@@ -3346,14 +3346,14 @@ window.Centro = {
              triggers (onRenovacionActivada exige 'Renovación' para amarrar la
              custodia) leen de aquí; DEMO/TEMP mapean a 'No Aplica' en
              _wcSyncTipo, igual que siempre. Los DEMO van por su wizard. -->
-        <!-- "Sin equipo" y "refurbished" ya NO se preguntan (Alberto
-             2026-09-04): se derivan del plan por serial del paso 2
-             (TransicionPlan.derivarModalidad) y se muestran aquí. -->
         <select id="wcAccion" class="hidden" aria-hidden="true">
           <option value="Nuevo" ${!esRenov ? 'selected' : ''}>Nuevo</option>
           <option value="Renovación" ${esRenov ? 'selected' : ''}>Renovación</option>
           <option value="No Aplica">No Aplica</option>
         </select>
+        <!-- "Sin equipo" y "refurbished" ya NO se preguntan (Alberto
+             2026-09-04): se derivan del plan por serial del paso 2
+             (TransicionPlan.derivarModalidad) y se muestran aquí. -->
         <div id="wcRenovBloque" class="${esRenov ? '' : 'hidden'}" style="margin-top:8px;">
           <div id="wcModalidad" style="font-size:12.5px; color:var(--fg-3);">La modalidad (sin equipo / con reemplazos / refurbished) sale de lo que declares por serial en el paso 2.</div>
         </div>
@@ -3556,13 +3556,13 @@ window.Centro = {
         <td style="font-size:12.5px;">${this._wcFuenteHtml(fuente, u)}</td>
         <td>${this._wcDestinoCelda(u.id, { destino: S.destinos[u.id] || '', reemplazo: S.reemplazos[u.id] || '', refurbished: !!S.refurb[u.id] })}</td></tr>`),
       ...agregados.map((a, i) => `<tr>
-          <label class="cg-toggle" style="font-size:12px; padding:3px 8px; margin-left:6px;" title="Refurbished de batería, antena, clip y piezas para este radio">
-            <input type="checkbox" data-wcpaf="${i}" ${a.refurbished ? 'checked' : ''} onchange="Centro._wcConciliar()"> refurbished</label>
         <td class="cg-mono">${this.esc(a.serial)}</td>
         <td>${a.pool ? this.esc(a.modelo || '—') : this._selModelo(`data-wcpa-modelo="${i}" onchange="Centro._wcConciliar()" style="min-width:180px;"`, a.modelo_id, a.modelo)}
           ${a.aviso ? `<div style="font-size:11.5px; color:var(--warn-deep, #92400E);">${this.esc(a.aviso)}</div>` : ''}</td>
         <td style="font-size:12.5px;">${this._wcFuenteHtml('agregado', a)}</td>
         <td style="white-space:nowrap;"><span style="font-size:12.5px;">Continúa</span>
+          <label class="cg-toggle" style="font-size:12px; padding:3px 8px; margin-left:6px;" title="Refurbished de batería, antena, clip y piezas para este radio">
+            <input type="checkbox" data-wcpaf="${i}" ${a.refurbished ? 'checked' : ''} onchange="Centro._wcConciliar()"> refurbished</label>
           <button type="button" class="btn btn-ghost" style="padding:2px 8px; margin-left:6px;" title="Quitar"
             onclick="Centro._wcQuitarAgregado(${i})">✕</button></td></tr>`),
     ];
@@ -3633,25 +3633,25 @@ window.Centro = {
 
   // Lee el plan tal como está en pantalla (o null si no aplica / vacío).
   _wcLeerPlan(origenIds) {
-      const idSel = this._cssEsc(e.id);
-      const rSel = document.querySelector(`select[data-wcpr="${idSel}"]`);
-      const rm = s.value === 'reemplaza' && rSel?.value ? this._modeloDeSelect(rSel) : null;
-      const refurbished = s.value === 'continua' && !!document.querySelector(`input[data-wcpf="${idSel}"]`)?.checked;
     const unidades = [...document.querySelectorAll('select[data-wcp]')].map(s => {
       const e = this.equipos.find(x => x.id === s.dataset.wcp);
       if (!e) return null;
       const cid = e.asignacion?.contrato_doc_id || null;
       const fuente = e.estado === 'por_clasificar' ? 'migracion' : cid ? 'origen' : 'custodia';
+      const idSel = this._cssEsc(e.id);
+      const rSel = document.querySelector(`select[data-wcpr="${idSel}"]`);
+      const rm = s.value === 'reemplaza' && rSel?.value ? this._modeloDeSelect(rSel) : null;
+      const refurbished = s.value === 'continua' && !!document.querySelector(`input[data-wcpf="${idSel}"]`)?.checked;
       return { pool_id: e.id, serial: e.serial || e.id, serial_norm: e.id,
-    // Destino obligatorio: se cuenta lo que falta y esas filas NO entran al
-    // plan (construirSerial las convertiría en 'devuelve' por defecto).
-    this._wcSinDestino = unidades.filter(u => !u.destino).length;
-    const conDestino = unidades.filter(u => u.destino);
         modelo_id: e.modelo_id || null, modelo: e.modelo_label || '', destino: s.value, fuente,
         modalidad: e.propiedad === 'cliente' ? 'propio' : 'alquiler',
         ...(rm ? { reemplazo_modelo_id: rm.id, reemplazo_modelo: rm.label } : {}),
         ...(refurbished ? { refurbished: true } : {}) };
     }).filter(Boolean);
+    // Destino obligatorio: se cuenta lo que falta y esas filas NO entran al
+    // plan (construirSerial las convertiría en 'devuelve' por defecto).
+    this._wcSinDestino = unidades.filter(u => !u.destino).length;
+    const conDestino = unidades.filter(u => u.destino);
     this._wcPlanState.agregados.forEach((a, i) => {
       let modelo_id = a.modelo_id, modelo = a.modelo;
       if (!a.pool) {
@@ -3699,12 +3699,12 @@ window.Centro = {
     const faltaModelo = plan.unidades.some(u => u.fuente === 'agregado' && !u.modelo && !u.modelo_id);
     const sinLinea = r.sinLinea.length
       ? `<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;"><b>${r.sinLinea.length} serial(es) sin línea en el contrato</b>: ${r.sinLinea.map(u => this.esc(u.serial)).join(', ')} — agrega su modelo${r.sinLinea.some(u => u.destino === 'reemplaza') ? ' (el del reemplazo)' : ''} en “Equipos y tarifas” o cámbiales el destino.</div>` : '';
-      ${sinDestino ? `<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-bottom:4px;"><b>Faltan ${sinDestino} serial(es) por decidir</b> — cada uno necesita destino.</div>` : ''}
     const modalidad = TransicionPlan.derivarModalidad(plan, lineas);
     if (modBox) {
       modBox.innerHTML = `<b>${modalidad.sin_equipo ? 'Renovación sin equipo' : 'Renovación con equipo'}</b> — ${modalidad.continuan} continúa${modalidad.continuan === 1 ? '' : 'n'}${modalidad.reemplazos ? ` · ${modalidad.reemplazos} reemplazo${modalidad.reemplazos === 1 ? '' : 's'}` : ''}${modalidad.nuevos ? ` · ${modalidad.nuevos} radio${modalidad.nuevos === 1 ? '' : 's'} nuevo${modalidad.nuevos === 1 ? '' : 's'}` : ''} · refurbished: ${modalidad.refurbished ? `<b>sí</b> (${modalidad.refurbished_n})` : 'no'}`;
     }
     box.innerHTML = `
+      ${sinDestino ? `<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-bottom:4px;"><b>Faltan ${sinDestino} serial(es) por decidir</b> — cada uno necesita destino.</div>` : ''}
       <div style="font-size:12.5px; color:var(--fg-3);">${this.esc(TransicionPlan.resumen(plan))}</div>
       ${partes.length ? `<div style="display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; margin-top:4px;">${partes.join('')}
         ${desajuste && !this._wcSoloPlan ? `<button type="button" class="btn btn-ghost cg-act" onclick="Centro._wcCuadrar()">Cuadrar cantidades con los seriales</button>` : ''}</div>` : ''}
@@ -3773,32 +3773,32 @@ window.Centro = {
     this._wcSyncPlan();
   },
 
-    if (conc.sinDestino) { Toast.show(`⚠️ Faltan ${conc.sinDestino} serial(es) por decidir — elige el destino de cada uno`, 'warn'); return; }
   async guardarPlanRenovacion(id) {
     const c = this.contratos.find(x => x.id === id);
     if (!c) return;
     const conc = this._wcConciliar();
     const plan = conc.plan || null;
+    if (conc.sinDestino) { Toast.show(`⚠️ Faltan ${conc.sinDestino} serial(es) por decidir — elige el destino de cada uno`, 'warn'); return; }
     if (!plan) { Toast.show('Declara al menos un serial (o agrega los que el cliente tiene)', 'warn'); return; }
     const v = TransicionPlan.validar(plan);
+    if (!v.ok) { Toast.show(`⚠️ ${v.mensaje}`, 'warn'); return; }
+    if (conc.faltaModelo) { Toast.show('⚠️ Elige el modelo de cada serial agregado sin ficha', 'warn'); return; }
+    if (conc.sinLinea.length) { Toast.show(`⚠️ ${conc.sinLinea.length} serial(es) sin línea en el contrato — cámbiales el destino o pide editar el contrato`, 'warn'); return; }
+    const btn = document.getElementById('wcGuardarPlan');
+    if (btn) btn.disabled = true;
     const m = conc.modalidad;
     // Un contrato aprobado "sin equipo" al que ahora se le declaran
     // reemplazos: bodega tiene que enterarse (la solicitud de seriales salió
     // al aprobar sin nada que pedir). Se avisa; el ajuste fino va por Almacén.
     const nuevoConEquipo = !!(c.renovacion_sin_equipo && m && !m.sin_equipo);
-    if (!v.ok) { Toast.show(`⚠️ ${v.mensaje}`, 'warn'); return; }
-    if (conc.faltaModelo) { Toast.show('⚠️ Elige el modelo de cada serial agregado sin ficha', 'warn'); return; }
-    if (conc.sinLinea.length) { Toast.show(`⚠️ ${conc.sinLinea.length} serial(es) sin línea en el contrato — cámbiales el destino o pide editar el contrato`, 'warn'); return; }
+    try {
+      await ContratosService.updateContrato(id, {
+        transicion_plan: plan,
         renovacion_refurbished_componentes: !!(m && m.refurbished),
         ...(m && c.renovacion_sin_equipo !== m.sin_equipo ? {
           renovacion_sin_equipo: m.sin_equipo,
           renovacion_modalidad: m.sin_equipo ? 'Renovación sin equipo' : 'Renovación con equipo',
         } : {}),
-    const btn = document.getElementById('wcGuardarPlan');
-    if (btn) btn.disabled = true;
-    try {
-      await ContratosService.updateContrato(id, {
-        transicion_plan: plan,
         transicion_plan_actualizado_at: firebase.firestore.FieldValue.serverTimestamp(),
         transicion_plan_actualizado_por_uid: this.uid,
         fecha_modificacion: new Date(),
@@ -3874,19 +3874,19 @@ window.Centro = {
         return c ? (c.contrato_id || c.id) : id;
       }),
       candidatos: candidatos.length,
-    let modalidad = null;
     };
-      // Paso OBLIGATORIO en toda renovación (Alberto 2026-09-04): cada
-      // serial con destino, o la confirmación explícita de que no hay.
     const vOrigen = OrigenContrato.validar(origenSel);
     if (!vOrigen.ok) { Toast.show(`⚠️ ${vOrigen.mensaje}`, 'warn'); return; }
-      if (conc.sinDestino) { Toast.show(`⚠️ Faltan ${conc.sinDestino} serial(es) por decidir — elige el destino de cada uno`, 'warn'); return; }
-      if (!plan && !this._wcPlanState.sinSeriales) { Toast.show('⚠️ Declara los seriales de la cuenta (o confirma que el cliente no tiene equipos con serial)', 'warn'); return; }
 
     let plan = null;
+    let modalidad = null;
     if (TransicionPlan.aplica(origenSel)) {
+      // Paso OBLIGATORIO en toda renovación (Alberto 2026-09-04): cada
+      // serial con destino, o la confirmación explícita de que no hay.
       const conc = this._wcConciliar();
       plan = conc.plan || null;
+      if (conc.sinDestino) { Toast.show(`⚠️ Faltan ${conc.sinDestino} serial(es) por decidir — elige el destino de cada uno`, 'warn'); return; }
+      if (!plan && !this._wcPlanState.sinSeriales) { Toast.show('⚠️ Declara los seriales de la cuenta (o confirma que el cliente no tiene equipos con serial)', 'warn'); return; }
       if (plan) {
         const vPlan = TransicionPlan.validar(plan);
         if (!vPlan.ok) { Toast.show(`⚠️ ${vPlan.mensaje}`, 'warn'); return; }
