@@ -40,6 +40,16 @@ async function cargarContrato() {
     window.location.href = `imprimir-contrato.html?id=${encodeURIComponent(contratoDocId)}`;
     return;
   }
+  // 3b) Con un enlace de firma pendiente el cliente está leyendo una copia
+  // congelada: editar por debajo la dejaría firmando otra cosa (2026-09-04).
+  if (c.estado === "aprobado" && c.firma_solicitud_estado === "pendiente") {
+    Toast.show('Este contrato tiene un enlace de firma pendiente: no se edita hasta que el cliente firme o se anule la solicitud.', 'bad');
+    window.location.href = `../clientes/centro.html?id=${encodeURIComponent(c.cliente_id || "")}`;
+    return;
+  }
+  // Plan por serial del Centro: la modalidad (sin equipo / refurbished) se
+  // DERIVA del plan y aquí no se pregunta (mismo criterio que el wizard).
+  planSerial = (c.transicion_plan?.nivel === "serial" && Array.isArray(c.transicion_plan.unidades)) ? c.transicion_plan : null;
 
   // 4) Poblar formulario
   document.getElementById("cliente_nombre").value = c.cliente_nombre || "";
@@ -152,6 +162,22 @@ function calcularTotal() {
   return { equiposSub, cargosRec, cargosUni, itbmsAplica, mensual, inicial, cargos };
 }
 
+let planSerial = null; // contrato.transicion_plan nivel 'serial' (Centro) o null
+
+// Modalidad derivada del plan por serial: mismas reglas que el wizard
+// (TransicionPlan.derivarModalidad). `equipos` = líneas tal como están en
+// la tabla ahora (la cantidad manda para "radios nuevos").
+function modalidadDerivada(equipos) {
+  if (!planSerial || !window.TransicionPlan) return null;
+  return TransicionPlan.derivarModalidad(planSerial, equipos || []);
+}
+function leerEquiposTabla() {
+  return [...document.querySelectorAll("#tablaEquipos tr")].map(row => ({
+    modelo_id: row.querySelector(".modelo")?.value.trim() || "",
+    cantidad: parseInt(row.querySelector(".cantidad")?.value || 0) || 0,
+  }));
+}
+
 function refreshRenovacionEditorUI() {
   const accion = document.getElementById("accion")?.value;
   const box = document.getElementById("renovacionBox");
@@ -162,6 +188,28 @@ function refreshRenovacionEditorUI() {
 
   const esRenovacion = accion === "Renovación";
   box.classList.toggle("visible", esRenovacion);
+
+  // Plan por serial: las casillas no aplican — se muestra lo derivado.
+  const derivWrap = document.getElementById("renovacionDerivada");
+  if (esRenovacion && planSerial) {
+    const m = modalidadDerivada(leerEquiposTabla());
+    checkbox.checked = !!m?.sin_equipo; checkbox.disabled = true;
+    const refurb = document.getElementById("renovacion_refurbished_componentes");
+    if (refurb) { refurb.checked = !!m?.refurbished; refurb.disabled = true; }
+    checkbox.closest("label")?.classList.add("hidden");
+    if (refurbWrap) refurbWrap.classList.remove("visible");
+    badge.textContent = m?.sin_equipo ? "Renovación sin equipo" : "Renovación con equipo";
+    if (derivWrap && m) {
+      derivWrap.classList.remove("hidden");
+      derivWrap.textContent = `Derivado del plan por serial declarado en el Centro: ${m.continuan} continúa${m.continuan === 1 ? "" : "n"}`
+        + (m.reemplazos ? ` · ${m.reemplazos} reemplazo${m.reemplazos === 1 ? "" : "s"}` : "")
+        + (m.nuevos ? ` · ${m.nuevos} radio${m.nuevos === 1 ? "" : "s"} nuevo${m.nuevos === 1 ? "" : "s"} (cantidad de línea por encima de los seriales)` : "")
+        + ` · refurbished: ${m.refurbished ? `sí (${m.refurbished_n})` : "no"}. Los seriales se corrigen en el Centro → Seriales de la cuenta.`;
+    }
+    return;
+  }
+  if (derivWrap) derivWrap.classList.add("hidden");
+  checkbox.closest("label")?.classList.remove("hidden");
 
   if (!esRenovacion) {
     checkbox.checked = false;
@@ -220,17 +268,40 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
   const t = calcularTotal(); // recalcula equipos + otros conceptos (mensual + primer pago)
   const accionSeleccionada = document.getElementById("accion").value;
   const esRenovacion = accionSeleccionada === "Renovación";
-  const renovacionSinEquipo = esRenovacion && !!document.getElementById("renovacion_sin_equipo")?.checked;
+  // Con plan por serial la modalidad se deriva (no de las casillas); sin
+  // plan, refurbished ya no exige "sin equipo" (2026-09-04).
+  const mDeriv = esRenovacion ? modalidadDerivada(equipos) : null;
+  const renovacionSinEquipo = esRenovacion && (mDeriv ? mDeriv.sin_equipo : !!document.getElementById("renovacion_sin_equipo")?.checked);
   const renovacionRefurbishedComponentes = esRenovacion
-    && renovacionSinEquipo
-    && !!document.getElementById("renovacion_refurbished_componentes")?.checked;
+    && (mDeriv ? mDeriv.refurbished : !!document.getElementById("renovacion_refurbished_componentes")?.checked);
   const renovacionModalidad = esRenovacion
     ? (renovacionSinEquipo ? "Renovación sin equipo" : "Renovación con equipo")
     : "";
 
   const total_equipos = equipos.reduce((acc, e) => acc + Number(e.cantidad || 0), 0);
 
+  // Contrato APROBADO editado en lo económico o el plazo (2026-09-04, Alberto:
+  // "el vendedor puede ajustar, pero sin reaprobación nadie se entera"):
+  // vuelve a PENDIENTE DE APROBACIÓN con rastro de la aprobación anterior y
+  // aviso a ventas. Los triggers de aprobación son idempotentes (seriales,
+  // plan, verificación), así que re-aprobar no duplica nada.
+  const re = (contratoActual?.estado === "aprobado" && window.ContratoTarifario?.requiereReaprobacion)
+    ? ContratoTarifario.requiereReaprobacion(contratoActual, { equipos, cargos: t.cargos, duracion: duracionFinal, itbms_aplica: t.itbmsAplica })
+    : { requiere: false, cambios: [] };
+  const reaprobacion = re.requiere ? {
+    estado: "pendiente_aprobacion",
+    reaprobacion: {
+      motivo: `Edición tras aprobar: ${re.cambios.join(", ")}`,
+      at: new Date(),
+      por_uid: firebase.auth().currentUser?.uid || null,
+      aprobado_antes_por_uid: contratoActual.aprobado_por_uid || null,
+      fecha_aprobacion_anterior: contratoActual.fecha_aprobacion || null,
+      total_mensual_anterior: Number(contratoActual.total_mensual || 0),
+    },
+  } : {};
+
   const actualizacion = ContratosService.updateContrato(contratoDocId, {
+    ...reaprobacion,
     codigo_tipo: document.getElementById("tipo_contrato").value,
     tipo_contrato: document.getElementById("tipo_contrato").selectedOptions[0].text,
     accion: accionSeleccionada,
@@ -264,7 +335,35 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
     return;
   }
 
-  Toast.show('Cambios guardados', 'ok');
+  if (re.requiere) {
+    // Aviso al aprobador — mismo buzón y mismo CTA que "Nuevo contrato creado".
+    try {
+      const esc = (s) => String(s ?? "").replace(/[<>&]/g, ch => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[ch]));
+      const filas = equipos.map(l => `<li>${esc(l.modelo)} – ${l.cantidad} × $${Number(l.precio || 0).toFixed(2)}</li>`).join("");
+      await firebase.firestore().collection("mail_queue").add({
+        to: "ventas@cecomunica.com",
+        cc: firebase.auth().currentUser?.email || null,
+        subject: `Contrato ${contratoActual.contrato_id || contratoDocId} editado tras aprobar — requiere nueva aprobación`,
+        preheader: `${contratoActual.cliente_nombre || ""}: cambió ${re.cambios.join(", ")}`,
+        bodyContent: `
+          <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Contrato editado después de aprobado</h2>
+          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+            El contrato <b>${esc(contratoActual.contrato_id || contratoDocId)}</b> de <b>${esc(contratoActual.cliente_nombre || "—")}</b>
+            ya estaba aprobado y se editó: cambió <b>${esc(re.cambios.join(", "))}</b>.
+            Volvió a <b>pendiente de aprobación</b>. Mensual anterior: $${Number(contratoActual.total_mensual || 0).toFixed(2)} →
+            nuevo: <b>$${Number(t.mensual.totalConITBMS || 0).toFixed(2)}</b>.</p>
+          <ul style="margin:0 0 16px;padding-left:18px;font:14px/1.5 Arial,sans-serif;">${filas}</ul>`,
+        ctaUrl: `${location.origin}/clientes/centro.html?id=${encodeURIComponent(contratoActual.cliente_id || "")}`,
+        ctaLabel: "Revisar y aprobar en el Centro",
+        meta: { source: "editar-contrato-reaprobacion", contrato_id: contratoActual.contrato_id || contratoDocId, created_at: firebase.firestore.FieldValue.serverTimestamp() },
+        status: "queued",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (err) { console.warn("No se pudo encolar el aviso de reaprobación:", err); }
+    Toast.show('Cambios guardados — el contrato vuelve a pendiente de aprobación (se avisó a ventas)', 'warn');
+  } else {
+    Toast.show('Cambios guardados', 'ok');
+  }
   location.href = "index.html";
 });
 

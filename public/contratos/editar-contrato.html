@@ -32,6 +32,8 @@
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script defer src="../js/domain/totales.js"></script>
+  <script defer src="../js/domain/contratoTarifario.js?v=ct5"></script>
+  <script defer src="../js/domain/transicionPlan.js?v=cc29"></script>
   <script src="../js/core/auth.js"></script>
   <script defer src="../js/services/contratosService.js?v=num1"></script>
   <script defer src="../js/services/modelosService.js"></script>
@@ -192,6 +194,8 @@
               <span><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Modalidad de renovación</span>
               <span id="renovacionBadge" class="chip-prioridad media">Renovación con equipo</span>
             </div>
+            <!-- Plan por serial (Centro): la modalidad se deriva; las casillas se ocultan. -->
+            <p id="renovacionDerivada" class="form-hint hidden" style="margin-top:var(--sp-2);"></p>
             <label class="form-check" style="margin-top:var(--sp-2);">
               <input type="checkbox" id="renovacion_sin_equipo">
               <span>
@@ -283,7 +287,7 @@
 
   <script src="../js/services/cargosService.js" defer></script>
   <script src="../js/pages/nc-cargos.js" defer></script>
-  <script src="../js/pages/editar-contrato.js?v=fk4" defer></script>
+  <script src="../js/pages/editar-contrato.js?v=fk5" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

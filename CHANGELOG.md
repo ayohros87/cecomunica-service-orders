@@ -87,6 +87,12 @@
 >   sin equipo = sin reemplazos ni unidades de más en las líneas. Una
 >   renovación sin equipo con reemplazos sí pide a bodega los seriales de
 >   los reemplazos y espera su entrega.
+> - **Editar un contrato APROBADO** (editar-contrato.html): si cambian
+>   líneas, cargos, duración o ITBMS vuelve a *pendiente de aprobación*
+>   con rastro (`reaprobacion`) y aviso a ventas@
+>   (`ContratoTarifario.requiereReaprobacion`). Con enlace de firma
+>   pendiente no se edita. Con plan por serial, la modalidad se deriva y
+>   las casillas se ocultan.
 
 ## [Arranque rápido: por qué demoraba entrar a los módulos] — 2026-08-13
 

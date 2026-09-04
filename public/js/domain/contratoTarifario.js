@@ -50,6 +50,25 @@ window.ContratoTarifario = {
   //   reemplaza_seriales|null, duracion ("N meses"), duracion_meses?,
   //   observaciones, equipos[], cargos[], itbms_aplica, creado_por_uid
   // }
+  // ¿Una edición de un contrato APROBADO cambia lo que se aprobó? (2026-09-04,
+  // Alberto: el vendedor puede ajustar cantidades, pero el aprobador tiene
+  // que volver a verlo). Compara lo económico y el plazo: líneas (modelo,
+  // cantidad, precio, modalidad), cargos (concepto, cantidad, monto,
+  // recurrente) y duración. Observaciones y datos del cliente NO cuentan.
+  requiereReaprobacion(antes, despues) {
+    const a = antes || {}, b = despues || {};
+    const norm = (s) => String(s || '').trim().toUpperCase();
+    const lin = (ls) => (ls || []).map(l => [l.modelo_id || norm(l.modelo), Number(l.cantidad) || 0, Number(l.precio) || 0, l.modalidad || 'alquiler'].join('|')).sort().join(';');
+    const car = (cs) => (cs || []).map(c => [c.cargo_id || norm(c.concepto), Number(c.cantidad) || 1, Number(c.monto) || 0, c.recurrente ? 1 : 0].join('|')).sort().join(';');
+    const dur = (c) => `${norm(c.duracion)}|${Number(c.duracion_meses) || 0}|${Number(c.duracion_dias) || 0}`;
+    const cambios = [];
+    if (lin(a.equipos) !== lin(b.equipos)) cambios.push('equipos');
+    if (car(a.cargos) !== car(b.cargos)) cambios.push('cargos');
+    if (dur(a) !== dur(b)) cambios.push('duracion');
+    if ((a.itbms_aplica !== false) !== (b.itbms_aplica !== false)) cambios.push('itbms');
+    return { requiere: cambios.length > 0, cambios };
+  },
+
   construirDoc(d) {
     const cli      = d.cliente || {};
     const esRenov  = d.accion === 'Renovación';
