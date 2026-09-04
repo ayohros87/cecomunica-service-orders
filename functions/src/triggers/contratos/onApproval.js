@@ -261,7 +261,12 @@ const onContratoActivado = onDocumentUpdated(
       const conEquipo = (after.equipos || []).some(e => Number(e.cantidad || 0) > 0)
         && !after.renovacion_sin_equipo;
       const esRenov = after.accion === "Renovación";
-      const esperando = conEquipo && after.entrega_confirmada !== true;
+      // Una RENOVACIÓN nunca espera entrega: los radios ya están en el cliente
+      // (caso Riba Smith 2026-09-03: 5 de 6 renovaciones salieron con "lleva
+      // equipo por entregar" porque entrega_confirmada no existe en contratos
+      // cuya entrega fue antes del trigger). Solo un contrato NUEVO con equipo
+      // y sin entrega confirmada arranca a facturar en la entrega.
+      const esperando = !esRenov && conEquipo && after.entrega_confirmada !== true;
       // Monto SIEMPRE desde las líneas (2026-09-04): total_mensual no existe
       // en contratos anteriores a jun-2026 y los avisos salían sin monto.
       const FA = require("../../lib/facturacionAvisos");

@@ -38,7 +38,8 @@ async function avisoDesdeContratoActivo(mail) {
   const d = cs.docs[0]; const c = d.data();
   const esRenov = c.accion === "Renovación";
   const conEquipo = (c.equipos || []).some(e => num(e.cantidad) > 0) && !c.renovacion_sin_equipo;
-  const esperando = conEquipo && c.entrega_confirmada !== true;
+  // Misma regla que onContratoActivado: una renovación nunca espera entrega.
+  const esperando = !esRenov && conEquipo && c.entrega_confirmada !== true;
   const m = FA.mensualDeContrato(c);
   const activadoPor = c.firmado_tipo === "digital" ? "firma digital del cliente" : await nombreUsuario(c.firmado_por_uid);
   const fechaAct = c.fecha_activacion?.toDate ? c.fecha_activacion.toDate() : (mail.meta?.created_at?.toDate?.() || new Date());
@@ -88,7 +89,26 @@ async function main() {
 
     const id = FA.avisoId(r.aviso.tipo, r.aviso.origen_id);
     const ya = await db.collection(FA.COL).doc(id).get();
-    if (ya.exists) { existentes++; console.log("  YA  ", id, "(no se toca)"); continue; }
+    if (ya.exists) {
+      existentes++;
+      // Corrección 2026-09-04: los sembrados como "esperando" por la regla
+      // vieja (renovación con entrega_confirmada ausente) pasan a pendiente
+      // con la fecha de activación. No se tocan pasos ni historial.
+      const cur = ya.data();
+      if (cur.estado === "esperando" && !r.aviso.esperando) {
+        console.log(`  ${APPLY ? "CORRIGE" : "corregiría"} ${id} · esperando → pendiente · fecha ${r.aviso.fecha_efectiva?.toISOString?.().slice(0, 10)}`);
+        // update(): las rutas con punto solo se interpretan como rutas en update, no en set(merge).
+        if (APPLY) await db.collection(FA.COL).doc(id).update({
+          estado: "pendiente",
+          fecha_efectiva: admin.firestore.Timestamp.fromDate(r.aviso.fecha_efectiva),
+          "contexto.entrega_pendiente": false,
+          historial: admin.firestore.FieldValue.arrayUnion({ accion: "corregido", detalle: "Renovación: los radios ya están en el cliente, no espera entrega",
+            fecha_iso: new Date().toISOString(), por_email: null }),
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } else console.log("  YA  ", id, "(no se toca)");
+      continue;
+    }
 
     const correo = { mail_queue_id: d.id, status: mail.status || null, error: mail.error || null,
       ...(mail.sent_at ? { sent_at: mail.sent_at } : {}) };
