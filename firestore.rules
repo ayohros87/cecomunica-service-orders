@@ -750,11 +750,13 @@ service cloud.firestore {
     // entregado, baja aprobada…). Lo CREA solo el servidor (lib/facturacionAvisos
     // en el mismo embudo que encola el correo). El navegador únicamente marca
     // pasos (QBO/POC), descarta con motivo, reactiva o pide reenviar el correo:
-    // campos acotados, historial que solo crece, nada se borra. Roles: los que
-    // facturan a mano en QuickBooks (recepción) + quienes supervisan.
+    // campos acotados, historial que solo crece, nada se borra. Roles: quien
+    // factura a mano en QuickBooks (recepción) + admin/contabilidad. La
+    // información financiera es need-to-know (Alberto 2026-09-04): gerente y
+    // el resto NO leen esta colección.
     match /facturacion_avisos/{docId} {
       function rolBandejaFact() {
-        return isSignedIn() && userRole() in ["administrador", "recepcion", "gerente", "contabilidad"];
+        return isSignedIn() && userRole() in ["administrador", "recepcion", "contabilidad"];
       }
       function avisoHistorialSoloCrece() {
         return resource.data.get("historial", []).size()

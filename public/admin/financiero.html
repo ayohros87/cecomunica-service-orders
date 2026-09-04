@@ -67,12 +67,20 @@
          larga, cada lado reconoce su palabra; es el mismo patrón corto→largo del
          resto del módulo (Activación → "Activación de facturación"). */
       title: '<i data-lucide="dollar-sign"></i> Panorama financiero',
-      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      // ?volver=finanzas (pestaña Panorama): el regreso y el rail activo son
+      // los del espacio Finanzas, no los del panel de admin. Antes el
+      // parámetro se mandaba y esta página lo ignoraba: al entrar por la
+      // pestaña, el "Volver" iba al Panel y el rail saltaba a Admin.
+      back: new URLSearchParams(location.search).get('volver') === 'finanzas'
+        ? { href: '../inventario/modelos.html', label: '<i data-lucide="arrow-left"></i> Finanzas' }
+        : { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
       showHome: true, homeHref: '../index.html', showLogout: true
     });
   </script>
 
-  <div class="app-wrap app-wrap--wide">
+  <!-- app-wrap--full como el resto del espacio Finanzas (2026-09-04): con
+       --wide (1400px) la barra de pestañas cambiaba de ancho al entrar aquí. -->
+  <div class="app-wrap app-wrap--full">
 
     <!-- Pestaña Panorama del espacio Finanzas (propuesta 2026-08, E4) -->
     <div id="wsTabs-mount"></div>
@@ -153,7 +161,8 @@
   </div> <!-- /cc-app -->
   <script>
     // Rail Command Center (F5) — espera auth (scripts defer) y pinta el rail del rol efectivo.
-    document.addEventListener('DOMContentLoaded', () => Layout.initRail('admin'));
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail(
+      new URLSearchParams(location.search).get('volver') === 'finanzas' ? 'facturacion' : 'admin'));
   </script>
 </body>
 </html>

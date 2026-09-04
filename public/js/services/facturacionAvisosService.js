@@ -8,7 +8,11 @@
 // aquí se escribe optimista para que la fila reaccione sin esperar el trigger.
 window.FacturacionAvisosService = {
   COL: 'facturacion_avisos',
-  ROLES: ['administrador', 'recepcion', 'gerente', 'contabilidad'],
+  // Need-to-know (Alberto 2026-09-04): recepción porque factura a mano en
+  // QuickBooks; admin y contabilidad porque supervisan. Nadie más.
+  ROLES: ['administrador', 'recepcion', 'contabilidad'],
+  // Solo estos ven el espacio Finanzas completo (la barra de pestañas).
+  ROLES_FINANZAS: ['administrador', 'contabilidad'],
 
   MOTIVOS_DESCARTE: [
     { codigo: 'ya_en_qbo',  label: 'Ya estaba en QuickBooks' },

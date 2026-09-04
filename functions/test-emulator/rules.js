@@ -614,12 +614,13 @@ async function main() {
       historial: [{ accion: "creado" }], correo: { mail_queue_id: "m1", status: "sent" },
     });
   });
-  for (const r of ["vendedor", "tecnico", "inventario", "vista", "jefe_taller"]) {
+  // Need-to-know (Alberto 2026-09-04): gerente tampoco lee información de facturación.
+  for (const r of ["vendedor", "tecnico", "inventario", "vista", "jefe_taller", "gerente"]) {
     await assertFails(as(r).doc("facturacion_avisos/av1").get());
     await assertFails(as(r).doc("facturacion_avisos/av1").set({ estado: "hecho" }, { merge: true }));
   }
-  ok("facturacion_avisos: vendedor/técnico/inventario/vista/jefe_taller no leen ni escriben");
-  for (const r of ["recepcion", "administrador", "gerente", "contabilidad"]) {
+  ok("facturacion_avisos: vendedor/técnico/inventario/vista/jefe_taller/gerente no leen ni escriben");
+  for (const r of ["recepcion", "administrador", "contabilidad"]) {
     await assertSucceeds(as(r).doc("facturacion_avisos/av1").get());
   }
   await assertSucceeds(as("recepcion").doc("facturacion_avisos/av1").set({

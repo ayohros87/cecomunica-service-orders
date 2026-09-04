@@ -31,19 +31,21 @@ window.MODULOS = (() => {
   // navegable: se llega SOLO desde el menú del Centro, marcado "avanzada"
   // (admin/recepción; la página conserva su propio guard de roles).
   const visiblesPorRol = {
-    administrador: ["ordenes", "poc", "almacen", "inventario", "equipos", "pendientes", "facturacion", "vendedores", "centro", "contratos", "cotizaciones", "piezas", "firma"],
+    administrador: ["ordenes", "poc", "almacen", "inventario", "equipos", "pendientes", "facturacion", "facturacion_bandeja", "vendedores", "centro", "contratos", "cotizaciones", "piezas", "firma"],
     gerente:       ["ordenes", "poc", "almacen", "inventario", "equipos", "centro", "contratos", "cotizaciones", "firma"],
     // inventario perdió "centro" el 2026-09-03: bodega asigna los seriales de
     // las gestiones desde Almacén · Asignar, ya no desde la ficha del cliente.
     inventario:    ["almacen", "inventario", "equipos", "pendientes", "piezas", "firma"],
-    contabilidad:  ["facturacion", "firma"],
+    contabilidad:  ["facturacion", "facturacion_bandeja", "firma"],
     vista:         ["ordenes", "poc", "firma"],
     tecnico:       ["ordenes", "poc", "firma"],
     jefe_taller:   ["ordenes", "poc", "cotizaciones", "firma"],
-    // recepcion ganó "facturacion" el 2026-09-04: quien arranca la facturación
-    // en QuickBooks es Recepción; el espacio estaba cerrado solo porque la
-    // emisión desde la app no existe. Su entrada es la Bandeja.
-    recepcion:     ["ordenes", "poc", "vendedores", "centro", "contratos", "facturacion", "firma"],
+    // "facturacion_bandeja" (2026-09-04): la cola de Recepción para facturar a
+    // mano en QuickBooks. Es un módulo APARTE del espacio Finanzas a propósito:
+    // la información financiera de la empresa (tarifas, costos, QuickBooks,
+    // panorama) es solo admin/contabilidad (need-to-know, Alberto 2026-09-04).
+    // Recepción ve la bandeja y nada más del espacio.
+    recepcion:     ["ordenes", "poc", "vendedores", "centro", "contratos", "facturacion_bandeja", "firma"],
     vendedor:      ["ordenes", "vendedores", "centro", "contratos", "cotizaciones", "firma"],
     tecnico_operativo: ["ordenes", "firma"]
   };
@@ -67,7 +69,8 @@ window.MODULOS = (() => {
     { grupo: 'Almacén · finanzas', items: [
       { id: 'almacen',     label: 'Almacén',  icon: 'warehouse',  href: '/almacen/index.html' },
       { id: 'piezas',      label: 'Piezas',   icon: 'puzzle',     href: '/inventario/piezas.html' },
-      { id: 'facturacion', label: 'Finanzas', icon: 'calculator', href: '/facturacion/bandeja.html' },
+      { id: 'facturacion_bandeja', label: 'Facturación pendiente', icon: 'inbox', href: '/facturacion/bandeja.html' },
+      { id: 'facturacion', label: 'Finanzas', icon: 'calculator', href: '/inventario/modelos.html' },
     ]},
   ];
 

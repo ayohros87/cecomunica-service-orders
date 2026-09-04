@@ -185,8 +185,18 @@
 
 <div class="app-wrap app-wrap--full">
 
+  <!-- La barra de Finanzas solo para admin/contabilidad (información financiera
+       need-to-know). Recepción entra por su módulo "Facturación pendiente" y ve
+       la bandeja sola. Se decide con la sesión cacheada en DOMContentLoaded
+       (mismo patrón optimista que el rail) para que no salte tras el auth;
+       facturacion-bandeja.js lo confirma con el rol real. -->
   <div id="wsTabs-mount"></div>
-  <script>FinanzasNav.render('bandeja'); // en el parse: la barra sale en el primer frame</script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const c = window.Sesion && Sesion.cacheAnonima ? Sesion.cacheAnonima() : null;
+      if (c && ['administrador', 'contabilidad'].includes(c.rol)) FinanzasNav.render('bandeja');
+    });
+  </script>
   <p class="fb-intro">
     Cada vez que un contrato, renovación, aumento, ajuste o baja se vuelve efectivo, aparece aquí (y llega el correo a activaciones@).
     Marca <b>QBO</b> cuando lo hayas facturado en QuickBooks y <b>POC</b> cuando el servicio esté al día. Lo más viejo va arriba.
@@ -211,7 +221,7 @@
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
-    document.addEventListener('DOMContentLoaded', () => Layout.initRail('facturacion'));
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('facturacion_bandeja'));
   </script>
 </body>
 </html>

@@ -478,7 +478,14 @@ window.FacturacionBandeja = (() => {
         if (!S().puedeGestionar(rol)) {
           document.body.innerHTML = "<h3 style='color:red;text-align:center;margin-top:100px;'>Acceso restringido</h3>"; return;
         }
-        if (window.FinanzasNav) FinanzasNav.render('bandeja', null, rol);
+        // Barra de Finanzas solo admin/contabilidad (need-to-know). La página
+        // la pintó en DOMContentLoaded con la sesión cacheada; aquí se confirma
+        // con el rol real: se agrega si faltaba, se quita si no corresponde.
+        const mount = document.getElementById('wsTabs-mount');
+        if (mount) {
+          if (S().ROLES_FINANZAS.includes(rol)) { if (!mount.children.length && window.FinanzasNav) FinanzasNav.render('bandeja'); }
+          else mount.innerHTML = '';
+        }
         wire();
         await cargar();
         await abrirDeepLink();
