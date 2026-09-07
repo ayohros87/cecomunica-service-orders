@@ -36,6 +36,94 @@ const { APP_BASE_URL } = require("../../lib/inventario");
 const { pendientesDevolucion, resumenDevolucion, derivarEstadoDevolucion } = require("../../lib/devolucion");
 const cobros = require("../../lib/cobrosEquipos");
 const { emailAcuse } = require("../../lib/acuseDevolucion");
+const sust = require("../../domain/sustitucionSaliente");
+
+// ── Sustitución del serial saliente (2026-09-07) ─────────────────────────
+// El check-in permite "sustituir el esperado X por este" cuando el radio que
+// llegó pertenece al mismo cliente pero no es el que nombró el plan de venta
+// (caso Gamboa: el plan puso B3700355, volvió B3400055). La fila esperada ya
+// trae el serial nuevo con `serial_original`; aquí se corrige lo que el
+// trigger de entrega dejó apuntando al serial errado, SIN borrar/crear mapeos
+// (onMapeoWrite ignora los updates, así que no hay carrera de triggers):
+//   · mapeo del contrato: saliente → el real (update en sitio)
+//   · unidad errada: se le quita pendiente_devolucion (sigue con el cliente)
+//   · unidad entrante: reemplaza_a → serial real (linaje)
+//   · contrato: reemplaza_seriales y transicion_plan corregidos, con nota
+// Todo best-effort y por pieza: lo que falle queda en el log, el resto se aplica.
+async function corregirSalienteSustituido(ordenId, after, s) {
+  const cid = after.contrato?.contrato_doc_id || null;
+  const nota = sust.notaCorreccion(s, ordenId);
+  const mov = (notas) => ({
+    at: admin.firestore.FieldValue.serverTimestamp(), por: "system", por_email: null,
+    tipo: "correccion", de_estado: null, a_estado: null,
+    ref: { tipo: "orden", id: ordenId, label: `DEVOLUCIÓN ${ordenId}` }, notas,
+  });
+
+  // Unidad errada: deja de estar "pendiente de devolución" — nunca salió del
+  // servicio. Se resuelve por id si se conoce, si no por serial.
+  try {
+    let ref = null;
+    if (s.pool_doc_id_original) {
+      const d = await db.collection("equipos_pool").doc(String(s.pool_doc_id_original)).get();
+      if (d.exists) ref = d.ref;
+    }
+    if (!ref) { const r = await pool.resolver(s.serial_original, s.modelo_id, s.modelo); if (r.data) ref = r.ref; }
+    if (ref) {
+      await ref.set({ pendiente_devolucion: admin.firestore.FieldValue.delete(), updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      await ref.collection("movimientos").add(mov(`Ya no está pendiente de devolución: el radio que volvió fue ${s.serial}, no este (corrección en el check-in).`));
+    }
+  } catch (e) {
+    logger.warn("[onOrdenDevolucionWrite] sustitución: no se pudo limpiar la unidad errada", { ordenId, serial: s.serial_original, error: e.message });
+  }
+
+  if (!cid) return;
+  const cRef = db.collection("contratos").doc(cid);
+
+  // Mapeos que nombran al errado → apuntan al real; el entrante pareado
+  // cambia su linaje.
+  try {
+    const ms = await cRef.collection("mapeos").get();
+    for (const d of ms.docs) {
+      const m = d.data();
+      if (!sust.mapeoNombraOriginal(m, s) || m.tipo === "no_devuelve") continue;
+      await d.ref.update({ ...sust.patchMapeo(s, nota), corregido_at: admin.firestore.FieldValue.serverTimestamp() });
+      if (m.entrante_pool_id || m.entrante) {
+        try {
+          let eRef = null;
+          if (m.entrante_pool_id) { const e = await db.collection("equipos_pool").doc(String(m.entrante_pool_id)).get(); if (e.exists) eRef = e.ref; }
+          if (!eRef && m.entrante) { const r = await pool.resolver(m.entrante, m.modelo_id, m.modelo); if (r.data) eRef = r.ref; }
+          if (eRef) {
+            await eRef.set({ reemplaza_a: s.serial_norm, updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+            await eRef.collection("movimientos").add(mov(`Reemplaza a ${s.serial} (antes decía ${s.serial_original}; corregido en el check-in).`));
+          }
+        } catch (e) {
+          logger.warn("[onOrdenDevolucionWrite] sustitución: linaje del entrante no corregido", { ordenId, mapeo: d.id, error: e.message });
+        }
+      }
+      logger.info("[onOrdenDevolucionWrite] sustitución: mapeo corregido", { ordenId, cid, mapeo: d.id, de: s.serial_original, a: s.serial });
+    }
+  } catch (e) {
+    logger.warn("[onOrdenDevolucionWrite] sustitución: mapeos no corregidos", { ordenId, cid, error: e.message });
+  }
+
+  // Contrato: reemplaza_seriales + transicion_plan.
+  try {
+    const cSnap = await cRef.get();
+    if (!cSnap.exists) return;
+    const c = cSnap.data();
+    const rs = sust.corregirReemplazaSeriales(c.reemplaza_seriales, s);
+    const pl = sust.corregirPlanSerial(c.transicion_plan, s, nota);
+    const patch = {};
+    if (rs.cambios) patch.reemplaza_seriales = rs.lista;
+    if (pl.cambios) patch.transicion_plan = { ...pl.plan, corregido_at: admin.firestore.Timestamp.now() };
+    if (Object.keys(patch).length) {
+      await cRef.set(patch, { merge: true });
+      logger.info("[onOrdenDevolucionWrite] sustitución: contrato corregido", { ordenId, cid, reemplaza_seriales: rs.cambios, plan: pl.cambios });
+    }
+  } catch (e) {
+    logger.warn("[onOrdenDevolucionWrite] sustitución: contrato no corregido", { ordenId, cid, error: e.message });
+  }
+}
 
 const escapeHtml = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, s => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]
@@ -549,6 +637,17 @@ module.exports = onDocumentWritten(
         logger.warn("[onOrdenDevolucionWrite] No se pudo aplicar la resolución (no crítico)", {
           ordenId, serial: e.serial, res, error: err.message,
         });
+      }
+    }
+
+    // Sustitución del serial saliente en el check-in: el radio que llegó no es
+    // el que nombró el plan. Se corrige mapeo, linaje y contrato ANTES de la
+    // ENTRADA (que ya lleva el serial real desde la tanda de arriba).
+    for (const s of sust.detectarSustituciones(antes, dev.esperados)) {
+      try {
+        await corregirSalienteSustituido(ordenId, after, s);
+      } catch (e) {
+        logger.warn("[onOrdenDevolucionWrite] sustitución no aplicada (no crítico)", { ordenId, de: s.serial_original, a: s.serial, error: e.message });
       }
     }
 

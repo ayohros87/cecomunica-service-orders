@@ -380,6 +380,17 @@
   function bloqueLoteHtml() {
     const filas = _draftLote || [];
     const inc = filas.filter(f => f.incluir);
+    // Sustitución: a qué esperado reemplaza este serial. Se puede cambiar
+    // entre los pendientes que ningún otro renglón del lote haya tomado.
+    const pendientesLibres = (_orden.devolucion?.esperados || []).filter(e => !e.resolucion);
+    const sustSelect = (f, i) => {
+      if (f.destino !== 'sustituye') return '';
+      const tomados = new Set(filas.filter((x, j) => j !== i && x.destino === 'sustituye').map(x => x.esperado_id));
+      const opciones = pendientesLibres.filter(e => e.id === f.esperado_id || !tomados.has(e.id));
+      return `<select class="form-select dev-lote-sustituye" data-i="${i}" style="height:26px;font-size:11.5px;max-width:200px;" title="Esperado que sustituye">
+        ${opciones.map(e => `<option value="${esc(e.id)}"${e.id === f.esperado_id ? ' selected' : ''}>en lugar de ${esc(e.serial)}${e.modelo ? ` · ${esc(e.modelo)}` : ''}</option>`).join('')}
+      </select>`;
+    };
     const filasHtml = filas.map((f, i) => {
       const bloqueada = !f.incluir;
       const modeloCell = (f.destino === 'nuevo' || f.destino === 'por_modelo')
@@ -391,7 +402,7 @@
           <td style="padding:5px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);font-family:var(--font-mono,monospace);white-space:nowrap;">${esc(f.serial)}</td>
           <td style="padding:5px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);">${modeloCell}</td>
           <td style="padding:5px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);">
-            <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;">${f.avisos.join('')}</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;">${f.avisos.join('')}${sustSelect(f, i)}</div>
           </td>
           <td style="padding:5px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);text-align:right;">
             <button type="button" class="btn btn-ghost btn-sm dev-lote-quitar" data-i="${i}"
@@ -953,6 +964,17 @@
       f.modelo_id = cat ? cat.id : null;
       if (cat) inp.value = cat.nombre;
     }));
+    // Sustitución: cambiar a qué esperado reemplaza el serial ajeno. Re-render
+    // porque los demás selects del lote deben dejar de ofrecer el elegido.
+    _overlay.querySelectorAll('.dev-lote-sustituye').forEach(sel => sel.addEventListener('change', () => {
+      const f = (_draftLote || [])[Number(sel.dataset.i)];
+      if (!f || f.destino !== 'sustituye') return;
+      f.esperado_id = sel.value;
+      const e = (_orden.devolucion?.esperados || []).find(x => x.id === sel.value);
+      f.avisos = f.avisos.map(a => /sustituye al esperado/.test(a)
+        ? `<span class="eqpool-chip" style="background:#fef3c7;color:#92400e;">sustituye al esperado ${esc(e?.serial || '')}</span>` : a);
+      render();
+    }));
     // La caja recién abierta va lista para el Ctrl+V; la revisión del lote se
     // trae a la vista (el modal re-renderiza desde arriba).
     const foco = _overlay.querySelector('#devPegarSeriales');
@@ -1292,6 +1314,9 @@
       i, m, falta: Math.max(0, Number(m.cantidad || 0) - Number(m.recibidos || 0)),
     }));
     const vistos = new Set();
+    // Esperados ya "tomados" por una sustitución de este lote: dos radios
+    // ajenos no pueden sustituir al mismo esperado.
+    const sustituidosEnLote = new Set();
 
     return tokens.map((token) => {
       const serial = token.trim().toUpperCase();
@@ -1345,6 +1370,15 @@
         const conCupo = cupos.filter(c => c.falta > 0);
         const cupo = (unidad && conCupo.find(c => EquiposPoolService._mismoModelo(unidad, c.m.modelo_id || null, c.m.modelo || '')))
           || (!unidad && conCupo.length === 1 ? conCupo[0] : null);
+        // Sustitución (2026-09-07, caso Gamboa): el radio que llegó es del
+        // MISMO cliente pero no figura — el plan de venta nombró otro serial.
+        // Se ofrece "sustituir el esperado X por este": la fila esperada
+        // cambia de serial y el backend corrige mapeo, linaje y contrato.
+        const cIds = new Set([_orden.contrato?.contrato_doc_id, ...(_orden.contrato?.contrato_origen_ids || [])].filter(Boolean));
+        const mismoCliente = !!unidad && (
+          (clienteOrden && unidad.asignacion?.cliente_id === clienteOrden)
+          || (unidad.asignacion?.contrato_doc_id && cIds.has(unidad.asignacion.contrato_doc_id)));
+        const pendientesSust = esperados.filter(e => !e.resolucion && !sustituidosEnLote.has(e.id));
         if (cupo) {
           cupo.falta--;
           f.destino = 'por_modelo';
@@ -1352,6 +1386,18 @@
           f.idx_modelo = cupo.i;
           f.modelo = unidad?.modelo_label || cupo.m.modelo || '';
           f.modelo_id = unidad?.modelo_id || cupo.m.modelo_id || null;
+        } else if (mismoCliente && pendientesSust.length) {
+          const mismoModelo = pendientesSust.find(e => EquiposPoolService._mismoModelo(unidad, e.modelo_id || null, e.modelo || ''));
+          const objetivo = mismoModelo || pendientesSust[0];
+          sustituidosEnLote.add(objetivo.id);
+          f.destino = 'sustituye';
+          f.incluir = true;
+          f.esperado_id = objetivo.id;
+          f.pool_doc_id = unidad.id;
+          f.modelo = unidad.modelo_label || objetivo.modelo || '';
+          f.modelo_id = unidad.modelo_id || objetivo.modelo_id || null;
+          aviso(`sustituye al esperado ${objetivo.serial}`, 'background:#fef3c7;color:#92400e;',
+            'Este radio es del mismo cliente pero la devolución esperaba otro serial. Al confirmar, la fila esperada pasa a este serial y el sistema corrige el plan del contrato.');
         } else {
           f.destino = 'ajeno';
           f.modelo = unidad?.modelo_label || '';
@@ -1438,7 +1484,27 @@
 
     let aplicadas = 0;
     for (const f of filas) {
-      if (f.destino === 'esperado') {
+      if (f.destino === 'sustituye') {
+        // La fila esperada cambia de serial y se recibe. `serial_original`
+        // es la señal para que el backend corrija mapeo, linaje y plan.
+        const e = dev.esperados.find(x => x.id === f.esperado_id);
+        if (!e || e.resolucion) continue;
+        e.serial_original = e.serial_original || e.serial;
+        e.pool_doc_id_original = e.pool_doc_id_original || e.pool_doc_id || null;
+        e.serial = f.serial;
+        e.modelo = f.modelo || e.modelo || '';
+        e.modelo_id = f.modelo_id || e.modelo_id || null;
+        e.pool_doc_id = f.pool_doc_id || null;
+        e.sustituido_at = ts;
+        e.sustituido_por = user?.uid || null;
+        e.resolucion = 'recibido';
+        e.accesorios = { ...accesorios };
+        e.dano_visible = dano || null;
+        e.motivo_codigo = null;
+        e.motivo_detalle = null;
+        e.resuelto_at = ts;
+        e.resuelto_por = user?.uid || null;
+      } else if (f.destino === 'esperado') {
         const e = dev.esperados.find(x => x.id === f.esperado_id);
         if (!e || e.resolucion) continue; // resuelto por otra vía mientras revisaba
         e.resolucion = 'recibido';
@@ -2252,9 +2318,11 @@
             <input class="form-input" id="devNuevaCliente" list="devNuevaClientesList" placeholder="Nombre del cliente (elige o escribe)" autocomplete="off">
             <datalist id="devNuevaClientesList">${nombres.map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
           </div>
+          <div id="devNuevaContratos"></div>
           <div class="form-field" style="margin-bottom:8px;">
             <label class="form-label" for="devNuevaRef">Referencia del contrato de papel</label>
             <input class="form-input" id="devNuevaRef" placeholder="Ej.: contrato físico #123 / carpeta 2019" autocomplete="off">
+            <div id="devNuevaRefInfo" style="font-size:11.5px;margin-top:3px;"></div>
           </div>
           <div class="form-field" style="margin-bottom:8px;">
             <label class="form-label" for="devNuevaTotal">¿Cuántos equipos debe devolver? <span class="req"></span></label>
@@ -2282,6 +2350,125 @@
       if (e.target === overlay || e.target.closest('[data-close]')) cleanup();
     });
 
+    // ── Contratos del cliente con entrega SIN confirmar + devoluciones abiertas
+    // (2026-09-07, caso Gamboa). En un reemplazo el radio nuevo se entrega
+    // primero y el viejo llega después; si la entrega del contrato nuevo aún
+    // no está confirmada en el sistema, el tiquete de devolución no existe y
+    // recepción lo abría a mano — y al confirmarse la entrega salía otro.
+    // Aquí se confirma la entrega en el momento en que se descubre el desfase
+    // (callable confirmarEntregaContrato) y el tiquete correcto se crea solo.
+    // También se listan las devoluciones abiertas del cliente, para no abrir
+    // una segunda cuando ya hay una esperando ese radio.
+    const panel = overlay.querySelector('#devNuevaContratos');
+    const clienteDe = () => {
+      const nombre = (overlay.querySelector('#devNuevaCliente')?.value || '').trim();
+      return clientes.find(c => (c.nombre || '').trim().toLowerCase() === nombre.toLowerCase()) || null;
+    };
+    const ESTADO_CERRADA_DEV = 'CERRADA (DEVOLUCION)';
+    async function revisarCliente() {
+      const cli = clienteDe();
+      if (!cli || !panel) { if (panel) panel.innerHTML = ''; return; }
+      panel.innerHTML = `<div style="font-size:11.5px;color:var(--fg-3,#6b7280);margin:0 0 8px;">Revisando contratos y devoluciones del cliente…</div>`;
+      try {
+        const db = firebase.firestore();
+        const [cs, ds] = await Promise.all([
+          db.collection('contratos').where('cliente_id', '==', cli.id).get(),
+          db.collection('ordenes_de_servicio').where('tipo_de_servicio', '==', 'DEVOLUCION').where('cliente_id', '==', cli.id).get(),
+        ]);
+        const sinEntrega = cs.docs.map(d => ({ id: d.id, ...d.data() }))
+          .filter(c => c.deleted !== true && ['aprobado', 'activo'].includes(c.estado)
+            && Number(c.seriales_count || 0) > 0 && c.entrega_confirmada !== true)
+          .sort((a, b) => String(b.contrato_id || '').localeCompare(String(a.contrato_id || '')));
+        const abiertas = ds.docs.map(d => ({ id: d.id, ...d.data() }))
+          .filter(o => o.eliminado !== true && (o.estado_reparacion || '').toUpperCase() !== ESTADO_CERRADA_DEV)
+          .sort((a, b) => b.id.localeCompare(a.id));
+        if (clienteDe()?.id !== cli.id) return; // cambió el cliente mientras cargaba
+        if (!sinEntrega.length && !abiertas.length) { panel.innerHTML = ''; return; }
+        const pend = (o) => (typeof pendientesDevolucion === 'function') ? pendientesDevolucion(o)
+          : ((o.devolucion?.esperados || []).filter(e => !e.resolucion).length);
+        panel.innerHTML = `
+          ${abiertas.length ? `
+          <div style="margin:0 0 8px;border:1px solid #fcd34d;background:#fffbeb;border-radius:8px;padding:8px 10px;">
+            <div style="font-weight:700;font-size:12.5px;color:#78350f;margin-bottom:4px;">Este cliente ya tiene ${abiertas.length === 1 ? 'una devolución abierta' : `${abiertas.length} devoluciones abiertas`}</div>
+            ${abiertas.map(o => `
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0;">
+                <span style="font-family:var(--font-mono,monospace);">${esc(o.id)}</span>
+                <span style="color:#78350f;">${pend(o)} pendiente${pend(o) === 1 ? '' : 's'}${o.contrato?.contrato_id ? ` · ${esc(o.contrato.contrato_id)}` : ''}</span>
+                <button type="button" class="btn btn-sm dev-nueva-abrir" data-id="${esc(o.id)}" style="margin-left:auto;height:26px;">Abrir esa</button>
+              </div>`).join('')}
+            <div style="font-size:11px;color:#92400e;margin-top:4px;">Si el radio que tienes en el mostrador es de una de estas, regístralo ahí en vez de crear otra.</div>
+          </div>` : ''}
+          ${sinEntrega.length ? `
+          <div style="margin:0 0 8px;border:1px solid #bae6fd;background:#eff6ff;border-radius:8px;padding:8px 10px;">
+            <div style="font-weight:700;font-size:12.5px;margin-bottom:4px;">Contratos con equipo asignado y entrega sin confirmar</div>
+            ${sinEntrega.map(c => `
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0;" data-cid="${esc(c.id)}">
+                <span style="font-family:var(--font-mono,monospace);">${esc(c.contrato_id || c.id)}</span>
+                <span style="color:var(--fg-3,#6b7280);">${esc(c.tipo_contrato || '')} · ${Number(c.seriales_count || 0)} equipo${Number(c.seriales_count || 0) === 1 ? '' : 's'} · ${esc(c.estado)}</span>
+                <button type="button" class="btn btn-sm btn-primary dev-nueva-confirmar" data-cid="${esc(c.id)}" style="margin-left:auto;height:26px;"
+                        title="El cliente ya recibió estos equipos. Al confirmar, si el contrato reclama equipo (reemplazo/renovación), la orden de devolución se crea sola.">Confirmar entrega</button>
+              </div>`).join('')}
+            <div style="font-size:11px;color:var(--fg-3,#6b7280);margin-top:4px;">
+              Si el radio que trae el cliente es el <b>sustituido</b> por uno de estos contratos, confirma la entrega aquí: el tiquete de devolución correcto se crea solo en unos segundos y no hace falta uno de papel.
+            </div>
+          </div>` : ''}`;
+        panel.querySelectorAll('.dev-nueva-abrir').forEach(b => b.addEventListener('click', () => { cleanup(); abrir(b.dataset.id); }));
+        panel.querySelectorAll('.dev-nueva-confirmar').forEach(b => b.addEventListener('click', async () => {
+          const c = sinEntrega.find(x => x.id === b.dataset.cid);
+          if (!c) return;
+          if (!window.confirm(`Confirmar que el cliente YA recibió los ${Number(c.seriales_count || 0)} equipo(s) del contrato ${c.contrato_id || c.id}.\n\nSi el contrato reemplaza o renueva equipo, la orden de devolución de los radios salientes se creará sola.`)) return;
+          b.disabled = true; b.textContent = 'Confirmando…';
+          try {
+            // El SDK de functions se carga bajo demanda (carga-diferida.js).
+            if (window.CargaDiferida?.functions) await CargaDiferida.functions();
+            await firebase.functions().httpsCallable('confirmarEntregaContrato')({
+              contratoDocId: c.id, nota: 'Confirmada desde el formulario de devolución (el radio saliente llegó al mostrador).',
+            });
+            const fila = b.closest('[data-cid]');
+            if (fila) fila.innerHTML = `<span style="font-family:var(--font-mono,monospace);">${esc(c.contrato_id || c.id)}</span>
+              <span style="color:#067647;">✓ entrega confirmada — si reclama equipo, la devolución aparece sola en la lista en unos segundos</span>`;
+            Toast.show(`Entrega de ${c.contrato_id || c.id} confirmada.`, 'ok');
+          } catch (err) {
+            console.error('[OrdenesDevolucion.nueva] confirmarEntregaContrato', err);
+            Toast.show('No se pudo confirmar la entrega: ' + (err?.message || err), 'bad');
+            b.disabled = false; b.textContent = 'Confirmar entrega';
+          }
+        }));
+      } catch (err) {
+        console.warn('[OrdenesDevolucion.nueva] revisión del cliente', err);
+        panel.innerHTML = '';
+      }
+    }
+    overlay.querySelector('#devNuevaCliente')?.addEventListener('change', revisarCliente);
+
+    // ── Referencia que ES un contrato del sistema (2026-09-07) ───────────
+    // Si el texto de "Referencia del contrato de papel" coincide con un
+    // contrato_id real, la devolución se liga a ese contrato en vez de nacer
+    // con aplica:false — así el espejo marca la fila del contrato y el cierre
+    // de la ENTRADA puede evaluar la cancelación. Caso Gamboa: la orden manual
+    // decía "ALQ20260806-02" y hubo que religarla con un script.
+    let contratoLigado = null;
+    const refInfo = overlay.querySelector('#devNuevaRefInfo');
+    async function revisarRef() {
+      const ref = (overlay.querySelector('#devNuevaRef')?.value || '').trim().toUpperCase();
+      contratoLigado = null;
+      if (!refInfo) return;
+      refInfo.textContent = '';
+      if (!/^[A-Z]{2,6}\d{8}-\d{2}$/.test(ref)) return;
+      try {
+        const snap = await firebase.firestore().collection('contratos').where('contrato_id', '==', ref).limit(2).get();
+        const c = snap.docs.map(d => ({ id: d.id, ...d.data() })).find(x => x.deleted !== true);
+        if (!c) { refInfo.innerHTML = `<span style="color:var(--fg-3,#6b7280);">${esc(ref)} no es un contrato del sistema: queda como contrato de papel.</span>`; return; }
+        contratoLigado = c;
+        refInfo.innerHTML = `<span style="color:#067647;">✓ ${esc(ref)} existe en el sistema (${esc(c.cliente_nombre || '')} · ${esc(c.estado || '')}): la devolución quedará <b>ligada a ese contrato</b>.</span>`;
+        const inpCli = overlay.querySelector('#devNuevaCliente');
+        if (inpCli && !inpCli.value.trim() && c.cliente_nombre) { inpCli.value = c.cliente_nombre; revisarCliente(); }
+      } catch (err) {
+        console.warn('[OrdenesDevolucion.nueva] revisión de la referencia', err);
+      }
+    }
+    overlay.querySelector('#devNuevaRef')?.addEventListener('change', revisarRef);
+
     const btn = overlay.querySelector('#devNuevaCrearBtn');
     btn.onclick = async () => {
       const nombre = (overlay.querySelector('#devNuevaCliente')?.value || '').trim();
@@ -2300,15 +2487,21 @@
       btn.disabled = true;
       btn.textContent = 'Creando…';
       try {
+        // Referencia que resultó ser un contrato real: la orden nace ligada a
+        // él (y a su cliente, si el nombre tecleado no casó con ninguno).
+        const ligado = (contratoLigado && String(contratoLigado.contrato_id || '').toUpperCase() === refPapel.toUpperCase())
+          ? contratoLigado : null;
         const data = {
-          cliente_id: match?.id || '',
+          cliente_id: match?.id || ligado?.cliente_id || '',
           cliente_nombre: nombre,
           vendedor_asignado: '',
           tipo_de_servicio: 'DEVOLUCION',
           estado_reparacion: 'POR ASIGNAR',
           fecha_creacion: firebase.firestore.FieldValue.serverTimestamp(),
           observaciones: [
-            `Devolución sin contrato en el sistema${refPapel ? ` — ${refPapel}` : ''}.`,
+            ligado
+              ? `Devolución registrada en mostrador, ligada al contrato ${ligado.contrato_id} del sistema.`
+              : `Devolución sin contrato en el sistema${refPapel ? ` — ${refPapel}` : ''}.`,
             `El cliente debe devolver ${total} equipo${total === 1 ? '' : 's'}.`,
             obs,
           ].filter(Boolean).join(' '),
@@ -2323,7 +2516,13 @@
             // esperados que consultar, solo esta cantidad menos lo recibido.
             total_esperado: total,
           },
-          contrato: {
+          contrato: ligado ? {
+            aplica: true,
+            contrato_doc_id: ligado.id,
+            contrato_id: ligado.contrato_id,
+            contrato_origen_ids: [],
+            motivo_no_aplica: null,
+          } : {
             aplica: false,
             contrato_doc_id: null,
             contrato_id: refPapel || null,

@@ -18,11 +18,130 @@ const logger = require("firebase-functions/logger");
 const { admin, db } = require("./admin");
 const { APP_BASE_URL } = require("./inventario");
 const { recepcionEmails } = require("./mailRecipients");
+const { decidirDedupe } = require("../domain/dedupeDevolucion");
+const pool = require("../domain/equiposPool");
 
 const escapeHtml = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, s => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]
 ));
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
+
+// Devoluciones recientes del cliente para el dedupe. Índice compuesto:
+// ordenes_de_servicio(tipo_de_servicio ASC, cliente_id ASC, fecha_creacion DESC).
+// `eliminado` y la ventana de días los filtra decidirDedupe.
+async function _devolucionesRecientes(clienteId) {
+  const snap = await db.collection("ordenes_de_servicio")
+    .where("tipo_de_servicio", "==", "DEVOLUCION")
+    .where("cliente_id", "==", clienteId)
+    .orderBy("fecha_creacion", "desc")
+    .limit(40)
+    .get();
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+const _filaEsperada = (u) => ({
+  id: crypto.randomUUID(),
+  serial: (u.serial || "").toString().trim(),
+  modelo: (u.modelo || "").toString().trim(),
+  modelo_id: u.modelo_id || null,
+  pool_doc_id: u.pool_doc_id || null,
+  resolucion: null, motivo_codigo: null, motivo_detalle: null,
+  resuelto_at: null, resuelto_por: null,
+});
+
+// Agrega a una devolución ABIERTA las unidades que le faltan (misma idea que
+// crearOAlimentarEntrada). Une los contratos de origen para que el espejo
+// marque también la fila del contrato que ahora reclama. Devuelve false si la
+// orden ya no está abierta (carrera): el llamante crea aparte.
+async function _alimentarDevolucion(ordenId, unidades, { contratoDocId, contratoId, contratoOrigenIds, motivo, clienteId, clienteNombre }) {
+  const ref = db.collection("ordenes_de_servicio").doc(ordenId);
+  const nuevas = unidades.map(_filaEsperada);
+  const ok = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return false;
+    const o = snap.data();
+    if (o.eliminado === true || String(o.estado_reparacion || "").toUpperCase() === "CERRADA (DEVOLUCION)") return false;
+    const dev = o.devolucion || {};
+    const ya = new Set((dev.esperados || []).map(e => pool.normSerial(e && e.serial)).filter(Boolean));
+    const agregar = nuevas.filter(n => !ya.has(pool.normSerial(n.serial)));
+    if (!agregar.length) return true;
+    const c = o.contrato || {};
+    const origenes = new Set([...(Array.isArray(c.contrato_origen_ids) ? c.contrato_origen_ids : []), ...(contratoOrigenIds || [])].filter(Boolean));
+    const update = {
+      "devolucion.esperados": [...(dev.esperados || []), ...agregar],
+      "contrato.contrato_origen_ids": [...origenes],
+      observaciones: `${o.observaciones || ""}\n\nSe agregaron ${agregar.length} equipo(s) a este tiquete en vez de abrir otro: ${motivo} — contrato ${contratoId || contratoDocId || "—"}.`.trim(),
+      fecha_modificacion: admin.firestore.FieldValue.serverTimestamp(),
+      os_logs: admin.firestore.FieldValue.arrayUnion({ action: "DEVOLUCION_ALIMENTAR", by: "system:orden-devolucion", contrato: contratoId || null }),
+    };
+    // Un tiquete de papel al que se le suman unidades de un contrato del
+    // sistema queda ligado a ese contrato (el espejo y la cancelación lo
+    // necesitan); si ya tenía contrato, se respeta el suyo.
+    if (!c.aplica && contratoDocId) {
+      update["contrato.aplica"] = true;
+      update["contrato.contrato_doc_id"] = contratoDocId;
+      update["contrato.contrato_id"] = contratoId || null;
+      update["contrato.motivo_no_aplica"] = null;
+    }
+    tx.update(ref, update);
+    return true;
+  });
+  if (!ok) return false;
+
+  // Correo corto (best-effort): el vendedor y recepción ya conocen el tiquete.
+  try {
+    const destinatarios = await _destinatarios(clienteId);
+    if (destinatarios.length) {
+      await db.collection("mail_queue").add({
+        to: destinatarios[0],
+        cc: destinatarios.length > 1 ? destinatarios.slice(1).join(",") : null,
+        subject: `Equipos agregados a la devolución ${ordenId} – ${clienteNombre || "Cliente"}`,
+        preheader: `${nuevas.length} equipo(s) más por recuperar · ${motivo || ""}`,
+        bodyContent: `
+          <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#9A3412;">Devolución ${escapeHtml(ordenId)}</h2>
+          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+            El cliente <b>${escapeHtml(clienteNombre || "—")}</b> ya tenía este tiquete abierto, así que
+            <b>${nuevas.length} equipo(s)</b> se agregaron ahí en vez de abrir otra orden (${escapeHtml(motivo || "")}).
+          </p>
+          <p style="margin:0;font:13px/1.5 Arial,sans-serif;font-family:monospace;">${nuevas.map(u => escapeHtml(u.serial)).join("<br>")}</p>`,
+        ctaUrl: `${APP_BASE_URL}/ordenes/index.html`,
+        ctaLabel: "Abrir órdenes de servicio",
+        meta: { created_at: admin.firestore.FieldValue.serverTimestamp(), source: "orden-devolucion-alimentar", orden_id: ordenId, contrato_id: contratoId || contratoDocId || null },
+        status: "queued",
+      });
+    }
+  } catch (e) {
+    logger.warn("[ordenDevolucion] No se pudo encolar el correo de unidades agregadas (no crítico)", { ordenId, message: e.message });
+  }
+  return true;
+}
+
+// Deja constancia en el tiquete que ya cubría la devolución de que otro
+// disparador la reclamó (y liga el contrato si el tiquete era de papel).
+async function _anotarDuplicado(ordenId, contratoId, contratoDocId, contratoOrigenIds, lista, motivo) {
+  try {
+    const ref = db.collection("ordenes_de_servicio").doc(ordenId);
+    const snap = await ref.get();
+    if (!snap.exists) return;
+    const o = snap.data();
+    const c = o.contrato || {};
+    const origenes = new Set([...(Array.isArray(c.contrato_origen_ids) ? c.contrato_origen_ids : []), ...(contratoOrigenIds || [])].filter(Boolean));
+    const update = {
+      "contrato.contrato_origen_ids": [...origenes],
+      observaciones: `${o.observaciones || ""}\n\nEste tiquete ya cubre la devolución que pedía: ${motivo} — contrato ${contratoId || contratoDocId || "—"} (${lista.map(u => u.serial).join(", ")}). No se abrió otra orden.`.trim(),
+      os_logs: admin.firestore.FieldValue.arrayUnion({ action: "DEVOLUCION_YA_CUBIERTA", by: "system:orden-devolucion", contrato: contratoId || null }),
+    };
+    if (!c.aplica && contratoDocId) {
+      update["contrato.aplica"] = true;
+      update["contrato.contrato_doc_id"] = contratoDocId;
+      update["contrato.contrato_id"] = contratoId || null;
+      update["contrato.motivo_no_aplica"] = null;
+    }
+    await ref.update(update);
+  } catch (e) {
+    logger.warn("[ordenDevolucion] No se pudo anotar el duplicado (no crítico)", { ordenId, message: e.message });
+  }
+}
 
 // Mismo formato de número de orden que ordenEntrada (AAAAMMDDNN, hora Panamá).
 async function _siguienteOrdenId() {
@@ -70,9 +189,46 @@ async function _destinatarios(clienteId) {
  * @returns {string|null} ordenId, o null (best-effort).
  */
 async function crearOrdenDevolucion({ clienteId, clienteNombre, contratoDocId, contratoId, contratoOrigenIds, modo, origen, unidades, porModelo, motivo }) {
-  const lista = (unidades || []).filter(u => (u.serial || "").toString().trim());
+  let lista = (unidades || []).filter(u => (u.serial || "").toString().trim());
   const modelos = (porModelo || []).filter(m => Number(m.cantidad || 0) > 0);
   if (!lista.length && !modelos.length) return null;
+
+  // ── Deduplicación (2026-09-07) ─────────────────────────────────────────
+  // ¿Ya hay un tiquete del cliente que reclama estos mismos radios? Caso
+  // Gamboa: recepción abrió la devolución a mano con el radio en el mostrador
+  // y dos horas después la confirmación de la entrega abrió OTRA. La regla
+  // (domain/dedupeDevolucion.js) da el mismo resultado sin importar el orden:
+  // abierta que coincide → se alimenta; todo ya cubierto → no se crea; una
+  // parte ya volvió → se crea solo con el resto. Best-effort: si la consulta
+  // falla se crea como siempre (peor un duplicado que una devolución perdida).
+  if (clienteId && lista.length && !modelos.length) {
+    try {
+      const existentes = await _devolucionesRecientes(clienteId);
+      const d = decidirDedupe({ unidades: lista, origen, existentes });
+      if (d.accion === "omitir") {
+        logger.info("[ordenDevolucion] Devolución ya cubierta por otro tiquete — no se crea",
+          { ordenId: d.ordenId, contratoId, motivo: d.motivo, unidades: lista.length });
+        if (d.ordenId) await _anotarDuplicado(d.ordenId, contratoId, contratoDocId, contratoOrigenIds, lista, motivo);
+        return d.ordenId;
+      }
+      if (d.accion === "alimentar") {
+        const ok = await _alimentarDevolucion(d.ordenId, d.unidades, { contratoDocId, contratoId, contratoOrigenIds, motivo, clienteId, clienteNombre });
+        if (ok) {
+          logger.info("[ordenDevolucion] Unidades agregadas a una devolución abierta del cliente",
+            { ordenId: d.ordenId, contratoId, motivo: d.motivo, agregadas: d.unidades.length });
+          return d.ordenId;
+        }
+        // La abierta se cerró entre la lectura y la escritura: se crea aparte.
+      }
+      if (d.unidades.length < lista.length) {
+        logger.info("[ordenDevolucion] Parte de las unidades ya volvió en otro tiquete; se reclama el resto",
+          { contratoId, antes: lista.length, ahora: d.unidades.length });
+        lista = d.unidades;
+      }
+    } catch (e) {
+      logger.warn("[ordenDevolucion] Dedupe no disponible — se crea la orden como siempre", { clienteId, message: e.message });
+    }
+  }
 
   const esperados = lista.map(u => ({
     id: crypto.randomUUID(),
