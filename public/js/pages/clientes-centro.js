@@ -721,7 +721,7 @@ window.Centro = {
           B('Validar firmante…', `Centro.aceptarFirmante('${this.esc(c.id)}')`, true));
       } else if (c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()) {
         it('warn', `El contrato ${id} espera la firma del cliente`,
-          c.firma_solicitud_estado === 'pendiente' ? 'El enlace de firma ya se envió — se puede reenviar' : 'Envíale el enlace de firma digital (o sube el firmado desde Ver)',
+          c.firma_solicitud_estado === 'pendiente' ? 'El enlace de firma ya se envió — se puede reenviar' : 'Envíale el enlace de firma digital, o imprime el contrato y sube el firmado desde el expediente',
           B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`) + B('Enviar para firma', `Centro.enviarFirma('${this.esc(c.id)}')`, true));
       } else if (c.estado === 'activo') {
         const reg = this._regPendiente(c);
@@ -934,6 +934,7 @@ window.Centro = {
         <a href="../contratos/documento.html?id=${encodeURIComponent(c.id)}" class="btn-quiet">Documento completo ›</a>
         <a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}&volver=centro" class="btn-quiet">Editar</a>
         <span class="sep"></span>
+        ${this._btnsFirmadoContrato(c)}
         ${c.estado === 'pendiente_aprobacion' && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
           ? `<button class="btn btn-primary cg-act" onclick="Centro.aprobarContrato('${this.esc(c.id)}')">Aprobar contrato</button>` : ''}
         ${ContratoAnulacion.esAnulable(c) && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
@@ -1024,6 +1025,93 @@ window.Centro = {
   // Aprobación del contrato SIN salir del Centro (2026-08-28: el correo de
   // "contrato creado" mandaba al módulo viejo para aprobar). Mismos campos
   // que contratos-approval.js; las rules solo guardan el salto a 'activo'.
+  // ── Contrato en papel: imprimir y subir el firmado desde el Centro ──
+  // (Alberto 2026-09-07: el anexo de aumento tenía imprimir + subir firmado a
+  // la vista y el contrato/renovación no — "Subir firmado" vivía solo en el
+  // módulo viejo de /contratos/.) Misma vía que contratos-upload.js: subir el
+  // PDF de un contrato APROBADO lo activa en el mismo write
+  // (rules::esActivacionPorFirmado, admin/vendedor); sobre un contrato ACTIVO
+  // repunta el archivo y archiva el anterior en firmado_historial[].
+  _puedeSubirFirmado() { return [ROLES.ADMIN, 'admin', ROLES.VENDEDOR].includes(this.rol); },
+  _aceptaFirmado(c) {
+    return (c?.estado === 'aprobado' && !c.firmado) || (c?.estado === 'activo' && !c.firmado_url);
+  },
+  _btnsFirmadoContrato(c) {
+    if (!c || !this.puedeCrearGestion()) return '';
+    const esperaFirma = c.estado === 'aprobado' && !c.firmado;
+    const imprimir = esperaFirma
+      ? `<a class="btn btn-ghost cg-act" target="_blank" href="../contratos/documento.html?id=${encodeURIComponent(c.id)}">Imprimir contrato</a>` : '';
+    const subir = this._aceptaFirmado(c) && this._puedeSubirFirmado()
+      ? `<label class="btn btn-ghost cg-act" style="cursor:pointer;" title="PDF, o fotos del contrato firmado (se arman en un solo PDF)">Subir firmado
+           <input type="file" multiple accept="application/pdf,image/*" style="display:none;"
+             onchange="Centro.subirFirmadoContrato('${this.esc(c.id)}', this.files)"></label>` : '';
+    return imprimir + subir;
+  },
+  async subirFirmadoContrato(id, fileList) {
+    const files = [...(fileList || [])];
+    if (!files.length) return;
+    if (!this._puedeSubirFirmado()) { Toast.show('Solo administración o el vendedor suben el contrato firmado', 'warn'); return; }
+    const c = this.contratos.find(x => x.id === id);
+    if (!c) { Toast.show('Contrato no encontrado', 'bad'); return; }
+    const modo = c.estado === 'aprobado' ? 'activacion' : c.estado === 'activo' ? 'reemplazo' : null;
+    if (!modo) { Toast.show('Solo se sube el firmado a contratos aprobados o activos', 'warn'); return; }
+    const legible = c.contrato_id || id;
+    if (modo === 'reemplazo' && c.firmado_url
+        && !window.confirm(`Vas a sustituir el archivo firmado de ${legible}. El actual queda archivado en el historial (no se borra); el estado y la fecha de activación no cambian. ¿Continuar?`)) return;
+    // storage.rules exige application/pdf en contratos_firmados/: un PDF pasa
+    // directo; las FOTOS (WhatsApp) se arman en un solo PDF con el conversor
+    // de contratos-upload.js. Mezclar PDF con fotos no tiene orden: se rechaza.
+    const esPdf = (f) => f.type === 'application/pdf' || (f.name.split('.').pop() || '').toLowerCase() === 'pdf';
+    const esImg = (f) => /^image\//.test(f.type);
+    let file;
+    try {
+      if (files.length === 1 && esPdf(files[0])) file = files[0];
+      else if (files.every(esImg)) {
+        if (!window.ContratosFirmado?._fotosAPdf) throw new Error('el conversor de fotos no está cargado');
+        Toast.show(`Armando un PDF con ${files.length} foto(s)…`, '');
+        const blob = await ContratosFirmado._fotosAPdf(files);
+        file = new File([blob], `firmado_${files.length}fotos.pdf`, { type: 'application/pdf' });
+      } else { Toast.show('Sube UN PDF, o solo fotos (varias a la vez) — no mezclados', 'warn'); return; }
+    } catch (e) { console.error(e); Toast.show('No se pudo preparar el archivo: ' + (e?.message || e), 'bad'); return; }
+    try {
+      Toast.show('Subiendo contrato firmado…', '');
+      const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
+      const path = `contratos_firmados/${legible}_${Date.now()}.${ext}`;
+      const snap = await firebase.storage().ref(path).put(file, {
+        contentType: file.type,
+        customMetadata: { contrato_doc_id: id, contrato_id: legible },
+      });
+      const url = await snap.ref.getDownloadURL();
+      const ahora = firebase.firestore.Timestamp.now();
+      const update = {
+        firmado: true, firmado_url: url, firmado_nombre: file.name,
+        firmado_storage_path: path, firmado_fecha: ahora, firmado_por_uid: this.uid,
+      };
+      if (modo === 'activacion') {
+        update.estado_previo = c.estado;
+        update.estado = 'activo';
+        update.fecha_activacion = ahora;
+      } else if (c.firmado_url) {
+        // Timestamp.now() y no serverTimestamp(): arrayUnion no acepta sentinels.
+        update.firmado_historial = firebase.firestore.FieldValue.arrayUnion({
+          firmado_url: c.firmado_url || null, firmado_nombre: c.firmado_nombre || null,
+          firmado_storage_path: c.firmado_storage_path || null, firmado_fecha: c.firmado_fecha || null,
+          firmado_por_uid: c.firmado_por_uid || null,
+          reemplazado_at: ahora, reemplazado_por_uid: this.uid, reemplazado_por: url,
+        });
+      }
+      await ContratosService.updateContrato(id, update);
+      this._cerrarModal();
+      Toast.show(modo === 'activacion'
+        ? `Contrato ${legible} firmado y ACTIVO — ${c.accion === 'Renovación' ? 'la cuenta queda consolidada; ' : ''}la custodia se amarra al entregarse`
+        : `Contrato ${legible}: firmado reemplazado — el anterior quedó archivado`, 'ok');
+      await this.abrir(this.cliente.id, { push: false });
+    } catch (e) {
+      console.error(e);
+      Toast.show('No se pudo subir el contrato firmado: ' + (e?.message || e), 'bad', 8000);
+    }
+  },
+
   async aprobarContrato(id) {
     const c = this.contratos.find(x => x.id === id);
     if (!c || c.estado !== 'pendiente_aprobacion') { Toast.show('El contrato no está pendiente de aprobación', 'warn'); return; }
@@ -1794,6 +1882,7 @@ window.Centro = {
         ? `<button class="btn btn-primary cg-act" onclick="Centro.aprobarContrato('${this.esc(c.id)}')">Aprobar contrato</button>` : ''}
       ${c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
         ? `<button class="btn btn-primary cg-act" onclick="Centro.enviarFirma('${this.esc(c.id)}')">Enviar para firma</button>` : ''}
+      ${this._btnsFirmadoContrato(c)}
       ${esRenov && c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
         ? `<button class="btn btn-ghost cg-act" onclick="Centro.wizSerialesRenovacion('${this.esc(c.id)}')" title="Qué seriales siguen con el cliente, cuáles no tiene y cuáles faltan — antes de la firma">Seriales de la cuenta</button>` : ''}
       ${reg?.motivo === 'sobrantes' && this.puedeCrearGestion()
