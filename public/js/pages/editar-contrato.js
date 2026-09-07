@@ -1,6 +1,17 @@
 // @ts-nocheck
 const params = new URLSearchParams(location.search);
 const contratoDocId = params.get("id");
+// ¿A dónde volver al guardar/cancelar? El Centro de gestión llega con
+// `?volver=centro` (misma whitelist de destinos que Layout.renderTopbar): se
+// regresa a la ficha del cliente con el contrato reabierto. Sin él, la lista
+// vieja. El destino se arma con el cliente del contrato, por eso es función.
+const volverCentro = params.get("volver") === "centro";
+function destinoVolver() {
+  const cid = contratoActual?.cliente_id;
+  return (volverCentro && cid)
+    ? `../clientes/centro.html?id=${encodeURIComponent(cid)}&contrato=${encodeURIComponent(contratoDocId)}`
+    : "index.html";
+}
 let modelosDisponibles = [];
 let contratoActual = null;
 // NCCargos llama window.NCForm.recalcularTotalesContrato() al cambiar conceptos;
@@ -33,18 +44,23 @@ async function cargarContrato() {
     return;
   }
   contratoActual = c;
+  if (volverCentro) {
+    const back = document.querySelector('#topbar-mount a.btn.btn-ghost[href="index.html"]');
+    if (back) { back.href = destinoVolver(); back.innerHTML = '<i data-lucide="arrow-left"></i> Volver al Centro'; }
+    if (window.lucide?.createIcons) lucide.createIcons();
+  }
 
   // 3) Bloquear edición si ya fue aprobado
   if (c.estado === "activo") {
     Toast.show('Este contrato ya fue aprobado y no se puede editar.', 'bad');
-    window.location.href = `imprimir-contrato.html?id=${encodeURIComponent(contratoDocId)}`;
+    window.location.href = volverCentro ? destinoVolver() : `imprimir-contrato.html?id=${encodeURIComponent(contratoDocId)}`;
     return;
   }
   // 3b) Con un enlace de firma pendiente el cliente está leyendo una copia
   // congelada: editar por debajo la dejaría firmando otra cosa (2026-09-04).
   if (c.estado === "aprobado" && c.firma_solicitud_estado === "pendiente") {
     Toast.show('Este contrato tiene un enlace de firma pendiente: no se edita hasta que el cliente firme o se anule la solicitud.', 'bad');
-    window.location.href = `../clientes/centro.html?id=${encodeURIComponent(c.cliente_id || "")}`;
+    window.location.href = volverCentro ? destinoVolver() : `../clientes/centro.html?id=${encodeURIComponent(c.cliente_id || "")}`;
     return;
   }
   // Plan por serial del Centro: la modalidad (sin equipo / refurbished) se
@@ -364,7 +380,7 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
   } else {
     Toast.show('Cambios guardados', 'ok');
   }
-  location.href = "index.html";
+  location.href = destinoVolver();
 });
 
 
@@ -375,6 +391,11 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
 document.addEventListener('DOMContentLoaded', () => {
   const selEstado = document.getElementById('estado');
   if (selEstado) selEstado.disabled = true;
+
+  // Cancelar regresa a donde se venía (Centro); el "Volver" del topbar se
+  // repunta en cargarContrato() cuando ya se conoce el cliente.
+  const btn = document.getElementById("btnCancelarEdicion");
+  if (btn && volverCentro) btn.onclick = () => { window.location.href = destinoVolver(); };
 
   document.getElementById("accion")?.addEventListener("change", refreshRenovacionEditorUI);
   document.getElementById("renovacion_sin_equipo")?.addEventListener("change", refreshRenovacionEditorUI);

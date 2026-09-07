@@ -55,6 +55,9 @@ window.Centro = {
         const params = new URLSearchParams(location.search);
         const id = params.get('id');
         this.gSel = params.get('g') || null;   // deep-link al expediente (correos)
+        // Deep-link al contrato (?contrato=): el editor del módulo viejo vuelve
+        // aquí y reabre el mismo contrato que se estaba viendo (2026-09-07).
+        this.cSel = params.get('contrato') || null;
         if (id) await this.abrir(id, { push: false });
         else await this.cargarLista(true);
         this.cargarParaHoy();                  // franja de alertas del directorio
@@ -436,6 +439,11 @@ window.Centro = {
       this.pintarGestiones();
       this.armarMenu();
       if (window.lucide?.createIcons) lucide.createIcons();
+      if (this.cSel) {
+        const cid = this.cSel; this.cSel = null;
+        history.replaceState({}, '', `?id=${encodeURIComponent(clienteId)}`);
+        if (this.contratos.some(x => x.id === cid)) this.verContrato(cid);
+      }
       // Escucha en vivo: los triggers escriben el avance ~1-2s después de
       // cada acción y la página lo adivinaba con setTimeout — ahora el
       // expediente se repinta cuando el dato REAL llega.
@@ -921,7 +929,7 @@ window.Centro = {
       ${c.observaciones ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0; max-width:72ch;">${this.esc(c.observaciones)}</p>` : ''}`,
       footer: `
         <a href="../contratos/documento.html?id=${encodeURIComponent(c.id)}" class="btn-quiet">Documento completo ›</a>
-        <a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}" class="btn-quiet">Editar</a>
+        <a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}&volver=centro" class="btn-quiet">Editar</a>
         <span class="sep"></span>
         ${c.estado === 'pendiente_aprobacion' && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
           ? `<button class="btn btn-primary cg-act" onclick="Centro.aprobarContrato('${this.esc(c.id)}')">Aprobar contrato</button>` : ''}
