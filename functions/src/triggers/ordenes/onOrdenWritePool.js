@@ -2,6 +2,7 @@ const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const pool = require("../../domain/equiposPool");
 const { catalogo } = require("../../domain/modeloCatalogo");
+const { decidirMarcaCancelacion } = require("../../domain/cancelacionEntrada");
 const { admin, db } = require("../../lib/admin");
 
 // Pool de equipos ↔ órdenes de servicio ("migración por contacto", plan
@@ -257,6 +258,12 @@ module.exports = onDocumentWritten(
         // ventas lo cancele. NO se cancela solo — una ENTRADA también puede ser
         // una reparación o un reemplazo, y cancelar factura de por medio es
         // decisión humana (decidido con el usuario 2026-07-28).
+        //
+        // Solo si lo que volvió es equipo PROPIO del contrato. La ENTRADA de un
+        // REEMPLAZO va ligada al REEMP (él disparó la devolución) pero trae los
+        // radios sustituidos, que nunca fueron suyos: marcarlo pedía cancelar
+        // un reemplazo cumplido (REEMP20260901-01, 2026-09-07). La regla vive
+        // en domain/cancelacionEntrada.js; en la duda, marca.
         const c = after.contrato || {};
         if (c.aplica && c.contrato_doc_id) {
           try {
@@ -264,17 +271,32 @@ module.exports = onDocumentWritten(
             const snap = await ref.get();
             const estado = String(snap.exists ? (snap.data().estado || "") : "").toLowerCase();
             if (snap.exists && VIGENTES.has(estado)) {
-              await ref.set({
-                cancelacion_pendiente: {
-                  orden_entrada_id: ordenId,
-                  orden_numero: after.numero_orden || ordenId,
-                  cliente_nombre: after.cliente_nombre || "",
-                  seriales: despues.map((e) => e.serial),
-                  at: admin.firestore.FieldValue.serverTimestamp(),
-                },
-              }, { merge: true });
-              logger.info("[onOrdenWritePool] Contrato marcado para cancelar tras ENTRADA",
-                { ordenId, contrato: c.contrato_id || c.contrato_doc_id, unidades: despues.length });
+              let propios = null;
+              try {
+                const ss = await ref.collection("seriales").get();
+                propios = ss.docs.map((d) => d.data()?.serial).filter((s) => typeof s === "string");
+              } catch (e) {
+                logger.warn("[onOrdenWritePool] No se pudieron leer los seriales del contrato",
+                  { ordenId, contrato: c.contrato_id || c.contrato_doc_id, err: String(e) });
+              }
+              const decision = decidirMarcaCancelacion({ devueltos: despues, propios });
+              if (decision.marcar) {
+                await ref.set({
+                  cancelacion_pendiente: {
+                    motivo: "entrada",
+                    orden_entrada_id: ordenId,
+                    orden_numero: after.numero_orden || ordenId,
+                    cliente_nombre: after.cliente_nombre || "",
+                    seriales: despues.map((e) => e.serial),
+                    at: admin.firestore.FieldValue.serverTimestamp(),
+                  },
+                }, { merge: true });
+                logger.info("[onOrdenWritePool] Contrato marcado para cancelar tras ENTRADA",
+                  { ordenId, contrato: c.contrato_id || c.contrato_doc_id, unidades: despues.length, motivo: decision.motivo });
+              } else {
+                logger.info("[onOrdenWritePool] ENTRADA con equipo ajeno al contrato (reemplazo/renovación): no se marca",
+                  { ordenId, contrato: c.contrato_id || c.contrato_doc_id, unidades: despues.length, propios: propios.length });
+              }
             }
           } catch (err) {
             logger.warn("[onOrdenWritePool] No se pudo marcar el contrato", { ordenId, err: String(err) });
