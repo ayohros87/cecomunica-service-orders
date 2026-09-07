@@ -2317,7 +2317,10 @@ window.Centro = {
       <a href="../cotizaciones/nueva-cotizacion.html?cliente_id=${this.esc(this.cliente.id)}&from=centro">Nueva cotización
         <span style="display:block; font-size:11px; color:var(--fg-4);">abre el editor con este cliente ya elegido; Cancelar regresa aquí</span></a>` : ''}
       <div class="hd">Cliente</div>
-      <a href="./ficha.html?id=${this.esc(this.cliente.id)}&from=centro">Editar datos del cliente</a>
+      ${this._puedeEditarCliente()
+        ? `<a href="./ficha.html?id=${this.esc(this.cliente.id)}&from=centro">Editar datos del cliente</a>`
+        : `<a href="./ficha.html?id=${this.esc(this.cliente.id)}&from=centro">Ver datos del cliente
+        <span style="display:block; font-size:11px; color:var(--fg-4);">solo lectura — los cambios los hace cobros (cobros@cecomunica.com)</span></a>`}
       ${this._puedeMasiva() ? `<a href="./index.html">Edición masiva de clientes
         <span style="display:block; font-size:11px; color:var(--fg-4);">avanzada — hoja completa con autoguardado; cada cambio queda en el historial</span></a>` : ''}`;
   },
@@ -2326,6 +2329,12 @@ window.Centro = {
   // por aquí y solo los roles que la página acepta (su propio guard: admin y
   // recepción — gerente nunca pasó ese guard, así que no se le ofrece).
   _puedeMasiva() { return [ROLES.ADMIN, 'admin', ROLES.RECEPCION].includes(this.rol); },
+
+  // Espejo de FichaCliente._puedeEditar (clientes-ficha.js) y del candado de
+  // identidad en rules: admin/gerente/recepción. Cobros entra con rol recepción
+  // (cobros@cecomunica.com); al vendedor se le muestra la ficha en solo lectura
+  // y se le dirige a cobros.
+  _puedeEditarCliente() { return [ROLES.ADMIN, 'admin', ROLES.RECEPCION, ROLES.GERENTE].includes(this.rol); },
 
   // Espejo del guard del editor de cotizaciones (admin/vendedor/jefe_taller);
   // gerente y recepción ven este menú pero el editor los rebotaría al home,
