@@ -2430,6 +2430,12 @@ window.Centro = {
       <div class="hd">Equipos</div>
       <button type="button" onclick="Centro.wizReemplazo()">Reemplazo de equipo</button>
       <button type="button" onclick="Centro.wizDemo()">Demo de equipos</button>
+      <!-- TEMP (evento) es independiente de la cuenta — como el DEMO, no
+           cuenta para _cuentaEstado ni renueva nada. Antes solo salía dentro
+           de "Nuevo contrato", que una cuenta con contratos vigentes NO
+           ofrece (caso Municipio de Arraiján / Elvia, 2026-09-07). -->
+      <button type="button" onclick="Centro.wizContrato({temporal:true})">Contrato temporal (evento)
+        <span style="display:block; font-size:11px; color:var(--fg-4);">alquiler por días o meses con su propio contrato — no toca ni renueva los contratos de la cuenta</span></button>
       <button type="button" onclick="Centro.wizBaja()">Baja de equipos (parcial, por serial)</button>
       <div class="hd">Cuenta</div>
       ${cuentaHtml}
@@ -3435,6 +3441,9 @@ window.Centro = {
       preIds = candidatos.filter(c => this._aplicaVenc(c) && !this._renovadoPor(c)).map(c => c.id);
     }
     const esRenov = !!(opts.renovarDe || opts.renovarCuenta);
+    // Contrato TEMPORAL (evento) desde el menú (2026-09-07): entra con el tipo
+    // fijo en TEMP, sin origen ni plan — es independiente de la cuenta.
+    const esTemp = !esRenov && !!opts.temporal;
     const custodia = this._wcCustodia();
     // Regularización: cuenta sin contratos en el sistema → escape legacy.
     const legacyAuto = esRenov && !preIds.length && !candidatos.length;
@@ -3488,7 +3497,7 @@ window.Centro = {
       // regulariza la custodia — llamarlo "renovar" confundía (2026-09-01).
       titulo: `${legacyAuto ? 'Nuevo contrato (regulariza la cuenta)'
         : opts.renovarCuenta ? 'Renovar cuenta (consolidación)'
-        : esRenov ? 'Renovación' : 'Nuevo contrato'} — ${this.esc(this.cliente.nombre)}`,
+        : esRenov ? 'Renovación' : esTemp ? 'Contrato temporal (evento)' : 'Nuevo contrato'} — ${this.esc(this.cliente.nombre)}`,
       cuerpo: `
       <p style="margin:0 0 14px; font-size:13px; color:var(--fg-3); max-width:72ch;">
         El contrato nace <b>pendiente de aprobación</b> con el mismo flujo de siempre (aprobación →
@@ -3509,25 +3518,26 @@ window.Centro = {
           <div class="form-field" style="margin:0; max-width:170px;">
             <label class="form-label" for="wcTipo">Tipo</label>
             <select class="form-select" id="wcTipo" onchange="Centro._wcSyncTipo()">
-              ${(esRenov ? ['SERV'] : ['SERV', 'TEMP'])
-                .map(k => `<option value="${k}" ${k === 'SERV' ? 'selected' : ''}>${this.TIPOS_CONTRATO[k]}</option>`).join('')}
+              ${(esTemp ? ['TEMP'] : esRenov ? ['SERV'] : ['SERV', 'TEMP'])
+                .map(k => `<option value="${k}" ${k === (esTemp ? 'TEMP' : 'SERV') ? 'selected' : ''}>${this.TIPOS_CONTRATO[k]}</option>`).join('')}
             </select></div>
           <div class="form-field" style="margin:0; max-width:210px;">
             <label class="form-label" for="wcMeses">Duración</label>
             <div style="display:flex; gap:6px;">
-              <input class="form-input" type="number" id="wcMeses" min="1" value="18" style="width:90px;">
+              <input class="form-input" type="number" id="wcMeses" min="1" value="${esTemp ? 7 : 18}" style="width:90px;">
               <!-- Días solo para TEMP (eventos cortos, caso FANLYC 2026-09-02:
                    "del 3 al 6 de septiembre" forzado a meses). _wcSyncTipo lo
                    muestra/oculta. -->
-              <select class="form-select" id="wcDurUnidad" style="width:100px; display:none;">
-                <option value="meses" selected>meses</option>
-                <option value="dias">días</option>
+              <select class="form-select" id="wcDurUnidad" style="width:100px; ${esTemp ? '' : 'display:none;'}">
+                <option value="meses" ${esTemp ? '' : 'selected'}>meses</option>
+                <option value="dias" ${esTemp ? 'selected' : ''}>días</option>
               </select>
-              <span id="wcDurMesesLbl" style="align-self:center; font-size:13px; color:var(--fg-3);">meses</span>
+              <span id="wcDurMesesLbl" style="align-self:center; font-size:13px; color:var(--fg-3); ${esTemp ? 'display:none;' : ''}">meses</span>
             </div></div>
           <p style="margin:0 0 7px; font-size:12.5px; color:var(--fg-3);">
             ${legacyAuto ? 'Regulariza la cuenta: los equipos en campo se amarran a este contrato al activarse.'
               : esRenov ? 'Renovación de la cuenta — los orígenes marcados pasan al histórico al activarse.'
+              : esTemp ? 'Contrato temporal por evento: termina con la devolución de los equipos — no renueva ni toca los demás contratos de la cuenta.'
               : 'Contrato nuevo.'}</p>
         </div>
         <!-- La acción NO se pregunta (2026-09-01, "el menú decide"): la fija
@@ -3607,6 +3617,9 @@ window.Centro = {
     });
     this._wcPlanState = { destinos: {}, reemplazos: {}, refurb: {}, agregados: [] };
     this._wcSoloPlan = false;
+    // TEMP fijo: la acción pasa a 'No Aplica' y se esconde el bloque de origen
+    // (lo mismo que hace el select al cambiar a mano).
+    if (esTemp) this._wcSyncTipo();
     this._wcSyncPlan();
     this._wcPreview();
   },
