@@ -276,7 +276,7 @@
         const marco = d.marco_html || (window.ContratoV2Texto ? ContratoV2Texto.anexoMarco : '');
         const claus = d.clausulas_html || (window.ContratoV2Texto ? ContratoV2Texto.clausulasHtml : '');
         cont.innerHTML = `
-          <p>Anexo de ${ajuste ? 'ajuste de tarifa' : regu ? 'regularización' : 'aumento'} al contrato <b>${this.esc(s.contrato_id || '—')}</b> entre
+          <p>${s.contrato_papel ? 'Adenda' : 'Anexo'} de ${ajuste ? 'ajuste de tarifa' : regu ? 'regularización' : 'aumento'} al contrato <b>${this.esc(s.contrato_id || '—')}</b>${s.contrato_papel ? ' (contrato marco suscrito en documento físico, que ambas partes reconocen como vigente)' : ''} entre
             <b>C COMUNICA, S.A.</b> y <b>${this.esc(s.cliente_nombre || 'EL CLIENTE')}</b>. ${intro}</p>
           ${regu && serialesRegu ? `<table><thead><tr><th>Serial</th><th>Modelo</th></tr></thead><tbody>${serialesRegu}</tbody></table>` : ''}
           ${ajuste && (s.ajustes_precio || []).length ? `

@@ -20,6 +20,7 @@ const { admin, db } = require("../../lib/admin");
 const { APP_BASE_URL } = require("../../lib/inventario");
 const pool = require("../../domain/equiposPool");
 const G = require("../../lib/gestiones");
+const AP = require("../../lib/adendaPapel");
 
 // Condiciones de cierre por tipo. Reemplazo/demo: las 4 del correo de Zuleika.
 // Baja (Ola 3): aprobación → derivación (fin de facturación aplicado y
@@ -598,7 +599,23 @@ module.exports = onDocumentWritten(
         // — sin líneas de equipo es válido; los cargos se aplican, el servicio
         // se estampa por serial y la gestión cierra sin bodega ni entrega.
         const esAjuste = a.es_ajuste === true && (a.cargos || []).length > 0;
-        if (!a.contrato_doc_id || (!(a.lineas || []).length && !esAjuste)) {
+        // ADENDA A CONTRATO EN PAPEL (2026-09-07, caso Falcon Servicios): el
+        // contrato marco no está en el sistema y la cuenta no se pudo
+        // regularizar en el momento. No hay doc al que aplicarle líneas — la
+        // derivación se marca igual para que la OS salga (sección C exige el
+        // flag); el tramo se estampa EN LAS UNIDADES al entregar
+        // (onOrdenWriteGestion) y la cuenta sigue pidiendo regularización.
+        const esPapel = AP.esAdendaPapel(a);
+        if (esPapel && (a.lineas || []).length) {
+          const osYaSalio = !!gA.ordenes?.programacion_id;
+          await ref.set({
+            cierre: { ...(gA.cierre || {}), derivacion: true },
+            ...(osYaSalio ? { estado: "en_proceso" } : {}),
+          }, { merge: true });
+          await G.registrarEvento(gid, "derivacion",
+            `Adenda firmada al contrato EN PAPEL ${a.contrato_id || "—"}: ${(a.lineas || []).length} línea(s) con vigencia propia (${a.duracion_meses || "?"} meses desde la entrega). El contrato marco no está en el sistema, así que no hay líneas que aplicar: el tramo se estampará en cada equipo al entregarse y la cuenta sigue pendiente de regularizar.${osYaSalio ? ` La OS ${gA.ordenes.programacion_id} ya estaba en curso — la entrega queda libre.` : ""}`);
+          logger.info("[onGestionWrite] adenda a contrato en papel firmada", { gid, contrato_papel: a.contrato_id || "", osYaSalio });
+        } else if (!a.contrato_doc_id || (!(a.lineas || []).length && !esAjuste)) {
           logger.error("[onGestionWrite] aumento firmado sin contrato destino o sin líneas", { gid });
         } else {
           // Anexo de REGULARIZACIÓN (2026-08-31, caso C COMUNICA): los equipos
@@ -921,8 +938,13 @@ module.exports = onDocumentWritten(
                   contrato_id: gC.aumento?.contrato_id || null,
                   cliente_id: gC.cliente_id, cliente_nombre: gC.cliente_nombre || "",
                   gestion_doc_id: gid,
+                  // Adenda a contrato en papel: el número manual queda como
+                  // etiqueta y la unidad es CUSTODIA (sin contrato interno).
+                  ...(AP.esAdendaPapel(gC.aumento) ? { contrato_papel: true } : {}),
                 },
-                nota: `Asignado por enmienda de aumento ${gid} (contrato ${gC.aumento?.contrato_id || "—"})`,
+                nota: AP.esAdendaPapel(gC.aumento)
+                  ? `Asignado por adenda ${gid} al contrato EN PAPEL ${gC.aumento?.contrato_id || "—"} — custodia sin contrato interno (regularizar la cuenta)`
+                  : `Asignado por enmienda de aumento ${gid} (contrato ${gC.aumento?.contrato_id || "—"})`,
               }))
             : (gC.demo?.seriales_asignados || []).map(s => ({
                 serial: s.serial,

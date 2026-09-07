@@ -22,6 +22,7 @@ const pool = require("../../domain/equiposPool");
 const { pendientesDevolucion } = require("../../lib/devolucion");
 const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
 const G = require("../../lib/gestiones");
+const AP = require("../../lib/adendaPapel");
 
 const ENTREGADO = "ENTREGADO AL CLIENTE";
 const norm = (s) => String(s || "").trim().toUpperCase();
@@ -230,6 +231,79 @@ module.exports = onDocumentWritten(
               });
             } catch (e) {
               logger.warn("[onOrdenWriteGestion] vigencia del tramo no estampada", { gid, message: e.message });
+            }
+          } else if (AP.esAdendaPapel(a) && meses > 0) {
+            // ADENDA A CONTRATO EN PAPEL (2026-09-07, caso Falcon Servicios):
+            // no hay contrato interno donde estampar el tramo — se estampa EN
+            // CADA UNIDAD entregada (pool.vigencia{}, el mismo campo que dejó
+            // asigna-custodia-por-ordenes) para que el semáforo por equipo
+            // corra. Las unidades quedan en custodia y la cuenta sigue
+            // pendiente de regularizar: eso lo pide el Centro solo.
+            const inicio = new Date();
+            const vig = AP.vigenciaAdenda({ inicio, meses, gid, contratoRef: a.contrato_id || "", ordenId });
+            let estampadas = 0;
+            for (const s of (a.seriales_asignados || [])) {
+              const serial = String(s.serial || "").trim();
+              if (!serial) continue;
+              try {
+                const r = await pool.resolver(serial, s.modelo_id || null, s.modelo || "");
+                if (!r?.ref || !r.data) {
+                  logger.warn("[onOrdenWriteGestion] adenda papel: serial sin ficha en el pool", { gid, serial });
+                  continue;
+                }
+                await r.ref.update({
+                  fecha_entrega: inicio.toISOString(),
+                  vigencia: {
+                    ...vig,
+                    fecha_inicio: admin.firestore.Timestamp.fromDate(vig.fecha_inicio),
+                    fecha_vencimiento: admin.firestore.Timestamp.fromDate(vig.fecha_vencimiento),
+                  },
+                  updated_at: admin.firestore.FieldValue.serverTimestamp(),
+                });
+                estampadas++;
+              } catch (e) {
+                logger.warn("[onOrdenWriteGestion] adenda papel: vigencia no estampada en la unidad", { gid, serial, message: e.message });
+              }
+            }
+            await G.registrarEvento(gid, "entrega",
+              `Entrega registrada desde la OS ${ordenId}. Adenda al contrato EN PAPEL ${a.contrato_id || "—"}: el tramo de ${meses} meses arranca hoy y quedó estampado en ${estampadas} equipo(s) del pool. Los equipos quedan en custodia sin contrato interno — la cuenta sigue pendiente de regularizar.`);
+            logger.info("[onOrdenWriteGestion] adenda papel entregada", { gid, ordenId, estampadas, contrato_papel: a.contrato_id || "" });
+            // Aviso de facturación: igual que el aumento normal (se factura
+            // desde la entrega), dejando claro que el contrato es de papel.
+            try {
+              await G.avisoFacturacion({
+                subject: `FACTURACIÓN: adenda a contrato en papel ENTREGADA — ${g.cliente_nombre || "Cliente"} (${a.contrato_id || ""})`,
+                titulo: "Adenda entregada — el tramo se factura desde hoy",
+                cuerpo: `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+                    La OS <b>${G.escapeHtml(ordenId)}</b> entregó los equipos de la adenda
+                    <b>${G.escapeHtml(gid)}</b> al contrato <b>${G.escapeHtml(a.contrato_id || "")}</b> de
+                    <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>. El tramo (${meses} meses) arrancó hoy.</p>
+                  <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;color:#92400e;">
+                    <b>Contrato en papel:</b> el contrato marco no está en el sistema — los equipos quedan en
+                    custodia con su vigencia propia y la cuenta sigue <b>pendiente de regularizar</b>.</p>
+                  ${G.detalleAumentoHtml(a)}
+                  ${(a.seriales_asignados || []).length ? `<p style="margin:8px 0 0;font:14px Arial,sans-serif;">Seriales entregados:
+                    ${a.seriales_asignados.map(s => `<code>${G.escapeHtml(s.serial || "")}</code>`).join(", ")}</p>` : ""}`,
+                cliente_id: g.cliente_id, cliente_nombre: g.cliente_nombre || "",
+                responsable_uid: g.responsable_uid || null, responsable_email: g.responsable_email || null,
+                ctaUrl: G.urlGestion(g, gid), ctaLabel: "Ver el expediente",
+                meta: { gestion_id: gid, paso: "facturacion_aumento_entrega", orden: ordenId, contrato_papel: true },
+                aviso: {
+                  tipo: "aumento_entregado", origen_col: "gestiones", origen_id: gid, gestion_id: gid, orden_id: ordenId,
+                  contrato_id: a.contrato_id || null, contrato_doc_id: null,
+                  fecha_efectiva: inicio,
+                  contexto: { duracion_meses: meses, orden: ordenId, contrato_papel: true,
+                    origen_texto: `Adenda a contrato en papel ${a.contrato_id || ""} entregada con la OS ${ordenId} — cuenta pendiente de regularizar` },
+                  resumen: { equipos: require("../../lib/facturacionAvisos").equiposTexto(a.lineas),
+                    equipos_n: (a.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0),
+                    mensual: a.totales?.total_mensual ?? null, delta_mensual: a.totales?.total_mensual ?? null,
+                    unico: a.totales?.cargos_uni ?? null,
+                    seriales: (a.seriales_asignados || []).map(s => s.serial).filter(Boolean) },
+                  detalle: { lineas: a.lineas || [], cargos: a.cargos || [], ajustes_precio: a.ajustes_precio || [] },
+                },
+              });
+            } catch (e) {
+              logger.warn("[onOrdenWriteGestion] adenda papel: aviso de facturación falló", { gid, message: e.message });
             }
           } else {
             await G.registrarEvento(gid, "entrega", `Entrega registrada desde la OS ${ordenId}.`);

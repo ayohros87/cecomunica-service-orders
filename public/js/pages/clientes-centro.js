@@ -1258,10 +1258,15 @@ window.Centro = {
           contrato_id: a.contrato_id || '',
           cliente_id: g.cliente_id,
           cliente_nombre: g.cliente_nombre || '',
+          // Adenda a contrato en papel: la solicitud lo declara para que la
+          // página de firma diga que el contrato marco está en papel.
+          ...(a.contrato_papel && !a.contrato_doc_id ? { contrato_papel: true } : {}),
           titulo: a.es_ajuste
             ? `Anexo de ajuste de tarifa ${gid} — contrato ${a.contrato_id || ''}`
             : a.es_regularizacion
             ? `Anexo de regularización ${gid} — contrato ${a.contrato_id || ''}`
+            : a.contrato_papel && !a.contrato_doc_id
+            ? `Adenda de aumento ${gid} — contrato en papel ${a.contrato_id || ''}`
             : `Anexo de aumento ${gid} — contrato ${a.contrato_id || ''}`,
           declaracion: a.es_ajuste
             ? `Declaro que acepto ${[
@@ -1499,7 +1504,8 @@ window.Centro = {
         if (dias !== null) {
           const cls = dias < 0 ? 'vencido' : (dias <= this.AVISO_DIAS ? 'por_vencer' : 'vigente');
           const label = dias < 0 ? `vencido ${-dias} d` : `${dias} d`;
-          return `<span class="cg-venc ${cls} num" title="Vence ${this._fmtFecha(fvU)} · período estampado desde la orden de entrega — sin contrato formal (regularizar al renovar)">${label} *</span>`;
+          const refPapel = e.vigencia?.contrato_papel_ref ? `adenda al contrato en papel ${this.esc(e.vigencia.contrato_papel_ref)} · ` : '';
+          return `<span class="cg-venc ${cls} num" title="Vence ${this._fmtFecha(fvU)} · ${refPapel}período estampado desde la orden de entrega — sin contrato formal (regularizar al renovar)">${label} *</span>`;
         }
       }
       return '<span style="color:var(--fg-4);">—</span>';
@@ -1905,6 +1911,7 @@ window.Centro = {
         <div style="min-width:0; flex:1;"><div class="n cg-mono" style="font-size:13px;${g.estado === 'anulada' ? ' text-decoration:line-through; color:var(--fg-3);' : ''}">${this.esc(g.id)}</div>
           <div class="s">${g.tipo === 'aumento' && g.aumento?.es_regularizacion ? 'Regularización por anexo'
             : g.tipo === 'aumento' && g.aumento?.es_ajuste ? 'Ajuste de tarifa / servicios'
+            : g.tipo === 'aumento' && g.aumento?.contrato_papel && !g.aumento?.contrato_doc_id ? `Adenda a contrato en papel <span class="cg-mono">${this.esc(g.aumento.contrato_id || '')}</span>`
             : this.esc(GestionesService.tipoLabel(g.tipo))} · ${g.tipo === 'demo'
             ? this.esc((g.demo?.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`).join(', ') || '—')
             : g.tipo === 'aumento'
@@ -1972,6 +1979,16 @@ window.Centro = {
       ['programacion', 'Sin orden de servicio', 'No aplica: nada que programar'],
       ['entrega', 'Regularización completa', 'Los sobrantes de la conciliación bajan a cero'],
     ];
+    // Adenda a contrato EN PAPEL: mismo circuito del aumento, pero no hay
+    // contrato interno al que aplicarle líneas — el tramo va a cada equipo.
+    else if (g.tipo === 'aumento' && g.aumento?.contrato_papel && !g.aumento?.contrato_doc_id) defs = [
+      ['aprobacion', 'Aprobación comercial', 'Administración / gerencia'],
+      ['firma', 'Adenda firmada por el cliente', 'Cita el número del contrato en papel'],
+      ['derivacion', 'Adenda registrada', 'Sin contrato en el sistema: nada que aplicar — la cuenta sigue por regularizar'],
+      ['asignacion', 'Asignación de seriales', 'Bodega'],
+      ['programacion', 'Programación', 'OS de programación confirmada'],
+      ['entrega', 'Entrega al cliente', 'El tramo se estampa en cada equipo (custodia con vigencia propia)'],
+    ];
     const check = `<div class="cg-tl">` + defs.map(([k, t, s], i) => {
       const done = g.cierre?.[k] === true;
       const next = !done && defs.slice(0, i).every(([kk]) => g.cierre?.[kk] === true);
@@ -2020,7 +2037,11 @@ window.Centro = {
           <b>Anexo de regularización</b> — amarra equipos que el cliente ya tiene
           (<span class="cg-mono">${(a.regulariza_seriales || []).map(s => this.esc(s.serial)).join(', ')}</span>);
           al firmarse se aplica y cierra solo, sin bodega ni entrega.</p>` : ''}
-        <p style="font-size:13px; margin:0 0 8px;"><b>Contrato destino:</b>
+        ${a.contrato_papel && !a.contrato_doc_id ? `<div class="cg-senal warn" style="margin:0 0 8px;">
+          <span><b>Adenda a contrato en papel</b> — el contrato marco <span class="cg-mono">${this.esc(a.contrato_id || '—')}</span>
+          no está en el sistema. Al entregarse, cada equipo queda en <b>custodia con su tramo propio</b>;
+          la cuenta sigue <b>pendiente de regularizar</b> (contrato nuevo cuando se pueda).</span></div>` : ''}
+        <p style="font-size:13px; margin:0 0 8px;"><b>${a.contrato_papel && !a.contrato_doc_id ? 'Contrato en papel' : 'Contrato destino'}:</b>
           <span class="cg-mono">${this.esc(a.contrato_id || '—')}</span> ·
           <b>Vigencia:</b> ${a.es_ajuste
             ? `rige con el contrato${a.duracion_meses ? ` (${this.esc(String(a.duracion_meses))} meses)` : ''}`
@@ -2267,14 +2288,24 @@ window.Centro = {
     //                  entra en ventana, Terminación de la cuenta.
     const est = this._cuentaEstado();
     let cuentaHtml = '';
+    // Adenda a contrato EN PAPEL (2026-09-07, caso Falcon Servicios): clientes
+    // viejos cuyo contrato marco no está en el sistema y que NO se pueden
+    // regularizar hoy, pero sí necesitan un equipo más. La adenda lleva el
+    // número manual del contrato; no se crea ningún contrato en el sistema
+    // (decisión de Alberto) y la cuenta sigue pidiendo la regularización.
+    const adendaPapelBtn = this.puedeCrearGestion()
+      ? `<button type="button" onclick="Centro.wizAumento(null,{papel:true})">Adenda a contrato en papel
+          <span style="display:block; font-size:11px; color:var(--fg-4);">aumento con el número del contrato viejo escrito a mano — salida para seguir sin regularizar hoy</span></button>`
+      : '';
     if (est.tipo === 'nueva') {
-      cuentaHtml = `<button type="button" onclick="Centro.wizContrato()">Nuevo contrato</button>`;
+      cuentaHtml = `<button type="button" onclick="Centro.wizContrato()">Nuevo contrato</button>${adendaPapelBtn}`;
     } else if (est.tipo === 'sin_contrato') {
       // Sin contratos vigentes: renovar no aplica — contrato NUEVO que cubra
       // los equipos que siguen con el cliente.
       cuentaHtml = `
         <button type="button" onclick="Centro.wizContrato({renovarCuenta:true})">Nuevo contrato
-          <span style="display:block; font-size:11px; color:var(--fg-4);">cubre los ${est.custodia} equipo${est.custodia === 1 ? '' : 's'} que el cliente aún tiene — se amarran al activarse</span></button>`;
+          <span style="display:block; font-size:11px; color:var(--fg-4);">cubre los ${est.custodia} equipo${est.custodia === 1 ? '' : 's'} que el cliente aún tiene — se amarran al activarse</span></button>
+        ${adendaPapelBtn}`;
     } else if (this._renovacionEnTramite()) {
       // Con una renovación EN CURSO no se ofrecen más renovaciones ni anexos
       // que compitan con ella: el trámite manda.
@@ -2765,9 +2796,13 @@ window.Centro = {
     document.getElementById('cgMenu')?.classList.add('hidden');
     await Promise.all([this._cargarModelos(), this._cargarCargos()]);
     const activos = this.contratos.filter(c => this._esVigente(c));
-    if (!activos.length) { Toast.show('El cliente no tiene contratos vigentes', 'warn'); return; }
+    // Adenda a contrato EN PAPEL (opts.papel): no hay contrato interno que
+    // elegir — el número va escrito a mano y la gestión vive sola.
+    const esPapel = opts.papel === true;
+    this._aumPapel = esPapel;
+    if (!activos.length && !esPapel) { Toast.show('El cliente no tiene contratos vigentes', 'warn'); return; }
     // ITBMS por defecto: hereda del contrato destino; cliente exento manda.
-    const cBase = activos.find(c => c.id === preselId) || activos[0];
+    const cBase = esPapel ? null : (activos.find(c => c.id === preselId) || activos[0]);
     const itbmsDefault = this.cliente?.itbms_exento === true ? false : (cBase?.itbms_aplica !== false);
     // Modo REGULARIZACIÓN (2026-08-31, caso C COMUNICA: el flujo normal mandó
     // a Alberto a bodega por equipos que el cliente YA tenía): el anexo amarra
@@ -2795,7 +2830,15 @@ window.Centro = {
           si el cliente está por renovar, este es el momento de consolidarla.</span>
           <button class="btn btn-primary" style="margin-left:auto; flex:none; padding:3px 11px; font-size:12px;"
             onclick="Centro.wizContrato({renovarCuenta:true, agregar:true})">Mejor renovar la cuenta</button></div>` : '';
-    const destinoHtml = this._aumRegulariza
+    const destinoHtml = esPapel
+      ? `<div class="form-field" style="margin-bottom:10px; max-width:420px;">
+          <label class="form-label" for="waContratoPapel">Número del contrato en papel</label>
+          <input class="form-input cg-mono" id="waContratoPapel" maxlength="40" autocomplete="off"
+            placeholder="p. ej. ALQ 2019-044 — tal cual está en el papel">
+          <p style="margin:6px 0 0; font-size:12px; color:var(--fg-3);">Se escribe a mano porque el contrato marco
+            <b>no está en el sistema</b>. La adenda cita este número y no crea ningún contrato.</p>
+          <select id="waContrato" class="hidden"><option value="" selected></option></select></div>`
+      : this._aumRegulariza
       ? `<div class="form-field" style="margin-bottom:10px;">
           <label class="form-label">Anexo de regularización al contrato</label>
           <p style="margin:0; font-size:13px;"><span class="cg-mono">${this.esc(cBase.contrato_id || cBase.id)}</span>
@@ -2831,17 +2874,27 @@ window.Centro = {
           YA tiene (<span class="cg-mono">${this._aumRegulariza.map(u => this.esc(u.serial)).join(', ')}</span>).
           Al firmarlo el cliente, quedan amarrados al contrato con el tramo desde <b>hoy</b> —
           <b>sin bodega, sin orden de servicio y sin entrega</b>. Solo falta ponerles precio.</span></div>` : '';
+    const papelSenal = esPapel
+      ? `<div class="cg-senal warn" style="margin-bottom:10px;">
+          <span><b>Salida para seguir sin regularizar hoy.</b> La adenda agrega equipos al contrato viejo
+          citando su número; no crea ningún contrato en el sistema. Al entregarse, cada equipo queda en
+          <b>custodia con su tramo propio</b> y la cuenta sigue marcada <b>sin contrato formal</b>: hay que
+          regularizarla con un contrato nuevo cuando se pueda.</span></div>` : '';
     this._abrirModalA({
-      titulo: `${this._aumRegulariza ? 'Regularización por anexo' : 'Aumento de equipos (enmienda)'} — ${this.esc(this.cliente.nombre)}`,
+      titulo: `${this._aumRegulariza ? 'Regularización por anexo' : esPapel ? 'Adenda a contrato en papel' : 'Aumento de equipos (enmienda)'} — ${this.esc(this.cliente.nombre)}`,
       cuerpo: `
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
         ${this._aumRegulariza
           ? `El anexo formaliza equipos <b>ya en poder del cliente</b> que la renovación dejó sin línea —
              <b>requiere la firma del cliente</b> y se aplica solo al firmarse.`
+          : esPapel
+          ? `La adenda agrega equipos <b>con vigencia propia</b> a un contrato que solo existe <b>en papel</b>:
+             el período corre desde la entrega, el documento cita el número del contrato viejo y
+             <b>requiere la firma del cliente</b> antes de salir a bodega.`
           : `La enmienda agrega líneas <b>con vigencia propia</b>: el período del equipo
              nuevo corre desde su entrega y vence más tarde que el resto — el anexo lo deja explícito y
              <b>requiere la firma del cliente</b> antes de aplicarse.`}</p>
-      ${regSenal}${nudge}
+      ${regSenal}${papelSenal}${nudge}
       <div class="cg-paso">
         <div class="cg-paso-t"><span class="n">1</span> Destino del anexo</div>
         ${destinoHtml}
@@ -2882,15 +2935,27 @@ window.Centro = {
     this._aumPreview();
   },
 
+  // Número manual del contrato en papel — espejo de
+  // functions/src/lib/adendaPapel.normalizarRefPapel (sin comillas, espacios
+  // colapsados, mayúsculas) para que lo guardado sea lo mismo que se lee.
+  _normRefPapel(texto) {
+    return String(texto == null ? '' : texto).replace(/["'`]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+  },
+
   async crearAumento() {
+    const esPapel = this._aumPapel === true;
     const contratoDocId = document.getElementById('waContrato')?.value || '';
-    const contrato = this.contratos.find(c => c.id === contratoDocId);
-    if (!contrato) { Toast.show('Elige el contrato destino', 'warn'); return; }
+    const contrato = esPapel ? null : this.contratos.find(c => c.id === contratoDocId);
+    const refPapel = esPapel ? this._normRefPapel(document.getElementById('waContratoPapel')?.value) : '';
+    if (esPapel && !refPapel) { Toast.show('Escribe el número del contrato en papel', 'warn'); document.getElementById('waContratoPapel')?.focus(); return; }
+    if (!esPapel && !contrato) { Toast.show('Elige el contrato destino', 'warn'); return; }
     const lineas = this._aumLineas();
     // Sin equipos pero CON cargos = un AJUSTE DE TARIFA (2026-09-02): en vez
     // de regañar, se redirige al wizard correcto — ahí se amarran los cargos
-    // por serial y el flujo cierra sin bodega.
+    // por serial y el flujo cierra sin bodega. En papel no hay contrato que
+    // ajustar: la adenda necesita al menos un equipo.
     if (!lineas.length && this._aumCargos().length) {
+      if (esPapel) { Toast.show('La adenda a contrato en papel necesita al menos un equipo — los cargos solos no tienen contrato al que aplicarse', 'warn'); return; }
       Toast.show('Solo cargos, sin equipos — eso es un Ajuste de tarifa: te llevo al wizard correcto', 'ok');
       this.wizAjuste(contratoDocId);
       return;
@@ -2913,8 +2978,11 @@ window.Centro = {
         cierre: {},
         aprobacion: { requiere: true },
         aumento: {
-          contrato_doc_id: contrato.id,
-          contrato_id: contrato.contrato_id || contrato.id,
+          // Adenda a contrato en papel: sin contrato interno (null) y el
+          // número manual como etiqueta; el flag lo leen los triggers.
+          contrato_doc_id: contrato ? contrato.id : null,
+          contrato_id: contrato ? (contrato.contrato_id || contrato.id) : refPapel,
+          ...(esPapel ? { contrato_papel: true } : {}),
           lineas,
           cargos,
           itbms: { aplica: itbmsAplica, porcentaje: totales.itbms_porcentaje },
@@ -2931,8 +2999,11 @@ window.Centro = {
       this.gSel = gid;
       Toast.show(this._aumRegulariza
         ? `Regularización ${gid} enviada a aprobación — al firmarse amarra los equipos de una vez`
+        : esPapel
+        ? `Adenda ${gid} al contrato en papel ${refPapel} enviada a aprobación comercial — la cuenta sigue pendiente de regularizar`
         : `Aumento ${gid} enviado a aprobación comercial`, 'ok');
       this._aumRegulariza = null;
+      this._aumPapel = false;
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo crear el aumento', 'bad'); }
   },

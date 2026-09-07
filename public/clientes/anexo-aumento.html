@@ -59,6 +59,9 @@
           const c = cSnap?.exists ? cSnap.data() : {};
           const cli = cliSnap?.exists ? cliSnap.data() : {};
           const totalMensual = (a.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0) * Number(l.precio || 0), 0);
+          // Adenda a contrato EN PAPEL (2026-09-07): el contrato marco no está
+          // en el sistema — el documento cita el número manual y lo dice.
+          const papel = a.contrato_papel === true && !a.contrato_doc_id;
 
           document.getElementById('hoja').innerHTML = `
             <div class="cab">
@@ -70,17 +73,19 @@
                     ventas@cecomunica.com · +507 279-5570</div>
                 </div>
               </div>
-              <div class="num">ANEXO DE AUMENTO<br>${esc(gid)}<br>
-                <span style="font-weight:400;color:#555;">Contrato ${esc(a.contrato_id || '—')}</span></div>
+              <div class="num">${papel ? 'ADENDA DE AUMENTO' : 'ANEXO DE AUMENTO'}<br>${esc(gid)}<br>
+                <span style="font-weight:400;color:#555;">Contrato ${esc(a.contrato_id || '—')}${papel ? ' (en papel)' : ''}</span></div>
             </div>
 
-            <h2>Anexo de aumento de equipos al contrato ${esc(a.contrato_id || '—')}</h2>
+            <h2>${papel ? 'Adenda' : 'Anexo'} de aumento de equipos al contrato ${esc(a.contrato_id || '—')}</h2>
             <p>Entre <b>C COMUNICA, S.A.</b> (RUC 32977-27-249966 DV 39) y <b>${esc(g.cliente_nombre || cli.nombre || '—')}</b>
               (RUC ${esc(cli.rucdv_norm || c.cliente_rucdv || '—')}), representada por
               <b>${esc(cli.representante || c.representante || '—')}</b>, se conviene AUMENTAR los equipos del
-              contrato <b>${esc(a.contrato_id || '—')}</b> con las siguientes líneas, que quedan sujetas a los
+              contrato <b>${esc(a.contrato_id || '—')}</b>${papel
+                ? ', suscrito entre las partes en documento físico y que ambas reconocen como vigente,'
+                : ''} con las siguientes líneas, que quedan sujetas a los
               mismos términos y condiciones del contrato, salvo el período de vigencia que se pacta expresamente
-              en este anexo:</p>
+              en ${papel ? 'esta adenda' : 'este anexo'}:</p>
 
             <table>
               <thead><tr><th>Cantidad</th><th>Concepto</th><th>Tipo</th><th>Precio (unidad)</th><th>Subtotal</th></tr></thead>
