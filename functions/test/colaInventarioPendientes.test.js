@@ -316,7 +316,12 @@ function cargarPagina(datos, transicionesActivas = true) {
     canRole: (rol) => ["administrador", "inventario", "recepcion", "vendedor", "gerente"].includes(rol),
     verificarAccesoYAplicarVisibilidad: (cb) => { ctx._init = cb; },
   };
+  ctx.Modal = { sheet: async () => null, confirm: async () => false };
   vm.createContext(ctx);
+  // El kit de bandeja (fila, grupo, antigüedad) es una dependencia de la
+  // página desde 2026-09-07; se carga el real, no un stub.
+  vm.runInContext(leer("public", "js", "ui", "bandeja.js"), ctx);
+  ctx.Bandeja = ctx.window.Bandeja;
   vm.runInContext(leer("public", "js", "pages", "almacen-hoy.js"), ctx);
   // DOMContentLoaded → verificarAccesoYAplicarVisibilidad(init) → ctx._init.
   if (ctx._onReady) ctx._onReady();
@@ -336,7 +341,7 @@ test("la bandeja muestra contrato y progreso, nunca el precio", async () => {
   assert.match(html, /4 días/);            // antigüedad de la cola
   // El CTA abre la pestaña Asignar del propio espacio (2026-09-03), ya no
   // la página de seriales del módulo Contratos.
-  assert.match(html, /tab=asignar&contrato=c1/);
+  assert.match(html, /tab=asignar&(amp;)?contrato=c1/);
   assert.ok(!html.includes("contratos/seriales.html"), "la bandeja volvió a mandar a /contratos/");
   assert.ok(!html.includes("1250"), "la bandeja pintó el precio unitario");
   assert.ok(!html.includes("8490"), "la bandeja pintó el total del contrato");

@@ -1372,14 +1372,9 @@ input[readonly]#numero_de_serie,
 .toast.toast-warning { background: var(--surface-card); color: var(--fg-1); border: 1px solid var(--border-subtle); border-left: 4px solid var(--status-warning); }
 .toast.toast-info    { background: var(--surface-card); color: var(--fg-1); border: 1px solid var(--border-subtle); border-left: 4px solid var(--accent); }
 
-/* DS modal backdrop alias */
-.modal-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,.5);
-  display: none; align-items: center; justify-content: center; z-index: 1500;
-  backdrop-filter: blur(4px);
-  animation: fadeIn 0.2s ease;
-}
-.modal-backdrop.open { display: flex; }
+/* .modal-backdrop vive UNA sola vez, en "Modal / Dialog" (más abajo). Aquí
+   había un alias duplicado (display:none + .open, z 1500) que la definición
+   de abajo pisaba en silencio — retirado 2026-09-07. */
 
 @keyframes slideInRight {
   from { transform: translateX(100px); opacity: 0; }
@@ -2011,17 +2006,37 @@ i[data-lucide]                              { display: inline-block; }
    per page incrementally.  Sourced from ui_kits/app/app.css.
    ════════════════════════════════════════════════════════════════ */
 
-/* ── Modal / Dialog (DS kit, full ruleset) ──────────────────── */
+/* ── Modal / Dialog (DS kit, full ruleset) ────────────────────
+   LA familia única de modal (decisión 2026-09-07, "Bandejas y pickers"):
+   anatomía del Centro (encabezado y pie fijos, cuerpo con scroll propio),
+   piel del kit (fondo marino con desenfoque, título Barlow con ícono de
+   acento, cerrar) y en móvil hoja pegada abajo. Modal.sheet() la construye;
+   los modales estáticos la usan con Modal.open/close. Las familias viejas
+   (.overlay+.sheet-*, .text-modal-*, .cg-modal) se migran a esta.
+   z-index 1500: antes era 800 y quedaba DEBAJO de cualquier .overlay. */
 .modal-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(6, 24, 41, 0.45);
-  z-index: 800;
+  z-index: 1500;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--sp-6);
+  backdrop-filter: blur(4px);
   animation: fade-in var(--dur-base) var(--ease-out) both;
+}
+/* El cuadro: sin relleno propio (lo ponen header/body/footer) y en columna,
+   para que el cuerpo scrollee y el encabezado y el pie se queden fijos.
+   Antes el .modal base metía 24px y el pie salía como un panel dentro de
+   otro panel. */
+.modal-backdrop > .modal {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
 }
 .modal-lg  { max-width: 720px; }
 .modal-xl  { max-width: 960px; }
@@ -2031,6 +2046,7 @@ i[data-lucide]                              { display: inline-block; }
   justify-content: space-between;
   padding: var(--sp-5) var(--sp-6);
   border-bottom: 1px solid var(--border-subtle);
+  flex: none;
 }
 .modal-title {
   font-family: var(--font-display);
@@ -2053,14 +2069,29 @@ i[data-lucide]                              { display: inline-block; }
   transition: background var(--dur-fast);
 }
 .modal-close:hover { background: var(--surface-sunken); color: var(--fg-1); }
-.modal-body   { padding: var(--sp-6); }
+.modal-body   { padding: var(--sp-6); overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 .modal-footer {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-4) var(--sp-6);
   border-top: 1px solid var(--border-subtle);
   background: var(--surface-sunken);
+  flex: none;
+  flex-wrap: wrap;
+}
+/* Móvil: hoja pegada abajo, ancho completo, pie fijo al alcance del pulgar. */
+@media (max-width: 768px) {
+  .modal-backdrop { align-items: flex-end; padding: 0; }
+  .modal-backdrop > .modal {
+    width: 100%; max-width: 100%;
+    border-radius: 16px 16px 0 0;
+    max-height: 92vh;
+  }
+  .modal-header { padding: var(--sp-4) var(--sp-5); }
+  .modal-body   { padding: var(--sp-5); }
+  .modal-footer { padding: var(--sp-3) var(--sp-5); }
 }
 @keyframes fade-in  { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slide-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }

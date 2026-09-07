@@ -92,57 +92,39 @@ window.AlmacenHoy = (() => {
   const $ = (id) => document.getElementById(id);
 
   // ── Presentación ──────────────────────────────────────────────────────
-  function dias(ms) {
-    if (!ms) return null;
-    return Math.floor((Date.now() - ms) / 86400000);
-  }
-
-  function ageHtml(ms) {
-    const d = dias(ms);
-    if (d === null) return '';
-    const txt = d === 0 ? 'hoy' : (d === 1 ? '1 día' : `${d} días`);
-    const cls = d > 7 ? 'hy-age bad' : d > 3 ? 'hy-age warn' : 'hy-age';
-    return `<span class="${cls}">${txt}</span>`;
-  }
+  // La fila, el grupo, la antigüedad y el "ver todos" son del kit de bandeja
+  // (js/ui/bandeja.js, 2026-09-07). Aquí solo se traduce el vocabulario de
+  // esta bandeja (chips por tipo de cola) al del kit (chips por tono).
+  const TONO = {
+    seriales: 'aviso', cambio: 'info', transicion: 'aviso', inspeccion: 'aviso',
+    clasificar: 'neutro', conflicto: 'alerta', diferencia: 'alerta', ok: 'listo',
+  };
 
   function cta(href, icono, label) {
-    return `<a class="btn btn-sm btn-accent hy-cta" href="${href}">
-      <i data-lucide="${icono}" style="width:14px;height:14px;"></i> ${esc(label)}</a>`;
+    return Bandeja.cta({ href, icono, label });
   }
 
   // CTA que abre la pestaña Asignar de ESTA página (sin recargar). El href
   // sigue siendo un deep-link real para "abrir en otra pestaña".
   function ctaAsignar({ contrato = null, g = null }, icono, label) {
     const q = contrato ? `contrato=${encodeURIComponent(contrato)}` : `g=${encodeURIComponent(g)}`;
-    return `<a class="btn btn-sm btn-accent hy-cta" href="index.html?tab=asignar&${q}" data-asignar
-       data-contrato="${esc(contrato || '')}" data-g="${esc(g || '')}">
-      <i data-lucide="${icono}" style="width:14px;height:14px;"></i> ${esc(label)}</a>`;
+    return Bandeja.cta({ href: `index.html?tab=asignar&${q}`, icono, label,
+      data: { asignar: '1', contrato: contrato || '', g: g || '' } });
   }
 
   function fila({ chip, chipCls, txt, at, ctaHtml }) {
-    return `<div class="hy-row">
-      <span class="hy-chip hy-chip--${chipCls}">${esc(chip)}</span>
-      <span class="hy-txt">${txt}</span>
-      ${at ? ageHtml(at) : ''}
-      ${ctaHtml || ''}
-    </div>`;
+    return Bandeja.fila({ chip, tono: TONO[chipCls] || 'neutro', txt, at, clase: 'cola', ctaHtml });
   }
 
   function grupo(titulo, n, filasHtml, extraHtml = '') {
-    if (!filasHtml && !extraHtml) return '';
-    return `<div class="hy-grupo">
-      <h3 class="hy-grupo-t">${esc(titulo)} <span class="hy-n">${n}</span></h3>
-      ${filasHtml}${extraHtml}
-    </div>`;
+    return Bandeja.grupo({ titulo, n, filasHtml, notaHtml: extraHtml });
   }
 
   function conMas(filas, renderFila, hrefTodos, labelTodos) {
-    const html = filas.slice(0, MAX_FILAS).map(renderFila).join('');
-    const resto = filas.length - MAX_FILAS;
-    const mas = resto > 0
-      ? `<p class="hy-mas"><a href="${hrefTodos}">Ver ${labelTodos} (${filas.length}) →</a></p>` : '';
-    return html + mas;
+    return Bandeja.conMas(filas, renderFila, { max: MAX_FILAS, hrefTodos, label: labelTodos });
   }
+
+  const nota = (html) => Bandeja.nota(html);
 
   // ── Cargas ────────────────────────────────────────────────────────────
   async function contarSinVerificar() {
@@ -256,7 +238,7 @@ window.AlmacenHoy = (() => {
     const c = cfgs[r.tipo];
     let detalle = '';
     if (r.tipo === 'cambio') {
-      const items = (r.cambio?.items || []).map(i => `<span class="hy-eq"><b>${esc(i.serial || '—')}</b>${i.modelo ? ` · ${esc(i.modelo)}` : ''}</span>`).join('');
+      const items = (r.cambio?.items || []).map(i => `<span class="bj-eq"><b>${esc(i.serial || '—')}</b>${i.modelo ? ` · ${esc(i.modelo)}` : ''}</span>`).join('');
       const motivo = r.cambio?.motivo_tipo || r.cambio?.motivo || '';
       detalle = ` — ${items}${motivo ? ` <span style="color:var(--fg-3);">${esc(motivo)}</span>` : ''}`;
     } else {
@@ -284,7 +266,7 @@ window.AlmacenHoy = (() => {
     total += deContratos.length;
     let notaTransicion = '';
     if (!ColaInventarioService.COLA_TRANSICIONES_ACTIVA && ctx.rol === ROLES.ADMIN) {
-      notaTransicion = `<p class="hy-nota">Cola de transiciones apagada (atraso histórico sin triar) —
+      notaTransicion = `<p class="bj-nota">Cola de transiciones apagada (atraso histórico sin triar) —
         se enciende en <code>colaInventarioService.js</code>; la mayoría de casos nuevos se
         auto-registra al confirmar la entrega.</p>`;
     }
@@ -352,7 +334,7 @@ window.AlmacenHoy = (() => {
         }), vol(`${EQUIPOS}?tab=devuelto_revision`), 'devueltos');
       }
       if (enTaller) {
-        notaTaller = `<p class="hy-nota">${enTaller} devueltos están en inspección de TALLER
+        notaTaller = `<p class="bj-nota">${enTaller} devueltos están en inspección de TALLER
           (orden de ENTRADA abierta) — regresan a bodega solos al cerrarse la ENTRADA;
           no son trabajo de bodega.</p>`;
       }
@@ -367,7 +349,7 @@ window.AlmacenHoy = (() => {
     if (d.clasificar === null) fallidas.push('por clasificar');
     else if (d.clasificar.length) {
       const sinModelo = d.clasificar.filter(eq => !eq.modelo_label).length;
-      notaClasificar = `<p class="hy-nota">${d.clasificar.length.toLocaleString()} unidades en
+      notaClasificar = `<p class="bj-nota">${d.clasificar.length.toLocaleString()} unidades en
         "por clasificar" (deuda de migración — ubicación sin respaldo${sinModelo ? `, ${sinModelo.toLocaleString()} sin modelo` : ''})
         — <a href="${vol(`${EQUIPOS}?tab=por_clasificar`)}">revisar por lotes →</a></p>`;
     }
@@ -378,7 +360,7 @@ window.AlmacenHoy = (() => {
       poolHtml += conMas(d.conflictos, (g) => fila({
         chip: 'Conflicto', chipCls: 'conflicto',
         txt: `<b>${esc(g.norm)}</b> — ${g.docs.length} fichas: ${esc(g.docs.map(x => x.modelo_label || '¿?').join(' ↔ '))}`,
-        ctaHtml: `<button type="button" class="btn btn-sm btn-accent hy-cta" onclick="AlmacenHoy.abrirConflicto('${esc(g.norm).replace(/'/g, "\\'")}')">
+        ctaHtml: `<button type="button" class="btn btn-sm btn-accent bj-cta" data-conflicto="${esc(g.norm)}">
           <i data-lucide="git-merge" style="width:14px;height:14px;"></i> Resolver</button>`,
       }), vol(`${EQUIPOS}?tab=conflictos`), 'conflictos');
     }
@@ -387,7 +369,7 @@ window.AlmacenHoy = (() => {
     let notaVerificar = '';
     if (d.sinVerificarN) {
       // Deuda de migración, no trabajo del día: se muestra pero NO suma al badge.
-      notaVerificar = `<p class="hy-nota">${d.sinVerificarN.toLocaleString()} fichas de migración sin verificar
+      notaVerificar = `<p class="bj-nota">${d.sinVerificarN.toLocaleString()} fichas de migración sin verificar
         (deuda, no trabajo del día) — <a href="${vol(`${EQUIPOS}?tab=todos&verificar=1`)}">revisar por lotes →</a></p>`;
     }
     partes.push(grupo('Del pool', poolN, poolHtml, notaTaller + notaClasificar + notaVerificar));
@@ -407,7 +389,7 @@ window.AlmacenHoy = (() => {
     });
     const difsViejas = difsTodas.length - difs.length;
     const notaConteosViejos = difsViejas > 0
-      ? `<p class="hy-nota">${difsViejas} modelos más tienen diferencia contra conteos de hace
+      ? `<p class="bj-nota">${difsViejas} modelos más tienen diferencia contra conteos de hace
          más de ${UMBRAL_CONTEO_DIAS} días — se cuadran recontando (Conteo físico), no son trabajo de hoy.
          <a href="#" onclick="event.preventDefault(); AlmacenPage.setTab('existencias')">Ver Existencias →</a></p>` : '';
     total += difs.length;
@@ -475,40 +457,60 @@ window.AlmacenHoy = (() => {
           ${d.verificado === false ? ' · sin verificar' : ''}
         </span>
       </label>`).join('');
-    _modalConflicto(`
-      <p style="font-size:13px; color:var(--fg-3); margin:0 0 10px;">
-        El serial <b style="font-family:var(--mono, monospace);">${esc(norm)}</b> tiene ${g.docs.length} fichas
-        (modelos distintos registrados por fuentes distintas). Elige el radio REAL para fusionar
-        las demás en él (su kardex se conserva) — o confirma que son radios físicos distintos.
-      </p>
-      <div style="display:flex; flex-direction:column; gap:8px;">${cards}</div>`,
-      `<button class="btn btn-ghost" onclick="AlmacenHoy._conflictoDistintos('${esc(norm).replace(/'/g, "\\'")}')">Son radios distintos</button>
-       <button class="btn btn-primary" onclick="AlmacenHoy._conflictoFusionar('${esc(norm).replace(/'/g, "\\'")}', this)">Fusionar en la seleccionada</button>`);
+    // Hoja del kit (Modal.sheet): los botones no cierran solos — onAction
+    // devuelve false mientras la operación no termine.
+    Modal.sheet({
+      title: 'Fichas en conflicto', icon: 'git-merge', size: 'md',
+      html: `
+        <p style="font-size:13px; color:var(--fg-3); margin:0 0 10px;">
+          El serial <b style="font-family:var(--mono, monospace);">${esc(norm)}</b> tiene ${g.docs.length} fichas
+          (modelos distintos registrados por fuentes distintas). Elige el radio REAL para fusionar
+          las demás en él (su kardex se conserva) — o confirma que son radios físicos distintos.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:8px;">${cards}</div>`,
+      buttons: [
+        { action: 'distintos', label: 'Son radios distintos' },
+        { action: 'cancelar', label: 'Cancelar' },
+        { action: 'fusionar', label: 'Fusionar en la seleccionada', primary: true },
+      ],
+      onAction: async (action, root) => {
+        if (action === 'cancelar') return null;
+        if (action === 'distintos') return (await _conflictoDistintos(norm)) ? 'distintos' : false;
+        if (action === 'fusionar') return (await _conflictoFusionar(norm, root)) ? 'fusionar' : false;
+        return false;
+      },
+    });
   }
 
-  async function _conflictoFusionar(norm, btn) {
+  // Devuelven true si la operación se hizo (la hoja se cierra) y false si no.
+  async function _conflictoFusionar(norm, root) {
     const g = (ctx.datos?.conflictos || []).find(x => x.norm === norm);
-    const sel = document.querySelector('input[name="hyConfl"]:checked');
-    if (!g || !sel) { if (window.Toast) Toast.show('Selecciona primero la ficha que se conserva.', 'warn'); return; }
+    const sel = root.querySelector('input[name="hyConfl"]:checked');
+    if (!g || !sel) { if (window.Toast) Toast.show('Selecciona primero la ficha que se conserva.', 'warn'); return false; }
     const keeperId = sel.value;
     const absorbidosIds = g.docs.map(d => d.id).filter(id => id !== keeperId);
-    if (!confirm(`Fusionar ${absorbidosIds.length} ficha(s) en la seleccionada. Sus kardex se conservan. ¿Continuar?`)) return;
-    btn.disabled = true;
+    const ok = await Modal.confirm({ title: 'Fusionar fichas', confirmLabel: 'Fusionar',
+      message: `Fusionar ${absorbidosIds.length} ficha(s) en la seleccionada. Sus kardex se conservan.` });
+    if (!ok) return false;
+    const btn = root.querySelector('[data-sheet-action="fusionar"]'); if (btn) btn.disabled = true;
     try {
       const res = await firebase.functions().httpsCallable('fusionarPoolFicha')({ keeperId, absorbidosIds });
       if (window.Toast) Toast.show(`Fusión lista: ${res.data.fusionados} ficha(s) absorbida(s).`, 'ok');
-      _cerrarConflicto();
       cargar();
+      return true;
     } catch (e) {
-      btn.disabled = false;
+      if (btn) btn.disabled = false;
       if (window.Toast) Toast.show('No se pudo fusionar: ' + (e.message || e), 'bad');
+      return false;
     }
   }
 
   async function _conflictoDistintos(norm) {
     const g = (ctx.datos?.conflictos || []).find(x => x.norm === norm);
-    if (!g) return;
-    if (!confirm(`Las ${g.docs.length} fichas del serial ${norm} quedarán marcadas como radios FÍSICOS distintos (salen de la cola, conservan el aviso "2+ modelos"). ¿Continuar?`)) return;
+    if (!g) return false;
+    const ok = await Modal.confirm({ title: 'Radios distintos', confirmLabel: 'Marcar como distintos',
+      message: `Las ${g.docs.length} fichas del serial ${norm} quedarán marcadas como radios FÍSICOS distintos (salen de la cola, conservan el aviso "2+ modelos").` });
+    if (!ok) return false;
     try {
       const db = firebase.firestore();
       const user = firebase.auth().currentUser;
@@ -534,39 +536,12 @@ window.AlmacenHoy = (() => {
       });
       await batch.commit();
       if (window.Toast) Toast.show('Grupo marcado como radios distintos.', 'ok');
-      _cerrarConflicto();
       cargar();
+      return true;
     } catch (e) {
       if (window.Toast) Toast.show('No se pudo marcar: ' + (e.message || e), 'bad');
+      return false;
     }
-  }
-
-  function _modalConflicto(bodyHtml, footerHtml) {
-    document.getElementById('hyConflOverlay')?.remove();
-    const overlay = document.createElement('div');
-    overlay.id = 'hyConflOverlay';
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:560px; width:min(560px, 94vw);">
-        <div class="sheet-header" style="display:flex; justify-content:space-between; align-items:center;">
-          <h3 class="sheet-title" style="margin:0;">Fichas en conflicto</h3>
-          <button class="btn btn-ghost btn-icon" data-action="cerrar" aria-label="Cerrar">✕</button>
-        </div>
-        <div class="sheet-body" style="padding:14px 10px;">${bodyHtml}</div>
-        <div class="footer" style="display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap;">
-          ${footerHtml}
-          <button class="btn btn-ghost" data-action="cerrar">Cancelar</button>
-        </div>
-      </div>`;
-    overlay.addEventListener('click', (e) => { if (e.target.closest('[data-action="cerrar"]')) _cerrarConflicto(); });
-    document.body.appendChild(overlay);
-    document.body.style.overflow = 'hidden';
-  }
-
-  function _cerrarConflicto() {
-    document.getElementById('hyConflOverlay')?.remove();
-    document.body.style.overflow = '';
   }
 
   // ── Entry ─────────────────────────────────────────────────────────────
@@ -603,8 +578,11 @@ window.AlmacenHoy = (() => {
     }
     // Una acción de la ficha (inspección, baja, venta…) refresca las listas.
     if (window.EquipoFicha) EquipoFicha.onCambio = () => AlmacenPage.recargarTodo();
-    // Los CTAs "Asignar" de la bandeja abren la pestaña sin recargar.
+    // Clics delegados de la bandeja (sin onclick inline): los CTAs "Asignar"
+    // abren la pestaña sin recargar; "Resolver" abre la hoja de conflicto.
     document.getElementById('hoyGrupos')?.addEventListener('click', (e) => {
+      const c = e.target.closest('[data-conflicto]');
+      if (c) { e.preventDefault(); abrirConflicto(c.dataset.conflicto); return; }
       const a = e.target.closest('a[data-asignar]');
       if (!a || e.ctrlKey || e.metaKey || e.button !== 0) return;
       e.preventDefault();

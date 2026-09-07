@@ -463,68 +463,52 @@
     }
   }
 
-  // Hoja de resumen del paso irreversible (auditoría 2026-08-04, R5).
-  function hojaConfirmarEnvio({ seriales, omisiones }) {
-    return new Promise((resolve) => {
-      const porModelo = new Map();
-      seriales.forEach(s => {
-        const k = s.modelo || '—';
-        porModelo.set(k, (porModelo.get(k) || 0) + 1);
-      });
-      (omisiones || []).forEach(o => {
-        const k = `${o.modelo || '—'}`;
-        if (!porModelo.has(k)) porModelo.set(k, 0);
-      });
-      const filas = [...porModelo.entries()].map(([modelo, n]) => {
-        const oms = (omisiones || []).filter(o => (o.modelo || '—') === modelo).length;
-        return `<tr>
-          <td style="padding:6px 10px; border-bottom:1px solid var(--border); font-size:13px;">${esc(modelo)}</td>
-          <td style="padding:6px 10px; border-bottom:1px solid var(--border); font-size:13px; text-align:right; white-space:nowrap;">
-            <b>${n}</b> con serial${oms ? ` · ${oms} sin serial` : ''}</td>
-        </tr>`;
-      }).join('');
-
-      const overlay = document.createElement('div');
-      overlay.className = 'overlay';
-      overlay.style.display = 'flex';
-      overlay.innerHTML = `
-        <div class="modal" style="max-width:560px; width:min(560px, 94vw);">
-          <div class="sheet-header"><h3 class="sheet-title">Confirmar y enviar a activaciones</h3></div>
-          <div class="sheet-body" style="padding:12px 8px;">
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:10px 16px; margin-bottom:12px;">
-              <div><div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3);">Contrato</div>
-                   <div style="font-size:13.5px;">${esc(ctx.contratoIdVisible)}</div></div>
-              <div><div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3);">Cliente</div>
-                   <div style="font-size:13.5px;">${esc(ctx.clienteNombre || '—')}</div></div>
-              <div><div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3);">Unidades</div>
-                   <div style="font-size:13.5px;"><b>${seriales.length}</b> con serial${omisiones.length ? ` · <b>${omisiones.length}</b> sin serial` : ''}</div></div>
-            </div>
-            <div style="border:1px solid var(--border); border-radius:8px; overflow:hidden; max-height:240px; overflow-y:auto;">
-              <table style="border-collapse:collapse; width:100%;">${filas}</table>
-            </div>
-            <div style="margin-top:12px; padding:10px 12px; background:#FFFBEB; border:1px solid #FCD34D; border-radius:8px; color:#92400E; font-size:12.5px; line-height:1.55;">
-              Al confirmar se envía el <b>correo a activaciones</b> con estos seriales y el PDF del contrato,
-              y esta página <b>queda bloqueada</b>. Corregir un serial después requiere una
-              <b>solicitud de cambio</b> desde la lista de Contratos.
-            </div>
-          </div>
-          <div class="footer">
-            <button class="btn btn-ghost" data-action="cancel">Volver a revisar</button>
-            <button class="btn btn-primary" data-action="confirm"><i data-lucide="send" style="width:14px;height:14px;"></i> Confirmar y enviar</button>
-          </div>
-        </div>`;
-      const cleanup = (r) => { overlay.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', kb); resolve(r); };
-      const kb = (e) => { if (e.key === 'Escape') cleanup(false); };
-      overlay.addEventListener('click', (e) => {
-        const action = e.target.closest('[data-action]')?.dataset?.action;
-        if (action === 'confirm') cleanup(true);
-        else if (action === 'cancel' || e.target === overlay) cleanup(false);
-      });
-      document.addEventListener('keydown', kb);
-      document.body.appendChild(overlay);
-      document.body.style.overflow = 'hidden';
-      if (window.lucide) lucide.createIcons();
+  // Hoja de resumen del paso irreversible (auditoría 2026-08-04, R5). Sobre
+  // Modal.sheet (2026-09-07): resuelve true solo si se confirma.
+  async function hojaConfirmarEnvio({ seriales, omisiones }) {
+    const porModelo = new Map();
+    seriales.forEach(s => {
+      const k = s.modelo || '—';
+      porModelo.set(k, (porModelo.get(k) || 0) + 1);
     });
+    (omisiones || []).forEach(o => {
+      const k = `${o.modelo || '—'}`;
+      if (!porModelo.has(k)) porModelo.set(k, 0);
+    });
+    const filas = [...porModelo.entries()].map(([modelo, n]) => {
+      const oms = (omisiones || []).filter(o => (o.modelo || '—') === modelo).length;
+      return `<tr>
+        <td style="padding:6px 10px; border-bottom:1px solid var(--border); font-size:13px;">${esc(modelo)}</td>
+        <td style="padding:6px 10px; border-bottom:1px solid var(--border); font-size:13px; text-align:right; white-space:nowrap;">
+          <b>${n}</b> con serial${oms ? ` · ${oms} sin serial` : ''}</td>
+      </tr>`;
+    }).join('');
+
+    const r = await Modal.sheet({
+      title: 'Confirmar y enviar a activaciones', icon: 'send', size: 'md',
+      html: `
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:10px 16px; margin-bottom:12px;">
+          <div><div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3);">Contrato</div>
+               <div style="font-size:13.5px;">${esc(ctx.contratoIdVisible)}</div></div>
+          <div><div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3);">Cliente</div>
+               <div style="font-size:13.5px;">${esc(ctx.clienteNombre || '—')}</div></div>
+          <div><div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3);">Unidades</div>
+               <div style="font-size:13.5px;"><b>${seriales.length}</b> con serial${omisiones.length ? ` · <b>${omisiones.length}</b> sin serial` : ''}</div></div>
+        </div>
+        <div style="border:1px solid var(--border); border-radius:8px; overflow:hidden; max-height:240px; overflow-y:auto;">
+          <table style="border-collapse:collapse; width:100%;">${filas}</table>
+        </div>
+        <div style="margin-top:12px; padding:10px 12px; background:#FFFBEB; border:1px solid #FCD34D; border-radius:8px; color:#92400E; font-size:12.5px; line-height:1.55;">
+          Al confirmar se envía el <b>correo a activaciones</b> con estos seriales y el PDF del contrato,
+          y esta página <b>queda bloqueada</b>. Corregir un serial después requiere una
+          <b>solicitud de cambio</b> desde la lista de Contratos.
+        </div>`,
+      buttons: [
+        { action: 'cancel', label: 'Volver a revisar' },
+        { action: 'confirm', label: 'Confirmar y enviar', primary: true, icon: 'send' },
+      ],
+    });
+    return r === 'confirm';
   }
 
   async function confirmar() {

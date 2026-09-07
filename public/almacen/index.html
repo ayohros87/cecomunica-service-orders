@@ -22,58 +22,15 @@
   <meta charset="UTF-8">
   <title>Almacén - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc29">
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
   <link rel="stylesheet" href="../css/ws-tabs.css?v=f2">
+  <link rel="stylesheet" href="../css/bandeja.css?v=bj1">
 
   <style>
-    /* Page-local — bandeja "Hoy" (propuesta Almacén/Finanzas 2026-08, E1). */
-    .hy-grupo { margin-bottom: var(--sp-5); }
-    .hy-grupo-t {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 11.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
-      color: var(--fg-3); margin: 0 0 8px;
-    }
-    .hy-grupo-t .hy-n {
-      background: var(--surface-sunken); border-radius: 999px; padding: 0 8px;
-      font-size: 11px; letter-spacing: 0;
-    }
-    .hy-row {
-      display: flex; align-items: center; gap: 10px; min-width: 0;
-      background: var(--surface-card); border: 1px solid var(--border-default);
-      border-radius: var(--radius-md); padding: 8px 12px; margin-bottom: 6px;
-    }
-    .hy-txt { flex: 1; min-width: 0; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .hy-txt b { font-weight: 600; }
-    .hy-chip {
-      flex: none; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 9px;
-      white-space: nowrap;
-    }
-    .hy-chip--seriales   { background: #FEF3C7; color: #92400E; }
-    .hy-chip--cambio     { background: #EFF6FF; color: #1E3A8A; }
-    .hy-chip--transicion { background: #FFEDD5; color: #7C2D12; }
-    .hy-chip--inspeccion { background: #FEF3C7; color: #92400E; }
-    .hy-chip--clasificar { background: var(--surface-sunken); color: var(--fg-3); }
-    .hy-chip--conflicto  { background: #FEF2F2; color: #991B1B; }
-    .hy-chip--diferencia { background: #FEF2F2; color: #991B1B; }
-    .hy-age { flex: none; font-size: 12px; color: var(--fg-3); white-space: nowrap; }
-    .hy-age.warn { color: #92400E; font-weight: 600; }
-    .hy-age.bad  { color: #991B1B; font-weight: 600; }
-    .hy-cta { flex: none; white-space: nowrap; }
-    .hy-mas { font-size: 12.5px; margin: 2px 0 0 4px; }
-    .hy-nota { font-size: 12px; color: var(--fg-3); margin: 4px 0 0 4px; }
-    .hy-eq {
-      display: inline-block; margin: 0 4px 0 0; padding: 0 7px;
-      background: var(--surface-sunken); border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-pill); font-size: 12px; white-space: nowrap;
-    }
-    .hy-aviso {
-      display: flex; align-items: center; gap: 8px; margin-bottom: var(--sp-3);
-      padding: 9px 12px; border-radius: var(--radius-md); font-size: 13px;
-      background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA;
-    }
-    .hy-vacio { text-align: center; color: var(--fg-3); padding: var(--sp-6); }
-    .hy-vacio svg { width: 34px; height: 34px; color: #16A34A; }
+    /* La bandeja "Hoy" y la cola de "Asignar" usan el kit de bandeja
+       (css/bandeja.css, js/ui/bandeja.js) desde 2026-09-07; aquí solo queda
+       lo propio de la página. */
 
     /* El loader del kit vive en el flujo (min-height 200px) y empujaba los
        títulos hacia abajo mientras cargaba cada pestaña. Aquí es un overlay
@@ -124,29 +81,8 @@
        estante, no quién es el cliente. */
     .as-layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
     @media (max-width: 860px) { .as-layout { grid-template-columns: 1fr; } }
-    .as-cola {
-      background: var(--surface-card); border: 1px solid var(--border-default);
-      border-radius: var(--radius-md); overflow: hidden; position: sticky; top: 8px;
-      max-height: calc(100vh - 120px); overflow-y: auto;
-    }
-    .as-cola-h {
-      display: flex; justify-content: space-between; padding: 9px 14px;
-      font-size: 11.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
-      color: var(--fg-3); border-bottom: 1px solid var(--border-subtle); background: var(--surface-sunken);
-    }
-    .as-item {
-      display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; width: 100%; text-align: left;
-      padding: 10px 14px; border: 0; border-bottom: 1px solid var(--border-subtle);
-      background: transparent; cursor: pointer; font: inherit; color: inherit;
-    }
-    .as-item:hover { background: var(--surface-sunken); }
-    .as-item.is-on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
-    .as-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-    .as-item-t { font-weight: 600; color: var(--fg-1); }
-    .as-item-n { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
-    .as-item-n.ok { color: #065F46; }
-    .as-item-s { grid-column: 1 / -1; font-size: 12px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .as-cola-vacio { margin: 0; padding: 18px 14px; font-size: 13px; color: var(--fg-3); }
+    /* La cola es una .bj-lista del kit; aquí solo su posición pegajosa. */
+    .as-cola { position: sticky; top: 8px; max-height: calc(100vh - 120px); overflow-y: auto; }
     .as-work {
       background: var(--surface-card); border: 1px solid var(--border-default);
       border-radius: var(--radius-md); padding: var(--sp-4); min-height: 320px; position: relative;
@@ -169,8 +105,6 @@
       border-top: 1px solid var(--border-default); border-radius: 0 0 var(--radius-md) var(--radius-md);
     }
     .as-foot-prog { font-family: var(--font-mono, monospace); color: var(--fg-1); font-variant-numeric: tabular-nums; }
-    .as-vacio { text-align: center; color: var(--fg-3); padding: var(--sp-6); }
-    .as-vacio svg { width: 34px; height: 34px; color: #16A34A; }
     /* Filas del formulario compartido (mismas clases que contratos/seriales) */
     .serial-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
     .serial-row.bloqueado .serial-input { background: var(--surface-sunken); color: var(--fg-3); }
@@ -180,7 +114,6 @@
     .serial-input.reemplazo { border-color: #2563eb !important; background: #eff6ff; box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
     .serial-omit { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--fg-3); white-space: nowrap; cursor: pointer; }
     .motivo-input { flex-basis: 100%; margin-left: 32px; height: 34px; font-size: 13px; }
-    .hy-chip--ok { background: #ECFDF5; color: #065F46; }
 
     /* Badges Dif. (mismo alias del tablero de Inventario) */
     .badge {
@@ -203,7 +136,8 @@
   <script src="../js/core/layout.js?v=cc13"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script> <!-- FMT: lo usan los asistentes -->
-  <script defer src="../js/ui/modal.js"></script> <!-- confirmaciones de los asistentes -->
+  <script defer src="../js/ui/modal.js?v=sheet1"></script> <!-- confirmaciones de los asistentes + Modal.sheet -->
+  <script defer src="../js/ui/bandeja.js?v=bj1"></script> <!-- kit de bandeja: fila, grupo, antigüedad -->
   <script defer src="../js/services/usuariosService.js"></script>
   <script defer src="../js/domain/transicionPendiente.js?v=reemp1"></script>
   <script defer src="../js/services/colaInventarioService.js?v=cc2"></script>
@@ -228,9 +162,9 @@
   <script defer src="../js/services/gestionesService.js?v=cg11"></script>
   <script defer src="../js/services/equiposDescartadosService.js?v=qcdesc1"></script><script defer src="../js/services/equiposCondicionesService.js?v=cond1"></script>
   <script defer src="../js/ui/serial-field.js?v=cond1"></script>
-  <script defer src="../js/ui/asignador-seriales.js?v=cond1"></script>
-  <script defer src="../js/pages/almacen-asignar.js?v=alm1"></script>
-  <script defer src="../js/pages/almacen-hoy.js?v=alm1"></script>
+  <script defer src="../js/ui/asignador-seriales.js?v=alm2"></script>
+  <script defer src="../js/pages/almacen-asignar.js?v=alm2"></script>
+  <script defer src="../js/pages/almacen-hoy.js?v=alm2"></script>
   <script defer src="../js/pages/almacen-existencias.js?v=fix1"></script>
   <script defer src="/js/vendor/lucide.min.js?v=3"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
@@ -300,9 +234,9 @@
 
     <!-- ============ HOY — bandeja unificada de trabajo ============ -->
     <section id="tab-hoy">
-      <div id="avisoFallidas" class="hy-aviso" style="display:none;"></div>
+      <div id="avisoFallidas" class="bj-aviso" style="display:none;"></div>
       <div id="hoyGrupos"></div>
-      <div class="hy-vacio" id="hoyVacio" style="display:none;">
+      <div class="bj-vacio" id="hoyVacio" style="display:none;">
         <i data-lucide="check-circle-2"></i>
         <p>Nada pendiente. Bodega al día.</p>
       </div>
@@ -311,7 +245,7 @@
     <!-- ============ ASIGNAR — seriales a contratos y gestiones ============ -->
     <section id="tab-asignar" style="display:none;">
       <div class="as-layout">
-        <aside class="as-cola" id="asCola" aria-label="Cola por asignar"></aside>
+        <aside class="bj-lista as-cola" id="asCola" aria-label="Cola por asignar"></aside>
         <section class="as-work" id="asTrabajo"></section>
       </div>
     </section>

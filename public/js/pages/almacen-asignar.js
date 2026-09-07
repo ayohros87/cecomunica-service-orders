@@ -122,24 +122,22 @@ window.AlmacenAsignar = (() => {
     if (!el) return;
     const porAsignar = st.items.filter(i => i.tipo !== 'cambio');
     const cambios = st.items.filter(i => i.tipo === 'cambio');
-    const fila = (it) => `
-      <button type="button" class="as-item${st.sel && st.sel.tipo === it.tipo && st.sel.id === it.id ? ' is-on' : ''}"
-              data-tipo="${esc(it.tipo)}" data-id="${esc(it.id)}">
-        <span class="as-item-t">${esc(it.titulo)}</span>
-        <span class="as-item-n${it.listo ? ' ok' : ''}">${esc(it.n)}</span>
-        <span class="as-item-s">${esc(it.sub)}</span>
-      </button>`;
+    // Ítems de la lista seleccionable del kit de bandeja (js/ui/bandeja.js).
+    const fila = (it) => Bandeja.item({
+      titulo: it.titulo, n: it.n, sub: it.sub, listo: it.listo,
+      sel: !!(st.sel && st.sel.tipo === it.tipo && st.sel.id === it.id),
+      data: { tipo: it.tipo, id: it.id },
+    });
     const aviso = (st.fallidas || []).length
-      ? `<p class="hy-nota" style="margin:8px 12px;">No se pudo leer: ${st.fallidas.join(', ')}.</p>` : '';
-    el.innerHTML = `
-      <div class="as-cola-h"><span>Por asignar</span><span>${porAsignar.length}</span></div>
-      ${porAsignar.map(fila).join('') || '<p class="as-cola-vacio">Nada por asignar. Bodega al día.</p>'}
-      ${cambios.length ? `<div class="as-cola-h" style="border-top:1px solid var(--border-default);"><span>Cambio de serial</span><span>${cambios.length}</span></div>${cambios.map(fila).join('')}` : ''}
-      ${aviso}`;
+      ? `<p class="bj-nota" style="margin:8px 12px;">No se pudo leer: ${esc(st.fallidas.join(', '))}.</p>` : '';
+    el.innerHTML = Bandeja.listaTitulo('Por asignar', porAsignar.length)
+      + (porAsignar.map(fila).join('') || Bandeja.listaVacia('Nada por asignar. Bodega al día.'))
+      + (cambios.length ? Bandeja.listaTitulo('Cambio de serial', cambios.length) + cambios.map(fila).join('') : '')
+      + aviso;
   }
 
   function onClickCola(e) {
-    const btn = e.target.closest('.as-item');
+    const btn = e.target.closest('.bj-item');
     if (!btn) return;
     const it = st.items.find(i => i.tipo === btn.dataset.tipo && i.id === btn.dataset.id);
     if (it) seleccionar(it);
@@ -189,10 +187,11 @@ window.AlmacenAsignar = (() => {
   function renderTrabajoVacio() {
     const el = $('asTrabajo');
     if (!el) return;
-    el.innerHTML = `<div class="as-vacio"><i data-lucide="check-circle-2"></i><p>Nada por asignar. Cuando un contrato o una gestión espere seriales, aparece aquí.</p></div>`;
+    el.innerHTML = Bandeja.vacio('Nada por asignar. Cuando un contrato o una gestión espere seriales, aparece aquí.');
     if (window.lucide) lucide.createIcons();
   }
 
+  // pillCls: tono del kit (aviso · info · alerta · listo · neutro).
   function cascaron({ titulo, sub, pill, pillCls }) {
     const el = $('asTrabajo');
     el.innerHTML = `
@@ -201,7 +200,7 @@ window.AlmacenAsignar = (() => {
           <div class="as-work-t">${titulo}</div>
           <div class="as-work-s">${sub}</div>
         </div>
-        ${pill ? `<span class="hy-chip hy-chip--${pillCls || 'seriales'}">${esc(pill)}</span>` : ''}
+        ${pill ? Bandeja.chip(pill, pillCls || 'aviso') : ''}
       </div>
       <div id="asPicklist"></div>
       <div id="asBanner"></div>
@@ -261,7 +260,7 @@ window.AlmacenAsignar = (() => {
     const el = cascaron({ titulo: 'Cargando…', sub: '' });
     let contrato;
     try { contrato = await ContratosService.getContrato(docId); } catch (e) { console.error(e); }
-    if (!contrato) { el.innerHTML = '<div class="as-vacio"><p>No se encontró el contrato.</p></div>'; return; }
+    if (!contrato) { el.innerHTML = Bandeja.vacio('No se encontró el contrato.', 'search-x'); return; }
 
     let guardados = [], omisiones = [], estadoSenal = '';
     try { guardados = await ContratosService.getSerialesManual(docId); } catch (e) { /* ok */ }
@@ -304,7 +303,7 @@ window.AlmacenAsignar = (() => {
       sub: `${esc(contrato.accion || 'Contrato')} · ${esc(ctxC.clienteNombre || 'Cliente')}`
         + (contrato.fecha_aprobacion?.toMillis ? ` · aprobado ${hace(contrato.fecha_aprobacion.toMillis())}` : ''),
       pill: modoReemplazo ? 'Cambio de serial' : yaAsignados ? 'Listo para programar' : esLegacy ? 'Histórico' : 'Por asignar',
-      pillCls: modoReemplazo ? 'cambio' : yaAsignados ? 'ok' : 'seriales',
+      pillCls: modoReemplazo ? 'info' : yaAsignados ? 'listo' : esLegacy ? 'neutro' : 'aviso',
     });
 
     const locked = yaAsignados && !modoReemplazo;
@@ -501,53 +500,38 @@ window.AlmacenAsignar = (() => {
     }
   }
 
-  // Hoja del paso que cierra el trabajo — en el idioma de bodega.
-  function hojaListo(c, { seriales, omisiones }) {
-    return new Promise((resolve) => {
-      const porModelo = new Map();
-      seriales.forEach(s => porModelo.set(s.modelo || '—', (porModelo.get(s.modelo || '—') || 0) + 1));
-      (omisiones || []).forEach(o => { if (!porModelo.has(o.modelo || '—')) porModelo.set(o.modelo || '—', 0); });
-      const filas = [...porModelo.entries()].map(([modelo, n]) => {
-        const oms = (omisiones || []).filter(o => (o.modelo || '—') === modelo).length;
-        return `<tr><td style="padding:6px 10px; border-bottom:1px solid var(--border); font-size:13px;">${esc(modelo)}</td>
-          <td style="padding:6px 10px; border-bottom:1px solid var(--border); font-size:13px; text-align:right; white-space:nowrap;"><b>${n}</b> con serial${oms ? ` · ${oms} sin serial` : ''}</td></tr>`;
-      }).join('');
-      const overlay = document.createElement('div');
-      overlay.className = 'overlay'; overlay.style.display = 'flex';
-      overlay.innerHTML = `
-        <div class="modal" style="max-width:560px; width:min(560px, 94vw);">
-          <div class="sheet-header"><h3 class="sheet-title">Listo para programar</h3></div>
-          <div class="sheet-body" style="padding:12px 8px;">
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:10px 16px; margin-bottom:12px;">
-              <div><div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3);">Contrato</div><div style="font-size:13.5px;">${esc(c.contratoIdVisible)}</div></div>
-              <div><div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3);">Cliente</div><div style="font-size:13.5px;">${esc(c.clienteNombre || '—')}</div></div>
-              <div><div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3);">Unidades</div><div style="font-size:13.5px;"><b>${seriales.length}</b> con serial${omisiones.length ? ` · <b>${omisiones.length}</b> sin serial` : ''}</div></div>
-            </div>
-            <div style="border:1px solid var(--border); border-radius:8px; overflow:hidden; max-height:240px; overflow-y:auto;">
-              <table style="border-collapse:collapse; width:100%;">${filas}</table>
-            </div>
-            <div style="margin-top:12px; padding:10px 12px; background:#FFFBEB; border:1px solid #FCD34D; border-radius:8px; color:#92400E; font-size:12.5px; line-height:1.55;">
-              El contrato pasa a la <b>cola de programación</b> y activaciones recibe los seriales.
-              Después de esto, corregir un serial requiere una <b>solicitud de cambio</b> de recepción.
-            </div>
-          </div>
-          <div class="footer">
-            <button class="btn btn-ghost" data-action="cancel">Volver a revisar</button>
-            <button class="btn btn-primary" data-action="confirm"><i data-lucide="check" style="width:14px;height:14px;"></i> Listo para programar</button>
-          </div>
-        </div>`;
-      const cleanup = (r) => { overlay.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', kb); resolve(r); };
-      const kb = (e) => { if (e.key === 'Escape') cleanup(false); };
-      overlay.addEventListener('click', (e) => {
-        const action = e.target.closest('[data-action]')?.dataset?.action;
-        if (action === 'confirm') cleanup(true);
-        else if (action === 'cancel' || e.target === overlay) cleanup(false);
-      });
-      document.addEventListener('keydown', kb);
-      document.body.appendChild(overlay);
-      document.body.style.overflow = 'hidden';
-      if (window.lucide) lucide.createIcons();
+  // Hoja del paso que cierra el trabajo — en el idioma de bodega. Resuelve
+  // true solo si se confirma (Modal.sheet devuelve null al cerrar).
+  async function hojaListo(c, { seriales, omisiones }) {
+    const porModelo = new Map();
+    seriales.forEach(s => porModelo.set(s.modelo || '—', (porModelo.get(s.modelo || '—') || 0) + 1));
+    (omisiones || []).forEach(o => { if (!porModelo.has(o.modelo || '—')) porModelo.set(o.modelo || '—', 0); });
+    const filas = [...porModelo.entries()].map(([modelo, n]) => {
+      const oms = (omisiones || []).filter(o => (o.modelo || '—') === modelo).length;
+      return `<tr><td style="padding:6px 10px; border-bottom:1px solid var(--border); font-size:13px;">${esc(modelo)}</td>
+        <td style="padding:6px 10px; border-bottom:1px solid var(--border); font-size:13px; text-align:right; white-space:nowrap;"><b>${n}</b> con serial${oms ? ` · ${oms} sin serial` : ''}</td></tr>`;
+    }).join('');
+    const r = await Modal.sheet({
+      title: 'Listo para programar', icon: 'check', size: 'md',
+      html: `
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:10px 16px; margin-bottom:12px;">
+          <div><div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3);">Contrato</div><div style="font-size:13.5px;">${esc(c.contratoIdVisible)}</div></div>
+          <div><div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3);">Cliente</div><div style="font-size:13.5px;">${esc(c.clienteNombre || '—')}</div></div>
+          <div><div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3);">Unidades</div><div style="font-size:13.5px;"><b>${seriales.length}</b> con serial${omisiones.length ? ` · <b>${omisiones.length}</b> sin serial` : ''}</div></div>
+        </div>
+        <div style="border:1px solid var(--border); border-radius:8px; overflow:hidden; max-height:240px; overflow-y:auto;">
+          <table style="border-collapse:collapse; width:100%;">${filas}</table>
+        </div>
+        <div style="margin-top:12px; padding:10px 12px; background:#FFFBEB; border:1px solid #FCD34D; border-radius:8px; color:#92400E; font-size:12.5px; line-height:1.55;">
+          El contrato pasa a la <b>cola de programación</b> y activaciones recibe los seriales.
+          Después de esto, corregir un serial requiere una <b>solicitud de cambio</b> de recepción.
+        </div>`,
+      buttons: [
+        { action: 'cancel', label: 'Volver a revisar' },
+        { action: 'confirm', label: 'Listo para programar', primary: true, icon: 'check' },
+      ],
     });
+    return r === 'confirm';
   }
 
   function traerDelOriginal() {
@@ -565,7 +549,7 @@ window.AlmacenAsignar = (() => {
     const el = cascaron({ titulo: 'Cargando…', sub: '' });
     let g = null;
     try { g = await GestionesService.get(gid); } catch (e) { console.error(e); }
-    if (!g) { el.innerHTML = '<div class="as-vacio"><p>No se encontró la gestión.</p></div>'; return; }
+    if (!g) { el.innerHTML = Bandeja.vacio('No se encontró la gestión.', 'search-x'); return; }
 
     const grupos = gruposDeGestion(g);
     const total = grupos.reduce((s, x) => s + x.activos, 0);
@@ -586,7 +570,7 @@ window.AlmacenAsignar = (() => {
         + (g.tipo === 'demo' && g.demo?.finalidad ? ` · ${esc(g.demo.finalidad)}` : '')
         + (g.tipo === 'aumento' && g.estado === 'pendiente_firma' ? ' · <b>firma del anexo en paralelo</b>' : ''),
       pill: cerrada ? (g.estado === 'anulada' ? 'Anulada' : 'Cerrada') : esperaBodega ? 'Por asignar' : conOS ? 'En programación' : 'Sin pendiente de bodega',
-      pillCls: esperaBodega ? 'seriales' : 'ok',
+      pillCls: esperaBodega ? 'aviso' : cerrada ? 'neutro' : 'listo',
     });
 
     const puede = esperaBodega && puedeAsignarGestion();

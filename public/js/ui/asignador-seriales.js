@@ -431,34 +431,9 @@ window.AsignadorSeriales = (() => {
           </div>`;
       }).join('');
 
-      const overlay = document.createElement('div');
-      overlay.id = 'overlayPoolPicker';
-      overlay.className = 'modal-backdrop open';
-      overlay.setAttribute('role', 'dialog');
-      overlay.setAttribute('aria-modal', 'true');
-      overlay.innerHTML = `
-        <div class="modal" style="max-width:640px;width:100%;">
-          <div class="modal-header">
-            <h3 class="modal-title"><i data-lucide="scan-barcode"></i> ${esc(titulo)}</h3>
-            <button type="button" class="modal-close" data-pp="cerrar" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
-          </div>
-          <div class="modal-body" style="max-height:56vh;overflow:auto;">
-            <p style="margin:0 0 10px;font-size:13px;color:var(--fg-3);">
-              Marca las unidades que vas a asignar, o usa <b>Selección automática</b>
-              (toma las más antiguas en bodega por modelo).
-            </p>
-            <input type="search" id="ppBuscar" class="form-input" placeholder="Filtrar por serial…" style="width:100%;margin-bottom:12px;height:36px;font-family:var(--font-mono,monospace);">
-            ${seccionesHtml}
-          </div>
-          <div class="modal-footer">
-            <span id="ppCount" class="ts" style="margin-right:auto;align-self:center;">Sin selección</span>
-            <button type="button" class="btn btn-ghost" data-pp="auto"><i data-lucide="list-checks"></i> Selección automática</button>
-            <button type="button" class="btn btn-ghost" data-pp="cerrar">Cancelar</button>
-            <button type="button" class="btn btn-primary" data-pp="aplicar"><i data-lucide="check"></i> Asignar seleccionados</button>
-          </div>
-        </div>`;
-      document.body.appendChild(overlay);
-      const cerrar = () => overlay.remove();
+      // Hoja del kit (Modal.sheet): el cuerpo se cablea en onMount; los
+      // botones que no cierran devuelven false en onAction.
+      let overlay = null;
       const refrescarConteos = () => {
         let total = 0;
         secciones.forEach((s, si) => {
@@ -470,54 +445,72 @@ window.AsignadorSeriales = (() => {
         const c = overlay.querySelector('#ppCount');
         if (c) c.textContent = total ? `${total} unidad(es) seleccionada(s)` : 'Sin selección';
       };
-      overlay.addEventListener('change', (e) => {
-        const chk = e.target;
-        if (!chk.classList || !chk.classList.contains('pp-check')) return;
-        const si = Number(chk.getAttribute('data-grupo'));
-        const s = secciones[si];
-        if (chk.checked && s && overlay.querySelectorAll(`.pp-check[data-grupo="${si}"]:checked`).length > s.cupos) {
-          chk.checked = false;
-          toast(`${s.modelo}: solo hay ${s.cupos} cupo(s) vacío(s).`, 'warn');
-        }
-        refrescarConteos();
-      });
-      overlay.querySelector('#ppBuscar').addEventListener('input', (e) => {
-        const q = norm(e.target.value);
-        overlay.querySelectorAll('.pp-item').forEach(item => {
-          const serial = norm(item.querySelector('.pp-serial')?.textContent);
-          item.style.display = (!q || serial.includes(q)) ? '' : 'none';
-        });
-      });
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) { cerrar(); return; }
-        const btn = e.target.closest('[data-pp]');
-        if (!btn) return;
-        const act = btn.getAttribute('data-pp');
-        if (act === 'cerrar') { cerrar(); return; }
-        if (act === 'auto') {
-          secciones.forEach((s, si) => {
-            const checks = [...overlay.querySelectorAll(`.pp-check[data-grupo="${si}"]`)];
-            let n = checks.filter(c => c.checked).length;
-            for (const c of checks) {
-              if (n >= s.cupos) break;
-              if (!c.checked) { c.checked = true; n++; }
+      Modal.sheet({
+        title: titulo, icon: 'scan-barcode', size: 'lg',
+        html: `
+          <p style="margin:0 0 10px;font-size:13px;color:var(--fg-3);">
+            Marca las unidades que vas a asignar, o usa <b>Selección automática</b>
+            (toma las más antiguas en bodega por modelo).
+          </p>
+          <input type="search" id="ppBuscar" class="form-input" placeholder="Filtrar por serial…" style="width:100%;margin-bottom:12px;height:36px;font-family:var(--font-mono,monospace);">
+          ${seccionesHtml}`,
+        buttons: [
+          { action: 'auto', label: 'Selección automática', icon: 'list-checks' },
+          { action: 'cerrar', label: 'Cancelar' },
+          { action: 'aplicar', label: 'Asignar seleccionados', primary: true, icon: 'check' },
+        ],
+        onMount: (root) => {
+          overlay = root;
+          root.id = 'overlayPoolPicker';
+          const pie = root.querySelector('.modal-footer');
+          if (pie) pie.insertAdjacentHTML('afterbegin', '<span id="ppCount" class="ts" style="margin-right:auto;align-self:center;">Sin selección</span>');
+          root.addEventListener('change', (e) => {
+            const chk = e.target;
+            if (!chk.classList || !chk.classList.contains('pp-check')) return;
+            const si = Number(chk.getAttribute('data-grupo'));
+            const s = secciones[si];
+            if (chk.checked && s && root.querySelectorAll(`.pp-check[data-grupo="${si}"]:checked`).length > s.cupos) {
+              chk.checked = false;
+              toast(`${s.modelo}: solo hay ${s.cupos} cupo(s) vacío(s).`, 'warn');
             }
+            refrescarConteos();
+          });
+          root.querySelector('#ppBuscar').addEventListener('input', (e) => {
+            const q = norm(e.target.value);
+            root.querySelectorAll('.pp-item').forEach(item => {
+              const serial = norm(item.querySelector('.pp-serial')?.textContent);
+              item.style.display = (!q || serial.includes(q)) ? '' : 'none';
+            });
           });
           refrescarConteos();
-          return;
-        }
-        if (act === 'aplicar') {
-          const items = [...overlay.querySelectorAll('.pp-check:checked')].map(c => {
-            const s = secciones[Number(c.getAttribute('data-grupo'))] || {};
-            return { serial: c.value, modelo: s.modelo || '', modeloId: s.modeloId || '' };
-          });
-          if (!items.length) { toast('Marca al menos una unidad para asignar.', 'warn'); return; }
-          cerrar();
-          jalarItems(items, opts.origenPicker || 'el pool de bodega');
-        }
+        },
+        onAction: (act, root) => {
+          if (act === 'cerrar') return null;
+          if (act === 'auto') {
+            secciones.forEach((s, si) => {
+              const checks = [...root.querySelectorAll(`.pp-check[data-grupo="${si}"]`)];
+              let n = checks.filter(c => c.checked).length;
+              for (const c of checks) {
+                if (n >= s.cupos) break;
+                if (!c.checked) { c.checked = true; n++; }
+              }
+            });
+            refrescarConteos();
+            return false;
+          }
+          if (act === 'aplicar') {
+            const items = [...root.querySelectorAll('.pp-check:checked')].map(c => {
+              const s = secciones[Number(c.getAttribute('data-grupo'))] || {};
+              return { serial: c.value, modelo: s.modelo || '', modeloId: s.modeloId || '' };
+            });
+            if (!items.length) { toast('Marca al menos una unidad para asignar.', 'warn'); return false; }
+            // jalarItems después de cerrar: el toast y el refresh van sobre la página.
+            setTimeout(() => jalarItems(items, opts.origenPicker || 'el pool de bodega'), 0);
+            return 'aplicar';
+          }
+          return false;
+        },
       });
-      if (window.lucide) lucide.createIcons();
-      refrescarConteos();
     }
 
     // ── Política SUAVE: avisos, nunca bloquea ──────────────────────────
@@ -579,11 +572,8 @@ window.AsignadorSeriales = (() => {
       return avisos;
     }
 
-    function panelRevisionSeriales(avisos, totalSeriales) {
-      return new Promise((resolve) => {
-        const overlay = document.createElement('div');
-        overlay.className = 'overlay';
-        overlay.style.display = 'flex';
+    async function panelRevisionSeriales(avisos, totalSeriales) {
+      {
         const filas = avisos.map(a => `
           <tr>
             <td style="font-family:var(--font-mono, monospace); font-size:12.5px; white-space:nowrap; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top;">
@@ -592,34 +582,25 @@ window.AsignadorSeriales = (() => {
               <span class="eqpool-chip" style="${esc(a.chipCss)}">${esc(a.chip)}</span>
               <div style="color:var(--fg-3); margin-top:3px; line-height:1.45;">${esc(a.detalle)}</div></td>
           </tr>`).join('');
-        overlay.innerHTML = `
-          <div class="modal" style="max-width:640px; width:min(640px, 94vw);">
-            <div class="sheet-header"><h3 class="sheet-title">Revisión antes de guardar</h3></div>
-            <div class="sheet-body" style="padding:12px 8px;">
-              <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
-                ${totalSeriales} serial(es) · <strong>${avisos.length} aviso(s)</strong> del pool de equipos. Guardar no se bloquea — revisa y decide.</p>
-              <div style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
-                <table style="border-collapse:collapse; width:100%;">${filas}</table>
-              </div>
-            </div>
-            <div class="footer">
-              <button class="btn btn-ghost" data-action="cancel">Volver a editar</button>
-              <button class="btn btn-primary" data-action="confirm">Guardar con ${avisos.length} aviso(s)</button>
-            </div>
-          </div>`;
-        const cleanup = (r) => { overlay.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', kb); resolve(r); };
-        const kb = (e) => { if (e.key === 'Escape') cleanup(false); };
-        overlay.addEventListener('click', (e) => {
-          const ficha = e.target.closest('[data-ficha]');
-          if (ficha) { e.preventDefault(); window.EquipoFicha?.abrir(ficha.getAttribute('data-ficha')); return; }
-          const action = e.target.closest('[data-action]')?.dataset?.action;
-          if (action === 'confirm') cleanup(true);
-          else if (action === 'cancel' || e.target === overlay) cleanup(false);
+        const r = await Modal.sheet({
+          title: 'Revisión antes de guardar', icon: 'search-check', size: 'lg',
+          html: `
+            <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
+              ${totalSeriales} serial(es) · <strong>${avisos.length} aviso(s)</strong> del pool de equipos. Guardar no se bloquea — revisa y decide.</p>
+            <div style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
+              <table style="border-collapse:collapse; width:100%;">${filas}</table>
+            </div>`,
+          buttons: [
+            { action: 'cancel', label: 'Volver a editar' },
+            { action: 'confirm', label: `Guardar con ${avisos.length} aviso(s)`, primary: true },
+          ],
+          onMount: (root) => root.addEventListener('click', (e) => {
+            const ficha = e.target.closest('[data-ficha]');
+            if (ficha) { e.preventDefault(); window.EquipoFicha?.abrir(ficha.getAttribute('data-ficha')); }
+          }),
         });
-        document.addEventListener('keydown', kb);
-        document.body.appendChild(overlay);
-        document.body.style.overflow = 'hidden';
-      });
+        return r === 'confirm';
+      }
     }
 
     async function confirmarAvisosPool(seriales) {
@@ -681,12 +662,9 @@ window.AsignadorSeriales = (() => {
     //   false                → volver a editar
     //   { motivo }           → "asignar de todos modos" (solo si todos los
     //                          errores son de modelo)
-    function panelBloqueo(errores) {
-      return new Promise((resolve) => {
+    async function panelBloqueo(errores) {
+      {
         const soloModelo = errores.length && errores.every(e => e.tipo === 'modelo');
-        const overlay = document.createElement('div');
-        overlay.className = 'overlay';
-        overlay.style.display = 'flex';
         const chip = (t) => t === 'modelo'
           ? '<span class="eqpool-chip" style="background:#fee2e2;color:#b91c1c;">modelo distinto</span>'
           : t === 'inexistente'
@@ -700,43 +678,37 @@ window.AsignadorSeriales = (() => {
               ${chip(e.tipo)}
               <div style="color:var(--fg-3); margin-top:3px; line-height:1.45;">${esc(e.motivo)}</div></td>
           </tr>`).join('');
-        overlay.innerHTML = `
-          <div class="modal" style="max-width:640px; width:min(640px, 94vw);">
-            <div class="sheet-header"><h3 class="sheet-title">${errores.length} serial(es) que no se pueden asignar</h3></div>
-            <div class="sheet-body" style="padding:12px 8px;">
-              <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
-                Un serial se asigna solo si existe en el inventario, está en bodega y es del modelo pedido.</p>
-              <div style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
-                <table style="border-collapse:collapse; width:100%;">${filas}</table>
-              </div>
-              ${soloModelo ? `
-              <div style="margin-top:12px; padding:10px 12px; background:#FFFBEB; border:1px solid #FCD34D; border-radius:8px; color:#92400E; font-size:12.5px; line-height:1.55;">
-                Si estás seguro de que es el radio correcto y el modelo del contrato está mal escrito,
-                puedes asignarlo de todos modos. El motivo queda en el historial.
-                <input type="text" id="pbMotivo" class="form-input" placeholder="Motivo (obligatorio)" style="margin-top:8px; width:100%; height:34px;">
-              </div>` : ''}
+        const r = await Modal.sheet({
+          title: `${errores.length} serial(es) que no se pueden asignar`, icon: 'shield-alert', size: 'lg',
+          html: `
+            <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
+              Un serial se asigna solo si existe en el inventario, está en bodega y es del modelo pedido.</p>
+            <div style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
+              <table style="border-collapse:collapse; width:100%;">${filas}</table>
             </div>
-            <div class="footer">
-              <button class="btn btn-primary" data-action="cancel">Volver a editar</button>
-              ${soloModelo ? '<button class="btn btn-ghost" data-action="forzar">Asignar de todos modos</button>' : ''}
-            </div>
-          </div>`;
-        const cleanup = (r) => { overlay.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', kb); resolve(r); };
-        const kb = (e) => { if (e.key === 'Escape') cleanup(false); };
-        overlay.addEventListener('click', (e) => {
-          const ficha = e.target.closest('[data-ficha]');
-          if (ficha) { e.preventDefault(); window.EquipoFicha?.abrir(ficha.getAttribute('data-ficha')); return; }
-          const action = e.target.closest('[data-action]')?.dataset?.action;
-          if (action === 'forzar') {
-            const motivo = overlay.querySelector('#pbMotivo')?.value.trim();
-            if (!motivo) { toast('Escribe el motivo para asignar un modelo distinto.', 'warn'); return; }
-            cleanup({ motivo });
-          } else if (action === 'cancel' || e.target === overlay) cleanup(false);
+            ${soloModelo ? `
+            <div style="margin-top:12px; padding:10px 12px; background:#FFFBEB; border:1px solid #FCD34D; border-radius:8px; color:#92400E; font-size:12.5px; line-height:1.55;">
+              Si estás seguro de que es el radio correcto y el modelo del contrato está mal escrito,
+              puedes asignarlo de todos modos. El motivo queda en el historial.
+              <input type="text" id="pbMotivo" class="form-input" placeholder="Motivo (obligatorio)" style="margin-top:8px; width:100%; height:34px;">
+            </div>` : ''}`,
+          buttons: [
+            ...(soloModelo ? [{ action: 'forzar', label: 'Asignar de todos modos' }] : []),
+            { action: 'cancel', label: 'Volver a editar', primary: true },
+          ],
+          onMount: (root) => root.addEventListener('click', (e) => {
+            const ficha = e.target.closest('[data-ficha]');
+            if (ficha) { e.preventDefault(); window.EquipoFicha?.abrir(ficha.getAttribute('data-ficha')); }
+          }),
+          onAction: (action, root) => {
+            if (action !== 'forzar') return null;
+            const motivo = root.querySelector('#pbMotivo')?.value.trim();
+            if (!motivo) { toast('Escribe el motivo para asignar un modelo distinto.', 'warn'); return false; }
+            return { motivo };
+          },
         });
-        document.addEventListener('keydown', kb);
-        document.body.appendChild(overlay);
-        document.body.style.overflow = 'hidden';
-      });
+        return r && typeof r === 'object' ? r : false;
+      }
     }
 
     // Atajo de la política dura: valida y, si hay bloqueos, abre el panel.

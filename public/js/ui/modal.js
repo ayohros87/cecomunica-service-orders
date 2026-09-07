@@ -7,6 +7,8 @@
 //   Modal.prompt(opts)        — programmatic text-input dialog, returns Promise<string|null>
 //     opts: { message, title?, defaultValue?, placeholder?, confirmLabel?, cancelLabel?, multiline? }
 //     null on cancel/Escape/backdrop; trimmed string on confirm.
+//   Modal.sheet(opts)         — hoja programática con cuerpo HTML y botones, Promise<resultado>
+//     (2026-09-07, propuesta "Bandejas y pickers" F1). Ver abajo.
 // Standard CSS selector for elements that participate in the Tab
 // sequence — used by the focus trap. Pulled out so Modal.open and the
 // programmatic confirm/prompt overlays share the same definition.
@@ -24,6 +26,26 @@ function _focusableIn(root) {
     .filter(el => !el.hasAttribute('disabled')
                 && el.offsetParent !== null);  // skip hidden
 }
+
+// Trampa de foco: Tab/Shift+Tab dan la vuelta dentro de `el`. Devuelve true
+// si consumió el evento.
+function _trapTab(e, el) {
+  if (e.key !== 'Tab') return false;
+  const focusables = _focusableIn(el);
+  if (focusables.length === 0) { e.preventDefault(); return true; }
+  const first = focusables[0];
+  const last  = focusables[focusables.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  return true;
+}
+
+// Pila de hojas programáticas abiertas: cada nueva va encima de la anterior
+// y por encima de cualquier overlay de página (los flujos de órdenes usan
+// 9500; el visor de fotos 10050). confirm/prompt van a 10100 y siguen
+// encima de una hoja.
+const _SHEET_Z_BASE = 10000;
+let _sheetsAbiertas = 0;
 
 window.Modal = {
   open(id, { onEscape = true } = {}) {
@@ -53,21 +75,7 @@ window.Modal = {
         this.close(id);
         return;
       }
-      if (e.key !== 'Tab') return;
-      const focusables = _focusableIn(el);
-      if (focusables.length === 0) {
-        e.preventDefault();
-        return;
-      }
-      const first = focusables[0];
-      const last  = focusables[focusables.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
+      _trapTab(e, el);
     };
     el._modalKeyHandler = handler;
     document.addEventListener('keydown', handler);
@@ -86,6 +94,109 @@ window.Modal = {
     const prev = el._previouslyFocused;
     if (prev && typeof prev.focus === 'function') prev.focus();
     delete el._previouslyFocused;
+  },
+
+  // Hoja programática — la familia única de modal (anatomía del Centro, piel
+  // del kit de diseño, hoja pegada abajo en móvil; ver ceco-ui.css
+  // "Modal / Dialog"). Reemplaza los overlays construidos a mano.
+  //
+  //   Modal.sheet({
+  //     title, icon?,            // icono lucide junto al título
+  //     html,                    // cuerpo (la página escapa lo suyo)
+  //     buttons: [{ action, label, primary?, danger?, ghost?, icon? }],
+  //     size: 'sm'|'md'|'lg'|'xl',   // 440 · 560 · 720 · 960
+  //     closable: true,          // X en el encabezado + Escape + clic fuera
+  //     onMount(root, api),      // cablear el cuerpo; api = { close(v), root }
+  //     onAction(action, root),  // false → sigue abierta; otro valor → resuelve con él;
+  //                              // undefined → resuelve con `action`
+  //   }) → Promise<valor | null>   (null = cerrada sin elegir)
+  sheet({
+    title = '',
+    icon = null,
+    html = '',
+    buttons = [],
+    size = 'md',
+    closable = true,
+    onMount = null,
+    onAction = null,
+  } = {}) {
+    return new Promise(resolve => {
+      const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({
+        '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;'
+      }[m]));
+      const ANCHO = { sm: 440, md: 560, lg: 720, xl: 960 };
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-backdrop';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      if (title) overlay.setAttribute('aria-label', title);
+      overlay.style.zIndex = String(_SHEET_Z_BASE + _sheetsAbiertas * 10);
+      const btnHtml = (buttons || []).map(b => {
+        const cls = b.danger ? 'btn-danger' : b.primary ? 'btn-primary' : b.ghost !== false ? 'btn-ghost' : 'btn';
+        return `<button type="button" class="btn ${cls}" data-sheet-action="${esc(b.action)}">`
+          + (b.icon ? `<i data-lucide="${esc(b.icon)}" style="width:14px;height:14px;"></i> ` : '') + esc(b.label) + '</button>';
+      }).join('');
+      overlay.innerHTML = `
+        <div class="modal" style="max-width:${ANCHO[size] || ANCHO.md}px; width:100%;">
+          ${title || closable ? `<div class="modal-header">
+            <h3 class="modal-title">${icon ? `<i data-lucide="${esc(icon)}"></i> ` : ''}${esc(title)}</h3>
+            ${closable ? '<button type="button" class="modal-close" data-sheet-action="__cerrar" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>' : ''}
+          </div>` : ''}
+          <div class="modal-body">${html}</div>
+          ${btnHtml ? `<div class="modal-footer">${btnHtml}</div>` : ''}
+        </div>`;
+
+      const previo = document.activeElement;
+      let cerrado = false;
+      const cleanup = (result) => {
+        if (cerrado) return;
+        cerrado = true;
+        overlay.remove();
+        _sheetsAbiertas = Math.max(0, _sheetsAbiertas - 1);
+        if (_sheetsAbiertas === 0 && !document.querySelector('.overlay[style*="flex"], .modal-backdrop')) {
+          document.body.style.overflow = '';
+        }
+        document.removeEventListener('keydown', kb);
+        if (previo && typeof previo.focus === 'function') previo.focus();
+        resolve(result === undefined ? null : result);
+      };
+      const api = { root: overlay, close: (v) => cleanup(v) };
+
+      const kb = (e) => {
+        if (e.key === 'Escape' && closable) { e.preventDefault(); cleanup(null); return; }
+        _trapTab(e, overlay);
+      };
+
+      overlay.addEventListener('click', async (e) => {
+        if (e.target === overlay) { if (closable) cleanup(null); return; }
+        const btn = e.target.closest('[data-sheet-action]');
+        if (!btn) return;
+        const action = btn.getAttribute('data-sheet-action');
+        if (action === '__cerrar') { cleanup(null); return; }
+        if (typeof onAction === 'function') {
+          let r;
+          try { r = await onAction(action, overlay, api); } catch (err) { console.error('[Modal.sheet] onAction:', err); return; }
+          if (r === false) return;              // la hoja sigue abierta
+          cleanup(r === undefined ? action : r);
+          return;
+        }
+        cleanup(action);
+      });
+
+      document.addEventListener('keydown', kb);
+      document.body.appendChild(overlay);
+      _sheetsAbiertas++;
+      document.body.style.overflow = 'hidden';
+      if (typeof onMount === 'function') {
+        try { onMount(overlay, api); } catch (err) { console.error('[Modal.sheet] onMount:', err); }
+      }
+      if (window.lucide?.createIcons) lucide.createIcons({ nodes: [overlay] });
+      requestAnimationFrame(() => {
+        const primario = overlay.querySelector('.modal-footer .btn-primary, .modal-footer .btn-danger');
+        const foco = primario || _focusableIn(overlay)[0];
+        if (foco) foco.focus();
+      });
+    });
   },
 
   confirm({
