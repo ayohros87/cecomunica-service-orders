@@ -121,11 +121,22 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     : '';
 
   let iconoContrato = '';
+  // Orden nacida de una GESTIÓN del Centro (reemplazo, demo, aumento): el
+  // amarre operativo es el expediente, tenga o no contrato interno — se
+  // enlaza directo en vez del ícono rojo de "no aplica contrato" (2026-09-07).
+  const gestionId = ordenData.gestion?.id ? String(ordenData.gestion.id) : '';
+  const gestionLink = gestionId
+    ? `<a class="orden-gestion-link" href="../clientes/centro.html?id=${encodeURIComponent(ordenData.cliente_id || '')}&g=${encodeURIComponent(gestionId)}"
+         title="Gestión ${escapeHtml(gestionId)} — abrir el expediente en el Centro de gestión" data-stop-propagation="true"
+         style="margin-left:4px;vertical-align:middle;text-decoration:none;display:inline-flex;align-items:center;gap:2px;font-size:11px;color:#1d4ed8;"><i data-lucide="folder-open" style="width:15px;height:15px;"></i>${escapeHtml(gestionId)}</a>`
+    : '';
   if (normalizarTipo(ordenData.tipo_de_servicio) === "PROGRAMACION") {
     if (ordenData.contrato) {
       if (ordenData.contrato.aplica === true) {
         const contratoNumero = ordenData.contrato.contrato_id || 'ID no disponible';
         iconoContrato = `<span title="Contrato: ${contratoNumero}" style="cursor:help;margin-left:4px;vertical-align:middle;"><i data-lucide="link" style="color:#059669;width:15px;height:15px;"></i></span>`;
+      } else if (ordenData.contrato.aplica === false && gestionLink) {
+        iconoContrato = '';
       } else if (ordenData.contrato.aplica === false) {
         const motivoShort = ordenData.contrato.motivo_no_aplica || 'Sin motivo';
         iconoContrato = `<span title="No aplica contrato: ${motivoShort}" style="cursor:help;margin-left:4px;vertical-align:middle;"><i data-lucide="ban" style="color:#dc2626;width:15px;height:15px;"></i></span>`;
@@ -144,7 +155,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     <td class="client-name-cell">
       <div class="cliente-cell">
         <span class="cliente-text">${escapeHtml(nombreClienteDe(ordenData))}</span>
-        <span class="cliente-icon">${iconoAdvertencia}${iconoContrato}</span>
+        <span class="cliente-icon">${iconoAdvertencia}${iconoContrato}${gestionLink}</span>
       </div>
     </td>
     <td>${(() => {
@@ -254,6 +265,9 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
       <div class="card-contrato__tier3">
         <span>Inicio: ${formatFecha(ordenData.fecha_creacion)}${edadChip(ordenData, estado)}</span>
         ${progresoHtml}
+        ${ordenData.gestion?.id ? `<a class="orden-gestion-link" data-stop-propagation="true" style="color:#1d4ed8;text-decoration:none;font-size:12px;"
+            href="../clientes/centro.html?id=${encodeURIComponent(ordenData.cliente_id || '')}&g=${encodeURIComponent(String(ordenData.gestion.id))}"
+            title="Abrir el expediente de la gestión">Gestión ${escapeHtml(String(ordenData.gestion.id))}</a>` : ''}
       </div>
       <div class="acciones">
         <button class="btn btn-primary" data-action="abrir-equipos-mobile" data-stop-propagation="true" data-orden-id="${ordenId}">

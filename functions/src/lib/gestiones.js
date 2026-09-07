@@ -160,6 +160,21 @@ async function registrarEvento(gid, accion, detalle) {
 async function crearOrdenesProgramacion(gid, g) {
   const ordenes = [];
   const grupos = [];
+
+  // Vendedor de la orden (2026-09-07): la OS nacía con vendedor_asignado
+  // vacío, así que el rol vendedor no la veía en su lista (query por
+  // vendedor_asignado), "Mis órdenes" no la marcaba y el correo de orden
+  // completada no lo copiaba. El equivalente de "quien elaboró el contrato"
+  // en una gestión es quien la abrió en el Centro (responsable_uid); la ficha
+  // del cliente es el respaldo.
+  let vendedorUid = g.responsable_uid || "";
+  if (!vendedorUid && g.cliente_id) {
+    try {
+      const cli = await db.collection("clientes").doc(g.cliente_id).get();
+      vendedorUid = (cli.exists && cli.data().vendedor_asignado) || "";
+    } catch (e) { logger.warn("[gestiones] vendedor de la ficha ilegible", { gid, error: e.message }); }
+  }
+  const esPapel = g.tipo === "aumento" && g.aumento?.contrato_papel === true && !g.aumento?.contrato_doc_id;
   if (g.tipo === "reemplazo") {
     const porContrato = new Map();
     for (const it of (g.items || [])) {
@@ -203,7 +218,7 @@ async function crearOrdenesProgramacion(gid, g) {
     const data = {
       cliente_id: g.cliente_id || "",
       cliente_nombre: g.cliente_nombre || "",
-      vendedor_asignado: "",
+      vendedor_asignado: vendedorUid,
       tipo_de_servicio: "PROGRAMACIÓN",
       estado_reparacion: "POR ASIGNAR",
       fecha_creacion: admin.firestore.FieldValue.serverTimestamp(),
@@ -213,9 +228,21 @@ async function crearOrdenesProgramacion(gid, g) {
           ? `Orden creada automáticamente por la enmienda de aumento ${gid}: programar ${equipos.length} equipo(s) nuevos del contrato ${contratoId || "—"} (vigencia propia del tramo).`
           : `Orden creada automáticamente por la gestión ${gid} (demo): programar ${equipos.length} equipo(s) para demostración.`,
       equipos,
+      // Sin contrato interno (demo, adenda a contrato en papel, reemplazo de
+      // un equipo en custodia): el amarre operativo es la gestión. El número
+      // de papel se conserva en contrato_id (acuse de la tablet, recordatorio)
+      // y el motivo es legible en la lista de órdenes (2026-09-07).
       contrato: grupo.contratoDocId
         ? { aplica: true, contrato_doc_id: grupo.contratoDocId, contrato_id: contratoId, motivo_no_aplica: null }
-        : { aplica: false, contrato_doc_id: null, contrato_id: null, motivo_no_aplica: g.tipo === "demo" ? "demo" : "gestion" },
+        : {
+            aplica: false, contrato_doc_id: null,
+            contrato_id: esPapel ? (contratoId || null) : null,
+            motivo_no_aplica: g.tipo === "demo"
+              ? `Demo ${gid} — sin contrato por diseño`
+              : esPapel
+                ? `Contrato de papel (fuera del sistema)${contratoId ? ` — ${contratoId}` : ""}`
+                : `Gestión ${gid} — equipo sin contrato interno`,
+          },
       gestion: { id: gid, tipo: g.tipo },
       creado_por_uid: "system",
       creado_por_email: null,
