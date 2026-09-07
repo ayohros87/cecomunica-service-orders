@@ -187,6 +187,30 @@
 
   <div class="app-wrap app-wrap--default">
 
+    <!-- Aviso de descontinuación (2026-09-04). El módulo viejo de contratos
+         solo conserva el ALQUILER NUEVO; renovaciones, aumentos, reemplazos,
+         demos y propios viven en el Centro de gestión de clientes. Si la URL
+         trae cliente_id, el botón abre directo la ficha de ese cliente. -->
+    <div class="alert" role="status" id="avisoDescontinuado"
+         style="display:flex;align-items:center;gap:12px;margin:0 0 var(--sp-4);">
+      <i data-lucide="alert-triangle" style="width:20px;height:20px;flex-shrink:0;"></i>
+      <div style="flex:1;">
+        <strong>Este módulo se está descontinuando.</strong>
+        Los contratos nuevos, renovaciones, aumentos, reemplazos, demos y propios se hacen ahora desde el
+        <strong>Centro de gestión de clientes</strong>. Aquí solo queda el alquiler nuevo mientras termina la transición.
+      </div>
+      <a class="btn btn-primary btn-sm" id="lnkCentroGestion" href="../clientes/centro.html" style="white-space:nowrap;">
+        <i data-lucide="users"></i> Ir al Centro de gestión
+      </a>
+    </div>
+    <script>
+      (function () {
+        var cid = new URLSearchParams(location.search).get('cliente_id');
+        var a = document.getElementById('lnkCentroGestion');
+        if (cid && a) a.href = '../clientes/centro.html?id=' + encodeURIComponent(cid);
+      })();
+    </script>
+
     <form id="formContrato">
 
       <!-- Sección 1: Cliente -->
@@ -220,25 +244,22 @@
         <div class="form-grid-2">
           <div class="form-field">
             <label class="form-label" for="tipo_contrato">Tipo de contrato <span class="req"></span></label>
+            <!-- 2026-09-04: solo ALQUILER NUEVO. Propio, Reemplazo, Demo,
+                 Temporal, Renovación y Adición se hacen en el Centro de
+                 gestión de clientes. Los <select> se conservan (y quedan
+                 fijos) porque nc-form / nc-guardar / nc-preview los leen. -->
             <select class="form-select" id="tipo_contrato" required>
-              <option value="">Seleccione…</option>
-              <option value="ALQ">Alquiler</option>
-              <option value="PROP">Propio</option>
-              <option value="REEMP">Reemplazo</option>
-              <option value="DEMO">Demo</option>
-              <option value="TEMP">Temporal</option>
+              <option value="ALQ" selected>Alquiler</option>
             </select>
+            <span class="form-hint">Otros tipos de contrato: desde el Centro de gestión de clientes.</span>
           </div>
 
           <div class="form-field">
             <label class="form-label" for="accion">Tipo de acción <span class="req"></span></label>
             <select class="form-select" id="accion" required>
-              <option value="">Seleccione…</option>
-              <option value="Nuevo">Nuevo</option>
-              <option value="Renovación">Renovación</option>
-              <option value="Adición">Adición</option>
-              <option value="No Aplica">No Aplica</option>
+              <option value="Nuevo" selected>Nuevo</option>
             </select>
+            <span class="form-hint">Renovaciones y aumentos: desde el Centro de gestión de clientes.</span>
           </div>
 
           <div class="form-field renovacion-mode-box" id="renovacionModeBox" style="display:none; grid-column:1/-1;">
@@ -473,7 +494,7 @@
   <script src="../js/pages/nc-cargos.js"      defer></script>
   <script src="../js/pages/nc-combo.js?v=fix1"       defer></script>
   <script src="../js/pages/nc-preview.js?v=rep1"     defer></script>
-  <script src="../js/pages/nc-guardar.js?v=rep1"     defer></script>
+  <script src="../js/pages/nc-guardar.js?v=alq1"     defer></script>
   <script src="../js/pages/nuevo-contrato.js?v=rep1" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->

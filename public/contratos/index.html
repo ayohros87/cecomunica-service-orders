@@ -144,6 +144,22 @@
 
   <div class="app-wrap app-wrap--full">
 
+    <!-- Aviso de descontinuación (2026-09-04): el módulo viejo se retira en
+         favor del Centro de gestión de clientes. Nuevo contrato solo deja
+         alquiler nuevo; el resto de gestiones ya no se hacen aquí. -->
+    <div class="alert" role="status" id="avisoDescontinuado"
+         style="display:flex;align-items:center;gap:12px;margin:0 0 var(--sp-3);">
+      <i data-lucide="alert-triangle" style="width:20px;height:20px;flex-shrink:0;"></i>
+      <div style="flex:1;">
+        <strong>Este módulo se está descontinuando.</strong>
+        Los contratos nuevos, renovaciones, aumentos, reemplazos, demos y propios se hacen ahora desde el
+        <strong>Centro de gestión de clientes</strong>. Empieza a usar el módulo nuevo; aquí solo queda el alquiler nuevo mientras termina la transición.
+      </div>
+      <a class="btn btn-primary btn-sm" href="../clientes/centro.html" style="white-space:nowrap;">
+        <i data-lucide="users"></i> Ir al Centro de gestión
+      </a>
+    </div>
+
     <p id="mensaje" class="resumen" style="min-height:20px; margin-bottom:var(--sp-2);"></p>
 
     <!-- Upload status banner (shown when uploading a signed PDF) -->
@@ -331,7 +347,7 @@
   <script defer src="../js/pages/contratos-upload.js?v=firm2"></script>
   <script defer src="../js/pages/contratos-equipos.js?v=dev5"></script>
   <script defer src="../js/pages/contratos-seriales-cambio.js?v=cc28"></script>
-  <script defer src="../js/pages/contratos-list.js?v=dev12"></script>
+  <script defer src="../js/pages/contratos-list.js?v=alq1"></script>
   <script src="../js/pages/contratos-index.js?v=ses4" defer></script>
 
   <!-- Aprobación overlay -->

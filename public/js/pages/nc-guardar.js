@@ -34,8 +34,20 @@ window.NCGuardar = {
       if (c) { NC.listaClientes[draft.cliente_id] = c; NCCombo.selectCliente(draft.cliente_id, true); }
     }
 
-    if (draft.codigo_tipo) document.getElementById('tipo_contrato').value = draft.codigo_tipo;
-    if (draft.accion)      document.getElementById('accion').value        = draft.accion;
+    // 2026-09-04: este módulo solo crea ALQUILER NUEVO (los <select> ya no
+    // traen otro valor). Un borrador de otro tipo/acción (duplicar un PROP,
+    // una renovación vieja en sessionStorage) no se fuerza en silencio: se
+    // avisa y se deja el formulario en Alquiler / Nuevo.
+    const tipoSel   = document.getElementById('tipo_contrato');
+    const accionSel = document.getElementById('accion');
+    const tipoFuera   = draft.codigo_tipo && draft.codigo_tipo !== 'ALQ';
+    const accionFuera = draft.accion && draft.accion !== 'Nuevo';
+    if (tipoFuera || accionFuera) {
+      NC.origenPreseleccion = null;
+      Toast.show('⚠️ Este módulo solo crea contratos de Alquiler nuevos. Renovaciones, aumentos, reemplazos, demos y propios se hacen desde el Centro de gestión de clientes.', 'warn');
+    }
+    if (tipoSel)   tipoSel.value   = 'ALQ';
+    if (accionSel) accionSel.value = 'Nuevo';
     NCForm.syncAccionForTipoContrato();
 
     const cbRenov = document.getElementById('renovacion_sin_equipo');

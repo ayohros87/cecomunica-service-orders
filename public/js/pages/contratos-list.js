@@ -291,8 +291,10 @@ window.ContratosLista = {
     // Renovar con prefill (auditoría P1): renovar se rehacía DESDE CERO
     // (~22 interacciones) eligiendo a mano cliente, equipos, plan y el
     // contrato de origen — con riesgo real de vincular el origen equivocado.
+    // 2026-09-04: la renovación ya no se arma en nuevo-contrato (solo queda
+    // alquiler nuevo); el CTA lleva a la ficha del cliente en el Centro.
     if (data.estado === 'activo' && (esAdmin || esVendedor))
-      items.push(I('refresh-ccw', 'Renovar (precargado)', `ContratosLista.renovar('${id}')`, 'highlighted'));
+      items.push(I('refresh-ccw', 'Renovar (Centro de gestión)', `ContratosLista.renovar('${id}')`, 'highlighted'));
     // Duplicar
     if (puedeEditar && ['anulado','inactivo'].includes(data.estado))
       items.push(I('copy', 'Duplicar', `ContratosLista.duplicar('${id}')`));
@@ -948,6 +950,16 @@ window.ContratosLista = {
       const c = await ContratosService.getContrato(id);
       if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
 
+      // 2026-09-04: nuevo-contrato solo crea ALQUILER NUEVO. Duplicar un
+      // contrato de otro tipo o acción se hace desde el Centro de gestión.
+      const tipoDup   = c.codigo_tipo || '';
+      const accionDup = c.accion || '';
+      if ((tipoDup && tipoDup !== 'ALQ') || (accionDup && accionDup !== 'Nuevo')) {
+        Toast.show('Este módulo solo duplica contratos de Alquiler nuevos. Abre la ficha del cliente en el Centro de gestión para rehacerlo.', 'warn');
+        this._irAlCentro(c.cliente_id);
+        return;
+      }
+
       const draft = {
         cliente_id:                      c.cliente_id || '',
         codigo_tipo:                     c.codigo_tipo || '',
@@ -975,9 +987,15 @@ window.ContratosLista = {
     }
   },
 
-  // CTA "Renovar": mismo mecanismo de prefill que duplicar(), más la
-  // preselección del ORIGEN (este contrato) — NC.origenPreseleccion la
-  // aplica nc-form.cargarContratosOrigen al pintar los checkboxes.
+  // Ficha del cliente en el Centro de gestión (sin cliente: el directorio).
+  _irAlCentro(clienteId) {
+    const base = '../clientes/centro.html';
+    window.location.href = clienteId ? `${base}?id=${encodeURIComponent(clienteId)}` : base;
+  },
+
+  // CTA "Renovar" (2026-09-04): la renovación se hace desde la CUENTA en el
+  // Centro de gestión ("Renovar cuenta", plan por serial). Antes precargaba
+  // nuevo-contrato con accion=Renovación, que ya no existe en ese módulo.
   async renovar(id) {
     try {
       const c = await ContratosService.getContrato(id);
@@ -985,27 +1003,11 @@ window.ContratosLista = {
       if (c.estado !== 'activo') {
         Toast.show('Solo se renueva un contrato ACTIVO.', 'bad'); return;
       }
-      const draft = {
-        cliente_id:  c.cliente_id || '',
-        codigo_tipo: c.codigo_tipo || '',
-        accion:      'Renovación',
-        duracion:    c.duracion || '',
-        equipos: (c.equipos || []).map(e => ({
-          modelo_id:   e.modelo_id || '',
-          modelo:      e.modelo || '',
-          descripcion: e.descripcion || '',
-          cantidad:    Number(e.cantidad || 0),
-          precio:      Number(e.precio || 0),
-        })),
-        cargos: Array.isArray(c.cargos) ? c.cargos : [],
-        origen_preseleccion: [id],
-      };
-      sessionStorage.setItem('contrato_prefill', JSON.stringify(draft));
-      const q = draft.cliente_id ? `?prefill=1&cliente_id=${encodeURIComponent(draft.cliente_id)}` : '?prefill=1';
-      window.location.href = `nuevo-contrato.html${q}`;
+      sessionStorage.removeItem('contrato_prefill');
+      this._irAlCentro(c.cliente_id);
     } catch (e) {
       console.error(e);
-      Toast.show('No se pudo preparar la renovación.', 'bad');
+      Toast.show('No se pudo abrir el Centro de gestión.', 'bad');
     }
   },
 
