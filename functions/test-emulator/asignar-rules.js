@@ -74,13 +74,18 @@ async function main() {
     tipo: "excepcion_modelo", nota: "el contrato dice HP786 pero el cliente pidió PNC460", seriales: ["23905A0441"],
     contrato_id: "CT-1", cliente_id: "cli-1", cliente_nombre: "CLIENTE", agregados: [], eliminados: [] }));
   ok("inventario: la excepción de modelo se registra en seriales_historial");
-  // La página NUNCA toca el doc del contrato. Hallazgo 2026-09-07: las reglas
-  // NO lo impiden — `seriales_estado` no está en touchesCFOwnedFields(), así
-  // que cualquier autenticado podría marcar un contrato como "asignados" sin
-  // pasar por el trigger. Se documenta aquí; cerrarlo es un cambio de rules
-  // aparte (ver informe).
-  await assertSucceeds(updateDoc(doc(inv, "contratos/c1"), { seriales_estado: "asignados" }));
-  console.log("  NOTA inventario SÍ puede escribir contratos.seriales_estado — hueco de rules, no de la página");
+  // La página NUNCA toca el doc del contrato, y desde 2026-09-07 las reglas
+  // tampoco lo dejan: el circuito de seriales del contrato es de los triggers
+  // (touchesCFOwnedFields). Antes cualquier autenticado podía marcarlo
+  // "asignados" por la puerta de atrás.
+  for (const campo of ["seriales_estado", "seriales_count", "seriales_cambio_pendiente", "seriales_asignados_at"]) {
+    await assertFails(updateDoc(doc(inv, "contratos/c1"), { [campo]: "x" }));
+    await assertFails(updateDoc(doc(as("administrador"), "contratos/c1"), { [campo]: "x" }));
+  }
+  ok("nadie (ni admin) escribe el circuito de seriales del doc del contrato: es de los triggers");
+  // Otros campos del contrato siguen editables por quien corresponde.
+  await assertSucceeds(updateDoc(doc(as("recepcion"), "contratos/c1"), { observaciones: "ok" }));
+  ok("los demás campos del contrato siguen editables");
 
   // ── Cambio de serial: resolver la solicitud ────────────────────────────
   await assertSucceeds(setDoc(doc(inv, "contratos/c2/seriales_cambios/req1"), { estado: "resuelto", resuelto_por: "inventario", resuelto_at: TS,

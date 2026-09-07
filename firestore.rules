@@ -75,6 +75,14 @@ service cloud.firestore {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
       return changed.hasAny([
         "firma_codigo", "firma_hash", "firma_url",
+        // Circuito de seriales (2026-09-07): los estampan
+        // onContratoAprobadoSolicitaSeriales / onSerialesAsignadasSendPdf /
+        // onSerialWrite / onSerialCambio. La UI escribe SOLO las subcolecciones
+        // (seriales, seriales_estado, seriales_cambios); nadie debe poder
+        // marcar un contrato "asignados" por la puerta de atrás.
+        "seriales_estado", "seriales_count", "seriales_omitidos_count",
+        "seriales_asignados_at", "seriales_asignados_por", "seriales_cambio_pendiente",
+        "seriales_pdf_enviado_at", "seriales_actualizado_at",
         "os_count", "equipos_total", "tiene_os", "os_linked",
         "os_serials_preview", "os_has_equipos", "os_last_orden_id",
         "os_equipos_count_last", "os_dirty",

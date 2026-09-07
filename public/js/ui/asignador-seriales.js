@@ -452,7 +452,8 @@ window.AsignadorSeriales = (() => {
             Marca las unidades que vas a asignar, o usa <b>Selección automática</b>
             (toma las más antiguas en bodega por modelo).
           </p>
-          <input type="search" id="ppBuscar" class="form-input" placeholder="Filtrar por serial…" style="width:100%;margin-bottom:12px;height:36px;font-family:var(--font-mono,monospace);">
+          <input type="search" id="ppBuscar" class="form-input" placeholder="Filtrar por serial…" style="width:100%;margin-bottom:8px;height:36px;font-family:var(--font-mono,monospace);">
+          <div id="ppCount" style="position:sticky;top:-24px;z-index:2;margin:0 -24px 10px;padding:6px 24px;background:var(--surface-card,#fff);border-bottom:1px solid var(--border-subtle,#EEF2F6);font-size:13px;font-weight:600;color:var(--fg-2);">Sin selección</div>
           ${seccionesHtml}`,
         buttons: [
           { action: 'auto', label: 'Selección automática', icon: 'list-checks' },
@@ -462,8 +463,8 @@ window.AsignadorSeriales = (() => {
         onMount: (root) => {
           overlay = root;
           root.id = 'overlayPoolPicker';
-          const pie = root.querySelector('.modal-footer');
-          if (pie) pie.insertAdjacentHTML('afterbegin', '<span id="ppCount" class="ts" style="margin-right:auto;align-self:center;">Sin selección</span>');
+          // El contador va arriba de la lista (pegajoso al scroll), no en el
+          // pie: con tres botones el pie se partía en dos filas a 720 px.
           root.addEventListener('change', (e) => {
             const chk = e.target;
             if (!chk.classList || !chk.classList.contains('pp-check')) return;
