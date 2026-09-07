@@ -34,6 +34,7 @@ const crypto = require("crypto");
 const logger = require("firebase-functions/logger");
 const { admin } = require("./admin");
 const pool = require("../domain/equiposPool");
+const { catalogo, ModeloFamilia } = require("../domain/modeloCatalogo");
 
 const SOURCE = "plan_renovacion";
 const norm = (s) => pool.normSerial(s || "");
@@ -102,19 +103,32 @@ async function aplicarPlanRenovacion(contratoRef, contrato, cid, { motivo = "apr
   const refMov = { tipo: "contrato", id: cid, label: contrato.contrato_id || "" };
   let creadas = 0, quitadas = 0, soltadas = 0;
   const soltarDetalle = [];
+  // Catálogo para resolver la fila -R de cada familia (refurbished por serial).
+  try { await catalogo(); } catch (e) { logger.warn("[planRenovacion] catálogo no disponible", { message: e.message }); }
 
   for (const u of dec.crear) {
     try {
+      // "Una familia, dos filas" (2026-09-07): un serial declarado refurbished
+      // se registra sobre la fila -R de su familia y la ficha del pool se
+      // repunta igual — así el Anexo A, la tarifa y el stock ven lo mismo.
+      const filaR = u.refurbished === true
+        ? ModeloFamilia.filaRefurbishedDe({ modelo_id: u.modelo_id || null, modelo: u.modelo || "" }) : null;
+      const modelo_id = filaR ? filaR.id : (u.modelo_id || null);
+      const modelo = filaR ? `${filaR.marca || ""} ${filaR.modelo || ""}`.trim() : (u.modelo || "");
       await contratoRef.collection("seriales").add({
         serial: u.serial || u.serial_norm,
-        modelo: u.modelo || "",
-        modelo_id: u.modelo_id || null,
+        modelo,
+        modelo_id,
         contrato_doc_id: cid,
         contrato_id: contrato.contrato_id || "",
         cliente_id: contrato.cliente_id || "",
         cliente_nombre: contrato.cliente_nombre || "",
         source: SOURCE,
         fuente_plan: u.fuente || null,
+        // 'continúa' = el radio YA está con el cliente: onSerialWrite lo deja
+        // en_cliente, no esperando entrega (caso Chino: 18 quedaron
+        // asignado_contrato en una renovación sin equipo).
+        ya_en_cliente: true,
         // Refurbished por serial (2026-09-04): viaja con la fila para que el
         // correo a activaciones y la ficha lo muestren por radio.
         ...(u.refurbished === true ? { refurbished: true } : {}),
@@ -124,6 +138,16 @@ async function aplicarPlanRenovacion(contratoRef, contrato, cid, { motivo = "apr
         updated_by: `trigger:${SOURCE}`,
       });
       creadas++;
+      if (u.refurbished === true) {
+        try {
+          const r = await pool.marcarRefurbished(u.serial || u.serial_norm, u.modelo_id || null, u.modelo || "", {
+            refMov, notas: `Declarado refurbished en el plan de renovación ${contrato.contrato_id || cid}`,
+          });
+          if (r === "sin-fila-r") logger.warn("[planRenovacion] familia sin fila -R", { cid, serial: u.serial, modelo: u.modelo });
+        } catch (e) {
+          logger.warn("[planRenovacion] no se pudo marcar refurbished", { cid, serial: u.serial, message: e.message });
+        }
+      }
     } catch (e) {
       logger.warn("[planRenovacion] no se pudo crear la fila", { cid, serial: u.serial, message: e.message });
     }

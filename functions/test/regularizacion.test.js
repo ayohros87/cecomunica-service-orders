@@ -112,3 +112,23 @@ test("modalidad: línea legacy sin modalidad acepta ambas propiedades", () => {
   ], []);
   assert.equal(r.asignar.length, 2);
 });
+
+// "Una familia, dos filas" (2026-09-07): con el catálogo cargado, una ficha en
+// la fila N cae en la línea -R de la misma familia (caso Chino Panameño), y
+// las filas ya registradas en la fila R consumen el cupo de la línea base.
+test("familia N/R con catálogo: la ficha PNC360S cae en la línea PNC360S-R y las filas -R consumen cupo", () => {
+  const ModeloFamilia = require("../src/domain/modeloFamilia");
+  ModeloFamilia.cargar([
+    { id: "n360", marca: "HYTERA", modelo: "PNC360S", estado: "N" },
+    { id: "r360", marca: "HYTERA", modelo: "PNC360S-R", estado: "R", variante_de: "n360" },
+  ]);
+  try {
+    const contrato = { equipos: [{ modelo_id: "r360", modelo: "PNC360S-R", cantidad: 3 }] };
+    const filas = [{ serial_norm: "F1", modelo_id: "r360", modelo: "HYTERA PNC360S-R" }];
+    const unidades = [U("A1", "n360", "HYTERA PNC360S"), U("A2", "r360", "HYTERA PNC360S-R"), U("A3", "n360", "HYTERA PNC360S")];
+    const r = planAmarre(contrato, unidades, filas);
+    assert.equal(r.sin_linea.length, 0);
+    assert.deepEqual(r.asignar.map((x) => x.unidad.serial), ["A1", "A2"]); // cupo 3 − 1 fila = 2
+    assert.deepEqual(r.sin_cupo.map((x) => x.serial), ["A3"]);
+  } finally { ModeloFamilia.cargar([]); }
+});

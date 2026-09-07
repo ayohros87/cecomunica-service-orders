@@ -8,6 +8,7 @@
 // (public/js/services/equiposPoolService.js) — mantener sincronizadas: una
 // divergencia produce docs duplicados del mismo equipo físico.
 const { admin, db } = require("../lib/admin");
+const ModeloFamilia = require("./modeloFamilia");
 
 const ESTADOS = {
   EN_BODEGA:  "en_bodega",
@@ -139,9 +140,9 @@ function _docNuevo({ serial, serialNorm, modelo_id, modelo_label, estado,
     serial_compartido: false,
     modelo_id:    modelo_id || null,
     modelo_label: (modelo_label || "").toString().trim(),
-    // Condición según la variante del modelo (convención del catálogo: la fila
-    // reuso lleva sufijo -R en el nombre). Sin sufijo → se colocó como nuevo.
-    condicion: /[\s-]r$/i.test((modelo_label || "").toString().trim()) ? "reuso" : "nuevo",
+    // Condición según la FILA del catálogo (estado R → reuso); si el modelo
+    // no está en el catálogo (o no se cargó), por el sufijo -R del texto.
+    condicion: ModeloFamilia.condicionDerivada({ modelo_id: modelo_id || null, modelo: modelo_label || "" }),
     // 'cecomunica' (flota propia: alquiler/demo/POC/bodega) | 'cliente' (equipo
     // del cliente: contratos "Propio"/venta, o traído a taller) | 'desconocida'
     propiedad,
@@ -574,7 +575,51 @@ async function transicionarPorId(docId, { aEstado, soloDesde = null, tipo,
   });
 }
 
+// "Una familia, dos filas" (2026-09-07): declarar un radio refurbished lo
+// REPUNTA a la fila R de su familia (modelo_id + label + condición) con
+// movimiento en el kardex. Si la familia no tiene fila R, conserva la fila y
+// queda `condicion: reuso` + `familia_sin_fila_r: true` para el reporte de
+// salud del catálogo. Lo llaman el plan de renovación (refurbished por
+// serial), el cierre de ENTRADA y la inspección OK. Requiere el catálogo
+// cargado (domain/modeloCatalogo.catalogo()) — sin él no hay familias y no
+// se toca nada. Retorna 'repuntada' | 'sin-fila-r' | 'sin-cambio' | 'no-existe'.
+async function marcarRefurbishedPorRef(ref, { refMov = null, notas = "" } = {}) {
+  if (!ModeloFamilia.listo()) return "sin-cambio";
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return "no-existe";
+    const actual = snap.data();
+    const filaR = ModeloFamilia.filaRefurbishedDe({ modelo_id: actual.modelo_id, modelo_label: actual.modelo_label });
+    const yaR = !!(filaR && actual.modelo_id === filaR.id && actual.condicion === "reuso");
+    if (yaR) return "sin-cambio";
+    const cambios = { condicion: "reuso", updated_at: admin.firestore.FieldValue.serverTimestamp() };
+    let nota;
+    if (filaR) {
+      cambios.modelo_id = filaR.id;
+      cambios.modelo_label = `${filaR.marca || ""} ${filaR.modelo || ""}`.trim();
+      cambios.familia_sin_fila_r = admin.firestore.FieldValue.delete();
+      nota = `Refurbished: pasa a ${cambios.modelo_label}` + (actual.modelo_label && actual.modelo_label !== cambios.modelo_label ? ` (antes ${actual.modelo_label})` : "");
+    } else {
+      if (actual.condicion === "reuso" && actual.familia_sin_fila_r) return "sin-cambio";
+      cambios.familia_sin_fila_r = true;
+      nota = `Refurbished, pero el catálogo no tiene fila -R para ${actual.modelo_label || "este modelo"}: queda en su fila con condición reuso`;
+    }
+    tx.set(ref, cambios, { merge: true });
+    tx.set(ref.collection("movimientos").doc(), _movimiento({
+      tipo: "cambio_condicion", de_estado: actual.estado, a_estado: actual.estado, ref: refMov,
+      notas: [nota, notas].filter(Boolean).join(" — "),
+    }));
+    return filaR ? "repuntada" : "sin-fila-r";
+  });
+}
+async function marcarRefurbished(serial, modeloId, modeloLabel, opts = {}) {
+  const { ref, data } = await resolver(serial, modeloId, modeloLabel, { adoptarSiExiste: true });
+  if (!data) return "no-existe";
+  return marcarRefurbishedPorRef(ref, opts);
+}
+
 module.exports = { ESTADOS, normSerial, esSerialValido, modeloKey, mismoModelo, resolver,
   upsertContacto, transicionar, transicionarPorId, custodiaPatch,
+  marcarRefurbished, marcarRefurbishedPorRef,
   desasignarContrato, soltarDelCliente, estadoPrevioAOrden, destinoAlSalirDeOrden,
   facturaVentaPatch, estamparVentaContrato };

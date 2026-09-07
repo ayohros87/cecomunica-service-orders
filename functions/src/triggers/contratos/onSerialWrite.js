@@ -110,7 +110,9 @@ module.exports = onDocumentWritten(
       // Serial agregado o editado → asignar/crear la unidad en el pool.
       if (serialDespues && (!before || !mismo)) {
         const c = await getContrato();
-        const entregado = c.entrega_confirmada === true || c.seriales_estado === "legacy";
+        // ya_en_cliente: fila de un radio que YA tiene el cliente (plan de
+        // renovación 'continúa') — no espera entrega.
+        const entregado = c.entrega_confirmada === true || c.seriales_estado === "legacy" || after.ya_en_cliente === true;
         // Propiedad de la unidad según el tipo de contrato: "Propio" (venta con
         // contrato de servicio) = equipo del cliente; Alquiler/Temporal/Demo/
         // Reemplazo = flota Cecomunica.

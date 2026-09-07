@@ -1,6 +1,7 @@
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const pool = require("../../domain/equiposPool");
+const { catalogo } = require("../../domain/modeloCatalogo");
 const { admin, db } = require("../../lib/admin");
 
 // Pool de equipos ↔ órdenes de servicio ("migración por contacto", plan
@@ -65,6 +66,8 @@ async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } =
   const refMovE = { tipo: "orden", id: ordenId, label: after.numero_orden || ordenId };
   const incidencias = [];
   let aterrizados = 0;
+  // Catálogo para repuntar a la fila -R lo que regresa de un cliente.
+  try { await catalogo(); } catch (err) { logger.warn("[onOrdenWritePool] catálogo no disponible", { message: err.message }); }
 
   for (const e of equipos) {
     let r = null;
@@ -92,7 +95,21 @@ async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } =
       logger.warn("[onOrdenWritePool] transicionar falló al cerrar ENTRADA",
         { ordenId, serial: e.serial, error: err.message });
     }
-    if (r === "transicion") { aterrizados++; continue; }
+    if (r === "transicion") {
+      aterrizados++;
+      // "Una familia, dos filas" (2026-09-07, decisión de Alberto): un radio
+      // que vuelve de un cliente y pasa la inspección de la ENTRADA es
+      // refurbished — se repunta a la fila -R de su familia. Los descartados
+      // no llegan aquí (no aterrizan en bodega).
+      try {
+        await pool.marcarRefurbished(e.serial, e.modelo_id, e.modelo, {
+          refMov: refMovE, notas: "Regresó de un cliente y pasó la revisión de entrada",
+        });
+      } catch (err) {
+        logger.warn("[onOrdenWritePool] no se pudo marcar refurbished", { ordenId, serial: e.serial, error: err.message });
+      }
+      continue;
+    }
     // "sin-cambio" con la ficha YA en bodega es el caso idempotente (el trigger
     // corrió dos veces): no es incidencia. Se distingue releyendo la ficha.
     let estadoActual = null;

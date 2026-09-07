@@ -1,5 +1,21 @@
 const ModelosService = {
 
+  // Catálogo completo UNA vez por página + carga de ModeloFamilia (la fuente
+  // única de "¿mismo modelo?" — familias N/R). Las pantallas que parean
+  // modelos con líneas de contrato llaman `await ModelosService.catalogo()`
+  // antes de pintar. `force` refresca (p. ej. tras editar el catálogo).
+  _catalogo: null,
+  async catalogo({ force = false } = {}) {
+    if (!force && this._catalogo) return this._catalogo;
+    this._catalogo = (async () => {
+      const lista = await this.getModelos();
+      if (window.ModeloFamilia) ModeloFamilia.cargar(lista);
+      return lista;
+    })();
+    try { return await this._catalogo; }
+    catch (e) { this._catalogo = null; throw e; }
+  },
+
   async getModelos({ source = null } = {}) {
     const db = firebase.firestore();
     const snap = source

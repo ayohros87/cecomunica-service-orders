@@ -632,11 +632,35 @@ const EquiposPoolService = {
   // Devuelve una unidad al pool (se soltó de un contrato, o pasó inspección).
   // Limpia pendiente_devolucion: la unidad ya regresó, el flag de los mapeos
   // de transición cumplió su propósito.
+  // "Una familia, dos filas" (2026-09-07, decisión de Alberto): un radio que
+  // pasa la inspección al volver es refurbished → además de `condicion:
+  // reuso` se REPUNTA a la fila -R de su familia (modelo_id + label), para
+  // que stock, Anexo A y facturación vean lo mismo. Si la página no cargó
+  // ModeloFamilia/ModelosService, o la familia no tiene fila -R, solo cambia
+  // la condición (y queda `familia_sin_fila_r` para el reporte de salud).
   async liberar(id, { ref = null, notas = '' } = {}, user) {
+    const extra = { asignacion: null, orden_actual_id: null, condicion: 'reuso',
+                    pendiente_devolucion: firebase.firestore.FieldValue.delete() };
+    let notaR = '';
+    try {
+      if (window.ModeloFamilia && window.ModelosService?.catalogo) {
+        await ModelosService.catalogo();
+        const snap = await firebase.firestore().collection('equipos_pool').doc(id).get();
+        const eq = snap.exists ? snap.data() : null;
+        const filaR = eq ? ModeloFamilia.filaRefurbishedDe({ modelo_id: eq.modelo_id, modelo_label: eq.modelo_label }) : null;
+        if (filaR && eq.modelo_id !== filaR.id) {
+          extra.modelo_id = filaR.id;
+          extra.modelo_label = `${filaR.marca || ''} ${filaR.modelo || ''}`.trim();
+          extra.familia_sin_fila_r = firebase.firestore.FieldValue.delete();
+          notaR = `Refurbished: pasa a ${extra.modelo_label}${eq.modelo_label ? ` (antes ${eq.modelo_label})` : ''}`;
+        } else if (eq && !filaR && eq.modelo_id) {
+          extra.familia_sin_fila_r = true;
+        }
+      }
+    } catch (e) { console.warn('[pool.liberar] sin repunte a fila -R:', e?.message || e); }
     return this.cambiarEstado(id, this.ESTADOS.EN_BODEGA, {
-      tipo: 'liberacion', ref, notas,
-      extra: { asignacion: null, orden_actual_id: null, condicion: 'reuso',
-               pendiente_devolucion: firebase.firestore.FieldValue.delete() },
+      tipo: 'liberacion', ref, notas: [notas, notaR].filter(Boolean).join(' — '),
+      extra,
     }, user);
   },
 

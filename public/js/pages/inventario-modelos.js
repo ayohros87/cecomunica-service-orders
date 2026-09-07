@@ -45,6 +45,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
     qboItems.loading = true;  // la lista de QBO llega en 2º plano (ver abajo)
     await loadFactConfig();
     render();                 // pinta el catálogo YA desde Firestore (rápido)
+    renderSalud().catch(e => console.warn('[modelos] salud del catálogo:', e?.message || e));
 
     // La lista de QuickBooks solo llena los NOMBRES de los desplegables de mapeo
     // (el ID ya está guardado en cada modelo). Se carga en segundo plano para que
@@ -409,6 +410,18 @@ function poblarVarianteDe(seleccion='', tipoActual=''){
   }).join('');
 }
 
+// Base sugerida para un refurbished: la fila N activa con el mismo nombre sin
+// el sufijo -R (misma marca si hay varias). null si no existe.
+function sugerirBase(modelo, marca){
+  const tight = (s) => String(s||'').normalize('NFD').replace(/[^\x00-\x7f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const nombre = tight(String(modelo||'').trim().replace(/[\s-]R$/i, ''));
+  if (!nombre) return null;
+  const cands = (listaModelos||[]).filter(m => m.id !== modeloEditId && m.activo !== false
+    && (m.estado||'N').toUpperCase() === 'N' && !m.variante_de && tight(m.modelo) === nombre);
+  if (!cands.length) return null;
+  return cands.find(m => tight(m.marca) === tight(marca)) || cands[0];
+}
+
 // Muestra el selector solo para refurbished (estado R).
 function onEstadoChange(){
   const esR = (document.getElementById('f-estado')||{}).value === 'R';
@@ -456,8 +469,15 @@ async function guardarModelo(){
   }
   // Vínculo variante→base: solo tiene sentido en refurbished. En "Nuevo" se limpia
   // para que no queden vínculos colgando si se cambia el estado.
-  const varSel = (document.getElementById('f-variante-de')||{}).value || '';
+  let varSel = (document.getElementById('f-variante-de')||{}).value || '';
   if (payload.estado === 'R') {
+    // Candado "una familia, dos filas" (2026-09-07): una fila R con base en el
+    // catálogo (mismo nombre sin -R) queda vinculada SIEMPRE — sin vínculo el
+    // pareo N/R de contratos, tarifas y Anexo A no la reconoce.
+    if (!varSel) {
+      const base = sugerirBase(modelo, marca);
+      if (base) { varSel = base.id; Toast.show(`Vinculado a su modelo base ${esc(`${base.marca||''} ${base.modelo||''}`.trim())}`, 'ok'); }
+    }
     if (varSel === modeloEditId) { Toast.show('Un modelo no puede ser variante de sí mismo','warn'); return; }
     const destino = (listaModelos||[]).find(x => x.id === varSel);
     if (varSel && !destino) { Toast.show('El modelo base elegido ya no existe','warn'); return; }
@@ -735,3 +755,59 @@ window.confirmarMapeo = confirmarMapeo;
 window.cerrarMapeo = cerrarMapeo;
 function cerrarSesion(){ firebase.auth().signOut().then(()=>window.location.href="../login.html"); }
 window.cerrarSesion = cerrarSesion;
+
+/* ===== Salud del catálogo — "una familia, dos filas" (2026-09-07) =====
+   Lo que rompe el pareo N/R o la facturación, en un solo lugar. Las
+   comprobaciones de catálogo salen de listaModelos (en vivo); las que cruzan el
+   pool y los contratos vienen del reporte diario admin_reportes/salud_catalogo
+   (cron saludCatalogo). Solo administrador y contabilidad ven esta página. */
+async function renderSalud(){
+  const box = document.getElementById('saludCatalogo');
+  if (!box || !window.ModeloFamilia) return;
+  ModeloFamilia.cargar(listaModelos || []);
+  const activos = (listaModelos||[]).filter(m => m.activo !== false);
+  const nombre = (m) => `${m.marca||''} ${m.modelo||''}`.trim();
+  const esR = (m) => (m.estado||'N').toUpperCase() === 'R';
+  const rSinBase = activos.filter(m => esR(m) && !m.variante_de && ModeloFamilia.familiaDe({ modelo_id: m.id }) !== m.id);
+  const rSinQbo = activos.filter(m => esR(m) && m.es_alquiler === true && !m.qbo_item_alquiler_id);
+  const rSinPrecio = activos.filter(m => esR(m) && m.es_alquiler === true && !(Number(m.precio_alquiler) > 0));
+  const nombreR = activos.filter(m => !esR(m) && /[\s-]R$/i.test(String(m.modelo||'').trim()));
+
+  let rep = null;
+  try {
+    const snap = await firebase.firestore().collection('admin_reportes').doc('salud_catalogo').get();
+    rep = snap.exists ? snap.data() : null;
+  } catch (e) { /* sin permiso o sin reporte: se muestra solo lo del catálogo */ }
+
+  const filas = [];
+  const fila = (n, txt, cls, detalle) => filas.push({ n, txt, cls, detalle });
+  fila(rSinBase.length, 'refurbished sin vincular a su modelo base (existe por nombre)', 'bad',
+    rSinBase.map(m => `${esc(nombre(m))} → ${esc(ModeloFamilia.familiaLabel(ModeloFamilia.familiaDe({ modelo_id: m.id })))}`).join(' · '));
+  fila(nombreR.length, 'con nombre "-R" pero estado Nuevo', 'bad', nombreR.map(m => esc(nombre(m))).join(' · '));
+  fila(rSinQbo.length, 'refurbished que se alquilan sin ítem de QuickBooks', 'warn', rSinQbo.map(m => esc(nombre(m))).join(' · '));
+  fila(rSinPrecio.length, 'refurbished que se alquilan sin precio de alquiler', 'warn', rSinPrecio.map(m => esc(nombre(m))).join(' · '));
+  if (rep) {
+    fila(Number(rep.fichas_condicion_total||0), 'fichas del pool cuya condición contradice su fila', 'bad',
+      (rep.fichas_condicion||[]).map(x => `${esc(x.modelo)}: ${x.n} (fila ${x.fila}, ficha ${x.ficha})`).join(' · '));
+    fila((rep.fichas_sin_fila_r||[]).reduce((s,x)=>s+x.n,0), 'radios refurbished en familias sin fila -R', 'warn',
+      (rep.fichas_sin_fila_r||[]).map(x => `${esc(x.modelo)}: ${x.n}`).join(' · '));
+    fila(Number(rep.contratos_sin_linea_total||0), 'radios de contratos vivos sin línea ni por familia', 'bad',
+      (rep.contratos_sin_linea||[]).map(x => `<a href="../clientes/centro.html?id=${encodeURIComponent(x.cliente_id||'')}">${esc(x.contrato_id)}</a> ${esc(x.cliente)}: ${x.n}`).join(' · '));
+    fila(Number(rep.contratos_puente_total||0), 'radios que casan con su línea solo por familia N/R (informativo)', 'info',
+      (rep.contratos_puente||[]).slice(0, 12).map(x => `${esc(x.contrato_id)}: ${x.n}`).join(' · '));
+  }
+  const conProblema = filas.filter(f => f.n > 0);
+  const gen = rep?.generado_at?.toDate ? rep.generado_at.toDate().toLocaleString('es-PA') : null;
+  const color = { bad: 'var(--bad, #A03030)', warn: 'var(--warn-deep, #8A6415)', info: 'var(--fg-3)' };
+  box.style.display = '';
+  box.innerHTML = `
+    <div style="padding:var(--sp-3) var(--sp-4); display:flex; gap:12px; align-items:baseline; flex-wrap:wrap;">
+      <b style="font-size:14px;">Salud del catálogo</b>
+      <span style="font-size:12px; color:var(--fg-4);">${conProblema.length ? `${conProblema.length} punto(s) por atender` : 'todo en orden'}${gen ? ` · pool y contratos al ${esc(gen)}` : ' · el cruce con pool y contratos llega con el reporte diario'}</span>
+    </div>
+    ${conProblema.length ? `<div style="padding:0 var(--sp-4) var(--sp-3); display:grid; gap:6px;">${conProblema.map(f => `
+      <details style="font-size:13px;">
+        <summary style="cursor:pointer; color:${color[f.cls]};"><b style="font-variant-numeric:tabular-nums;">${f.n}</b> ${f.txt}</summary>
+        <div style="margin:4px 0 0 18px; font-size:12.5px; color:var(--fg-3); line-height:1.6;">${f.detalle || '—'}</div>
+      </details>`).join('')}</div>` : ''}`;
+}

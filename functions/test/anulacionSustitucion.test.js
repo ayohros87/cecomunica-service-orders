@@ -26,6 +26,7 @@ const {
 } = require("../src/lib/devolucion");
 const { cupoPorModelo } = require("../src/lib/sustitucionContrato");
 const pool = require("../src/domain/equiposPool");
+const ModeloFamilia = require("../src/domain/modeloFamilia");
 
 const CONTRATO = "contrato-anulado-1";
 
@@ -221,18 +222,37 @@ test("una TERMINACIÓN nunca reclama la unidad que está en nuestro taller", () 
 test("cupoPorModelo suma los renglones repetidos del mismo modelo", () => {
   // ALQ20260812-01 tal cual está en producción: 3 + 2 HYT-P50 (dos tramos de
   // precio) + 5 T338 = 10 unidades donde el anulado tenía 5.
+  // La clave es la FAMILIA del catálogo (ModeloFamilia.claveFamilia); sin
+  // catálogo cargado, el texto sin marca ni sufijo -R.
+  ModeloFamilia.cargar([]);
+  const K = (l) => ModeloFamilia.claveFamilia(l);
   const cupo = cupoPorModelo({ equipos: [
     { modelo_id: "m-hyt", modelo: "HYT-P50", cantidad: 3 },
     { modelo_id: "m-t338", modelo: "T338",   cantidad: 5 },
     { modelo_id: "m-hyt", modelo: "HYT-P50", cantidad: 2 },
   ] });
-  assert.deepEqual(cupo.get("m-hyt"), { label: "HYT-P50", cantidad: 5 });
-  assert.deepEqual(cupo.get("m-t338"), { label: "T338", cantidad: 5 });
+  assert.deepEqual(cupo.get(K({ modelo_id: "m-hyt", modelo: "HYT-P50" })), { label: "HYT-P50", cantidad: 5 });
+  assert.deepEqual(cupo.get(K({ modelo_id: "m-t338", modelo: "T338" })), { label: "T338", cantidad: 5 });
+  assert.equal(cupo.size, 2);
 });
 
-test("cupoPorModelo cae al nombre apretado cuando no hay modelo_id", () => {
-  const cupo = cupoPorModelo({ equipos: [{ modelo: "PNC360S-R", cantidad: 2 }] });
-  assert.deepEqual(cupo.get("PNC360SR"), { label: "PNC360S-R", cantidad: 2 });
+test("cupoPorModelo: sin modelo_id casa por texto, y -R con base son la MISMA clave con catálogo", () => {
+  ModeloFamilia.cargar([]);
+  let cupo = cupoPorModelo({ equipos: [{ modelo: "PNC360S-R", cantidad: 2 }] });
+  assert.deepEqual(cupo.get(ModeloFamilia.claveFamilia({ modelo: "PNC360S" })), { label: "PNC360S-R", cantidad: 2 });
+  // Con catálogo: una línea PNC360S-R (fila R) y una PNC360S (fila N) suman
+  // en la familia — "una familia, dos filas".
+  ModeloFamilia.cargar([
+    { id: "n360", marca: "HYTERA", modelo: "PNC360S", estado: "N" },
+    { id: "r360", marca: "HYTERA", modelo: "PNC360S-R", estado: "R", variante_de: "n360" },
+  ]);
+  cupo = cupoPorModelo({ equipos: [
+    { modelo_id: "r360", modelo: "PNC360S-R", cantidad: 2 },
+    { modelo_id: "n360", modelo: "PNC360S", cantidad: 3 },
+  ] });
+  assert.equal(cupo.size, 1);
+  assert.equal(cupo.get("n360").cantidad, 5);
+  ModeloFamilia.cargar([]);
 });
 
 test("cupoPorModelo devuelve null sin renglones (se copia todo, como antes)", () => {

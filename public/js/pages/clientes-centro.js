@@ -422,6 +422,9 @@ window.Centro = {
       const [conSnap, equipos, gestiones] = await Promise.all([
         db.collection('contratos').where('cliente_id', '==', clienteId).get(),
         EquiposPoolService.listarPorCliente(clienteId),
+        // Catálogo → ModeloFamilia: el pareo equipo↔línea (tarifa, vencimiento,
+        // Anexo A) se decide por familia N/R, no por texto.
+        (window.ModelosService?.catalogo ? ModelosService.catalogo().catch(e => { console.warn('[centro] catálogo no disponible:', e?.message || e); return null; }) : null),
         GestionesService.listarPorCliente(clienteId).catch(e => {
           console.warn('[centro] gestiones no disponibles:', e?.message || e);
           return [];
@@ -1075,11 +1078,10 @@ window.Centro = {
             // modelo+modalidad + servicios amarrados al serial. Lo que el
             // cliente firma es exactamente esto — congelado.
             anexo: (enCampo || []).slice(0, 300).map(u => {
-              const nrm = (s) => String(s || '').trim().toUpperCase();
-              const mod = u.propiedad === 'cliente' ? 'propio' : 'alquiler';
-              const linea = (c.equipos || []).find(l => (l.modalidad || 'alquiler') === mod
-                && ((u.modelo_id && l.modelo_id && l.modelo_id === u.modelo_id)
-                    || (nrm(l.modelo) && nrm(l.modelo) === nrm(u.modelo_label))));
+              // Línea por FAMILIA de modelo (PNC360S ≡ PNC360S-R) y modalidad
+              // — antes era exacta y dejaba radios "sin tarifa" en el anexo
+              // que firma el cliente (caso Chino Panameño, 2026-09-07).
+              const linea = this._lineaDeEquipo(u, c);
               let extras = 0;
               (c.cargos || []).forEach(cg => {
                 if (cg.recurrente && Array.isArray(cg.seriales) && cg.seriales.includes(u.serial || u.id)) extras += Number(cg.monto || 0);
@@ -1517,18 +1519,28 @@ window.Centro = {
   // dice "HYTERA PNC360S" (marca incluida) con OTRO id — id exacto y label
   // exacto fallaban. Se normaliza a alfanumérico y se acepta contención por
   // sufijo/prefijo (marca por delante, "-R" por detrás).
+  // "Una familia, dos filas" (2026-09-07): la decisión vive en ModeloFamilia
+  // (misma fila del catálogo primero, luego misma familia N/R; la modalidad
+  // filtra y una línea sin modalidad es legacy). El texto de aquí abajo solo
+  // corre si el módulo no cargó.
   _normModelo(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); },
   _mismoModeloLinea(l, e) {
+    if (window.ModeloFamilia) return ModeloFamilia.lineasCompatibles(this._refEquipo(e), [l]).length > 0;
     if (l.modelo_id && e.modelo_id && l.modelo_id === e.modelo_id) return true;
     const a = this._normModelo(l.modelo), b = this._normModelo(e.modelo_label);
     if (!a || !b) return false;
     return a === b || a.endsWith(b) || b.endsWith(a) || a.includes(b) || b.includes(a);
   },
+  _refEquipo(e) {
+    return { modelo_id: e.modelo_id || null, modelo: e.modelo_label || e.modelo || '', propiedad: e.propiedad, modalidad: e.modalidad };
+  },
 
   // Línea del contrato que le corresponde a la unidad — la que define su
-  // tarifa y su tramo.
+  // tarifa y su tramo. Exacta primero; si no, la de su familia.
   _lineaDeEquipo(e, c) {
-    return (c?.equipos || []).find(l => this._mismoModeloLinea(l, e));
+    const ls = c?.equipos || [];
+    if (window.ModeloFamilia) { const i = ModeloFamilia.lineaPara(this._refEquipo(e), ls); return i >= 0 ? ls[i] : undefined; }
+    return ls.find(l => this._mismoModeloLinea(l, e));
   },
 
   // Tarifa mensual del equipo según la línea de su contrato.

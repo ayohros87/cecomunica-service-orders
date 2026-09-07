@@ -18,12 +18,14 @@ const logger = require("firebase-functions/logger");
 const { admin, db } = require("./admin");
 const { APP_BASE_URL, inventarioEmailTo } = require("./inventario");
 
+const { catalogo, ModeloFamilia } = require("../domain/modeloCatalogo");
+
 // Clave de modelo para casar un serial con el renglón que le corresponde en el
-// contrato sustituto: el id del modelo cuando lo hay, y si no el nombre
-// apretado (mismo criterio que devolucion.js — "PNC360S-R" == "pnc360s r").
-const claveModelo = (modeloId, modelo) => modeloId
-  || String(modelo == null ? "" : modelo).trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
-  || "";
+// contrato sustituto: la FAMILIA del catálogo ("una familia, dos filas",
+// 2026-09-07 — PNC360S ≡ PNC360S-R, y un id y un texto del mismo modelo caen
+// en la misma clave). Requiere `await catalogo()` antes (traspasarASustituto
+// lo hace); sin catálogo cae al texto sin marca ni sufijo -R.
+const claveModelo = (modeloId, modelo) => ModeloFamilia.claveFamilia({ modelo_id: modeloId || null, modelo: modelo || "" });
 
 /**
  * Cupo de seriales por modelo del contrato: cuántas unidades admite cada
@@ -129,6 +131,7 @@ async function traspasarASustituto({ origenId, origen, sustitutoId, unidades }) 
   // Cupo del sustituto, descontando lo que ya tenga cargado. Sin renglones de
   // equipo declarados no hay con qué casar: se copia todo (comportamiento
   // anterior) y que el humano revise.
+  try { await catalogo(); } catch (e) { logger.warn("[sustitucion] catálogo no disponible", { message: e.message }); }
   const cupo = cupoPorModelo(s);
   const yaCargados = await ref.collection("seriales").get();
   const yaSeriales = new Set();

@@ -198,16 +198,26 @@
     try {
       const ms = await ModelosService.getModelos();
       (ms || []).forEach((m) => { modelosMap[m.id] = m; });
+      // ModeloFamilia: pareo serial↔línea por familia N/R y valor de
+      // reposición con caída a la fila base ("una familia, dos filas").
+      if (window.ModeloFamilia) ModeloFamilia.cargar(ms || []);
     } catch (e) { console.warn('modelos no legibles', e); }
 
     const norm = (s) => String(s || '').trim().toUpperCase();
     const tarifaDe = (serial, modeloId, modeloLabel, propiedad) => {
       const mod = propiedad === 'cliente' ? 'propio' : 'alquiler';
-      const linea = (c.equipos || []).find((l) =>
-        (l.modalidad || 'alquiler') === mod
-        && ((modeloId && l.modelo_id && l.modelo_id === modeloId)
-            || (norm(l.modelo) && norm(l.modelo) === norm(modeloLabel))
-            || (norm(modeloLabel) && norm(modeloLabel).includes(norm(l.modelo)) && norm(l.modelo))));
+      const ls = c.equipos || [];
+      let linea;
+      if (window.ModeloFamilia) {
+        const i = ModeloFamilia.lineaPara({ modelo_id: modeloId || null, modelo: modeloLabel || '', propiedad }, ls);
+        linea = i >= 0 ? ls[i] : undefined;
+      } else {
+        linea = ls.find((l) =>
+          (l.modalidad || 'alquiler') === mod
+          && ((modeloId && l.modelo_id && l.modelo_id === modeloId)
+              || (norm(l.modelo) && norm(l.modelo) === norm(modeloLabel))
+              || (norm(modeloLabel) && norm(modeloLabel).includes(norm(l.modelo)) && norm(l.modelo))));
+      }
       let extras = 0; const etiquetas = [];
       (c.cargos || []).forEach((cg) => {
         if (cg.recurrente && Array.isArray(cg.seriales) && cg.seriales.includes(serial)) {
@@ -294,8 +304,13 @@
     const filasR = Object.keys(grupos).sort().map((k) => {
       const g = grupos[k]; totC += g.ceco; totCli += g.cli;
       const m = g.modelo_id ? modelosMap[g.modelo_id] : null;
+      // Precio de venta de la fila, o el de su modelo base (la -R rara vez lo
+      // tiene); si nadie lo puso, el genérico del contrato ($200).
+      const pv = (window.ModeloFamilia && g.modelo_id)
+        ? ModeloFamilia.precioReferencia({ modelo_id: g.modelo_id, modelo: k }, 'precio_venta').valor
+        : (Number(m?.precio_venta) > 0 ? Number(m.precio_venta) : null);
       const valor = g.ceco === 0 ? 'n/a (del cliente)'
-        : `${money(Number(m?.precio_venta) > 0 ? m.precio_venta : 200)} + ITBMS`;
+        : `${money(pv || 200)} + ITBMS`;
       return `<tr><td>${esc(k)}</td><td class="right">${g.ceco || '—'}</td>
         <td class="right">${g.cli || '—'}</td><td class="right">${g.ceco + g.cli}</td>
         <td class="right">${valor}</td></tr>`;

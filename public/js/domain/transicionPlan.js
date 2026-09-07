@@ -180,6 +180,11 @@ window.TransicionPlan = {
   _mismaLinea(u, l) {
     const modU = u.modalidad || 'alquiler';
     if (l.modalidad && l.modalidad !== modU) return false;
+    // "Una familia, dos filas" (2026-09-07): con el catálogo cargado decide
+    // ModeloFamilia (variante_de); el texto de abajo es el respaldo.
+    if (typeof ModeloFamilia !== 'undefined' && ModeloFamilia.listo()) {
+      return ModeloFamilia.lineasCompatibles({ modelo_id: u.modelo_id || null, modelo: u.modelo || '', modalidad: modU }, [l]).length > 0;
+    }
     if (u.modelo_id && l.modelo_id && u.modelo_id === l.modelo_id) return true;
     // Ids distintos NO descartan: PNC360S y PNC360S-R son fichas distintas
     // del catálogo (refurbished) y una línea "PNC360S-R" cubre ambas — el

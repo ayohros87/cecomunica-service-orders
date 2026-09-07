@@ -35,7 +35,7 @@
   <script src="../js/core/layout.js?v=cc13"></script>
   <script src="../js/core/roles.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/services/modelosService.js"></script>
+  <script defer src="../js/services/modelosService.js?v=mf1"></script>
 
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script defer src="/js/vendor/lucide.min.js?v=3"></script>
@@ -154,6 +154,10 @@
   <div id="wsTabs-mount"></div>
   <div id="wsSubTabs-mount"></div>
   <script>FinanzasNav.render('catalogo', 'modelos'); // en el parse: la barra sale en el primer frame</script>
+  <!-- Salud del catálogo ("una familia, dos filas", 2026-09-07): lo que rompe
+       el pareo N/R o la facturación. Catálogo en vivo + reporte diario del
+       cron saludCatalogo (pool y contratos). -->
+  <div class="ds-card" id="saludCatalogo" style="display:none; margin-bottom:var(--sp-4);"></div>
   <div class="ds-card" style="padding:0;">
     <div style="padding:var(--sp-3) var(--sp-4); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
@@ -334,7 +338,8 @@
 
 <script defer src="../js/ui/toast.js"></script>
 <script defer src="../js/ui/modal.js"></script>
-<script src="../js/pages/inventario-modelos.js?v=cc16" defer></script>
+<script defer src="../js/domain/modeloFamilia.js?v=mf1"></script>
+<script src="../js/pages/inventario-modelos.js?v=mf1" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

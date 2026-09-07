@@ -26,6 +26,7 @@ const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
 const { planAmarre } = require("../../lib/regularizacion");
+const { catalogo } = require("../../domain/modeloCatalogo");
 const { serialesExcluidosPorPlan, planTieneReemplazos } = require("../../lib/planRenovacion");
 
 const SOURCE = "regularizacion_renovacion";
@@ -86,6 +87,7 @@ module.exports = onDocumentUpdated(
         return { serial_norm: pool.normSerial(x.serial || ""), modelo_id: x.modelo_id || null, modelo: x.modelo || "" };
       });
 
+      try { await catalogo(); } catch (e) { logger.warn("[onRenovacionActivada] catálogo no disponible", { message: e.message }); }
       const plan = planAmarre(after, custodia, filas);
 
       for (const { unidad } of plan.asignar) {

@@ -13,6 +13,7 @@
 // (regla de Alberto: seriales jamás inferidos en el papel); este amarre es
 // interno — pool, tarifa por línea y semáforo.
 const pool = require("../domain/equiposPool");
+const ModeloFamilia = require("../domain/modeloFamilia");
 
 /**
  * @param {Object} contrato — doc del contrato (usa equipos[]).
@@ -26,13 +27,22 @@ function planAmarre(contrato, unidades, filasExistentes) {
   const filas = filasExistentes || [];
   const lineas = (contrato.equipos || []);
 
-  const cupo = lineas.map((l) => {
-    const filasModelo = filas.filter((f) =>
-      (f.modelo_id && l.modelo_id && f.modelo_id === l.modelo_id) ||
-      (String(f.modelo || "").trim().toUpperCase() !== "" &&
-       String(f.modelo || "").trim().toUpperCase() === String(l.modelo || "").trim().toUpperCase())).length;
-    return Math.max(0, Number(l.cantidad || 0) - filasModelo);
-  });
+  // "Una familia, dos filas" (2026-09-07): el pareo unidad↔línea lo decide
+  // ModeloFamilia — misma fila del catálogo primero, luego misma familia
+  // (PNC360S ≡ PNC360S-R) — con la modalidad como filtro (SERV mixto: un
+  // equipo del cliente solo cae en líneas 'propio'; una línea sin modalidad es
+  // legacy y acepta cualquiera). Si el catálogo no está cargado, ModeloFamilia
+  // cae al texto (marca por delante, -R por detrás).
+  //
+  // Las filas ya registradas consumen cupo con el MISMO criterio (antes se
+  // contaban por id/texto exacto y una fila -R no restaba a la línea base):
+  // se colocan primero, sin filtro de modalidad porque una fila no la sabe.
+  const cupo = lineas.map((l) => Math.max(0, Number(l.cantidad || 0)));
+  const lineasSinModalidad = lineas.map((l) => ({ modelo_id: l.modelo_id || null, modelo: l.modelo || "" }));
+  for (const f of filas) {
+    const i = ModeloFamilia.lineaPara({ modelo_id: f.modelo_id || null, modelo: f.modelo || "" }, lineasSinModalidad, cupo);
+    if (i >= 0) cupo[i]--;
+  }
 
   const listadas = new Set(filas.map((f) => f.serial_norm).filter(Boolean));
   const res = { asignar: [], sin_cupo: [], sin_linea: [], ya_listadas: [] };
@@ -40,29 +50,17 @@ function planAmarre(contrato, unidades, filasExistentes) {
   for (const u of unidades) {
     const norm = u.serial_norm || pool.normSerial(u.serial || "");
     if (norm && listadas.has(norm)) { res.ya_listadas.push(u); continue; }
-    // TODAS las líneas compatibles, con el match EXACTO por modelo_id primero:
-    // "PNC460" debe preferir la línea PNC460 aunque la tolerante PNC460-R
-    // aparezca antes — y si su línea preferida se llena, cae a la siguiente
-    // compatible con cupo (el bug que la simulación de SEPROSA destapó:
-    // first-match dejaba 91 unidades sin_cupo con 96 cupos libres al lado).
-    const matches = [];
-    // Modalidad (SERV mixto, 2026-09-01): un equipo PROPIEDAD DEL CLIENTE
-    // solo se amarra a líneas 'propio' (tarifa de servicio) y uno de
-    // CECOMUNICA solo a líneas 'alquiler'. Una línea SIN modalidad es legacy:
-    // acepta cualquiera (los contratos previos no distinguían).
-    const modUnidad = (u.propiedad === "cliente") ? "propio" : "alquiler";
-    for (let i = 0; i < lineas.length; i++) {
-      const l = lineas[i];
-      if (l.modalidad && l.modalidad !== modUnidad) continue;
-      const exacto = !!(u.modelo_id && l.modelo_id && u.modelo_id === l.modelo_id);
-      if (exacto || pool.mismoModelo(u, l.modelo_id || null, l.modelo || "")) matches.push({ i, exacto });
-    }
+    // TODAS las líneas compatibles, exactas primero: "PNC460" prefiere la
+    // línea PNC460 aunque PNC460-R aparezca antes — y si su preferida se
+    // llena, cae a la siguiente compatible con cupo (SEPROSA: first-match
+    // dejaba 91 unidades sin_cupo con 96 cupos libres al lado).
+    const matches = ModeloFamilia.lineasCompatibles(
+      { modelo_id: u.modelo_id || null, modelo: u.modelo_label || u.modelo || "", propiedad: u.propiedad }, lineas);
     if (!matches.length) { res.sin_linea.push(u); continue; }
-    matches.sort((a, b) => (b.exacto ? 1 : 0) - (a.exacto ? 1 : 0));
-    const destino = matches.find((m) => cupo[m.i] > 0);
+    const destino = matches.find((m) => cupo[m.idx] > 0);
     if (!destino) { res.sin_cupo.push(u); continue; }
-    cupo[destino.i]--;
-    res.asignar.push({ unidad: u, linea_idx: destino.i });
+    cupo[destino.idx]--;
+    res.asignar.push({ unidad: u, linea_idx: destino.idx });
   }
   return res;
 }

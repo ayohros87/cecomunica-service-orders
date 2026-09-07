@@ -35,17 +35,15 @@
 "use strict";
 
 const norm = (s) => (s ?? "").toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-const labelKey = (s) => (s || "").toString().toLowerCase()
-  .normalize("NFD").replace(/[^a-z0-9]+/g, "").replace(/r$/, "");
+const ModeloFamilia = require("../domain/modeloFamilia");
 
-// ¿El entrante puede sustituir a esta unidad? Misma fila del catálogo o mismo
-// texto de modelo (tolerante al sufijo -R, versión ligera de mismoModelo).
+// ¿El entrante puede sustituir a esta unidad? Misma FAMILIA del catálogo
+// (PNC360S ≡ PNC360S-R — "una familia, dos filas", 2026-09-07); sin catálogo
+// cargado, mismo texto tolerante a marca y sufijo -R.
 function _mismoModelo(unidad, entrante) {
-  if (unidad.modelo_id && entrante.modelo_id) return unidad.modelo_id === entrante.modelo_id;
-  const a = labelKey(unidad.modelo_label || unidad.modelo);
-  const b = labelKey(entrante.modelo_label || entrante.modelo);
-  if (a && b) return a === b || (a.length >= 3 && b.includes(a)) || (b.length >= 3 && a.includes(b));
-  return true; // sin datos de modelo: no bloquear el pareo
+  const tieneDato = (x) => !!(x.modelo_id || x.modelo_label || x.modelo);
+  if (!tieneDato(unidad) || !tieneDato(entrante)) return true; // sin datos de modelo: no bloquear el pareo
+  return ModeloFamilia.mismaFamilia(unidad, entrante);
 }
 
 /**

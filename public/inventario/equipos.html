@@ -153,13 +153,14 @@
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/services/modelosService.js"></script>
+  <script defer src="../js/services/modelosService.js?v=mf1"></script>
   <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/inventarioService.js"></script>
   <!-- ?v= aquí (y no en las otras páginas) porque el flujo de recepción de
        esta página y el servicio cambian juntos: la confirmación de colisión de
        modelo necesita las dos mitades de la misma versión. -->
-  <script defer src="../js/services/equiposPoolService.js?v=cc29"></script>
+  <script defer src="../js/domain/modeloFamilia.js?v=mf1"></script>
+  <script defer src="../js/services/equiposPoolService.js?v=mf1"></script>
   <!-- Join único conteo↔pool — lo usa el modal de conciliación. -->
   <script defer src="../js/domain/stockAgg.js"></script>
   <!-- Solo para el badge "Pendientes" del rail (conteo por agregados). -->

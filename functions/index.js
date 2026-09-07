@@ -65,6 +65,8 @@ exports.recordatorioSeriales          = require("./src/triggers/scheduled/record
 // Diario: órdenes estancadas (taller) + cuarentena sin inspección (recepción)
 // + devoluciones vencidas/sueltas (recepción)
 exports.recordatorioOperativo         = require("./src/triggers/scheduled/recordatorioOperativo");
+// "Una familia, dos filas" (2026-09-07): reporte diario para Finanzas · Modelos.
+exports.saludCatalogo                 = require("./src/triggers/scheduled/saludCatalogo");
 exports.manageUser                    = require("./src/callable/manageUser");
 exports.rebuildContractCache          = require("./src/callable/rebuildContractCache");
 exports.runBackfill                   = require("./src/callable/runBackfill");

@@ -8,6 +8,8 @@
 // las dos sobre el mismo corpus y falla si divergen.
 "use strict";
 
+const ModeloFamilia = require("../domain/modeloFamilia");
+
 /**
  * Equipos que el cliente todavía NO ha devuelto en una orden de DEVOLUCIÓN.
  * Tres orígenes según cómo nació la orden:
@@ -260,16 +262,18 @@ function unidadesRecuperablesDeBaja({ fichas = [], contratoDocId = null, items =
 
   // Baja parcial: la enmienda cancela cantidades por modelo, no seriales. Se
   // toman las primeras unidades elegibles de cada modelo hasta su cupo.
+  // Clave = FAMILIA del catálogo ("una familia, dos filas", 2026-09-07): una
+  // baja de "2 × PNC360S-R" recupera fichas de PNC360S o PNC360S-R.
   const cupo = new Map();
   for (const it of items || []) {
     const n = Number(it && it.cantidad || 0);
     if (n <= 0) continue;
-    const k = it.modelo_id || _tight(it.modelo);
+    const k = ModeloFamilia.claveFamilia({ modelo_id: it.modelo_id || null, modelo: it.modelo || "" });
     if (!k) continue;
     cupo.set(k, Number(cupo.get(k) || 0) + n);
   }
   return elegibles.filter((f) => {
-    const k = (f.modelo_id && cupo.has(f.modelo_id)) ? f.modelo_id : _tight(f.modelo);
+    const k = ModeloFamilia.claveFamilia({ modelo_id: f.modelo_id || null, modelo: f.modelo_label || f.modelo || "" });
     const libre = Number(cupo.get(k) || 0);
     if (libre <= 0) return false;
     cupo.set(k, libre - 1);

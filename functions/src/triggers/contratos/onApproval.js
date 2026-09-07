@@ -10,6 +10,7 @@ const { APP_BASE_URL, inventarioEmailTo } = require("../../lib/inventario");
 const { activacionesEmailTo, ccContratoAprobado } = require("../../lib/mailRecipients");
 const vigencia = require("../../lib/vigencia");
 const { planAmarre } = require("../../lib/regularizacion");
+const { catalogo } = require("../../domain/modeloCatalogo");
 const { aplicarPlanRenovacion, serialesExcluidosPorPlan, reemplazosPorModelo } = require("../../lib/planRenovacion");
 const { esDocumentoV2 } = require("../../lib/documentoContrato");
 const poolDom = require("../../domain/equiposPool");
@@ -45,6 +46,7 @@ async function jalarSerialesPropios(contratoRef, contrato, cid) {
       const x = d.data() || {};
       return { serial_norm: poolDom.normSerial(x.serial || ""), modelo_id: x.modelo_id || null, modelo: x.modelo || "" };
     });
+    try { await catalogo(); } catch (e) { logger.warn("[jalarSerialesPropios] catálogo no disponible", { message: e.message }); }
     const plan = planAmarre({ equipos: lineasPropio }, custodia, filas);
     for (const { unidad } of plan.asignar) {
       await contratoRef.collection("seriales").add({

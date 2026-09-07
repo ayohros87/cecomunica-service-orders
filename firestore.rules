@@ -1067,6 +1067,12 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // "Salud del catálogo" (cron saludCatalogo → Finanzas · Modelos): también
+    // lo lee contabilidad, que es quien completa precios y mapeos QBO.
+    match /admin_reportes/salud_catalogo {
+      allow read: if isSignedIn() && userRole() in ["administrador", "contabilidad"];
+      allow write: if false;
+    }
 
     // ── Integración QuickBooks — SOLO Cloud Functions (admin SDK) ──────────
     // `integraciones/quickbooks` guarda tokens OAuth (access/refresh) y realmId;

@@ -12,6 +12,7 @@
 // nada aguas abajo nota la diferencia.
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("./admin");
+const ModeloFamilia = require("../domain/modeloFamilia");
 
 /**
  * Recalcula y estampa los derivados de baja de UN contrato desde las dos
@@ -40,7 +41,7 @@ async function derivarBajaContrato(contratoDocId) {
       const sd = s.data();
       if (sd.estado !== "aprobada" && sd.estado !== "cerrada") return;
       (sd.items || []).forEach((it) => {
-        const key = String(it.modelo_id || it.modelo || "").trim();
+        const key = ModeloFamilia.claveFamilia({ modelo_id: it.modelo_id || null, modelo: it.modelo || "" });
         const q = Number(it.cantidad || 0);
         if (!key || q <= 0) return;
         map[key] = Number(map[key] || 0) + q;
@@ -62,7 +63,7 @@ async function derivarBajaContrato(contratoDocId) {
       if (!["en_proceso", "cerrada"].includes(gd.estado)) return;
       (gd.items || []).forEach((it) => {
         if (it.contrato_doc_id !== contratoDocId) return;
-        const key = String(it.modelo_id || it.modelo || "").trim();
+        const key = ModeloFamilia.claveFamilia({ modelo_id: it.modelo_id || null, modelo: it.modelo || "" });
         if (!key) return;
         map[key] = Number(map[key] || 0) + 1; // 1 ítem = 1 serial
         masTardia(it.fecha_fin_facturacion || gd.fecha_fin_facturacion);

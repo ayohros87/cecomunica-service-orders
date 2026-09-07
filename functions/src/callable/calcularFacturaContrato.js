@@ -7,8 +7,8 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const { db } = require("../lib/admin");
+const ModeloFamilia = require("../domain/modeloFamilia");
 
-const norm = (s) => String(s || "").trim().toLowerCase();
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const r4 = (n) => Math.round((Number(n) || 0) * 10000) / 10000;
 const toDate = (ts) => (ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null));
@@ -41,13 +41,12 @@ module.exports = onCall(
     const diasMes = finMes.getDate();
 
     // Catálogo de modelos (desglose).
-    const modelosById = {}, modelosByName = {};
-    (await db.collection("modelos").get()).forEach((d) => {
-      const m = { id: d.id, ...d.data() };
-      modelosById[m.id] = m;
-      if (m.modelo) modelosByName[norm(m.modelo)] = m;
-    });
-    const modeloDe = (e) => (e.modelo_id && modelosById[e.modelo_id]) || modelosByName[norm(e.modelo)] || null;
+    // Resolución por ModeloFamilia: id, texto con o sin marca, alias
+    // ("una familia, dos filas", 2026-09-07). La fila resuelta conserva su
+    // propio precio_alquiler / mapeo QBO (la -R es otro ítem en QBO).
+    const lista = (await db.collection("modelos").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+    ModeloFamilia.cargar(lista);
+    const modeloDe = (e) => ModeloFamilia.resolver({ modelo_id: e.modelo_id || null, modelo: e.modelo || "" });
 
     const itbmsAplica = (typeof c.itbms_aplica !== "undefined") ? !!c.itbms_aplica : true;
     const itbmsPorc = Number(c.itbms_porcentaje || 0.07);

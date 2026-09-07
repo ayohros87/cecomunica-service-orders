@@ -8,6 +8,7 @@
 // bandeja los cierra por allá, y si divergen el mismo renglón se lee distinto
 // según quién lo mire.
 const { admin, db } = require("./admin");
+const { catalogo, ModeloFamilia } = require("../domain/modeloCatalogo");
 
 const COL = "cobros_equipos";
 
@@ -46,13 +47,14 @@ function descuentoPct(montoCatalogo, montoUnit) {
 // null NO es 0: significa "nadie ha puesto precio a este modelo", y el renglón
 // queda marcado `sin_referencia` para que una persona lo mire. Los modelos
 // refurbished (-R) son los más propensos a no tenerlo.
+// "Una familia, dos filas" (2026-09-07): si la fila -R no tiene precio de
+// venta, vale el de su modelo base — el radio físico es el mismo.
 async function precioCatalogo(modeloId) {
   if (!modeloId) return null;
   try {
-    const snap = await db.collection("modelos").doc(String(modeloId)).get();
-    if (!snap.exists) return null;
-    const p = Number(snap.data().precio_venta);
-    return Number.isFinite(p) && p > 0 ? redondear(p) : null;
+    await catalogo();
+    const r = ModeloFamilia.precioReferencia({ modelo_id: String(modeloId) }, "precio_venta");
+    return r.valor ? redondear(r.valor) : null;
   } catch (e) {
     return null;
   }
