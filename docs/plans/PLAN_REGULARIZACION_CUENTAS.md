@@ -180,8 +180,10 @@ de admin. Subtítulos de una línea o ninguno.
   regularización tiene las líneas fijas (modelo, cantidad y modalidad salen
   de los seriales; solo se pone precio), sin "Agregar otro modelo", y
   `crearAumento` exige que la suma de cantidades sea igual al número de
-  seriales. Pendiente: el mismo chequeo en B3 (`onGestionWrite`) cuando se
-  libere el archivo. Dos gestiones, dos firmas, cada una con su circuito.
+  seriales. El mismo chequeo vive en el trigger de firma
+  (`G.regularizacionConsistente` en B3 de `onGestionWrite`): si falla, no se
+  aplica, se estampa `regularizacion_bloqueada` y el expediente lo muestra.
+  Dos gestiones, dos firmas, cada una con su circuito.
 - **Reemplazo**: ya exige el serial saliente. Si lo declara, D1 baja en uno.
 - **Temporal y Demo**: no piden nada (no tocan la cuenta). Se estampan pero no
   cuentan como puntuales.
