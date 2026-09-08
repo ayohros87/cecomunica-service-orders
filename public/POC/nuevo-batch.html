@@ -209,15 +209,16 @@
             </div>
 
             <div class="form-field">
-              <label class="form-label" for="contratoJalar">Contrato del cliente <span class="auto-tag">auto-elegido</span></label>
+              <label class="form-label" for="contratoJalar">Contrato o gestión del cliente <span class="auto-tag">auto-elegido</span></label>
               <div style="display:flex; gap:var(--sp-2); align-items:stretch;">
                 <select class="form-select" id="contratoJalar" style="flex:1;">
                   <option value="">Selecciona el cliente primero…</option>
                 </select>
-                <button type="button" id="btnJalarContrato" class="btn btn-secondary" title="Traer los seriales asignados al contrato">
+                <button type="button" id="btnJalarContrato" class="btn btn-secondary" title="Traer los seriales asignados al contrato o a la gestión">
                   <i data-lucide="download"></i> Jalar</button>
               </div>
-              <span class="form-hint">El <strong>modelo de cada serial se toma del contrato</strong>. Vincula el batch al contrato y al pool.</span>
+              <span class="form-hint">El <strong>modelo de cada serial se toma del contrato</strong>. Vincula el batch al contrato y al pool.
+                Un <strong>aumento, reemplazo o demo</strong> del Centro (GA, GR, GD) aparece como gestión: sus seriales no están en el contrato, se jalan de la gestión.</span>
               <!-- Chips por modelo: un contrato multi-modelo casi nunca se carga
                    entero a PoC (Gamboa: 74 seriales, lote de 22 PNC360S-R). -->
               <div id="filtroModelos"></div>
@@ -276,7 +277,7 @@
 
   </div><!-- /.app-wrap -->
 
-  <script src="../js/pages/nuevo-batch.js?v=cc24" defer></script>
+  <script src="../js/pages/nuevo-batch.js?v=gest1" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

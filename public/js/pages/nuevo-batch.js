@@ -55,11 +55,44 @@
       caja.hidden = false;
     }
 
+    // ── Gestiones como fuente de seriales (Brenda, recepción, 2026-09-08) ──
+    // Un aumento (GA), reemplazo (GR) o demo (GD) del Centro crea la OS de
+    // programación con los seriales que bodega asignó, pero esos seriales NO
+    // entran a contratos/{id}/seriales: "Jalar" del contrato no los trae, y
+    // una adenda a contrato en papel (Falcon) ni siquiera tiene contrato en el
+    // sistema. La gestión es el amarre operativo (mismo criterio que la OS), así
+    // que el select ofrece las gestiones del cliente con OS de programación y
+    // "Jalar" trae sus seriales con el modelo que bodega asignó. El valor en el
+    // select va con prefijo "g:" para distinguirlo de un contrato.
+    let gestionesPorId = new Map();   // gestion_id → doc de la gestión
+    const esValorGestion = (v) => typeof v === 'string' && v.startsWith('g:');
+    const gestionDe = (v) => esValorGestion(v) ? gestionesPorId.get(v.slice(2)) : null;
+
+    function serialesDeGestion(g) {
+      if (!g) return [];
+      const lista = g.tipo === 'reemplazo'
+        ? (g.items || []).map(it => ({ serial: it.serial_nuevo, modelo: it.modelo_solicitado || it.modelo, modelo_id: it.modelo_solicitado_id || it.modelo_id }))
+        : ((g.tipo === 'aumento' ? g.aumento?.seriales_asignados : g.demo?.seriales_asignados) || []);
+      return lista
+        .map(s => ({ serial: String(s.serial || '').trim(), modelo: s.modelo || '', modelo_id: s.modelo_id || '' }))
+        .filter(s => s.serial);
+    }
+
+    // Mapa serialNorm → { serial, modelo, modelo_id } de la fuente elegida:
+    // contrato (subcolección seriales) o gestión (seriales asignados por bodega).
+    async function mapaSerialesDe(valor) {
+      if (!valor) return new Map();
+      if (esValorGestion(valor)) {
+        const map = new Map();
+        for (const s of serialesDeGestion(gestionDe(valor))) map.set(ContratosService._serialKey(s.serial), s);
+        return map;
+      }
+      return ContratosService.getModeloPorSerial(valor);
+    }
+
     async function cargarModeloContrato(contratoDocId) {
       renderAvisoConsolas();
-      modeloContratoPorSerial = contratoDocId
-        ? await ContratosService.getModeloPorSerial(contratoDocId)
-        : new Map();
+      modeloContratoPorSerial = await mapaSerialesDe(contratoDocId);
       // Al (re)vincular un contrato se recalcula qué modelos entran al lote:
       // manda el archivo del vendedor si ya está cargado.
       modelosSeleccionados = seleccionPorDefecto();
@@ -647,12 +680,34 @@ async function cargarContratosDelCliente() {
   try {
     const contratos = await ContratosService.getContratosActivosPorCliente(clienteId);
     contratosPorId = new Map(contratos.map(c => [c.id, c]));  // para el aviso de consolas
-    sel.innerHTML = contratos.length
-      ? '<option value="">Sin vincular a contrato</option>' + contratos.map(c => {
-          const label = `${c.contrato_id || c.id} · ${c.tipo_contrato || ''} · ${c.estado || ''}`;
-          return `<option value="${c.id}" data-ref="${(c.contrato_id || c.id).replace(/"/g, '&quot;')}">${label.replace(/</g, '&lt;')}</option>`;
-        }).join('')
-      : '<option value="">El cliente no tiene contratos vigentes</option>';
+    const esc = (s) => String(s ?? '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    const opcionesContratos = contratos.map(c => {
+      const label = `${c.contrato_id || c.id} · ${c.tipo_contrato || ''} · ${c.estado || ''}`;
+      return `<option value="${c.id}" data-ref="${esc(c.contrato_id || c.id)}">${esc(label)}</option>`;
+    }).join('');
+    // Gestiones del cliente con OS de programación y seriales (no anuladas).
+    // Lectura directa: gestionesService no está cargado en esta página.
+    let gestiones = [];
+    try {
+      const gs = await firebase.firestore().collection('gestiones').where('cliente_id', '==', clienteId).limit(100).get();
+      gestiones = gs.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(g => g.estado !== 'anulada' && (g.ordenes?.programacion_ids || []).length && serialesDeGestion(g).length)
+        .sort((a, b) => String(b.id).localeCompare(String(a.id)));
+    } catch (e) { console.warn('[nuevo-batch] gestiones del cliente ilegibles', e); }
+    gestionesPorId = new Map(gestiones.map(g => [g.id, g]));
+    const opcionesGestiones = gestiones.map(g => {
+      const a = g.aumento || {};
+      const que = g.tipo === 'aumento'
+        ? (a.contrato_papel && !a.contrato_doc_id ? `adenda a contrato en papel ${a.contrato_id || ''}` : `anexo al contrato ${a.contrato_id || ''}`)
+        : g.tipo === 'reemplazo' ? 'reemplazo' : 'demo';
+      const label = `${g.id} · ${que} · ${serialesDeGestion(g).length} serial(es) · OS ${(g.ordenes.programacion_ids || []).join(', ')}`;
+      return `<option value="g:${esc(g.id)}" data-ref="${esc(a.contrato_id || '')}">${esc(label)}</option>`;
+    }).join('');
+    sel.innerHTML = (contratos.length || gestiones.length)
+      ? '<option value="">Sin vincular a contrato</option>'
+        + (opcionesContratos ? `<optgroup label="Contratos vigentes">${opcionesContratos}</optgroup>` : '')
+        + (opcionesGestiones ? `<optgroup label="Gestiones con OS de programación (aumento, reemplazo, demo)">${opcionesGestiones}</optgroup>` : '')
+      : '<option value="">El cliente no tiene contratos vigentes ni gestiones con OS</option>';
     sel.dataset.clienteId = clienteId;
     const restaurado = mismoCliente && contratoPrevio
       && [...sel.options].some(o => o.value === contratoPrevio);
@@ -677,14 +732,17 @@ async function cargarContratosDelCliente() {
 async function jalarSerialesDesdeContrato() {
   const sel = document.getElementById("contratoJalar");
   const contratoDocId = sel?.value || "";
-  if (!contratoDocId) { Toast.show('Elige primero un contrato del cliente.', 'warn'); return; }
+  if (!contratoDocId) { Toast.show('Elige primero un contrato o una gestión del cliente.', 'warn'); return; }
   const btn = document.getElementById("btnJalarContrato");
   if (btn) btn.disabled = true;
   try {
-    // Trae serial + modelo del contrato (fuente de verdad), fija el filtro de
-    // modelos por defecto y pinta el preview.
+    // Trae serial + modelo del contrato (fuente de verdad) o de la gestión, fija
+    // el filtro de modelos por defecto y pinta el preview.
     const mapa = await cargarModeloContrato(contratoDocId);
-    if (!mapa.size) { Toast.show('El contrato no tiene seriales asignados todavía.', 'warn'); return; }
+    if (!mapa.size) {
+      Toast.show(esValorGestion(contratoDocId) ? 'La gestión no tiene seriales asignados todavía.' : 'El contrato no tiene seriales asignados todavía.', 'warn');
+      return;
+    }
 
     const r = sincronizarSerialesConFiltro();
     const elegidos = gruposModeloContrato().filter(g => modeloSeleccionado(g.id));
@@ -775,7 +833,7 @@ async function autoJalarContrato(cantidadEsperada) {
     const matches = [];
     for (const o of opciones) {
       try {
-        const mapa = await ContratosService.getModeloPorSerial(o.value);
+        const mapa = await mapaSerialesDe(o.value);
         if (mapa.size === cantidadEsperada) matches.push(o);
       } catch (_) {}
     }
@@ -1009,21 +1067,29 @@ document.getElementById("addCliente").onclick = async () => {
         // device lo referencia (contrato_doc_id/contrato_id). Es el ancla que
         // conecta POC con contratos y con el pool de equipos.
         const contratoSel   = document.getElementById("contratoJalar");
-        const contratoDocId = contratoSel?.value || null;
-        const contratoRef   = contratoDocId
-          ? (contratoSel.selectedOptions[0]?.getAttribute("data-ref") || null) : null;
+        const fuente        = contratoSel?.value || null;
+        // Gestión como fuente: el ancla es la gestión (gestion_id); el contrato
+        // es el de su anexo si existe en el sistema, o el número de papel de
+        // la adenda (solo referencia, sin contrato_doc_id).
+        const gestionSel    = gestionDe(fuente);
+        const contratoDocId = gestionSel ? (gestionSel.aumento?.contrato_doc_id || null) : fuente;
+        const contratoRef   = gestionSel
+          ? (gestionSel.aumento?.contrato_id || null)
+          : (contratoDocId ? (contratoSel.selectedOptions[0]?.getAttribute("data-ref") || null) : null);
 
         // Modelo autoritativo por serial: con contrato vinculado, el modelo de
         // cada serial se toma del contrato (no del archivo del vendedor). Carga
         // lazy por si se eligió el contrato sin pulsar "Jalar seriales".
-        if (contratoDocId && !modeloContratoPorSerial.size) {
-          try { await cargarModeloContrato(contratoDocId); } catch (_) {}
+        if (fuente && !modeloContratoPorSerial.size) {
+          try { await cargarModeloContrato(fuente); } catch (_) {}
         }
 
         // Advertencia NON-BLOCKING al crear sin contrato (caso Pandeportes
         // 2026-07-24: lote re-creado suelto y hubo que vincularlo a mano).
-        if (!contratoDocId) {
+        if (!fuente) {
           Toast.show('Ojo: el lote se está creando SIN contrato vinculado. Los equipos no quedarán anclados a ningún contrato.', 'warn');
+        } else if (gestionSel && !contratoDocId) {
+          Toast.show(`Lote anclado a la gestión ${gestionSel.id}${contratoRef ? ` (contrato en papel ${contratoRef})` : ' (sin contrato, por diseño)'}.`, 'ok');
         }
 
         // Garantía final: alinear los seriales al orden del archivo del vendedor
@@ -1090,6 +1156,7 @@ document.getElementById("addCliente").onclick = async () => {
         cliente_nombre: document.getElementById("cliente").selectedOptions[0].textContent,
         contrato_doc_id: contratoDocId,
         contrato_id: contratoRef,
+        ...(gestionSel ? { gestion_id: gestionSel.id, gestion_tipo: gestionSel.tipo || null } : {}),
         ip: document.getElementById("ip").value,
         serial: serialesFinal[i],
         unit_id: String(unitIdInicial + i), // Unit ID consecutivo
