@@ -19,6 +19,32 @@ let contratoIdVisible = "";
 // serialLower -> { serial, modelo, modelo_id } del contrato. Es la verdad del
 // modelo por serial: la tabla la muestra por fila y avisa cuando no coincide.
 let contratoSeriales = new Map();
+// Gestión que creó la orden (aumento GA / reemplazo GR / demo GD). Sus seriales
+// NO están en contratos/{id}/seriales (bodega los asigna en la gestión y en el
+// pool), así que "Jalar del contrato" no los trae y la validación por fila los
+// marcaría "fuera del contrato". La gestión es el amarre operativo de esa OS:
+// se ofrece "Jalar de la gestión" y sus seriales entran al mapa de validación.
+let gestionOrden = null;
+
+// Seriales asignados por bodega en la gestión, con el modelo (misma lectura
+// que el lote de POC, nuevo-batch.js del POC).
+function serialesDeGestion(g) {
+  if (!g) return [];
+  const lista = g.tipo === "reemplazo"
+    ? (g.items || []).map(it => ({ serial: it.serial_nuevo, modelo: it.modelo_solicitado || it.modelo, modelo_id: it.modelo_solicitado_id || it.modelo_id }))
+    : ((g.tipo === "aumento" ? g.aumento?.seriales_asignados : g.demo?.seriales_asignados) || []);
+  return lista
+    .map(s => ({ serial: String(s.serial || "").trim(), modelo: s.modelo || "", modelo_id: s.modelo_id || "" }))
+    .filter(s => s.serial);
+}
+
+function mezclarSerialesGestion(mapa) {
+  for (const s of serialesDeGestion(gestionOrden)) {
+    const k = ContratosService._serialKey(s.serial);
+    if (!mapa.has(k)) mapa.set(k, s);
+  }
+  return mapa;
+}
 
 let filaSeq = 0;
 
@@ -85,6 +111,23 @@ async function cargarOrden() {
   if (contratoDocId) {
     try { contratoSeriales = await ContratosService.getModeloPorSerial(contratoDocId); }
     catch (e) { console.warn("No se pudieron cargar los seriales del contrato:", e); }
+  }
+
+  // Orden creada por una gestión → "Jalar de la gestión" y sus seriales
+  // cuentan como "del contrato" en la validación por fila.
+  if (data.gestion?.id) {
+    try {
+      const gs = await firebase.firestore().collection("gestiones").doc(data.gestion.id).get();
+      gestionOrden = gs.exists ? { id: gs.id, ...gs.data() } : null;
+    } catch (e) { console.warn("No se pudo leer la gestión de la orden:", e); }
+    if (gestionOrden && serialesDeGestion(gestionOrden).length) {
+      mezclarSerialesGestion(contratoSeriales);
+      const btnG = $("btnJalarGestion");
+      if (btnG) {
+        btnG.style.display = "";
+        btnG.innerHTML = `<i data-lucide="git-branch"></i> Jalar de la gestión ${escHtml(gestionOrden.id)}`;
+      }
+    }
   }
 
   // Modelo común (defaults para filas pegadas / "aplicar a todas").
@@ -334,6 +377,37 @@ window.jalarSerialesDesdeContrato = async ({ auto = false } = {}) => {
   }
 };
 
+// Trae a la tabla los seriales que bodega asignó en la gestión que creó la
+// orden (con su modelo). Deduplica contra la tabla, igual que el contrato.
+window.jalarSerialesDesdeGestion = async () => {
+  const lista = serialesDeGestion(gestionOrden);
+  if (!lista.length) { Toast.show("La gestión no tiene seriales asignados todavía.", "warn"); return; }
+  const btn = $("btnJalarGestion");
+  if (btn) btn.disabled = true;
+  try {
+    const modeloPorNombre = new Map(modelos.map(m => [normName(m.nombre), m.id]));
+    const idsValidos = new Set(modelos.map(m => m.id));
+    const presentes = serialesActuales();
+    let agregados = 0, omitidos = 0;
+    for (const s of lista) {
+      const key = s.serial.toLowerCase();
+      if (presentes.has(key)) { omitidos++; continue; }
+      const modeloId = (s.modelo_id && idsValidos.has(s.modelo_id))
+        ? s.modelo_id
+        : (modeloPorNombre.get(normName(s.modelo || "")) || "");
+      addRow({ serial: s.serial, modeloId });
+      presentes.add(key);
+      agregados++;
+    }
+    if (agregados) mostrarOrigenEquipos(`Jalado de la gestión ${gestionOrden.id}`);
+    let msg = `${agregados} equipo(s) jalados de la gestión ${gestionOrden.id}.`;
+    if (omitidos) msg += ` ${omitidos} ya estaban en la tabla.`;
+    Toast.show(agregados ? msg : "Esos seriales ya estaban en la tabla.", agregados ? "ok" : "warn");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+};
+
 // Enforcement del modelo del contrato: con una orden vinculada a contrato, el
 // modelo de cada serial es el del contrato (contratos/{id}/seriales), no el que
 // quedó en la tabla. Corrige por serial cualquier modelo que no coincida y
@@ -349,6 +423,9 @@ async function enforceContratoModelos() {
     console.warn("No se pudo cargar el modelo por serial del contrato:", e);
     return { corregidos: 0, fuera: [] };
   }
+  // Los seriales de la gestión que creó la orden (anexo GA) no están en el
+  // contrato pero son suyos: no se avisan como ajenos.
+  mezclarSerialesGestion(mapa);
   if (!mapa.size) return { corregidos: 0, fuera: [] };
 
   const modeloPorNombre = new Map(modelos.map(m => [normName(m.nombre), m.id]));

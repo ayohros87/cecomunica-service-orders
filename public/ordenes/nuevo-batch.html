@@ -83,7 +83,7 @@
   <script defer src="../js/domain/equipoNormalize.js"></script>
   <script src="../js/core/modulos.js?v=cc15"></script>
   <script src="../js/core/layout.js?v=cc13"></script>
-  <script src="../js/pages/ordenes-nuevo-batch.js?v=cc5" defer></script>
+  <script src="../js/pages/ordenes-nuevo-batch.js?v=gest1" defer></script>
   <script defer src="/js/vendor/lucide.min.js?v=3"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
 </head>
@@ -137,6 +137,11 @@
       <div class="form-actions" style="margin-bottom:var(--sp-4);">
         <button type="button" id="btnJalarContrato" class="btn btn-secondary" style="display:none;" onclick="jalarSerialesDesdeContrato()" title="Traer los seriales asignados al contrato vinculado a esta orden">
           <i data-lucide="file-check-2"></i> Jalar del contrato
+        </button>
+        <!-- Orden creada por una gestión (aumento, reemplazo, demo): sus seriales
+             viven en la gestión, no en el contrato. Se muestra al cargar la orden. -->
+        <button type="button" id="btnJalarGestion" class="btn btn-secondary" style="display:none;" onclick="jalarSerialesDesdeGestion()" title="Traer los seriales que bodega asignó en la gestión que creó esta orden">
+          <i data-lucide="git-branch"></i> Jalar de la gestión
         </button>
         <button type="button" id="btnJalarPoc" class="btn btn-secondary" onclick="jalarSerialesDesdePoc()" title="Traer seriales y modelos del cliente desde POC">
           <i data-lucide="download"></i> Jalar desde POC

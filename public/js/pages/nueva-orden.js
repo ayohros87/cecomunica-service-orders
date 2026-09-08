@@ -89,6 +89,41 @@
       hint.hidden = !texto;
     }
 
+    // Guardia contra la OS duplicada (Brenda, 2026-09-08): un aumento,
+    // reemplazo o demo del Centro YA crea su OS de programación con los
+    // seriales cargados; recepción, acostumbrada a crear la orden a mano tras
+    // el contrato, la volvía a crear. Si el cliente tiene gestiones abiertas
+    // con OS, se avisa debajo del contrato con el enlace. No bloquea.
+    async function avisarOsDeGestiones(clienteId) {
+      let caja = document.getElementById("gestionesOsHint");
+      if (!caja) {
+        caja = document.createElement("div");
+        caja.id = "gestionesOsHint";
+        caja.className = "form-hint";
+        caja.style.cssText = "margin-top:var(--sp-2);padding:8px 10px;border-radius:6px;background:#fef3c7;color:#92400e;";
+        caja.hidden = true;
+        contratoSelect.closest(".form-field")?.insertAdjacentElement("afterend", caja);
+      }
+      caja.hidden = true; caja.innerHTML = "";
+      if (!clienteId) return;
+      try {
+        const snap = await firebase.firestore().collection("gestiones")
+          .where("cliente_id", "==", clienteId).limit(50).get();
+        const conOs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .filter(g => !["cerrada", "anulada"].includes(g.estado) && (g.ordenes?.programacion_ids || []).length)
+          .sort((a, b) => String(b.id).localeCompare(String(a.id)));
+        if (!conOs.length) return;
+        const esc = (s) => String(s ?? "").replace(/</g, "&lt;");
+        caja.innerHTML = `⚠️ Este cliente ya tiene OS de programación creadas por gestión: ` +
+          conOs.map(g => {
+            const ids = g.ordenes.programacion_ids;
+            return `<a href="index.html?ids=${encodeURIComponent(ids.join(","))}" target="_blank"><b>${esc(ids.join(", "))}</b></a> (${esc(g.id)})`;
+          }).join(" · ") +
+          `. Si esta orden es para ese trámite, trabaja esa OS en vez de crear otra.`;
+        caja.hidden = false;
+      } catch (e) { console.warn("gestiones del cliente ilegibles:", e); }
+    }
+
     // Rellena el select de vendedores y preselecciona `preseleccionUid`. Sin
     // preselección conserva lo que ya estaba elegido (el select se re-arma en
     // varios puntos y no debe perder la elección del usuario).
@@ -173,6 +208,7 @@
           option.disabled = true;
           contratoSelect.appendChild(option);
         }
+        avisarOsDeGestiones(clienteId);
       } catch (error) {
         console.error("Error cargando contratos:", error);
         mostrarMensaje("No se pudieron cargar los contratos: " + error.message, "rojo");
