@@ -3351,26 +3351,29 @@ window.Centro = {
             ${activos.map(c => `<option value="${this.esc(c.id)}" ${c.id === preselId ? 'selected' : ''}>${this.esc(c.contrato_id || c.id)} · ${this.esc(c.tipo_contrato || '')}</option>`).join('')}
           </select></div>`;
     // Prellenado de líneas: en regularización, los modelos de los sobrantes.
-    const lineasIni = this._aumRegulariza
-      ? (() => {
-          const m = new Map();
-          this._aumRegulariza.forEach(u => {
-            const k = (u.modelo_id || u.modelo) + '|' + (u.modalidad || 'alquiler');
-            const g = m.get(k) || { modelo_id: u.modelo_id, modelo: u.modelo, modalidad: u.modalidad, cantidad: 0 };
-            g.cantidad++; m.set(k, g);
-          });
-          // Líneas FIJAS: modelo y cantidad salen de los seriales; solo se
-          // pone precio. Un anexo de regularización no lleva radios nuevos
-          // (no pasa por bodega ni genera OS — verificación 2026-09-08).
-          return [...m.values()].map(l => this._lineaModeloFija('wau', l)).join('');
-        })()
-      : this._lineaModeloHtml('wau', true);
+    // Líneas FIJAS: modelo y cantidad salen de los seriales MARCADOS; solo se
+    // pone precio. Un anexo de regularización no lleva radios nuevos (no pasa
+    // por bodega ni genera OS — verificación 2026-09-08).
+    this._aumRegularizaTodos = this._aumRegulariza ? [...this._aumRegulariza] : null;
+    const lineasIni = this._aumRegulariza ? this._aumLineasFijasHtml({}) : this._lineaModeloHtml('wau', true);
+    // El vendedor decide qué seriales entran (Alberto 2026-09-08: la cuenta
+    // tiene fugas — reemplazos sin devolución, radios que ya no están). Lo que
+    // desmarca NO entra al anexo y sigue como deuda; "no lo tiene" y agregar
+    // seriales que faltan se hacen en Regularizar cuenta (plan por serial).
     const regSenal = this._aumRegulariza
-      ? `<div class="cg-senal warn" style="margin-bottom:10px;">
-          <span>Anexo de <b>regularización</b>: amarra <b>${this._aumRegulariza.length} equipo(s)</b> que el cliente
-          YA tiene (<span class="cg-mono">${this._aumRegulariza.map(u => this.esc(u.serial)).join(', ')}</span>).
-          Al firmarlo el cliente, quedan amarrados al contrato con el tramo desde <b>hoy</b> —
-          <b>sin bodega, sin orden de servicio y sin entrega</b>. Solo falta ponerles precio.</span></div>` : '';
+      ? `<div class="cg-senal warn" style="margin-bottom:10px; display:block;">
+          <div>Anexo de <b>regularización</b>: amarra al contrato los equipos que el cliente <b>YA tiene</b>. Al firmarlo,
+            quedan amarrados con el tramo desde <b>hoy</b> — <b>sin bodega, sin orden de servicio y sin entrega</b>.
+            Desmarca los que NO están con el cliente: no entran al anexo.</div>
+          <div id="waRegSeriales" style="display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:8px;">
+            ${this._aumRegularizaTodos.map(u => `<label style="display:inline-flex; gap:5px; align-items:center; font-size:12.5px; cursor:pointer;">
+              <input type="checkbox" checked data-wareg="${this.esc(u.serial)}" onchange="Centro._aumRegToggle(this.dataset.wareg, this.checked)" style="width:auto; margin:0;">
+              <span class="cg-mono">${this.esc(u.serial)}</span><span style="color:var(--fg-4);">${this.esc(u.modelo || '')}</span></label>`).join('')}
+          </div>
+          <div style="margin-top:6px; font-size:12px; color:var(--fg-3);"><span id="waRegN">${this._aumRegulariza.length}</span> de ${this._aumRegularizaTodos.length} entran al anexo.
+            ¿Un serial que el cliente NO tiene, o uno que sí tiene y no aparece? Eso se declara en
+            <button type="button" style="background:none; border:0; padding:0; font:inherit; font-weight:600; color:var(--accent); cursor:pointer;"
+              onclick="Centro._cerrarModal(); Centro.wizContrato({renovarCuenta:true})">Regularizar cuenta</button> (plan por serial).</div></div>` : '';
     const papelSenal = esPapel
       ? `<div class="cg-senal warn" style="margin-bottom:10px;">
           <span><b>Salida para seguir sin regularizar hoy.</b> La adenda agrega equipos al contrato viejo
@@ -3466,6 +3469,7 @@ window.Centro = {
     // sin bodega, OS ni entrega — si llevara radios nuevos, esos radios
     // nunca saldrían. Las cantidades tienen que ser exactamente los seriales.
     if (this._aumRegulariza) {
+      if (!this._aumRegulariza.length) { Toast.show('Marca al menos un serial que el cliente sí tiene — si no tiene ninguno, decláralo en Regularizar cuenta', 'warn'); return; }
       const total = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
       if (total !== this._aumRegulariza.length) {
         Toast.show(`El anexo de regularización cubre exactamente ${this._aumRegulariza.length} equipo(s) que ya están con el cliente — los radios nuevos van en un aumento aparte`, 'warn');
@@ -3779,6 +3783,34 @@ window.Centro = {
   // (modalidad) y por serial (pool/Anexo A). ALQ/PROP quedan como legacy: se
   // absorben al renovar. Los nuevos desde el Centro nacen SERV.
   TIPOS_CONTRATO: { SERV: 'Servicio', ALQ: 'Alquiler', PROP: 'Propio', DEMO: 'Demo', TEMP: 'Temporal' },
+
+  // Líneas fijas del anexo de regularización a partir de los seriales
+  // marcados (_aumRegulariza), fusionadas por modelo+modalidad. `precios`
+  // conserva lo ya tecleado (clave modelo|modalidad) al re-pintar.
+  _aumLineasFijasHtml(precios = {}) {
+    const m = new Map();
+    (this._aumRegulariza || []).forEach(u => {
+      const k = (u.modelo_id || u.modelo) + '|' + (u.modalidad || 'alquiler');
+      const g = m.get(k) || { modelo_id: u.modelo_id, modelo: u.modelo, modalidad: u.modalidad, cantidad: 0, precio: precios[k] ?? '' };
+      g.cantidad++; m.set(k, g);
+    });
+    return [...m.values()].map(l => this._lineaModeloFija('wau', l)).join('');
+  },
+  // Marcar / desmarcar un serial del anexo de regularización: se re-pintan las
+  // líneas fijas con la cantidad nueva (el precio tecleado se conserva).
+  _aumRegToggle(serial, on) {
+    if (!this._aumRegularizaTodos) return;
+    const precios = {};
+    for (const l of this._lineasModelo('wau')) precios[(l.modelo_id || l.modelo) + '|' + (l.modalidad || 'alquiler')] = l.precio || '';
+    const sel = new Set((this._aumRegulariza || []).map(u => u.serial));
+    if (on) sel.add(serial); else sel.delete(serial);
+    this._aumRegulariza = this._aumRegularizaTodos.filter(u => sel.has(u.serial));
+    const cont = document.getElementById('waLineas');
+    if (cont) cont.innerHTML = this._aumLineasFijasHtml(precios);
+    const n = document.getElementById('waRegN');
+    if (n) n.textContent = String(this._aumRegulariza.length);
+    this._aumPreview();
+  },
 
   // Línea FIJA (anexo de regularización): modelo, cantidad y modalidad vienen
   // de los seriales y no se editan; solo el precio. Mismos data-attrs que la
