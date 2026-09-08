@@ -53,7 +53,7 @@ window.Centro = {
         if (chk) chk.checked = this.soloActivos;
         // Bandeja "Cuentas por regularizar" (plan 2026-09-08 §4.6): admin y
         // gerencia. El vendedor ve las suyas en el inicio y en cada ficha.
-        if ([ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)) {
+        if ([ROLES.ADMIN, ROLES.GERENTE, ROLES.RECEPCION].includes(this.rol)) {
           const ex = document.getElementById('cgToolsExtra');
           if (ex) ex.innerHTML = `<a class="btn btn-ghost" href="./regularizacion.html" style="font-size:13px;"><i data-lucide="clipboard-list"></i> Cuentas por regularizar</a>`;
         }

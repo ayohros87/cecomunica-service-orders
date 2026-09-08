@@ -25,8 +25,11 @@ window.ClientesRegularizacion = (() => {
       if (!user) return (window.location.href = '../login.html');
       uid = user.uid;
       try { const u = await UsuariosService.getUsuario(uid); rol = u?.rol || null; } catch (e) { rol = null; }
-      if (![ROLES.ADMIN, ROLES.GERENTE].includes(rol)) {
-        document.getElementById('rgRows').innerHTML = '<div class="rg-vacio">Esta bandeja es de administración y gerencia. El vendedor ve sus cuentas por regularizar en el inicio y en cada ficha.</div>';
+      // Recepción (cobros, Brenda) entra desde 2026-09-08 para F0: darle
+      // vendedor a las cuentas sin dueño. Sin montos: no es información
+      // financiera. El vendedor ve las suyas en el inicio y en cada ficha.
+      if (![ROLES.ADMIN, ROLES.GERENTE, ROLES.RECEPCION].includes(rol)) {
+        document.getElementById('rgRows').innerHTML = '<div class="rg-vacio">Esta bandeja es de administración, gerencia y recepción. El vendedor ve sus cuentas por regularizar en el inicio y en cada ficha.</div>';
         document.getElementById('rgChips').style.display = 'none';
         return;
       }
