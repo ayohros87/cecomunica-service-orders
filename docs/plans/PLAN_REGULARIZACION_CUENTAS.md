@@ -1,6 +1,15 @@
 # Regularización de cuentas — deuda visible, gestiones que no traban
 
-**Estado:** plan, sin ejecutar. Fecha 2026-09-08.
+**Estado:** F1, F2 y F3 implementadas y desplegadas el 2026-09-08 (commit
+692a211): módulo compartido `domain/regularizacion.js`, job diario 06:50 +
+barrido de marcadas cada 10 min, chip/panel/banda/estampa en la ficha, menú
+por intención, precarga del plan por serial, señales del home y bandeja
+`clientes/regularizacion.html`. **Pendientes:** F0 (dar vendedor a las 57
+cuentas sin dueño — se hace desde la bandeja), F4 (asistida de las 5 grandes),
+el párrafo ámbar en los correos de gestiones (gestiones.js estaba en vuelo en
+otra sesión) y calibrar umbrales con datos (§9). Ajuste al plan: D7 (por
+clasificar) es cola de bodega → cuenta puntos pero lleva etiqueta `migracion`
+y no sube la escalera. Fecha del plan: 2026-09-08.
 **Origen:** Elvia no encontraba "contrato temporal" para el Municipio de Arraiján
 (2026-09-07). Al revisar el menú de gestiones salió la pregunta de fondo de
 Alberto: qué pasa con las cuentas que no tienen los seriales ni los contratos
