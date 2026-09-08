@@ -28,18 +28,9 @@ window.HomeFeedDevoluciones = (() => {
   const COLLAPSE_KEY = (uid) => `ccHomeFeedDevolCollapsed:v1:${uid}`;
   const MAX_FILAS = 5;
 
-  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
-
-  function hace(ts) {
-    if (!ts) return '';
-    const min = Math.floor((Date.now() - ts) / 60000);
-    if (min < 60) return 'hace un momento';
-    const h = Math.floor(min / 60);
-    if (h < 24) return `hace ${h} h`;
-    const d = Math.floor(h / 24);
-    return d === 1 ? 'hace 1 día' : `hace ${d} días`;
-  }
+  // Filas, esqueleto y antigüedad: kit de bandeja (js/ui/bandeja.js,
+  // 2026-09-08). Semáforo de SEÑAL (10/30 días).
+  const esc = (v) => Bandeja.esc(v);
 
   function _readCache(uid) {
     try {
@@ -103,18 +94,12 @@ window.HomeFeedDevoluciones = (() => {
 
   function _row(c) {
     const detalle = (MOTIVO_TXT[c.motivo] || MOTIVO_TXT.conteo_bodega)(c);
-    const meta = `${esc(c.contrato_id)} · ${detalle} · contrato ${esc(c.estado)}`
-      + `${c.at ? ` · ${hace(c.at)}` : ''}`;
-    return `
-<div class="fo-row">
-  <span class="fo-ico fo-ico--contrato"><i data-lucide="package-check"></i></span>
-  <div class="fo-main">
-    <div class="fo-t">${esc(c.cliente_nombre)}</div>
-    <div class="fo-s">${meta}</div>
-  </div>
-  <a class="fo-btn" href="contratos/index.html?buscar=${encodeURIComponent(c.contrato_id)}"
-     title="Abrir el contrato para cancelarlo o anularlo"><i data-lucide="file-x"></i> Ver contrato</a>
-</div>`;
+    return Bandeja.fila({
+      chip: 'Por cancelar', tono: 'aviso', clase: 'senal', at: c.at || null,
+      txt: `<b>${esc(c.cliente_nombre)}</b> · ${esc(c.contrato_id)} · ${detalle} · contrato ${esc(c.estado)}`,
+      ctaHtml: Bandeja.cta({ href: `contratos/index.html?buscar=${encodeURIComponent(c.contrato_id)}`, label: 'Ver contrato',
+        icono: 'file-x', plano: true, title: 'Abrir el contrato para cancelarlo o anularlo' }),
+    });
   }
 
   function _pintar(mount, uid, filas) {
@@ -133,7 +118,7 @@ window.HomeFeedDevoluciones = (() => {
     <span class="fo-head__hint">el equipo ya volvió, el contrato sigue vigente</span>
     <i data-lucide="chevron-down" class="fo-chev"></i>
   </button>
-  <div class="fo-body">
+  <div class="fo-body bj-panel" style="margin:0;border:0;border-radius:0;">
     ${visibles.map(_row).join('')}
     ${resto > 0 ? `<div class="fo-foot">+${resto} más — <a href="contratos/index.html">ver contratos</a></div>` : ''}
   </div>
@@ -149,17 +134,12 @@ window.HomeFeedDevoluciones = (() => {
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
-  // Shell de carga (2 filas shimmer). Clases .fo-skel en ceco-command.css.
+  // Shell de carga (2 filas shimmer del kit).
   function _skeleton(mount) {
-    const fila = `<div class="fo-row"><span class="fo-skel fo-skel--ico"></span>
-      <div class="fo-main"><div class="fo-skel fo-skel--l1"></div><div class="fo-skel fo-skel--l2"></div></div></div>`;
     mount.innerHTML = `
 <div class="fo-card">
-  <div class="fo-head" style="cursor:default">
-    <span class="fo-skel fo-skel--ico"></span>
-    <span class="fo-skel fo-skel--t"></span>
-  </div>
-  <div class="fo-body">${fila}${fila}</div>
+  <div class="fo-head" style="cursor:default"><span class="bj-skel bj-skel--chip"></span><span class="bj-skel bj-skel--l2" style="width:180px;"></span></div>
+  <div class="fo-body bj-panel" style="margin:0;border:0;border-radius:0;">${Bandeja.esqueleto(2)}</div>
 </div>`;
     mount.style.display = '';
   }

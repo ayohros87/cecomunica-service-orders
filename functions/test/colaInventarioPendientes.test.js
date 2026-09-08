@@ -299,6 +299,7 @@ function cargarPagina(datos, transicionesActivas = true) {
       contarBodegaPorModelo: async () => new Map(),
     },
     ModelosService: { getModelos: async () => [] },
+    ConflictosPoolService: { listarPendientes: async () => [] },
     InventarioService: { getInventarioActual: async () => [] },
     StockAgg: { build: () => [], diferencias: () => [] },
     WorkspaceTabs: { render: noop, setActive: noop, setBadge: noop },

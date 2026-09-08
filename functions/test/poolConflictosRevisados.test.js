@@ -41,6 +41,10 @@ function cargarPagina() {
     localStorage: { getItem: () => null, setItem: noop },
   };
   vm.createContext(ctx);
+  // El predicado de conflicto vive en el servicio compartido con Almacén
+  // (2026-09-08); la página delega en él.
+  vm.runInContext(leer("public", "js", "services", "conflictosPoolService.js"), ctx);
+  ctx.ConflictosPoolService = ctx.window.ConflictosPoolService;
   vm.runInContext(leer("public", "js", "pages", "inventario-equipos.js"), ctx);
   return ctx.window.EquiposPool;
 }

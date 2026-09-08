@@ -68,7 +68,7 @@ window.HomeSignals = (() => {
       count: () => SenalesService.countOrdenesQcPendiente(),
       items: () => SenalesService.listQcCola(),
       row: (r, esc) => ({
-        txt: `<b>${esc(r.cliente)}</b> <span class="pend-id">${esc(r.id)}</span> · ${esc(r.motivo)}`,
+        txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.id)}</span> · ${esc(r.motivo)}`,
         dias: r.dias,
         cta: { label: 'Abrir orden', href: `ordenes/editar-orden.html?id=${encodeURIComponent(r.id)}` },
       }),
@@ -88,7 +88,7 @@ window.HomeSignals = (() => {
       items: () => SenalesService.listListasParaEntregar(),
       posponer: true, curso: true,
       row: (r, esc) => ({
-        txt: `<b>${esc(r.cliente)}</b> <span class="pend-id">${esc(r.id)}</span>`
+        txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.id)}</span>`
           + ` · ${r.equipos} equipo${r.equipos === 1 ? '' : 's'} · ${esc(r.tipo)}`,
         dias: r.dias,
         // Deep-link ?entrega= abre el modal de entrega directamente
@@ -108,7 +108,7 @@ window.HomeSignals = (() => {
       items: () => SenalesService.listEstancadas(),
       posponer: true, curso: true,
       row: (r, esc) => ({
-        txt: `<b>${esc(r.cliente)}</b> <span class="pend-id">${esc(r.id)}</span>`
+        txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.id)}</span>`
           + ` · ${esc(r.estado.toLowerCase())}${r.tecnico ? ' · ' + esc(r.tecnico) : ''}`,
         dias: r.dias,
         cta: { label: 'Abrir orden', href: `ordenes/editar-orden.html?id=${encodeURIComponent(r.id)}` },
@@ -191,7 +191,7 @@ window.HomeSignals = (() => {
       items: () => SenalesService.listCuarentena(),
       curso: true,
       row: (r, esc) => ({
-        txt: `<span class="pend-id">${esc(r.serial)}</span> <b>${esc(r.modelo)}</b>`
+        txt: `<span class="bj-id">${esc(r.serial)}</span> <b>${esc(r.modelo)}</b>`
           + (r.cliente && r.cliente !== '—' ? ` · venía de ${esc(r.cliente)}` : ''),
         dias: r.dias,
         cta: { label: 'Abrir en el pool', href: 'inventario/equipos.html?tab=devuelto_revision' },
@@ -369,108 +369,52 @@ window.HomeSignals = (() => {
      Posponer (señales con `posponer: true`): mini-formulario inline — el
      home no carga modal.js y no va a cargarlo por esto. El estado queda en
      el DOCUMENTO FUENTE (pendiente_snooze) y lo respetan esta bandeja y el
-     correo diario. */
+     correo diario.
+
+     La fila, el panel, la antigüedad y los botones de texto son del kit de
+     bandeja (js/ui/bandeja.js + css/bandeja.css, 2026-09-08): antes este
+     archivo inyectaba 50 líneas de CSS propio. Semáforo de SEÑAL: ámbar a
+     10 días, rojo a 30. Lo específico del posponer (.pend-snz-form) vive
+     en ceco-command.css. */
 
   const MAX_FILAS_PANEL = 40;
   let _panelAbierto = null;   // id de la señal abierta
 
-  function _esc(v) {
-    return String(v ?? '').replace(/[&<>"']/g, m => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-    }[m]));
-  }
-
-  function _injectStyles() {
-    if (document.getElementById('ccPendStyles')) return;
-    const st = document.createElement('style');
-    st.id = 'ccPendStyles';
-    st.textContent = `
-      .kpi--abre { cursor: pointer; }
-      .kpi__chev { font-size: 10px; opacity: .55; margin-left: 2px; transition: transform .15s; display: inline-block; }
-      .kpi[aria-expanded="true"] .kpi__chev { transform: rotate(180deg); }
-      .kpi[aria-expanded="true"] { outline: 2px solid var(--accent, #0091D7); outline-offset: -2px; }
-      .pend-panel { margin: 10px 0 4px; border: 1px solid var(--border-default, #DBE3ED);
-        border-radius: 10px; background: var(--surface-card, #fff); overflow: hidden; }
-      .pend-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px;
-        font-size: 13px; font-weight: 700; border-bottom: 1px solid var(--border-subtle, #E9EFF5); }
-      .pend-head .pend-n { background: var(--surface-sunken, #F1F5F9); border-radius: 999px;
-        padding: 0 8px; font-size: 12px; font-weight: 600; }
-      .pend-head a { margin-left: auto; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
-      .pend-fila { display: flex; align-items: center; gap: 10px; padding: 8px 14px;
-        border-bottom: 1px solid var(--border-subtle, #E9EFF5); font-size: 13.5px; }
-      .pend-fila:last-child { border-bottom: none; }
-      .pend-txt { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .pend-id { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; color: var(--accent, #0091D7); }
-      .pend-dias { flex: none; font-family: var(--mono, ui-monospace, monospace); font-size: 12px;
-        color: var(--fg-3, #6B819A); white-space: nowrap; font-variant-numeric: tabular-nums; }
-      .pend-dias.warn { color: #B45309; font-weight: 700; }
-      .pend-dias.bad { color: #B91C1C; font-weight: 700; }
-      .pend-cta { flex: none; font-size: 12px; font-weight: 600; white-space: nowrap;
-        padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-default, #DBE3ED);
-        background: var(--surface-sunken, #F6F8FB); text-decoration: none; color: inherit; }
-      .pend-cta:hover { border-color: var(--accent, #0091D7); color: var(--accent, #0091D7); }
-      .pend-snz-btn { flex: none; font-size: 11.5px; background: none; border: none; cursor: pointer;
-        color: var(--fg-3, #6B819A); text-decoration: underline; padding: 2px 4px; }
-      .pend-snz-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 6px 14px 10px 26px;
-        border-bottom: 1px solid var(--border-subtle, #E9EFF5); background: var(--surface-sunken, #F8FAFC); }
-      .pend-snz-form input[type=number] { width: 58px; }
-      .pend-snz-form input[type=text] { flex: 1 1 180px; min-width: 140px; }
-      .pend-snz-form input { font: inherit; font-size: 12.5px; padding: 4px 8px;
-        border: 1px solid var(--border-default, #DBE3ED); border-radius: 6px; }
-      .pend-snz-form button { font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px;
-        border-radius: 6px; border: 1px solid var(--border-default, #DBE3ED); cursor: pointer; }
-      .pend-snz-form .ok { background: var(--accent, #0091D7); color: #fff; border-color: transparent; }
-      .pend-pospuesto { opacity: .62; }
-      .pend-pospuesto .pend-txt { text-decoration: none; }
-      .pend-snz-tag { flex: none; font-size: 11px; background: #FEF3C7; color: #92400E;
-        border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
-      .pend-curso-tag { flex: none; font-size: 11px; background: #E6F4FC; color: #005781;
-        border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
-      .pend-pie { padding: 8px 14px; font-size: 12px; color: var(--fg-3, #6B819A);
-        background: var(--surface-sunken, #F8FAFC); }
-      .pend-vacio { padding: 16px 14px; font-size: 13px; color: var(--fg-3, #6B819A); text-align: center; }
-      @media (prefers-reduced-motion: reduce) { .kpi__chev { transition: none; } }
-    `;
-    document.head.appendChild(st);
-  }
-
-  function _diasHtml(d) {
-    const cls = d >= 30 ? ' bad' : d >= 10 ? ' warn' : '';
-    return `<span class="pend-dias${cls}">${d} d</span>`;
-  }
+  const _esc = (v) => Bandeja.esc(v);
 
   function _filaHtml(id, sig, r) {
     const row = sig.row(r, _esc);
     const snz = sig.posponer && !r.pospuesto
-      ? `<button type="button" class="pend-snz-btn" data-snz="${_esc(r.id)}" title="Sacarlo del ruido unos días, con motivo — también silencia el correo diario">posponer</button>`
+      ? Bandeja.btnTexto('posponer', { snz: r.id }, 'Sacarlo del ruido unos días, con motivo — también silencia el correo diario')
       : '';
     // "En curso": el dueño del pendiente es el ROL — tomar avisa, no bloquea,
     // y cualquiera del rol puede soltar (si quien lo tomó no está, el
     // pendiente no se queda secuestrado).
     const cursoTag = r.en_curso
-      ? `<span class="pend-curso-tag" title="Alguien del rol ya lo está trabajando — no bloquea: cualquiera puede actuar o soltarlo">en curso · ${_esc(r.curso_por)}${r.curso_dias ? ' · ' + r.curso_dias + 'd' : ''}</span>`
+      ? Bandeja.tag(`en curso · ${r.curso_por}${r.curso_dias ? ' · ' + r.curso_dias + 'd' : ''}`, 'info',
+          'Alguien del rol ya lo está trabajando — no bloquea: cualquiera puede actuar o soltarlo')
       : '';
     const cursoBtn = r.pospuesto ? '' : (r.en_curso
-      ? `<button type="button" class="pend-snz-btn" data-soltar="${_esc(r.id)}" title="Liberarlo — por ejemplo, si quien lo tomó no está">soltar</button>`
-      : (sig.curso ? `<button type="button" class="pend-snz-btn" data-tomar="${_esc(r.id)}" title="Avisar al resto del rol que lo estás trabajando">tomar</button>` : ''));
+      ? Bandeja.btnTexto('soltar', { soltar: r.id }, 'Liberarlo — por ejemplo, si quien lo tomó no está')
+      : (sig.curso ? Bandeja.btnTexto('tomar', { tomar: r.id }, 'Avisar al resto del rol que lo estás trabajando') : ''));
     const tag = r.pospuesto
-      ? `<span class="pend-snz-tag" title="${_esc(r.snooze_motivo)}">pospuesto → ${_esc(r.snooze_hasta)}</span>
-         <button type="button" class="pend-snz-btn" data-react="${_esc(r.id)}">reactivar</button>`
+      ? Bandeja.tag(`pospuesto → ${r.snooze_hasta}`, 'aviso', r.snooze_motivo) + Bandeja.btnTexto('reactivar', { react: r.id })
       : '';
-    return `<div class="pend-fila${r.pospuesto ? ' pend-pospuesto' : ''}" data-row="${_esc(r.id)}" data-col="${_esc(r.col)}">
-      <span class="pend-txt">${row.txt}</span>
-      ${tag}${cursoTag}${_diasHtml(row.dias)}${cursoBtn}${snz}
-      ${row.cta && !r.pospuesto ? `<a class="pend-cta" href="${row.cta.href}">${_esc(row.cta.label)}</a>` : ''}
-    </div>`;
+    return Bandeja.fila({
+      txt: row.txt, dias: row.dias, clase: 'senal', off: !!r.pospuesto,
+      data: { row: r.id, col: r.col },
+      extraHtml: `${tag}${cursoTag}`,
+      ctaHtml: `${cursoBtn}${snz}${row.cta && !r.pospuesto ? Bandeja.cta({ href: row.cta.href, label: row.cta.label, plano: true }) : ''}`,
+    });
   }
 
   async function _renderPanel(panel, id, sig) {
-    panel.innerHTML = `<div class="pend-vacio">Cargando…</div>`;
+    panel.innerHTML = Bandeja.listaVacia('Cargando…');
     let rows;
     try { rows = await sig.items(); }
     catch (e) {
       console.warn('[HomeSignals] filas de', id, 'no disponibles:', e?.code || e);
-      panel.innerHTML = `<div class="pend-vacio">No se pudieron cargar las filas. <a href="${sig.href}">Abrir en su módulo</a></div>`;
+      panel.innerHTML = `<p class="bj-lista-vacia">No se pudieron cargar las filas. <a href="${sig.href}">Abrir en su módulo</a></p>`;
       return;
     }
     const activas = rows.filter(r => !r.pospuesto);
@@ -478,23 +422,20 @@ window.HomeSignals = (() => {
     const visibles = activas.slice(0, MAX_FILAS_PANEL);
     const resto = activas.length - visibles.length;
 
-    panel.innerHTML = `
-      <div class="pend-head">${_esc(sig.label)} <span class="pend-n">${activas.length}</span>
-        <a href="${sig.href}">Abrir en su módulo →</a>
-      </div>
-      ${visibles.length
+    panel.innerHTML = Bandeja.panelHead({ titulo: sig.label, n: activas.length, href: sig.href })
+      + (visibles.length
         ? visibles.map(r => _filaHtml(id, sig, r)).join('')
-        : `<div class="pend-vacio">${_esc(sig.vacio || 'Nada pendiente.')}</div>`}
-      ${pospuestas.length ? pospuestas.map(r => _filaHtml(id, sig, r)).join('') : ''}
-      ${(resto > 0 || pospuestas.length)
-        ? `<div class="pend-pie">${resto > 0 ? `…y ${resto} más — ábrelo en su módulo para verlo todo. ` : ''}${pospuestas.length ? `${pospuestas.length} pospuesto${pospuestas.length === 1 ? '' : 's'} (también fuera del correo diario).` : ''}</div>`
-        : ''}`;
+        : Bandeja.listaVacia(sig.vacio || 'Nada pendiente.'))
+      + (pospuestas.length ? pospuestas.map(r => _filaHtml(id, sig, r)).join('') : '')
+      + ((resto > 0 || pospuestas.length)
+        ? Bandeja.pie(`${resto > 0 ? `…y ${resto} más — ábrelo en su módulo para verlo todo. ` : ''}${pospuestas.length ? `${pospuestas.length} pospuesto${pospuestas.length === 1 ? '' : 's'} (también fuera del correo diario).` : ''}`)
+        : '');
 
     // Posponer inline: un formulario a la vez, debajo de su fila.
     panel.querySelectorAll('[data-snz]').forEach(btn => {
       btn.addEventListener('click', () => {
         panel.querySelector('.pend-snz-form')?.remove();
-        const fila = btn.closest('.pend-fila');
+        const fila = btn.closest('.bj-row');
         const form = document.createElement('div');
         form.className = 'pend-snz-form';
         form.innerHTML = `
@@ -528,7 +469,7 @@ window.HomeSignals = (() => {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
-          const fila = btn.closest('.pend-fila');
+          const fila = btn.closest('.bj-row');
           await SenalesService.reactivarPendiente({ col: fila.dataset.col, id: fila.dataset.row });
           await _refrescarSenal(panel.closest('[data-pend-mount]'), id, sig);
           _renderPanel(panel, id, sig);
@@ -542,7 +483,7 @@ window.HomeSignals = (() => {
         btn.addEventListener('click', async () => {
           btn.disabled = true;
           try {
-            const fila = btn.closest('.pend-fila');
+            const fila = btn.closest('.bj-row');
             await fn({ col: fila.dataset.col, id: fila.dataset.row });
             _renderPanel(panel, id, sig);
           } catch (e) { btn.disabled = false; console.warn('[HomeSignals] curso:', e); }
@@ -570,7 +511,6 @@ window.HomeSignals = (() => {
   }
 
   function _wireExpansion(mount) {
-    _injectStyles();
     mount.setAttribute('data-pend-mount', '1');
     // Re-render (p.ej. "Ver como" del admin): el innerHTML nuevo borró el
     // panel, así que el estado se resetea; el listener NO se duplica — dos
@@ -595,7 +535,7 @@ window.HomeSignals = (() => {
         .forEach(t => t.setAttribute('aria-expanded', 'false'));
       if (!panel) {
         panel = document.createElement('div');
-        panel.className = 'pend-panel';
+        panel.className = 'bj-panel';
         mount.appendChild(panel);
       }
       _panelAbierto = id;

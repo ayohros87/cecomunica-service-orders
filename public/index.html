@@ -24,7 +24,8 @@
   <title>Cecomunica - Plataforma</title>
   <!-- Rediseño Command Center (F1) — esta página usa ceco-command.css.
        Las páginas aún no migradas siguen con ceco-ui.css. -->
-  <link rel="stylesheet" href="css/ceco-command.css?v=cc13">
+  <link rel="stylesheet" href="css/ceco-command.css?v=cc14">
+  <link rel="stylesheet" href="css/bandeja.css?v=bj2"> <!-- kit de bandeja: panel de señales y feeds -->
 
   <!-- Firebase -->
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -41,7 +42,8 @@
   <script type="module" src="js/firebase-aggregates.js?v=agg1"></script>
   <script defer src="js/domain/regularizacion.js?v=reg2"></script>
   <script defer src="js/services/senalesService.js?v=pen11"></script>
-  <script defer src="js/pages/home-signals.js?v=pen5"></script>
+  <script defer src="js/ui/bandeja.js?v=bj2"></script> <!-- kit de bandeja (fila, panel, antigüedad); antes de señales y feeds -->
+  <script defer src="js/pages/home-signals.js?v=pen6"></script>
   <!-- Feed "Órdenes por crear": los tres archivos cambian juntos (descarte de
        filas), así que comparten token de versión. equiposPoolService es la
        única ruta de escritura a equipos_pool — el descarte de una venta pasa
@@ -49,8 +51,8 @@
   <script defer src="js/domain/ordenProgPendiente.js?v=fo2"></script>
   <script defer src="js/services/equiposPoolService.js?v=fo2"></script>
   <script defer src="js/services/feedOrdenesService.js?v=fo2"></script>
-  <script defer src="js/pages/home-feed-ordenes.js?v=fo3"></script>
-  <script defer src="js/pages/home-feed-devoluciones.js?v=fo3"></script>
+  <script defer src="js/pages/home-feed-ordenes.js?v=fo4"></script>
+  <script defer src="js/pages/home-feed-devoluciones.js?v=fo4"></script>
   <!-- Lucide en defer + icons.js (par adyacente, en este orden): icons.js hace
        el barrido inicial de <i data-lucide>; los guards inline viejos quedan
        como no-ops en parse. Ver js/core/icons.js. -->

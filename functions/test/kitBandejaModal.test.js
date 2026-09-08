@@ -98,6 +98,37 @@ test("K4 · las hojas de asignación van por Modal.sheet, no por overlays a mano
   }
 });
 
+test("K6 · el home (panel de señales y feeds) pinta con el kit: sin CSS inyectado ni filas propias", () => {
+  const senales = sinComentarios(leer("public", "js", "pages", "home-signals.js"));
+  assert.ok(!/createElement\(['"]style['"]\)/.test(senales), "home-signals.js no debe inyectar CSS");
+  assert.ok(!/pend-fila|pend-dias|pend-cta|pend-head/.test(senales), "home-signals.js no debe pintar su propia fila");
+  assert.ok(/Bandeja\.fila\(/.test(senales) && /clase: 'senal'/.test(senales), "el panel usa la fila del kit con semáforo de señal");
+  for (const f of ["home-feed-ordenes.js", "home-feed-devoluciones.js"]) {
+    const src = sinComentarios(leer("public", "js", "pages", f));
+    assert.ok(/Bandeja\.fila\(/.test(src), `${f}: filas del kit`);
+    assert.ok(!/function hace\(/.test(src), `${f}: 'hace' ya no se duplica`);
+    assert.ok(!/fo-skel/.test(src), `${f}: esqueleto del kit`);
+  }
+  const html = leer("public", "index.html");
+  assert.ok(/bandeja\.css/.test(html) && /ui\/bandeja\.js/.test(html), "index.html carga el kit");
+  const css = leer("public", "css", "ceco-command.css");
+  assert.ok(!/\.fo-row\s*\{/.test(css) && !/\.fo-skel\s*\{/.test(css), "ceco-command.css ya no define la fila ni el esqueleto del feed");
+});
+
+test("K7 · la cola de Conflictos vive una sola vez (ConflictosPoolService)", () => {
+  const svc = leer("public", "js", "services", "conflictosPoolService.js");
+  assert.ok(/agrupar\(/.test(svc) && /fusionarPoolFicha/.test(svc) && /conflicto_revisado/.test(svc));
+  for (const f of [["public", "js", "pages", "almacen-hoy.js"], ["public", "js", "pages", "inventario-equipos.js"]]) {
+    const src = sinComentarios(leer(...f));
+    assert.ok(/ConflictosPoolService\./.test(src), `${f.at(-1)}: usa el servicio`);
+    assert.ok(!/fusionarPoolFicha/.test(src), `${f.at(-1)}: el callable se invoca solo desde el servicio`);
+    assert.ok(!/conflicto_revisado:\s*(true|valor)/.test(src), `${f.at(-1)}: la marca la escribe solo el servicio`);
+  }
+  for (const h of [["public", "almacen", "index.html"], ["public", "inventario", "equipos.html"]]) {
+    assert.ok(/conflictosPoolService\.js/.test(leer(...h)), `${h.at(-1)} carga el servicio`);
+  }
+});
+
 test("K5 · Modal.sheet resuelve con la acción del botón y respeta onAction=false", async () => {
   // DOM mínimo para modal.js: createElement con innerHTML, querySelector
   // sobre botones marcados con data-sheet-action.

@@ -135,27 +135,10 @@ window.AlmacenHoy = (() => {
     return s.data().count;
   }
 
-  async function cargarConflictos() {
-    // Subconjunto marcado por el failsafe de colisión — mismo predicado que la
-    // cola "Conflictos" de equipos.html (≥2 fichas del mismo serial_norm y no
-    // todas revisadas).
-    const db = firebase.firestore();
-    const snap = await db.collection('equipos_pool')
-      .where('serial_compartido', '==', true).limit(300).get();
-    const porNorm = new Map();
-    snap.docs.forEach(d => {
-      const eq = { id: d.id, ...d.data() };
-      const k = eq.serial_norm || (eq.id || '').split('__')[0];
-      if (!porNorm.has(k)) porNorm.set(k, []);
-      porNorm.get(k).push(eq);
-    });
-    const grupos = [];
-    for (const [norm, docs] of porNorm) {
-      if (docs.length < 2) continue;
-      if (docs.every(d => d.conflicto_revisado === true)) continue;
-      grupos.push({ norm, docs });
-    }
-    return grupos.sort((a, b) => a.norm.localeCompare(b.norm));
+  // La cola de Conflictos es UNA (ConflictosPoolService, compartida con
+  // Equipos por serial): mismo predicado, misma fusión, misma marca.
+  function cargarConflictos() {
+    return ConflictosPoolService.listarPendientes();
   }
 
   // Gestiones esperando a BODEGA (brecha Ola 6, caso GA20260828-01 de
@@ -446,17 +429,7 @@ window.AlmacenHoy = (() => {
       if (window.Toast) Toast.show('Solo administración o inventario resuelven conflictos.', 'warn');
       return;
     }
-    const cards = g.docs.map(d => `
-      <label style="display:block; border:1px solid var(--border-default); border-radius:var(--radius-md); padding:10px 12px; cursor:pointer;">
-        <input type="radio" name="hyConfl" value="${esc(d.id)}" style="margin-right:8px;">
-        <b>${esc(d.modelo_label || 'sin modelo')}</b>
-        <span style="color:var(--fg-3); font-size:12px; display:block; margin-left:22px;">
-          estado: ${esc(EquiposPoolService.ESTADO_LABELS[d.estado] || d.estado)}
-          · origen: ${esc(d.origen || '—')}
-          ${d.asignacion?.cliente_nombre ? ` · ${esc(d.asignacion.cliente_nombre)}` : ''}
-          ${d.verificado === false ? ' · sin verificar' : ''}
-        </span>
-      </label>`).join('');
+    const cards = ConflictosPoolService.tarjetasHtml(g, { elegible: true, esc });
     // Hoja del kit (Modal.sheet): los botones no cierran solos — onAction
     // devuelve false mientras la operación no termine.
     Modal.sheet({
@@ -494,8 +467,8 @@ window.AlmacenHoy = (() => {
     if (!ok) return false;
     const btn = root.querySelector('[data-sheet-action="fusionar"]'); if (btn) btn.disabled = true;
     try {
-      const res = await firebase.functions().httpsCallable('fusionarPoolFicha')({ keeperId, absorbidosIds });
-      if (window.Toast) Toast.show(`Fusión lista: ${res.data.fusionados} ficha(s) absorbida(s).`, 'ok');
+      const res = await ConflictosPoolService.fusionar({ keeperId, absorbidosIds });
+      if (window.Toast) Toast.show(`Fusión lista: ${res.fusionados} ficha(s) absorbida(s).`, 'ok');
       cargar();
       return true;
     } catch (e) {
@@ -512,29 +485,10 @@ window.AlmacenHoy = (() => {
       message: `Las ${g.docs.length} fichas del serial ${norm} quedarán marcadas como radios FÍSICOS distintos (salen de la cola, conservan el aviso "2+ modelos").` });
     if (!ok) return false;
     try {
-      const db = firebase.firestore();
-      const user = firebase.auth().currentUser;
-      const batch = db.batch();
-      // Marca + kardex: la decisión tiene que quedar rastreable en la ficha —
-      // meses después la pregunta es "¿quién dijo que son distintos y cuándo?",
-      // y el chip "2+ modelos" por sí solo no la contesta.
-      g.docs.forEach(d => {
-        const ref = db.collection('equipos_pool').doc(d.id);
-        batch.set(ref, {
-          conflicto_revisado: true,
-          updated_at: firebase.firestore.FieldValue.serverTimestamp(),
-          updated_by: user?.uid || null,
-          updated_by_email: user?.email || null,
-        }, { merge: true });
-        batch.set(ref.collection('movimientos').doc(), {
-          at: firebase.firestore.FieldValue.serverTimestamp(),
-          por: user?.uid || 'system', por_email: user?.email || null,
-          tipo: 'conflicto_revisado',
-          de_estado: d.estado || null, a_estado: d.estado || null, ref: null,
-          notas: 'Serial compartido entre modelos: son radios distintos.',
-        });
-      });
-      await batch.commit();
+      // Marca + kardex (ConflictosPoolService): la decisión queda rastreable
+      // en la ficha — meses después la pregunta es "¿quién dijo que son
+      // distintos y cuándo?", y el chip "2+ modelos" solo no la contesta.
+      await ConflictosPoolService.marcarRevisado(g, true, 'Serial compartido entre modelos: son radios distintos.');
       if (window.Toast) Toast.show('Grupo marcado como radios distintos.', 'ok');
       cargar();
       return true;

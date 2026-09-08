@@ -41,18 +41,9 @@ window.HomeFeedOrdenes = (() => {
   // El descarte re-pinta desde aquí (sin releer Firestore) y refresca el cache.
   let _st = { mount: null, uid: '', user: null, feed: null, verDescartadas: false };
 
-  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
-
-  function hace(ts) {
-    if (!ts) return '';
-    const min = Math.floor((Date.now() - ts) / 60000);
-    if (min < 60) return 'hace un momento';
-    const h = Math.floor(min / 60);
-    if (h < 24) return `hace ${h} h`;
-    const d = Math.floor(h / 24);
-    return d === 1 ? 'hace 1 día' : `hace ${d} días`;
-  }
+  // Filas, esqueleto y antigüedad: kit de bandeja (js/ui/bandeja.js,
+  // 2026-09-08). Semáforo de SEÑAL (10/30 días).
+  const esc = (v) => Bandeja.esc(v);
 
   function _readCache(uid) {
     try {
@@ -74,40 +65,32 @@ window.HomeFeedOrdenes = (() => {
 
   function _rowContrato(c) {
     const url = `ordenes/nueva-orden.html?cliente_id=${encodeURIComponent(c.cliente_id)}&contrato_doc_id=${encodeURIComponent(c.doc_id)}&tipo=PROGRAMACION`;
-    return `
-<div class="fo-row" data-key="${esc(claveContrato(c))}">
-  <span class="fo-ico fo-ico--contrato"><i data-lucide="file-text"></i></span>
-  <div class="fo-main">
-    <div class="fo-t">${esc(c.cliente_nombre)}</div>
-    <div class="fo-s">${esc(c.contrato_id)} · ${c.equipos} equipo(s), seriales listos · contrato ${esc(c.estado)}${c.at ? ` · ${hace(c.at)}` : ''}</div>
-  </div>
-  <a class="fo-btn" href="${url}" title="Crear la orden de programación (formulario precargado)"><i data-lucide="calendar-plus"></i> Crear orden</a>
-  ${_btnDescartar()}
-</div>`;
+    return Bandeja.fila({
+      chip: 'Contrato', tono: 'info', clase: 'senal', at: c.at || null,
+      data: { key: claveContrato(c) },
+      txt: `<b>${esc(c.cliente_nombre)}</b> · ${esc(c.contrato_id)} · ${c.equipos} equipo(s), seriales listos · contrato ${esc(c.estado)}`,
+      ctaHtml: Bandeja.cta({ href: url, label: 'Crear orden', icono: 'calendar-plus', plano: true, title: 'Crear la orden de programación (formulario precargado)' }) + _btnDescartar(),
+    });
   }
 
   function _rowVenta(v) {
-    const meta = `${v.seriales.length} equipo(s) vendidos${v.factura ? ` · factura QBO ${esc(v.factura)}` : ''}${v.at ? ` · ${hace(v.at)}` : ''}`;
+    const meta = `${v.seriales.length} equipo(s) vendidos${v.factura ? ` · factura QBO ${esc(v.factura)}` : ''}`;
     // Venta por excepción: sin cliente_id no hay prefill posible — el paso
     // previo es crear la ficha del cliente.
     const accion = (v.excepcion || !v.cliente_id)
       ? `<span class="fo-nota" title="La venta se registró a un comprador sin ficha en la app; crea el cliente para poder precargar la orden">cliente sin ficha</span>`
-      : `<a class="fo-btn" href="ordenes/nueva-orden.html?${new URLSearchParams({
+      : Bandeja.cta({ href: `ordenes/nueva-orden.html?${new URLSearchParams({
           tipo: 'PROGRAMACION', origen: 'venta',
           cliente_id: v.cliente_id,
           seriales: v.seriales.join(','),
           ...(v.factura ? { factura: v.factura } : {}),
-        }).toString()}" title="Crear la orden de programación (formulario precargado)"><i data-lucide="calendar-plus"></i> Crear orden</a>`;
-    return `
-<div class="fo-row" data-key="${esc(claveVenta(v))}">
-  <span class="fo-ico fo-ico--venta"><i data-lucide="banknote"></i></span>
-  <div class="fo-main">
-    <div class="fo-t">${esc(v.cliente_nombre)}</div>
-    <div class="fo-s">${meta}</div>
-  </div>
-  ${accion}
-  ${_btnDescartar()}
-</div>`;
+        }).toString()}`, label: 'Crear orden', icono: 'calendar-plus', plano: true, title: 'Crear la orden de programación (formulario precargado)' });
+    return Bandeja.fila({
+      chip: 'Venta', tono: 'listo', clase: 'senal', at: v.at || null,
+      data: { key: claveVenta(v) },
+      txt: `<b>${esc(v.cliente_nombre)}</b> · ${meta}`,
+      ctaHtml: accion + _btnDescartar(),
+    });
   }
 
   // Acción secundaria, deliberadamente discreta: descartar no es lo normal.
@@ -142,16 +125,15 @@ window.HomeFeedOrdenes = (() => {
   function _rowDescartada(f) {
     const quien = f.descarte?.por_email ? ` · ${esc(f.descarte.por_email)}` : '';
     const nota  = f.descarte?.nota ? ` — ${esc(f.descarte.nota)}` : '';
-    return `
-<div class="fo-row fo-row--off" data-key="${esc(f.key)}">
-  <span class="fo-ico fo-ico--off"><i data-lucide="circle-slash"></i></span>
-  <div class="fo-main">
-    <div class="fo-t">${esc(f.titulo)}</div>
-    <div class="fo-s">${esc(OrdenProgPendiente.motivoLabel(f.descarte?.motivo))}${nota}${quien}</div>
-  </div>
-  <button class="fo-btn fo-btn--ghost" type="button" data-act="reactivar"
-    title="Devolver esta orden a la bandeja"><i data-lucide="undo-2"></i> Reactivar</button>
-</div>`;
+    // Fila apagada (off) con la reversa a la mano. Conserva .fo-row--off
+    // para el fondo gris del descarte.
+    return Bandeja.fila({
+      chip: 'Descartada', tono: 'neutro', off: true,
+      data: { key: f.key },
+      txt: `<b>${esc(f.titulo)}</b> · ${esc(OrdenProgPendiente.motivoLabel(f.descarte?.motivo))}${nota}${quien}`,
+      ctaHtml: `<button class="fo-btn fo-btn--ghost" type="button" data-act="reactivar"
+        title="Devolver esta orden a la bandeja"><i data-lucide="undo-2"></i> Reactivar</button>`,
+    }).replace('class="bj-row is-off"', 'class="bj-row is-off fo-row--off"');
   }
 
   // El feed (dos fuentes) se aplana a filas con clave, título y orden.
@@ -209,9 +191,9 @@ window.HomeFeedOrdenes = (() => {
     <span class="fo-head__hint">contratos listos y ventas sin orden</span>
     <i data-lucide="chevron-down" class="fo-chev"></i>
   </button>
-  <div class="fo-body">
+  <div class="fo-body bj-panel" style="margin:0;border:0;border-radius:0;">
     ${visibles.map(f => f.html()).join('')}
-    ${activas.length ? '' : '<div class="fo-vacio">Nada por crear ahora mismo.</div>'}
+    ${activas.length ? '' : Bandeja.listaVacia('Nada por crear ahora mismo.')}
     ${_st.verDescartadas ? descartadas.map(_rowDescartada).join('') : ''}
     ${(pieLinks || pieDesc) ? `<div class="fo-foot">${pieLinks}${pieLinks && pieDesc ? ' · ' : ''}${pieDesc}</div>` : ''}
   </div>
@@ -315,17 +297,12 @@ window.HomeFeedOrdenes = (() => {
     }
   }
 
-  // Shell de carga (2 filas shimmer). Clases .fo-skel en ceco-command.css.
+  // Shell de carga (2 filas shimmer del kit).
   function _skeleton(mount) {
-    const fila = `<div class="fo-row"><span class="fo-skel fo-skel--ico"></span>
-      <div class="fo-main"><div class="fo-skel fo-skel--l1"></div><div class="fo-skel fo-skel--l2"></div></div></div>`;
     mount.innerHTML = `
 <div class="fo-card">
-  <div class="fo-head" style="cursor:default">
-    <span class="fo-skel fo-skel--ico"></span>
-    <span class="fo-skel fo-skel--t"></span>
-  </div>
-  <div class="fo-body">${fila}${fila}</div>
+  <div class="fo-head" style="cursor:default"><span class="bj-skel bj-skel--chip"></span><span class="bj-skel bj-skel--l2" style="width:180px;"></span></div>
+  <div class="fo-body bj-panel" style="margin:0;border:0;border-radius:0;">${Bandeja.esqueleto(2)}</div>
 </div>`;
     mount.style.display = '';
   }

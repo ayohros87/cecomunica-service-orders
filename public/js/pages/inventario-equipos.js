@@ -340,23 +340,10 @@ window.EquiposPool = {
   // usuario que lo ve viene aquí a buscarlo. Por eso `incluirRevisados` — sin
   // eso, el único destino que anuncia el chip es una pantalla donde el serial
   // nunca aparece, y parece que el sistema perdió el dato.
+  // El predicado, la fusión y la marca de revisado viven en
+  // ConflictosPoolService (2026-09-08): la misma cola que Almacén · Hoy.
   _gruposConflicto({ incluirRevisados = false } = {}) {
-    const porNorm = new Map();
-    for (const eq of this._equipos) {
-      const k = eq.serial_norm || (eq.id || '').split('__')[0];
-      if (!porNorm.has(k)) porNorm.set(k, []);
-      porNorm.get(k).push(eq);
-    }
-    const grupos = [];
-    for (const [norm, docs] of porNorm) {
-      if (docs.length < 2) continue;
-      const revisado = docs.every(d => d.conflicto_revisado === true);
-      if (revisado && !incluirRevisados) continue;
-      grupos.push({ norm, docs, revisado });
-    }
-    // Pendientes primero: la cola es para trabajar, el historial es consulta.
-    return grupos.sort((a, b) =>
-      (a.revisado === b.revisado) ? a.norm.localeCompare(b.norm) : (a.revisado ? 1 : -1));
+    return ConflictosPoolService.agrupar(this._equipos, { incluirRevisados });
   },
 
   // Alterna el historial de conflictos ya cerrados dentro de la cola.
@@ -452,9 +439,8 @@ window.EquiposPool = {
     });
     if (!ok) return;
     try {
-      const fn = firebase.functions().httpsCallable('fusionarPoolFicha');
-      const res = await fn({ keeperId, absorbidosIds: absorbidos });
-      Toast.show(`Fusión lista: ${res.data.fusionados} ficha(s) absorbida(s).`, 'ok');
+      const res = await ConflictosPoolService.fusionar({ keeperId, absorbidosIds: absorbidos });
+      Toast.show(`Fusión lista: ${res.fusionados} ficha(s) absorbida(s).`, 'ok');
       await this.refrescar([keeperId, ...absorbidos]);
     } catch (e) {
       Toast.show('No se pudo fusionar: ' + (e.message || e), 'bad');
@@ -506,31 +492,10 @@ window.EquiposPool = {
     }
   },
 
-  // Marca/desmarca `conflicto_revisado` en todas las fichas del grupo Y deja
-  // movimiento en el kardex de cada una — sin la nota nadie sabe en qué se basó
-  // la decisión, que es justo lo que se pregunta meses después.
-  async _escribirRevisado(grupo, valor, notas) {
-    const db = firebase.firestore();
-    const user = firebase.auth().currentUser;
-    const batch = db.batch();
-    grupo.docs.forEach(d => {
-      const ref = db.collection('equipos_pool').doc(d.id);
-      batch.set(ref, {
-        conflicto_revisado: valor,
-        updated_at: firebase.firestore.FieldValue.serverTimestamp(),
-        updated_by: user?.uid || null,
-        updated_by_email: user?.email || null,
-      }, { merge: true });
-      batch.set(ref.collection('movimientos').doc(), {
-        at: firebase.firestore.FieldValue.serverTimestamp(),
-        por: user?.uid || 'system', por_email: user?.email || null,
-        tipo: valor ? 'conflicto_revisado' : 'conflicto_reabierto',
-        de_estado: d.estado || null, a_estado: d.estado || null, ref: null,
-        notas: notas || '',
-      });
-    });
-    await batch.commit();
-    grupo.docs.forEach(d => { d.conflicto_revisado = valor; });
+  // Marca/desmarca `conflicto_revisado` en el grupo con kardex — la escritura
+  // es UNA (ConflictosPoolService.marcarRevisado), compartida con Almacén.
+  _escribirRevisado(grupo, valor, notas) {
+    return ConflictosPoolService.marcarRevisado(grupo, valor, notas);
   },
 
   _sinCliente(eq) {

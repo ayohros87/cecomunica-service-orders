@@ -54,37 +54,73 @@ window.Bandeja = (() => {
     return d === 1 ? 'hace 1 día' : `hace ${d} días`;
   }
 
-  // <span class="bj-age [warn|bad]">N días</span>
-  function edad(ms, { clase = 'cola', umbrales = null } = {}) {
-    const d = dias(ms);
-    if (d === null) return '';
+  // <span class="bj-age [warn|bad]">N días</span> a partir de los DÍAS.
+  function edadDeDias(d, { clase = 'cola', umbrales = null } = {}) {
+    if (d === null || d === undefined || Number.isNaN(Number(d))) return '';
+    const n = Number(d);
     const [warn, bad] = umbrales || UMBRALES[clase] || UMBRALES.cola;
-    const cls = d >= bad ? 'bj-age bad' : d >= warn ? 'bj-age warn' : 'bj-age';
-    return `<span class="${cls}">${esc(edadTexto(ms))}</span>`;
+    const cls = n >= bad ? 'bj-age bad' : n >= warn ? 'bj-age warn' : 'bj-age';
+    const txt = n <= 0 ? 'hoy' : (n === 1 ? '1 día' : `${n} días`);
+    return `<span class="${cls}">${txt}</span>`;
+  }
+  // …a partir de un timestamp en ms.
+  function edad(ms, opts) {
+    const d = dias(ms);
+    return d === null ? '' : edadDeDias(d, opts);
   }
 
   // Chip de tono. `label` ya viene en texto plano.
   function chip(label, t = 'neutro') {
     return `<span class="bj-chip bj-chip--${tono(t)}">${esc(label)}</span>`;
   }
+  // Etiqueta pequeña dentro de la fila (pospuesto, en curso…).
+  function tag(label, t = 'neutro', title = '') {
+    return `<span class="bj-tag bj-chip--${tono(t)}"${title ? ` title="${esc(title)}"` : ''}>${esc(label)}</span>`;
+  }
+  // Botón de texto (tomar · soltar · posponer · reactivar). `data` → data-attrs.
+  function btnTexto(label, data = null, title = '') {
+    const attrs = Object.entries(data || {}).map(([k, v]) => ` data-${esc(k)}="${esc(v)}"`).join('');
+    return `<button type="button" class="bj-btn-txt"${attrs}${title ? ` title="${esc(title)}"` : ''}>${esc(label)}</button>`;
+  }
 
   // CTA como enlace. `data` → data-attributes para que la página delegue el
-  // clic (sin onclick inline). `ghost` = secundario.
-  function cta({ href = '#', label, icono = null, data = null, ghost = false, title = '' } = {}) {
+  // clic (sin onclick inline). `ghost` = secundario. `plano` = sin el kit de
+  // botones de ceco-ui (páginas que solo cargan ceco-command.css).
+  function cta({ href = '#', label, icono = null, data = null, ghost = false, plano = false, title = '' } = {}) {
     const attrs = Object.entries(data || {}).map(([k, v]) => ` data-${esc(k)}="${esc(v)}"`).join('');
-    return `<a class="btn btn-sm ${ghost ? 'btn-ghost' : 'btn-accent'} bj-cta" href="${esc(href)}"${attrs}${title ? ` title="${esc(title)}"` : ''}>`
+    const cls = plano ? 'bj-cta bj-cta--plano' : `btn btn-sm ${ghost ? 'btn-ghost' : 'btn-accent'} bj-cta`;
+    return `<a class="${cls}" href="${esc(href)}"${attrs}${title ? ` title="${esc(title)}"` : ''}>`
       + (icono ? `<i data-lucide="${esc(icono)}" style="width:14px;height:14px;"></i> ` : '') + esc(label) + '</a>';
   }
 
   // La fila. `txt` es HTML (la bandeja escapa lo suyo); `chip` texto plano.
-  function fila({ chip: label = '', tono: t = 'neutro', txt = '', at = null, clase = 'cola', umbrales = null, ctaHtml = '', extraHtml = '' } = {}) {
-    return `<div class="bj-row">
+  // `at` (ms) o `dias` alimentan la antigüedad; `data` → data-attrs en la fila;
+  // `off` la atenúa (pospuesta, descartada).
+  function fila({ chip: label = '', tono: t = 'neutro', txt = '', at = null, dias: d = null, clase = 'cola', umbrales = null,
+                  ctaHtml = '', extraHtml = '', data = null, off = false } = {}) {
+    const attrs = Object.entries(data || {}).map(([k, v]) => ` data-${esc(k)}="${esc(v)}"`).join('');
+    const antig = (d !== null && d !== undefined) ? edadDeDias(d, { clase, umbrales }) : (at ? edad(at, { clase, umbrales }) : '');
+    return `<div class="bj-row${off ? ' is-off' : ''}"${attrs}>
       ${label ? chip(label, t) : ''}
       <span class="bj-txt">${txt}</span>
       ${extraHtml || ''}
-      ${at ? edad(at, { clase, umbrales }) : ''}
+      ${antig}
       ${ctaHtml || ''}
     </div>`;
+  }
+
+  // Panel: tarjeta con encabezado (título · contador · enlace) y filas dentro.
+  function panelHead({ titulo, n = null, href = '', hrefLabel = 'Abrir en su módulo →' } = {}) {
+    return `<div class="bj-panel-h">${esc(titulo)}${n != null ? ` <span class="bj-n">${esc(String(n))}</span>` : ''}
+      ${href ? `<a href="${esc(href)}">${esc(hrefLabel)}</a>` : ''}</div>`;
+  }
+  // Pie de panel (…y N más).
+  function pie(html) { return `<div class="bj-pie">${html}</div>`; }
+
+  // Esqueleto de carga con la forma de N filas.
+  function esqueleto(n = 2) {
+    const f = `<div class="bj-row"><span class="bj-skel bj-skel--chip"></span><span class="bj-txt"><span class="bj-skel bj-skel--l1" style="display:inline-block;"></span></span><span class="bj-skel bj-skel--l2"></span></div>`;
+    return Array.from({ length: Math.max(1, n) }, () => f).join('');
   }
 
   // Grupo con título y contador. Vacío (sin filas ni notas) → no se pinta.
@@ -140,5 +176,6 @@ window.Bandeja = (() => {
   }
   function listaVacia(texto) { return `<p class="bj-lista-vacia">${esc(texto)}</p>`; }
 
-  return { esc, TONOS, UMBRALES, dias, edadTexto, hace, edad, chip, cta, fila, grupo, conMas, nota, aviso, vacio, pastilla, listaTitulo, item, listaVacia };
+  return { esc, TONOS, UMBRALES, dias, edadTexto, hace, edad, edadDeDias, chip, tag, btnTexto, cta, fila, grupo, conMas,
+    nota, aviso, vacio, pastilla, panelHead, pie, esqueleto, listaTitulo, item, listaVacia };
 })();
