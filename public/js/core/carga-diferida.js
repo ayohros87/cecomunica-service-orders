@@ -38,6 +38,8 @@ window.CargaDiferida = (() => {
     visita:     "/js/pages/ordenes-visita.js?v=f3",
     fotos:      "/js/pages/ordenes-fotos.js?v=1",
     notas:      "/js/pages/ordenes-notas.js?v=1",
+    // Dividir una ENTRADA grande entre varias órdenes (Brenda, 2026-09-08).
+    dividir:    "/js/pages/ordenes-dividir.js?v=1",
   };
 
   return {
@@ -68,6 +70,9 @@ window.CargaDiferida = (() => {
     },
     notas() {
       return window.gestionarNotasTecnicas ? Promise.resolve() : script(MODULOS.notas);
+    },
+    dividir() {
+      return window.abrirDividirOrden ? Promise.resolve() : script(MODULOS.dividir);
     },
   };
 })();

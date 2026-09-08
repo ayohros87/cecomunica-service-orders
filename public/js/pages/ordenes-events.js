@@ -151,6 +151,14 @@
       const ordenId = el.dataset.ordenId;
       if (ordenId) eliminarOrden(ordenId);
     },
+    // Dividir una ENTRADA entre varias órdenes (ordenes-dividir.js, diferido).
+    'dividir-orden': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (!ordenId) return;
+      closeAllMenus();
+      CargaDiferida.dividir().then(() => abrirDividirOrden(ordenId))
+        .catch(() => Toast.show('Sin conexión — no se pudo abrir el reparto.', 'bad'));
+    },
     'editar-orden': (el) => {
       const ordenId = el.dataset.ordenId;
       if (ordenId) window.location.href = `editar-orden.html?id=${ordenId}`;

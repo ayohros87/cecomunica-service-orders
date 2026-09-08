@@ -309,6 +309,150 @@ const OrdenesService = {
     });
   },
 
+  // ── Dividir una orden de ENTRADA ─────────────────────────────────────
+  // Petición de Brenda (2026-09-08, Gamboa: 34 NX-420-R en la 2026090806):
+  // una devolución grande cae completa en UNA orden de inspección y, como la
+  // orden tiene UN técnico, un solo técnico carga con los 34 radios. Dividir
+  // reparte los equipos en órdenes hermanas —mismo cliente, devolución,
+  // acuse y contrato— para que cada una se asigne a su técnico.
+  //
+  // Solo ENTRADA en POR ASIGNAR y sin técnico: es el mismo candado con el
+  // que las tandas nuevas de la devolución siguen entrando a la orden
+  // (ESTADOS_APPEND_ENTRADA en onOrdenDevolucionWrite). Una vez tomada, la
+  // orden es del técnico y no se toca.
+  //
+  // Los equipos SALEN físicamente del array de la orden madre (no se marcan
+  // `eliminado`): un equipo eliminado sigue contando en `equipos.size()` y
+  // el pool lo seguiría viendo enlazado a la madre. onOrdenWritePool trata
+  // a la hija igual que a la madre (`entrada_inspeccion` copiado): no mueve
+  // inventario, solo re-apunta `orden_actual_id`; al cerrar cada hija, sus
+  // equipos aterrizan en bodega por separado.
+  //
+  // Transacción: si otra tanda de la devolución agrega equipos entre el
+  // modal y el guardado, la relectura los deja en la madre y el reparto
+  // solo mueve los ids que se eligieron.
+  //
+  // @param {string}   ordenId  orden madre
+  // @param {string[][]} grupos  ids de `equipos[]` por orden hija (≥1 cada uno)
+  // @returns {Promise<{nuevas:string[], restantes:number}>}
+  async dividirOrden(ordenId, grupos) {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    const gruposLimpios = (grupos || [])
+      .map(g => [...new Set((g || []).filter(Boolean))])
+      .filter(g => g.length);
+    if (!gruposLimpios.length) throw new Error("Nada que dividir: elige al menos un equipo.");
+    const todosIds = gruposLimpios.flat();
+    if (new Set(todosIds).size !== todosIds.length) throw new Error("Un equipo no puede ir a dos órdenes.");
+
+    // Números reservados ANTES de la transacción (cada reserva es su propia
+    // transacción sobre contadores/, igual que nueva-orden). Un número que
+    // se reserva y no se usa —si la transacción de abajo falla— solo deja
+    // un hueco en el correlativo del día, nunca un duplicado.
+    const f = new Date();
+    const p2 = (n) => String(n).padStart(2, '0');
+    const fechaStr = `${f.getFullYear()}${p2(f.getMonth() + 1)}${p2(f.getDate())}`;
+    let piso = 0;
+    try { piso = await this.maxSufijoOrdenDelDia(fechaStr); } catch (_) { /* piso 0 */ }
+    const nuevas = [];
+    for (let i = 0; i < gruposLimpios.length; i++) {
+      const seq = await this.reservarNumeroOrden(fechaStr, piso);
+      piso = seq;
+      nuevas.push(`${fechaStr}${String(seq).padStart(2, '0')}`);
+    }
+
+    const RE_OBS_AUTO = /^Orden creada automáticamente: inspección de \d+ equipos?(?:\(s\))? devueltos?(?:\(s\))?\./i;
+    const frase = (n) => { const s = n === 1 ? "" : "s"; return `${n} equipo${s} devuelto${s}`; };
+    const lista = (ids) => ids.length === 1 ? `la orden ${ids[0]}` : `las órdenes ${ids.join(", ")}`;
+    const obsHija = (obs, n, madre) => {
+      const base = RE_OBS_AUTO.test(obs)
+        ? obs.replace(RE_OBS_AUTO, `Orden creada automáticamente: inspección de ${frase(n)}.`)
+        : `Inspección de ${frase(n)}.${obs ? " " + obs : ""}`;
+      return `${base} Dividida de la orden ${madre} para repartir la inspección entre técnicos.`;
+    };
+    const obsMadre = (obs, n, hijas, movidos) => {
+      const base = RE_OBS_AUTO.test(obs)
+        ? obs.replace(RE_OBS_AUTO, `Orden creada automáticamente: inspección de ${frase(n)}.`)
+        : obs;
+      return `${base}${base ? " " : ""}Dividida: ${movidos} equipo${movidos === 1 ? "" : "s"} pasaron a ${lista(hijas)}.`;
+    };
+
+    const madreRef = db.collection("ordenes_de_servicio").doc(ordenId);
+    let restantes = 0;
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(madreRef);
+      if (!snap.exists) throw new Error("La orden ya no existe.");
+      const o = snap.data();
+      if (o.eliminado === true) throw new Error("La orden está eliminada.");
+      if (String(o.tipo_de_servicio || "").toUpperCase() !== "ENTRADA") throw new Error("Solo se dividen órdenes de ENTRADA.");
+      if ((o.estado_reparacion || "POR ASIGNAR").toUpperCase() !== "POR ASIGNAR" || o.tecnico_uid || o.tecnico_asignado) {
+        throw new Error("La orden ya fue tomada por el taller: no se puede dividir.");
+      }
+      const equipos = Array.isArray(o.equipos) ? o.equipos : [];
+      const porId = new Map(equipos.filter(e => e && e.id && !e.eliminado).map(e => [e.id, e]));
+      for (const id of todosIds) {
+        if (!porId.has(id)) throw new Error("Un equipo elegido ya no está en la orden. Vuelve a abrir el reparto.");
+      }
+      const movidos = new Set(todosIds);
+      const quedan = equipos.filter(e => !(e && movidos.has(e.id)));
+      restantes = quedan.filter(e => e && !e.eliminado).length;
+      if (!restantes) throw new Error("La orden madre debe quedarse con al menos un equipo.");
+
+      const now = firebase.firestore.FieldValue.serverTimestamp();
+      const uid = user?.uid || "";
+      const email = user?.email || null;
+      // Lo que una hija hereda: identidad de la orden (cliente, tipo,
+      // contrato, devolución de origen) y la recepción sellada por el acuse
+      // (mismos campos que copia onOrdenDevolucionWrite). NO hereda notas
+      // técnicas, fotos ni searchTokens (los regenera onWriteSearchTokens).
+      const heredado = {
+        cliente_id: o.cliente_id || "",
+        cliente_nombre: o.cliente_nombre || "",
+        vendedor_asignado: o.vendedor_asignado || "",
+        tipo_de_servicio: o.tipo_de_servicio,
+        estado_reparacion: "POR ASIGNAR",
+        contrato: o.contrato || { aplica: false, contrato_doc_id: null, contrato_id: null, motivo_no_aplica: null },
+        entrada_inspeccion: o.entrada_inspeccion || { tipo: "entrada", ref_id: null },
+        ...(o.gestion ? { gestion: o.gestion } : {}),
+        fecha_recepcion: o.fecha_recepcion || now,
+        recepcion_por_uid: o.recepcion_por_uid || "system",
+        recepcion_por_email: o.recepcion_por_email || null,
+        ...(o.receptor_recepcion_nombre !== undefined ? { receptor_recepcion_nombre: o.receptor_recepcion_nombre } : {}),
+        ...(o.firma_recepcion_url !== undefined ? { firma_recepcion_url: o.firma_recepcion_url } : {}),
+        ...(o.recepcion_sin_firma !== undefined ? { recepcion_sin_firma: o.recepcion_sin_firma } : {}),
+        ...(o.recepcion_sin_firma_motivo !== undefined ? { recepcion_sin_firma_motivo: o.recepcion_sin_firma_motivo } : {}),
+      };
+      const obsOriginal = String(o.observaciones || "");
+      gruposLimpios.forEach((ids, i) => {
+        const hijaId = nuevas[i];
+        const eqs = ids.map(id => porId.get(id));
+        tx.set(db.collection("ordenes_de_servicio").doc(hijaId), {
+          ...heredado,
+          equipos: eqs,
+          observaciones: obsHija(obsOriginal, eqs.length, ordenId),
+          dividida_de: ordenId,
+          fecha_creacion: now,
+          fecha_modificacion: now,
+          creado_por_uid: uid,
+          creado_por_email: email,
+          eliminado: false,
+          os_logs: [{ action: "CREAR", by: uid, dividida_de: ordenId, at: firebase.firestore.Timestamp.now() }],
+        });
+      });
+      tx.update(madreRef, {
+        equipos: quedan,
+        observaciones: obsMadre(obsOriginal, restantes, nuevas, todosIds.length),
+        dividida_en: firebase.firestore.FieldValue.arrayUnion(...nuevas),
+        fecha_modificacion: now,
+        os_logs: firebase.firestore.FieldValue.arrayUnion({
+          action: "DIVIDIR", by: uid, en: nuevas, equipos_movidos: todosIds.length,
+          at: firebase.firestore.Timestamp.now(),
+        }),
+      });
+    });
+    return { nuevas, restantes };
+  },
+
   /**
    * Mark order as completed. Captures `completado_por_email` so the
    * timeline can attribute the action, and appends an `os_logs` entry.

@@ -1,5 +1,34 @@
 # Changelog
 
+## [Dividir una orden de ENTRADA entre varios técnicos] — 2026-09-08
+
+> Petición de Brenda: la devolución de Tropical Resorts (Gamboa), 34 NX-420-R
+> renovados, cayó completa en la ENTRADA 2026090806 y, como una orden lleva UN
+> técnico, la inspección de los 34 radios quedaba en una sola persona.
+>
+> - **Menú ⋯ → "Dividir orden"** en las ENTRADA que siguen **POR ASIGNAR y sin
+>   técnico** con 2+ equipos (recepción, jefe de taller y admin). Mismo candado
+>   con el que las tandas nuevas de la devolución siguen entrando a la orden:
+>   una vez tomada, es del técnico y no se toca.
+> - **Dos formas** en la misma hoja: *Repartir parejo* en N órdenes (34 en 4 →
+>   9 · 9 · 8 · 8; la madre conserva el primer bloque) o *a mano* marcando los
+>   equipos que pasan a UNA orden nueva (se puede repetir).
+> - **Las hijas heredan** cliente, contrato, `entrada_inspeccion` (la devolución
+>   de origen), la recepción sellada por el acuse (firma, receptor, fecha) y
+>   nacen POR ASIGNAR con su propio número del día; `dividida_de` / `dividida_en`
+>   ligan madre e hijas y la observación auto-generada reescribe el conteo en
+>   ambas. NO heredan notas técnicas ni fotos. Los equipos SALEN del array de la
+>   madre (no se marcan `eliminado`): así cada orden cierra y aterriza en
+>   bodega solo lo suyo (onOrdenWritePool trata a la hija igual que a la madre).
+> - **Transacción** (`OrdenesService.dividirOrden`): relee la madre, rechaza si
+>   ya fue tomada, si un equipo elegido ya no está o si la madre quedaría
+>   vacía. Números reservados con el contador del día, como nueva-orden.
+> - Módulo diferido `ordenes-dividir.js` (CargaDiferida.dividir). Test contra el
+>   emulador con las reglas reales: `functions/test-emulator/dividir-orden.js`.
+> - Límite conocido: la corrección pre-firma que espeja onOrdenDevolucionWrite
+>   solo llega a la madre (`orden_entrada_id`); en una hija se corrige en la
+>   propia orden. En la práctica se divide después de firmado el acuse.
+
 ## [Equipos con condición particular, pegada al serial] — 2026-09-04
 
 > Petición de Solangel (taller): un radio que funciona pero arrastra una

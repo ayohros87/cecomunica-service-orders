@@ -1189,6 +1189,24 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     });
   }
 
+  // Dividir una ENTRADA grande entre varios técnicos (Brenda, 2026-09-08:
+  // 34 radios de Gamboa en una sola orden). Solo mientras nadie la haya
+  // tomado —POR ASIGNAR y sin técnico— y con equipos suficientes para
+  // repartir. Quienes asignan: recepción, jefe de taller y admin.
+  const esEntradaDivisible = typeof esOrdenEntrada === 'function' && esOrdenEntrada(o)
+    && estadoUpper === "POR ASIGNAR" && !o.tecnico_uid && !o.tecnico_asignado
+    && (o.equipos || []).filter(e => e && !e.eliminado).length >= 2
+    && (rol === ROLES.ADMIN || rol === ROLES.RECEPCION || rol === ROLES.JEFE_TALLER);
+  if (esEntradaDivisible) {
+    menuItems.unshift({
+      icon: '<i data-lucide="layers"></i>',
+      label: "Dividir orden",
+      action: "dividir-orden",
+      dataAttributes: `data-orden-id="${ordenId}"`,
+      class: "highlighted"
+    });
+  }
+
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     // Editar: SOLO cuando aplica (POR ASIGNAR). El item gris permanente era
