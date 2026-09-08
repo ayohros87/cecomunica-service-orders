@@ -623,8 +623,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
 const EQUIPOS_BUSCADOR_MIN = 5;
 
 function _normSerialBusqueda(v) {
-  if (typeof EquiposPoolService !== 'undefined') return EquiposPoolService.normalizarSerial(v);
-  return String(v == null ? '' : v).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return Serial.norm(v);
 }
 
 // Arranque del buscador cuando la bandeja ya viene filtrada por serial: la

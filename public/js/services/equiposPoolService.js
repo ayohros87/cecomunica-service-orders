@@ -60,8 +60,10 @@ const EquiposPoolService = {
 
   // Serial normalizado: mayúsculas, solo [A-Z0-9]. Es el ID del doc (salvo
   // colisión — ver failsafe) y el campo de búsqueda canónico `serial_norm`.
+  // La regla vive en js/core/serial.js (Serial.norm) desde 2026-09-08; aquí
+  // solo se expone con el nombre histórico.
   normalizarSerial(raw) {
-    return (raw ?? '').toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return Serial.norm(raw);
   },
 
   // 3-30 alfanuméricos Y al menos un dígito. Lo del dígito (2026-07-27): el
@@ -71,7 +73,7 @@ const EquiposPoolService = {
   // y no entra al pool. DUPLICADO en functions/src/domain/equiposPool.js —
   // functions/test/poolNormalizacion.test.js exige que sigan idénticos.
   esSerialValido(serialNorm) {
-    return /^[A-Z0-9]{3,30}$/.test(serialNorm) && /\d/.test(serialNorm);
+    return Serial.valido(serialNorm);
   },
 
   // Componente de modelo para el ID sufijado del failsafe. La normalización

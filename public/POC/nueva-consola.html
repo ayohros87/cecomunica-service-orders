@@ -43,6 +43,7 @@
   <script defer src="../js/services/pocService.js?v=cc10"></script>
   <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/empresaService.js"></script>
+  <script src="../js/core/serial.js?v=1"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
   <script defer src="../js/services/contratosService.js"></script>
   <!-- Regla única de "qué es una consola" y cuántas trae el contrato. -->
   <script defer src="../js/domain/consolasContrato.js?v=cc1"></script>
@@ -158,7 +159,8 @@
 
   </div><!-- /.app-wrap -->
 
-  <script src="../js/pages/poc-nueva-consola.js?v=cc1" defer></script>
+  <script defer src="../js/ui/filtered-select.js?v=fs1"></script>
+  <script src="../js/pages/poc-nueva-consola.js?v=fs1" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

@@ -91,48 +91,26 @@ window.VB = {
     } catch (e) { console.error('Error al refrescar clientes:', e); Toast.show('Error al refrescar clientes', 'bad'); }
   },
 
-  // ---- Client autocomplete ----
-  sugerirClientes() {
-    const contenedor = document.getElementById('sugerenciasClientes');
-    contenedor.innerHTML = '';
-    const inputEl = document.getElementById('clienteGlobal');
-    const texto   = (inputEl.value || '').trim();
-    if (texto.length < 2) { this.clienteIDSeleccionado = null; this.clienteNombreSeleccionado = null; return; }
-    clearTimeout(this._timeoutCliente);
-    this._timeoutCliente = setTimeout(async () => {
-      if (!this.clientesCargados) { try { await this.cargarClientesCache(); } catch (e) { console.error(e); } }
-      const needle  = FMT.normalize(texto);
-      let matches   = this.clientesCache
-        .filter(c => c.norm.includes(needle))
-        .map(c => ({ id: c.id, nombre: c.nombre, pos: c.norm.indexOf(needle) }));
-      matches.sort((a, b) => a.pos !== b.pos ? a.pos - b.pos : a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
-      this.renderSugerencias(matches.slice(0, 30), contenedor, inputEl);
-    }, 200);
+  // ---- Client autocomplete (EntityCombo adoptando #clienteGlobal, 2026-09-08) ----
+  async montarComboCliente() {
+    const input = document.getElementById('clienteGlobal');
+    if (!input || typeof EntityCombo === 'undefined') return;
+    if (!this.clientesCargados) { try { await this.cargarClientesCache(); } catch (e) { console.error(e); } }
+    this._combo = EntityCombo.montar(null, {
+      input,
+      items: this.clientesCache || [],
+      id: (c) => c.id, label: (c) => c.nombre, campos: (c) => [c.nombre],
+      limite: 30,
+      onSelect: (id, c) => {
+        VB.clienteIDSeleccionado     = c ? c.id : null;
+        VB.clienteNombreSeleccionado = c ? (c.nombre || '') : null;
+        if (c) VB.buscarGruposCliente();
+      },
+    });
   },
 
   toTitleCase(str) {
     return (str || '').toLowerCase().replace(/\b[\p{L}\p{M}]+/gu, s => s.charAt(0).toUpperCase() + s.slice(1));
-  },
-
-  renderSugerencias(items, contenedor, inputEl) {
-    contenedor.innerHTML = '';
-    if (!items || !items.length) return;
-    const lista = document.createElement('ul');
-    lista.className = 'suggest-list';
-    items.forEach(it => {
-      const li = document.createElement('li');
-      li.className = 'suggest-item';
-      li.textContent = this.toTitleCase(it.nombre || '');
-      li.onclick = () => {
-        inputEl.value = it.nombre || '';
-        VB.clienteIDSeleccionado      = it.id;
-        VB.clienteNombreSeleccionado  = it.nombre || '';
-        contenedor.innerHTML = '';
-        VB.buscarGruposCliente();
-      };
-      lista.appendChild(li);
-    });
-    contenedor.appendChild(lista);
   },
 
   // Carga automática: si el texto escrito coincide exactamente con un cliente
@@ -875,12 +853,8 @@ window.VB = {
     document.getElementById('grupoInput').addEventListener('input', () => VB.renderGrupoChips());
     document.addEventListener('DOMContentLoaded', () => VB.renderGrupoChips());
 
-    document.addEventListener('click', e => {
-      const box   = document.getElementById('sugerenciasClientes');
-      const input = document.getElementById('clienteGlobal');
-      if (!box) return;
-      if (!box.contains(e.target) && !input.contains(e.target)) box.innerHTML = '';
-    });
+    // El combo de cliente (EntityCombo) cierra su lista solo.
+    this.montarComboCliente();
 
     document.getElementById('btnGuardarBorrador').addEventListener('click', () => VB.saveDraft());
     document.addEventListener('keydown', e => {
@@ -899,26 +873,6 @@ window.VB = {
     // para que un clic en una sugerencia gane la selección primero).
     const clienteEl = document.getElementById('clienteGlobal');
     if (clienteEl) clienteEl.addEventListener('blur', () => setTimeout(() => VB.intentarCargarGruposAuto(), 200));
-
-    // Navegación con teclado en las sugerencias de cliente: ↑/↓ mueven el
-    // resaltado, Enter selecciona, Esc cierra la lista.
-    if (clienteEl) clienteEl.addEventListener('keydown', e => {
-      const box   = document.getElementById('sugerenciasClientes');
-      const items = box ? Array.from(box.querySelectorAll('.suggest-item')) : [];
-      if (!items.length) return;
-      const idx = items.findIndex(li => li.classList.contains('active'));
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        const next = e.key === 'ArrowDown' ? Math.min(idx + 1, items.length - 1) : Math.max(idx - 1, 0);
-        items.forEach((li, i) => li.classList.toggle('active', i === next));
-        items[next].scrollIntoView({ block: 'nearest' });
-      } else if (e.key === 'Enter' && idx >= 0) {
-        e.preventDefault();
-        items[idx].click();
-      } else if (e.key === 'Escape') {
-        box.innerHTML = '';
-      }
-    });
 
     // Autoguardado al editar cualquier celda de la tabla (delegación).
     const cuerpo = document.getElementById('cuerpoTabla');

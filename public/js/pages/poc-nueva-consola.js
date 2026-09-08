@@ -106,26 +106,11 @@ function construirDocConsola({
 async function cargarClientes() {
   const { docs } = await ClientesService.listClientes({ limit: 2000 });
   _clientesDocs = docs;
-  pintarClientes();
-  el("clienteFiltro")?.addEventListener("input", (e) => pintarClientes(e.target.value));
-}
-
-function pintarClientes(filtro = "") {
-  const select = el("cliente");
-  if (!select) return;
-  const q = _normTxt(filtro);
-  const actual = select.value;
-  const lista = q ? _clientesDocs.filter(c => _normTxt(c.nombre).includes(q)) : _clientesDocs;
-  select.innerHTML = '<option value="">Seleccione un cliente</option>';
-  lista.forEach(c => {
-    const opt = document.createElement("option");
-    opt.value = c.id;
-    opt.textContent = c.nombre;
-    opt.dataset.ip = c.ip || "";
-    select.appendChild(opt);
-  });
-  if (actual && lista.some(c => c.id === actual)) select.value = actual;
-  else if (q && lista.length === 1) { select.value = lista[0].id; onClienteChange(); }
+  // FilteredSelect (js/ui/filtered-select.js, 2026-09-08): filtra y con UNA
+  // coincidencia auto-selecciona (dispara change → onClienteChange).
+  FilteredSelect.montar({ select: el("cliente"), filtro: el("clienteFiltro"), items: docs,
+    id: (c) => c.id, label: (c) => c.nombre, placeholder: "Seleccione un cliente",
+    opcion: (c, opt) => { opt.dataset.ip = c.ip || ""; } });
 }
 
 async function cargarIPs() {

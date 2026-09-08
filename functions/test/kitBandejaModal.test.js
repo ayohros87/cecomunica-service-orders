@@ -129,6 +129,53 @@ test("K7 · la cola de Conflictos vive una sola vez (ConflictosPoolService)", ()
   }
 });
 
+test("K8 · F3: una identidad de serial, un picker, un combo y un select filtrado", () => {
+  // Serial.norm es la única regla en el navegador; nadie conserva su copia.
+  const serial = leer("public", "js", "core", "serial.js");
+  assert.match(serial, /window\.Serial/);
+  for (const f of [["public", "js", "services", "equiposPoolService.js"], ["public", "js", "services", "contratosService.js"],
+    ["public", "js", "ui", "asignador-seriales.js"], ["public", "js", "pages", "almacen-asignar.js"],
+    ["public", "js", "pages", "ordenes-render.js"], ["public", "js", "pages", "ordenes-equipos.js"], ["public", "js", "pages", "contratos-seriales-cambio.js"]]) {
+    const src = sinComentarios(leer(...f));
+    assert.ok(!/toUpperCase\(\)\.replace\(\/\[\^A-Z0-9\]\/g/.test(src), `${f.at(-1)}: conserva una copia de la normalización de serial`);
+    assert.ok(!/toLowerCase\(\)\.replace\(\/\[\^a-z0-9\]\/g/.test(src), `${f.at(-1)}: normaliza en minúsculas (divergente)`);
+    assert.ok(/Serial\.(norm|clave|valido)\(/.test(src), `${f.at(-1)}: debe usar Serial`);
+  }
+  // Toda página que carga los servicios de seriales carga core/serial.js antes.
+  const fs2 = require("node:fs"), path2 = require("node:path");
+  const htmls = [];
+  (function walk(d) { for (const e of fs2.readdirSync(d, { withFileTypes: true })) { const p = path2.join(d, e.name);
+    if (e.isDirectory()) { if (!/vendor|node_modules/.test(e.name)) walk(p); } else if (e.name.endsWith(".html")) htmls.push(p); } })(path2.join(RAIZ, "public"));
+  for (const h of htmls) {
+    const s = fs2.readFileSync(h, "utf8");
+    if (!/services\/(equiposPoolService|contratosService)\.js/.test(s)) continue;
+    const iSerial = s.indexOf("core/serial.js"), iSvc = s.search(/services\/(equiposPoolService|contratosService)\.js/);
+    assert.ok(iSerial >= 0 && iSerial < iSvc, `${path2.relative(RAIZ, h)}: core/serial.js debe ir antes de los servicios de seriales`);
+  }
+  // EntityPicker: el picker del estante y el cambio de serial ya no arman su lista.
+  assert.match(leer("public", "js", "ui", "entity-picker.js"), /Modal\.sheet\(/);
+  for (const f of [["public", "js", "ui", "asignador-seriales.js"], ["public", "js", "pages", "contratos-seriales-cambio.js"]]) {
+    const src = sinComentarios(leer(...f));
+    assert.ok(/EntityPicker\.abrir\(/.test(src), `${f.at(-1)}: usa EntityPicker`);
+    assert.ok(!/pp-check|scmb-check/.test(src), `${f.at(-1)}: no debe pintar su propia lista de checkboxes`);
+  }
+  // EntityCombo: cuatro combos de cliente sobre uno.
+  for (const f of [["public", "js", "pages", "cot-editor-state.js"], ["public", "js", "pages", "nc-combo.js"],
+    ["public", "js", "ui", "asistente-venta.js"], ["public", "js", "pages", "vendedores-batch.js"]]) {
+    const src = sinComentarios(leer(...f));
+    assert.ok(/EntityCombo\.(montar|filtrar)\(/.test(src), `${f.at(-1)}: usa EntityCombo`);
+    assert.ok(!/suggest-list|class="combo-item/.test(src), `${f.at(-1)}: no debe pintar su propia lista`);
+  }
+  const css = leer("public", "css", "ceco-ui.css");
+  assert.equal((css.match(/^\.combo-list\s*\{/gm) || []).length, 1, ".combo-list debe definirse una sola vez en ceco-ui.css");
+  // FilteredSelect: tres copias del filtro con auto-selección sobre una.
+  for (const f of [["public", "js", "pages", "nueva-orden.js"], ["public", "js", "pages", "poc-nueva-consola.js"], ["public", "js", "ui", "asistente-recibir.js"]]) {
+    const src = sinComentarios(leer(...f));
+    assert.ok(/FilteredSelect\.montar\(/.test(src), `${f.at(-1)}: usa FilteredSelect`);
+    assert.ok(!/lista\.length === 1\)/.test(src), `${f.at(-1)}: conserva su copia del auto-select`);
+  }
+});
+
 test("K5 · Modal.sheet resuelve con la acción del botón y respeta onAction=false", async () => {
   // DOM mínimo para modal.js: createElement con innerHTML, querySelector
   // sobre botones marcados con data-sheet-action.

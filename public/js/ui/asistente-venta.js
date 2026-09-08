@@ -99,48 +99,29 @@ window.AsistenteVenta = {
     return this._clientesCache;
   },
 
-  sugerirCliente() {
-    this._clienteSel = null; // editar el texto invalida la selección previa
-    const cont  = this._el?.querySelector('#asvClienteSugs');
+  // Combo de cliente (EntityCombo adoptando el input #asvCliente, 2026-09-08).
+  // Con cero coincidencias se relee del servidor UNA vez por apertura antes
+  // de decir que no existe — es la diferencia entre facturar y no poder.
+  async _montarCombo() {
     const input = this._el?.querySelector('#asvCliente');
-    if (!cont || !input) return;
-    cont.innerHTML = '';
-    const texto = (input.value || '').trim();
-    if (texto.length < 2) return;
-    clearTimeout(this._cliTimer);
-    this._cliTimer = setTimeout(async () => {
-      try { await this._cargarClientesCache(); } catch (e) { console.error('Error al cargar clientes:', e); return; }
-      const needle  = FMT.normalize(texto);
-      const filtrar = () => this._clientesCache.filter(c => c.norm.includes(needle));
-      // Cero coincidencias puede ser un cliente creado después de que se llenó
-      // la caché. Se relee del servidor UNA vez por apertura antes de decir que
-      // no existe — es la diferencia entre facturar y no poder facturar.
-      if (!filtrar().length && !this._cliRefrescado) {
-        this._cliRefrescado = true;
-        try { await this._cargarClientesCache(true); } catch (e) { console.error('Error al refrescar clientes:', e); }
-      }
-      const matches = filtrar()
-        .map(c => ({ ...c, pos: c.norm.indexOf(needle) }))
-        .sort((a, b) => a.pos !== b.pos ? a.pos - b.pos
-          : a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
-        .slice(0, 30);
-      cont.innerHTML = '';
-      if (!matches.length) return;
-      const ul = document.createElement('ul');
-      ul.className = 'suggest-list';
-      matches.forEach(m => {
-        const li = document.createElement('li');
-        li.className = 'suggest-item';
-        li.textContent = m.nombre;
-        li.onclick = () => {
-          input.value = m.nombre;
-          this._clienteSel = { id: m.id, nombre: m.nombre };
-          cont.innerHTML = '';
-        };
-        ul.appendChild(li);
-      });
-      cont.appendChild(ul);
-    }, 200);
+    if (!input || typeof EntityCombo === 'undefined') return;
+    try { await this._cargarClientesCache(); } catch (e) { console.error('Error al cargar clientes:', e); }
+    const combo = EntityCombo.montar(null, {
+      input,
+      items: this._clientesCache || [],
+      id: (c) => c.id, label: (c) => c.nombre, campos: (c) => [c.nombre],
+      limite: 30,
+      vacio: (q) => {
+        if (!this._cliRefrescado && q && q.trim().length >= 2) {
+          this._cliRefrescado = true;
+          this._cargarClientesCache(true).then(() => combo.setItems(this._clientesCache || [])).catch(() => {});
+          return '<div class="combo-empty">Buscando en el servidor…</div>';
+        }
+        return '<div class="combo-empty">No hay un cliente con ese nombre. Puedes registrar la venta por excepción.</div>';
+      },
+      onSelect: (id, c) => { this._clienteSel = c ? { id: c.id, nombre: c.nombre } : null; },
+    });
+    this._combo = combo;
   },
 
   async guardar() {
@@ -310,27 +291,9 @@ window.AsistenteVenta = {
   },
 
   // ── Overlay propio (patrón equipo-ficha._render) ─────────────────────
-  // El desplegable de sugerencias venía del CSS local de equipos.html; ahora
-  // lo trae el componente, acotado a su overlay para no pisar otras páginas.
-  _injectCss() {
-    if (document.getElementById('asistenteVentaCss')) return;
-    const st = document.createElement('style');
-    st.id = 'asistenteVentaCss';
-    st.textContent = `
-      #asistenteVentaOverlay .suggest-list {
-        position: absolute; top: 100%; left: 0; right: 0;
-        background: var(--surface-card); border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-md); box-shadow: var(--shadow-md);
-        padding: 6px; margin: 4px 0 0; list-style: none;
-        max-height: 220px; overflow-y: auto; z-index: 2000;
-      }
-      #asistenteVentaOverlay .suggest-item { padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; }
-      #asistenteVentaOverlay .suggest-item:hover { background: var(--surface-sunken); color: var(--accent); }`;
-    document.head.appendChild(st);
-  },
-
+  // El desplegable del cliente es .combo-list del kit (EntityCombo): sin CSS
+  // propio.
   _render() {
-    this._injectCss();
     document.getElementById('asistenteVentaOverlay')?.remove();
     const overlay = document.createElement('div');
     overlay.id = 'asistenteVentaOverlay';
@@ -356,9 +319,10 @@ window.AsistenteVenta = {
           <div style="display:flex; gap:var(--sp-3);">
             <div class="form-field" style="flex:2;">
               <label class="form-label" for="asvCliente">Cliente (de la factura)</label>
-              <input class="form-input" id="asvCliente" type="text" placeholder="Escribe para buscar el cliente…"
-                     autocomplete="off">
-              <div id="asvClienteSugs" style="position:relative;"></div>
+              <div style="position:relative;">
+                <input class="form-input" id="asvCliente" type="text" placeholder="Escribe para buscar el cliente…"
+                       autocomplete="off">
+              </div>
               <span class="form-hint">Elígelo de la lista. Si no existe en la app, la venta se registra por excepción.</span>
             </div>
             <div class="form-field" style="flex:1.2;">
@@ -387,7 +351,7 @@ window.AsistenteVenta = {
     document.body.style.overflow = 'hidden';
     this._el = overlay;
 
-    overlay.querySelector('#asvCliente').addEventListener('input', () => this.sugerirCliente());
+    this._montarCombo();
     overlay.querySelector('#asvSeriales').addEventListener('input', () => this._actualizarContador());
     overlay.querySelector('#asvBtnGuardar').addEventListener('click', () => this.guardar());
     if (typeof lucide !== 'undefined') lucide.createIcons();

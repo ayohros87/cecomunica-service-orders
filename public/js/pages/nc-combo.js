@@ -1,11 +1,13 @@
-﻿// @ts-nocheck
-// nuevo-contrato client combobox — search, recents, keyboard navigation
+// @ts-nocheck
+// nuevo-contrato · combo de cliente. Desde 2026-09-08 (F3 de "Bandejas y
+// pickers") es EntityCombo (js/ui/entity-combo.js) adoptando el input
+// #clienteCombo y la lista #clienteList: búsqueda remota por tokens
+// (ClientesService.searchByToken + searchByPrefix), recientes con la caja
+// vacía, "Crear cliente" cuando no hay coincidencias y teclado completo. Aquí
+// quedan solo los efectos de elegir un cliente sobre el formulario.
 window.NCCombo = {
-  idx:              -1,
-  items:            [],
-  currentQuery:     '',
-  currentQueryParts: [],
-  RECENTS_KEY:      'clientes_recent_v1',
+  RECENTS_KEY: 'clientes_recent_v1',
+  _combo: null,
 
   renderInfoCliente(id) {
     const c    = NC.listaClientes[id];
@@ -17,40 +19,6 @@ window.NCCombo = {
     ` : '';
     document.getElementById('infoCliente').innerHTML = html;
     document.getElementById('btnEditarCliente').disabled = !id;
-  },
-
-  highlightQuery(text) {
-    if (!text) return '';
-    if (!this.currentQueryParts.length) return NC.escapeHtml(text);
-    let out = text;
-    this.currentQueryParts.forEach(t => {
-      if (!t) return;
-      const re = new RegExp(`(${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig');
-      out = out.replace(re, '<mark>$1</mark>');
-    });
-    return out;
-  },
-
-  showLoading() {
-    const $list = document.getElementById('clienteList');
-    $list.innerHTML = `<div class="combo-empty">Buscando…</div>`;
-    $list.hidden = false;
-  },
-
-  showEmpty() {
-    const $list  = document.getElementById('clienteList');
-    const $combo = document.getElementById('clienteCombo');
-    const propuesta = NC.escapeHtml(($combo.value || '').trim());
-    $list.innerHTML = `
-      <div class="combo-empty">
-        Sin resultados.<br>
-        <button type="button" class="btn btn-pill" id="btnCrearDesdeCombo">
-          ➕ Crear cliente${propuesta ? ` "${propuesta}"` : ''}
-        </button>
-      </div>`;
-    $list.hidden = false;
-    const $btn = document.getElementById('btnCrearDesdeCombo');
-    if ($btn) $btn.onclick = () => window.open('../contratos/nuevo-cliente.html?redirect=true', '_blank');
   },
 
   loadRecent() {
@@ -65,49 +33,29 @@ window.NCCombo = {
     localStorage.setItem(this.RECENTS_KEY, JSON.stringify(rec.slice(0, 5)));
   },
 
-  renderRecent() {
-    const $list = document.getElementById('clienteList');
-    const rec   = this.loadRecent();
-    if (!rec.length) { $list.hidden = true; return; }
-    $list.innerHTML = '';
-    const self = this;
-    rec.forEach((r, i) => {
-      const div       = document.createElement('div');
-      div.className   = 'combo-item' + (i === 0 ? ' active' : '');
-      div.dataset.id  = r.id;
-      div.innerHTML   = `
-        ${NC.escapeHtml(r.nombre || '(sin nombre)')}
-        <span class="combo-sub">
-          ${NC.escapeHtml((r.ruc || '') + (r.dv ? ' - DV' + r.dv : ''))} · reciente
-        </span>`;
-      div.onclick = () => self.selectCliente(r.id, true);
-      $list.appendChild(div);
+  // Búsqueda remota: tokens contra searchTokens (o el nombre normalizado) y,
+  // sin resultados, prefijo.
+  async buscar(text) {
+    const _norm = s => FMT.normalize(s);
+    const parts = _norm(text).split(/[^a-z0-9]+/).filter(Boolean);
+    if (!parts.length) return [];
+    const rawDocs = await ClientesService.searchByToken(parts[0], { limit: 50 });
+    const items = [];
+    NC.listaClientes = {};
+    rawDocs.forEach(c => {
+      const hasTokens = Array.isArray(c.searchTokens) && c.searchTokens.length;
+      const pass = hasTokens
+        ? parts.every(t => c.searchTokens.includes(t))
+        : parts.every(t => _norm(c.nombre || '').includes(t));
+      if (pass) { NC.listaClientes[c.id] = c; items.push(c); }
     });
-    this.items  = rec.map(r => ({ id: r.id, d: r }));
-    this.idx    = 0;
-    $list.hidden = false;
-  },
-
-  renderCombo(items) {
-    const $list = document.getElementById('clienteList');
-    this.items  = items;
-    this.idx    = items.length ? 0 : -1;
-    $list.innerHTML = '';
-    if (!items.length) { this.showEmpty(); return; }
-    const self = this;
-    items.forEach(({ id, d }, i) => {
-      const div      = document.createElement('div');
-      div.className  = 'combo-item' + (i === this.idx ? ' active' : '');
-      div.dataset.id = id;
-      div.innerHTML  = `
-        ${self.highlightQuery(d.nombre || '(sin nombre)')}
-        <span class="combo-sub">
-          ${d.ruc || ''}${d.dv ? ' - DV' + d.dv : ''} ${d.representante ? '· ' + d.representante : ''}
-        </span>`;
-      div.onclick = () => self.selectCliente(id, true);
-      $list.appendChild(div);
-    });
-    $list.hidden = false;
+    if (!items.length) {
+      const prefixDocs = await ClientesService.searchByPrefix(text, 25);
+      prefixDocs.forEach(d => {
+        if (_norm(d.nombre || '').includes(_norm(text))) { NC.listaClientes[d.id] = d; items.push(d); }
+      });
+    }
+    return items;
   },
 
   async selectCliente(id, close = true) {
@@ -122,7 +70,6 @@ window.NCCombo = {
     document.getElementById('cliente').value      = id;
     document.getElementById('clienteCombo').value = d.nombre || '';
     this.renderInfoCliente(id);
-    if (close) document.getElementById('clienteList').hidden = true;
     this.saveRecent(id);
     const selItbms = document.getElementById('itbms_aplica');
     if (selItbms) {
@@ -138,99 +85,43 @@ window.NCCombo = {
     if ($btnGuardar) { $btnGuardar.disabled = false; $btnGuardar.title = ''; }
   },
 
-  updateActive() {
-    document.getElementById('clienteList').querySelectorAll('.combo-item')
-      .forEach((n, i) => n.classList.toggle('active', i === this.idx));
-  },
-
   init() {
     const self = this;
-
-    // debounce lives here — only used by doSearch
-    const _deb = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
-    const _norm = s => FMT.normalize(s);
-    const _tokens = q => _norm(q).split(/[^a-z0-9]+/).filter(Boolean);
-
-    this.doSearch = _deb(async text => {
-      const parts = _tokens(text);
-      self.currentQuery      = text;
-      self.currentQueryParts = parts;
-
-      if (parts.length < 1) { document.getElementById('clienteList').hidden = true; return; }
-      self.showLoading();
-
-      const rawDocs = await ClientesService.searchByToken(parts[0], { limit: 50 });
-      const items   = [];
-      NC.listaClientes = {};
-
-      rawDocs.forEach(c => {
-        const hasTokens = Array.isArray(c.searchTokens) && c.searchTokens.length;
-        const pass = hasTokens
-          ? parts.every(t => c.searchTokens.includes(t))
-          : parts.every(t => _norm(c.nombre || '').includes(t));
-        if (pass) { NC.listaClientes[c.id] = c; items.push({ id: c.id, d: c }); }
-      });
-
-      if (items.length === 0) {
-        const prefixDocs = await ClientesService.searchByPrefix(text, 25);
-        prefixDocs.forEach(d => {
-          if (_norm(d.nombre || '').includes(_norm(text))) {
-            NC.listaClientes[d.id] = d;
-            items.push({ id: d.id, d });
-          }
-        });
-      }
-
-      if (items.length === 0) self.showEmpty();
-      else self.renderCombo(items);
-    }, 180);
-
     const $combo   = document.getElementById('clienteCombo');
     const $hidden  = document.getElementById('cliente');
     const $list    = document.getElementById('clienteList');
     const $btnEdit = document.getElementById('btnEditarCliente');
     const $btnClr  = document.getElementById('btnClearCliente');
 
-    $combo.addEventListener('focus', () => {
-      if (!$hidden.value && !$combo.value.trim()) self.renderRecent();
+    this._combo = EntityCombo.montar(null, {
+      input: $combo, lista: $list,
+      buscar: (q) => self.buscar(q),
+      recientes: () => self.loadRecent().map(r => ({ id: r.id, nombre: r.nombre, _reciente: true, ruc: r.ruc, dv: r.dv })),
+      id: (c) => c.id,
+      label: (c) => c.nombre || '(sin nombre)',
+      sub: (c) => `${c.ruc || ''}${c.dv ? ' - DV' + c.dv : ''}${c.representante ? ' · ' + c.representante : ''}${c._reciente ? ' · reciente' : ''}`,
+      limite: 50,
+      vacio: (q) => {
+        const propuesta = NC.escapeHtml((q || '').trim());
+        return `<div class="combo-empty">Sin resultados.<br>
+          <button type="button" class="btn btn-pill" data-crear-cliente>➕ Crear cliente${propuesta ? ` "${propuesta}"` : ''}</button></div>`;
+      },
+      onSelect: (id) => {
+        if (id) { self.selectCliente(id, true); return; }
+        // Escribir invalida la selección previa.
+        $hidden.value = '';
+        $btnEdit.disabled = true;
+        self.renderInfoCliente(null);
+      },
     });
-
-    $combo.addEventListener('input', e => {
-      const v = e.target.value;
-      $hidden.value = '';
-      $btnEdit.disabled = true;
-      self.renderInfoCliente(null);
-      if (v.trim().length < 2) { $list.hidden = true; return; }
-      self.doSearch(v);
-    });
-
-    $combo.addEventListener('keydown', e => {
-      if ($list.hidden) return;
-      const max  = self.items.length - 1;
-      const jump = 5;
-      switch (e.key) {
-        case 'ArrowDown': e.preventDefault(); self.idx = Math.min(max, self.idx + 1); self.updateActive(); break;
-        case 'ArrowUp':   e.preventDefault(); self.idx = Math.max(0,   self.idx - 1); self.updateActive(); break;
-        case 'PageDown':  e.preventDefault(); self.idx = Math.min(max, self.idx + jump); self.updateActive(); break;
-        case 'PageUp':    e.preventDefault(); self.idx = Math.max(0,   self.idx - jump); self.updateActive(); break;
-        case 'Home':      e.preventDefault(); self.idx = 0;   self.updateActive(); break;
-        case 'End':       e.preventDefault(); self.idx = max; self.updateActive(); break;
-        case 'Enter':
-          e.preventDefault();
-          if (self.idx >= 0 && self.idx < self.items.length) self.selectCliente(self.items[self.idx].id, true);
-          break;
-        case 'Escape': $list.hidden = true; break;
-      }
-    });
-
-    document.addEventListener('click', e => {
-      if (!e.target.closest('.combobox')) $list.hidden = true;
+    $list.addEventListener('mousedown', (e) => {
+      if (e.target.closest('[data-crear-cliente]')) { e.preventDefault(); window.open('../contratos/nuevo-cliente.html?redirect=true', '_blank'); }
     });
 
     $btnClr.addEventListener('click', () => {
-      $hidden.value = ''; $combo.value = '';
+      self._combo.clear();
+      $hidden.value = '';
       self.renderInfoCliente(null);
-      $list.hidden = true;
       $combo.focus();
       NCForm.updateContratoBadges();
       const $btnGuardar = document.getElementById('btnGuardar');

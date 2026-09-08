@@ -20,7 +20,7 @@ function cargar() {
   const raiz = path.join(__dirname, "..", "..");
   const sandbox = { window: {}, firebase: {}, console, document: undefined };
   vm.createContext(sandbox);
-  for (const rel of [["public", "js", "services", "equiposPoolService.js"],
+  for (const rel of [["public", "js", "core", "serial.js"], ["public", "js", "services", "equiposPoolService.js"],
                      ["public", "js", "domain", "serialPatron.js"],
                      ["public", "js", "ui", "asistente-importar.js"]]) {
     vm.runInContext(fs.readFileSync(path.join(raiz, ...rel), "utf8"), sandbox,

@@ -28,6 +28,8 @@ const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
 function cargarServicio() {
   const ctx = { firebase: { firestore: { FieldValue: {} } }, console, window: {} };
   vm.createContext(ctx);
+  vm.runInContext(leer("public", "js", "core", "serial.js"), ctx);
+  ctx.Serial = ctx.window.Serial;
   vm.runInContext(leer("public", "js", "services", "equiposPoolService.js"), ctx);
   return ctx.window.EquiposPoolService;
 }

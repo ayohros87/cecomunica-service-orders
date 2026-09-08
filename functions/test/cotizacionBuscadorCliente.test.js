@@ -44,6 +44,10 @@ function cargarCotState() {
   // El mapa de permisos real: requiereAprobacionPara consulta window.canRole,
   // y el test tiene que ejercitar la matriz de verdad, no una imitación.
   vm.runInContext(leer("public", "js", "core", "roles.js"), ctx);
+  // El combo de cliente es EntityCombo (js/ui/entity-combo.js); cot-editor-state
+  // solo lo adapta a los campos del cliente (razón, RUC, representante).
+  vm.runInContext(leer("public", "js", "ui", "entity-combo.js"), ctx);
+  ctx.EntityCombo = ctx.window.EntityCombo;
   vm.runInContext(leer("public", "js", "pages", "cot-editor-state.js"), ctx);
   return ctx.window.CotState;
 }
@@ -144,7 +148,10 @@ test("B1 · las tres pantallas montan el combo, y teclear en él no ensucia el b
   }
 
   // El panel recorta con overflow:hidden; el combo tiene que destaparlo.
-  assert.match(estado, /cc-panel-combo-abierto/, "el combo debe destapar el panel al abrir");
+  // (Desde 2026-09-08 el combo es EntityCombo; cot-editor-state solo lo adapta.)
+  const combo = leer("public", "js", "ui", "entity-combo.js");
+  assert.match(estado, /EntityCombo\.montar\(/, "cot-editor-state debe montar EntityCombo");
+  assert.match(combo, /cc-panel-combo-abierto/, "el combo debe destapar el panel al abrir");
   assert.match(
     leer("public", "css", "cotizaciones-kit.css"),
     /\.cc-panel\.cc-panel-combo-abierto \{ overflow: visible; \}/,
@@ -153,7 +160,7 @@ test("B1 · las tres pantallas montan el combo, y teclear en él no ensucia el b
 
   // Teclear en el buscador es navegar, no editar: el aviso de "cambios sin
   // guardar" no puede dispararse por explorar la lista.
-  assert.match(estado, /data-combo-busqueda="1"/, "el input del combo debe ser identificable");
+  assert.match(combo, /data-combo-busqueda="1"/, "el input del combo debe ser identificable");
   assert.match(editor, /dataset\?\.comboBusqueda/, "el marcador de sucio debe ignorar el buscador");
 });
 

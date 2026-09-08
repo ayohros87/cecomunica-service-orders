@@ -319,37 +319,14 @@
     // Catálogo en memoria + select filtrable (auditoría A6): ~2,000 opciones
     // en un select nativo sin búsqueda era el punto de captura más caro de
     // equivocarse — el cliente elegido contamina contrato, entrega y correo.
-    let _clientesDocs = [];
-    const _normTxt = (s) => String(s || '').toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '');
-
-    function pintarOpcionesClientes(filtro = '') {
-      const q = _normTxt(filtro).trim();
-      const actual = clienteSelect.value;
-      const lista = q ? _clientesDocs.filter(c => _normTxt(c.nombre).includes(q)) : _clientesDocs;
-      clienteSelect.innerHTML = '<option value="">Seleccione un cliente</option>';
-      lista.forEach(c => {
-        const option = document.createElement("option");
-        option.value = c.id;
-        option.textContent = c.nombre;
-        clienteSelect.appendChild(option);
-      });
-      if (actual && lista.some(c => c.id === actual)) {
-        clienteSelect.value = actual;
-      } else if (q && lista.length === 1) {
-        // Un único match → se auto-selecciona y dispara el change (carga el
-        // vendedor asignado y los contratos del cliente, como un click).
-        clienteSelect.value = lista[0].id;
-        clienteSelect.dispatchEvent(new Event('change'));
-      }
-    }
+    // FilteredSelect (js/ui/filtered-select.js, 2026-09-08): la caja filtra
+    // las opciones y con UNA sola la auto-selecciona y dispara change.
+    let _clientesFS = null;
 
     async function cargarClientes() {
   const { docs } = await ClientesService.listClientes({ limit: 2000 });
-  _clientesDocs = docs;
-  pintarOpcionesClientes();
-  const filtroInput = document.getElementById('clienteFiltro');
-  if (filtroInput) filtroInput.addEventListener('input', (e) => pintarOpcionesClientes(e.target.value));
+  _clientesFS = FilteredSelect.montar({ select: clienteSelect, filtro: 'clienteFiltro', items: docs,
+    id: (c) => c.id, label: (c) => c.nombre, placeholder: 'Seleccione un cliente' });
   clienteSelect.addEventListener("change", async () => {
   const clienteId = clienteSelect.value;
   if (!clienteId) return;

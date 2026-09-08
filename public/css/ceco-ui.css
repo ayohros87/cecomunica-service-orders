@@ -1389,15 +1389,9 @@ tr.selected{ outline:2px solid #c7d2fe; background:#f8fbff; }
 .combobox { position: relative; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; }
 .combobox > #clienteCombo { width: 100%; }
 .combo-actions { display:flex; gap:6px; }
-.combo-list {
-  position: absolute; top: 100%; left: 0; right: 90px;
-  background: #fff; border: 1px solid #ddd; max-height: 240px;
-  overflow-y: auto; z-index: 1000; border-radius: 6px; margin-top: 4px; border-color: var(--line);
-}
-.combo-item { padding: 8px 10px; cursor: pointer; }
-.combo-item:hover, .combo-item.active { background: #f0f4ff; }
-.combo-empty { padding: 8px 10px; color: #777; }
-.combo-sub { display:block; font-size: 12px; color:#666; }
+/* .combo-list/.combo-item/.combo-empty/.combo-sub viven una sola vez en el
+   kit de diseño (más abajo, "Combo"); aquí había una copia vieja con
+   colores fijos — retirada 2026-09-08. */
 .btn.sm { padding: 6px 10px; font-size: 12.5px; }
 .table-actions { display: flex; gap: 6px; justify-content: flex-end; }
 th.actions, td.actions { white-space: nowrap; text-align: right; }

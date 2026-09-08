@@ -134,6 +134,8 @@ test("C9 · la normalización es la MISMA que la del pool", () => {
   const { svc } = cargar();
   const poolCtx = { firebase: { firestore: { FieldValue: {} } }, console, window: {} };
   vm.createContext(poolCtx);
+  vm.runInContext(leer("public", "js", "core", "serial.js"), poolCtx);
+  poolCtx.Serial = poolCtx.window.Serial;
   vm.runInContext(leer("public", "js", "services", "equiposPoolService.js"), poolCtx);
   const pool = poolCtx.window.EquiposPoolService;
   for (const s of [" nx-420 1234 ", "abc123", "A-1_B/2", "25725A0542"]) {

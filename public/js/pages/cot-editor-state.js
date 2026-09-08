@@ -518,179 +518,34 @@
   }
 
   // ── Combo de cliente buscable ─────────────────────────────────────────────
-  // El <select> nativo NO filtra: solo hace type-ahead por prefijo con un
-  // temporizador de ~1 s entre teclas. Al escribir "Hotel Gamboa" el navegador
-  // salta a la primera "H…", el temporizador vence a media palabra y arranca
-  // una búsqueda nueva con la letra suelta — que es exactamente el "a la
-  // tercera letra deja de filtrar y se pierde la búsqueda" que reportó ventas.
-  // Este combo filtra de verdad: por subcadena, sin acentos, con todas las
-  // palabras en cualquier orden, y también por RUC (imprescindible cuando dos
-  // clientes se llaman igual).
-  const RE_DIACRITICOS = /[\u0300-\u036f]/g;
+  // Desde 2026-09-08 el combo es EntityCombo (js/ui/entity-combo.js): aquí
+  // solo se adapta a los campos del cliente. La regla de búsqueda (todas las
+  // palabras en cualquier orden, sin acentos, RUC y representante como
+  // campos secundarios, palabras cortas solo contra el nombre) vive en el
+  // componente; functions/test/cotizacionBuscadorCliente.test.js la congela.
+  const CAMPOS_CLIENTE = (c) => [c && c.razon, c && c.ruc, c && c.representante];
 
-  function normBusq(s) {
-    return String(s == null ? '' : s)
-      .normalize('NFD').replace(RE_DIACRITICOS, '')
-      .toLowerCase().trim();
-  }
-
-  // Todas las palabras de la consulta deben aparecer en el cliente. El orden no
-  // importa: "gamboa hotel" encuentra "HOTEL GAMBOA RAINFOREST RESORT".
-  // Devuelve { items, total } — `total` es el universo que calzó, `items` el
-  // recorte que se pinta (la lista completa son cientos de clientes).
   function filtrarClientes(clientes, query, { limite = 50 } = {}) {
-    const lista = Array.isArray(clientes) ? clientes : [];
-    const q = normBusq(query);
-    if (!q) return { items: lista.slice(0, limite), total: lista.length, tokens: [] };
-
-    const tokens = q.split(/\s+/).filter(Boolean);
-    const hits = [];
-    for (const c of lista) {
-      const razon = normBusq(c && c.razon);
-      const heno = razon + ' ' + normBusq(c && c.ruc) + ' ' + normBusq(c && c.representante);
-      // Las palabras de 1–2 letras solo valen contra el nombre: si no, la "g"
-      // de "hotel g" calza con el MIGUEL de un representante y ensucia todo.
-      if (!tokens.every((t) => (t.length < 3 ? razon : heno).includes(t))) continue;
-      // Rango: primero el que empieza con lo escrito, luego el que lo contiene
-      // en el nombre, y de último los que solo calzan por RUC o representante.
-      const rango = razon.startsWith(q) ? 0
-        : razon.includes(q) ? 1
-          : razon.includes(tokens[0]) ? 2 : 3;
-      hits.push({ c, rango, razon });
-    }
-    hits.sort((a, b) => a.rango - b.rango || a.razon.localeCompare(b.razon, 'es'));
-    return { items: hits.slice(0, limite).map((h) => h.c), total: hits.length, tokens };
+    return EntityCombo.filtrar(clientes, query, { campos: CAMPOS_CLIENTE, limite });
   }
 
-  // Monta el combo dentro de `host` (id o elemento). Devuelve una API mínima
-  // para que la pantalla pueda re-sincronizar la selección sin re-montarlo.
+  // Monta el combo dentro de `host` (id o elemento). Devuelve la API mínima
+  // de EntityCombo ({ value, set, focus, input }).
   function mountClienteCombo(host, opts = {}) {
-    const cont = typeof host === 'string' ? document.getElementById(host) : host;
-    if (!cont) return null;
-    const esc = (window.FMT && window.FMT.esc) || String;
-    const clientes = Array.isArray(opts.clientes) ? opts.clientes : [];
-    const limite = opts.limite || 50;
-    const onSelect = typeof opts.onSelect === 'function' ? opts.onSelect : () => {};
-
-    const byId = Object.create(null);
-    clientes.forEach((c) => { if (c && c.id) byId[c.id] = c; });
-
-    let idSel = opts.selectedId || '';
-    let vistos = [];      // clientes actualmente pintados en la lista
-    let idx = -1;         // ítem resaltado con el teclado
-    let abierto = false;
-
-    cont.style.position = 'relative';
-    cont.innerHTML = `
-      <input type="text" class="form-input" role="combobox" aria-expanded="false"
-             aria-autocomplete="list" autocomplete="off" spellcheck="false"
-             data-combo-busqueda="1"
-             placeholder="${esc(opts.placeholder || 'Escribe para buscar cliente…')}">
-      <div class="combo-list" role="listbox" hidden></div>
-    `;
-    const inp = cont.querySelector('input');
-    const list = cont.querySelector('.combo-list');
-
-    function etiqueta(id) { return (byId[id] && byId[id].razon) || ''; }
-
-    // Resalta lo escrito sin correr un regex sobre HTML ya escapado: parte el
-    // texto crudo y escapa cada trozo por separado.
-    function resaltar(texto, tokens) {
-      const t = String(texto == null ? '' : texto);
-      if (!tokens || !tokens.length) return esc(t);
-      const re = new RegExp('(' + tokens.map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'ig');
-      return t.split(re).map((trozo, i) => (i % 2 ? `<mark>${esc(trozo)}</mark>` : esc(trozo))).join('');
-    }
-
-    function pintarLista(query) {
-      const { items, total, tokens } = filtrarClientes(clientes, query, { limite });
-      vistos = items;
-      idx = items.length ? 0 : -1;
-      if (!items.length) {
-        list.innerHTML = `<div class="combo-empty">Ningún cliente coincide con “${esc(query)}”.</div>`;
-      } else {
-        // El RUC desempata homónimos: dos "HOTEL LATINO" se distinguen aquí.
-        list.innerHTML = items.map((c, i) => `
-          <div class="combo-item${i === idx ? ' active' : ''}" role="option" data-id="${esc(c.id)}"
-               aria-selected="${c.id === idSel ? 'true' : 'false'}">
-            <span class="combo-item-label">${resaltar(c.razon, tokens)}</span>
-            <span class="combo-sub">RUC ${esc(c.ruc || '—')}${c.representante ? ' · ' + esc(c.representante) : ''}</span>
-          </div>
-        `).join('') + (total > items.length
-          ? `<div class="combo-hint">Mostrando ${items.length} de ${total} · escribe más para afinar</div>`
-          : '');
-      }
-      abrir();
-    }
-
-    // .cc-panel recorta con overflow:hidden — mientras la lista está abierta el
-    // panel tiene que dejarla salir (regla en cotizaciones-kit.css).
-    const panel = cont.closest ? cont.closest('.cc-panel') : null;
-
-    function abrir() {
-      list.hidden = false;
-      abierto = true;
-      inp.setAttribute('aria-expanded', 'true');
-      if (panel) panel.classList.add('cc-panel-combo-abierto');
-    }
-
-    function cerrar() {
-      list.hidden = true;
-      abierto = false;
-      idx = -1;
-      inp.setAttribute('aria-expanded', 'false');
-      if (panel) panel.classList.remove('cc-panel-combo-abierto');
-    }
-
-    // Al salir sin elegir, el texto vuelve al cliente seleccionado: escribir a
-    // medias nunca borra la selección vigente.
-    function restaurar() { inp.value = etiqueta(idSel); }
-
-    function mover(paso) {
-      if (!abierto) { pintarLista(''); return; }
-      if (!vistos.length) return;
-      idx = (idx + paso + vistos.length) % vistos.length;
-      const nodos = list.querySelectorAll('.combo-item');
-      nodos.forEach((n, i) => n.classList.toggle('active', i === idx));
-      if (nodos[idx]) nodos[idx].scrollIntoView({ block: 'nearest' });
-    }
-
-    function elegir(id) {
-      idSel = id || '';
-      restaurar();
-      cerrar();
-      onSelect(idSel, byId[idSel] || null);
-    }
-
-    inp.addEventListener('focus', () => { inp.select(); pintarLista(inp.value === etiqueta(idSel) ? '' : inp.value); });
-    inp.addEventListener('input', () => pintarLista(inp.value));
-    inp.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowDown') { e.preventDefault(); mover(1); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); mover(-1); }
-      else if (e.key === 'Enter') {
-        if (abierto && idx >= 0 && vistos[idx]) { e.preventDefault(); elegir(vistos[idx].id); }
-      } else if (e.key === 'Escape') { restaurar(); cerrar(); }
+    return EntityCombo.montar(host, {
+      items: Array.isArray(opts.clientes) ? opts.clientes : [],
+      id: (c) => c.id,
+      label: (c) => c.razon || '',
+      // El RUC desempata homónimos: dos "HOTEL LATINO" se distinguen aquí.
+      sub: (c) => `RUC ${c.ruc || '—'}${c.representante ? ' · ' + c.representante : ''}`,
+      campos: CAMPOS_CLIENTE,
+      limite: opts.limite || 50,
+      selectedId: opts.selectedId || '',
+      placeholder: opts.placeholder || 'Escribe para buscar cliente…',
+      autoFocus: !!opts.autoFocus,
+      vacio: (q) => `<div class="combo-empty">Ningún cliente coincide con “${(window.FMT && FMT.esc ? FMT.esc(q) : q)}”.</div>`,
+      onSelect: (id, c) => { if (id && typeof opts.onSelect === 'function') opts.onSelect(id, c); },
     });
-    inp.addEventListener('blur', () => {
-      // El mousedown de la lista ya seleccionó; este timeout deja que ocurra.
-      setTimeout(() => { if (abierto) { restaurar(); cerrar(); } }, 150);
-    });
-    list.addEventListener('mousedown', (e) => {
-      const it = e.target.closest('.combo-item');
-      if (!it) return;
-      e.preventDefault();
-      elegir(it.dataset.id);
-    });
-
-    restaurar();
-    if (opts.autoFocus) inp.focus();
-
-    return {
-      get value() { return idSel; },
-      set(id) { idSel = id || ''; restaurar(); },
-      focus() { inp.focus(); },
-      input: inp,
-    };
   }
 
   // ── Modal "Cerrar cotización" ─────────────────────────────────────────────

@@ -329,11 +329,7 @@ const ContratosService = {
   // página no cargó ese servicio; los seriales patológicos que normalizan a
   // vacío conservan una clave propia para no colisionar entre sí.
   _serialKey(s) {
-    const raw = String(s || '').trim();
-    const norm = (typeof EquiposPoolService !== 'undefined')
-      ? EquiposPoolService.normalizarSerial(raw)
-      : raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    return norm || (raw ? `raw:${raw.toLowerCase()}` : '');
+    return Serial.clave(s);
   },
 
   async getModeloPorSerial(contratoId) {

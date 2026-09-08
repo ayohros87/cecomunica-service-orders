@@ -29,6 +29,9 @@ function cargarFrontend(rel, global) {
   const src = fs.readFileSync(path.join(__dirname, "..", "..", "public", "js", ...rel), "utf8");
   const sandbox = { window: {}, firebase: {}, console };
   vm.createContext(sandbox);
+  // Serial.norm (js/core/serial.js) es la regla única: el pool delega en ella.
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "..", "public", "js", "core", "serial.js"), "utf8"), sandbox, { filename: "serial.js" });
+  sandbox.Serial = sandbox.window.Serial;
   vm.runInContext(src, sandbox, { filename: rel[rel.length - 1] });
   return sandbox.window[global];
 }

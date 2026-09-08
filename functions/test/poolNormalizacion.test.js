@@ -31,6 +31,9 @@ function cargarFrontend() {
   );
   const sandbox = { window: {}, firebase: {}, console };
   vm.createContext(sandbox);
+  // La regla vive en js/core/serial.js (Serial.norm); el servicio delega.
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "..", "public", "js", "core", "serial.js"), "utf8"), sandbox, { filename: "serial.js" });
+  sandbox.Serial = sandbox.window.Serial;
   vm.runInContext(src, sandbox, { filename: "equiposPoolService.js" });
   return sandbox.window.EquiposPoolService;
 }

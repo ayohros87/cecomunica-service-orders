@@ -52,17 +52,7 @@
     .badge.info     { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
     .badge.completo { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
 
-    /* Suggestion dropdown */
-    .suggest-list {
-      position: absolute; top: 100%; left: 0; right: 0;
-      background: var(--surface-card); border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md); box-shadow: var(--shadow-md);
-      padding: 6px; margin: 4px 0 0; list-style: none;
-      max-height: 220px; overflow-y: auto; z-index: 2000;
-    }
-    .suggest-item { padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; }
-    .suggest-item:hover,
-    .suggest-item.active { background: var(--surface-sunken); color: var(--accent); }
+    /* El desplegable de clientes es .combo-list del kit (EntityCombo). */
 
     /* .chips-editor y .chip-x los provee el kit (ceco-ui.css) — no duplicar. */
 
@@ -258,7 +248,7 @@
         <div class="form-field">
           <label class="form-label" for="clienteGlobal">Cliente <span class="req"></span></label>
           <div class="vb-input-row">
-            <input class="form-input" type="text" id="clienteGlobal" placeholder="Nombre del cliente" oninput="VB.sugerirClientes()" autocomplete="off">
+            <input class="form-input" type="text" id="clienteGlobal" placeholder="Nombre del cliente" autocomplete="off">
             <button class="btn btn-secondary btn-icon" onclick="VB.buscarGruposCliente()" title="Buscar grupos del cliente"><i data-lucide="search"></i></button>
             <button class="btn btn-ghost btn-icon" type="button" onclick="VB.refrescarClientes()" title="Actualizar lista de clientes"><i data-lucide="refresh-cw"></i></button>
           </div>
@@ -379,7 +369,8 @@
   <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/pocService.js"></script>
   <script defer src="../js/ui/toast.js"></script>
-  <script src="../js/pages/vendedores-batch.js?v=cc13" defer></script>
+  <script defer src="../js/ui/entity-combo.js?v=ec1"></script>
+  <script src="../js/pages/vendedores-batch.js?v=cc14" defer></script>
   <script>
     function cerrarSesion() {
       firebase.auth().signOut().then(() => { window.location.href = '../login.html'; });

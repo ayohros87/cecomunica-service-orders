@@ -24,9 +24,7 @@
 window.AsignadorSeriales = (() => {
 
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
-  const normDefault = (s) => (typeof ContratosService !== 'undefined' && ContratosService._serialKey)
-    ? ContratosService._serialKey(s)
-    : String(s || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const normDefault = (s) => Serial.clave(s);
 
   function crear(opts = {}) {
     const body = opts.body;
@@ -411,106 +409,27 @@ window.AsignadorSeriales = (() => {
         toast('En bodega no hay unidades de estos modelos. Recibe equipos primero.', 'warn');
         return;
       }
-      const titulo = opts.tituloPicker || 'Tomar del pool (bodega)';
-      const seccionesHtml = secciones.map((s, si) => {
-        const filas = s.unidades.map(u => `
-          <label class="pp-item" style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border-subtle,#eee);cursor:pointer;font-size:13px;">
-            <input type="checkbox" class="pp-check" value="${esc(u.serial || u.serial_norm)}" data-grupo="${si}" style="width:16px;height:16px;">
-            <span class="pp-serial" style="font-family:var(--font-mono,monospace);">${esc(u.serial || u.serial_norm)}</span>
-            <span style="margin-left:auto;color:var(--fg-3);font-size:12px;">${u.condicion === 'reuso' ? 'Refurbished' : 'Nuevo'}</span>
-          </label>`).join('');
-        return `
-          <div class="pp-grupo" data-grupo="${si}" style="margin-bottom:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0;">
-              <div style="font-weight:600;">${esc(s.modelo)}</div>
-              <div class="pp-progreso" style="color:var(--fg-3);font-size:12px;">0/${s.cupos} · ${s.unidades.length} disponible(s)</div>
-            </div>
-            ${s.unidades.length
-              ? `<div style="border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;overflow:hidden;">${filas}</div>`
-              : `<div style="border:1px dashed var(--border-subtle,#e5e7eb);border-radius:8px;padding:10px;color:var(--fg-3);font-size:13px;">Sin unidades en bodega de este modelo.</div>`}
-          </div>`;
-      }).join('');
-
-      // Hoja del kit (Modal.sheet): el cuerpo se cablea en onMount; los
-      // botones que no cierran devuelven false en onAction.
-      let overlay = null;
-      const refrescarConteos = () => {
-        let total = 0;
-        secciones.forEach((s, si) => {
-          const n = overlay.querySelectorAll(`.pp-check[data-grupo="${si}"]:checked`).length;
-          total += n;
-          const el = overlay.querySelector(`.pp-grupo[data-grupo="${si}"] .pp-progreso`);
-          if (el) el.textContent = `${n}/${s.cupos} · ${s.unidades.length} disponible(s)`;
+      // EntityPicker (js/ui/entity-picker.js, 2026-09-08): lista agrupada
+      // por modelo con buscador, tope de cupos por grupo y selección
+      // automática (FIFO por ingreso a bodega). Devuelve la selección; el
+      // llenado del formulario sigue siendo jalarItems.
+      EntityPicker.abrir({
+        titulo: opts.tituloPicker || 'Tomar del pool (bodega)', icono: 'scan-barcode', size: 'lg',
+        descripcion: 'Marca las unidades que vas a asignar, o usa <b>Selección automática</b> (toma las más antiguas en bodega por modelo).',
+        placeholderBuscar: 'Filtrar por serial…', normalizar: (s) => norm(s),
+        grupos: secciones.map((s, si) => ({
+          id: si, titulo: s.modelo, cupos: s.cupos,
+          items: s.unidades.map(u => ({ id: u.serial || u.serial_norm, label: u.serial || u.serial_norm, sub: u.condicion === 'reuso' ? 'Refurbished' : 'Nuevo' })),
+        })),
+        vacioGrupo: 'Sin unidades en bodega de este modelo.',
+        autoSeleccion: true, confirmar: 'Asignar seleccionados', iconoConfirmar: 'check',
+      }).then((r) => {
+        if (!r) return;
+        const items = r.seleccion.map(x => {
+          const s = secciones[Number(x.grupo)] || {};
+          return { serial: x.id, modelo: s.modelo || '', modeloId: s.modeloId || '' };
         });
-        const c = overlay.querySelector('#ppCount');
-        if (c) c.textContent = total ? `${total} unidad(es) seleccionada(s)` : 'Sin selección';
-      };
-      Modal.sheet({
-        title: titulo, icon: 'scan-barcode', size: 'lg',
-        html: `
-          <p style="margin:0 0 10px;font-size:13px;color:var(--fg-3);">
-            Marca las unidades que vas a asignar, o usa <b>Selección automática</b>
-            (toma las más antiguas en bodega por modelo).
-          </p>
-          <input type="search" id="ppBuscar" class="form-input" placeholder="Filtrar por serial…" style="width:100%;margin-bottom:8px;height:36px;font-family:var(--font-mono,monospace);">
-          <div id="ppCount" style="position:sticky;top:-24px;z-index:2;margin:0 -24px 10px;padding:6px 24px;background:var(--surface-card,#fff);border-bottom:1px solid var(--border-subtle,#EEF2F6);font-size:13px;font-weight:600;color:var(--fg-2);">Sin selección</div>
-          ${seccionesHtml}`,
-        buttons: [
-          { action: 'auto', label: 'Selección automática', icon: 'list-checks' },
-          { action: 'cerrar', label: 'Cancelar' },
-          { action: 'aplicar', label: 'Asignar seleccionados', primary: true, icon: 'check' },
-        ],
-        onMount: (root) => {
-          overlay = root;
-          root.id = 'overlayPoolPicker';
-          // El contador va arriba de la lista (pegajoso al scroll), no en el
-          // pie: con tres botones el pie se partía en dos filas a 720 px.
-          root.addEventListener('change', (e) => {
-            const chk = e.target;
-            if (!chk.classList || !chk.classList.contains('pp-check')) return;
-            const si = Number(chk.getAttribute('data-grupo'));
-            const s = secciones[si];
-            if (chk.checked && s && root.querySelectorAll(`.pp-check[data-grupo="${si}"]:checked`).length > s.cupos) {
-              chk.checked = false;
-              toast(`${s.modelo}: solo hay ${s.cupos} cupo(s) vacío(s).`, 'warn');
-            }
-            refrescarConteos();
-          });
-          root.querySelector('#ppBuscar').addEventListener('input', (e) => {
-            const q = norm(e.target.value);
-            root.querySelectorAll('.pp-item').forEach(item => {
-              const serial = norm(item.querySelector('.pp-serial')?.textContent);
-              item.style.display = (!q || serial.includes(q)) ? '' : 'none';
-            });
-          });
-          refrescarConteos();
-        },
-        onAction: (act, root) => {
-          if (act === 'cerrar') return null;
-          if (act === 'auto') {
-            secciones.forEach((s, si) => {
-              const checks = [...root.querySelectorAll(`.pp-check[data-grupo="${si}"]`)];
-              let n = checks.filter(c => c.checked).length;
-              for (const c of checks) {
-                if (n >= s.cupos) break;
-                if (!c.checked) { c.checked = true; n++; }
-              }
-            });
-            refrescarConteos();
-            return false;
-          }
-          if (act === 'aplicar') {
-            const items = [...root.querySelectorAll('.pp-check:checked')].map(c => {
-              const s = secciones[Number(c.getAttribute('data-grupo'))] || {};
-              return { serial: c.value, modelo: s.modelo || '', modeloId: s.modeloId || '' };
-            });
-            if (!items.length) { toast('Marca al menos una unidad para asignar.', 'warn'); return false; }
-            // jalarItems después de cerrar: el toast y el refresh van sobre la página.
-            setTimeout(() => jalarItems(items, opts.origenPicker || 'el pool de bodega'), 0);
-            return 'aplicar';
-          }
-          return false;
-        },
+        jalarItems(items, opts.origenPicker || 'el pool de bodega');
       });
     }
 

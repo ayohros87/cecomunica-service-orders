@@ -24,9 +24,7 @@ window.AlmacenAsignar = (() => {
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
   const $ = (id) => document.getElementById(id);
-  const norm = (s) => (typeof ContratosService !== 'undefined' && ContratosService._serialKey)
-    ? ContratosService._serialKey(s)
-    : EquiposPoolService.normalizarSerial(s);
+  const norm = (s) => Serial.clave(s);
   const db = () => firebase.firestore();
   const toast = (m, k) => { if (window.Toast) Toast.show(m, k); };
 

@@ -250,6 +250,8 @@ test("D7 · la normalización del registro es la MISMA que la del pool", () => {
   const { svc } = cargarDescartados();
   const poolCtx = { firebase: { firestore: { FieldValue: {} } }, console, window: {} };
   vm.createContext(poolCtx);
+  vm.runInContext(leer("public", "js", "core", "serial.js"), poolCtx);
+  poolCtx.Serial = poolCtx.window.Serial;
   vm.runInContext(leer("public", "js", "services", "equiposPoolService.js"), poolCtx);
   const pool = poolCtx.window.EquiposPoolService;
 

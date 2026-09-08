@@ -68,16 +68,16 @@ window.AsistenteRecibir = {
   _pintarOpcionesModelo(filtro = '') {
     const sel = this._el?.querySelector('#asrModelo');
     if (!sel) return;
-    const q = String(filtro || '').toLowerCase().trim();
-    const actual = sel.value;
-    const lista = q ? this._modelos.filter(m => (m.label || '').toLowerCase().includes(q)) : this._modelos;
-    sel.innerHTML = '<option value="">Seleccione…</option>' + lista
-      .map(m => `<option value="${this._esc(m.id)}">${this._esc(m.label)}</option>`).join('');
-    if (actual && lista.some(m => m.id === actual)) sel.value = actual;
-    // Con un único resultado se auto-selecciona: teclear "nx-410" y seguir
-    // directo al textarea de seriales.
-    else if (q && lista.length === 1) sel.value = lista[0].id;
-    else sel.value = '';
+    // FilteredSelect (js/ui/filtered-select.js, 2026-09-08): fila EXACTA del
+    // catálogo (N y R aparte); con un único resultado se auto-selecciona y el
+    // change sincroniza la condición.
+    if (!this._modeloFS) {
+      this._modeloFS = FilteredSelect.montar({ select: sel, filtro: this._el.querySelector('#asrModeloFiltro'),
+        items: this._modelos, id: (m) => m.id, label: (m) => m.label, placeholder: 'Seleccione…' });
+    } else {
+      this._modeloFS.setItems(this._modelos);
+    }
+    if (filtro) this._modeloFS.repintar(filtro);
     this._sincronizarCondicion();
   },
 
@@ -371,9 +371,9 @@ window.AsistenteRecibir = {
     document.body.appendChild(overlay);
     document.body.style.overflow = 'hidden';
     this._el = overlay;
+    this._modeloFS = null;
 
     overlay.querySelector('#asrModelo').addEventListener('change', () => this._sincronizarCondicion());
-    overlay.querySelector('#asrModeloFiltro').addEventListener('input', (e) => this._pintarOpcionesModelo(e.target.value));
     overlay.querySelector('#asrSeriales').addEventListener('input', () => this._actualizarContador());
     overlay.querySelector('#asrBtnGuardar').addEventListener('click', () => this.guardar());
     this._sincronizarCondicion();
