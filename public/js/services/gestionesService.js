@@ -110,6 +110,10 @@ const GestionesService = {
       deleted: false,
       ...(data.demo ? { demo: data.demo } : {}),
       ...(data.aumento ? { aumento: data.aumento } : {}),
+      // Estampa de regularización (plan 2026-09-08): la gestión nace sobre una
+      // cuenta con deuda → queda dicho en el expediente, el correo y el aviso
+      // a facturación. Nunca bloquea. Lo arma Regularizacion.estampa().
+      ...(data.cuenta_regularizacion ? { cuenta_regularizacion: data.cuenta_regularizacion } : {}),
       ...(data.aprobacion ? { aprobacion: data.aprobacion } : {}),
       // Baja: la penalidad estimada y la fecha global viajan en el MISMO create
       // para que el correo de aprobación (trigger onCreate) ya traiga el desglose.

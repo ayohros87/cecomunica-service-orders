@@ -102,3 +102,13 @@ exports.onFacturacionAvisoWrite       = require("./src/triggers/facturacion/onFa
 // Historial de la ficha del cliente: quién cambió qué (representante, RUC,
 // vendedor…) — diff server-side en clientes/{id}/historial, inmutable por rules
 exports.onClienteHistorial            = require("./src/triggers/clientes/onClienteHistorial");
+// Regularización de cuentas (docs/plans/PLAN_REGULARIZACION_CUENTAS.md): la
+// deuda D1–D7 por cuenta vive en clientes/{id}.regularizacion. Barrido diario
+// 06:50 + barrido de marcadas cada 10 min; los triggers solo marcan.
+const { regularizacionDiaria, regularizacionMarcadas } = require("./src/triggers/scheduled/regularizacionCuentas");
+const { onPoolMarcaRegularizacion, onContratoMarcaRegularizacion, onGestionMarcaRegularizacion } = require("./src/triggers/regularizacion/onMarcaRegularizacion");
+exports.regularizacionDiaria          = regularizacionDiaria;
+exports.regularizacionMarcadas        = regularizacionMarcadas;
+exports.onPoolMarcaRegularizacion     = onPoolMarcaRegularizacion;
+exports.onContratoMarcaRegularizacion = onContratoMarcaRegularizacion;
+exports.onGestionMarcaRegularizacion  = onGestionMarcaRegularizacion;

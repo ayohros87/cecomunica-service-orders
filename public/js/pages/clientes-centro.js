@@ -51,6 +51,12 @@ window.Centro = {
         this.soloActivos = localStorage.getItem('cg_solo_activos') !== '0';
         const chk = document.getElementById('cgSoloActivos');
         if (chk) chk.checked = this.soloActivos;
+        // Bandeja "Cuentas por regularizar" (plan 2026-09-08 §4.6): admin y
+        // gerencia. El vendedor ve las suyas en el inicio y en cada ficha.
+        if ([ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)) {
+          const ex = document.getElementById('cgToolsExtra');
+          if (ex) ex.innerHTML = `<a class="btn btn-ghost" href="./regularizacion.html" style="font-size:13px;"><i data-lucide="clipboard-list"></i> Cuentas por regularizar</a>`;
+        }
         this._wire();
         const params = new URLSearchParams(location.search);
         const id = params.get('id');
@@ -473,6 +479,80 @@ window.Centro = {
       c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null, c.telefono || null, c.email || null,
       c.vendedor_email ? `Vendedor: ${c.vendedor_email}` : null,
     ].filter(Boolean).join(' · ') || '—';
+    this._pintarChipReg(c);
+  },
+
+  /* ═════════ Regularización de la cuenta (plan 2026-09-08) ═════════
+   * La deuda D1–D7 la CALCULA el job (clientes.regularizacion); aquí solo se
+   * lee y se explica con la misma regla (Regularizacion, módulo compartido).
+   * Principio: nunca trabar, siempre estampar, cada gestión puntual paga. */
+  _reg() { return this.cliente?.regularizacion || null; },
+  // Lo que se pega a cada gestión/contrato creado desde aquí ({} si al día).
+  _estampaReg() {
+    const st = (typeof Regularizacion !== 'undefined') ? Regularizacion.estampa(this._reg()) : null;
+    return st ? { cuenta_regularizacion: st } : {};
+  },
+  _pintarChipReg(c) {
+    const el = document.getElementById('fRegChip');
+    if (!el) return;
+    const chip = (typeof Regularizacion !== 'undefined') ? Regularizacion.chip(c?.regularizacion) : null;
+    if (!chip) { el.innerHTML = ''; return; }
+    const cls = chip.tono === 'bad' ? 'cg-chip--bad' : chip.tono === 'warn' ? 'cg-chip--warn' : 'cg-chip--muted';
+    el.innerHTML = `<button type="button" class="cg-chip ${cls}" onclick="Centro.verRegularizacion()"
+        style="border:0; cursor:pointer; font:inherit; font-size:12px;" title="Qué le falta a esta cuenta para estar bien registrada">
+        ${this.esc(chip.texto)}</button>`;
+  },
+  // Panel "Qué falta": una fila por componente con la acción que lo cierra.
+  verRegularizacion() {
+    const r = this._reg();
+    if (!r || !(r.puntos > 0)) { Toast.show('La cuenta está al día', 'ok'); return; }
+    const filas = Regularizacion.desglose(r);
+    const est = this._cuentaEstado();
+    const tram = this._renovacionEnTramite();
+    const puede = this.puedeCrearGestion();
+    const regularizarBtn = !puede ? '' : tram
+      ? `<button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal(); Centro.abrirGestion('ct-${this.esc(tram.id)}')">Ver la renovación en trámite</button>`
+      : `<button class="btn btn-primary cg-act" onclick="Centro._cerrarModal(); Centro.wizContrato({renovarCuenta:true})">${est.tipo === 'sin_contrato' || est.tipo === 'nueva' ? 'Regularizar: contrato nuevo' : 'Regularizar cuenta'}</button>`;
+    const accion = (f) => {
+      if (f.codigo === 'd1') return regularizarBtn;
+      if (f.codigo === 'd2') return f.ids.map(id => {
+        const c = this.contratos.find(x => (x.contrato_id || x.id) === id);
+        return c && this.puedeAsignar()
+          ? `<a class="btn btn-ghost cg-act" href="../almacen/index.html?tab=asignar&contrato=${encodeURIComponent(c.id)}">Declarar seriales · <span class="cg-mono">${this.esc(id)}</span></a>`
+          : `<span class="cg-mono" style="font-size:12px;">${this.esc(id)}</span>`;
+      }).join(' ') + (this.puedeAsignar() ? '' : `<div style="font-size:12px; color:var(--fg-3); margin-top:4px;">Los seriales los declara bodega en Almacén · Asignar; si tú los tienes, mándaselos.</div>`);
+      if (f.codigo === 'd5') return f.ids.map(id => {
+        const c = this.contratos.find(x => (x.contrato_id || x.id) === id);
+        return c ? `<button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal(); Centro.abrirGestion('ct-${this.esc(c.id)}')">Confirmar serial saliente · <span class="cg-mono">${this.esc(id)}</span></button>` : this.esc(id);
+      }).join(' ');
+      if (f.codigo === 'd7') return `<a class="btn btn-ghost cg-act" href="../inventario/equipos.html?tab=por_clasificar">Ver por clasificar</a>`;
+      if (f.codigo === 'd3' || f.codigo === 'd4') return `<span style="font-size:12.5px; color:var(--fg-3);">Se cierra al regularizar la cuenta.</span>`;
+      if (f.codigo === 'd6') return `<span style="font-size:12.5px; color:var(--fg-3);">Agrégalos por anexo o libéralos desde el expediente del contrato.</span>`;
+      return '';
+    };
+    const ids = (f) => (f.codigo === 'd1' || f.codigo === 'd7') && f.ids.length
+      ? `<div class="cg-mono" style="font-size:11.5px; color:var(--fg-4); margin-top:4px; word-break:break-word;">${f.ids.slice(0, 40).map(s => this.esc(s)).join(', ')}${f.ids.length > 40 ? ` … +${f.ids.length - 40}` : ''}</div>` : '';
+    const puntuales = Number(r.gestiones_puntuales || 0);
+    this._abrirModalA({
+      titulo: `Qué falta para regularizar — ${this.esc(this.cliente.nombre)}`,
+      cuerpo: `
+        <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:72ch;">
+          <b>${this.esc(Regularizacion.NIVEL_LABEL[r.nivel] || r.nivel)} · ${r.puntos} punto${r.puntos === 1 ? '' : 's'}</b>
+          ${r.etiqueta === 'migracion' ? ' · deuda de migración (contratos anteriores al sistema)' : ''}.
+          Ninguna gestión se frena por esto: cada gestión que declare seriales baja la deuda, y
+          <b>Regularizar cuenta</b> abre la renovación con el plan por serial ya precargado.
+          ${puntuales ? `<br>Gestiones puntuales hechas sobre esta deuda: <b>${puntuales}</b>${r.excede_margen ? ' — <span style="color:var(--cg-bad-deep, #991B1B);">excede el margen sin regularizar</span>' : ''}.` : ''}
+        </p>
+        <div class="cg-twrap"><table class="cg-table">
+          <thead><tr><th>Qué falta</th><th>Cómo se cierra</th></tr></thead>
+          <tbody>${filas.map(f => `<tr>
+            <td style="white-space:normal;"><b>${f.n}</b> ${this.esc(f.label)}${ids(f)}</td>
+            <td style="white-space:normal;">${accion(f)}</td></tr>`).join('')}</tbody>
+        </table></div>`,
+      footer: `<span class="sep"></span><button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cerrar</button>${r.d1 > 0 ? '' : regularizarBtn}`,
+      banda: false,
+    });
+    if (window.lucide?.createIcons) lucide.createIcons();
   },
 
   // ── Historial de cambios de la ficha (2026-09-02) ──────────────────────
@@ -809,7 +889,18 @@ window.Centro = {
     // Regla 2026-08-27: una cuenta con equipos FUERA de contrato formal ya
     // requiere renovación/regularización (el documento marco los formaliza).
     const sinContrato = this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id).length;
-    if (sinContrato) {
+    // Con el campo regularizacion ya calculado por el job, la deuda tiene UNA
+    // voz: el chip de la cabecera + esta señal que abre "Qué falta". La señal
+    // vieja de custodia (abajo) queda solo mientras el job no haya pasado.
+    const reg = this._reg();
+    if (reg && reg.puntos > 0) {
+      const tram = this._renovacionEnTramite();
+      out.unshift({
+        tipo: reg.nivel === 'critica' ? 'bad' : reg.nivel === 'leve' ? 'info' : 'warn',
+        txt: `${Regularizacion.resumen(reg)}${tram ? ` — la renovación en trámite (${tram.contrato_id || ''}) cubre la custodia al activarse.` : '.'}`,
+        extra: `<button class="btn btn-ghost cg-act cg-senal-cta" onclick="Centro.verRegularizacion()">Qué falta</button>`,
+      });
+    } else if (sinContrato) {
       const tram = this._renovacionEnTramite();
       out.unshift(tram ? {
         tipo: 'info',
@@ -2364,6 +2455,7 @@ window.Centro = {
 
   armarMenu() {
     const btn = document.getElementById('btnGestion');
+    this._pintarHeadLinks();
     if (!this.puedeCrearGestion()) { btn?.classList.add('hidden'); return; }
     btn?.classList.remove('hidden');
     // Terminación total como GESTIÓN (2026-08-27) — la página vieja de
@@ -2375,80 +2467,87 @@ window.Centro = {
     //                  equipos entra por ahí; terminación = toda la cuenta.
     //   consolidada  → Aumento (anexo directo al maestro), Renovar cuando
     //                  entra en ventana, Terminación de la cuenta.
+    // ── Menú POR INTENCIÓN (plan 2026-09-08 §4.2, rediseño del menú de
+    // 2026-08-28). Depende de dos hechos y una excepción: ¿hay radios en
+    // campo?, ¿hay contrato vigente?, ¿hay renovación en trámite? Mismo nombre
+    // para la misma intención en todos los estados; lo que no aplica se
+    // ESCONDE, no se deshabilita. Cotizar / Datos / Historial viven en la
+    // cabecera (_pintarHeadLinks): este menú es solo para gestiones.
     const est = this._cuentaEstado();
-    let cuentaHtml = '';
-    // Adenda a contrato EN PAPEL (2026-09-07, caso Falcon Servicios): clientes
-    // viejos cuyo contrato marco no está en el sistema y que NO se pueden
-    // regularizar hoy, pero sí necesitan un equipo más. La adenda lleva el
-    // número manual del contrato; no se crea ningún contrato en el sistema
-    // (decisión de Alberto) y la cuenta sigue pidiendo la regularización.
-    const adendaPapelBtn = this.puedeCrearGestion()
-      ? `<button type="button" onclick="Centro.wizAumento(null,{papel:true})">Adenda a contrato en papel
-          <span style="display:block; font-size:11px; color:var(--fg-4);">aumento con el número del contrato viejo escrito a mano — salida para seguir sin regularizar hoy</span></button>`
-      : '';
-    if (est.tipo === 'nueva') {
-      cuentaHtml = `<button type="button" onclick="Centro.wizContrato()">Nuevo contrato</button>${adendaPapelBtn}`;
+    const tram = this._renovacionEnTramite();
+    const hayRadios = this.equipos.some(e => ['en_cliente', 'asignado_contrato'].includes(e.estado));
+    const hayContrato = est.renovables.length > 0;
+    const reg = this._reg();
+    const deuda = !!(reg && reg.puntos > 0);
+    const item = (onclick, label, hint, cls = '') =>
+      `<button type="button" class="${cls}" onclick="${onclick}">${label}${hint ? `<span class="cg-menu-hint">${hint}</span>` : ''}</button>`;
+    const grupo = (hd, items) => { const xs = items.filter(Boolean); return xs.length ? `<div class="hd">${hd}</div>${xs.join('')}` : ''; };
+
+    // Arriba, destacado: lo que la cuenta pide primero.
+    let top = '';
+    if (tram) {
+      top = item(`Centro.abrirGestion('ct-${this.esc(tram.id)}')`,
+        `Ver renovación en trámite <span class="cg-mono">${this.esc(tram.contrato_id || '')}</span>`,
+        'abre el expediente para ver en qué paso va', 'top');
+    } else if (est.tipo === 'nueva') {
+      top = item('Centro.wizContrato()', 'Nuevo contrato', '', 'top');
     } else if (est.tipo === 'sin_contrato') {
-      // Sin contratos vigentes: renovar no aplica — contrato NUEVO que cubra
-      // los equipos que siguen con el cliente.
-      cuentaHtml = `
-        <button type="button" onclick="Centro.wizContrato({renovarCuenta:true})">Nuevo contrato
-          <span style="display:block; font-size:11px; color:var(--fg-4);">cubre los ${est.custodia} equipo${est.custodia === 1 ? '' : 's'} que el cliente aún tiene — se amarran al activarse</span></button>
-        ${adendaPapelBtn}`;
-    } else if (this._renovacionEnTramite()) {
-      // Con una renovación EN CURSO no se ofrecen más renovaciones ni anexos
-      // que compitan con ella: el trámite manda.
-      const tram = this._renovacionEnTramite();
-      cuentaHtml = `
-        <button type="button" onclick="Centro.abrirGestion('ct-${this.esc(tram.id)}')">Renovación en trámite — <span class="cg-mono">${this.esc(tram.contrato_id || '')}</span>
-          <span style="display:block; font-size:11px; color:var(--fg-4);">abre el expediente para ver en qué paso va</span></button>
-        <button type="button" onclick="Centro.wizAjuste()">Ajuste de tarifa / servicios
-          <span style="display:block; font-size:11px; color:var(--fg-4);">cargos como GPS, amarrados por serial — sin bodega</span></button>
-        <button type="button" onclick="Centro.wizTerminacionCuenta()">Terminación de la cuenta</button>`;
-    } else if (est.tipo === 'fragmentada') {
-      const n = est.renovables.length;
-      cuentaHtml = `
-        <button type="button" onclick="Centro.wizAgregarEquipos()">Agregar equipos
-          <span style="display:block; font-size:11px; color:var(--fg-4);">anexo rápido a la cuenta — el contrato ancla se elige solo</span></button>
-        <button type="button" onclick="Centro.wizAjuste()">Ajuste de tarifa / servicios
-          <span style="display:block; font-size:11px; color:var(--fg-4);">cargos como GPS, amarrados por serial — sin bodega</span></button>
-        <button type="button" onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta
-          <span style="display:block; font-size:11px; color:var(--fg-4);">consolida ${n ? `${n} contrato${n === 1 ? '' : 's'}` : 'la cuenta'}${est.custodia ? ` + ${est.custodia} radio${est.custodia === 1 ? '' : 's'} sin contrato` : ''} en un contrato maestro</span></button>
-        ${n ? `<button type="button" onclick="Centro.wizTerminacionCuenta()">Terminación de la cuenta
-          <span style="display:block; font-size:11px; color:var(--fg-4);">cancela los ${n} contrato${n === 1 ? '' : 's'} con una sola carta y aprobación</span></button>` : ''}`;
-    } else {
-      const m = est.maestro;
-      cuentaHtml = `
-        <button type="button" onclick="Centro.wizAumento('${this.esc(m.id)}')">Aumento de equipos (anexo)</button>
-        <button type="button" onclick="Centro.wizAjuste('${this.esc(m.id)}')">Ajuste de tarifa / servicios
-          <span style="display:block; font-size:11px; color:var(--fg-4);">cargos como GPS, amarrados por serial — sin bodega</span></button>
-        ${this._wcEnVentana(m)
-          ? `<button type="button" onclick="Centro.wizContrato('${this.esc(m.id)}')">Renovar cuenta</button>` : ''}
-        <button type="button" onclick="Centro.wizTerminacionCuenta()">Terminación de la cuenta</button>`;
+      top = item('Centro.wizContrato({renovarCuenta:true})', 'Regularizar: contrato nuevo',
+        `cubre los ${est.custodia} radio${est.custodia === 1 ? '' : 's'} que el cliente aún tiene`, 'top');
+    } else if (deuda) {
+      top = item('Centro.wizContrato({renovarCuenta:true})', 'Regularizar cuenta',
+        `${reg.puntos} punto${reg.puntos === 1 ? '' : 's'} — renovación con el plan por serial precargado`, 'top');
     }
-    document.getElementById('cgMenu').innerHTML = `
-      <div class="hd">Equipos</div>
-      <button type="button" onclick="Centro.wizReemplazo()">Reemplazo de equipo</button>
-      <button type="button" onclick="Centro.wizDemo()">Demo de equipos</button>
-      <!-- TEMP (evento) es independiente de la cuenta — como el DEMO, no
-           cuenta para _cuentaEstado ni renueva nada. Antes solo salía dentro
-           de "Nuevo contrato", que una cuenta con contratos vigentes NO
-           ofrece (caso Municipio de Arraiján / Elvia, 2026-09-07). -->
-      <button type="button" onclick="Centro.wizContrato({temporal:true})">Contrato temporal (evento)
-        <span style="display:block; font-size:11px; color:var(--fg-4);">alquiler por días o meses con su propio contrato — no toca ni renueva los contratos de la cuenta</span></button>
-      <button type="button" onclick="Centro.wizBaja()">Baja de equipos (parcial, por serial)</button>
-      <div class="hd">Cuenta</div>
-      ${cuentaHtml}
-      ${this._puedeCotizar() ? `<div class="hd">Comercial</div>
-      <a href="../cotizaciones/nueva-cotizacion.html?cliente_id=${this.esc(this.cliente.id)}&from=centro">Nueva cotización
-        <span style="display:block; font-size:11px; color:var(--fg-4);">abre el editor con este cliente ya elegido; Cancelar regresa aquí</span></a>` : ''}
-      <div class="hd">Cliente</div>
-      ${this._puedeEditarCliente()
-        ? `<a href="./ficha.html?id=${this.esc(this.cliente.id)}&from=centro">Editar datos del cliente</a>`
-        : `<a href="./ficha.html?id=${this.esc(this.cliente.id)}&from=centro">Ver datos del cliente
-        <span style="display:block; font-size:11px; color:var(--fg-4);">solo lectura — los cambios los hace cobros (cobros@cecomunica.com)</span></a>`}
-      ${this._puedeMasiva() ? `<a href="./index.html">Edición masiva de clientes
-        <span style="display:block; font-size:11px; color:var(--fg-4);">avanzada — hoja completa con autoguardado; cada cambio queda en el historial</span></a>` : ''}`;
+    // Regularizar cuenta y Renovar cuenta son la MISMA acción (renovación
+    // consolidadora): si ya está arriba, no se repite en "Cambiar".
+    const renovarArriba = !tram && deuda && est.tipo !== 'nueva' && est.tipo !== 'sin_contrato';
+    const n = est.renovables.length;
+    const renovar = tram || !hayContrato || renovarArriba ? ''
+      : est.tipo === 'fragmentada'
+        ? item('Centro.wizContrato({renovarCuenta:true})', 'Renovar cuenta', `consolida ${n} contrato${n === 1 ? '' : 's'} en uno`)
+        : this._wcEnVentana(est.maestro)
+          ? item(`Centro.wizContrato('${this.esc(est.maestro.id)}')`, 'Renovar cuenta', 'entra en ventana de renovación')
+          : '';
+
+    const dar = grupo('Dar equipos', [
+      hayContrato && !tram ? item('Centro.wizAgregarEquipos()', 'Agregar equipos', 'anexo al contrato de la cuenta') : '',
+      // TEMP (evento) y DEMO son independientes de la cuenta: no cuentan para
+      // _cuentaEstado ni renuevan nada (caso Arraiján / Elvia, 2026-09-07).
+      item('Centro.wizContrato({temporal:true})', 'Contrato temporal', 'por evento, días o meses'),
+      item('Centro.wizDemo()', 'Demo', 'prueba sin cargo, termina con la devolución'),
+    ]);
+    const cambiar = grupo('Cambiar', [
+      hayRadios ? item('Centro.wizReemplazo()', 'Reemplazar un equipo') : '',
+      hayContrato ? item(est.tipo === 'consolidada' ? `Centro.wizAjuste('${this.esc(est.maestro.id)}')` : 'Centro.wizAjuste()',
+        'Ajustar tarifa / servicios', 'cargos como GPS, amarrados por serial') : '',
+      renovar,
+    ]);
+    const retirar = grupo('Retirar', [
+      hayRadios ? item('Centro.wizBaja()', 'Baja parcial por serial') : '',
+      hayContrato ? item('Centro.wizTerminacionCuenta()', 'Terminar la cuenta', n > 1 ? `cancela los ${n} contratos con una sola carta` : '') : '',
+    ]);
+    // Pie discreto: salidas raras. Adenda a contrato EN PAPEL (2026-09-07,
+    // caso Falcon): el marco no está en el sistema y hoy no se puede
+    // regularizar, pero hace falta un equipo más; no crea contrato interno.
+    // Solo donde tiene sentido: cuenta sin contrato en el sistema.
+    const pie = [
+      (est.tipo === 'nueva' || est.tipo === 'sin_contrato')
+        ? item('Centro.wizAumento(null,{papel:true})', '¿Contrato en papel? Adenda de aumento', '', 'pie') : '',
+      this._puedeMasiva() ? `<a class="pie" href="./index.html">Edición masiva de clientes</a>` : '',
+    ].filter(Boolean).join('');
+
+    document.getElementById('cgMenu').innerHTML = `${top}${dar}${cambiar}${retirar}${pie}`;
+  },
+
+  // Cabecera de la ficha: Cotizar y Datos del cliente (plan 2026-09-08 §4.2).
+  _pintarHeadLinks() {
+    const el = document.getElementById('cgHeadLinks');
+    if (!el || !this.cliente) return;
+    const id = this.esc(this.cliente.id);
+    el.innerHTML = `
+      ${this._puedeCotizar() ? `<a class="btn btn-ghost" href="../cotizaciones/nueva-cotizacion.html?cliente_id=${id}&from=centro" title="Abre el editor con este cliente ya elegido"><i data-lucide="receipt"></i> Cotizar</a>` : ''}
+      <a class="btn btn-ghost" href="./ficha.html?id=${id}&from=centro" title="${this._puedeEditarCliente() ? 'Editar datos del cliente' : 'Solo lectura — los cambios los hace cobros (cobros@cecomunica.com)'}">
+        <i data-lucide="${this._puedeEditarCliente() ? 'pencil' : 'id-card'}"></i> Datos</a>`;
   },
 
   // El grid de edición masiva salió del home/rail (2026-09-03): se entra SOLO
@@ -2569,12 +2668,28 @@ window.Centro = {
 
   // Anatomía del kit (header fijo + cuerpo scrolleable + footer fijo) para los
   // modales largos: el título y las acciones nunca se pierden con el scroll.
-  _abrirModalA({ titulo, cuerpo, footer }) {
+  // Banda de regularización en los wizards (plan 2026-09-08 §4.3): un renglón,
+  // nunca bloquea. Dice cuánta deuda hay y que esta gestión quedará como
+  // puntual (#n). banda:false para los modales que no crean nada.
+  _bandaReg() {
+    const r = this._reg();
+    if (!r || !(r.puntos > 0) || typeof Regularizacion === 'undefined') return '';
+    const n = (Number(r.gestiones_puntuales) || 0) + 1;
+    const bad = r.nivel === 'critica' || r.excede_margen;
+    return `<div class="cg-banda-reg" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 12px; padding:8px 12px; border-radius:8px; font-size:12.5px;
+        background:${bad ? 'var(--cg-bad-soft, #FEE2E2)' : 'var(--cg-warn-soft, #FEF3C7)'}; color:${bad ? 'var(--cg-bad-deep, #991B1B)' : 'var(--cg-warn-deep, #92400E)'};">
+      <span><b>Cuenta por regularizar (${r.puntos})</b> — ${this.esc(Regularizacion.desglose(r).slice(0, 2).map(x => `${x.n} ${x.label}`).join(' · '))}.
+        Esta gestión se registrará como puntual #${n}${r.excede_margen ? ' y la cuenta ya excede el margen sin regularizar' : ''}.</span>
+      <button type="button" class="btn btn-ghost cg-act" style="margin-left:auto; padding:2px 10px; font-size:12px;" onclick="Centro.verRegularizacion()">Qué falta</button>
+    </div>`;
+  },
+
+  _abrirModalA({ titulo, cuerpo, footer, banda = true }) {
     const m = document.getElementById('cgModal');
     m.innerHTML = `<div class="cg-modal cg-modal--anatomia" role="dialog" aria-modal="true" aria-labelledby="cgModalT">
       <div class="cg-modal-hd"><h3 id="cgModalT">${titulo}</h3>
         <button type="button" class="cg-x" aria-label="Cerrar" onclick="Centro._cerrarModal()">✕</button></div>
-      <div class="cg-modal-bd">${cuerpo}</div>
+      <div class="cg-modal-bd">${banda ? this._bandaReg() : ''}${cuerpo}</div>
       ${footer ? `<div class="cg-modal-ft">${footer}</div>` : ''}
     </div>`;
     m.classList.remove('hidden');
@@ -2678,7 +2793,7 @@ window.Centro = {
     }
     const requiereAprobacion = items.some(it => it.elegibilidad === 'propio_excepcion');
     try {
-      const gid = await GestionesService.crear({
+      const gid = await GestionesService.crear({ ...Centro._estampaReg(),
         tipo: 'reemplazo',
         cliente_id: this.cliente.id,
         cliente_nombre: this.cliente.nombre || '',
@@ -2754,7 +2869,7 @@ window.Centro = {
     if (!lineas.length) { Toast.show('Indica al menos un modelo', 'warn'); return; }
     if (!finalidad) { Toast.show('Indica la finalidad del demo', 'warn'); return; }
     try {
-      const gid = await GestionesService.crear({
+      const gid = await GestionesService.crear({ ...Centro._estampaReg(),
         tipo: 'demo',
         cliente_id: this.cliente.id,
         cliente_nombre: this.cliente.nombre || '',
@@ -3063,7 +3178,7 @@ window.Centro = {
     const itbmsAplica = document.getElementById('waItbms')?.checked !== false;
     const totales = this._totAumento(lineas, cargos, itbmsAplica);
     try {
-      const gid = await GestionesService.crear({
+      const gid = await GestionesService.crear({ ...Centro._estampaReg(),
         tipo: 'aumento',
         cliente_id: this.cliente.id,
         cliente_nombre: this.cliente.nombre || '',
@@ -3319,7 +3434,7 @@ window.Centro = {
     const itbmsAplica = document.getElementById('wjItbms')?.checked !== false;
     const totales = this._totAumento([], cargos, itbmsAplica);
     try {
-      const gid = await GestionesService.crear({
+      const gid = await GestionesService.crear({ ...Centro._estampaReg(),
         tipo: 'aumento',
         cliente_id: this.cliente.id,
         cliente_nombre: this.cliente.nombre || '',
@@ -3616,6 +3731,15 @@ window.Centro = {
       if (ref) ref.style.display = e.target.checked ? '' : 'none';
     });
     this._wcPlanState = { destinos: {}, reemplazos: {}, refurb: {}, agregados: [] };
+    // Precarga (plan 2026-09-08 §5): al regularizar/renovar la cuenta, los
+    // radios en campo SIN contrato (D1) entran como "Continúa" — es lo que la
+    // deuda dice que el cliente tiene. El vendedor los corrige si no es así;
+    // los del contrato de origen siguen pidiendo destino explícito.
+    if (opts.renovarCuenta) {
+      for (const { u, fuente } of this._wcUnidadesCuenta(preIds)) {
+        if (fuente === 'custodia') this._wcPlanState.destinos[u.id] = 'continua';
+      }
+    }
     this._wcSoloPlan = false;
     // TEMP fijo: la acción pasa a 'No Aplica' y se esconde el bloque de origen
     // (lo mismo que hace el select al cambiar a mano).
@@ -4149,6 +4273,10 @@ window.Centro = {
         creado_por_uid: this.uid,
       });
 
+      // Estampa de regularización (plan 2026-09-08): el contrato nace sobre
+      // una cuenta con deuda → queda dicho; DEMO/TEMP se estampan pero no
+      // cuentan como puntuales (Regularizacion.esPuntual).
+      Object.assign(contrato, Centro._estampaReg());
       const docRef = await ContratosService.addContrato(contrato);
 
       try {
@@ -4423,7 +4551,7 @@ window.Centro = {
         console.error(e);
         Toast.show('La carta NO subió — la gestión se crea igual: adjúntala desde el expediente', 'warn');
       }
-      await GestionesService.crear({
+      await GestionesService.crear({ ...Centro._estampaReg(),
         tipo: 'baja',
         cliente_id: this.cliente.id,
         cliente_nombre: this.cliente.nombre || '',

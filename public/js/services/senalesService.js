@@ -250,6 +250,41 @@ const SenalesService = {
   _LIST_TTL_MS: 5 * 60 * 1000,
   _listMemo: new Map(),   // clave → { t, p: Promise<rows> }
 
+  /** Cuentas con deuda de regularización (plan 2026-09-08). Lee SOLO el
+   *  campo clientes.regularizacion que escribe el job — nada se calcula aquí.
+   *  { uid } → la cartera de ese vendedor (filtro en cliente sobre su
+   *  cartera, sin índice compuesto); sin uid → todas (puntos > 0). */
+  listCuentasPorRegularizar({ uid = null } = {}) {
+    return this._memoList(`reg:${uid || 'todas'}`, async () => {
+      const db = firebase.firestore();
+      const q = uid
+        ? db.collection('clientes').where('vendedor_asignado', '==', uid)
+        : db.collection('clientes').where('regularizacion.puntos', '>', 0).limit(400);
+      const snap = await q.get();
+      const now = Date.now();
+      const rows = [];
+      snap.forEach(d => {
+        const c = d.data() || {};
+        const r = c.regularizacion;
+        if (c.deleted || !r || !(r.puntos > 0)) return;
+        const desde = r.primera_marca_at?.toDate?.() || r.calculado_at?.toDate?.() || null;
+        rows.push({
+          id: d.id, col: 'clientes',
+          cliente: c.nombre || '—',
+          vendedor: (c.vendedor_email || '').split('@')[0],
+          nivel: r.nivel, nivel_label: (window.Regularizacion?.NIVEL_LABEL || {})[r.nivel] || r.nivel,
+          puntos: Number(r.puntos) || 0, puntuales: Number(r.gestiones_puntuales) || 0,
+          excede: !!r.excede_margen, etiqueta: r.etiqueta || '',
+          dias: desde ? Math.floor((now - desde.getTime()) / 86400000) : 0,
+          ...this._snooze(c),
+        });
+      });
+      // Sin vendedor primero (nadie las ve), luego por deuda.
+      return rows.sort((a, b) => (a.vendedor ? 1 : 0) - (b.vendedor ? 1 : 0) || b.puntos - a.puntos);
+    });
+  },
+  async countCuentasPorRegularizar(opts) { return (await this.listCuentasPorRegularizar(opts)).filter(r => !r.pospuesto).length; },
+
   _memoList(clave, fn) {
     const hit = this._listMemo.get(clave);
     if (hit && Date.now() - hit.t < this._LIST_TTL_MS) return hit.p;

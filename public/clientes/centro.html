@@ -35,7 +35,7 @@
   <script defer src="../js/services/modelosService.js?v=mf1"></script>
   <script defer src="../js/domain/contratoV2Texto.js?v=2"></script>
   <script defer src="../js/services/cargosService.js"></script>
-  <script defer src="../js/services/gestionesService.js?v=cg11"></script>
+  <script defer src="../js/services/gestionesService.js?v=cg12"></script>
   <script defer src="../js/services/mailService.js"></script>
   <script defer src="../js/services/equiposDescartadosService.js"></script><script defer src="../js/services/equiposCondicionesService.js?v=cond1"></script>
   <script defer src="../js/ui/serial-field.js"></script>
@@ -44,6 +44,7 @@
   <script defer src="../js/domain/origenContrato.js?v=orig1"></script>
   <script defer src="../js/domain/transicionPlan.js?v=mf1"></script>
   <script defer src="../js/domain/contratoAnulacion.js?v=an2"></script>
+  <script defer src="../js/domain/regularizacion.js?v=reg1"></script>
   <script defer src="/js/vendor/lucide.min.js?v=3"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
 
@@ -102,6 +103,11 @@
                padding:9px 14px; font-size:13.5px; color:var(--fg-1); text-decoration:none; cursor:pointer; }
     .cg-menu a:hover, .cg-menu button:hover { background:var(--accent-soft, #E6F4FB); }
     .cg-menu .off { color:var(--fg-4); cursor:not-allowed; }
+    /* Menú por intención (plan 2026-09-08 §4.2): un destacado arriba, grupos
+       Dar equipos / Cambiar / Retirar, pistas de UNA línea, pie discreto. */
+    .cg-menu .top { font-weight:600; background:var(--accent-soft, #E6F4FB); }
+    .cg-menu .cg-menu-hint { display:block; font-size:11px; font-weight:400; color:var(--fg-4); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cg-menu .pie { font-size:12px; color:var(--fg-3); border-bottom:0; }
     .cg-menu .off:hover { background:none; }
     .cg-vacio { color:var(--fg-3); font-size:13px; padding:14px; text-align:center; }
     .cg-hoy { display:flex; gap:9px; align-items:center; width:100%; text-align:left; background:none; border:0;
@@ -156,6 +162,8 @@
         <span class="trk" aria-hidden="true"></span> Solo activos
       </label>
       <span id="cgResumen" style="font-size:13px; color:var(--fg-3);"></span>
+      <!-- Bandeja "Cuentas por regularizar" (admin/gerencia): la pinta init(). -->
+      <span id="cgToolsExtra" style="margin-left:auto;"></span>
     </div>
     <div id="cgParaHoy"></div>
     <div id="cgLista"></div>
@@ -173,10 +181,18 @@
       <div class="cg-head">
         <div class="cg-av" id="fAvatar" style="width:48px;height:48px;font-size:17px;"></div>
         <div style="min-width:0;">
-          <h2 id="fNombre" style="margin:0; font-size:20px;"></h2>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <h2 id="fNombre" style="margin:0; font-size:20px;"></h2>
+            <!-- Deuda de regularización de la cuenta (plan 2026-09-08): lee
+                 clientes.regularizacion (lo escribe el job); clic → "Qué falta". -->
+            <span id="fRegChip"></span>
+          </div>
           <p id="fMeta" style="margin:4px 0 0; color:var(--fg-3); font-size:13px;"></p>
         </div>
         <div class="cg-acts">
+          <!-- Cotizar / Datos salieron del menú "Nueva gestión" a la cabecera
+               (plan 2026-09-08 §4.2): el menú es solo para gestiones. -->
+          <span id="cgHeadLinks" style="display:contents;"></span>
           <button class="btn btn-ghost" onclick="Centro.verHistorial()"
                   title="Quién cambió qué en la ficha (representante, RUC, vendedor…)">
             <i data-lucide="history"></i> Historial</button>
@@ -218,7 +234,7 @@
 <script defer src="../js/ui/toast.js"></script>
 <!-- Conversor fotos→PDF del contrato firmado (ContratosFirmado._fotosAPdf); su init no encuentra #fileFirmado aquí y no hace nada más. -->
 <script defer src="../js/pages/contratos-upload.js?v=firm2"></script>
-<script src="../js/pages/clientes-centro.js?v=cg75" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg76" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

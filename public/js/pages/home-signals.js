@@ -213,6 +213,36 @@ window.HomeSignals = (() => {
       href: 'almacen/index.html',
       count: () => SenalesService.countSerialesPorAsignar(),
     },
+    // ── Regularización de cuentas (plan 2026-09-08) ──
+    // La deuda D1–D7 la calcula el job en clientes.regularizacion; aquí solo
+    // se lee. El vendedor ve SU cartera; gerencia/admin ven todas (REGG).
+    REGV: {
+      modulo: 'centro', icon: 'clipboard-list', alert: true, moreIsBad: true,
+      label: 'Mis cuentas por regularizar', sub: 'operan, pero les faltan seriales o contratos',
+      href: 'clientes/centro.html',
+      count: (ctx) => SenalesService.countCuentasPorRegularizar({ uid: ctx.uid }),
+      // items() se llama sin ctx: la cartera sale del usuario autenticado.
+      items: () => SenalesService.listCuentasPorRegularizar({ uid: firebase.auth().currentUser?.uid || null }),
+      row: (r, esc) => ({
+        txt: `<b>${esc(r.cliente)}</b> · ${esc(r.nivel_label)} · ${r.puntos} punto${r.puntos === 1 ? '' : 's'}${r.puntuales ? ` · ${r.puntuales} gestión${r.puntuales === 1 ? '' : 'es'} puntual${r.puntuales === 1 ? '' : 'es'}` : ''}`,
+        dias: r.dias,
+        cta: { label: 'Abrir ficha', href: `clientes/centro.html?id=${encodeURIComponent(r.id)}` },
+      }),
+      vacio: 'Tu cartera está al día: todas las cuentas tienen sus seriales y contratos.',
+    },
+    REGG: {
+      modulo: 'centro', icon: 'clipboard-list', moreIsBad: true,
+      label: 'Cuentas por regularizar', sub: 'todas las carteras — las sin vendedor primero',
+      href: 'clientes/regularizacion.html',
+      count: () => SenalesService.countCuentasPorRegularizar({}),
+      items: () => SenalesService.listCuentasPorRegularizar({}),
+      row: (r, esc) => ({
+        txt: `<b>${esc(r.cliente)}</b> · ${esc(r.nivel_label)} · ${r.puntos} punto${r.puntos === 1 ? '' : 's'} · ${r.vendedor ? esc(r.vendedor) : '<span style="color:var(--cg-bad-deep,#991B1B);">sin vendedor</span>'}${r.excede ? ' · <b>excede el margen</b>' : ''}`,
+        dias: r.dias,
+        cta: { label: 'Abrir ficha', href: `clientes/centro.html?id=${encodeURIComponent(r.id)}` },
+      }),
+      vacio: 'Ninguna cuenta con deuda de regularización.',
+    },
   };
 
   // Rol efectivo → señales (máx. 4). Cada señal pasa ADEMÁS por el gate de
@@ -231,11 +261,13 @@ window.HomeSignals = (() => {
     // dato de estado y entra una cola con gente esperando — el mismo
     // razonamiento con el que S15 desplazó a S11. S3 y S4 siguen accesibles
     // desde la lista de órdenes (chips por estado).
-    administrador:     ['S1', 'EST', 'S4Q', 'SAP'],
-    gerente:           ['S1', 'S10', 'SAP', 'S8'],
+    // REGV/REGG (cuentas por regularizar, plan 2026-09-08): el vendedor ve su
+    // cartera; admin y gerencia ven todas, con las sin vendedor primero.
+    administrador:     ['S1', 'EST', 'S4Q', 'SAP', 'REGG'],
+    gerente:           ['S1', 'S10', 'SAP', 'S8', 'REGG'],
     jefe_taller:       ['S1', 'EST', 'S4Q', 'SAP'],
     recepcion:         ['S1', 'S2', 'ENT', 'S8'],
-    vendedor:          ['S7', 'S8', 'S1', 'S4'],
+    vendedor:          ['S7', 'S8', 'S1', 'REGV'],
     tecnico:           ['S5', 'S4P'],
     tecnico_operativo: ['S5', 'S4P'],
     // S14 (por clasificar) entra en lugar de S12 (por verificar): la ubicación

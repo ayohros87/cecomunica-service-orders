@@ -53,7 +53,7 @@ const codigo = (c) => c.codigo_tipo || ({ Servicio: 'SERV', Alquiler: 'ALQ', Pro
       tot.cuentasConDeuda++;
       const v = cli.vendedor.split('@')[0] || '(sin vendedor)';
       porVendedor.set(v, (porVendedor.get(v) || 0) + 1);
-      lista.push({ nombre: cli.nombre, v, puntos, ...deuda, gestionesUltimos90: a.gestiones.filter(g => { const t = g.fecha_creacion?.toDate?.() || g.created_at?.toDate?.(); return t && (Date.now() - t) < 90 * 86400000; }).length });
+      lista.push({ nombre: cli.nombre, v, puntos, ...deuda, gestionesUltimos90: a.gestiones.filter(g => { const t = g.fecha_solicitud?.toDate?.() || g.fecha_creacion?.toDate?.() || g.created_at?.toDate?.(); return t && (Date.now() - t) < 90 * 86400000; }).length });
     }
   }
   console.log('TOTALES', JSON.stringify(tot));
