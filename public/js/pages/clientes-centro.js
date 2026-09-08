@@ -2371,6 +2371,7 @@ window.Centro = {
                         ...(g.aumento?.cargos || []).map(c => `${c.cantidad} × ${c.concepto}`)].join(', ') || '—')
             : `${(g.items || []).length} serial(es)`} · ${fecha}${g.estado === 'anulada' && g.anulada_motivo ? ` · <i>${this.esc(g.anulada_motivo)}</i>` : ''}</div></div>
         ${atenuada ? '' : `<span class="num" style="font-size:12px; color:var(--fg-3); flex:none;">${done}/${defsG.length}</span>`}
+        ${g.regularizacion_bloqueada ? `<span class="cg-chip cg-chip--bad" style="flex:none;" title="Las cantidades del anexo no coinciden con los seriales — no se aplicó">No aplicado</span>` : ''}
         <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}" style="flex:none;">${this.esc(GestionesService.estadoLabel(g.estado))}</span>
         <span class="arr" style="margin-left:0;">${abierta ? '▾' : '›'}</span>
       </div>
@@ -2485,6 +2486,10 @@ window.Centro = {
           ${(a.ajustes_precio || []).length ? `<p style="font-size:12.5px; margin:0 0 8px;">
             <b>Tarifas renegociadas:</b> ${a.ajustes_precio.map(x =>
               `${this.esc(x.modelo)} <span class="num">$${Number(x.precio_anterior).toFixed(2)} → $${Number(x.precio_nuevo).toFixed(2)}</span>`).join(' · ')}</p>` : ''}` : ''}
+        ${g.regularizacion_bloqueada ? `<div class="cg-senal bad" style="margin-bottom:10px;">
+          <span><b>El anexo no se aplicó:</b> ${this.esc(g.regularizacion_bloqueada.motivo || 'las cantidades no coinciden con los seriales')}.
+          Un anexo de regularización solo cubre equipos que el cliente ya tiene; los radios nuevos van en un aumento aparte.
+          Anula esta gestión y créala de nuevo desde "Nueva gestión".</span></div>` : ''}
         ${a.es_regularizacion ? `<p style="font-size:12.5px; margin:0 0 8px; color:var(--fg-3);">
           <b>Anexo de regularización</b> — amarra equipos que el cliente ya tiene
           (<span class="cg-mono">${(a.regulariza_seriales || []).map(s => this.esc(s.serial)).join(', ')}</span>);

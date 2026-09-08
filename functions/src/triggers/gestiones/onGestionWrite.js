@@ -628,6 +628,19 @@ module.exports = onDocumentWritten(
           logger.info("[onGestionWrite] adenda a contrato en papel firmada", { gid, contrato_papel: a.contrato_id || "", osYaSalio });
         } else if (!a.contrato_doc_id || (!(a.lineas || []).length && !esAjuste)) {
           logger.error("[onGestionWrite] aumento firmado sin contrato destino o sin líneas", { gid });
+        } else if (a.es_regularizacion === true && !G.regularizacionConsistente(a).ok) {
+          // Candado server-side (verificación 2026-09-08): un anexo de
+          // regularización con más cantidades que seriales llevaría radios
+          // NUEVOS que nunca pasarían por bodega ni tendrían OS ni entrega, y
+          // se facturarían desde hoy. NO se aplica: queda marcado para que
+          // el expediente lo diga y alguien lo corrija (anular y rehacer).
+          const chk = G.regularizacionConsistente(a);
+          await ref.set({
+            regularizacion_bloqueada: { motivo: chk.motivo, total: chk.total, seriales: chk.seriales, at: admin.firestore.FieldValue.serverTimestamp() },
+          }, { merge: true });
+          await G.registrarEvento(gid, "regularizacion_bloqueada",
+            `El anexo de regularización NO se aplicó: ${chk.motivo}. Un anexo de regularización solo cubre equipos que el cliente ya tiene; los radios nuevos van en un aumento aparte. Anula esta gestión y créala de nuevo desde el Centro.`);
+          logger.error("[onGestionWrite] anexo de regularización inconsistente — no aplicado", { gid, ...chk });
         } else {
           // Anexo de REGULARIZACIÓN (2026-08-31, caso C COMUNICA): los equipos
           // YA están en poder del cliente (sobrantes sin línea de una

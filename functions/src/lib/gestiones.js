@@ -659,7 +659,24 @@ function detalleAumentoHtml(a = {}) {
   return html || `<p style="font:13px Arial,sans-serif;color:#666;">(sin detalle registrado)</p>`;
 }
 
+// Candado del anexo de REGULARIZACIÓN (verificación 2026-09-08): cierra sin
+// bodega, OS ni entrega, así que NO puede llevar radios nuevos — la suma de
+// cantidades de las líneas tiene que ser exactamente el número de seriales
+// que el cliente ya tiene. El wizard lo exige al guardar; esto es el piso
+// server-side para documentos armados fuera del wizard o editados a mano.
+function regularizacionConsistente(aumento) {
+  const a = aumento || {};
+  if (a.es_regularizacion !== true) return { ok: true, aplica: false, total: 0, seriales: 0 };
+  const total = (a.lineas || []).reduce((s, l) => s + (Number(l && l.cantidad) || 0), 0);
+  const seriales = (Array.isArray(a.regulariza_seriales) ? a.regulariza_seriales : [])
+    .filter(s => s && String(s.serial || "").trim()).length;
+  if (!seriales) return { ok: false, aplica: true, total, seriales, motivo: "sin seriales declarados" };
+  if (total !== seriales) return { ok: false, aplica: true, total, seriales, motivo: `las líneas suman ${total} equipo(s) y los seriales regularizados son ${seriales}` };
+  return { ok: true, aplica: true, total, seriales };
+}
+
 module.exports = {
+  regularizacionConsistente,
   limpiarAnulacion,
   avisoFacturacion, detalleAumentoHtml, tramiteResumen, tipoContratoDeNumero,
   TIPO_LABEL, escapeHtml, isEmail, urlGestion, urlBodegaGestion, tablaHtml,
