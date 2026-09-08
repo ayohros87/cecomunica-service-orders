@@ -170,20 +170,7 @@
       .cg-head { flex-wrap:nowrap; }
       .cg-acts { margin-left:0; }
     }
-    .cg-hoy { display:flex; gap:9px; align-items:center; width:100%; text-align:left; background:none; border:0;
               border-top:1px solid var(--border-subtle); padding:8px 16px; font-size:13px; color:var(--fg-2); cursor:pointer; }
-    .cg-hoy:hover { background:var(--accent-soft, #E6F4FB); }
-    .cg-hoy.bad span:first-child  { color:#A03030; }
-    .cg-hoy.warn span:first-child { color:#8A6415; }
-    .cg-hoy.info span:first-child { color:#0B5E8A; }
-    .cg-hoy-resumen { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:2px 16px 9px; }
-    .cg-hoy-chip { font-size:12px; font-weight:700; padding:3px 10px; border-radius:999px;
-                   background:var(--surface-2, #EEF2F5); color:var(--fg-3); }
-    .cg-hoy-chip.bad  { background:#F9E4E4; color:#A03030; }
-    .cg-hoy-chip.warn { background:#F9F0D8; color:#8A6415; }
-    .cg-hoy-vertoggle { margin-left:auto; background:none; border:1px solid var(--border-subtle);
-                        border-radius:8px; padding:3px 10px; font-size:12px; color:var(--fg-2); cursor:pointer; }
-    .cg-hoy-vertoggle:hover { background:var(--accent-soft, #E6F4FB); }
     .cg-overlay { position:fixed; inset:0; background:rgba(11,42,71,.45); display:grid; place-items:center;
                   padding:20px; z-index:80; }
     .cg-modal { background:var(--surface-card); border-radius:14px; box-shadow:0 20px 50px -20px rgba(11,42,71,.4);
@@ -208,8 +195,9 @@
   <!-- ── Vista: directorio ─────────────────────────────────────────── -->
   <div id="vistaLista">
     <!-- El buscador va PRIMERO (pedido de Zuleika 2026-09-04): el objetivo de
-         esta pantalla es encontrar al cliente; "Para hoy" es la capa secundaria
-         de señales (decisión 2026-08-25) y vive debajo, plegada por defecto. -->
+         esta pantalla es encontrar al cliente. La franja "Para hoy" se quitó el
+         2026-09-08 (Alberto): duplicaba el inicio y la cola Ahora de la ficha y
+         barría todo el pool. -->
     <div class="cg-tools">
       <input class="form-input cg-buscar" id="cgBuscar" type="search"
              placeholder="Buscar cliente por nombre, RUC o representante…" autocomplete="off">
@@ -225,7 +213,6 @@
       <!-- Bandeja "Cuentas por regularizar" (admin/gerencia): la pinta init(). -->
       <span id="cgToolsExtra" style="margin-left:auto;"></span>
     </div>
-    <div id="cgParaHoy"></div>
     <div id="cgLista"></div>
     <div style="text-align:center; margin-top:var(--sp-3);">
       <button class="btn btn-ghost hidden" id="btnMas">Cargar más</button>
@@ -310,7 +297,7 @@
 <script defer src="../js/ui/toast.js"></script>
 <!-- Conversor fotos→PDF del contrato firmado (ContratosFirmado._fotosAPdf); su init no encuentra #fileFirmado aquí y no hace nada más. -->
 <script defer src="../js/pages/contratos-upload.js?v=firm2"></script>
-<script src="../js/pages/clientes-centro.js?v=cg81" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg82" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
