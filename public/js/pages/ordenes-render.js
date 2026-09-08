@@ -1563,6 +1563,9 @@ function _crearFilaDetalle(ordenId, ordenData, equiposNormalizados) {
                 <span class="separador-leyenda">|</span>
                 <span class="estado-inline"><span class="accesorio-item accesorio-item--chip activo accesorio-item--mini">✓</span> Incluido</span>
                 <span class="estado-inline"><span class="accesorio-item accesorio-item--chip inactivo accesorio-item--mini">✕</span> No incluido</span>
+                <span class="separador-leyenda">|</span>
+                <button type="button" class="btn-header-compact" data-action="accesorios-todos" data-valor="1" data-stop-propagation="true" data-orden-id="${ordenId}" title="Marcar los 6 accesorios en todos los equipos de la orden (luego Guardar)">Marcar todos</button>
+                <button type="button" class="btn-header-compact" data-action="accesorios-todos" data-valor="0" data-stop-propagation="true" data-orden-id="${ordenId}" title="Quitar los accesorios de todos los equipos de la orden (luego Guardar)">Quitar todos</button>
               </div>
             </div>
           </div>

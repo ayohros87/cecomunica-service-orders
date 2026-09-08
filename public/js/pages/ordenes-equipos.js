@@ -274,6 +274,26 @@ window.activarModoAccesorios = function (ordenId) {
   }
 };
 
+// "Marcar todos" / "Quitar todos" (pedido de Brenda, recepción, 2026-09-08):
+// una OS de programación de 10+ radios obligaba a 6 clicks por equipo. Aplica
+// a TODOS los equipos de la orden en el DOM (entra al modo lote si hace falta)
+// y deja la escritura al botón Guardar de siempre — nada se guarda hasta ahí.
+window.marcarAccesoriosTodos = function (ordenId, activo) {
+  const filaDetalle = document.querySelector(`tr.filaDetalle[data-orden-id="${ordenId}"]`);
+  if (!filaDetalle) {
+    Toast.show("⚠️ Abre la orden primero para editar accesorios", "bad");
+    return;
+  }
+  if (filaDetalle.dataset.modoAccesorios !== "true") activarModoAccesorios(ordenId);
+  const chips = filaDetalle.querySelectorAll('.accesorios-group .accesorio-item');
+  chips.forEach(chip => {
+    chip.classList.toggle('activo', !!activo);
+    chip.classList.toggle('inactivo', !activo);
+  });
+  const equipos = new Set(Array.from(chips).map(c => c.closest('tr[data-equipo-id]')?.dataset.equipoId).filter(Boolean)).size;
+  Toast.show(`Accesorios ${activo ? 'marcados' : 'quitados'} en ${equipos} equipo(s) — pulsa Guardar`, "ok");
+};
+
 // Chips de accesorios vivos al PRIMER click (auditoría órdenes P2): antes el
 // click en un chip fuera del modo lote se perdía — había que descubrir
 // "Accesorios en lote" en el menú del detalle. Delegado: si el modo no está

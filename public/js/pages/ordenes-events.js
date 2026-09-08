@@ -186,6 +186,10 @@
       const ordenId = el.dataset.ordenId;
       if (ordenId) guardarAccesoriosLote(ordenId);
     },
+    'accesorios-todos': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (ordenId) marcarAccesoriosTodos(ordenId, el.dataset.valor === '1');
+    },
     'toggle-order-actions': (el) => {
       const ordenId = el.dataset.ordenId;
       if (ordenId) toggleOrderActionsMenu(ordenId);
