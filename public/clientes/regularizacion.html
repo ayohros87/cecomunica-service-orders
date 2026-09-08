@@ -60,9 +60,9 @@
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/domain/regularizacion.js?v=reg1"></script>
+  <script defer src="../js/domain/regularizacion.js?v=reg2"></script>
   <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/pages/clientes-regularizacion.js?v=reg2"></script>
+  <script defer src="../js/pages/clientes-regularizacion.js?v=reg3"></script>
   <script defer src="/js/vendor/lucide.min.js?v=3"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
 </head>
@@ -91,6 +91,8 @@
     <button type="button" class="rg-chip rg-chip--leve" data-f="leve" role="tab">Leves <span class="cnt" data-cnt="leve">0</span></button>
     <button type="button" class="rg-chip rg-chip--sin_vendedor" data-f="sin_vendedor" role="tab">Sin vendedor <span class="cnt" data-cnt="sin_vendedor">0</span></button>
     <button type="button" class="rg-chip rg-chip--exceden" data-f="exceden" role="tab">Exceden el margen <span class="cnt" data-cnt="exceden">0</span></button>
+    <button type="button" class="rg-chip rg-chip--leve" data-f="solo_bodega" role="tab" title="Solo radios por clasificar: cola de bodega, no del vendedor">Solo bodega <span class="cnt" data-cnt="solo_bodega">0</span></button>
+    <button type="button" class="rg-chip rg-chip--leve" data-f="inactivas" role="tab">Inactivas <span class="cnt" data-cnt="inactivas">0</span></button>
     <span class="push"></span>
     <select class="form-select" id="rgVendedor" style="max-width:200px;" aria-label="Filtrar por vendedor"><option value="">Todos los vendedores</option></select>
     <input type="search" id="rgBuscar" class="form-input" placeholder="Buscar cuenta…" style="max-width:200px;" autocomplete="off">

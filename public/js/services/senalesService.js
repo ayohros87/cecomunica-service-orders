@@ -266,7 +266,9 @@ const SenalesService = {
       snap.forEach(d => {
         const c = d.data() || {};
         const r = c.regularizacion;
-        if (c.deleted || !r || !(r.puntos > 0)) return;
+        if (c.deleted || c.activo === false || !r || !(r.puntos > 0)) return;
+        // Solo "por clasificar" = cola de bodega, no cuenta del vendedor.
+        if (r.solo_bodega) return;
         const desde = r.primera_marca_at?.toDate?.() || r.calculado_at?.toDate?.() || null;
         rows.push({
           id: d.id, col: 'clientes',

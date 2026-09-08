@@ -137,8 +137,15 @@
     const excede = puntos > 0 && etiqueta === "operativa"
       && (puntuales.length > o.max_puntuales || diasDesdePrimera > o.max_dias);
 
+    // Solo D7 = la cuenta no tiene contrato vigente ni radios en campo; lo
+    // único que le cuelga son fichas "por clasificar" (migración POC). Es
+    // cola de BODEGA, no una cuenta que un vendedor deba tomar: la bandeja y
+    // el home la esconden por defecto (verificación 2026-09-08: 58 de las
+    // 112 "sin vendedor" eran esto).
+    const soloBodega = puntos > 0 && puntos === d7;
+
     return {
-      nivel, puntos, etiqueta,
+      nivel, puntos, etiqueta, solo_bodega: soloBodega,
       d1, d2, d3, d4, d5, d6, d7,
       d1_ids: d1_ids.slice(0, 200), d2_ids, d3_ids, d4_ids, d5_ids, d7_ids: d7_ids.slice(0, 200),
       sin_contrato_vigente: sinContratoVigente,
@@ -197,7 +204,7 @@
 
   // ¿Cambió lo que importa? Evita reescribir el doc del cliente cada barrido.
   function igual(a, b) {
-    const ka = ["nivel", "puntos", "etiqueta", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "gestiones_puntuales", "excede_margen", "sin_contrato_vigente"];
+    const ka = ["nivel", "puntos", "etiqueta", "solo_bodega", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "gestiones_puntuales", "excede_margen", "sin_contrato_vigente"];
     const x = a || {}, y = b || {};
     return ka.every(k => (x[k] === undefined ? null : x[k]) === (y[k] === undefined ? null : y[k]));
   }

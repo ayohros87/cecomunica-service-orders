@@ -68,8 +68,17 @@ window.ClientesRegularizacion = (() => {
     render();
   }
 
+  // Fuera por defecto: cuentas inactivas y las que solo tienen radios "por
+  // clasificar" (cola de bodega, migración POC). Verificación 2026-09-08: de
+  // 112 "sin vendedor", 58 eran solo bodega y 3 inactivas — no son cuentas
+  // que un vendedor deba tomar. Sus chips las traen de vuelta.
+  const esBodega = (c) => !!c.regularizacion?.solo_bodega;
+  const esInactiva = (c) => c.activo === false;
   function pasa(c) {
     const r = c.regularizacion;
+    if (filtro === 'solo_bodega') return esBodega(c);
+    if (filtro === 'inactivas') return esInactiva(c);
+    if (esBodega(c) || esInactiva(c)) return false;
     if (filtro === 'critica' || filtro === 'por_regularizar' || filtro === 'leve') { if (r.nivel !== filtro) return false; }
     if (filtro === 'sin_vendedor' && c.vendedor_asignado) return false;
     if (filtro === 'exceden' && !r.excede_margen) return false;
@@ -89,9 +98,12 @@ window.ClientesRegularizacion = (() => {
   }
 
   function render() {
-    const cnt = { all: cuentas.length, critica: 0, por_regularizar: 0, leve: 0, sin_vendedor: 0, exceden: 0 };
+    const cnt = { all: 0, critica: 0, por_regularizar: 0, leve: 0, sin_vendedor: 0, exceden: 0, solo_bodega: 0, inactivas: 0 };
     cuentas.forEach(c => {
       const r = c.regularizacion;
+      if (esInactiva(c)) { cnt.inactivas++; return; }
+      if (esBodega(c)) { cnt.solo_bodega++; return; }
+      cnt.all++;
       if (cnt[r.nivel] !== undefined) cnt[r.nivel]++;
       if (!c.vendedor_asignado) cnt.sin_vendedor++;
       if (r.excede_margen) cnt.exceden++;

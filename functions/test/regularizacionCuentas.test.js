@@ -122,6 +122,15 @@ test("estampa y escalera: DEMO/TEMP se estampan pero no cuentan; excede por cant
   assert.equal(mig.excede_margen, false);
 });
 
+test("solo_bodega: una cuenta cuya única deuda son radios por clasificar es cola de bodega", () => {
+  const solo = R.calcular({ unidades: [{ id: "Z1", serial: "Z1", estado: "por_clasificar", ultima_asignacion: { cliente_id: "c1" } }] });
+  assert.equal(solo.solo_bodega, true);
+  assert.equal(solo.nivel, "leve");
+  const mixta = R.calcular({ unidades: [{ id: "Z1", serial: "Z1", estado: "por_clasificar", ultima_asignacion: { cliente_id: "c1" } }, en("A1")] });
+  assert.equal(mixta.solo_bodega, false);
+  assert.equal(R.calcular({}).solo_bodega, false);
+});
+
 test("igual(): solo compara lo que importa para no reescribir el doc del cliente", () => {
   const a = R.calcular({ unidades: [en("A1")] });
   const b = R.calcular({ unidades: [en("A1")] });
