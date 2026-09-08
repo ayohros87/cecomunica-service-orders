@@ -168,9 +168,20 @@ de admin. Subtítulos de una línea o ninguno.
 - **Banda al abrir** cualquier wizard sobre una cuenta con deuda:
   "Esta cuenta está por regularizar (131). Esta gestión se registrará como
   puntual (#3)". Un solo renglón, sin bloquear.
-- **Aumento** sobre cuenta con D1 > 0: paso "Radios que ya tiene" precargado
-  con los D1, para incorporarlos al anexo (usa `es_regularizacion` y
-  `regulariza_seriales`, que ya existen). El vendedor los marca o los deja.
+- **Aumento** sobre cuenta con D1 > 0: **no se mezcla.** Verificación del
+  2026-09-08: la marca `es_regularizacion` es de toda la gestión y todas las
+  compuertas (Almacén, aviso a bodega, OS, correo de firma) la excluyen
+  entera; al firmarse, B3 aplica todas las líneas como vigentes desde hoy. Un
+  anexo mixto dejaría los radios nuevos sin OS, sin entrega y facturándose.
+  Por eso el aumento normal muestra un aviso "N radios ya están con el
+  cliente sin contrato: aquí van solo los nuevos" con el botón **Regularizar
+  esos radios**, que abre el anexo de regularización aparte
+  (`wizAumento(id, {regularizarD1:true})`) precargado con los D1. El anexo de
+  regularización tiene las líneas fijas (modelo, cantidad y modalidad salen
+  de los seriales; solo se pone precio), sin "Agregar otro modelo", y
+  `crearAumento` exige que la suma de cantidades sea igual al número de
+  seriales. Pendiente: el mismo chequeo en B3 (`onGestionWrite`) cuando se
+  libere el archivo. Dos gestiones, dos firmas, cada una con su circuito.
 - **Reemplazo**: ya exige el serial saliente. Si lo declara, D1 baja en uno.
 - **Temporal y Demo**: no piden nada (no tocan la cuenta). Se estampan pero no
   cuentan como puntuales.

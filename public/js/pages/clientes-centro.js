@@ -514,7 +514,10 @@ window.Centro = {
       ? `<button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal(); Centro.abrirGestion('ct-${this.esc(tram.id)}')">Ver la renovación en trámite</button>`
       : `<button class="btn btn-primary cg-act" onclick="Centro._cerrarModal(); Centro.wizContrato({renovarCuenta:true})">${est.tipo === 'sin_contrato' || est.tipo === 'nueva' ? 'Regularizar: contrato nuevo' : 'Regularizar cuenta'}</button>`;
     const accion = (f) => {
-      if (f.codigo === 'd1') return regularizarBtn;
+      // D1: la renovación consolidadora los cubre; con un contrato vigente
+      // también sirve el anexo de regularización (sin bodega, sin OS).
+      if (f.codigo === 'd1') return regularizarBtn + (puede && !tram && est.renovables.length
+        ? ` <button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal(); Centro.wizAumento(null,{regularizarD1:true})">Anexo de regularización</button>` : '');
       if (f.codigo === 'd2') return f.ids.map(id => {
         const c = this.contratos.find(x => (x.contrato_id || x.id) === id);
         return c && this.puedeAsignar()
@@ -3019,11 +3022,20 @@ window.Centro = {
     // los sobrantes de la conciliación — prellenado con sus modelos, y B3 lo
     // aplica y CIERRA al firmarse, sin bodega, sin OS y sin entrega.
     this._aumRegulariza = null;
-    if (opts.regularizar) {
-      const sobr = [...(cBase.regularizacion?.sin_linea_seriales || []),
+    // Dos fuentes de "equipos que el cliente YA tiene" (plan 2026-09-08 §4.3):
+    //   · opts.regularizar   → sobrantes de la conciliación de ESE contrato.
+    //   · opts.regularizarD1 → radios en campo sin contrato interno (D1 de la
+    //     deuda de la cuenta); se amarran al contrato destino al firmarse.
+    // En ambos casos el anexo es SOLO de regularización: sin bodega, sin OS,
+    // sin entrega — por eso NO admite radios nuevos (candado en las líneas y
+    // en crearAumento). Los nuevos van en un aumento normal aparte.
+    if (opts.regularizar || opts.regularizarD1) {
+      const sobr = opts.regularizarD1 ? [] : [...(cBase.regularizacion?.sin_linea_seriales || []),
                     ...(cBase.regularizacion?.sin_cupo_seriales || [])];
-      const unidades = sobr.map(s => this.equipos.find(e => (e.serial || e.id) === s)).filter(Boolean);
-      if (!unidades.length) { Toast.show('Este contrato no tiene sobrantes de regularización', 'warn'); return; }
+      const unidades = opts.regularizarD1
+        ? this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id && !e.pendiente_devolucion)
+        : sobr.map(s => this.equipos.find(e => (e.serial || e.id) === s)).filter(Boolean);
+      if (!unidades.length) { Toast.show(opts.regularizarD1 ? 'La cuenta no tiene radios en campo sin contrato' : 'Este contrato no tiene sobrantes de regularización', 'warn'); return; }
       this._aumRegulariza = unidades.map(u => ({
         pool_doc_id: u.id, serial: u.serial || u.id,
         modelo_id: u.modelo_id || null, modelo: u.modelo_label || u.modelo || '',
@@ -3033,13 +3045,27 @@ window.Centro = {
     // Ancla automática (cuenta fragmentada): el destino NO se pregunta — se
     // informa. Y la consolidación se OFRECE cuando conviene, sin imponerla.
     const est = this._cuentaEstado();
-    const nudge = this._aumRegulariza ? '' : est.tipo === 'fragmentada' && !this._renovacionEnTramite()
+    // Aviso (plan 2026-09-08 §4.3, corregido tras la verificación): un aumento
+    // NO mezcla radios que el cliente ya tiene con radios nuevos — el anexo de
+    // regularización cierra sin bodega y los nuevos se quedarían sin OS. Se
+    // ofrece el anexo aparte, precargado con los D1 de la cuenta.
+    const d1 = esPapel || this._aumRegulariza ? [] : this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id && !e.pendiente_devolucion);
+    const nudgeReg = d1.length
+      ? `<div class="cg-senal warn" style="margin-bottom:10px; align-items:center;">
+          <span><b>${d1.length} radio${d1.length === 1 ? '' : 's'}</b> ya está${d1.length === 1 ? '' : 'n'} con el cliente sin contrato
+            (<span class="cg-mono">${d1.slice(0, 6).map(e => this.esc(e.serial || e.id)).join(', ')}${d1.length > 6 ? '…' : ''}</span>).
+            Aquí van <b>solo los radios nuevos</b>; esos se regularizan con un anexo aparte, sin bodega.</span>
+          <button class="btn btn-ghost" style="margin-left:auto; flex:none; padding:3px 11px; font-size:12px;"
+            onclick="Centro.wizAumento(${preselId ? `'${this.esc(preselId)}'` : 'null'},{regularizarD1:true})">Regularizar esos radios</button></div>`
+      : '';
+    const nudgeConsol = this._aumRegulariza ? '' : est.tipo === 'fragmentada' && !this._renovacionEnTramite()
       && (est.custodia || est.renovables.some(c => this._wcEnVentana(c)))
       ? `<div class="cg-senal warn" style="margin-bottom:10px; align-items:center;">
           <span>Esta cuenta tiene <b>${est.renovables.length} contrato(s)</b>${est.custodia ? ` y <b>${est.custodia} radio(s) sin contrato formal</b>` : ''} —
           si el cliente está por renovar, este es el momento de consolidarla.</span>
           <button class="btn btn-primary" style="margin-left:auto; flex:none; padding:3px 11px; font-size:12px;"
             onclick="Centro.wizContrato({renovarCuenta:true, agregar:true})">Mejor renovar la cuenta</button></div>` : '';
+    const nudge = nudgeReg + nudgeConsol;
     const destinoHtml = esPapel
       ? `<div class="form-field" style="margin-bottom:10px; max-width:420px;">
           <label class="form-label" for="waContratoPapel">Número del contrato en papel</label>
@@ -3052,7 +3078,7 @@ window.Centro = {
       ? `<div class="form-field" style="margin-bottom:10px;">
           <label class="form-label">Anexo de regularización al contrato</label>
           <p style="margin:0; font-size:13px;"><span class="cg-mono">${this.esc(cBase.contrato_id || cBase.id)}</span>
-            <span style="color:var(--fg-4);">(el de la renovación con sobrantes — fijo)</span></p>
+            <span style="color:var(--fg-4);">(fijo — los equipos quedan amarrados a este contrato al firmarse)</span></p>
           <select id="waContrato" class="hidden"><option value="${this.esc(cBase.id)}" selected></option></select></div>`
       : opts.ancla
       ? `<div class="form-field" style="margin-bottom:10px;">
@@ -3075,7 +3101,10 @@ window.Centro = {
             const g = m.get(k) || { modelo_id: u.modelo_id, modelo: u.modelo, modalidad: u.modalidad, cantidad: 0 };
             g.cantidad++; m.set(k, g);
           });
-          return [...m.values()].map(l => this._lineaModeloPre('wau', true, l)).join('');
+          // Líneas FIJAS: modelo y cantidad salen de los seriales; solo se
+          // pone precio. Un anexo de regularización no lleva radios nuevos
+          // (no pasa por bodega ni genera OS — verificación 2026-09-08).
+          return [...m.values()].map(l => this._lineaModeloFija('wau', l)).join('');
         })()
       : this._lineaModeloHtml('wau', true);
     const regSenal = this._aumRegulariza
@@ -3115,8 +3144,10 @@ window.Centro = {
         <div class="form-field" style="margin-bottom:10px;">
           <label class="form-label">Equipos (modelo · cantidad · precio mensual)</label>
           <div id="waLineas">${lineasIni}</div>
-          <button class="btn btn-ghost cg-act"
-            onclick="Centro._addLineaModelo('waLineas','wau',true); Centro._aumPreview()">+ Agregar otro modelo</button></div>
+          ${this._aumRegulariza
+            ? `<p style="margin:4px 0 0; font-size:12px; color:var(--fg-3);">Solo los ${this._aumRegulariza.length} equipo(s) que ya están con el cliente. ¿Radios nuevos? Van en un <b>aumento aparte</b>, que sí pasa por bodega y entrega.</p>`
+            : `<button class="btn btn-ghost cg-act"
+            onclick="Centro._addLineaModelo('waLineas','wau',true); Centro._aumPreview()">+ Agregar otro modelo</button>`}</div>
         <div class="form-field" style="margin-bottom:4px;">
           <label class="form-label">Otros conceptos (cargos del catálogo — únicos o mensuales)</label>
           <div id="waCargos"></div>
@@ -3172,6 +3203,16 @@ window.Centro = {
     }
     if (!lineas.length) { Toast.show('Indica al menos un modelo (de la lista)', 'warn'); return; }
     if (lineas.some(l => !(l.precio > 0))) { Toast.show('Cada línea necesita su precio mensual', 'warn'); return; }
+    // Candado (verificación 2026-09-08): un anexo de regularización cierra
+    // sin bodega, OS ni entrega — si llevara radios nuevos, esos radios
+    // nunca saldrían. Las cantidades tienen que ser exactamente los seriales.
+    if (this._aumRegulariza) {
+      const total = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
+      if (total !== this._aumRegulariza.length) {
+        Toast.show(`El anexo de regularización cubre exactamente ${this._aumRegulariza.length} equipo(s) que ya están con el cliente — los radios nuevos van en un aumento aparte`, 'warn');
+        return;
+      }
+    }
     const meses = Number(document.getElementById('waMeses')?.value || 0);
     if (!(meses > 0)) { Toast.show('Indica la vigencia del tramo en meses', 'warn'); return; }
     const cargos = this._aumCargos();
@@ -3479,6 +3520,19 @@ window.Centro = {
   // (modalidad) y por serial (pool/Anexo A). ALQ/PROP quedan como legacy: se
   // absorben al renovar. Los nuevos desde el Centro nacen SERV.
   TIPOS_CONTRATO: { SERV: 'Servicio', ALQ: 'Alquiler', PROP: 'Propio', DEMO: 'Demo', TEMP: 'Temporal' },
+
+  // Línea FIJA (anexo de regularización): modelo, cantidad y modalidad vienen
+  // de los seriales y no se editan; solo el precio. Mismos data-attrs que la
+  // línea normal para que _lineasModelo la lea igual.
+  _lineaModeloFija(pref, l) {
+    return `<div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
+      ${this._selModelo(`data-${pref}-modelo disabled style="flex:1;"`, l?.modelo_id, l?.modelo)}
+      <input class="form-input" data-${pref}-cant type="number" readonly value="${Math.max(1, Number(l?.cantidad || 1))}" style="width:86px; background:var(--surface-sunken, #EEF2F6);" title="Cantidad — fija por los seriales">
+      <input class="form-input" data-${pref}-precio type="number" min="0" step="1" placeholder="$/mes" value="${l?.precio != null && l.precio !== '' ? Number(l.precio).toFixed(2) : ''}" style="width:110px;" title="Precio mensual">
+      <label class="cg-toggle" style="flex:none; font-size:12px; padding:4px 9px; opacity:.8;" title="Modalidad fija por la propiedad del serial">
+        <input type="checkbox" data-${pref}-propio disabled ${l?.modalidad === 'propio' ? 'checked' : ''}> del cliente</label>
+    </div>`;
+  },
 
   _lineaModeloPre(pref, conPrecio, l) {
     return `<div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
