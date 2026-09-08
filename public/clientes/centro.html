@@ -110,6 +110,66 @@
     .cg-menu .pie { font-size:12px; color:var(--fg-3); border-bottom:0; }
     .cg-menu .off:hover { background:none; }
     .cg-vacio { color:var(--fg-3); font-size:13px; padding:14px; text-align:center; }
+    /* ── Ficha reordenada (2026-09-08): cola "Ahora", franja de números,
+       bloques plegables, equipos por grupo, dock móvil ── */
+    .cg-ahora { background:var(--surface-card); border:1px solid var(--border-default); border-radius:10px; margin:var(--sp-4) 0 10px; overflow:hidden; }
+    .cg-ahora .hd { font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--fg-3); font-weight:700; padding:9px 14px 4px; display:flex; gap:10px; align-items:center; }
+    .cg-ahora .hd .mas { margin-left:auto; background:none; border:0; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; text-transform:none; letter-spacing:0; }
+    .cg-ahora .row { display:grid; grid-template-columns:10px minmax(0,1fr) auto; gap:12px; align-items:center; padding:9px 14px; border-top:1px solid var(--border-subtle); }
+    .cg-ahora .row .dot { width:10px; height:10px; border-radius:50%; background:var(--accent); }
+    .cg-ahora .row.bad .dot { background:#D24545; } .cg-ahora .row.warn .dot { background:#E0A93A; }
+    .cg-ahora .row .t { min-width:0; font-size:13.5px; } .cg-ahora .row .t b { font-weight:600; }
+    .cg-ahora .row .t .s { display:block; color:var(--fg-3); font-size:12.5px; }
+    .cg-ahora .row .t .toca { color:var(--fg-2); font-weight:600; }
+    .cg-ahora .row .btns { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+    .cg-ahora .ok { padding:10px 14px; font-size:13px; color:var(--cg-ok-deep, #17714B); display:flex; gap:8px; align-items:center; }
+    .cg-resumen { display:flex; flex-wrap:wrap; gap:6px 18px; font-size:12.5px; color:var(--fg-3); padding:0 4px; margin-bottom:12px; }
+    .cg-resumen b { color:var(--fg-1); font-weight:600; font-variant-numeric:tabular-nums; }
+    .cg-resumen button { background:none; border:0; padding:0; font:inherit; color:var(--fg-3); cursor:pointer; border-bottom:1px dotted var(--accent-line, #66BCE7); }
+    .cg-resumen button:hover { color:var(--fg-1); }
+    .cg-block { background:var(--surface-card); border:1px solid var(--border-default); border-radius:10px; margin-bottom:10px; }
+    .cg-block > summary { list-style:none; cursor:pointer; display:grid; grid-template-columns:24px auto minmax(0,1fr) 18px; gap:10px; align-items:center; padding:11px 14px; user-select:none; }
+    .cg-block > summary::-webkit-details-marker { display:none; }
+    .cg-block > summary .ic { width:24px; height:24px; border-radius:6px; background:var(--surface-sunken, #EEF2F6); display:grid; place-items:center; color:var(--fg-2); }
+    .cg-block > summary .ic svg, .cg-block > summary .ic i { width:14px; height:14px; }
+    .cg-block > summary .ttl { font-family:var(--font-display); font-weight:700; font-size:15.5px; }
+    .cg-block > summary .sum { color:var(--fg-3); font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cg-block > summary .chev { color:var(--fg-4); font-size:18px; font-weight:600; transition:transform .15s; text-align:center; }
+    .cg-block[open] > summary .chev { transform:rotate(90deg); }
+    .cg-block > .in { border-top:1px solid var(--border-subtle); padding:10px 14px 14px; }
+    .cg-eqgrp { border:1px solid var(--border-subtle); border-radius:8px; margin-bottom:6px; }
+    .cg-eqgrp > summary { list-style:none; cursor:pointer; display:grid; grid-template-columns:minmax(0,1fr) auto auto auto 18px; gap:12px; align-items:center; padding:8px 12px; font-size:13px; user-select:none; }
+    .cg-eqgrp > summary::-webkit-details-marker { display:none; }
+    .cg-eqgrp > summary .k { color:var(--fg-3); font-size:12.5px; white-space:nowrap; }
+    .cg-eqgrp > summary .chev { color:var(--fg-4); font-weight:600; text-align:center; }
+    .cg-eqgrp[open] > summary { border-bottom:1px solid var(--border-subtle); }
+    .cg-eqgrp[open] > summary .chev { transform:rotate(90deg); }
+    .cg-eqgrp.warn > summary { background:var(--cg-warn-soft, #FBF3E0); }
+    .cg-dock { display:none; }
+    @media (max-width:760px) {
+      .cg-block > summary { grid-template-columns:24px minmax(0,1fr) 18px; }
+      .cg-block > summary .sum { grid-column:2; white-space:normal; }
+      .cg-eqgrp > summary { grid-template-columns:minmax(0,1fr) auto 18px; }
+      .cg-eqgrp > summary .k:nth-of-type(2) { display:none; }
+      .cg-ahora .row { grid-template-columns:10px minmax(0,1fr); }
+      .cg-ahora .row .btns { grid-column:2; justify-content:flex-start; }
+      /* Dock inferior con las dos acciones; el FAB del rail sube para no taparlo. */
+      /* El FAB del rail vive DENTRO del dock (primera celda vacía): nada tapa el contenido. */
+      .cg-dock { display:grid; grid-template-columns:54px 1fr 1fr; gap:8px; position:fixed; left:0; right:0; bottom:0; z-index:1050;
+                 background:var(--surface-card); border-top:1px solid var(--border-default); padding:10px 12px calc(10px + env(safe-area-inset-bottom)); }
+      .cg-dock .btn { justify-content:center; }
+      .cg-dock:empty { display:none; }
+      #vistaFicha { padding-bottom:84px; }
+      .rail-fab { bottom:12px !important; left:12px !important; z-index:1100 !important; }
+      #btnPrimario, #btnGestion { display:none; }
+      /* Barra superior: en el teléfono el título montaba sobre "Menú principal"
+         y "Cerrar sesión" (recorrido con emulador 2026-09-08). Aquí solo el
+         título y el menú; el resto vive en el rail. */
+      .topbar .topbar-title { font-size:15px; max-width:calc(100vw - 120px); overflow:hidden; text-overflow:ellipsis; }
+      .topbar .topbar-actions > a.btn, .topbar .topbar-actions > button.btn:not(.btn-topbar-menu) { display:none; }
+      .cg-head { flex-wrap:nowrap; }
+      .cg-acts { margin-left:0; }
+    }
     .cg-hoy { display:flex; gap:9px; align-items:center; width:100%; text-align:left; background:none; border:0;
               border-top:1px solid var(--border-subtle); padding:8px 16px; font-size:13px; color:var(--fg-2); cursor:pointer; }
     .cg-hoy:hover { background:var(--accent-soft, #E6F4FB); }
@@ -190,41 +250,57 @@
           <p id="fMeta" style="margin:4px 0 0; color:var(--fg-3); font-size:13px;"></p>
         </div>
         <div class="cg-acts">
-          <!-- Cotizar / Datos salieron del menú "Nueva gestión" a la cabecera
-               (plan 2026-09-08 §4.2): el menú es solo para gestiones. -->
-          <span id="cgHeadLinks" style="display:contents;"></span>
-          <button class="btn btn-ghost" onclick="Centro.verHistorial()"
-                  title="Quién cambió qué en la ficha (representante, RUC, vendedor…)">
-            <i data-lucide="history"></i> Historial</button>
-          <button class="btn btn-primary" id="btnGestion" onclick="Centro.toggleMenu(event)">
+          <!-- Rediseño de la ficha (2026-09-08, "cada pieza en su lugar"):
+               UN botón primario contextual (Regularizar / Renovar / Ver
+               trámite / Nuevo contrato), "Nueva gestión" para todo lo demás y
+               un "⋯" con Cotizar · Datos · Historial. Lo pinta _pintarPrimario. -->
+          <button class="btn btn-primary hidden" id="btnPrimario"></button>
+          <button class="btn" id="btnGestion" onclick="Centro.toggleMenu(event)">
             Nueva gestión <i data-lucide="chevron-down"></i></button>
           <div class="cg-menu hidden" id="cgMenu"></div>
+          <button class="btn btn-ghost" id="btnMasFicha" onclick="Centro.toggleMas(event)" aria-label="Más opciones"
+                  title="Cotizar · Datos del cliente · Historial"><i data-lucide="more-horizontal"></i></button>
+          <div class="cg-menu hidden" id="cgMasMenu" style="min-width:220px;"></div>
         </div>
       </div>
     </div>
 
-    <div id="fAcciones" style="margin:var(--sp-4) 0;"></div>
-    <div class="cg-kpis" id="fKpis"></div>
-    <div id="fSenales" style="margin-bottom:var(--sp-4);"></div>
+    <!-- Una sola cola "Ahora": lo que antes eran "Requiere tu acción" + las
+         señales + la regularización, ordenadas por urgencia, con quién debe
+         actuar y un botón por fila. Debajo, la franja de números (sin tiles). -->
+    <div id="fAhora" class="cg-ahora"></div>
+    <div id="fResumen" class="cg-resumen"></div>
 
-    <div class="ds-card" style="padding:var(--sp-4); margin-bottom:var(--sp-4);">
-      <h3 style="margin:0 0 var(--sp-3);"><i data-lucide="file-text" style="width:16px;height:16px;"></i> Contratos</h3>
-      <div class="cg-twrap" id="fContratos"></div>
-    </div>
+    <!-- Bloques plegables con resumen en la cabecera: Gestiones primero
+         (abierto si hay trabajo vivo), Contratos, Equipos agrupados, Actividad. -->
+    <details class="cg-block" id="blkGestiones">
+      <summary><span class="ic"><i data-lucide="refresh-cw"></i></span><span class="ttl">Gestiones</span><span class="sum" id="sumGestiones"></span><span class="chev">›</span></summary>
+      <div class="in"><div id="fGestiones"></div></div>
+    </details>
 
-    <div class="ds-card" style="padding:var(--sp-4); margin-bottom:var(--sp-4);">
-      <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:var(--sp-3);">
-        <h3 style="margin:0; flex:1;"><i data-lucide="radio" style="width:16px;height:16px;"></i> Equipos del cliente</h3>
-        <input class="form-input" id="fEqFiltro" type="search" placeholder="Filtrar por serial, modelo o contrato…"
-               style="max-width:300px;" autocomplete="off">
+    <details class="cg-block" id="blkContratos">
+      <summary><span class="ic"><i data-lucide="file-text"></i></span><span class="ttl">Contratos</span><span class="sum" id="sumContratos"></span><span class="chev">›</span></summary>
+      <div class="in"><div class="cg-twrap" id="fContratos"></div></div>
+    </details>
+
+    <details class="cg-block" id="blkEquipos">
+      <summary><span class="ic"><i data-lucide="radio"></i></span><span class="ttl">Equipos</span><span class="sum" id="sumEquipos"></span><span class="chev">›</span></summary>
+      <div class="in">
+        <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+          <input class="form-input" id="fEqFiltro" type="search" placeholder="Buscar serial, modelo o contrato…"
+                 style="max-width:300px;" autocomplete="off" aria-label="Buscar equipo">
+        </div>
+        <div id="fEquipos"></div>
       </div>
-      <div class="cg-twrap" id="fEquipos"></div>
-    </div>
+    </details>
 
-    <div class="ds-card" style="padding:var(--sp-4);">
-      <h3 style="margin:0 0 var(--sp-3);"><i data-lucide="refresh-cw" style="width:16px;height:16px;"></i> Gestiones</h3>
-      <div id="fGestiones"></div>
-    </div>
+    <details class="cg-block" id="blkActividad">
+      <summary><span class="ic"><i data-lucide="history"></i></span><span class="ttl">Actividad</span><span class="sum" id="sumActividad">quién cambió qué en la ficha</span><span class="chev">›</span></summary>
+      <div class="in"><div id="fActividad"><div class="cg-vacio">Ábrelo para cargar el historial.</div></div></div>
+    </details>
+
+    <!-- Móvil: las dos acciones siempre al alcance del pulgar. -->
+    <div class="cg-dock" id="cgDock"></div>
   </div>
 
 </div>
@@ -234,7 +310,7 @@
 <script defer src="../js/ui/toast.js"></script>
 <!-- Conversor fotos→PDF del contrato firmado (ContratosFirmado._fotosAPdf); su init no encuentra #fileFirmado aquí y no hace nada más. -->
 <script defer src="../js/pages/contratos-upload.js?v=firm2"></script>
-<script src="../js/pages/clientes-centro.js?v=cg77" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg78" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

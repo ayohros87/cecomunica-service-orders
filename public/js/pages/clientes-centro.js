@@ -83,6 +83,8 @@ window.Centro = {
     });
     document.getElementById('btnMas')?.addEventListener('click', () => this.cargarLista(false));
     document.getElementById('fEqFiltro')?.addEventListener('input', () => this.pintarEquipos());
+    // El bloque Actividad carga el historial la primera vez que se abre.
+    document.getElementById('blkActividad')?.addEventListener('toggle', (e) => { if (e.target.open) this.cargarActividad(); });
     document.addEventListener('click', (e) => {
       const menu = document.getElementById('cgMenu');
       if (menu && !menu.classList.contains('hidden') && !e.target.closest('.cg-acts')) menu.classList.add('hidden');
@@ -415,8 +417,8 @@ window.Centro = {
       // aparecía a saltos, sección por sección).
       const skel = (n, h) => Array.from({ length: n }, () =>
         `<div class="cg-skel" style="height:${h}px; margin-bottom:8px;"></div>`).join('');
-      document.getElementById('fKpis').innerHTML = skel(1, 64);
-      document.getElementById('fSenales').innerHTML = '';
+      document.getElementById('fAhora').innerHTML = skel(1, 64);
+      document.getElementById('fResumen').innerHTML = '';
       document.getElementById('fContratos').innerHTML = skel(3, 38);
       document.getElementById('fEquipos').innerHTML = skel(3, 38);
       document.getElementById('fGestiones').innerHTML = skel(2, 46);
@@ -447,6 +449,7 @@ window.Centro = {
       this.pintarEquipos();
       this.pintarGestiones();
       this.armarMenu();
+      this._abrirBloques(clienteId);
       if (window.lucide?.createIcons) lucide.createIcons();
       if (this.cSel) {
         const cid = this.cSel; this.cSel = null;
@@ -776,9 +779,9 @@ window.Centro = {
     if (window.lucide?.createIcons) lucide.createIcons();
     setTimeout(() => document.getElementById(`grow-${gid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
   },
-  pintarAcciones() {
-    const cont = document.getElementById('fAcciones');
-    if (!cont) return;
+  // Lo que espera una acción de alguien (contratos en trámite, gestiones
+  // vivas). Devuelve filas; pintarAhora las funde con las señales.
+  _itemsAccion() {
     const items = [];
     const esAprobador = [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol);
     const it = (tono, t, s, btns) => items.push({ tono, t, s, btns });
@@ -857,36 +860,248 @@ window.Centro = {
       }
     }
 
-    cont.innerHTML = items.length
-      ? `<p class="cg-accion-hd">Requiere tu acción (${items.length})</p>`
-        + items.map(x => `<div class="cg-accion${x.tono === 'info' ? ' cg-accion--info' : ''}">
-            <span class="t"><b>${x.t}</b><span class="s">${x.s}</span></span>
-            <span class="btns">${x.btns}</span></div>`).join('')
-      : '';
+    return items;
   },
 
-  pintarKpis() {
-    const activos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c));
-    const enTaller = this.equipos.filter(e => ['en_taller', 'devuelto_revision'].includes(e.estado)).length;
-    const abiertas = (this.gestiones || []).filter(g => GestionesService.ABIERTAS.includes(g.estado)).length;
-    document.getElementById('fKpis').innerHTML = [
-      [activos.length, 'Contratos vigentes'],
-      [this.equipos.length, 'Equipos en campo'],
-      [abiertas, 'Gestiones abiertas'],
-      [enTaller, 'En taller / revisión'],
-    ].map(([v, l]) => `<div class="cg-kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+  /* ═════════ Ficha reordenada (2026-09-08, "cada pieza en su lugar") ═════════
+   * Verificado con emulador: la ficha medía 3,558 px (5,056 en móvil), los
+   * equipos eran el 67 % y las gestiones quedaban al final. Ahora: cabecera
+   * con estado y UN botón primario, una sola cola "Ahora", una franja de
+   * números y bloques plegables con su resumen. Los pintores viejos quedan
+   * como alias porque los llaman la recarga y el listener. */
+  pintarAcciones() { this.pintarAhora(); },
+  pintarSenales() { /* fundido en pintarAhora */ },
+  pintarKpis() { this.pintarResumen(); },
+
+  // "Le toca a" — quién destraba la fila (derivado del texto de la acción).
+  _tocaA(t) {
+    const s = String(t || '').toLowerCase();
+    if (/espera aprobación de ventas/.test(s)) return 'ventas';
+    if (/^aprobar|^validar|resolver|revisar/.test(s)) return 'ti';
+    if (/espera la firma/.test(s)) return 'el cliente · tú envías el enlace';
+    if (/necesita la carta/.test(s)) return 'ti · el cliente firma la carta';
+    if (/bodega/.test(s)) return 'bodega';
+    if (/venció|vence en|regulariz|sin contrato/.test(s)) return 'ti';
+    return '';
+  },
+  _ahoraTodo: false,
+  pintarAhora() {
+    const cont = document.getElementById('fAhora');
+    if (!cont) return;
+    const acc = this._itemsAccion().map(x => ({ tono: x.tono === 'info' ? 'info' : 'warn', t: x.t, s: x.s, btns: x.btns }));
+    const sen = this._itemsSenal().map(x => ({ tono: x.tipo, t: this.esc(x.txt), s: '', btns: x.extra || '' }));
+    const peso = { bad: 0, warn: 1, info: 2 };
+    const items = [...acc, ...sen].sort((a, b) => (peso[a.tono] ?? 3) - (peso[b.tono] ?? 3));
+    if (!items.length) {
+      cont.innerHTML = `<div class="ok"><i data-lucide="check-circle-2" style="width:15px;height:15px;"></i> Nada pendiente en esta cuenta.</div>`;
+      return;
+    }
+    const MAX = 3;
+    const vis = this._ahoraTodo ? items : items.slice(0, MAX);
+    const fila = (x) => {
+      const toca = this._tocaA(x.t);
+      return `<div class="row ${x.tono}"><span class="dot"></span>
+        <span class="t"><b>${x.t}</b><span class="s">${x.s}${x.s && toca ? ' · ' : ''}${toca ? `le toca a <span class="toca">${this.esc(toca)}</span>` : ''}</span></span>
+        <span class="btns">${x.btns}</span></div>`;
+    };
+    cont.innerHTML = `<div class="hd">Ahora · ${items.length}
+        ${items.length > MAX ? `<button type="button" class="mas" onclick="Centro._ahoraTodo=!Centro._ahoraTodo; Centro.pintarAhora(); if(window.lucide) lucide.createIcons()">${this._ahoraTodo ? 'Ver menos' : `Ver ${items.length - MAX} más`}</button>` : ''}</div>
+      ${vis.map(fila).join('')}`;
   },
 
-  pintarSenales() {
+  // Franja de números con enlace al bloque (reemplaza los cuatro tiles).
+  pintarResumen() {
+    const cont = document.getElementById('fResumen');
+    if (!cont) return;
+    const vig = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c));
+    const mensual = vig.reduce((s, c) => s + Number(c.total_mensual ?? c.total_con_itbms ?? 0), 0);
+    const enContrato = this.equipos.filter(e => ['en_cliente', 'asignado_contrato'].includes(e.estado) && e.asignacion?.contrato_doc_id).length;
+    const sinContrato = this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id).length;
+    const porClasificar = this.equipos.filter(e => e.estado === 'por_clasificar').length;
+    const taller = this.equipos.filter(e => ['en_taller', 'devuelto_revision'].includes(e.estado)).length;
+    const abiertas = (this.gestiones || []).filter(g => GestionesService.ABIERTAS.includes(g.estado)).length + this._tramitesContrato().length;
+    const L = (blk, html) => `<button type="button" onclick="Centro.abrirBloque('${blk}')">${html}</button>`;
+    cont.innerHTML = [
+      L('blkContratos', `Vigentes <b>${vig.length}</b>`),
+      `<span>Mensual <b class="num">$${mensual.toFixed(2)}</b></span>`,
+      L('blkEquipos', `En contrato <b>${enContrato}</b>`),
+      sinContrato ? L('blkEquipos', `Sin contrato <b>${sinContrato}</b>`) : '',
+      porClasificar ? L('blkEquipos', `Por clasificar <b>${porClasificar}</b>`) : '',
+      L('blkGestiones', `En trámite <b>${abiertas}</b>`),
+      taller ? L('blkEquipos', `En taller <b>${taller}</b>`) : '',
+    ].filter(Boolean).join('');
+    // La cabecera resume la cuenta en una línea y los chips dicen el estado.
+    const meta = document.getElementById('fMeta');
+    const c = this.cliente || {};
+    if (meta) meta.textContent = [
+      `${vig.length} contrato${vig.length === 1 ? '' : 's'} vigente${vig.length === 1 ? '' : 's'}`,
+      `${this.equipos.length} radio${this.equipos.length === 1 ? '' : 's'}`,
+      c.vendedor_email ? `Vendedor: ${c.vendedor_email.split('@')[0]}` : null,
+      c.telefono || null,
+    ].filter(Boolean).join(' · ');
+    this._pintarChipReg(c);
+    this._pintarSumarios({ vig, enContrato, sinContrato, porClasificar, taller, abiertas });
+    this._pintarPrimario();
+  },
+
+  // Resúmenes de una línea en la cabecera de cada bloque.
+  _pintarSumarios({ vig, enContrato, sinContrato, porClasificar, taller, abiertas }) {
+    const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+    const cerradas = (this.gestiones || []).filter(g => ['cerrada', 'anulada'].includes(g.estado)).length;
+    set('sumGestiones', abiertas ? `${abiertas} en trámite · ${cerradas} en historial` : (cerradas ? `nada en trámite · ${cerradas} en historial` : 'nada en trámite'));
+    let vencidos = 0, proxima = null;
+    const hoy = new Date();
+    for (const c of vig) {
+      if (!this._aplicaVenc(c) || !c.fecha_vencimiento) continue;
+      const d = c.fecha_vencimiento.toDate ? c.fecha_vencimiento.toDate() : new Date(c.fecha_vencimiento);
+      if (isNaN(d)) continue;
+      if (d < hoy) vencidos++; else if (!proxima || d < proxima) proxima = d;
+    }
+    set('sumContratos', vig.length
+      ? `${vig.length} vigente${vig.length === 1 ? '' : 's'}${proxima ? ` · próximo vence ${this._fmtFecha(proxima)}` : ''}${vencidos ? ` · ${vencidos} vencido${vencidos === 1 ? '' : 's'}` : ''}`
+      : 'sin contratos vigentes');
+    set('sumEquipos', this.equipos.length
+      ? [`${this.equipos.length}`, `${enContrato} en contrato`, sinContrato ? `${sinContrato} sin contrato` : '', porClasificar ? `${porClasificar} por clasificar` : '', taller ? `${taller} en taller` : ''].filter(Boolean).join(' · ')
+      : 'sin equipos en el inventario');
+  },
+
+  // Chips de estado junto al nombre: vencidos, en trámite, regularización.
+  _pintarChipReg(c) {
+    const el = document.getElementById('fRegChip');
+    if (!el) return;
+    const chips = [];
+    const vig = (this.contratos || []).filter(x => this._esVigente(x) && !this._renovadoPor(x));
+    const vencidos = vig.filter(x => this._vencInfo(x)?.estado === 'vencido').length;
+    if (vencidos) chips.push(`<button type="button" class="cg-chip cg-chip--bad" style="border:0; cursor:pointer; font:inherit; font-size:12px;" onclick="Centro.abrirBloque('blkContratos')">${vencidos} contrato${vencidos === 1 ? '' : 's'} vencido${vencidos === 1 ? '' : 's'}</button>`);
+    const chip = (typeof Regularizacion !== 'undefined') ? Regularizacion.chip(c?.regularizacion) : null;
+    if (chip) {
+      const cls = chip.tono === 'bad' ? 'cg-chip--bad' : chip.tono === 'warn' ? 'cg-chip--warn' : 'cg-chip--muted';
+      chips.push(`<button type="button" class="cg-chip ${cls}" onclick="Centro.verRegularizacion()"
+        style="border:0; cursor:pointer; font:inherit; font-size:12px;" title="Qué le falta a esta cuenta para estar bien registrada">${this.esc(chip.texto)}</button>`);
+    }
+    const tram = (this.gestiones || []).filter(g => GestionesService.ABIERTAS.includes(g.estado)).length + this._tramitesContrato().length;
+    if (tram) chips.push(`<button type="button" class="cg-chip cg-chip--info" style="border:0; cursor:pointer; font:inherit; font-size:12px;" onclick="Centro.abrirBloque('blkGestiones')">${tram} en trámite</button>`);
+    if (!chips.length && this.contratos.length) chips.push(`<span class="cg-chip cg-chip--ok" style="font-size:12px;">Al día</span>`);
+    el.innerHTML = chips.join(' ');
+  },
+
+  // La acción que la cuenta pide primero — el botón primario de la cabecera,
+  // el destacado del menú y el dock móvil salen de aquí (una sola regla).
+  _accionPrimaria() {
+    if (!this.puedeCrearGestion()) return null;
+    const est = this._cuentaEstado();
+    const tram = this._renovacionEnTramite();
+    const reg = this._reg();
+    const deuda = !!(reg && reg.puntos > 0);
+    if (tram) return { onclick: `Centro.abrirGestion('ct-${this.esc(tram.id)}')`, label: `Ver renovación en trámite`, hint: `${this.esc(tram.contrato_id || '')} — abre el expediente para ver en qué paso va` };
+    if (est.tipo === 'nueva') return { onclick: 'Centro.wizContrato()', label: 'Nuevo contrato', hint: '' };
+    if (est.tipo === 'sin_contrato') return { onclick: 'Centro.wizContrato({renovarCuenta:true})', label: 'Regularizar: contrato nuevo', hint: `cubre los ${est.custodia} radio${est.custodia === 1 ? '' : 's'} que el cliente aún tiene` };
+    if (deuda) return { onclick: 'Centro.wizContrato({renovarCuenta:true})', label: 'Regularizar cuenta', hint: `${reg.puntos} punto${reg.puntos === 1 ? '' : 's'} — renovación con el plan por serial precargado` };
+    if (est.tipo === 'fragmentada') return { onclick: 'Centro.wizContrato({renovarCuenta:true})', label: 'Renovar cuenta', hint: `consolida ${est.renovables.length} contratos en uno` };
+    if (est.tipo === 'consolidada' && this._wcEnVentana(est.maestro)) return { onclick: `Centro.wizContrato('${this.esc(est.maestro.id)}')`, label: 'Renovar cuenta', hint: 'entra en ventana de renovación' };
+    return null;
+  },
+  _pintarPrimario() {
+    const P = this._accionPrimaria();
+    const btn = document.getElementById('btnPrimario');
+    if (btn) {
+      btn.classList.toggle('hidden', !P);
+      if (P) { btn.textContent = P.label; btn.setAttribute('onclick', P.onclick); btn.title = P.hint || ''; }
+    }
+    const dock = document.getElementById('cgDock');
+    if (dock) dock.innerHTML = !this.puedeCrearGestion() ? '' : `<span aria-hidden="true"></span>
+      <button class="btn" onclick="Centro.abrirMenuDesdeDock()">Nueva gestión ▾</button>
+      ${P ? `<button class="btn btn-primary" onclick="${P.onclick}">${P.label}</button>` : ''}`;
+  },
+  abrirMenuDesdeDock() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => document.getElementById('cgMenu')?.classList.remove('hidden'), 250);
+  },
+  toggleMas(e) {
+    e.stopPropagation();
+    document.getElementById('cgMenu')?.classList.add('hidden');
+    const m = document.getElementById('cgMasMenu');
+    if (!m) return;
+    m.classList.toggle('hidden');
+    if (!m.classList.contains('hidden')) {
+      document.addEventListener('click', () => m.classList.add('hidden'), { once: true });
+    }
+  },
+  abrirBloque(id) {
+    const d = document.getElementById(id);
+    if (!d) return;
+    d.open = true;
+    d.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  },
+  // Qué bloque abre solo al entrar: el que tenga trabajo vivo; si no, Contratos.
+  _bloquesDe: null,
+  _abrirBloques(clienteId) {
+    if (this._bloquesDe === clienteId) return;
+    this._bloquesDe = clienteId;
+    const vivas = (this.gestiones || []).some(g => GestionesService.ABIERTAS.includes(g.estado)) || this._tramitesContrato().length > 0;
+    const ids = ['blkGestiones', 'blkContratos', 'blkEquipos', 'blkActividad'];
+    const abrir = this.gSel ? 'blkGestiones' : vivas ? 'blkGestiones' : 'blkContratos';
+    ids.forEach(id => { const d = document.getElementById(id); if (d) d.open = id === abrir; });
+    const act = document.getElementById('fActividad');
+    if (act) act.innerHTML = '<div class="cg-vacio">Ábrelo para cargar el historial.</div>';
+    this._actividadDe = null;
+  },
+  _actividadDe: null,
+  async cargarActividad() {
+    if (!this.cliente || this._actividadDe === this.cliente.id) return;
+    this._actividadDe = this.cliente.id;
+    const cont = document.getElementById('fActividad');
+    if (!cont) return;
+    cont.innerHTML = '<div class="cg-vacio">Cargando…</div>';
+    let filas = [];
+    try {
+      const snap = await firebase.firestore().collection('clientes').doc(this.cliente.id)
+        .collection('historial').orderBy('at', 'desc').limit(50).get();
+      filas = snap.docs.map(d => d.data());
+    } catch (e) { console.warn('[centro] historial no disponible:', e?.message || e); }
+    cont.innerHTML = filas.length ? filas.map(h => this._histFilaHtml(h)).join('')
+      : `<div class="cg-vacio">Sin cambios registrados. El historial arrancó el 2&nbsp;sep&nbsp;2026.</div>`;
+    const sum = document.getElementById('sumActividad');
+    if (sum && filas[0]) sum.textContent = `último cambio ${this._histCuando(filas[0].at)} · ${(filas[0].por_email || 'sistema').split('@')[0]}`;
+  },
+  _histFilaHtml(h) {
+    const quien = this.esc(h.por_email || h.por_uid || 'sistema / script');
+    const cuando = this.esc(this._histCuando(h.at));
+    let cuerpo = '';
+    if (h.tipo === 'alta') {
+      cuerpo = `<div style="font-size:13px;">Alta del cliente${h.nombre ? ` — <b>${this.esc(h.nombre)}</b>` : ''}</div>`;
+    } else if (h.tipo === 'borrado_fisico') {
+      cuerpo = `<div style="font-size:13px; color:#A03030;">Borrado físico del documento${h.nombre ? ` — <b>${this.esc(h.nombre)}</b>` : ''}</div>`;
+    } else {
+      cuerpo = `<ul style="margin:4px 0 0; padding-left:18px; font-size:13px;">` +
+        Object.entries(h.cambios || {}).map(([campo, c]) => `
+          <li style="margin:2px 0;"><b>${this.esc(this.HIST_LABELS[campo] || campo)}</b>:
+            <span style="color:#A03030; text-decoration:line-through;">${this.esc(this._histVal(c?.antes))}</span>
+            <span style="color:var(--fg-4);">→</span>
+            <span style="color:#17714B; font-weight:600;">${this.esc(this._histVal(c?.despues))}</span></li>`).join('') +
+        `</ul>`;
+    }
+    return `<div style="border-bottom:1px solid var(--border-subtle); padding:10px 2px;">
+      <div style="font-size:12px; color:var(--fg-3);">${cuando} · ${quien}</div>
+      ${cuerpo}
+    </div>`;
+  },
+
+  _itemsSenal() {
     const out = [];
     for (const c of this.contratos) {
       if (!this._esVigente(c) || !this._aplicaVenc(c) || this._renovadoPor(c)) continue;
       const v = this._vencInfo(c);
       if (!v) continue;
+      // La fila de la cola "Ahora" lleva su botón: renovar (o ver el trámite).
+      const tram = this._renovacionEnTramite();
+      const cta = !this.puedeCrearGestion() ? '' : tram
+        ? `<button class="btn btn-ghost cg-act cg-senal-cta" onclick="Centro.abrirGestion('ct-${this.esc(tram.id)}')">Ver trámite</button>`
+        : `<button class="btn btn-ghost cg-act cg-senal-cta" onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta</button>`;
       if (v.estado === 'vencido') {
-        out.push({ tipo: 'bad', txt: `El contrato ${c.contrato_id || c.id} venció hace ${-v.dias} día(s) — coordinar renovación o terminación.` });
+        out.push({ tipo: 'bad', txt: `El contrato ${c.contrato_id || c.id} venció hace ${-v.dias} día(s) — coordinar renovación o terminación.`, extra: cta });
       } else if (v.estado === 'por_vencer') {
-        out.push({ tipo: 'warn', txt: `El contrato ${c.contrato_id || c.id} vence en ${v.dias} día(s) — iniciar renovación.` });
+        out.push({ tipo: 'warn', txt: `El contrato ${c.contrato_id || c.id} vence en ${v.dias} día(s) — iniciar renovación.`, extra: cta });
       }
     }
     // Regla 2026-08-27: una cuenta con equipos FUERA de contrato formal ya
@@ -930,10 +1145,7 @@ window.Centro = {
     if (enTaller) out.push({ tipo: 'info', txt: `${enTaller} equipo(s) en taller o en revisión.` });
     // Las gestiones abiertas NO se repiten aquí: ya viven en el KPI, en
     // "Requiere tu acción" y en la lista de Gestiones con su fila accionable.
-    document.getElementById('fSenales').innerHTML = out.length
-      ? out.map(s => `<div class="cg-senal ${s.tipo}"><i data-lucide="${s.tipo === 'info' ? 'info' : 'alert-triangle'}"
-          style="width:15px;height:15px;flex:none;margin-top:2px;"></i><span>${this.esc(s.txt)}</span>${s.extra || ''}</div>`).join('')
-      : '';
+    return out;
   },
 
   _unidadesActivas(c) {
@@ -1743,17 +1955,12 @@ window.Centro = {
 
   pintarEquipos() {
     const cont = document.getElementById('fEquipos');
+    if (!cont) return;
     const q = (document.getElementById('fEqFiltro')?.value || '').trim().toUpperCase();
-    const lista = this.equipos.filter(e => !q ||
-      `${e.serial || ''} ${e.modelo_label || ''} ${e.asignacion?.contrato_id || ''}`.toUpperCase().includes(q));
-    if (!lista.length) {
-      cont.innerHTML = `<div class="cg-empty">${this.equipos.length ? 'Ningún equipo coincide con el filtro.' : 'Sin equipos asignados en el inventario.'}</div>`;
-      return;
-    }
     const chip = (e) => (window.EquiposPoolService?.chipEstadoHtml)
       ? EquiposPoolService.chipEstadoHtml(e.estado)
       : this.esc(e.estado || '—');
-    const filas = lista.map(e => `<tr>
+    const fila = (e) => `<tr>
       <td class="cg-mono">${this.esc(e.serial || e.id)}</td>
       <td>${this.esc(e.modelo_label || '—')}</td>
       <td>${chip(e)}${e.pendiente_devolucion ? ' <span class="cg-venc por_vencer">pend. devolución</span>' : ''}</td>
@@ -1761,10 +1968,72 @@ window.Centro = {
       <td style="text-align:right;">${this._tarifaEquipo(e)}</td>
       <td>${this._vencChipEquipo(e)}</td>
       <td style="text-align:right;"><button class="btn btn-ghost cg-act"
-        title="Historia completa de esta unidad" onclick="Centro.verKardex('${this.esc(e.id)}')">Kardex ›</button></td></tr>`).join('');
-    cont.innerHTML = `<table class="cg-tabla"><thead><tr>
+        title="Historia completa de esta unidad" onclick="Centro.verKardex('${this.esc(e.id)}')">Kardex ›</button></td></tr>`;
+    const tabla = (rows) => `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
       <th>Serial</th><th>Modelo</th><th>Situación</th><th>Contrato</th><th style="text-align:right;">Tarifa</th><th>Vence</th><th></th>
-      </tr></thead><tbody>${filas}</tbody></table>`;
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
+    if (!this.equipos.length) { cont.innerHTML = '<div class="cg-empty">Sin equipos asignados en el inventario.</div>'; return; }
+    // Buscar un serial lo abre directo: con filtro, lista plana.
+    if (q) {
+      const lista = this.equipos.filter(e => `${e.serial || ''} ${e.modelo_label || ''} ${e.asignacion?.contrato_id || ''}`.toUpperCase().includes(q));
+      cont.innerHTML = lista.length ? tabla(lista.map(fila).join('')) : '<div class="cg-empty">Ningún equipo coincide con la búsqueda.</div>';
+      return;
+    }
+    // Sin filtro: GRUPOS (2026-09-08). Antes eran 52 filas abiertas con los
+    // "por clasificar" primero — el 67 % de la ficha. Un grupo por contrato,
+    // con conteo, modelos y vencimiento; "sin contrato" y "por clasificar"
+    // aparte con su salida; los seriales aparecen al abrir el grupo.
+    const grupos = new Map();
+    for (const e of this.equipos) {
+      let k, orden;
+      if (['en_taller', 'devuelto_revision'].includes(e.estado)) { k = 'taller'; orden = 3; }
+      else if (e.estado === 'por_clasificar') { k = 'por_clasificar'; orden = 4; }
+      else if (['en_cliente', 'asignado_contrato'].includes(e.estado)) {
+        k = e.asignacion?.contrato_doc_id ? `c:${e.asignacion.contrato_doc_id}` : 'sin_contrato';
+        orden = e.asignacion?.contrato_doc_id ? 1 : 2;
+      } else { k = `otros:${e.estado}`; orden = 5; }
+      if (!grupos.has(k)) grupos.set(k, { k, orden, items: [] });
+      grupos.get(k).items.push(e);
+    }
+    const venceDe = (c) => { const d = c?.fecha_vencimiento?.toDate ? c.fecha_vencimiento.toDate() : (c?.fecha_vencimiento ? new Date(c.fecha_vencimiento) : null); return d && !isNaN(d) ? d.getTime() : Infinity; };
+    const lista = [...grupos.values()].sort((a, b) => a.orden - b.orden
+      || (a.k.startsWith('c:') && b.k.startsWith('c:') ? venceDe(this.contratos.find(c => c.id === a.k.slice(2))) - venceDe(this.contratos.find(c => c.id === b.k.slice(2))) : 0));
+    const modelos = (items) => { const m = [...new Set(items.map(e => e.modelo_label).filter(Boolean))]; return m.length ? this.esc(m.slice(0, 2).join(', ')) + (m.length > 2 ? ` +${m.length - 2}` : '') : '<span style="color:var(--fg-4);">sin modelo</span>'; };
+    const abiertos = this._eqGruposAbiertos || new Set();
+    this._eqGruposAbiertos = abiertos;
+    const html = lista.map(g => {
+      const n = g.items.length;
+      let titulo = '', k2 = '', tono = '', accion = '';
+      if (g.k.startsWith('c:')) {
+        const c = this.contratos.find(x => x.id === g.k.slice(2));
+        titulo = `<span class="cg-mono">${this.esc(c?.contrato_id || g.items[0].asignacion?.contrato_id || '—')}</span> · ${modelos(g.items)}`;
+        k2 = c ? `${this._tarifaEquipo(g.items[0])} · ${this._vencChipEquipo(g.items[0])}` : '';
+      } else if (g.k === 'sin_contrato') {
+        titulo = `<b>En campo sin contrato</b> · ${modelos(g.items)}`; tono = 'warn';
+        k2 = 'cuentan como deuda de la cuenta';
+        accion = this.puedeCrearGestion() ? `<button class="btn btn-ghost cg-act" onclick="event.preventDefault(); Centro.verRegularizacion()">Qué falta</button>` : '';
+      } else if (g.k === 'por_clasificar') {
+        titulo = `<b>Por clasificar</b> · ubicación desconocida`; tono = 'warn';
+        k2 = 'cola de bodega';
+        accion = `<a class="btn btn-ghost cg-act" href="../inventario/equipos.html?tab=por_clasificar" onclick="event.stopPropagation()">Ver por clasificar</a>`;
+      } else if (g.k === 'taller') {
+        titulo = `<b>En taller / revisión</b> · ${modelos(g.items)}`;
+        k2 = 'vuelven al cliente al entregarse la orden';
+      } else {
+        titulo = `<b>${this.esc((window.EquiposPoolService?.ESTADO_LABELS || {})[g.items[0].estado] || g.items[0].estado)}</b> · ${modelos(g.items)}`;
+      }
+      const open = abiertos.has(g.k) || (lista.length === 1);
+      return `<details class="cg-eqgrp ${tono}" data-grp="${this.esc(g.k)}" ${open ? 'open' : ''} ontoggle="Centro._eqToggle(this)">
+        <summary><span>${titulo}</span><span class="k">${n} equipo${n === 1 ? '' : 's'}</span><span class="k">${k2}</span><span>${accion}</span><span class="chev">›</span></summary>
+        <div style="padding:6px 8px 8px;">${tabla(g.items.map(fila).join(''))}</div>
+      </details>`;
+    }).join('');
+    cont.innerHTML = html;
+  },
+  _eqGruposAbiertos: null,
+  _eqToggle(d) {
+    const s = this._eqGruposAbiertos || (this._eqGruposAbiertos = new Set());
+    if (d.open) s.add(d.dataset.grp); else s.delete(d.dataset.grp);
   },
 
   // Kardex en un modal (pedido 2026-08-28): la historia de la unidad se ve
@@ -2486,31 +2755,14 @@ window.Centro = {
       `<button type="button" class="${cls}" onclick="${onclick}">${label}${hint ? `<span class="cg-menu-hint">${hint}</span>` : ''}</button>`;
     const grupo = (hd, items) => { const xs = items.filter(Boolean); return xs.length ? `<div class="hd">${hd}</div>${xs.join('')}` : ''; };
 
-    // Arriba, destacado: lo que la cuenta pide primero.
-    let top = '';
-    if (tram) {
-      top = item(`Centro.abrirGestion('ct-${this.esc(tram.id)}')`,
-        `Ver renovación en trámite <span class="cg-mono">${this.esc(tram.contrato_id || '')}</span>`,
-        'abre el expediente para ver en qué paso va', 'top');
-    } else if (est.tipo === 'nueva') {
-      top = item('Centro.wizContrato()', 'Nuevo contrato', '', 'top');
-    } else if (est.tipo === 'sin_contrato') {
-      top = item('Centro.wizContrato({renovarCuenta:true})', 'Regularizar: contrato nuevo',
-        `cubre los ${est.custodia} radio${est.custodia === 1 ? '' : 's'} que el cliente aún tiene`, 'top');
-    } else if (deuda) {
-      top = item('Centro.wizContrato({renovarCuenta:true})', 'Regularizar cuenta',
-        `${reg.puntos} punto${reg.puntos === 1 ? '' : 's'} — renovación con el plan por serial precargado`, 'top');
-    }
-    // Regularizar cuenta y Renovar cuenta son la MISMA acción (renovación
-    // consolidadora): si ya está arriba, no se repite en "Cambiar".
-    const renovarArriba = !tram && deuda && est.tipo !== 'nueva' && est.tipo !== 'sin_contrato';
+    // Arriba, destacado: lo que la cuenta pide primero (misma regla que el
+    // botón primario de la cabecera y el dock móvil: _accionPrimaria).
+    const P = this._accionPrimaria();
+    const top = P ? item(P.onclick, P.label, P.hint, 'top') : '';
+    // Renovar cuenta ya es el destacado cuando aplica: no se repite en "Cambiar".
     const n = est.renovables.length;
-    const renovar = tram || !hayContrato || renovarArriba ? ''
-      : est.tipo === 'fragmentada'
-        ? item('Centro.wizContrato({renovarCuenta:true})', 'Renovar cuenta', `consolida ${n} contrato${n === 1 ? '' : 's'} en uno`)
-        : this._wcEnVentana(est.maestro)
-          ? item(`Centro.wizContrato('${this.esc(est.maestro.id)}')`, 'Renovar cuenta', 'entra en ventana de renovación')
-          : '';
+    const renovar = '';
+    void deuda; void reg;
 
     const dar = grupo('Dar equipos', [
       hayContrato && !tram ? item('Centro.wizAgregarEquipos()', 'Agregar equipos', 'anexo al contrato de la cuenta') : '',
@@ -2542,15 +2794,15 @@ window.Centro = {
     document.getElementById('cgMenu').innerHTML = `${top}${dar}${cambiar}${retirar}${pie}`;
   },
 
-  // Cabecera de la ficha: Cotizar y Datos del cliente (plan 2026-09-08 §4.2).
+  // Menú "⋯" de la cabecera: Cotizar, Datos del cliente, Historial (2026-09-08).
   _pintarHeadLinks() {
-    const el = document.getElementById('cgHeadLinks');
+    const el = document.getElementById('cgMasMenu');
     if (!el || !this.cliente) return;
     const id = this.esc(this.cliente.id);
     el.innerHTML = `
-      ${this._puedeCotizar() ? `<a class="btn btn-ghost" href="../cotizaciones/nueva-cotizacion.html?cliente_id=${id}&from=centro" title="Abre el editor con este cliente ya elegido"><i data-lucide="receipt"></i> Cotizar</a>` : ''}
-      <a class="btn btn-ghost" href="./ficha.html?id=${id}&from=centro" title="${this._puedeEditarCliente() ? 'Editar datos del cliente' : 'Solo lectura — los cambios los hace cobros (cobros@cecomunica.com)'}">
-        <i data-lucide="${this._puedeEditarCliente() ? 'pencil' : 'id-card'}"></i> Datos</a>`;
+      ${this._puedeCotizar() ? `<a href="../cotizaciones/nueva-cotizacion.html?cliente_id=${id}&from=centro">Nueva cotización<span class="cg-menu-hint">abre el editor con este cliente ya elegido</span></a>` : ''}
+      <a href="./ficha.html?id=${id}&from=centro">${this._puedeEditarCliente() ? 'Editar datos del cliente' : 'Ver datos del cliente'}<span class="cg-menu-hint">${this._puedeEditarCliente() ? 'RUC, representante, contacto, vendedor' : 'solo lectura — los cambios los hace cobros'}</span></a>
+      <button type="button" onclick="Centro.abrirBloque('blkActividad')">Historial de la ficha<span class="cg-menu-hint">quién cambió qué y cuándo</span></button>`;
   },
 
   // El grid de edición masiva salió del home/rail (2026-09-03): se entra SOLO
@@ -2679,11 +2931,10 @@ window.Centro = {
     if (!r || !(r.puntos > 0) || typeof Regularizacion === 'undefined') return '';
     const n = (Number(r.gestiones_puntuales) || 0) + 1;
     const bad = r.nivel === 'critica' || r.excede_margen;
-    return `<div class="cg-banda-reg" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 12px; padding:8px 12px; border-radius:8px; font-size:12.5px;
-        background:${bad ? 'var(--cg-bad-soft, #FEE2E2)' : 'var(--cg-warn-soft, #FEF3C7)'}; color:${bad ? 'var(--cg-bad-deep, #991B1B)' : 'var(--cg-warn-deep, #92400E)'};">
-      <span><b>Cuenta por regularizar (${r.puntos})</b> — ${this.esc(Regularizacion.desglose(r).slice(0, 2).map(x => `${x.n} ${x.label}`).join(' · '))}.
-        Esta gestión se registrará como puntual #${n}${r.excede_margen ? ' y la cuenta ya excede el margen sin regularizar' : ''}.</span>
-      <button type="button" class="btn btn-ghost cg-act" style="margin-left:auto; padding:2px 10px; font-size:12px;" onclick="Centro.verRegularizacion()">Qué falta</button>
+    // UN renglón de contexto bajo el título (2026-09-08): el campo va primero.
+    return `<div class="cg-banda-reg" style="display:flex; gap:10px; align-items:center; margin:-4px 0 12px; font-size:12.5px; color:${bad ? 'var(--cg-bad-deep, #991B1B)' : 'var(--cg-warn-deep, #92400E)'};">
+      <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><b>Cuenta por regularizar · ${r.puntos}</b> · gestión puntual #${n}${r.excede_margen ? ' · excede el margen' : ''}</span>
+      <button type="button" style="background:none; border:0; padding:0; font:inherit; font-weight:600; color:var(--accent); cursor:pointer; white-space:nowrap;" onclick="Centro.verRegularizacion()">Qué falta</button>
     </div>`;
   },
 
@@ -3065,7 +3316,9 @@ window.Centro = {
           si el cliente está por renovar, este es el momento de consolidarla.</span>
           <button class="btn btn-primary" style="margin-left:auto; flex:none; padding:3px 11px; font-size:12px;"
             onclick="Centro.wizContrato({renovarCuenta:true, agregar:true})">Mejor renovar la cuenta</button></div>` : '';
-    const nudge = nudgeReg + nudgeConsol;
+    // El aviso de consolidación baja al pie del formulario (2026-09-08): es
+    // secundario y antes era la tercera caja antes del primer campo.
+    const nudge = nudgeReg;
     const destinoHtml = esPapel
       ? `<div class="form-field" style="margin-bottom:10px; max-width:420px;">
           <label class="form-label" for="waContratoPapel">Número del contrato en papel</label>
@@ -3166,6 +3419,7 @@ window.Centro = {
           </label>
         </div>
         <div id="waTot" class="ds-card" style="padding:10px 14px; max-width:380px;"></div>
+        ${nudgeConsol ? `<div style="margin-top:12px;">${nudgeConsol}</div>` : ''}
       </div>
       </div>`,
       footer: `
