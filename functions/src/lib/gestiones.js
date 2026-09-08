@@ -546,6 +546,82 @@ async function avisoFacturacion({ subject, titulo, cuerpo, cliente_id, cliente_n
   } catch (e) { logger.warn("[gestiones] avisoFacturacion no encolado", { message: e.message, subject }); }
 }
 
+// Tipo de contrato legible a partir del prefijo del número. Los contratos del
+// Centro nacen SERV (servicio: alquiler o propio se decide POR LÍNEA, ver la
+// fila Modalidad); ALQ/PROP son los históricos, donde el prefijo sí decía la
+// modalidad. Mismos códigos que lib/vigencia.js; null si no se reconoce.
+const TIPO_POR_PREFIJO = {
+  SERV: "Servicio (la modalidad va por línea)", ALQ: "Alquiler (histórico)",
+  PROP: "Equipos propios del cliente (histórico)",
+  TEMP: "Temporal (evento)", REEMP: "Reemplazo", DEMO: "Demo",
+};
+function tipoContratoDeNumero(numero) {
+  const m = /^([A-Z]+)/.exec(String(numero || "").trim().toUpperCase());
+  return (m && TIPO_POR_PREFIJO[m[1]]) || null;
+}
+
+// Cuadro "Trámite" del correo de OS de programación (pedido de Brenda,
+// recepción, 2026-09-08): ella llena el archivo de activaciones a partir de
+// ese correo y necesita saber, sin abrir nada, QUÉ trámite es (adición,
+// reemplazo, demo), a qué contrato pertenece y de qué tipo (alquiler, propio,
+// papel). Montos NO: van en el aviso de facturación a activaciones
+// (need-to-know). Devuelve { titulo, filas, html }.
+function tramiteResumen(gid, g = {}) {
+  const a = g.aumento || {};
+  const filas = [];
+  let titulo = "";
+  if (g.tipo === "aumento") {
+    const esPapel = a.contrato_papel === true && !a.contrato_doc_id;
+    const tipo = tipoContratoDeNumero(a.contrato_id);
+    titulo = esPapel
+      ? "ADICIÓN DE EQUIPOS — adenda a contrato en papel"
+      : "ADICIÓN DE EQUIPOS — anexo a contrato vigente";
+    filas.push(["Contrato", esPapel
+      ? `${a.contrato_id || "—"} (contrato en papel, fuera del sistema)`
+      : `${a.contrato_id || "—"}${tipo ? ` — ${tipo}` : ""}`]);
+    const lineas = a.lineas || [];
+    const cnt = (f) => lineas.filter(f).reduce((s, l) => s + Number(l.cantidad || 0), 0);
+    const nProp = cnt(l => l.modalidad === "propio");
+    const nAlq = cnt(l => l.modalidad !== "propio");
+    const nTotal = nProp + nAlq || (a.seriales_asignados || []).length;
+    const modalidad = nProp && nAlq
+      ? `${nAlq} en alquiler + ${nProp} propio(s) del cliente`
+      : nProp ? `${nProp} equipo(s) propio(s) del cliente (servicio)`
+        : `${nTotal} equipo(s) nuevo(s) en alquiler`;
+    filas.push(["Modalidad", modalidad]);
+    if (Number(a.duracion_meses) > 0) filas.push(["Vigencia del tramo", `${Number(a.duracion_meses)} meses desde la entrega`]);
+  } else if (g.tipo === "reemplazo") {
+    titulo = "REEMPLAZO DE EQUIPOS — el contrato y la facturación no cambian";
+    const contratos = [...new Set((g.items || []).map(it => it.contrato_id).filter(Boolean))];
+    filas.push(["Contrato(s)", contratos.length
+      ? contratos.map(c => `${c}${tipoContratoDeNumero(c) ? ` — ${tipoContratoDeNumero(c)}` : ""}`).join(", ")
+      : "sin contrato interno (equipo en custodia)"]);
+    filas.push(["Equipos", `${(g.items || []).length} radio(s) sustituido(s) — cada uno indica el serial saliente`]);
+  } else {
+    titulo = "DEMO — sin contrato ni facturación";
+    filas.push(["Contrato", "no aplica (demostración)"]);
+    if (g.demo?.fecha_devolucion_estimada) filas.push(["Devolución estimada", String(g.demo.fecha_devolucion_estimada)]);
+  }
+  // Estampa de deuda de la cuenta (PLAN_REGULARIZACION_CUENTAS §4.4, F1):
+  // cuando la gestión nazca con `cuenta_regularizacion`, el cuadro lo dice
+  // aquí mismo — una sola voz, sin párrafo aparte. Hasta F1 el campo no
+  // existe y la fila no sale.
+  const cr = g.cuenta_regularizacion;
+  if (cr && cr.nivel && cr.nivel !== "al_dia") {
+    const nivel = { leve: "detalle por regularizar", por_regularizar: "POR REGULARIZAR", critica: "SIN REGULARIZAR (crítica)" }[cr.nivel] || cr.nivel;
+    filas.push(["Cuenta", `${nivel}${Number(cr.puntos) > 0 ? ` · ${Number(cr.puntos)} punto(s)` : ""}${Number(cr.puntual_n) > 0 ? ` · gestión puntual #${Number(cr.puntual_n)}` : ""}`]);
+  }
+  filas.push(["Gestión", `${gid} · <a href="${urlGestion(g, gid)}" style="color:#0091D7;">ver el expediente</a>`]);
+  const html = `
+    <div style="margin:0 0 14px;padding:12px 14px;border:2px solid #2563eb;border-radius:10px;background:#eff6ff;">
+      <div style="font:700 15px Arial,sans-serif;color:#1e3a8a;margin:0 0 6px;">Trámite: ${escapeHtml(titulo)}</div>
+      <table role="presentation" style="font:13px/1.5 Arial,sans-serif;color:#1f2937;border-collapse:collapse;">
+        ${filas.map(([k, v]) => `<tr><td style="padding:2px 10px 2px 0;white-space:nowrap;"><b>${escapeHtml(k)}</b></td><td style="padding:2px 0;">${k === "Gestión" ? v : escapeHtml(v)}</td></tr>`).join("")}
+      </table>
+    </div>`;
+  return { titulo, filas, html };
+}
+
 // Detalle completo de un anexo/aumento (líneas con modalidad, cargos con sus
 // seriales, tarifas renegociadas, total) — compartido por los correos de
 // aprobación, cierre y los avisos de facturación.
@@ -585,7 +661,7 @@ function detalleAumentoHtml(a = {}) {
 
 module.exports = {
   limpiarAnulacion,
-  avisoFacturacion, detalleAumentoHtml,
+  avisoFacturacion, detalleAumentoHtml, tramiteResumen, tipoContratoDeNumero,
   TIPO_LABEL, escapeHtml, isEmail, urlGestion, urlBodegaGestion, tablaHtml,
   destinatariosRecepcionVendedor, vendedorEmailDeCliente, adminEmails, aprobadoresEmails, aprobacionesTo, encolarCorreo,
   configEmailTo,

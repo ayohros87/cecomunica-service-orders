@@ -632,9 +632,18 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
         }
       }
 
+      // Modalidad por línea (2026-09-08, pedido de Brenda): un contrato SERV
+      // del Centro mezcla alquiler y equipos propios del cliente; el prefijo
+      // ya no lo dice, así que la lista y una fila "Modalidad" lo dicen.
       const equiposHtml = (contrato.equipos || []).map(e =>
-        `<li>${e.modelo || "—"} – ${Number(e.cantidad||0)} × $${Number(e.precio || 0).toFixed(2)}</li>`
+        `<li>${e.modelo || "—"} – ${Number(e.cantidad||0)} × $${Number(e.precio || 0).toFixed(2)}${e.modalidad === "propio" ? " — <b>equipo del cliente</b>" : ""}</li>`
       ).join("");
+      const nPropio = (contrato.equipos || []).filter(e => e.modalidad === "propio").reduce((s, e) => s + Number(e.cantidad || 0), 0);
+      const nAlq    = (contrato.equipos || []).filter(e => e.modalidad !== "propio").reduce((s, e) => s + Number(e.cantidad || 0), 0);
+      const modalidadTexto = nPropio && nAlq
+        ? `${nAlq} en alquiler + ${nPropio} propio(s) del cliente`
+        : nPropio ? `${nPropio} equipo(s) propio(s) del cliente (servicio)`
+          : nAlq ? `${nAlq} equipo(s) en alquiler` : "—";
 
       // Seriales asignados (subcolección) agrupados por modelo.
       const serialesSnap = await contratoRef.collection("seriales").get();
@@ -719,6 +728,7 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
           <tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Elaborador del contrato</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${vendedorInfo?.nombre || "—"}</td></tr>
           <tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Tipo</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${contrato.tipo_contrato || "—"}</td></tr>
           <tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Acción</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${contrato.accion || "—"}</td></tr>
+          <tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Modalidad</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${modalidadTexto}</td></tr>
           ${contrato.accion === "Renovación" ? `<tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Modalidad renovación</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${contrato.renovacion_sin_equipo ? "Sin equipo" : "Con equipo"}</td></tr>` : ""}
           ${aplicaRefurbished ? `<tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Refurbished batería/antena/clip/piezas</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;color:${refurbishedIncluido ? "#115e59" : "#991b1b"};font-weight:700;">${refurbishedIncluido ? "Sí" : "No"}</td></tr>` : ""}
           <tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Observaciones</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${(contrato.observaciones || "—").replace(/[<>&]/g, s => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[s]))}</td></tr>

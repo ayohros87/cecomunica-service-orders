@@ -247,23 +247,33 @@ async function correoRecepcion(gid, g, ordenIds) {
     logger.warn("[onGestionWrite] OS de programación sin destinatarios", { gid, ordenIds });
     return;
   }
+  // Reemplazo: columna "Contrato" por fila — los ítems pueden cruzar contratos.
   const pares = g.tipo === "reemplazo"
     ? (g.items || []).map(it => [
         `<code>${G.escapeHtml(it.serial_nuevo || "—")}</code>`,
         `<code>${G.escapeHtml(it.serial_saliente || "—")}</code>`,
         G.escapeHtml(it.modelo_solicitado || it.modelo || "—"),
+        G.escapeHtml(it.contrato_id || "custodia"),
       ])
     : ((g.tipo === "aumento" ? g.aumento?.seriales_asignados : g.demo?.seriales_asignados) || []).map(s => [
         `<code>${G.escapeHtml(s.serial || "—")}</code>`, "—", G.escapeHtml(s.modelo || "—"),
       ]);
+  const cabeceras = g.tipo === "reemplazo" ? ["Entra", "Sustituye a", "Modelo", "Contrato"] : ["Entra", "Sustituye a", "Modelo"];
   // Aumento pre-asignado (2026-09-03): la OS sale con el anexo aún en firma —
   // programar se puede desde ya; la ENTREGA queda candada hasta cierre.firma.
   const firmaEnParalelo = g.tipo === "aumento" && g.estado === "pendiente_firma"
     && g.cierre?.firma !== true;
+  // Cuadro "Trámite" (Brenda, 2026-09-08): qué es, a qué contrato y de qué
+  // tipo — lo que recepción necesita para el archivo de activaciones. El
+  // asunto también lo dice, para que se distinga desde la bandeja.
+  const tramite = G.tramiteResumen(gid, g);
+  const contratoAsunto = g.tipo === "aumento"
+    ? ` · ${g.aumento?.contrato_papel === true && !g.aumento?.contrato_doc_id ? "adenda a contrato en papel" : "anexo al contrato"} ${g.aumento?.contrato_id || "—"}`
+    : g.tipo === "demo" ? " · sin contrato" : "";
   await G.encolarCorreo({
     to: dests[0],
     cc: dests.length > 1 ? dests.slice(1).join(",") : null,
-    subject: `OS de programación lista: ${ordenIds.join(", ")} — ${G.TIPO_LABEL[g.tipo] || g.tipo} ${gid}`,
+    subject: `OS de programación lista: ${ordenIds.join(", ")} — ${G.TIPO_LABEL[g.tipo] || g.tipo} ${gid}${contratoAsunto}`,
     preheader: g.tipo === "reemplazo"
       ? "Programar copiando la configuración del radio reemplazado"
       : g.tipo === "aumento"
@@ -281,10 +291,11 @@ async function correoRecepcion(gid, g, ordenIds) {
             ? "Programar los equipos nuevos del aumento y coordinar la entrega."
             : "Programar y coordinar la entrega del demo."}
       </p>
+      ${tramite.html}
       ${firmaEnParalelo ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;background:#FEF3C7;border-radius:6px;padding:10px 12px;">
         ⚠️ La <b>firma del anexo corre en paralelo</b>: se puede programar desde ya, pero la
         <b>entrega no sale</b> hasta que el cliente firme (el sistema la bloquea solo).</p>` : ""}
-      ${G.tablaHtml(["Entra", "Sustituye a", "Modelo"], pares)}`,
+      ${G.tablaHtml(cabeceras, pares)}`,
     ctaUrl: `${APP_BASE_URL}/ordenes/index.html?ids=${encodeURIComponent(ordenIds.join(","))}`,
     ctaLabel: "Ver la(s) orden(es)",
     meta: { gestion_id: gid, paso: "programacion", ordenes: ordenIds.join(",") },
