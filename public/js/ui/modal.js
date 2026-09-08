@@ -53,6 +53,7 @@ window.Modal = {
     if (!el) return;
     el.style.display = 'flex';
     el.classList.remove('hidden');
+    el.classList.add('open');   // .modal-backdrop está oculto por defecto (2026-09-08)
     document.body.style.overflow = 'hidden';
 
     // Track previously-focused element so we can restore on close.
@@ -85,6 +86,7 @@ window.Modal = {
     const el = document.getElementById(id);
     if (!el) return;
     el.style.display = 'none';
+    el.classList.remove('open');
     document.body.style.overflow = '';
     if (el._modalKeyHandler) {
       document.removeEventListener('keydown', el._modalKeyHandler);
@@ -126,7 +128,7 @@ window.Modal = {
       }[m]));
       const ANCHO = { sm: 440, md: 560, lg: 720, xl: 960 };
       const overlay = document.createElement('div');
-      overlay.className = 'modal-backdrop';
+      overlay.className = 'modal-backdrop open';
       overlay.setAttribute('role', 'dialog');
       overlay.setAttribute('aria-modal', 'true');
       if (title) overlay.setAttribute('aria-label', title);
@@ -197,6 +199,12 @@ window.Modal = {
         if (foco) foco.focus();
       });
     });
+  },
+
+  // Aviso con un solo botón (reemplaza a alert()). Promise<void>.
+  alert({ title = 'Aviso', message = '', okLabel = 'Entendido', icon = 'info' } = {}) {
+    return this.sheet({ title, icon, size: 'sm', html: `<p style="margin:0;font-size:14.5px;line-height:1.5;">${message}</p>`,
+      buttons: [{ action: 'ok', label: okLabel, primary: true }] }).then(() => undefined);
   },
 
   confirm({

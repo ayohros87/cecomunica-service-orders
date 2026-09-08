@@ -254,7 +254,7 @@
     // contrato entero contra un lote de un solo modelo. Se ofrece recortar a los
     // modelos del archivo, y SOLO si el recorte deja justo las filas del archivo;
     // si no cuadra, no hay nada que ofrecer y el candado bloquea como siempre.
-    function recortarAModelosDelArchivo() {
+    async function recortarAModelosDelArchivo() {
       if (!modeloContratoPorSerial.size || !detallesBatch?.length) return false;
       const delArchivo = modelosDelArchivo();
       if (!delArchivo.size) return false;
@@ -267,10 +267,10 @@
       const fuera = actuales.length - quedan.length;
       if (!fuera || quedan.length !== detallesBatch.length) return false;
       const nombres = [...delArchivo].map(id => modeloById.get(id)?.label || id).join(', ');
-      const ok = window.confirm(
-        `El contrato tiene ${actuales.length} seriales, pero el archivo del vendedor trae ${detallesBatch.length} equipos (${nombres}).\n\n` +
-        `¿Crear solo esos ${quedan.length} y dejar los otros ${fuera} fuera del lote?\n\n` +
-        `Los ${fuera} que quedan fuera NO se tocan: siguen en el contrato, solo no se crean en PoC ahora.`);
+      const ok = await Modal.confirm({ title: 'Lote parcial', confirmLabel: `Crear solo ${quedan.length}`, message:
+        `El contrato tiene ${actuales.length} seriales, pero el archivo del vendedor trae ${detallesBatch.length} equipos (${nombres}).<br><br>` +
+        `¿Crear solo esos ${quedan.length} y dejar los otros ${fuera} fuera del lote?<br><br>` +
+        `Los ${fuera} que quedan fuera NO se tocan: siguen en el contrato, solo no se crean en PoC ahora.` });
       if (!ok) return false;
       modelosSeleccionados = new Set(delArchivo);
       ta.value = quedan.join('\n');
@@ -586,7 +586,7 @@ async function mostrarUltimosUnitIDs() {
 
 
 async function agregarElemento(ruta, selectId, label) {
-  const nuevo = prompt(`Nuevo ${label}:`);
+  const nuevo = await Modal.prompt({ title: `Nuevo ${label}`, confirmLabel: 'Agregar', message: `Nuevo ${label}:` });
   if (nuevo) {
     const docId = ruta.split('/')[1];
     const snap = await EmpresaService.getDoc(docId);
@@ -884,7 +884,7 @@ async function autoJalarContrato(cantidadEsperada) {
         // Pegar seriales a mano también debe encender/apagar el aviso sin-contrato.
         document.getElementById("seriales")?.addEventListener("input", actualizarAvisoSinContrato);
 document.getElementById("addCliente").onclick = async () => {
-  const nombre = prompt("Ingrese el nombre del nuevo cliente:");
+  const nombre = await Modal.prompt({ title: 'Nuevo cliente', confirmLabel: 'Crear', message: 'Nombre del nuevo cliente:' });
   if (!nombre) return;
 
   const nombreLimpio = nombre.trim();
@@ -975,7 +975,7 @@ document.getElementById("addCliente").onclick = async () => {
         if ((detallesBatch || []).length > 0 && detallesBatch.length !== seriales.length) {
           // Última red: si el sobrante son justo los modelos que el archivo no
           // trae, se ofrece recortar en vez de mandar a recepción a teclear.
-          if (recortarAModelosDelArchivo()) {
+          if (await recortarAModelosDelArchivo()) {
             seriales = document.getElementById("seriales").value.trim().split('\n').map(s => s.trim()).filter(s => s);
           }
           if (detallesBatch.length !== seriales.length) {
@@ -1036,7 +1036,7 @@ document.getElementById("addCliente").onclick = async () => {
             return;
           }
           if (otroCliente.length) {
-            const ok = window.confirm(`Estos seriales figuran en POC con OTRO cliente:\n\n- ${otroCliente.join('\n- ')}\n\nSi el radio se reasignó (reemplazo o devolución), continúa — y luego borra o libera el equipo del cliente anterior para no dejarlo duplicado.\n\n¿Continuar de todos modos?`);
+            const ok = await Modal.confirm({ title: 'Seriales con otro cliente', confirmLabel: 'Continuar de todos modos', message: `Estos seriales figuran en POC con OTRO cliente: ${otroCliente.join(', ')}.<br><br>Si el radio se reasignó (reemplazo o devolución), continúa — y luego borra o libera el equipo del cliente anterior para no dejarlo duplicado.` });
             if (!ok) { bloquear(false); return; }
           }
 
@@ -1105,10 +1105,10 @@ document.getElementById("addCliente").onclick = async () => {
         if (contratoDocId && modeloContratoPorSerial.size) {
           const fuera = serialesFinal.filter(s => !modeloContratoPorSerial.has(ContratosService._serialKey(s)));
           if (fuera.length) {
-            const ok = window.confirm(
-              `Estos seriales NO están en el contrato seleccionado:\n\n- ${fuera.join('\n- ')}\n\n` +
+            const ok = await Modal.confirm({ title: 'Seriales fuera del contrato', confirmLabel: 'Continuar de todos modos', message:
+              `Estos seriales NO están en el contrato seleccionado: ${fuera.join(', ')}.<br><br>` +
               `Se guardarán con el modelo del archivo del vendedor (emparejado por posición), que puede quedar equivocado. ` +
-              `Lo ideal es corregir el contrato o el pegado. ¿Continuar de todos modos?`);
+              `Lo ideal es corregir el contrato o el pegado.` });
             if (!ok) { bloquear(false); return; }
           }
           // Filas donde el modelo del serial no cuadra con el del archivo (nombre
@@ -1121,9 +1121,9 @@ document.getElementById("addCliente").onclick = async () => {
               if (c && jsonId && c.modelo_id !== jsonId) mal++;
             }
             if (mal) {
-              const ok = window.confirm(
+              const ok = await Modal.confirm({ title: 'Modelos que no cuadran', confirmLabel: 'Guardar de todos modos', message:
                 `${mal} equipo(s) no cuadran por modelo entre el archivo del vendedor y el contrato — ` +
-                `su NOMBRE podría quedar desalineado. Revisa el resumen de abajo. ¿Guardar de todos modos?`);
+                `su NOMBRE podría quedar desalineado. Revisa el resumen de abajo.` });
               if (!ok) { bloquear(false); return; }
             }
           }
@@ -1135,9 +1135,9 @@ document.getElementById("addCliente").onclick = async () => {
         if (detallesBatch?.length) {
           const sinGrupos = detallesBatch.filter(d => limpiarGrupos(d.grupos || []).length === 0).length;
           if (sinGrupos) {
-            const ok = window.confirm(
+            const ok = await Modal.confirm({ title: 'Equipos sin grupos', confirmLabel: 'Guardar de todos modos', message:
               `${sinGrupos} equipo(s) se guardarán SIN grupos. Puedes completarlos en la vista previa ` +
-              `(edita los grupos o usa "a todo el modelo"). ¿Guardar de todos modos?`);
+              `(edita los grupos o usa "a todo el modelo").` });
             if (!ok) { bloquear(false); return; }
           }
         }

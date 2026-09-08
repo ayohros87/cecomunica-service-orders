@@ -253,16 +253,16 @@ async function accion(id, acc){
   if(acc==='activar'){
     const d=document.getElementById('fi-'+id)?.value;
     payload.fecha_inicio = d ? new Date(d+'T00:00:00').toISOString() : null;
-    if(!window.confirm('¿Activar facturación de este contrato?')) return;
+    if(!await Modal.confirm({ title: 'Activar facturación', confirmLabel: 'Activar', message: '¿Activar facturación de este contrato?' })) return;
   } else if(acc==='confirmar_entrega'){
-    const d=window.prompt('Fecha de entrega (YYYY-MM-DD), vacío = hoy:','');
+    const d=await Modal.prompt({ title: 'Confirmar entrega', message: 'Fecha de entrega (YYYY-MM-DD), vacío = hoy:', placeholder: 'YYYY-MM-DD' });
     if(d===null) return;
     payload.fecha = d ? new Date(d+'T00:00:00').toISOString() : null;
   } else if(acc==='no_facturable'){
-    if(!window.confirm('¿Marcar como NO facturable (demo, etc.)?')) return;
-    payload.motivo = window.prompt('Motivo (opcional):')||'';
+    if(!await Modal.confirm({ title: 'No facturable', confirmLabel: 'Marcar', message: '¿Marcar como NO facturable (demo, etc.)?' })) return;
+    payload.motivo = (await Modal.prompt({ title: 'Motivo', message: 'Motivo (opcional):' }))||'';
   } else if(acc==='en_espera'){
-    if(!window.confirm('¿Poner en espera (excluir del ciclo de facturación)?')) return;
+    if(!await Modal.confirm({ title: 'Poner en espera', confirmLabel: 'Poner en espera', message: '¿Poner en espera (excluir del ciclo de facturación)?' })) return;
   }
   _accionEnVuelo = true;
   try{

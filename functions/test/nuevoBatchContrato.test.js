@@ -122,7 +122,8 @@ function montar({ contratos = CONTRATOS, modelos = MODELOS } = {}) {
     document: doc,
     confirm: () => estado.confirmar,      // window.confirm (sandbox.window = sandbox)
     Toast: { show: (msg, tipo) => toasts.push({ msg, tipo }) },
-    Modal: { confirm: async () => true },
+    // Desde 2026-09-08 el recorte pregunta con Modal.confirm (no con el nativo).
+    Modal: { confirm: async () => estado.confirmar },
     FMT: { normalize: (s) => String(s || "").trim().toLowerCase(), normalizeGrupo: (s) => s, dedupGrupos: (a) => a, esc: (s) => s },
     ModelosService: { getModelos: async () => modelos },
     ClientesService: { listClientes: async () => ({ docs: [] }) },
@@ -355,7 +356,7 @@ test("al guardar se ofrece recortar en vez de bloquear a secas", async () => {
   h.sandbox.alternarModeloFiltro("mNX420");          // 22 + 45 = 67 contra 22 filas
   assert.equal(lineas(h).length, 67);
 
-  assert.equal(h.sandbox.recortarAModelosDelArchivo(), true);
+  assert.equal(await h.sandbox.recortarAModelosDelArchivo(), true);
   assert.equal(lineas(h).length, 22, "recorta a los modelos del archivo");
 });
 
@@ -365,7 +366,7 @@ test("si recepción dice que no al recorte, no se toca nada", async () => {
   h.sandbox.alternarModeloFiltro("mNX420");
   h.estado.confirmar = false;
 
-  assert.equal(h.sandbox.recortarAModelosDelArchivo(), false);
+  assert.equal(await h.sandbox.recortarAModelosDelArchivo(), false);
   assert.equal(lineas(h).length, 67, "el pegado queda como estaba y el candado bloquea");
 });
 
@@ -374,7 +375,7 @@ test("no se ofrece recortar si el recorte no cuadra con el archivo", async () =>
   await subirArchivo(h, ARCHIVO_22_PNC);
   h.el("seriales").value = lineas(h).slice(0, 20).join("\n");   // 20 PNC contra 22 filas
 
-  assert.equal(h.sandbox.recortarAModelosDelArchivo(), false,
+  assert.equal(await h.sandbox.recortarAModelosDelArchivo(), false,
     "recortar no arregla un desajuste que no es de modelos");
 });
 

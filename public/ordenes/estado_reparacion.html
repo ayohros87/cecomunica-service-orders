@@ -18,7 +18,7 @@
   <meta charset="UTF-8">
   <title>Estados de Reparación - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=f4">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
 
@@ -119,7 +119,7 @@
           Toast.show('Ese estado es parte del flujo del taller y no se puede eliminar.', 'warn');
           return;
         }
-        if (confirm(`¿Eliminar estado "${id}"?`)) {
+        if (await Modal.confirm({ title: 'Eliminar estado', confirmLabel: 'Eliminar', danger: true, message: `¿Eliminar estado "${id}"?` })) {
           const snap = await EmpresaService.getDoc("estado_de_reparacion");
           const nuevaLista = ((snap && snap.list) || []).filter(e => e !== id);
           await EmpresaService.setDoc("estado_de_reparacion", { list: nuevaLista });
@@ -154,6 +154,7 @@
       }); // fin callback verificarAccesoYAplicarVisibilidad
     });
   </script>
+  <script defer src="../js/ui/modal.js?v=f4"></script> <!-- Modal.confirm/prompt en vez de los nativos -->
 </head>
 <body>
   <div class="cc-app">

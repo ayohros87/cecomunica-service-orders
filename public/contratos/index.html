@@ -24,7 +24,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0B2A47">
 
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=f4">
   <!-- Rediseño Command Center F4: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
 
@@ -122,7 +122,7 @@
   <script defer src="../js/ui/equipo-ficha.js"></script>
   <script defer src="../js/domain/totales.js"></script>
   <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/ui/modal.js"></script>
+  <script defer src="../js/ui/modal.js?v=f4"></script>
   <!-- Lucide en defer + icons.js (par adyacente, en este orden): icons.js hace
        el barrido inicial de <i data-lucide>; los guards inline viejos quedan
        como no-ops en parse. Ver js/core/icons.js. -->
@@ -353,7 +353,7 @@
   <script src="../js/pages/contratos-index.js?v=ses4" defer></script>
 
   <!-- Aprobación overlay -->
-  <div id="overlayAprobacion" class="modal-backdrop" style="display:none;"
+  <div id="overlayAprobacion" class="modal-backdrop"
        role="dialog" aria-modal="true" aria-labelledby="aprobacionTitulo">
     <div class="modal modal-lg" id="sheetAprobacion">
       <div class="modal-header">
@@ -411,7 +411,7 @@
   </div>
 
   <!-- Panel de trabajo overlay -->
-  <div id="overlayPanelTrabajo" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
+  <div id="overlayPanelTrabajo" class="modal-backdrop" role="dialog" aria-modal="true">
     <div class="modal modal-lg">
       <div class="modal-header">
         <h3 class="modal-title"><i data-lucide="layout-dashboard"></i> Panel de trabajo</h3>
@@ -425,7 +425,7 @@
   </div>
 
   <!-- Equipos asociados overlay -->
-  <div id="overlayEquiposContrato" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
+  <div id="overlayEquiposContrato" class="modal-backdrop" role="dialog" aria-modal="true">
     <div class="modal modal-lg">
       <div class="modal-header">
         <h3 class="modal-title"><i data-lucide="package"></i> Equipos del contrato</h3>

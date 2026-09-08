@@ -21,7 +21,7 @@
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <title>Equipos PoC - Cecomunica</title>
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=f4">
   <!-- Rediseño Command Center F4: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
   <style>
@@ -191,7 +191,7 @@
   <!-- SheetJS se carga BAJO DEMANDA al exportar (js/core/xlsx-loader.js) -->
   <script defer src="../js/core/xlsx-loader.js"></script>
   <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/ui/modal.js"></script>
+  <script defer src="../js/ui/modal.js?v=f4"></script>
   <script src="../js/core/serial.js?v=1"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
   <script defer src="../js/services/equiposPoolService.js"></script><script defer src="../js/services/equiposDescartadosService.js?v=qcdesc1"></script><script defer src="../js/services/equiposCondicionesService.js?v=cond1"></script><script defer src="../js/ui/equipo-ficha.js?v=cond1"></script><script defer src="../js/ui/serial-field.js?v=cond1"></script>
   <script src="../js/pages/poc-state.js?v=cc12" defer></script>
@@ -425,7 +425,7 @@
     </div><!-- /.ds-card -->
 
     <!-- SIM/Teléfono modal -->
-    <div id="simModal" class="modal-backdrop" style="display:none;">
+    <div id="simModal" class="modal-backdrop">
       <div class="modal">
         <div class="modal-header">
           <h3 class="modal-title"><i data-lucide="smartphone"></i> Actualizar SIM/Teléfono en Lote</h3>
@@ -458,7 +458,7 @@
     </div>
 
     <!-- Asignar SIMs del pool -->
-    <div id="simPoolModal" class="modal-backdrop" style="display:none;">
+    <div id="simPoolModal" class="modal-backdrop">
       <div class="modal" style="max-width:620px;">
         <div class="modal-header">
           <h3 class="modal-title"><i data-lucide="credit-card"></i> Asignar SIMs del pool</h3>

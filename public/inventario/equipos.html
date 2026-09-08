@@ -18,7 +18,7 @@
   <meta charset="UTF-8">
   <title>Equipos por serial - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=f4">
   <!-- Rediseño Command Center: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
 
@@ -179,7 +179,7 @@
 
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/ui/modal.js"></script>
+  <script defer src="../js/ui/modal.js?v=f4"></script>
   <script src="../js/pages/inventario-equipos.js?v=cc30" defer></script>
   <script defer src="/js/vendor/lucide.min.js?v=3"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
@@ -367,7 +367,7 @@
   </div><!-- /.app-wrap -->
 
   <!-- Modal: confirmar acción en lote (+ progreso en el mismo sitio) -->
-  <div id="eqLoteModal" class="modal-backdrop" style="display:none;">
+  <div id="eqLoteModal" class="modal-backdrop">
     <div class="modal" style="max-width:540px;">
       <div class="modal-header">
         <h3 class="modal-title"><i data-lucide="layers"></i> <span id="loteTitulo">Acción en lote</span></h3>
@@ -397,7 +397,7 @@
   </div>
 
   <!-- Modal: reporte del lote (sólo si hubo fallos o cancelación) -->
-  <div id="eqLoteReporteModal" class="modal-backdrop" style="display:none;">
+  <div id="eqLoteReporteModal" class="modal-backdrop">
     <div class="modal" style="max-width:560px;">
       <div class="modal-header">
         <h3 class="modal-title"><i data-lucide="clipboard-list"></i> Resultado del lote</h3>
@@ -416,7 +416,7 @@
        js/ui/asistente-venta.js), compartidos con el espacio Almacén. -->
 
   <!-- Modal: editar equipo -->
-  <div id="eqEditModal" class="modal-backdrop" style="display:none;">
+  <div id="eqEditModal" class="modal-backdrop">
     <div class="modal" style="max-width:460px;">
       <div class="modal-header">
         <h3 class="modal-title"><i data-lucide="pencil"></i> Editar <span id="editSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
@@ -465,7 +465,7 @@
 
   <!-- Modal: corregir estado → bodega (migración con estado errado, o unidad
        "Por clasificar" que apareció físicamente). Único destino: bodega. -->
-  <div id="eqCorregirModal" class="modal-backdrop" style="display:none;">
+  <div id="eqCorregirModal" class="modal-backdrop">
     <div class="modal" style="max-width:500px;">
       <div class="modal-header">
         <h3 class="modal-title"><i data-lucide="pencil-ruler"></i> Corregir estado <span id="corrSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
@@ -505,7 +505,7 @@
   </div>
 
   <!-- Modal: historia (kardex del serial) -->
-  <div id="eqHistoriaModal" class="modal-backdrop" style="display:none;">
+  <div id="eqHistoriaModal" class="modal-backdrop">
     <div class="modal" style="max-width:560px;">
       <div class="modal-header">
         <h3 class="modal-title"><i data-lucide="history"></i> Historia <span id="histSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
@@ -522,7 +522,7 @@
   </div>
 
   <!-- Modal: conciliación pool vs conteo manual -->
-  <div id="eqConcilModal" class="modal-backdrop" style="display:none;">
+  <div id="eqConcilModal" class="modal-backdrop">
     <div class="modal" style="max-width:640px;">
       <div class="modal-header">
         <h3 class="modal-title"><i data-lucide="scale"></i> Conciliación: pool vs conteo manual</h3>
@@ -544,7 +544,7 @@
   </div>
 
   <!-- Modal: importar Excel -->
-  <div id="eqImportModal" class="modal-backdrop" style="display:none;">
+  <div id="eqImportModal" class="modal-backdrop">
     <div class="modal" style="max-width:640px;">
       <div class="modal-header">
         <h3 class="modal-title"><i data-lucide="upload"></i> Importar seriales desde Excel</h3>

@@ -209,10 +209,8 @@ window.PocEdit = {
       const gruposAntes = Array.isArray(originalData?.grupos)
         ? originalData.grupos.filter(g => (g || '').toString().trim()).length : 0;
       if (gruposAntes >= 3 && grupos.length === 0) {
-        if (!confirm(
-          `Este equipo tenía ${gruposAntes} grupos y este guardado los quita TODOS.\n\n` +
-          `¿Seguro que quieres continuar?`
-        )) return;
+        if (!await Modal.confirm({ title: 'Quitar todos los grupos', confirmLabel: 'Continuar', danger: true,
+          message: `Este equipo tenía ${gruposAntes} grupos y este guardado los quita TODOS.<br><br>¿Seguro que quieres continuar?` })) return;
       }
       const user   = firebase.auth().currentUser;
 

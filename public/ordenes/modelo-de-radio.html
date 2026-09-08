@@ -18,7 +18,7 @@
   <meta charset="UTF-8">
   <title>Modelos de Radio - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=f4">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
 
@@ -98,7 +98,7 @@
       };
 
       window.borrarModelo = async (id) => {
-        if (!confirm("¿Eliminar modelo permanentemente?")) return;
+        if (!await Modal.confirm({ title: 'Eliminar modelo', confirmLabel: 'Eliminar', danger: true, message: '¿Eliminar modelo permanentemente?' })) return;
         await ModelosService.deleteModelo(id);
         await cargarModelos();
       };
@@ -114,7 +114,7 @@
         // captura derivan la condición de `estado` — guardarlo distinto de "R" hace
         // que los radios entren como nuevos en silencio (caso DGP8550-R 2026-08-21).
         if (/[\s-]r$/i.test(modelo) && estado.toUpperCase() !== "R") {
-          if (!confirm(`"${modelo}" termina en -R (refurbished) pero el estado no es "R". Todo radio de este modelo entrará a bodega como NUEVO. ¿Guardar así de todos modos?`)) return;
+          if (!await Modal.confirm({ title: 'Modelo -R sin estado R', confirmLabel: 'Guardar así', message: `"${modelo}" termina en -R (refurbished) pero el estado no es "R". Todo radio de este modelo entrará a bodega como NUEVO. ¿Guardar así de todos modos?` })) return;
         }
         if (editandoId) {
           await ModelosService.updateModelo(editandoId, { modelo, marca, tipo, estado });
@@ -129,6 +129,7 @@
       await cargarModelos();
     });
   </script>
+  <script defer src="../js/ui/modal.js?v=f4"></script> <!-- Modal.confirm/prompt en vez de los nativos -->
 </head>
 <body>
   <div class="cc-app">

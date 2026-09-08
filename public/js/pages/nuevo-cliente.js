@@ -29,7 +29,7 @@ async function cargarListaIPs(valorActual = "") {
 
 // Agrega un bloque IP a empresa/IPs (mismo patrón que Nuevo batch) y lo selecciona.
 async function agregarIP() {
-  const nuevo = (prompt("Nuevo bloque IP (ej. cliente.cecomunica.net):") || "").trim();
+  const nuevo = ((await Modal.prompt({ title: 'Nuevo bloque IP', confirmLabel: 'Agregar', message: 'Nuevo bloque IP (ej. cliente.cecomunica.net):' })) || '').trim();
   if (!nuevo) return;
   const snap = await EmpresaService.getDoc("IPs");
   const lista = snap && Array.isArray(snap.list) ? snap.list : [];

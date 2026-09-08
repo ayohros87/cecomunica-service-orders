@@ -223,7 +223,7 @@ function vincularManual(clienteId){
 }
 
 async function desvincular(clienteId){
-  if(!window.confirm('¿Quitar el vínculo con QuickBooks?')) return;
+  if(!await Modal.confirm({ title: 'Quitar vínculo', confirmLabel: 'Quitar', danger: true, message: '¿Quitar el vínculo con QuickBooks?' })) return;
   try{
     const user = firebase.auth().currentUser;
     await ClientesService.updateCliente(clienteId, {

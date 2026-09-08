@@ -16,7 +16,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin · Referencias huérfanas — Cecomunica</title>
 
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=f4">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
   <link rel="stylesheet" href="../css/admin-panel.css">
@@ -56,6 +56,7 @@
   <script>
     function cerrarSesion() { firebase.auth().signOut().then(() => { window.location.href = "../login.html"; }); }
   </script>
+  <script defer src="../js/ui/modal.js?v=f4"></script> <!-- Modal.confirm/prompt en vez de los nativos -->
 </head>
 <body>
   <div class="cc-app">

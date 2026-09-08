@@ -2485,7 +2485,7 @@ window.Centro = {
   },
 
   async anularGestion(gid) {
-    const motivo = window.prompt('Motivo de la anulación (queda en el expediente):');
+    const motivo = await Modal.prompt({ title: 'Anular gestión', confirmLabel: 'Anular', message: 'Motivo de la anulación (queda en el expediente):', multiline: true });
     if (motivo === null) return;
     try {
       await GestionesService.anular(gid, motivo);

@@ -22,7 +22,7 @@
   <meta charset="UTF-8">
   <title>Preparar Equipos PoC por Vendedor - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=f4">
   <!-- Rediseño Command Center F4: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
 
@@ -42,15 +42,7 @@
     }
 
     /* Badges de readiness por sección (JS asigna .pending / .info / .completo) */
-    .badge {
-      display: inline-flex; align-items: center;
-      padding: 4px 12px; border-radius: 999px;
-      font-size: 12px; font-weight: 600; white-space: nowrap;
-      border: 1px solid transparent;
-    }
-    .badge.pending  { background: var(--surface-sunken); color: var(--fg-3); border-color: var(--border-default); }
-    .badge.info     { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
-    .badge.completo { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
+    /* .badge: kit (ceco-ui.css) */
 
     /* El desplegable de clientes es .combo-list del kit (EntityCombo). */
 
@@ -203,6 +195,7 @@
   <script src="../js/core/layout.js?v=cc13"></script>
   <script defer src="/js/vendor/lucide.min.js?v=3"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
+  <script defer src="../js/ui/modal.js?v=f4"></script> <!-- Modal.confirm/prompt en vez de los nativos -->
 </head>
 <body>
   <div class="cc-app">

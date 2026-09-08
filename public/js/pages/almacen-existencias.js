@@ -387,7 +387,7 @@ window.AlmacenExistencias = (() => {
       corregir: `¿Corregir a bodega las ${docs.length} unidades de ${f.label} en "por clasificar"? Quedan disponibles y verificadas.`,
       verificar: `¿Marcar verificadas ${docs.length} unidades de ${f.label}?`,
     };
-    if (!confirm(msgs[accion])) return;
+    if (!await Modal.confirm({ title: 'Acción en lote', confirmLabel: 'Continuar', message: msgs[accion] })) return;
     _loteEnVuelo = true;
     if (btn) btn.disabled = true;
     let ok = 0, err = 0;

@@ -157,7 +157,7 @@ function editarGlobal(sufijo){
 async function setGlobalItem(campo, value){
   const sufijo = campo==='qbo_item_frecuencia_id' ? 'Frec' : 'Mant';
   if(String(value) === String(factConfig[campo]||'')){ refreshGlobalDisplay(); return; }
-  if(!window.confirm('Vas a cambiar el ítem global — afecta a TODOS los modelos. ¿Continuar?')){
+  if(!await Modal.confirm({ title: 'Ítem global', confirmLabel: 'Cambiar', danger: true, message: 'Vas a cambiar el ítem global — afecta a TODOS los modelos. ¿Continuar?' })){
     refreshGlobalDisplay(); return; // revertir sin guardar
   }
   factConfig[campo] = value;

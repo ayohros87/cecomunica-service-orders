@@ -364,7 +364,7 @@
     }
 
    document.getElementById("crearCliente").addEventListener("click", async () => {
-  const nombre = prompt("Ingrese nombre del nuevo cliente:");
+  const nombre = await Modal.prompt({ title: 'Nuevo cliente', confirmLabel: 'Crear', message: 'Nombre del nuevo cliente:' });
   if (!nombre) return;
 
   const nombreLimpio = nombre.trim();

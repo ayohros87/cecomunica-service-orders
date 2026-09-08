@@ -96,7 +96,7 @@
     if (!nombre) { Toast.show('Escribe o elige el cliente destino.', 'warn'); return; }
     const id = State.nombreToId.get(nombre.toLowerCase());
     if (!id) { Toast.show('Ese nombre no es un cliente activo. Elígelo de la lista.', 'warn'); return; }
-    if (!confirm(`Re-apuntar ${g.total} referencia(s) de "${g.nombre}" → "${nombre}"?`)) return;
+    if (!await Modal.confirm({ title: 'Re-apuntar referencias', confirmLabel: 'Re-apuntar', message: `Re-apuntar ${g.total} referencia(s) de "${g.nombre}" → "${nombre}"?` })) return;
 
     const btn = root.querySelector('.oh-apply');
     btn.disabled = true; btn.textContent = 'Aplicando…';

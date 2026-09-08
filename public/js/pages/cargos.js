@@ -144,7 +144,7 @@ async function agregarCargo(){
 }
 
 async function borrarCargo(id){
-  if(!window.confirm('¿Borrar este cargo definitivamente?')) return;
+  if(!await Modal.confirm({ title: 'Borrar cargo', confirmLabel: 'Borrar', danger: true, message: '¿Borrar este cargo definitivamente?' })) return;
   try{ await CargosService.deleteCargo(id); await cargarCargos(); render(); Toast.show('Cargo borrado','ok'); }
   catch(e){ console.error(e); Toast.show('No se pudo borrar','bad'); }
 }

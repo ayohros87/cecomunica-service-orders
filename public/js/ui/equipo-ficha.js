@@ -230,21 +230,21 @@ window.EquipoFicha = {
     const aviso = (msg, tipo = 'ok') => { if (window.Toast) Toast.show(msg, tipo); };
     try {
       if (accion === 'inspeccion_ok') {
-        if (!confirm(`¿Inspección OK? ${serial} regresa a bodega como disponible (condición reuso).`)) return;
+        if (!await Modal.confirm({ title: 'Inspección OK', confirmLabel: 'A bodega', message: `¿Inspección OK? ${serial} regresa a bodega como disponible (condición reuso).` })) return;
         await EquiposPoolService.liberar(eq.id, { notas: 'Inspección OK desde la ficha (Almacén)' }, user);
         aviso(`${serial} → en bodega.`);
       } else if (accion === 'corregir') {
-        const motivo = prompt(`Corregir ${serial} a bodega — la unidad está físicamente en bodega y su estado era heredado.\nMotivo (opcional):`);
+        const motivo = await Modal.prompt({ title: 'Corregir a bodega', confirmLabel: 'Corregir', message: `Corregir ${serial} a bodega — la unidad está físicamente en bodega y su estado era heredado. Motivo (opcional):` });
         if (motivo === null) return;
         await EquiposPoolService.corregirABodega(eq.id, motivo || 'Corrección desde la ficha (Almacén)', user);
         aviso(`${serial} → en bodega (verificado).`);
       } else if (accion === 'baja') {
-        const motivo = prompt(`Dar de baja ${serial} — sale de la flota (reversible con "Reactivar").\nMotivo (obligatorio):`);
+        const motivo = await Modal.prompt({ title: 'Dar de baja', confirmLabel: 'Dar de baja', message: `Dar de baja ${serial} — sale de la flota (reversible con "Reactivar"). Motivo (obligatorio):` });
         if (!motivo) return;
         await EquiposPoolService.darDeBaja(eq.id, motivo, user);
         aviso(`${serial} dado de baja.`);
       } else if (accion === 'reactivar') {
-        const motivo = prompt(`Reactivar ${serial} — regresa a bodega como disponible.\nMotivo:`);
+        const motivo = await Modal.prompt({ title: 'Reactivar', confirmLabel: 'Reactivar', message: `Reactivar ${serial} — regresa a bodega como disponible. Motivo:` });
         if (!motivo) return;
         await EquiposPoolService.reactivar(eq.id, motivo, user);
         aviso(`${serial} → en bodega.`);

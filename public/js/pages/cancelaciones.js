@@ -303,14 +303,14 @@ window.Cancelaciones = {
 
   async aprobar(id) {
     if (!this.esAprobador()) return;
-    if (!window.confirm('¿Aprobar esta enmienda?')) return;
+    if (!await Modal.confirm({ title: 'Aprobar enmienda', confirmLabel: 'Aprobar', message: '¿Aprobar esta enmienda?' })) return;
     try { await CancelacionesService.aprobar(id, firebase.auth().currentUser?.uid); Toast.show('Enmienda aprobada', 'ok'); this.cargarCola(); }
     catch (e) { console.error(e); Toast.show('No se pudo aprobar', 'bad'); }
   },
 
   async rechazar(id) {
     if (!this.esAprobador()) return;
-    const motivo = window.prompt('Motivo del rechazo (opcional):') || '';
+    const motivo = (await Modal.prompt({ title: 'Rechazar enmienda', confirmLabel: 'Rechazar', message: 'Motivo del rechazo (opcional):' })) || '';
     try { await CancelacionesService.rechazar(id, firebase.auth().currentUser?.uid, motivo); Toast.show('Enmienda rechazada', 'ok'); this.cargarCola(); }
     catch (e) { console.error(e); Toast.show('No se pudo rechazar', 'bad'); }
   },
@@ -327,8 +327,8 @@ window.Cancelaciones = {
       : sol?.devolucion_no_aplica === 'propio'
         ? 'No hay recuperación: los equipos son propiedad del cliente (contrato Propio). '
         : '';
-    if (!window.confirm(`¿Cerrar la enmienda? ${dev}Esto marca el trámite como terminado.`)) return;
-    const cond = window.prompt('Notas de cierre (opcional):') || '';
+    if (!await Modal.confirm({ title: 'Cerrar enmienda', confirmLabel: 'Cerrar', message: `¿Cerrar la enmienda? ${dev}Esto marca el trámite como terminado.` })) return;
+    const cond = (await Modal.prompt({ title: 'Notas de cierre', message: 'Notas de cierre (opcional):', multiline: true })) || '';
     try { await CancelacionesService.cerrar(id, firebase.auth().currentUser?.uid, { condicionNotas: cond }); Toast.show('Enmienda cerrada', 'ok'); this.cargarCola(); }
     catch (e) { console.error(e); Toast.show('No se pudo cerrar', 'bad'); }
   },

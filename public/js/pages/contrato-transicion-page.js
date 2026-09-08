@@ -396,7 +396,8 @@
   // vía onMapeoWrite (que no aplica linaje al no traer seriales).
   async function cerrarSinReemplazos() {
     const c = ctx.contrato;
-    if (!window.confirm('Confirma que los equipos de este contrato NO sustituyen a ninguno existente (adición pura).\n\nLa lista dejará de pedir la transición. Si más adelante sí hay reemplazos, puedes registrarlos aquí mismo.')) return;
+    if (!await Modal.confirm({ title: 'Cerrar sin reemplazos', confirmLabel: 'Confirmar',
+      message: 'Confirma que los equipos de este contrato NO sustituyen a ninguno existente (adición pura).<br><br>La lista dejará de pedir la transición. Si más adelante sí hay reemplazos, puedes registrarlos aquí mismo.' })) return;
     try {
       await db().collection('contratos').doc(contratoDocId).collection('mapeos').add({
         sin_reemplazos: true,
@@ -485,8 +486,8 @@
     const refs = (Array.isArray(ctx.contrato.contrato_origen_refs) && ctx.contrato.contrato_origen_refs.length)
       ? ctx.contrato.contrato_origen_refs
       : [ctx.contrato.contrato_origen_ref || ctx.contrato.contrato_origen_id];
-    if (!confirm(`¿Confirmas que este contrato reemplaza a ${refs.join(', ')}?\n\n`
-      + 'El sistema abrirá una orden de devolución con los equipos de ese contrato que siguen con el cliente.')) return;
+    if (!await Modal.confirm({ title: 'Confirmar origen', confirmLabel: 'Confirmar', message: `¿Confirmas que este contrato reemplaza a ${refs.join(', ')}?<br><br>`
+      + 'El sistema abrirá una orden de devolución con los equipos de ese contrato que siguen con el cliente.' })) return;
     const u = firebase.auth().currentUser;
     try {
       await ContratosService.updateContrato(contratoDocId, {
@@ -509,8 +510,8 @@
   // No se toca `origen_tipo: 'legacy'` — si el original es de papel, sigue
   // siéndolo, y la transición se registra a mano aquí abajo.
   async function quitarOrigen() {
-    if (!confirm('¿Quitar el vínculo al contrato original?\n\n'
-      + 'Podrás vincular el correcto, o registrar la transición a mano en esta página.')) return;
+    if (!await Modal.confirm({ title: 'Quitar vínculo', confirmLabel: 'Quitar', danger: true, message: '¿Quitar el vínculo al contrato original?<br><br>'
+      + 'Podrás vincular el correcto, o registrar la transición a mano en esta página.' })) return;
     const FV = firebase.firestore.FieldValue;
     try {
       await ContratosService.updateContrato(contratoDocId, {
@@ -607,7 +608,8 @@
     if (!nuevos.length) { Toast.show('No hay nada que registrar. Si la adición no sustituye equipos, usa "Cerrar sin reemplazos".', 'warn'); return; }
     const nDevuelven = nuevos.filter(m => m.tipo !== 'no_devuelve' && m.saliente).length;
     const nExcep = nuevos.filter(m => m.tipo === 'no_devuelve').length;
-    if (!window.confirm(`Se registrarán ${nDevuelven} devolución(es)${nExcep ? ` y ${nExcep} excepción(es) justificada(s)` : ''}. Los que se devuelven quedan pendientes de devolución. ¿Continuar?`)) return;
+    if (!await Modal.confirm({ title: 'Registrar transición', confirmLabel: 'Registrar',
+      message: `Se registrarán ${nDevuelven} devolución(es)${nExcep ? ` y ${nExcep} excepción(es) justificada(s)` : ''}. Los que se devuelven quedan pendientes de devolución. ¿Continuar?` })) return;
 
     const btn = $('btnGuardarTrans');
     btn.disabled = true;

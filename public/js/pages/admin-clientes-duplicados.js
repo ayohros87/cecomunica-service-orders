@@ -145,13 +145,13 @@
       const r = cl.refs[d.id] || {}; return acc + (r.contratos || 0) + (r.ordenes || 0) + (r.poc || 0);
     }, 0);
 
-    const ok = confirm(
+    const ok = await Modal.confirm({ title: 'Fusionar clientes', confirmLabel: 'Fusionar', danger: true, message: (
       `Fusionar en "${canonical.nombre}":\n\n` +
       `• Se eliminarán (soft-delete) ${dups.length} duplicado(s): ${dups.map(d => '"' + d.nombre + '"').join(', ')}\n` +
       `• Se re-apuntarán ~${totalRefs} referencia(s) (contratos/órdenes/equipos) al canónico\n` +
       `• El canónico ganará: ${fillTxt}\n\n` +
       `¿Continuar?`
-    );
+    ).replace(/\n/g, '<br>') });
     if (!ok) return;
 
     const btn = root.querySelector('[data-fusionar]');

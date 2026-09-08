@@ -375,7 +375,7 @@ ${borrador ? '<div class="watermark"><span>BORRADOR</span></div>' : ''}
         location.href = data.url;
       } catch (err) {
         e.target.textContent = 'ver';
-        alert('No pude obtener el PDF: ' + (err.message || err));
+        Modal.alert({ title: 'PDF', message: 'No pude obtener el PDF: ' + (err.message || err) });
       }
     });
   }
@@ -396,7 +396,7 @@ ${borrador ? '<div class="watermark"><span>BORRADOR</span></div>' : ''}
       $('pdfInfo').innerHTML = `PDF archivado ✓ · <a href="${data.url}" target="_blank" rel="noopener">descargar</a>`;
     } catch (err) {
       console.error(err);
-      alert('Error al archivar el PDF: ' + (err.message || err));
+      Modal.alert({ title: 'PDF', message: 'Error al archivar el PDF: ' + (err.message || err) });
     } finally {
       btn.disabled = false;
       btn.textContent = prev;

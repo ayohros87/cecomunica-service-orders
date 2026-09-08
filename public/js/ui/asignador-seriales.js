@@ -452,7 +452,7 @@ window.AsignadorSeriales = (() => {
         const c = mapa.get(norm(s.serial));
         if (!c) continue;
         avisos.push({ serial: s.serial, chip: `⚠ condición: ${EquiposCondicionesService.resumen(c.condicion, 40)}`,
-          chipCss: 'background:#fef3c7;color:#92400e;',
+          chipCls: 'eqpool-chip-aviso',
           detalle: `${c.condicion}${c.orden_id ? ` (orden ${c.orden_id})` : ''}. Funciona, pero verifica que este cliente no necesite justo esa función.` });
       }
       return avisos;
@@ -467,7 +467,7 @@ window.AsignadorSeriales = (() => {
           const docs = await EquiposPoolService.findBySerial(s.serial);
           if (!docs.length) {
             if (!st.esLegacy) avisos.push({ serial: s.serial, chip: 'sin registro en el pool',
-              chipCss: 'background:transparent;border:1px dashed #cbd5e1;color:#64748b;',
+              chipCls: 'eqpool-chip-vacio',
               detalle: 'Verifica que esté bien escrito, o recíbelo antes en Almacén · Recibir equipos. Se dará de alta al guardar.' });
             continue;
           }
@@ -475,7 +475,7 @@ window.AsignadorSeriales = (() => {
           if (!mismo) {
             const otros = docs.map(d => d.modelo_label || 'sin modelo').join(', ');
             avisos.push({ serial: s.serial, chip: 'modelo distinto en el pool',
-              chipCss: 'background:#fee2e2;color:#b91c1c;',
+              chipCls: 'eqpool-chip-alerta',
               detalle: `El pool lo registra como ${otros} — verifica que sea el ${s.modelo}. Si es el mismo radio, el conflicto se resuelve en Almacén · Hoy (Conflictos).` });
             continue;
           }
@@ -484,7 +484,7 @@ window.AsignadorSeriales = (() => {
             const est = EquiposPoolService.ESTADO_LABELS[mismo.estado] || mismo.estado;
             const quien = mismo.asignacion?.cliente_nombre ? ` con ${mismo.asignacion.cliente_nombre}` : '';
             avisos.push({ serial: s.serial, chip: `${est}${quien}`,
-              chipCss: 'background:#fef3c7;color:#92400e;',
+              chipCls: 'eqpool-chip-aviso',
               detalle: 'Al guardar, la unidad se reasignará a este contrato (queda rastro del tenedor anterior en su historia).' });
           }
         } catch (e) { /* best-effort: nunca bloquea */ }
@@ -499,7 +499,7 @@ window.AsignadorSeriales = (() => {
             <td style="font-family:var(--font-mono, monospace); font-size:12.5px; white-space:nowrap; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top;">
               <a href="#" data-ficha="${esc(a.serial)}" style="color:inherit; text-decoration:none;" title="Ver ficha del equipo">${esc(a.serial)}</a></td>
             <td style="padding:8px 10px; border-bottom:1px solid var(--border); font-size:12.5px;">
-              <span class="eqpool-chip" style="${esc(a.chipCss)}">${esc(a.chip)}</span>
+              <span class="eqpool-chip ${esc(a.chipCls || '')}">${esc(a.chip)}</span>
               <div style="color:var(--fg-3); margin-top:3px; line-height:1.45;">${esc(a.detalle)}</div></td>
           </tr>`).join('');
         const r = await Modal.sheet({
@@ -586,10 +586,10 @@ window.AsignadorSeriales = (() => {
       {
         const soloModelo = errores.length && errores.every(e => e.tipo === 'modelo');
         const chip = (t) => t === 'modelo'
-          ? '<span class="eqpool-chip" style="background:#fee2e2;color:#b91c1c;">modelo distinto</span>'
+          ? '<span class="eqpool-chip eqpool-chip-alerta">modelo distinto</span>'
           : t === 'inexistente'
-            ? '<span class="eqpool-chip" style="background:transparent;border:1px dashed #cbd5e1;color:#64748b;">no existe</span>'
-            : '<span class="eqpool-chip" style="background:#fef3c7;color:#92400e;">no está en bodega</span>';
+            ? '<span class="eqpool-chip eqpool-chip-vacio">no existe</span>'
+            : '<span class="eqpool-chip eqpool-chip-aviso">no está en bodega</span>';
         const filas = errores.map(e => `
           <tr>
             <td style="font-family:var(--font-mono, monospace); font-size:12.5px; white-space:nowrap; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top;">

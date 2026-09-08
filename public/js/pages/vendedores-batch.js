@@ -278,7 +278,7 @@ window.VB = {
   },
 
   // ---- Batch table ----
-  generarTabla() {
+  async generarTabla() {
     const cliente = document.getElementById('clienteGlobal').value.trim();
     if (/[\\/#[\]$]/.test(cliente)) {
       Toast.show('El nombre del cliente contiene caracteres no permitidos: / # [ ] $', 'bad');
@@ -288,7 +288,7 @@ window.VB = {
     if (!nombres.length) { Toast.show('Pega los nombres de los equipos (uno por línea) antes de generar la tabla.', 'warn'); return; }
     const cuerpoPrevio = document.getElementById('cuerpoTabla');
     if (cuerpoPrevio.children.length &&
-        !confirm('La tabla ya tiene filas trabajadas; generarla de nuevo las reemplaza y se pierden los cambios. ¿Continuar?')) return;
+        !await Modal.confirm({ title: 'Generar la tabla de nuevo', confirmLabel: 'Reemplazar', danger: true, message: 'La tabla ya tiene filas trabajadas; generarla de nuevo las reemplaza y se pierden los cambios. ¿Continuar?' })) return;
 
     const input = document.getElementById('grupoInput').value;
     VB.grupos = input.split(',').map(g => g.trim()).filter(Boolean);
@@ -713,7 +713,7 @@ window.VB = {
       if (sinModelo)   partes.push(`${sinModelo} sin modelo`);
       if (sinGrupos)   partes.push(`${sinGrupos} sin grupos`);
       if (dupSet.size) partes.push(`${dupSet.size} nombre(s) duplicado(s)`);
-      if (!confirm(`⚠ Hay pendientes en el lote:\n\n- ${partes.join('\n- ')}\n\nRecepción lo recibirá así. Revisa la tabla (los puntos ámbar) antes de enviar.\n\n¿Descargar de todos modos?`)) return;
+      if (!await Modal.confirm({ title: 'Pendientes en el lote', confirmLabel: 'Descargar de todos modos', message: `Hay pendientes en el lote: ${partes.join(' · ')}.<br><br>Recepción lo recibirá así. Revisa la tabla (los puntos ámbar) antes de enviar.` })) return;
     }
 
     const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });

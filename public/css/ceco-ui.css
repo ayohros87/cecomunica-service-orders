@@ -432,6 +432,12 @@ body{
   background: var(--aprobado-bg);
   color: var(--aprobado-fg);
 }
+/* Variantes que vivían inline en almacen/index.html, inventario/piezas.html y
+   POC/vendedores-batch.html (2026-09-08): una sola definición. */
+.badge.danger  { background:#FEF2F2; color:#991B1B; }
+.badge.warn    { background:#FFFBEB; color:#92400E; }
+.badge.pending { background:var(--surface-sunken); color:var(--fg-3); }
+.badge.info    { background:var(--accent-soft); color:var(--accent); }
 
 
 /* Contratos card state styling is now handled by .chip-estado.chip-* from
@@ -1396,9 +1402,8 @@ tr.selected{ outline:2px solid #c7d2fe; background:#f8fbff; }
 .table-actions { display: flex; gap: 6px; justify-content: flex-end; }
 th.actions, td.actions { white-space: nowrap; text-align: right; }
 /* Badges/colors already defined? Keep or adjust as needed */
-.badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; }
-.badge.completo { background:#e7f7ef; color:#0f8a5f; }
-.badge.danger { background:#fde8e8; color:#b91c1c; }
+/* .badge vive una sola vez (bloque "badge" de arriba, con sus variantes);
+   aquí había una segunda definición con otra paleta — retirada 2026-09-08. */
 
 :root {
   --aprobado-bg: var(--accent-soft); /* azul muy claro */
@@ -2013,13 +2018,14 @@ i[data-lucide]                              { display: inline-block; }
   inset: 0;
   background: rgba(6, 24, 41, 0.45);
   z-index: 1500;
-  display: flex;
+  display: none;            /* oculto por defecto: Modal.open/close y Modal.sheet ponen .open */
   align-items: center;
   justify-content: center;
   padding: var(--sp-6);
   backdrop-filter: blur(4px);
   animation: fade-in var(--dur-base) var(--ease-out) both;
 }
+.modal-backdrop.open { display: flex; }
 /* El cuadro: sin relleno propio (lo ponen header/body/footer) y en columna,
    para que el cuerpo scrollee y el encabezado y el pie se queden fijos.
    Antes el .modal base metía 24px y el pie salía como un panel dentro de

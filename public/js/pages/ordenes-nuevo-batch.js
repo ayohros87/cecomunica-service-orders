@@ -712,9 +712,9 @@ window.guardarBatch = async () => {
   if (contratoDocId) {
     const { corregidos, fuera } = await enforceContratoModelos();
     if (fuera.length) {
-      const ok = window.confirm(
-        `Estos seriales NO están en el contrato vinculado a la orden:\n\n- ${fuera.join("\n- ")}\n\n` +
-        `Se guardarán con el modelo elegido en la tabla. ¿Continuar de todos modos?`);
+      const ok = await Modal.confirm({ title: "Seriales fuera del contrato", confirmLabel: "Continuar de todos modos", message:
+        `Estos seriales NO están en el contrato vinculado a la orden: ${fuera.join(", ")}.<br><br>` +
+        `Se guardarán con el modelo elegido en la tabla.` });
       if (!ok) return;
     }
     if (corregidos) Toast.show(`${corregidos} modelo(s) ajustados al del contrato.`, "ok");

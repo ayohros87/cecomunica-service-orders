@@ -38,10 +38,10 @@
   <!-- Toast/Modal: clientes-index.js los usa en la bulk-bar, "Mostrar todo" y el
        guard de acceso; sin estos dos scripts esos botones morían en ReferenceError. -->
   <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/ui/modal.js"></script>
+  <script defer src="../js/ui/modal.js?v=f4"></script>
   <script src="../js/core/auth.js"></script>
 
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=f4">
   <!-- Rediseño Command Center F4: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
   <style>
@@ -203,7 +203,7 @@
   </div>
 
   <!-- Modal de confirmación de eliminación -->
-  <div id="overlay" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true">
+  <div id="overlay" class="modal-backdrop" role="dialog" aria-modal="true">
     <div class="modal" id="confirmModal">
       <div class="modal-header">
         <h3 class="modal-title" id="confirmTitle">Confirmar eliminación</h3>

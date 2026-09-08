@@ -137,8 +137,8 @@ window.AsistenteRecibir = {
           if (sosp.length && rev.cobertura >= 0.6) {
             const detalle = sosp.slice(0, 8)
               .map(r => r.serial + (r.sugerencia ? ` (¿será ${r.sugerencia}?)` : '')).join('\n');
-            const seguir = confirm(
-              `Ojo: ${sosp.length} serial(es) no calzan con el patrón del resto de la tanda:\n\n${detalle}\n\n¿Recibir igual?`);
+            const seguir = await Modal.confirm({ title: 'Seriales fuera del patrón', confirmLabel: 'Recibir igual',
+              message: `Ojo: ${sosp.length} serial(es) no calzan con el patrón del resto de la tanda:<br><br>${this._esc(detalle).replace(/\n/g, '<br>')}` });
             if (!seguir) return;
           }
         } catch (_) { /* detector opcional: nunca frena la recepción */ }

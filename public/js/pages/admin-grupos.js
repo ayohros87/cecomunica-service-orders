@@ -337,14 +337,11 @@
 
   // Pide y valida un prefijo único de 3 letras; lo propone si el cliente no
   // tiene. Al confirmar, re-aplica el prefijo a TODOS los grupos del cliente.
-  function pedirPrefijo(propuesto) {
+  async function pedirPrefijo(propuesto) {
     const tomados = new Set(State.prefijosTomados);
     if (State.clientePrefijo) tomados.delete(State.clientePrefijo); // puede conservar el propio
-    const entrada = prompt(
-      `Prefijo de 3 letras (A-Z) para ${State.clienteSel.nombre}:\n` +
-      `Los grupos quedarán como PREFIJO-Nombre.`,
-      propuesto
-    );
+    const entrada = await Modal.prompt({ title: 'Prefijo del cliente', confirmLabel: 'Aplicar', defaultValue: propuesto,
+      message: `Prefijo de 3 letras (A-Z) para ${State.clienteSel.nombre}. Los grupos quedarán como PREFIJO-Nombre.` });
     if (entrada === null) return null;
     const pfx = FMT.normalizePrefijo(entrada);
     if (pfx.length !== 3) { Toast.show('El prefijo debe ser exactamente 3 letras (A-Z).', 'bad'); return null; }
@@ -357,9 +354,9 @@
     const tomados = new Set(State.prefijosTomados);
     if (State.clientePrefijo) tomados.delete(State.clientePrefijo);
     const propuesto = State.clientePrefijo || GruposAnalisis.proponerPrefijo(State.clienteSel.nombre, tomados);
-    const pfx = pedirPrefijo(propuesto);
+    const pfx = await pedirPrefijo(propuesto);
     if (!pfx) return;
-    if (!confirm(`Aplicar el prefijo "${pfx}" a TODOS los grupos de ${State.clienteSel.nombre} (catálogo + equipos)?`)) return;
+    if (!await Modal.confirm({ title: 'Aplicar prefijo', confirmLabel: 'Aplicar', message: `Aplicar el prefijo "${pfx}" a TODOS los grupos de ${State.clienteSel.nombre} (catálogo + equipos)?` })) return;
     try {
       const { affected, prefijo } = await PocService.aplicarPrefijoCliente({
         clienteId: State.clienteSel.id,
@@ -788,10 +785,8 @@
   async function aplicarMigracion() {
     const filas = State.migFilas;
     if (!filas.length) return;
-    if (!confirm(
-      `Aplicar prefijos y renombrar grupos en ${filas.length} empresa(s)?\n\n` +
-      `Esto modifica el catálogo Y los equipos en producción. Es idempotente (se puede repetir).`
-    )) return;
+    if (!await Modal.confirm({ title: 'Aplicar migración', confirmLabel: 'Aplicar', danger: true,
+      message: `Aplicar prefijos y renombrar grupos en ${filas.length} empresa(s)?<br><br>Esto modifica el catálogo Y los equipos en producción. Es idempotente (se puede repetir).` })) return;
     const apply = $('gpMigApply');
     const cancel = $('gpMigCancel');
     const status = $('gpMigStatus');
@@ -910,13 +905,13 @@
 
   // ── Actions ─────────────────────────────────────────────────────────
   async function renombrarGrupo(nombre) {
-    const nuevo = prompt(`Nuevo nombre para "${nombre}":`, nombre);
+    const nuevo = await Modal.prompt({ title: 'Renombrar grupo', confirmLabel: 'Renombrar', defaultValue: nombre, message: `Nuevo nombre para "${nombre}":` });
     if (!nuevo) return;
     let nuevoN = FMT.normalizeGrupo(nuevo);
     // Conserva el prefijo del cliente en el nombre nuevo.
     if (State.clientePrefijo) nuevoN = FMT.aplicarPrefijoGrupo(State.clientePrefijo, nuevoN);
     if (!nuevoN || nuevoN === nombre) return;
-    if (!confirm(`Renombrar "${nombre}" → "${nuevoN}" en todos los equipos de ${State.clienteSel.nombre}?`)) return;
+    if (!await Modal.confirm({ title: 'Renombrar grupo', confirmLabel: 'Renombrar', message: `Renombrar "${nombre}" → "${nuevoN}" en todos los equipos de ${State.clienteSel.nombre}?` })) return;
     try {
       const { affected } = await PocService.renombrarGrupo({
         clienteId: State.clienteSel.id,
@@ -1025,10 +1020,9 @@
     const totalEquipos = State.grupos
       .filter(g => sources.includes(g.nombre) || g.nombre === target)
       .reduce((acc, g) => acc + g.count, 0);
-    if (!confirm(
-      `Fusionar ${sources.length} grupo${sources.length === 1 ? '' : 's'} (${sources.map(s => `"${s}"`).join(', ')}) ` +
-      `en "${target}"?\n\nSe actualizarán hasta ${totalEquipos} equipos de ${State.clienteSel.nombre}.`
-    )) return;
+    if (!await Modal.confirm({ title: 'Fusionar grupos', confirmLabel: 'Fusionar', danger: true,
+      message: `Fusionar ${sources.length} grupo${sources.length === 1 ? '' : 's'} (${sources.map(s => `"${s}"`).join(', ')}) ` +
+      `en "${target}"?<br><br>Se actualizarán hasta ${totalEquipos} equipos de ${State.clienteSel.nombre}.` })) return;
     try {
       const { affected } = await PocService.fusionarGrupos({
         clienteId: State.clienteSel.id,
@@ -1051,11 +1045,8 @@
   async function mergeSeleccionados() {
     const seleccion = Array.from(State.seleccionados);
     if (seleccion.length < 2) return;
-    const target = prompt(
-      `Fusionar estos grupos en uno:\n\n${seleccion.map(s => '• ' + s).join('\n')}\n\n` +
-      `Escribe el nombre final (puede ser uno de la lista o uno nuevo):`,
-      seleccion[0]
-    );
+    const target = await Modal.prompt({ title: 'Fusionar grupos', confirmLabel: 'Fusionar', defaultValue: seleccion[0],
+      message: `Fusionar estos grupos en uno: ${seleccion.join(' · ')}. Escribe el nombre final (puede ser uno de la lista o uno nuevo):` });
     if (!target) return;
     const targetN = target.toString().trim().replace(/\s+/g, ' ');
     if (!targetN) return;

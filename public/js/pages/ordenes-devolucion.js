@@ -986,9 +986,7 @@
       if (!sel.value) return;
       let detalle = '';
       if (sel.value === 'otro') {
-        detalle = (window.Modal?.prompt
-          ? await Modal.prompt({ title: 'Motivo de la excepción', message: 'Detalla por qué esta unidad no se devuelve.' })
-          : window.prompt('Detalla por qué esta unidad no se devuelve:')) || '';
+        detalle = (await Modal.prompt({ title: 'Motivo de la excepción', message: 'Detalla por qué esta unidad no se devuelve.' })) || '';
         if (!detalle.trim()) { sel.value = ''; return; }
       }
       resolver(sel.dataset.id, 'no_devuelve', sel.value, detalle.trim());
@@ -1206,7 +1204,7 @@
     const e = (_orden.devolucion.esperados || []).find(x => x.id === esperadoId);
     if (!e || e.resolucion) return;
     const labels = { nunca_salio: 'NUNCA SALIÓ del taller', no_devuelve: 'NO SE DEVUELVE' };
-    if (!window.confirm(`${e.serial} → ${labels[resolucion]}. Esta acción mueve el equipo en el inventario y no se deshace desde aquí. ¿Confirmar?`)) { render(); return; }
+    if (!await Modal.confirm({ title: 'Resolver unidad', confirmLabel: 'Confirmar', danger: true, message: `${e.serial} → ${labels[resolucion]}. Esta acción mueve el equipo en el inventario y no se deshace desde aquí.` })) { render(); return; }
     const user = firebase.auth().currentUser;
     e.resolucion = resolucion;
     e.motivo_codigo = motivoCodigo || null;
@@ -1470,10 +1468,10 @@
     // después a mano. En una unidad sola se nota; en un lote de 10 se pasa por
     // alto, así que aquí se pregunta antes de escribir.
     const sinModelo = filas.filter(f => !(f.modelo || '').trim()).map(f => f.serial);
-    if (sinModelo.length && !window.confirm(
+    if (sinModelo.length && !await Modal.confirm({ title: 'Unidades sin modelo', confirmLabel: 'Continuar así', message:
       `${sinModelo.length} unidad(es) van SIN modelo: ${sinModelo.slice(0, 8).join(', ')}` +
-      `${sinModelo.length > 8 ? `, +${sinModelo.length - 8} más` : ''}.\n\n` +
-      'Quedarán en el inventario sin modelo y habrá que corregirlas a mano. ¿Continuar así?')) {
+      `${sinModelo.length > 8 ? `, +${sinModelo.length - 8} más` : ''}.<br><br>` +
+      'Quedarán en el inventario sin modelo y habrá que corregirlas a mano.' })) {
       return;
     }
     const { accesorios, dano } = _leerChecklist();
@@ -2195,7 +2193,7 @@
           ? `Los ${faltan.total} faltantes quedarán registrados como equipos por cobrar, visibles en "Equipos no devueltos" hasta que se facturen, se condonen o aparezcan.`
           : 'Quedará registrado en la orden — coordina el cobro o la excepción antes de cerrar.')
       : '¿Cerrar la devolución? Todas las unidades quedaron resueltas; los equipos recibidos ya están (o quedarán) en la orden de ENTRADA de inspección.';
-    if (!window.confirm(base + aviso + avisoEnvio)) return;
+    if (!await Modal.confirm({ title: 'Cerrar devolución', confirmLabel: 'Cerrar', message: (base + aviso + avisoEnvio).replace(/\n/g, '<br>') })) return;
     const user = firebase.auth().currentUser;
     const previo = dev.cierre_pendientes;
     dev.cierre_pendientes = pend;
@@ -2416,7 +2414,7 @@
         panel.querySelectorAll('.dev-nueva-confirmar').forEach(b => b.addEventListener('click', async () => {
           const c = sinEntrega.find(x => x.id === b.dataset.cid);
           if (!c) return;
-          if (!window.confirm(`Confirmar que el cliente YA recibió los ${Number(c.seriales_count || 0)} equipo(s) del contrato ${c.contrato_id || c.id}.\n\nSi el contrato reemplaza o renueva equipo, la orden de devolución de los radios salientes se creará sola.`)) return;
+          if (!await Modal.confirm({ title: 'Confirmar entrega', confirmLabel: 'Confirmar', message: `Confirmar que el cliente YA recibió los ${Number(c.seriales_count || 0)} equipo(s) del contrato ${c.contrato_id || c.id}.<br><br>Si el contrato reemplaza o renueva equipo, la orden de devolución de los radios salientes se creará sola.` })) return;
           b.disabled = true; b.textContent = 'Confirmando…';
           try {
             // El SDK de functions se carga bajo demanda (carga-diferida.js).

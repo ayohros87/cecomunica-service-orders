@@ -18,7 +18,7 @@
   <meta charset="UTF-8">
   <title>SIM Cards - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=f4">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
 
@@ -69,7 +69,7 @@
   <!-- SheetJS se carga BAJO DEMANDA al importar/descargar plantilla (js/core/xlsx-loader.js) -->
   <script defer src="../js/core/xlsx-loader.js"></script>
   <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/ui/modal.js"></script>
+  <script defer src="../js/ui/modal.js?v=f4"></script>
   <script src="../js/pages/poc-state.js?v=cc11" defer></script>
   <script src="../js/pages/sim-cards.js?v=cc11" defer></script>
   <script defer src="/js/vendor/lucide.min.js?v=3"></script>
@@ -149,7 +149,7 @@
   </div><!-- /.app-wrap -->
 
   <!-- Modal: alta manual -->
-  <div id="simAltaModal" class="modal-backdrop" style="display:none;">
+  <div id="simAltaModal" class="modal-backdrop">
     <div class="modal" style="max-width:420px;">
       <div class="modal-header">
         <h3 class="modal-title"><i data-lucide="plus"></i> Agregar SIM al pool</h3>
@@ -177,7 +177,7 @@
   </div>
 
   <!-- Modal: editar teléfono/operador -->
-  <div id="simEditModal" class="modal-backdrop" style="display:none;">
+  <div id="simEditModal" class="modal-backdrop">
     <div class="modal" style="max-width:420px;">
       <div class="modal-header">
         <h3 class="modal-title"><i data-lucide="pencil"></i> Editar SIM <span id="editSimLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
@@ -201,7 +201,7 @@
   </div>
 
   <!-- Modal: importar Excel -->
-  <div id="simImportModal" class="modal-backdrop" style="display:none;">
+  <div id="simImportModal" class="modal-backdrop">
     <div class="modal" style="max-width:640px;">
       <div class="modal-header">
         <h3 class="modal-title"><i data-lucide="upload"></i> Importar SIMs desde Excel</h3>
