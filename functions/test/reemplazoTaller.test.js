@@ -1,9 +1,14 @@
-// El taller PROPONE el reemplazo de un radio (2026-09-09).
+// El taller PROPONE el reemplazo de un radio (2026-09-09). UNO POR UNO.
 //
 // Hasta hoy el reemplazo solo se pedía desde el Centro de gestión, al que el
 // técnico no entra: quien ve el radio dañado tenía que contárselo a alguien
-// para que ese alguien abriera la solicitud. Ahora el técnico la abre desde su
-// orden y la aprueba ventas@cecomunica.com.
+// para que ese alguien abriera la solicitud. Ahora la abre él desde la fila de
+// ESE radio y la aprueba ventas@cecomunica.com.
+//
+// POR SERIAL, NO POR ORDEN (Alberto): el técnico diagnostica radio por radio y
+// cada propuesta es su propio expediente, para que ventas apruebe uno y
+// rechace otro sin arrastrar a los demás. Es lo que fijan P1 e I1, y lo que
+// rules exige con items.size() == 1.
 //
 // Lo que este test congela:
 //
@@ -20,16 +25,17 @@
 //        cláusula 8) pero se marca ESTIMADA y sigue exigiendo aprobación. Es
 //        el punto donde las dos pantallas podrían divergir.
 //
-//   I1 — Los ÍTEMS que se mandan tienen el mismo contrato de datos que los del
+//   I1 — El ÍTEM que se manda tiene el mismo contrato de datos que los del
 //        Centro (bodega y los triggers no deben distinguir de dónde salió la
-//        propuesta), heredan el contrato de la ficha y piden el MISMO modelo.
+//        propuesta), hereda el contrato de la ficha y pide el MISMO modelo.
 //
-//   P1 — Quién puede proponer y desde qué orden.
+//   P1 — Quién puede proponer, sobre qué radio, y que la marca de "ya
+//        propuesto" sea POR SERIAL (el radio de al lado sigue libre).
 //
-//   C1 — Los cables que hacen que exista: ítem en el menú ⋯, handler del
-//        evento, permiso en firestore.rules y el trato del saliente que ya
-//        está en casa (no se abre una devolución para ir a buscar un radio que
-//        está en el mostrador).
+//   C1 — Los cables que hacen que exista: botón en la FILA DEL RADIO (escritorio
+//        y móvil), handler del evento, permiso en firestore.rules y el trato
+//        del saliente que ya está en casa (no se abre una devolución para ir a
+//        buscar un radio que está en el mostrador).
 //
 // Corre con `npm test` (node --test). Sin red ni navegador.
 const { test } = require("node:test");
@@ -44,6 +50,7 @@ const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
 function montar() {
   const ctx = { console, window: {}, document: { getElementById: () => null } };
   vm.createContext(ctx);
+  vm.runInContext(leer("public", "js", "core", "serial.js"), ctx);
   vm.runInContext(leer("public", "js", "domain", "garantiaEquipo.js"), ctx);
   vm.runInContext(leer("public", "js", "pages", "ordenes-reemplazo.js"), ctx);
   return ctx.window;
@@ -127,14 +134,11 @@ test("S2 · el alquiler no tiene garantía que discutir", () => {
   assert.equal(W.GarantiaEquipo.textoGarantia(g), "");
 });
 
-test("I1 · los ítems heredan contrato, piden el MISMO modelo y llevan el diagnóstico", () => {
+test("I1 · el ítem hereda contrato, pide el MISMO modelo y lleva el diagnóstico", () => {
   const W = montar();
-  const seleccion = [{
-    equipo: { id: "e1", numero_de_serie: " B3400055 ", modelo: "NX-420" },
-    ficha: alquilerEnTaller,
-    sit: W.OrdenesReemplazo.situacion(alquilerEnTaller, { clienteId: "cli1", hoy: HOY }),
-  }];
-  const [it] = W.OrdenesReemplazo.construirItems(seleccion, {
+  const equipo = { id: "e1", numero_de_serie: " B3400055 ", modelo: "NX-420" };
+  const sit = W.OrdenesReemplazo.situacion(alquilerEnTaller, { clienteId: "cli1", hoy: HOY });
+  const it = W.OrdenesReemplazo.construirItem(equipo, alquilerEnTaller, sit, {
     motivo: "garantia_fabrica", diagnostico: "No enciende; placa quemada.", salienteEnCasa: true,
   });
 
@@ -157,8 +161,8 @@ test("I1 · de un propio viaja la garantía que vio el taller (para que ventas d
   const W = montar();
   const ficha = { ...alquilerEnTaller, propiedad: "cliente", venta: { factura: "9", at: ts("2026-06-01") } };
   const sit = W.OrdenesReemplazo.situacion(ficha, { clienteId: "cli1", hoy: HOY });
-  const [it] = W.OrdenesReemplazo.construirItems(
-    [{ equipo: { numero_de_serie: "B3400055", modelo: "NX-420" }, ficha, sit }],
+  const it = W.OrdenesReemplazo.construirItem(
+    { numero_de_serie: "B3400055", modelo: "NX-420" }, ficha, sit,
     { motivo: "otro", diagnostico: "x", salienteEnCasa: false });
   assert.equal(it.elegibilidad, "propio_excepcion");
   assert.equal(it.garantia.vigente, true);
@@ -167,36 +171,60 @@ test("I1 · de un propio viaja la garantía que vio el taller (para que ventas d
   assert.equal(it.saliente_en_casa, false);
 });
 
-test("P1 · quién propone y desde qué orden", () => {
+test("P1 · se propone POR RADIO: quién, sobre cuál y desde qué orden", () => {
   const W = montar();
   const P = W.OrdenesReemplazo.puedeProponer;
-  const orden = {
-    cliente_id: "cli1", estado_reparacion: "ASIGNADO",
-    equipos: [{ id: "e1", numero_de_serie: "B3400055" }],
-  };
+  const orden = { cliente_id: "cli1", estado_reparacion: "ASIGNADO" };
+  const eq = { id: "e1", numero_de_serie: "B3400055" };
   for (const rol of ["tecnico", "tecnico_operativo", "jefe_taller", "administrador"]) {
-    assert.equal(P(orden, rol), true, `${rol} propone`);
+    assert.equal(P(orden, eq, rol), true, `${rol} propone`);
   }
   for (const rol of ["recepcion", "vendedor", "vista", "inventario", ""]) {
-    assert.equal(P(orden, rol), false, `${rol} no propone desde la orden`);
+    assert.equal(P(orden, eq, rol), false, `${rol} no propone desde la orden`);
   }
-  assert.equal(P({ ...orden, cliente_id: "" }, "tecnico"), false, "sin cliente no hay gestión posible");
-  assert.equal(P({ ...orden, estado_reparacion: "CERRADA (ENTRADA)" }, "tecnico"), false, "orden cerrada");
-  assert.equal(P({ ...orden, estado_reparacion: "ENTREGADO AL CLIENTE" }, "tecnico"), false, "orden entregada");
-  assert.equal(P({ ...orden, equipos: [{ id: "e1" }] }, "tecnico"), false, "sin serial no hay radio que reemplazar");
-  assert.equal(P({ ...orden, equipos: [{ id: "e1", numero_de_serie: "B34", eliminado: true }] }, "tecnico"), false,
+  assert.equal(P({ ...orden, cliente_id: "" }, eq, "tecnico"), false, "sin cliente no hay gestión posible");
+  assert.equal(P({ ...orden, estado_reparacion: "CERRADA (ENTRADA)" }, eq, "tecnico"), false, "orden cerrada");
+  assert.equal(P({ ...orden, estado_reparacion: "ENTREGADO AL CLIENTE" }, eq, "tecnico"), false, "orden entregada");
+  assert.equal(P(orden, { id: "e1" }, "tecnico"), false, "sin serial no hay radio que reemplazar");
+  assert.equal(P(orden, { id: "e1", numero_de_serie: "B34", eliminado: true }, "tecnico"), false,
     "un equipo eliminado no cuenta");
 });
 
-test("C1 · la acción está cableada de punta a punta", () => {
+test("P1 · la marca de 'ya propuesto' es POR SERIAL, no de la orden entera", () => {
+  const W = montar();
+  const D = W.OrdenesReemplazo.propuestaDe;
+  const orden = { reemplazos_propuestos: { B3400055: { gestion_id: "GR20260909-01", por_email: "t@c.com" } } };
+  assert.equal(D(orden, "b3 4000-55").gestion_id, "GR20260909-01", "la identidad del serial es tolerante");
+  assert.equal(D(orden, "B3400099"), null, "el radio de al lado sigue libre");
+  assert.equal(D({}, "B3400055"), null);
+  // Formato viejo (las primeras horas del 2026-09-09, cuando la propuesta era
+  // de la orden entera): se sigue leyendo para no perder las ya creadas.
+  const legacy = { reemplazo_propuesto: { gestion_id: "GR20260909-02", seriales: ["B3400099"] } };
+  assert.equal(D(legacy, "B3400099").gestion_id, "GR20260909-02");
+  assert.equal(D(legacy, "B3400055"), null);
+});
+
+test("C1 · la acción vive en la FILA DEL RADIO y está cableada de punta a punta", () => {
   const render = leer("public", "js", "pages", "ordenes-render.js");
-  assert.match(render, /proponer-reemplazo/, "el ⋯ ofrece la acción");
-  assert.match(render, /Proponer reemplazo por garantía/);
+  assert.match(render, /function botonProponerReemplazo\(ordenId, ordenData, equipo\)/);
+  assert.match(render, /data-action="proponer-reemplazo"[\s\S]{0,220}data-equipo-id=/,
+    "el botón lleva el radio, no solo la orden");
+  assert.match(render, /<td class="col-acciones">\s*\$\{botonProponerReemplazo\(/,
+    "y se pinta en la fila del equipo");
   assert.match(render, /ROLES\.TECNICO,\s*ROLES\.TECNICO_OPERATIVO,\s*ROLES\.JEFE_TALLER/,
-    "y se la ofrece al taller");
+    "se le ofrece al taller");
+  // Ya NO cuelga del ⋯ de la orden: ahí volvía a ser una decisión por orden.
+  const menu = render.slice(render.indexOf("function botonesGestion("),
+    render.indexOf("window.botonesGestion = botonesGestion"));
+  assert.ok(menu.length > 500, "se localizó el menú ⋯");
+  assert.doesNotMatch(menu, /proponer-reemplazo/, "el ⋯ de la orden ya no la ofrece");
+
+  const equipos = leer("public", "js", "pages", "ordenes-equipos.js");
+  assert.match(equipos, /botonProponerReemplazo\(ordenId, o, e\)/, "también en la tarjeta de móvil");
 
   const events = leer("public", "js", "pages", "ordenes-events.js");
   assert.match(events, /'proponer-reemplazo':/, "el handler existe");
+  assert.match(events, /abrirProponerReemplazo\(ordenId, equipoId\)/, "y le pasa el radio");
   assert.match(events, /CargaDiferida\.reemplazo\(\)/, "el módulo se carga diferido");
 
   const carga = leer("public", "js", "core", "carga-diferida.js");
@@ -212,6 +240,7 @@ test("C1 · rules: el taller solo puede PROPONER, nunca darse curso", () => {
   const bloque = rules.slice(i, i + 700);
   assert.match(bloque, /tipo == "reemplazo"/, "solo reemplazo");
   assert.match(bloque, /estado == "pendiente_aprobacion"/, "siempre nace esperando aprobación");
+  assert.match(bloque, /items\.size\(\) == 1/, "un serial por propuesta");
   assert.match(bloque, /"origen", \{\}\)\.get\("tipo", ""\) == "taller"/);
   assert.match(bloque, /responsable_uid == request\.auth\.uid/, "a nombre de quien la abre");
 
@@ -241,5 +270,7 @@ test("C1 · el correo de aprobación va a ventas con el vendedor y el técnico e
   const cc = trg.slice(i, i + 600);
   assert.match(cc, /vendedorEmailDeCliente/, "el vendedor del cliente queda informado");
   assert.match(cc, /tecnico_email/, "y el técnico que propuso");
+  assert.match(trg, /subject: `Aprobación requerida: reemplazo del radio \$\{serial\}/,
+    "el asunto nombra el radio — es lo que ventas necesita para decidir");
   assert.match(trg, /async function correoRechazoTaller/, "y el rechazo se le avisa al taller");
 });

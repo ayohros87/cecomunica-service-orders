@@ -176,13 +176,14 @@
       CargaDiferida.casosViejos().then(() => abrirCasosViejos())
         .catch(() => Toast.show('Sin conexión — no se pudieron abrir los casos viejos.', 'bad'));
     },
-    // El taller propone reemplazar un radio (ordenes-reemplazo.js, diferido):
-    // nace la gestión GR en pendiente_aprobacion y ventas la decide.
+    // El taller propone reemplazar ESTE radio (ordenes-reemplazo.js, diferido):
+    // nace una gestión GR por serial, en pendiente_aprobacion, y ventas la
+    // decide. La acción sale de la fila del equipo, no del ⋯ de la orden.
     'proponer-reemplazo': (el) => {
-      const ordenId = el.dataset.ordenId;
-      if (!ordenId) return;
+      const { ordenId, equipoId } = el.dataset;
+      if (!ordenId || !equipoId) return;
       closeAllMenus();
-      CargaDiferida.reemplazo().then(() => abrirProponerReemplazo(ordenId))
+      CargaDiferida.reemplazo().then(() => abrirProponerReemplazo(ordenId, equipoId))
         .catch(() => Toast.show('Sin conexión — no se pudo abrir la propuesta.', 'bad'));
     },
     'editar-orden': (el) => {

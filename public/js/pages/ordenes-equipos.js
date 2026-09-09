@@ -452,6 +452,11 @@ window.abrirEquiposMobile = function(ordenId) {
               data-action="ver-trabajo-equipo" data-orden-id="${ordenId}" data-idx="${idx}" title="Ver comentario">
               <i data-lucide="eye"></i>
             </button>
+
+            <!-- Proponer el reemplazo de ESTE radio: misma acción que en la
+                 fila de escritorio (ordenes-render.js la arma), aquí al lado
+                 de su intervención porque es donde el técnico lo diagnostica. -->
+            ${typeof botonProponerReemplazo === 'function' ? botonProponerReemplazo(ordenId, o, e) : ''}
           </div>
 
           ${trabajoDisplay}

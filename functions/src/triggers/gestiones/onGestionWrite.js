@@ -93,40 +93,43 @@ function garantiaTexto(it) {
 // decidir — y la orden de servicio de donde salió.
 async function correoPropuestaTaller(gid, g) {
   const o = g.origen || {};
-  const enCasa = (g.items || []).every(it => it.saliente_en_casa);
+  // Una propuesta = UN radio (decisión 2026-09-09): el asunto lo nombra, que
+  // es lo que ventas necesita para decidir sin abrir nada.
+  const it = (g.items || [])[0] || {};
+  const serial = it.serial_saliente || o.serial || "—";
   await G.encolarCorreo({
     to: await G.aprobacionesTo(),
     cc: await ccTaller(g),
-    subject: `Aprobación requerida: reemplazo propuesto por el taller ${gid} — ${g.cliente_nombre || "Cliente"}`,
-    preheader: `El taller propone reemplazar ${(g.items || []).length} radio(s) de ${g.cliente_nombre || "un cliente"}`,
+    subject: `Aprobación requerida: reemplazo del radio ${serial} — ${g.cliente_nombre || "Cliente"} (${gid})`,
+    preheader: `El taller propone reemplazar ${serial} (${it.modelo || "sin modelo"}) de ${g.cliente_nombre || "un cliente"}`,
     bodyContent: `
-      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">El taller propone un reemplazo</h2>
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">El taller propone reemplazar un radio</h2>
       <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-        <b>${G.escapeHtml(o.tecnico_email || g.responsable_email || "El taller")}</b> revisó
-        ${(g.items || []).length === 1 ? "un radio" : `${(g.items || []).length} radios`} de
+        <b>${G.escapeHtml(o.tecnico_email || g.responsable_email || "El taller")}</b> revisó el radio
+        <b><code>${G.escapeHtml(serial)}</code></b> (${G.escapeHtml(it.modelo || "—")}) de
         <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> en la orden
-        <b>${G.escapeHtml(o.orden_id || "—")}</b> y propone reemplazarlo${(g.items || []).length === 1 ? "" : "s"}.
+        <b>${G.escapeHtml(o.orden_id || "—")}</b> y propone reemplazarlo.
         <b>Nada se mueve hasta que ventas apruebe</b>: al aprobar, Bodega recibe el aviso para asignar
-        el equipo que sustituye a cada radio (mismo modelo).
+        el equipo que lo sustituye (mismo modelo).
       </p>
       <div style="margin:0 0 14px;padding:10px 12px;background:#F1F5F9;border-radius:6px;">
         <p style="margin:0 0 4px;font:700 13px Arial,sans-serif;color:#334155;">Diagnóstico del taller</p>
         <p style="margin:0;font:14px/1.5 Arial,sans-serif;">${G.escapeHtml(o.diagnostico || "—")}</p>
       </div>
-      ${G.tablaHtml(["Radio", "Modelo", "Contrato", "Situación"], (g.items || []).map(it => [
-        `<code>${G.escapeHtml(it.serial_saliente || "—")}</code>`,
+      ${G.tablaHtml(["Radio", "Modelo", "Contrato", "Situación"], [[
+        `<code>${G.escapeHtml(serial)}</code>`,
         G.escapeHtml(it.modelo || "—"),
         `<code>${G.escapeHtml(it.contrato_id || "custodia")}</code>`,
         G.escapeHtml(garantiaTexto(it)),
-      ]))}
+      ]])}
       <p style="margin:12px 0 0;font:13px/1.5 Arial,sans-serif;color:#475569;">
-        ${enCasa
-          ? "El/los radio(s) ya están en CECOMUNICA (entraron con esa orden): no hace falta ir a buscarlos, y el sistema no abrirá una orden de devolución por ellos."
-          : "El/los radio(s) siguen donde el cliente: al entregarse el reemplazo, el sistema abre sola la orden de devolución para recuperarlos."}
+        ${it.saliente_en_casa
+          ? "El radio ya está en CECOMUNICA (entró con esa orden): no hace falta ir a buscarlo, y el sistema no abrirá una orden de devolución por él."
+          : "El radio sigue donde el cliente: al entregarse el reemplazo, el sistema abre sola la orden de devolución para recuperarlo."}
       </p>`,
     ctaUrl: G.urlGestion(g, gid),
     ctaLabel: "Revisar y aprobar",
-    meta: { gestion_id: gid, paso: "aprobacion", origen: "taller", orden: o.orden_id || "" },
+    meta: { gestion_id: gid, paso: "aprobacion", origen: "taller", orden: o.orden_id || "", serial },
   });
 }
 
@@ -140,7 +143,7 @@ async function correoRechazoTaller(gid, g) {
   await G.encolarCorreo({
     to: para,
     cc: vend || null,
-    subject: `Propuesta de reemplazo ${gid} rechazada — ${g.cliente_nombre || "Cliente"}`,
+    subject: `Propuesta de reemplazo rechazada: radio ${(g.items || [])[0]?.serial_saliente || g.origen?.serial || "—"} — ${g.cliente_nombre || "Cliente"} (${gid})`,
     preheader: "Ventas no aprobó el reemplazo propuesto desde el taller",
     bodyContent: `
       <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#991B1B;">Propuesta rechazada</h2>

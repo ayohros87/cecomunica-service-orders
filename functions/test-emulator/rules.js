@@ -929,7 +929,13 @@ async function main() {
   await assertFails(as("tecnico").doc("gestiones/gT_x3")
     .set(propuesta("tecnico", { origen: { tipo: "vendedor" } })));
   await assertFails(as("tecnico").doc("gestiones/gT_x4").set(propuesta("otro-uid")));
-  ok("gestiones: el taller no se salta la aprobación, ni cambia el tipo, el origen o el dueño");
+  // UN SERIAL POR PROPUESTA: un expediente con dos radios obligaría a ventas
+  // a decidir en bloque, que es justo lo que se quería evitar.
+  await assertFails(as("tecnico").doc("gestiones/gT_x5").set(propuesta("tecnico", {
+    items: [{ serial_saliente: "B3400055" }, { serial_saliente: "B3400099" }],
+  })));
+  await assertFails(as("tecnico").doc("gestiones/gT_x6").set(propuesta("tecnico", { items: [] })));
+  ok("gestiones: el taller no se salta la aprobación, ni cambia el tipo, el origen, el dueño o el radio único");
 
   // Y no puede aprobar la suya (ni ninguna): eso es de admin/gerencia.
   await assertFails(as("tecnico").doc("gestiones/gT_tecnico")

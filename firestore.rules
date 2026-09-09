@@ -977,16 +977,21 @@ service cloud.firestore {
           && (soloTocaG(["items"]) || soloTocaG(["demo"]) || soloTocaG(["aumento"]));
       }
       // El TALLER propone un reemplazo (2026-09-09): el técnico ve el radio
-      // dañado y abre la solicitud desde su orden, sin pasar por el Centro
-      // (al que no entra). Es una PROPUESTA, no una decisión: nace siempre en
-      // pendiente_aprobacion — ventas@cecomunica.com aprueba — y solo de
-      // reemplazo. Aprobar sigue siendo de administración/gerencia
+      // dañado y abre la solicitud desde la fila de ESE radio, sin pasar por
+      // el Centro (al que no entra). Es una PROPUESTA, no una decisión: nace
+      // siempre en pendiente_aprobacion — ventas@cecomunica.com aprueba — y
+      // solo de reemplazo. Aprobar sigue siendo de administración/gerencia
       // (esAprobacionGestion), así que el técnico no puede darse curso solo.
+      //
+      // UN SERIAL POR PROPUESTA (Alberto, 2026-09-09): el técnico diagnostica
+      // radio por radio y cada uno se aprueba o se rechaza por su cuenta. Un
+      // expediente con dos ítems obligaría a decidir en bloque.
       function esPropuestaTaller() {
         return userRole() in ["tecnico","tecnico_operativo","jefe_taller"]
           && request.resource.data.tipo == "reemplazo"
           && request.resource.data.estado == "pendiente_aprobacion"
           && request.resource.data.get("origen", {}).get("tipo", "") == "taller"
+          && request.resource.data.items.size() == 1
           && request.resource.data.responsable_uid == request.auth.uid;
       }
       allow read:   if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion","inventario","tecnico","tecnico_operativo","jefe_taller","contabilidad"];

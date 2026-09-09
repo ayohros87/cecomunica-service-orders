@@ -2064,8 +2064,8 @@ tr.activo:hover { background: #f0f9ff !important; }
 .col-modelo { width: 12%; }
 .col-intervencion { width: 24%; }
 .col-accesorios { width: 22%; }
-.col-observaciones { width: 20%; }
-.col-acciones { width: 6%; text-align: center; }
+.col-observaciones { width: 17%; }
+.col-acciones { width: 9%; text-align: center; white-space: nowrap; }
 
 /* Serie comparte celda con los chips del pool (estado + avisos) que inyecta
    decorarEstadoPoolEnTabla. Dos cosas los sacaban de la columna y los dejaban
@@ -2501,6 +2501,33 @@ tr.activo:hover { background: #f0f9ff !important; }
   opacity: 1;
   transform: scale(1.1);
 }
+
+/* Proponer el reemplazo de ESTE radio (ordenes-reemplazo.js). Vive junto al
+   de eliminar, con el mismo peso visual: es una acción de la fila, no del
+   flujo. Ámbar cuando ya hay propuesta enviada — la fila lo dice sin abrir
+   nada, y así nadie la manda dos veces. */
+.btn-proponer-reemplazo {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: var(--transition);
+  color: #94a3b8;
+  opacity: 0.55;
+  line-height: 1;
+}
+.btn-proponer-reemplazo:hover {
+  background: #FFFBEB;
+  border-color: #FCD34D;
+  color: #B45309;
+  opacity: 1;
+}
+.btn-proponer-reemplazo.propuesto {
+  color: #B45309;
+  opacity: 1;
+}
+.btn-proponer-reemplazo i { width: 16px; height: 16px; }
 
 /* Contenedor de equipos */
 .equipos-container {

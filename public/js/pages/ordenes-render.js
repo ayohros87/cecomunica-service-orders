@@ -578,6 +578,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
               </td>
 
               <td class="col-acciones">
+                ${botonProponerReemplazo(ordenId, ordenData, e)}
                 <button data-action="eliminar-equipo" data-id="${ordenId}_${e.id}" class="btn-eliminar-equipo" title="Eliminar equipo">
                   <i data-lucide="trash-2"></i>
                 </button>
@@ -612,6 +613,55 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
     .then(() => decorarCondicionesEnTabla(ordenId, equipos, filaDetalle))
     .catch(() => {});
 }
+
+/* ── Proponer el reemplazo de UN radio (2026-09-09) ────────────────────────
+   Quien ve que el equipo no tiene arreglo es el técnico, con el radio en la
+   mano — y hasta hoy tenía que contárselo a alguien con acceso al Centro para
+   que abriera la solicitud. La acción vive en la FILA DEL RADIO, no en el ⋯ de
+   la orden: el técnico diagnostica uno por uno y cada propuesta es su propio
+   expediente (ventas aprueba uno y rechaza otro sin arrastrar a los demás).
+   El módulo que abre la hoja es diferido, así que la condición se evalúa aquí
+   en corto; ordenes-reemplazo.js la vuelve a validar antes de escribir.      */
+const ROLES_PROPONEN_REEMPLAZO = [ROLES.TECNICO, ROLES.TECNICO_OPERATIVO, ROLES.JEFE_TALLER, ROLES.ADMIN];
+
+// La propuesta que ya existe para un serial (o null). El mapa va por serial
+// normalizado; `reemplazo_propuesto` es el formato de las primeras horas del
+// 2026-09-09, cuando la propuesta era de la orden entera.
+function propuestaReemplazoDe(ordenData, serial) {
+  const k = _normSerialBusqueda(serial);
+  if (!k) return null;
+  const m = ordenData?.reemplazos_propuestos;
+  if (m && m[k]) return m[k];
+  const legacy = ordenData?.reemplazo_propuesto;
+  if (legacy?.gestion_id && (legacy.seriales || []).some(s => _normSerialBusqueda(s) === k)) return legacy;
+  return null;
+}
+
+function puedeProponerReemplazoEquipo(ordenData, equipo) {
+  const rol = APP.state.userRole || '';
+  if (!ROLES_PROPONEN_REEMPLAZO.includes(rol)) return false;
+  if (!ordenData?.cliente_id) return false;
+  if (!equipo || equipo.eliminado) return false;
+  if (!String(equipo.numero_de_serie || equipo.serial || '').trim()) return false;
+  const estado = String(ordenData.estado || ordenData.estado_reparacion || '').toUpperCase();
+  return !(estado.includes('ENTREGAD') || estado.startsWith('CERRADA'));
+}
+
+function botonProponerReemplazo(ordenId, ordenData, equipo) {
+  if (!puedeProponerReemplazoEquipo(ordenData, equipo)) return '';
+  const serial = String(equipo.numero_de_serie || equipo.serial || '').trim();
+  const ya = propuestaReemplazoDe(ordenData, serial);
+  const title = ya
+    ? `Reemplazo ya propuesto para ${serial} — solicitud ${ya.gestion_id}`
+    : `Proponer el reemplazo de ${serial} (garantía) — lo aprueba ventas`;
+  return `<button data-action="proponer-reemplazo" data-stop-propagation="true"
+            data-orden-id="${ordenId}" data-equipo-id="${escapeHtml(String(equipo.id))}"
+            class="btn-proponer-reemplazo${ya ? ' propuesto' : ''}" title="${escapeHtml(title)}"
+            aria-label="${escapeHtml(title)}"><i data-lucide="shield-check"></i></button>`;
+}
+window.botonProponerReemplazo = botonProponerReemplazo;
+window.puedeProponerReemplazoEquipo = puedeProponerReemplazoEquipo;
+window.propuestaReemplazoDe = propuestaReemplazoDe;
 
 // ── Buscador de serial dentro de una orden ────────────────────────────────
 // Petición de recepción (2026-08-25): con la lista larga, encontrar el radio
@@ -1258,26 +1308,6 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
       action: "entregar-parcial",
       dataAttributes: `data-orden-id="${ordenId}"`,
       class: "highlighted"
-    });
-  }
-
-  // Proponer el reemplazo de un radio desde el taller (2026-09-09): quien ve
-  // que el equipo no tiene arreglo es el técnico, y hasta hoy tenía que
-  // contárselo a alguien con acceso al Centro para que abriera la solicitud.
-  // La propuesta va a ventas@cecomunica.com para aprobación. Hace falta
-  // cliente (la gestión es POR CLIENTE), equipos con serial y una orden viva.
-  const esTerminalOrden = estadoUpper.includes("ENTREGAD") || estadoUpper.startsWith("CERRADA");
-  const puedeProponerReemplazo = [ROLES.TECNICO, ROLES.TECNICO_OPERATIVO, ROLES.JEFE_TALLER, ROLES.ADMIN].includes(rol)
-    && !!o.cliente_id && !esTerminalOrden
-    && (o.equipos || []).some(e => e && !e.eliminado && (e.numero_de_serie || e.serial));
-  if (puedeProponerReemplazo) {
-    const yaPropuesto = o.reemplazo_propuesto?.gestion_id;
-    menuItems.push({
-      icon: '<i data-lucide="shield-check"></i>',
-      label: yaPropuesto ? `Reemplazo propuesto (${yaPropuesto})` : "Proponer reemplazo por garantía",
-      action: "proponer-reemplazo",
-      dataAttributes: `data-orden-id="${ordenId}"`,
-      class: yaPropuesto ? 'highlighted' : ''
     });
   }
 
