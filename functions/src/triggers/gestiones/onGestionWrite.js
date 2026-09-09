@@ -21,6 +21,7 @@ const { APP_BASE_URL } = require("../../lib/inventario");
 const pool = require("../../domain/equiposPool");
 const G = require("../../lib/gestiones");
 const AP = require("../../lib/adendaPapel");
+const RC = require("../../domain/regularizacionCuentas");
 
 // Condiciones de cierre por tipo. Reemplazo/demo: las 4 del correo de Zuleika.
 // Baja (Ola 3): aprobación → derivación (fin de facturación aplicado y
@@ -1057,6 +1058,12 @@ module.exports = onDocumentWritten(
               + `${soltados ? `; ${soltados} serial(es) que el cliente NO tiene salieron de la cuenta (${(a.regulariza_no_tiene || []).map(s => s.serial).join(", ")})` : ""}`
               + `; el tramo de ${a.duracion_meses || "?"} meses arranca hoy. Sin bodega ni entrega — la gestión cierra.`);
             logger.info("[onGestionWrite] regularización por anexo aplicada", { gid, contrato: a.contrato_doc_id, amarrados, nacidos, soltados });
+            // La deuda de la cuenta se recalcula AQUÍ MISMO, no en el barrido
+            // de los 10 minutos (2026-09-09, Alberto): el vendedor aprueba la
+            // actualización de seriales y la ficha seguía diciendo "por
+            // regularizar" un buen rato después. El barrido sigue como red.
+            try { await RC.recalcularCuenta(gA.cliente_id); }
+            catch (e) { logger.warn("[onGestionWrite] recálculo de regularización no pudo correr en el acto", { gid, message: e.message }); }
             await G.avisoFacturacion({
               subject: `FACTURACIÓN: regularización EFECTIVA — ${gA.cliente_nombre || "Cliente"} (${a.contrato_id || ""})`,
               titulo: "Regularización aplicada — el tramo arranca hoy",

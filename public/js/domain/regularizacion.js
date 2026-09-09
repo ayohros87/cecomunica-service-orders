@@ -17,7 +17,8 @@
 //
 // Componentes de la deuda (puntos):
 //   D1 radios en campo sin contrato interno      (pool en_cliente sin contrato_doc_id)
-//   D2 contratos vigentes sin seriales declarados (seriales_estado = 'legacy')
+//   D2 contratos vigentes sin seriales declarados (seriales_estado = 'legacy'
+//      y sin seriales amarrados que cubran la cuenta — ver `serialesDeclarados`)
 //   D3 contrato marco en papel                    (origen_tipo 'legacy' / origen_legacy_ref)
 //   D4 adenda a contrato en papel                 (gestión aumento contrato_papel sin contrato interno)
 //   D5 reemplazo sin serial saliente              (REEMP vigente con reemplaza_seriales = [])
@@ -99,7 +100,26 @@
     const d1_ids = unidades
       .filter(u => u && u.estado === "en_cliente" && !u.pendiente_devolucion && !(u.asignacion && u.asignacion.contrato_doc_id))
       .map(u => u.serial || u.id).filter(Boolean);
-    const d2_ids = renovables.filter(c => tieneLineas(c) && c.seriales_estado === "legacy")
+    // D2: un contrato del cutover ('legacy') pesa mientras nadie haya
+    // declarado sus seriales. Deja de pesar cuando ya no queda NADA que
+    // declarar contra él: o los seriales amarrados cubren sus unidades, o la
+    // cuenta no tiene un solo radio suelto (D1 = 0) y ese contrato ya tiene
+    // seriales amarrados. Sin esto (Fortunato Mangravita, 2026-09-09) el
+    // anexo "Actualizar seriales del cliente" amarraba los 13 radios de la
+    // cuenta y el contrato seguía pidiendo regularización para siempre: una
+    // deuda que nadie podía pagar, porque `seriales_estado` nunca sale de
+    // 'legacy' (el corte histórico es definitivo, ver onSerialesAsignadasSendPdf).
+    const amarradosPorContrato = {};
+    unidades.forEach(u => {
+      const cd = u && u.asignacion && u.asignacion.contrato_doc_id;
+      if (cd) amarradosPorContrato[cd] = (amarradosPorContrato[cd] || 0) + 1;
+    });
+    const unidadesDeLineas = (c) => ((c && c.equipos) || []).reduce((s, l) => s + (Number(l && l.cantidad) || 0), 0);
+    const serialesDeclarados = (c) => {
+      const n = amarradosPorContrato[c.id] || 0;
+      return n > 0 && (n >= unidadesDeLineas(c) || d1_ids.length === 0);
+    };
+    const d2_ids = renovables.filter(c => tieneLineas(c) && c.seriales_estado === "legacy" && !serialesDeclarados(c))
       .map(c => c.contrato_id || c.id);
     const d3_ids = vig.filter(c => c.origen_tipo === "legacy" || !!c.origen_legacy_ref)
       .map(c => c.contrato_id || c.id);

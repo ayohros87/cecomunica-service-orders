@@ -244,6 +244,7 @@ window.Centro = {
       // cada acción y la página lo adivinaba con setTimeout — ahora el
       // expediente se repinta cuando el dato REAL llega.
       this._escucharGestiones(clienteId);
+      this._escucharCliente(clienteId);
       // Con la persistencia multi-pestaña, la pestaña que abre el deep-link
       // del correo entra como SECUNDARIA: si la primaria está congelada por
       // el navegador, estos get() resuelven del caché de IndexedDB y la
@@ -2032,16 +2033,71 @@ window.Centro = {
           if (!this.cliente || this.cliente.id !== clienteId) return;
           const out = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           out.sort((a, b) => (b.fecha_solicitud?.toMillis?.() || 0) - (a.fecha_solicitud?.toMillis?.() || 0));
+          // Una gestión que CAMBIA DE ESTADO casi siempre movió la cuenta:
+          // amarró seriales, soltó radios, agregó líneas a un contrato. Antes
+          // solo se repintaba el expediente y el resto de la ficha (flota,
+          // contratos, chip de regularización, menú de acciones) se quedaba
+          // con lo que se leyó al entrar — el reporte de Alberto 2026-09-09:
+          // "los menús se quedan estáticos". Ahora se relee lo de verdad.
+          const estados = out.map(g => `${g.id}:${g.estado}`).join('|');
+          const movio = this._gEstados !== null && this._gEstados !== estados;
+          this._gEstados = estados;
           this.gestiones = out;
           this._repintarGestiones();
+          if (movio) this._revalidarPronto(clienteId);
         }, (e) => console.warn('[centro] escucha de gestiones no disponible:', e?.message || e));
     } catch (e) { console.warn('[centro] escucha de gestiones no disponible:', e?.message || e); }
+  },
+  // Los triggers escriben en cadena (pool → contrato → cuenta): se relee un
+  // par de veces, no una, para no pintar a medio camino.
+  _gEstados: null,
+  _revalTimers: [],
+  _revalidarPronto(clienteId) {
+    this._revalTimers.forEach(t => clearTimeout(t));
+    this._revalTimers = [1200, 6000].map(ms => setTimeout(() => {
+      if (this.cliente && this.cliente.id === clienteId) this._revalidarFicha(clienteId);
+    }, ms));
+  },
+
+  // ── Escucha en vivo del cliente (2026-09-09) ──
+  // `clientes/{id}.regularizacion` lo escribe el back (al aplicar el anexo y
+  // en el barrido). Sin esta escucha, el chip "Por regularizar" y el menú se
+  // quedaban con el número viejo hasta el F5.
+  _unsubCliente: null,
+  _escucharCliente(clienteId) {
+    try {
+      this._unsubCliente = firebase.firestore().collection('clientes').doc(clienteId)
+        .onSnapshot((snap) => {
+          if (!snap.exists || !this.cliente || this.cliente.id !== clienteId) return;
+          const antes = this.cliente.regularizacion || null;
+          this.cliente = { id: snap.id, ...snap.data() };
+          const ahora = this.cliente.regularizacion || null;
+          this._pintarEncabezado(this.cliente);
+          this.pintarSenales();
+          this.pintarAcciones();
+          this.armarMenu();
+          if (window.lucide?.createIcons) lucide.createIcons();
+          const pa = Number(antes?.puntos || 0), pd = Number(ahora?.puntos || 0);
+          if (antes && pa !== pd) {
+            Toast.show(pd === 0
+              ? 'La cuenta quedó al día — ya no pide regularización'
+              : `La cuenta bajó de ${pa} a ${pd} punto${pd === 1 ? '' : 's'} por regularizar`, pd === 0 ? 'ok' : '');
+          }
+        }, (e) => console.warn('[centro] escucha del cliente no disponible:', e?.message || e));
+    } catch (e) { console.warn('[centro] escucha del cliente no disponible:', e?.message || e); }
   },
   _pararEscucha() {
     if (this._unsubGestiones) {
       try { this._unsubGestiones(); } catch (e) { /* nada */ }
       this._unsubGestiones = null;
     }
+    if (this._unsubCliente) {
+      try { this._unsubCliente(); } catch (e) { /* nada */ }
+      this._unsubCliente = null;
+    }
+    this._revalTimers.forEach(t => clearTimeout(t));
+    this._revalTimers = [];
+    this._gEstados = null;
   },
   _repintarGestiones() {
     // Con el foco en un campo del expediente (bodega tecleando seriales) el

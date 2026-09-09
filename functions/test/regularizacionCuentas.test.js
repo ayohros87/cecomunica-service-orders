@@ -138,3 +138,42 @@ test("igual(): solo compara lo que importa para no reescribir el doc del cliente
   assert.equal(R.igual(a, R.calcular({ unidades: [en("A1"), en("A2")] })), false);
   assert.equal(R.igual(a, { ...a, calculado_at: new Date(), vendedor_uid: "x" }), true);
 });
+
+// Fortunato Mangravita, 2026-09-09: el vendedor amarró los 13 radios de la
+// cuenta al contrato legacy con "Actualizar seriales del cliente" y la ficha
+// seguía diciendo "Por regularizar". `seriales_estado` nunca sale de 'legacy'
+// (el corte histórico es definitivo), así que D2 mira los seriales amarrados.
+test("D2: el contrato legacy deja de pesar cuando la cuenta ya declaró sus seriales", () => {
+  const amarrado = (u) => en(u, { asignacion: { cliente_id: "c1", contrato_doc_id: "ALQ20251006-02" } });
+  const legacy = (extra) => con("ALQ20251006-02", { seriales_estado: "legacy", equipos: [{ cantidad: 16 }], ...extra });
+
+  // Antes del anexo: 13 radios sueltos y el contrato sin un solo serial.
+  const antes = R.calcular({ contratos: [legacy()], unidades: Array.from({ length: 13 }, (_, i) => en(`S${i}`)) });
+  assert.equal(antes.d1, 13);
+  assert.equal(antes.d2, 1);
+
+  // Después: los 13 quedan amarrados. No cubren las 16 unidades de las líneas
+  // (la línea vieja del papel es fantasma), pero la cuenta no tiene un solo
+  // radio suelto: no queda NADA que declarar.
+  const despues = R.calcular({ contratos: [legacy()], unidades: Array.from({ length: 13 }, (_, i) => amarrado(`S${i}`)) });
+  assert.equal(despues.d1, 0);
+  assert.equal(despues.d2, 0);
+  assert.equal(despues.nivel, "al_dia");
+
+  // Con radios todavía sueltos, un puñado de seriales NO limpia el contrato.
+  const aMedias = R.calcular({
+    contratos: [legacy()],
+    unidades: [amarrado("S0"), amarrado("S1"), en("S2"), en("S3")],
+  });
+  assert.equal(aMedias.d2, 1);
+  assert.deepEqual(aMedias.d2_ids, ["ALQ20251006-02"]);
+
+  // Y si los amarrados cubren las unidades del contrato, se limpia aunque la
+  // cuenta tenga radios sueltos de OTRO lado.
+  const cubierto = R.calcular({
+    contratos: [legacy({ equipos: [{ cantidad: 2 }] }), con("SERV20260101-01")],
+    unidades: [amarrado("S0"), amarrado("S1"), en("S9")],
+  });
+  assert.equal(cubierto.d2, 0);
+  assert.equal(cubierto.d1, 1);
+});
