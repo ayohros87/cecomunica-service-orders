@@ -73,10 +73,12 @@
     /* Color por cola = el mismo del chip del estado que representa. */
     .eq-cola[data-cola="por_clasificar"]    .eq-cola-n { color:#9f1239; }
     .eq-cola[data-cola="devuelto_revision"] .eq-cola-n { color:#c2410c; }
+    .eq-cola[data-cola="no_retirado"] .eq-cola-n { color:#6d28d9; }
     .eq-cola[data-cola="conflictos"]        .eq-cola-n { color:#b91c1c; }
     .eq-cola[data-cola="sin_verificar"]     .eq-cola-n { color:#a16207; }
     .eq-cola.is-active[data-cola="por_clasificar"]    { border-color:#9f1239; box-shadow:0 0 0 2px #9f123933; }
     .eq-cola.is-active[data-cola="devuelto_revision"] { border-color:#c2410c; box-shadow:0 0 0 2px #c2410c33; }
+    .eq-cola.is-active[data-cola="no_retirado"] { border-color:#6d28d9; box-shadow:0 0 0 2px #6d28d933; }
     .eq-cola.is-active[data-cola="conflictos"]        { border-color:#b91c1c; box-shadow:0 0 0 2px #b91c1c33; }
     .eq-cola.is-active[data-cola="sin_verificar"]     { border-color:#a16207; box-shadow:0 0 0 2px #a1620733; }
     /* Cola vacía = nada que hacer: se apaga en vez de gritar un 0 de color. */
@@ -243,6 +245,12 @@
         <span class="eq-cola-n" id="colaPorInspeccionar">—</span>
         <span class="eq-cola-lbl">Por inspeccionar</span>
         <span class="eq-cola-sub">devueltos del cliente</span>
+      </button>
+      <button class="eq-cola" data-cola="no_retirado" onclick="EquiposPool.setCola('no_retirado')"
+              title="Radios DEL CLIENTE que quedaron listos y nadie vino a buscar: la orden se cerró sin retirar y hay que decidir qué se hace con ellos">
+        <span class="eq-cola-n" id="colaNoRetirado">—</span>
+        <span class="eq-cola-lbl">Sin retirar</span>
+        <span class="eq-cola-sub">el cliente no vino</span>
       </button>
       <button class="eq-cola" data-cola="conflictos" onclick="EquiposPool.setCola('conflictos')"
               title="Un mismo serial con 2+ fichas de modelos distintos: fusionar o confirmar que son radios distintos">

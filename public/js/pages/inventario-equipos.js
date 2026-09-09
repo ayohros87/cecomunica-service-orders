@@ -36,6 +36,10 @@ window.EquiposPool = {
   COLAS: {
     por_clasificar:    { tab: 'por_clasificar' },
     devuelto_revision: { tab: 'devuelto_revision' },
+    // Radios DEL CLIENTE que quedaron listos y nadie vino a buscar (la orden
+    // cerró CERRADA (SIN RETIRAR)). Es una cola de DECISIÓN, no de trabajo:
+    // se retiran, vuelven a bodega si eran nuestros, o se dan por abandonados.
+    no_retirado:       { tab: 'no_retirado' },
     conflictos:        { tab: 'conflictos' },
     sin_verificar:     { tab: 'todos', chk: 'chkSinVerificar' },
   },
@@ -615,16 +619,19 @@ window.EquiposPool = {
     // verdad, no cuánto falta dentro de lo que estés mirando ahora.
     const nPorClasificar = this._equipos.filter(e => e.estado === 'por_clasificar').length;
     const nPorInspeccionar = this._equipos.filter(e => e.estado === 'devuelto_revision').length;
+    const nNoRetirado = this._equipos.filter(e => e.estado === 'no_retirado').length;
     const nConflictos = this._gruposConflicto().length;
     const nSinVerificar = this._equipos.filter(e => e.verificado === false).length;
     set('colaPorClasificar', fmt(nPorClasificar));
     set('colaPorInspeccionar', fmt(nPorInspeccionar));
+    set('colaNoRetirado', fmt(nNoRetirado));
     set('colaConflictos', fmt(nConflictos));
     set('colaSinVerificar', fmt(nSinVerificar));
     const apagar = (cola, n) => document.querySelector(`.eq-cola[data-cola="${cola}"]`)
       ?.classList.toggle('is-vacia', n === 0);
     apagar('por_clasificar', nPorClasificar);
     apagar('devuelto_revision', nPorInspeccionar);
+    apagar('no_retirado', nNoRetirado);
     apagar('conflictos', nConflictos);
     apagar('sin_verificar', nSinVerificar);
 
@@ -675,6 +682,7 @@ window.EquiposPool = {
         en_taller: 'No hay unidades en taller. Entran al agregarse con serial a una orden de servicio y salen al entregarse.',
         devuelto_revision: 'No hay radios pendientes de inspección. Los que el cliente devolvió (cierre de enmienda, anulación de contrato o cambio por defectuoso) caen aquí al recibirse por una orden de ENTRADA; con "Inspección OK" regresan a bodega como Refurbished, o se dan de baja.',
         por_clasificar: 'No hay unidades por clasificar. Aquí caen las que el sistema tenía en un cliente sin nada que lo respalde (ni contrato ni orden de servicio). No es una ubicación física: hay que encontrar el radio — si aparece en bodega se registra con "Corregir estado"; si lo tiene un cliente, se asigna en Seriales de su contrato.',
+        no_retirado: 'No hay radios sin retirar. Aquí caen los equipos DEL CLIENTE que quedaron listos y nadie vino a buscar: llegan cuando una reparación se cierra como "sin retirar" (menú ⋯ → Casos viejos, en Órdenes). Salen por una de tres puertas: el cliente los retira, vuelven a bodega si eran nuestros, o se dan por abandonados.',
         otros: 'No hay unidades dadas de baja ni vendidas. Las ventas directas (facturadas en QuickBooks) se registran con "Registrar venta" para descontarlas de bodega; una baja hecha por error se revierte con "Revivir equipo".',
       };
       const hayOtrosFiltros = !!(fAct.mod || fAct.prop || fAct.sinVerificar || fAct.compartidos || fAct.sinCliente || fAct.listos);
@@ -816,6 +824,53 @@ window.EquiposPool = {
       pideMotivo: true,
       motivoPlaceholder: 'p. ej. conteo físico del 4-ago, estante A2',
       correr: (eq, motivo) => EquiposPoolService.corregirABodega(eq.id, motivo, firebase.auth().currentUser),
+    },
+    // ── Salidas de "Listo · el cliente no lo retiró" ────────────────────
+    // Radios ajenos que quedaron en nuestro estante al cerrar una reparación
+    // que el cliente nunca vino a buscar (CERRADA (SIN RETIRAR)). Las tres
+    // puertas piden motivo: si sacar algo de aquí fuera un clic sin explicar,
+    // esto se volvería otra gaveta donde "limpiar la lista".
+    retirado: {
+      label: 'El cliente lo retiró',
+      icono: 'package-check',
+      aplica: (eq) => eq.estado === 'no_retirado',
+      titulo: 'El cliente vino a retirar',
+      cuerpo: (n) => `<b>${n}</b> unidad(es) pasan a <b>En cliente</b>: el dueño apareció y se las llevó.`
+        + '<br><br>Aquí <b>no se captura firma</b> — la orden que amparaba estos equipos ya está cerrada, '
+        + 'así que el rastro es el motivo que escribas más tu nombre en el kardex. '
+        + 'Si necesitas un papel firmado, no uses esta acción: abre una entrega.',
+      pideMotivo: true,
+      motivoPlaceholder: 'p. ej. retirados el 9-sep por Luis Pérez, cédula 8-888-8888',
+      correr: (eq, motivo) => EquiposPoolService.retiradoPorCliente(eq.id, motivo, firebase.auth().currentUser),
+    },
+    noRetiradoBodega: {
+      label: 'Sin retirar → bodega',
+      icono: 'warehouse',
+      aplica: (eq) => eq.estado === 'no_retirado',
+      titulo: 'Vuelve a bodega',
+      cuerpo: (n) => `<b>${n}</b> unidad(es) vuelven a <b>En bodega</b>.`
+        + '<br><br>Úsalo solo cuando el equipo <b>es nuestro</b> (flota de alquiler que el cliente '
+        + 'dejó de usar). Si es del cliente, mandarlo a bodega dice que es nuestro y queda '
+        + 'disponible para alquilarlo a otro.<br><br>Entran a la cola de verificar.',
+      pideMotivo: true,
+      motivoPlaceholder: 'p. ej. flota de alquiler del contrato ALQ-2025-14, terminado',
+      correr: (eq, motivo) => EquiposPoolService.noRetiradoABodega(eq.id, motivo, firebase.auth().currentUser),
+    },
+    abandonado: {
+      label: 'Darlo por abandonado',
+      icono: 'trash-2',
+      // Solo admin: es la puerta que hace desaparecer equipo ajeno.
+      aplica: (eq) => eq.estado === 'no_retirado'
+        && EquiposPool._rol === ROLES.ADMIN,
+      titulo: 'Dar por abandonado',
+      cuerpo: (n) => `<b>${n}</b> unidad(es) pasan a <b>Baja</b>.`
+        + '<br><br>Es equipo <b>del cliente</b> que llevamos guardando y que se declara abandonado. '
+        + 'La baja no se deshace sola (hay reactivación, pero deja las dos vueltas en el kardex), '
+        + 'y el motivo es lo único que va a explicar esto dentro de dos años. '
+        + 'Escribe la fecha del último contacto.',
+      pideMotivo: true,
+      motivoPlaceholder: 'p. ej. abandonado — sin respuesta desde 12-mar, avisado por correo 3 veces',
+      correr: (eq, motivo) => EquiposPoolService.darDeBaja(eq.id, motivo, firebase.auth().currentUser),
     },
   },
 

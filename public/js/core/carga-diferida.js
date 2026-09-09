@@ -15,6 +15,23 @@
 window.CargaDiferida = (() => {
   const _cargas = new Map(); // src -> Promise
 
+  // Hoja de estilos diferida — misma idea que script(): una sola inyección,
+  // y no bloquea (la hoja ya está pintada cuando el CSS aterriza).
+  function css(href) {
+    if (_cargas.has(href)) return _cargas.get(href);
+    const p = new Promise((resolve) => {
+      const l = document.createElement("link");
+      l.rel = "stylesheet";
+      l.href = href;
+      // Resolver también en error: un módulo no se cae por falta de estilos.
+      l.onload = () => resolve();
+      l.onerror = () => resolve();
+      document.head.appendChild(l);
+    });
+    _cargas.set(href, p);
+    return p;
+  }
+
   function script(src) {
     if (_cargas.has(src)) return _cargas.get(src);
     const p = new Promise((resolve, reject) => {
@@ -42,6 +59,11 @@ window.CargaDiferida = (() => {
     dividir:    "/js/pages/ordenes-dividir.js?v=1",
     // Entrega parcial de una REPARACIÓN: el cliente se lleva solo una tanda.
     entregaParcial: "/js/pages/ordenes-entrega-parcial.js?v=1",
+    // Válvula de casos viejos: cerrar reparaciones que llevan ≥30 días.
+    // Necesita el kit de bandeja (fila + semáforo), que /ordenes/ no carga.
+    casosViejos: "/js/pages/ordenes-casos-viejos.js?v=1",
+    bandejaKit: "/js/ui/bandeja.js?v=1",
+    bandejaCss: "/css/bandeja.css?v=1",
     // Propuesta de reemplazo desde el taller: el módulo + lo que necesita
     // (expedientes de gestión y la garantía de la unidad), que no se cargan
     // en /ordenes/ para nada más.
@@ -51,7 +73,7 @@ window.CargaDiferida = (() => {
   };
 
   return {
-    script,
+    script, css,
     storage() {
       return firebase.storage ? Promise.resolve() : script(GSTATIC + "firebase-storage-compat.js");
     },
@@ -88,6 +110,11 @@ window.CargaDiferida = (() => {
         : this.storage()
             .then(() => script(MODULOS.firmaPad))
             .then(() => script(MODULOS.entregaParcial));
+    },
+    casosViejos() {
+      return window.abrirCasosViejos ? Promise.resolve()
+        : Promise.all([script(MODULOS.bandejaKit), css(MODULOS.bandejaCss)])
+            .then(() => script(MODULOS.casosViejos));
     },
     reemplazo() {
       return window.OrdenesReemplazo ? Promise.resolve()

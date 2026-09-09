@@ -27,7 +27,7 @@ const { admin, db } = require("../lib/admin");
 const pool = require("./equiposPool");
 
 const CERRADAS = new Set(["ENTREGADO AL CLIENTE", "CERRADA (ENTRADA)",
-  "CERRADA (DEVOLUCION)", "CERRADA (VISITA)", "ANULADA"]);
+  "CERRADA (DEVOLUCION)", "CERRADA (VISITA)", "CERRADA (SIN RETIRAR)", "ANULADA"]);
 const MAX_MUESTRAS = 20;
 
 async function ejecutar() {

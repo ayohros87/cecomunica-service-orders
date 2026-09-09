@@ -435,7 +435,8 @@ service cloud.firestore {
         return de == a
           || !(de in ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO",
                       "COMPLETADO (EN OFICINA)", "ENTREGADO AL CLIENTE",
-                      "CERRADA (VISITA)", "CERRADA (DEVOLUCION)", "CERRADA (ENTRADA)"])
+                      "CERRADA (VISITA)", "CERRADA (DEVOLUCION)", "CERRADA (ENTRADA)",
+                      "CERRADA (SIN RETIRAR)"])
           || (de == "POR ASIGNAR" && a in ["RECIBIDO EN MOSTRADOR", "ASIGNADO", "CERRADA (DEVOLUCION)"])
           || (de == "RECIBIDO EN MOSTRADOR" && a == "ASIGNADO")
           || (de == "ASIGNADO" && a in ["COMPLETADO (EN OFICINA)", "CERRADA (VISITA)", "CERRADA (DEVOLUCION)"])
@@ -443,6 +444,16 @@ service cloud.firestore {
           // de devueltos) — cierran sin entrega ni QC; las unidades quedan
           // bajo control de inventario (bodega/baja por serial).
           || (de == "COMPLETADO (EN OFICINA)" && a in ["CERRADA (VISITA)", "CERRADA (ENTRADA)"])
+          // CERRADA (SIN RETIRAR): la válvula de casos viejos. El cliente no
+          // vino por sus radios y la orden se archiva CON los equipos todavía
+          // en nuestro estante — por eso NO es una entrega: marcarla ENTREGADO
+          // haría que onOrdenWritePool jurara que el cliente los tiene. Exige
+          // motivo escrito (≥10 chars, lo mismo que el borrado lógico): cerrar
+          // un caso sin decir por qué es como no cerrarlo. La UI además pide
+          // 30 días de antigüedad; eso no se replica aquí porque las reglas no
+          // saben restar fechas sin encarecer un match que ya va justo.
+          || (de == "COMPLETADO (EN OFICINA)" && a == "CERRADA (SIN RETIRAR)"
+              && request.resource.data.get("sin_retirar", {}).get("motivo", "").size() >= 10)
           // Candado de control de calidad (ordenes-qc.js): las órdenes
           // completadas post-despliegue llevan qc_requerido:true (lo estampa
           // completeOrder) y solo pueden entregarse con qc.resultado ==
@@ -627,7 +638,8 @@ service cloud.firestore {
               && request.resource.data.get("eliminado_motivo", "").size() >= 10
               && !(resource.data.get("estado_reparacion", "POR ASIGNAR")
                      in ["ENTREGADO AL CLIENTE", "CERRADA (VISITA)",
-                         "CERRADA (DEVOLUCION)", "CERRADA (ENTRADA)"]));
+                         "CERRADA (DEVOLUCION)", "CERRADA (ENTRADA)",
+                         "CERRADA (SIN RETIRAR)"]));
       }
       // ENTREGA PARCIAL por tandas (2026-09-09) — `entrega.tandas[]`. Una
       // REPARACIÓN puede entregarse por partes: el cliente se lleva los radios

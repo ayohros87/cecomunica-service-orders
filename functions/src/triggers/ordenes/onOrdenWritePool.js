@@ -23,6 +23,9 @@ const ENTREGADO = "ENTREGADO AL CLIENTE";
 const CERRADA_ENTRADA = "CERRADA (ENTRADA)";
 // Terminal de la VISITA TÉCNICA (se cierra en sitio, con firma del cliente).
 const CERRADA_VISITA = "CERRADA (VISITA)";
+// Terminal de la válvula de casos viejos: el cliente nunca vino por sus
+// radios. NO es una entrega — las unidades siguen en nuestro estante.
+const CERRADA_SIN_RETIRAR = "CERRADA (SIN RETIRAR)";
 const norm = (s) => String(s || "").trim().toUpperCase();
 // Contratos que siguen vivos: solo esos vale la pena marcar para cancelar.
 const VIGENTES = new Set(["activo", "aprobado"]);
@@ -365,6 +368,55 @@ module.exports = onDocumentWritten(
       // hasta el cierre: semanas de inventario diciendo que tenemos radios que
       // están donde el cliente.
       //
+      // ── Cierre por NO RETIRO (2026-09-09) ────────────────────────────────
+      // El cliente nunca vino a buscar sus radios y la orden se archiva con
+      // ellos todavía en nuestro estante. Es lo contrario de una entrega, y
+      // por eso tiene terminal propio: si se hubiera cerrado como ENTREGADO,
+      // la rama de arriba habría mandado a `en_cliente` radios que están aquí
+      // — inventario mintiendo, en silencio, sobre equipo ajeno.
+      //
+      // Van a `no_retirado`: ubicación real (nuestra repisa), propiedad del
+      // cliente. Ni en_taller (invisible sin orden viva) ni en_bodega (diría
+      // que es nuestro y alquilable). Salen por las puertas explícitas de
+      // Equipos por serial.
+      //
+      // Solo se mueven las que SIGUEN en el taller: lo que ya salió en una
+      // tanda está en_cliente y `soloDesde` lo rebota — así una orden con
+      // entrega parcial cierra bien sin devolverle radios al estante.
+      const cerroSinRetirar = after
+        && norm(after.estado_reparacion) === CERRADA_SIN_RETIRAR
+        && norm(before?.estado_reparacion) !== CERRADA_SIN_RETIRAR;
+      if (cerroSinRetirar) {
+        for (const e of despues) {
+          try {
+            const r = await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+              aEstado: pool.ESTADOS.NO_RETIRADO,
+              soloDesde: [pool.ESTADOS.EN_TALLER],
+              condicion: (d) => d.orden_actual_id === ordenId,
+              tipo: "salida_taller",
+              refMov,
+              notas: String(after.sin_retirar?.motivo || "El cliente no retiró el equipo"),
+              extra: {
+                orden_actual_id: null,
+                // Custodia: el radio es del cliente y está con nosotros. Sin
+                // esto la ficha no diría de quién es lo que tenemos guardado.
+                ...(custodiaCliente ? { asignacionSiFalta: custodiaCliente } : {}),
+              },
+            });
+            if (r === "no-existe") {
+              logger.error("[onOrdenWritePool] Cierre sin retirar con serial sin ficha", {
+                ordenId, serial: e.serial,
+              });
+            }
+          } catch (err) {
+            logger.warn("[onOrdenWritePool] No se pudo dejar la unidad en no_retirado", {
+              ordenId, serial: e.serial, message: err.message,
+            });
+          }
+        }
+        return null;
+      }
+
       // Qué unidades entrega ESTA escritura lo decide domain/entregaTandas.js
       // (probado en test/entregaParcialTandas.test.js sin Firestore).
       //

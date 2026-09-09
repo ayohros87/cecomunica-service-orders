@@ -264,8 +264,11 @@ test("las pestañas son sólo ubicaciones; las colas viven en las tarjetas", () 
     "las colas (devuelto_revision/por_clasificar/conflictos) no deben volver a la fila de pestañas");
 
   const colas = [...html.matchAll(/class="eq-cola"\s+data-cola="([^"]+)"/g)].map(m => m[1]);
+  // no_retirado (2026-09-09): radios DEL CLIENTE que quedaron listos y nadie
+  // vino a buscar. Es cola y no pestaña por lo mismo que las otras — no es una
+  // ubicación del inventario, es trabajo pendiente de DECISIÓN.
   assert.deepEqual(colas.sort(),
-    ["conflictos", "devuelto_revision", "por_clasificar", "sin_verificar"].sort());
+    ["conflictos", "devuelto_revision", "no_retirado", "por_clasificar", "sin_verificar"].sort());
 
   const page = cargarPagina();
   // Toda cola declarada en el HTML tiene que existir en el mapa de la página.

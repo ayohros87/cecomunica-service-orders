@@ -62,7 +62,13 @@ window.CONFIG = {
     // Órdenes de ENTRADA (inspección de equipos devueltos): no se entregan
     // al cliente — la revisión termina, se cotiza si hay daños/faltantes y
     // las unidades quedan bajo control de inventario (bodega/baja por serial).
-    CERRADA_ENTRADA: 'CERRADA (ENTRADA)'
+    CERRADA_ENTRADA: 'CERRADA (ENTRADA)',
+    // Órdenes de REPARACIÓN que el cliente nunca vino a retirar (válvula de
+    // casos viejos, 2026-09-09): el trabajo está hecho y cobrado o no, pero
+    // los radios siguen en nuestro estante. NO es una entrega — marcarlas
+    // ENTREGADO mandaría al pool a decir que el cliente los tiene. Las
+    // unidades quedan en `no_retirado` esperando una decisión de inventario.
+    CERRADA_SIN_RETIRAR: 'CERRADA (SIN RETIRAR)'
   },
   
   // Pagination — per-role page size. Técnicos see far fewer orders
@@ -291,6 +297,9 @@ function getEstadoClass(estado) {
   if (e === "CERRADA (VISITA)") return "chip-aprobada";     // esmeralda
   if (e === "CERRADA (DEVOLUCION)") return "chip-aprobada"; // esmeralda
   if (e === "CERRADA (ENTRADA)") return "chip-aprobada";    // esmeralda
+  // Sin retirar NO es esmeralda: las otras CERRADA son cierres limpios, esta
+  // es un caso que se archiva con radios ajenos todavía en la casa.
+  if (e === "CERRADA (SIN RETIRAR)") return "chip-espera";  // ámbar
   return "chip-espera"; // estados legacy/extendidos: neutral
 }
 
@@ -317,6 +326,9 @@ function estadoCompacto(estado) {
   if (e === "CERRADA (VISITA)") return "CERRADA";
   if (e === "CERRADA (DEVOLUCION)") return "CERRADA";
   if (e === "CERRADA (ENTRADA)") return "CERRADA";
+  // "CERRADA" a secas se confundiría con los cierres limpios: lo que importa
+  // de esta fila es que quedaron radios sin retirar.
+  if (e === "CERRADA (SIN RETIRAR)") return "SIN RETIRAR";
   return e;
 }
 

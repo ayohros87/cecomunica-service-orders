@@ -2273,6 +2273,11 @@ table.app-table.editable tbody tr:hover { background: transparent; }
 /* No devuelto por el cliente: rojo, no ámbar. Es plata que se debe, no una
    cola de trabajo — tiene que leerse distinto de "por inspeccionar". */
 .eqpool-chip-pendiente_cobro   { background: #fee2e2; color: #b91c1c; }
+/* Listo y sin retirar: violeta. Es custodia, no cola de trabajo ni deuda —
+   el radio es del cliente y está en nuestro estante ocupando sitio. Tiene que
+   leerse distinto del ámbar de "en taller" (donde estaría si nadie lo notara)
+   y del rojo de "por cobrar" (que sí es plata). */
+.eqpool-chip-no_retirado       { background: #ede9fe; color: #6d28d9; }
 .eqpool-chip-baja              { background: #f1f5f9; color: #64748b; }
 .eqpool-chip-en_poc            { background: #f1f5f9; color: #64748b; }
 .eqpool-chip-desconocido       { background: #f1f5f9; color: #64748b; }

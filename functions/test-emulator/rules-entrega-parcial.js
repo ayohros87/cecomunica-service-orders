@@ -132,6 +132,70 @@ async function main() {
 
   await testEnv.cleanup();
   console.log(`\nENTREGA PARCIAL: TODAS LAS REGLAS PASARON (${n} grupos)`);
+  await validarCierreSinRetirar();
+}
+
+// ── Cierre por NO RETIRO (CERRADA (SIN RETIRAR)) ──────────────────────────
+// Aquí sí se prueba contra la máquina de estados REAL (ordenTransicionLegal),
+// porque lo que se valida es una transición y recortarla no probaría nada. El
+// tope de evaluación no estorba en el camino que DEBE pasar; los que deben
+// fallar se contrastan además con el motivo corto, que es la diferencia
+// concreta entre permitido y denegado.
+async function validarCierreSinRetirar() {
+  const testEnv = await initializeTestEnvironment({
+    projectId: "demo-sin-retirar",
+    firestore: { rules: RULES, host: "127.0.0.1", port: 8080 },
+  });
+  const base = {
+    tipo_de_servicio: "REPARACIÓN", equipos: EQ(3), qc_requerido: false,
+    cliente_id: "cli1", cliente_nombre: "ACME",
+  };
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc("usuarios/recepcion").set({ rol: "recepcion" });
+    for (const id of ["sr1", "sr2", "sr3", "sr4"]) {
+      await db.doc("ordenes_de_servicio/" + id)
+        .set({ ...base, estado_reparacion: "COMPLETADO (EN OFICINA)" });
+    }
+    await db.doc("ordenes_de_servicio/srAsignada")
+      .set({ ...base, estado_reparacion: "ASIGNADO" });
+    await db.doc("ordenes_de_servicio/srCerrada")
+      .set({ ...base, estado_reparacion: "CERRADA (SIN RETIRAR)",
+             sin_retirar: { motivo: "cliente cerró operaciones en Colón" } });
+  });
+  const doc = (id) => testEnv.authenticatedContext("recepcion").firestore()
+    .doc("ordenes_de_servicio/" + id);
+  const cierre = (motivo) => ({
+    estado_reparacion: "CERRADA (SIN RETIRAR)",
+    sin_retirar: { motivo, fecha: new Date(), por_uid: "recepcion" },
+  });
+  let n = 0;
+  const ok = (m) => { n++; console.log("  PASS", m); };
+
+  await assertSucceeds(doc("sr1").update(cierre("cliente cerró operaciones en Colón")));
+  ok("sin retirar: una reparación vieja se archiva con motivo");
+
+  await assertFails(doc("sr2").update(cierre("no vino")));
+  await assertFails(doc("sr3").update({ estado_reparacion: "CERRADA (SIN RETIRAR)" }));
+  ok("sin retirar: sin motivo (o con un motivo de dos palabras) no se cierra");
+
+  await assertFails(doc("srAsignada").update(cierre("cliente cerró operaciones en Colón")));
+  ok("sin retirar: no se salta el taller — solo desde COMPLETADO");
+
+  // Es terminal: una vez archivada no se reabre por la puerta de atrás.
+  await assertFails(doc("srCerrada").update({ estado_reparacion: "COMPLETADO (EN OFICINA)" }));
+  await assertFails(doc("srCerrada").update({ estado_reparacion: "ENTREGADO AL CLIENTE" }));
+  ok("sin retirar: es terminal, no se revierte sin admin");
+
+  // Y guarda radios ajenos: borrarla lógicamente la sacaría de toda la
+  // operación con los equipos todavía en la casa.
+  await assertFails(doc("srCerrada").update({
+    eliminado: true, eliminado_motivo: "limpiando la bandeja de una vez",
+  }));
+  ok("sin retirar: no se borra — es el papel al que se vuelve si el cliente aparece");
+
+  await testEnv.cleanup();
+  console.log(`\nCIERRE SIN RETIRAR: TODAS LAS REGLAS PASARON (${n} grupos)`);
 }
 
 main().then(() => process.exit(0)).catch((e) => {

@@ -169,6 +169,13 @@
       entregarParcialOrden(ordenId)
         .catch(() => Toast.show('Sin conexión — no se pudo abrir la entrega parcial.', 'bad'));
     },
+    // Válvula de casos viejos (ordenes-casos-viejos.js, diferido): la lista de
+    // reparaciones terminadas hace >30 días, con las dos puertas de cierre.
+    'casos-viejos': () => {
+      closeAllMenus();
+      CargaDiferida.casosViejos().then(() => abrirCasosViejos())
+        .catch(() => Toast.show('Sin conexión — no se pudieron abrir los casos viejos.', 'bad'));
+    },
     // El taller propone reemplazar un radio (ordenes-reemplazo.js, diferido):
     // nace la gestión GR en pendiente_aprobacion y ventas la decide.
     'proponer-reemplazo': (el) => {

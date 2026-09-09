@@ -147,6 +147,7 @@
     const ESTADOS_TERMINAL = new Set([
       'ENTREGADO AL CLIENTE', 'COMPLETADO (EN OFICINA)',
       'CERRADA (VISITA)', 'CERRADA (DEVOLUCION)', 'CERRADA (ENTRADA)',
+      'CERRADA (SIN RETIRAR)',
     ]);
     // La DEVOLUCION nace "POR ASIGNAR" pero nunca se asigna (vida binaria:
     // abierta → cerrada) — fuera de las alertas de asignación/estancamiento.

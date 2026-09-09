@@ -40,6 +40,19 @@ const ESTADOS = {
   // dice DÓNDE está el equipo; el renglón dice CÓMO va la cobranza.
   // Plan: docs/plans/PLAN_EQUIPOS_NO_DEVUELTOS.md.
   PENDIENTE_COBRO: "pendiente_cobro",
+  // El radio del CLIENTE que quedó listo en el taller y el cliente nunca vino
+  // a buscarlo. Es el reverso exacto de pendiente_cobro: aquí la unidad está
+  // en NUESTRO estante pero es SUYA. Por eso no puede ser ninguno de los dos
+  // vecinos obvios:
+  //   · `en_taller` sin orden viva es INVISIBLE — nadie vuelve a mirarlo, que
+  //     es justo como se pierden los radios (ver el caso TIL PANAMA arriba).
+  //   · `en_bodega` diría que es nuestro y que está disponible para alquilar.
+  // Lo estampa el cierre por no retiro de una orden de REPARACIÓN
+  // (CERRADA (SIN RETIRAR)). Sale por tres puertas explícitas: el cliente
+  // aparece y lo retira (→ en_cliente, con firma), era flota nuestra y vuelve
+  // al estante (→ en_bodega) o se da por abandonado (→ baja, solo admin).
+  // Plan: docs/plans/PLAN_ENTREGA_PARCIAL.md §3.
+  NO_RETIRADO: "no_retirado",
   BAJA:       "baja",
 };
 

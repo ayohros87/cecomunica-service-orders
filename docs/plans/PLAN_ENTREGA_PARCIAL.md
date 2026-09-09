@@ -170,9 +170,20 @@ Puertas de salida explícitas, como `pendiente_cobro`:
 
 | Puerta | Destino | Quién |
 |---|---|---|
-| El cliente lo retiró | `en_cliente` (pide nombre + firma) | recepción / admin |
+| El cliente lo retiró | `en_cliente` | inventario / admin |
 | Era flota nuestra, vuelve a bodega | `en_bodega` (`verificado: false`) | inventario / admin |
-| Abandonado | `baja` con motivo | solo admin |
+| Abandonado | `baja` | solo admin |
+
+Las tres viven en la barra de acciones en lote de **Inventario · Equipos por
+serial** (cola nueva "Sin retirar") y **las tres exigen motivo**: si sacar algo
+de aquí fuera un clic sin explicación, esto se volvería otra gaveta donde
+"limpiar la lista", que es justo lo que la válvula viene a evitar.
+
+**La puerta "el cliente lo retiró" NO captura firma.** La orden que amparaba
+esos equipos ya está cerrada, así que el rastro es el motivo (quién retiró y
+cuándo) más la autoría y el kardex. Pedir firma aquí obligaría a reconstruir el
+modal de entrega dentro de Inventario. Si en un caso concreto hace falta papel
+firmado, lo correcto es no usar esta puerta y abrir una entrega.
 
 ### Lo que la válvula NO hace
 
@@ -183,7 +194,7 @@ el caso y elige la puerta. El cron solo *lista*.
 
 ## 4. Fases
 
-**F1 — Entrega parcial funcionando**
+**F1 — Entrega parcial funcionando** ✅ hecha 2026-09-09
 - `public/js/pages/ordenes-entrega-parcial.js` (módulo diferido, registrado en
   `core/carga-diferida.js` junto a `dividir`)
 - `OrdenesService.registrarTandaEntrega`
@@ -197,11 +208,20 @@ el caso y elige la puerta. El cron solo *lista*.
   cliente, y firma en tablet — reusando la maquinaria de acuses de devolución
   (`firmas_tablet`, cola de correo, `emailRenderer`)
 
-**F3 — Válvula y bandeja de casos viejos**
-- estado de pool `no_retirado` + etiqueta + puertas de salida
-- terminal `CERRADA (SIN RETIRAR)` en rules, estados y consumidores
-- bandeja "Casos viejos" (≥30 días) con las dos puertas
-- la señal "lista para entregar" deja de repetir lo ya cerrado
+**F3 — Válvula y bandeja de casos viejos** ✅ hecha 2026-09-09
+- estado de pool `no_retirado` (label, chip violeta, cola propia en Inventario)
+  y sus tres puertas de salida en lote
+- terminal `CERRADA (SIN RETIRAR)` en rules, estados, conciliación y filtros
+- hoja "Casos viejos" (≥30 días) en el ⋯ de Órdenes, con las dos puertas
+- `EquiposPoolService.retiradoPorCliente` / `noRetiradoABodega`;
+  `OrdenesService.cerrarSinRetirar`
+
+Pendiente de F3: la señal "lista para entregar" (`pendientes.js`) sigue
+contando los casos viejos como cola de entrega. No estorba —los casos se
+cierran desde la hoja y desaparecen solos— pero mientras queden abiertos siguen
+sonando en el recordatorio diario. Separarlos exige tocar `pendientes.js`, que
+está DUPLICADO front/functions con un test de paridad; se deja para cuando haya
+números reales de cuántos casos quedan de verdad.
 
 ---
 

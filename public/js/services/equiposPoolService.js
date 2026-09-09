@@ -36,6 +36,10 @@ const EquiposPoolService = {
     // (functions) para el criterio completo. El avance del cobro vive en
     // cobros_equipos, no aquí.
     PENDIENTE_COBRO: 'pendiente_cobro',
+    // El radio del CLIENTE que quedó listo y nunca vino a buscarlo: está en
+    // NUESTRO estante pero es SUYO — el reverso de pendiente_cobro. Ver
+    // equiposPool.js (functions) para por qué no es en_taller ni en_bodega.
+    NO_RETIRADO: 'no_retirado',
     BAJA:       'baja',
   },
 
@@ -55,6 +59,7 @@ const EquiposPoolService = {
     por_clasificar:    'Por clasificar (ubicación desconocida)',
     vendido:           'Vendido',
     pendiente_cobro:   'No devuelto · por cobrar',
+    no_retirado:       'Listo · el cliente no lo retiró',
     baja:              'Baja',
   },
 
@@ -757,6 +762,36 @@ const EquiposPoolService = {
       extra: { asignacion: null, poc_device_id: null, orden_actual_id: null,
                verificado: true,
                pendiente_devolucion: firebase.firestore.FieldValue.delete() },
+    }, user);
+  },
+
+  // ── Salidas de `no_retirado` ────────────────────────────────────────────
+  // Un radio del cliente que quedó listo y nadie vino a buscarlo. La orden ya
+  // se archivó (CERRADA (SIN RETIRAR)); lo que falta es decidir qué se hace
+  // con el aparato. Tres puertas, todas explícitas y todas con motivo: si
+  // sacar algo de aquí fuera un clic sin explicación, esto se volvería otra
+  // gaveta donde limpiar la lista.
+
+  // El cliente apareció y se lo llevó. Sin firma digital: la orden que lo
+  // amparaba ya está cerrada, así que el rastro es el motivo (quién lo retiró
+  // y cuándo) más la autoría y el kardex. Si hace falta un papel firmado, lo
+  // correcto es NO usar esta puerta y reabrir una entrega.
+  async retiradoPorCliente(id, motivo, user) {
+    return this.cambiarEstado(id, this.ESTADOS.EN_CLIENTE, {
+      esperado: this.ESTADOS.NO_RETIRADO,
+      tipo: 'salida_taller', notas: motivo,
+      extra: { orden_actual_id: null },
+    }, user);
+  },
+
+  // Era flota NUESTRA (alquiler bajo contrato): vuelve al estante. Entra a la
+  // cola de "verificar" como cualquier otro regreso a bodega — nadie la miró
+  // técnicamente al guardarla.
+  async noRetiradoABodega(id, motivo, user) {
+    return this.cambiarEstado(id, this.ESTADOS.EN_BODEGA, {
+      esperado: this.ESTADOS.NO_RETIRADO,
+      tipo: 'ingreso_bodega', notas: motivo,
+      extra: { orden_actual_id: null, verificado: false },
     }, user);
   },
 

@@ -613,6 +613,60 @@ const OrdenesService = {
   },
 
   /**
+   * Cierre por NO RETIRO — la válvula de casos viejos.
+   *
+   * El cliente nunca vino por sus radios y la orden lleva meses viva sonando
+   * en el recordatorio. Se archiva CON los equipos todavía en el estante: por
+   * eso NO es una entrega (marcarla ENTREGADO haría que onOrdenWritePool
+   * jurara que el cliente los tiene) y tiene terminal propio,
+   * CERRADA (SIN RETIRAR). El trigger deja las unidades pendientes en
+   * `no_retirado`, a la espera de una decisión de inventario.
+   *
+   * El motivo es obligatorio y lo exigen también las rules (≥10 chars):
+   * cerrar un caso sin decir por qué es como no cerrarlo.
+   *
+   * @param {string} ordenId
+   * @param {{motivo:string, contactos?:string}} payload
+   */
+  async cerrarSinRetirar(ordenId, { motivo, contactos = '' }) {
+    const texto = String(motivo || '').trim();
+    if (texto.length < 10) {
+      throw new Error("Explica en una frase por qué se cierra sin retirar (mínimo 10 caracteres).");
+    }
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    const orden = (await db.collection("ordenes_de_servicio").doc(ordenId).get()).data() || {};
+    // Qué queda físicamente aquí. Lo que ya salió en una tanda NO entra: ese
+    // radio está con el cliente y el pool ya lo sabe.
+    const pendientes = (typeof EntregaTandas !== 'undefined')
+      ? EntregaTandas.equiposPendientes(orden)
+      : (orden.equipos || []).filter(e => e && !e.eliminado);
+    await db.collection("ordenes_de_servicio").doc(ordenId).update({
+      estado_reparacion: "CERRADA (SIN RETIRAR)",
+      sin_retirar: {
+        motivo: texto,
+        contactos: String(contactos || '').trim() || null,
+        fecha: firebase.firestore.Timestamp.now(),
+        por_uid: user?.uid || '',
+        por_email: user?.email || null,
+        // Congelado de lo que quedó en la casa: la orden es el papel al que
+        // se vuelve cuando el cliente aparezca dentro de un año.
+        equipos: pendientes.map(e => ({
+          id: e.id || null,
+          serial: e.numero_de_serie || e.serial || null,
+          modelo: e.modelo || null,
+        })),
+      },
+      fecha_cierre_sin_retirar: firebase.firestore.FieldValue.serverTimestamp(),
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'CERRAR_SIN_RETIRAR', by: user?.uid || '',
+        equipos: pendientes.length, at: firebase.firestore.Timestamp.now(),
+      }),
+    });
+    return { equipos: pendientes.length };
+  },
+
+  /**
    * Entrega PARCIAL — registra una tanda de equipos que el cliente se lleva
    * hoy, dejando el resto en el taller. NO toca `estado_reparacion`: la orden
    * sigue COMPLETADO (EN OFICINA) y solo el camino normal (confirmarEntrega)

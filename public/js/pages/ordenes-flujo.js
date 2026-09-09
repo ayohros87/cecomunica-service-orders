@@ -490,10 +490,10 @@ async function puedeEntregar(orden, ordenId) {
   return true;
 }
 
-window.entregarOrden = async function (ordenId) {
+window.entregarOrden = async function (ordenId, opts = {}) {
   const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
   if (!(await puedeEntregar(orden, ordenId))) return;
-  abrirModalEntrega(ordenId);
+  abrirModalEntrega(ordenId, opts);
 };
 
 // Entrega PARCIAL — el cliente se lleva solo una tanda y la orden sigue
@@ -1185,6 +1185,16 @@ window.copiarSeriales = function (ordenId) {
     // se cierra ÚNICAMENTE con la X o Cancelar.
     const modal = document.getElementById('modalEntrega');
     if (modal) modal.onclick = null;
+
+    // Entrega RETROACTIVA (válvula de casos viejos): la orden lleva meses en
+    // COMPLETADO porque el cliente ya se llevó los radios y nadie la marcó.
+    // Se abre directo en "firma en papel" (`no_recibido`) — pedirle ahora una
+    // firma digital al cliente por algo que se llevó en abril no tiene
+    // sentido, y el flujo ya sabe exigir motivo y quién recibió.
+    if (opts.noRecibido) {
+      const cb = document.getElementById('entregaNoRecibido');
+      if (cb && !cb.checked) { cb.checked = true; window._toggleEntregaNoRecibido(); }
+    }
   };
 
   window.cerrarModalEntrega = function () {

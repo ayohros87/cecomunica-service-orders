@@ -40,7 +40,7 @@
      al subir firma/foto o pedir la URL de una identificación. Los carga
      CargaDiferida al primer uso. -->
 <script defer src="../js/firebase-init.js?v=ses2"></script>
-<script defer src="../js/core/carga-diferida.js?v=7"></script>
+<script defer src="../js/core/carga-diferida.js?v=8"></script>
 <script src="../js/core/roles.js"></script>
 <script src="../js/core/modulos.js?v=cc15"></script>
 <script src="../js/core/layout.js?v=cc13"></script>
@@ -128,6 +128,10 @@
           <button class="overflow-menu-item" data-action="nueva-devolucion" title="Registrar devolución de equipos con contrato de papel (fuera del sistema)"><i data-lucide="package-open"></i> Devolución sin contrato</button>
           <div class="overflow-menu-divider"></div>
           <button class="overflow-menu-item" data-action="go-reporte-pendientes"><i data-lucide="clock"></i> Pendientes</button>
+          <!-- Válvula de casos viejos: reparaciones terminadas hace >30 días que
+               nadie cerró. Cada una es "ya se entregó y faltó marcarlo" o "el
+               cliente no vino" — la hoja obliga a decir cuál. -->
+          <button class="overflow-menu-item" data-action="casos-viejos" title="Reparaciones terminadas hace más de 30 días que nadie ha cerrado"><i data-lucide="archive"></i> Casos viejos</button>
           <button class="overflow-menu-item" id="btnProgresoTecnicos" data-action="go-progreso-tecnicos"><i data-lucide="trophy"></i> Progreso</button>
           <!-- Taller no tiene el módulo Almacén en el rail, así que el listado
                de descartados (que nace en el QC de esta página) se alcanza aquí. -->
@@ -299,6 +303,7 @@
         <option value="ENTREGADO AL CLIENTE">ENTREGADO AL CLIENTE</option>
         <option value="CERRADA (VISITA)">CERRADA (VISITA)</option>
         <option value="CERRADA (ENTRADA)">CERRADA (ENTRADA)</option>
+        <option value="CERRADA (SIN RETIRAR)">CERRADA (SIN RETIRAR)</option>
       </select>
     </div>
 
