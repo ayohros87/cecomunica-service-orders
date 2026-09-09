@@ -177,3 +177,28 @@ test("D2: el contrato legacy deja de pesar cuando la cuenta ya declaró sus seri
   assert.equal(cubierto.d2, 0);
   assert.equal(cubierto.d1, 1);
 });
+
+// C COMUNICA 1, 2026-09-09: la cuenta se regularizó CREANDO el contrato
+// SERV20260901-01, y el vendedor declaró honestamente "el original es de papel
+// / no está en el sistema". `origen_tipo: 'legacy'` habla del ORIGINAL, no de
+// este contrato — cobrarle un punto de por vida es castigar al que regularizó.
+test("D3: el contrato que nació para regularizar deja de pesar cuando declaró sus seriales", () => {
+  const papel = (extra) => con("SERV20260901-01", {
+    origen_tipo: "legacy", origen_legacy_ref: "Cuenta sin contrato en sistema — regularización",
+    equipos: [{ cantidad: 2 }, { cantidad: 3 }], ...extra,
+  });
+  const amarrado = (u) => en(u, { asignacion: { cliente_id: "c1", contrato_doc_id: "SERV20260901-01" } });
+
+  // Los 5 seriales del contrato están amarrados: nada que regularizar.
+  const ok = R.calcular({ contratos: [papel()], unidades: ["A", "B", "C", "D", "E"].map(amarrado) });
+  assert.equal(ok.d3, 0);
+  assert.equal(ok.nivel, "al_dia");
+
+  // A medias (3 de 5 unidades) el marco de papel sigue pesando.
+  const aMedias = R.calcular({ contratos: [papel()], unidades: ["A", "B", "C"].map(amarrado) });
+  assert.equal(aMedias.d3, 1);
+  assert.deepEqual(aMedias.d3_ids, ["SERV20260901-01"]);
+
+  // Y sin un solo serial amarrado, igual: es el caso que D3 vino a contar.
+  assert.equal(R.calcular({ contratos: [papel()] }).d3, 1);
+});

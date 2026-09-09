@@ -18,8 +18,9 @@
 // Componentes de la deuda (puntos):
 //   D1 radios en campo sin contrato interno      (pool en_cliente sin contrato_doc_id)
 //   D2 contratos vigentes sin seriales declarados (seriales_estado = 'legacy'
-//      y sin seriales amarrados que cubran la cuenta — ver `serialesDeclarados`)
-//   D3 contrato marco en papel                    (origen_tipo 'legacy' / origen_legacy_ref)
+//      y sin seriales amarrados que cubran la cuenta — ver `cubreSusUnidades`)
+//   D3 contrato marco en papel                    (origen_tipo 'legacy' /
+//      origen_legacy_ref, mientras el contrato no haya declarado sus seriales)
 //   D4 adenda a contrato en papel                 (gestión aumento contrato_papel sin contrato interno)
 //   D5 reemplazo sin serial saliente              (REEMP vigente con reemplaza_seriales = [])
 //   D6 sobrantes de conciliación                  (contratos.regularizacion.sobrantes)
@@ -100,28 +101,35 @@
     const d1_ids = unidades
       .filter(u => u && u.estado === "en_cliente" && !u.pendiente_devolucion && !(u.asignacion && u.asignacion.contrato_doc_id))
       .map(u => u.serial || u.id).filter(Boolean);
-    // D2: un contrato del cutover ('legacy') pesa mientras nadie haya
-    // declarado sus seriales. Deja de pesar cuando ya no queda NADA que
-    // declarar contra él: o los seriales amarrados cubren sus unidades, o la
-    // cuenta no tiene un solo radio suelto (D1 = 0) y ese contrato ya tiene
-    // seriales amarrados. Sin esto (Fortunato Mangravita, 2026-09-09) el
-    // anexo "Actualizar seriales del cliente" amarraba los 13 radios de la
-    // cuenta y el contrato seguía pidiendo regularización para siempre: una
-    // deuda que nadie podía pagar, porque `seriales_estado` nunca sale de
-    // 'legacy' (el corte histórico es definitivo, ver onSerialesAsignadasSendPdf).
+    // D2 y D3 miran los seriales AMARRADOS en el pool, no una etiqueta del
+    // contrato (2026-09-09, Alberto): las dos etiquetas son de por vida y
+    // castigaban justo al que regularizó.
+    //   · `seriales_estado` NUNCA sale de 'legacy' — el corte histórico es
+    //     definitivo (onSerialesAsignadasSendPdf). Fortunato Mangravita amarró
+    //     sus 13 radios con "Actualizar seriales del cliente" y la cuenta
+    //     seguía pidiendo regularización: una deuda que nadie podía pagar.
+    //   · `origen_tipo: 'legacy'` dice que el contrato ORIGINAL es de papel,
+    //     no que este lo sea. C COMUNICA 1: se regularizó la cuenta creando
+    //     SERV20260901-01 con la referencia honesta "Cuenta sin contrato en
+    //     sistema — regularización", y el sistema cobró un punto POR DECIRLO.
     const amarradosPorContrato = {};
     unidades.forEach(u => {
       const cd = u && u.asignacion && u.asignacion.contrato_doc_id;
       if (cd) amarradosPorContrato[cd] = (amarradosPorContrato[cd] || 0) + 1;
     });
     const unidadesDeLineas = (c) => ((c && c.equipos) || []).reduce((s, l) => s + (Number(l && l.cantidad) || 0), 0);
-    const serialesDeclarados = (c) => {
+    // El contrato declaró lo suyo: los seriales amarrados cubren sus unidades.
+    const cubreSusUnidades = (c) => {
       const n = amarradosPorContrato[c.id] || 0;
-      return n > 0 && (n >= unidadesDeLineas(c) || d1_ids.length === 0);
+      return n > 0 && n >= unidadesDeLineas(c);
     };
-    const d2_ids = renovables.filter(c => tieneLineas(c) && c.seriales_estado === "legacy" && !serialesDeclarados(c))
+    // D2 afloja un poco más: si la cuenta no tiene UN SOLO radio suelto
+    // (D1 = 0) y el contrato ya tiene seriales, no queda nada que declarar
+    // contra él — las unidades de más son la línea fantasma del papel.
+    const d2_ids = renovables.filter(c => tieneLineas(c) && c.seriales_estado === "legacy"
+      && !(cubreSusUnidades(c) || (amarradosPorContrato[c.id] > 0 && d1_ids.length === 0)))
       .map(c => c.contrato_id || c.id);
-    const d3_ids = vig.filter(c => c.origen_tipo === "legacy" || !!c.origen_legacy_ref)
+    const d3_ids = vig.filter(c => (c.origen_tipo === "legacy" || !!c.origen_legacy_ref) && !cubreSusUnidades(c))
       .map(c => c.contrato_id || c.id);
     const d4_ids = gestiones
       .filter(g => g && g.tipo === "aumento" && !g.deleted && !GESTION_CERRADA.includes(g.estado)
