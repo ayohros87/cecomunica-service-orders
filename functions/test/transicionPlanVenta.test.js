@@ -110,6 +110,69 @@ test("conciliarLineas cuenta los 'continúa' por línea (modelo + modalidad) y r
   const r = P.conciliarLineas(plan, lineas);
   assert.deepEqual(JSON.parse(JSON.stringify(r.porLinea)), [{ idx: 0, continuan: 2, reemplazan: 0 }, { idx: 1, continuan: 1, reemplazan: 0 }]);
   assert.deepEqual(JSON.parse(JSON.stringify(r.sinLinea.map(u => u.serial))), ["X1"]);
+  assert.equal(r.otraModalidad.length, 0);   // cada uno cayó en su propia modalidad
+});
+
+// ── 2026-09-09 (FORTUNATO MANGRAVITA): la modalidad de la ficha no deja
+// huérfano a un serial cuando SÍ hay línea de ese modelo ──
+test("segundo pase: un serial marcado 'del cliente' entra en la línea de alquiler del mismo modelo y se avisa", () => {
+  const P = cargar();
+  const plan = P.construirSerial([
+    { serial: "A1", modelo: "HYTERA PD606-R", destino: "continua", modalidad: "alquiler" },
+    // Los 6 que la migración dejó como "del cliente" sin verificar.
+    ...["B1", "B2", "B3"].map(s => ({ serial: s, modelo: "HYTERA PD606-R", destino: "continua", modalidad: "propio" })),
+  ], []);
+  const lineas = [{ modelo_id: "m1", modelo: "HYTERA PD606-R", cantidad: 4, modalidad: "alquiler" }];
+  const r = P.conciliarLineas(plan, lineas);
+  assert.equal(r.sinLinea.length, 0, "ningún serial queda sin línea: la línea del modelo existe");
+  assert.deepEqual(JSON.parse(JSON.stringify(r.porLinea)), [{ idx: 0, continuan: 4, reemplazan: 0 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.otraModalidad.map(x => x.unidad.serial))), ["B1", "B2", "B3"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.otraModalidad.map(x => `${x.ficha}→${x.linea}`))), ["propio→alquiler", "propio→alquiler", "propio→alquiler"]);
+});
+
+test("con las dos modalidades en juego, cada serial se queda en la SUYA (el segundo pase no la pisa)", () => {
+  const P = cargar();
+  const plan = P.construirSerial([
+    { serial: "A1", modelo: "HYTERA PD606-R", destino: "continua", modalidad: "alquiler" },
+    { serial: "B1", modelo: "HYTERA PD606-R", destino: "continua", modalidad: "propio" },
+  ], []);
+  const lineas = [
+    { modelo_id: "m1", modelo: "HYTERA PD606-R", cantidad: 1, modalidad: "alquiler" },
+    { modelo_id: "m1", modelo: "HYTERA PD606-R", cantidad: 1, modalidad: "propio" },
+  ];
+  const r = P.conciliarLineas(plan, lineas);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.porLinea)), [{ idx: 0, continuan: 1, reemplazan: 0 }, { idx: 1, continuan: 1, reemplazan: 0 }]);
+  assert.equal(r.otraModalidad.length, 0);
+});
+
+test("dos líneas del mismo modelo se REPARTEN los seriales por cupo, y el sobrante sigue dando desajuste", () => {
+  const P = cargar();
+  const seriales = (n, pre, mod) => Array.from({ length: n }, (_, i) => ({ serial: pre + i, modelo: "HYTERA PD606-R", destino: "continua", modalidad: mod }));
+  // 3 de la flota + 6 marcados del cliente; el vendedor agregó una segunda
+  // línea de alquiler por 6 (caso FORTUNATO MANGRAVITA tal cual).
+  const plan = P.construirSerial([...seriales(3, "A", "alquiler"), ...seriales(6, "B", "propio")], []);
+  const lineas = [
+    { modelo_id: "m1", modelo: "HYTERA PD606-R", cantidad: 3, modalidad: "alquiler" },
+    { modelo_id: "m1", modelo: "HYTERA PD606-R", cantidad: 6, modalidad: "alquiler" },
+  ];
+  const r = P.conciliarLineas(plan, lineas);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.porLinea)), [{ idx: 0, continuan: 3, reemplazan: 0 }, { idx: 1, continuan: 6, reemplazan: 0 }]);
+  assert.equal(r.sinLinea.length, 0);
+  assert.equal(r.otraModalidad.length, 6);
+  // Con la segunda línea en 2, los 4 que no caben en ningún cupo se van a la
+  // primera compatible: nadie queda sin línea, pero la cuenta no cuadra
+  // (7 > 3) y el wizard ofrece "Cuadrar cantidades".
+  const apretado = P.conciliarLineas(plan, [lineas[0], { ...lineas[1], cantidad: 2 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(apretado.porLinea)), [{ idx: 0, continuan: 7, reemplazan: 0 }, { idx: 1, continuan: 2, reemplazan: 0 }]);
+  assert.equal(apretado.sinLinea.length, 0);
+});
+
+test("sin ninguna línea de ese modelo, el serial sigue saliendo como 'sin línea'", () => {
+  const P = cargar();
+  const plan = P.construirSerial([{ serial: "X1", modelo: "KENWOOD TK-3000", destino: "continua", modalidad: "propio" }], []);
+  const r = P.conciliarLineas(plan, [{ modelo_id: "m1", modelo: "HYTERA PD606-R", cantidad: 1, modalidad: "alquiler" }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.sinLinea.map(u => u.serial))), ["X1"]);
+  assert.equal(r.otraModalidad.length, 0);
 });
 
 // ── 2026-09-04 (2): reemplazo por OTRO modelo, refurbished por serial, modalidad derivada ──

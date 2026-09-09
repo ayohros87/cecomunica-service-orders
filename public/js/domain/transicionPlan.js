@@ -177,9 +177,11 @@ window.TransicionPlan = {
   _claveModelo(s) {
     return String(s || '').toUpperCase().normalize('NFD').replace(/[^A-Z0-9]/g, '').replace(/R$/, '');
   },
-  _mismaLinea(u, l) {
-    const modU = u.modalidad || 'alquiler';
-    if (l.modalidad && l.modalidad !== modU) return false;
+  // `ignorarModalidad`: parea SOLO por modelo (el segundo pase de
+  // conciliarLineas), igual que domain/propiedadUnidad.js en el servidor.
+  _mismaLinea(u, l, ignorarModalidad) {
+    const modU = ignorarModalidad ? (l.modalidad || 'alquiler') : (u.modalidad || 'alquiler');
+    if (!ignorarModalidad && l.modalidad && l.modalidad !== modU) return false;
     // "Una familia, dos filas" (2026-09-07): con el catálogo cargado decide
     // ModeloFamilia (variante_de); el texto de abajo es el respaldo.
     if (typeof ModeloFamilia !== 'undefined' && ModeloFamilia.listo()) {
@@ -193,23 +195,79 @@ window.TransicionPlan = {
     if (!a || !b) return false;
     return a === b || (a.length >= 3 && b.includes(a)) || (b.length >= 3 && a.includes(b));
   },
+  // DOS PASES (2026-09-09, caso FORTUNATO MANGRAVITA). El primero exige
+  // misma modalidad; el segundo recoge lo que quedó suelto pareando SOLO por
+  // modelo. Con un pase único, 6 radios que la migración marcó "del cliente"
+  // sin verificar dejaban la renovación trancada: el aviso decía "agrega su
+  // modelo" y el vendedor lo agregaba — pero la línea nueva era de alquiler y
+  // el serial seguía sin línea, sin decir jamás que lo que no cuadraba era la
+  // modalidad. Quien manda es la LÍNEA (misma regla que domain/propiedadUnidad
+  // en el servidor); las unidades del segundo pase salen en `otraModalidad`
+  // para que el wizard lo diga con todas sus letras, sin bloquear.
+  // Además, el pareo respeta el CUPO de cada línea: dos líneas del mismo
+  // modelo (la que ya existía y la que el vendedor acaba de agregar) se
+  // reparten los seriales en vez de amontonarse en la primera. Si ninguna
+  // línea tiene cupo, la unidad igual entra en la primera compatible — así
+  // sigue saliendo el desajuste y el botón "Cuadrar cantidades".
   conciliarLineas(plan, lineas) {
     const ls = Array.isArray(lineas) ? lineas : [];
     const porLinea = ls.map((_, idx) => ({ idx, continuan: 0, reemplazan: 0 }));
+    const cupo = ls.map(l => Number(l && l.cantidad) || 0);
     const sinLinea = [];
+    const otraModalidad = [];
+    const contar = (idx, u) => {
+      if (u.destino === 'continua') porLinea[idx].continuan++; else porLinea[idx].reemplazan++;
+      cupo[idx]--;
+    };
+    // Unidades que cuentan, con el modelo por el que se buscan (el reemplazo
+    // se busca por el modelo ENTRANTE).
+    const cola = [];
     for (const u of ((plan && plan.unidades) || [])) {
       if (u.destino !== 'continua' && u.destino !== 'reemplaza') continue;
-      // El reemplazo se busca por el modelo ENTRANTE.
-      const q = (u.destino === 'reemplaza' && (u.reemplazo_modelo_id || u.reemplazo_modelo))
+      cola.push({ u, q: (u.destino === 'reemplaza' && (u.reemplazo_modelo_id || u.reemplazo_modelo))
         ? { modelo_id: u.reemplazo_modelo_id || null, modelo: u.reemplazo_modelo || '', modalidad: u.modalidad }
-        : u;
-      // Exacto por modelo_id primero; luego el tolerante por texto.
-      let idx = ls.findIndex(l => (l.modalidad || 'alquiler') === (q.modalidad || 'alquiler') && q.modelo_id && l.modelo_id && q.modelo_id === l.modelo_id);
-      if (idx < 0) idx = ls.findIndex(l => this._mismaLinea(q, l));
-      if (idx < 0) { sinLinea.push(u); continue; }
-      if (u.destino === 'continua') porLinea[idx].continuan++; else porLinea[idx].reemplazan++;
+        : u });
     }
-    return { porLinea, sinLinea };
+    // Índice de la línea que le toca a una unidad. `conCupo` limita a las que
+    // aún tienen espacio; `ignorarModalidad` es el segundo pase.
+    const buscar = (q, ignorarModalidad, conCupo) => {
+      const ok = (idx) => !conCupo || cupo[idx] > 0;
+      if (!ignorarModalidad) {
+        const exacta = ls.findIndex((l, idx) => ok(idx) && (l.modalidad || 'alquiler') === (q.modalidad || 'alquiler')
+          && q.modelo_id && l.modelo_id && q.modelo_id === l.modelo_id);
+        if (exacta >= 0) return exacta;
+      }
+      return ls.findIndex((l, idx) => ok(idx) && this._mismaLinea(q, l, ignorarModalidad));
+    };
+    let resto = [];
+    for (const it of cola) {                      // 1 · misma modalidad, con cupo
+      const idx = buscar(it.q, false, true);
+      if (idx < 0) { resto.push(it); continue; }
+      contar(idx, it.u);
+    }
+    let resto2 = [];
+    for (const it of resto) {                     // 2 · misma modalidad, sin cupo
+      const idx = buscar(it.q, false, false);
+      if (idx < 0) { resto2.push(it); continue; }
+      contar(idx, it.u);
+    }
+    const anota = (it, idx) => {
+      contar(idx, it.u);
+      otraModalidad.push({ unidad: it.u, idx,
+        ficha: it.q.modalidad || 'alquiler', linea: ls[idx].modalidad || 'alquiler' });
+    };
+    resto = [];
+    for (const it of resto2) {                    // 3 · solo el modelo, con cupo
+      const idx = buscar(it.q, true, true);
+      if (idx < 0) { resto.push(it); continue; }
+      anota(it, idx);
+    }
+    for (const it of resto) {                     // 4 · solo el modelo, sin cupo
+      const idx = buscar(it.q, true, false);
+      if (idx < 0) { sinLinea.push(it.u); continue; }
+      anota(it, idx);
+    }
+    return { porLinea, sinLinea, otraModalidad };
   },
 
   // ¿El plan declara reemplazos? Una renovación "sin equipo" con reemplazos

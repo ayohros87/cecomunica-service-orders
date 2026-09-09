@@ -4230,7 +4230,7 @@ window.Centro = {
     if (!plan) {
       box.innerHTML = sinDestino ? `<div style="color:var(--warn-deep, #92400E); font-size:12.5px;">Elige el destino de los ${sinDestino} serial(es).</div>` : '';
       if (modBox) modBox.textContent = 'La modalidad (sin equipo / con reemplazos / refurbished) sale de lo que declares por serial en el paso 2.';
-      return { ok: !sinDestino, sinDestino, plan: null, sinLinea: [], faltaModelo: false, desajuste: false, modalidad: null };
+      return { ok: !sinDestino, sinDestino, plan: null, sinLinea: [], faltaModelo: false, desajuste: false, modalidad: null, otraModalidad: [] };
     }
     const lineas = this._lineasModelo('wcm');
     const r = TransicionPlan.conciliarLineas(plan, lineas);
@@ -4248,6 +4248,10 @@ window.Centro = {
     const faltaModelo = plan.unidades.some(u => u.fuente === 'agregado' && !u.modelo && !u.modelo_id);
     const sinLinea = r.sinLinea.length
       ? `<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;"><b>${r.sinLinea.length} serial(es) sin línea en el contrato</b>: ${r.sinLinea.map(u => this.esc(u.serial)).join(', ')} — agrega su modelo${r.sinLinea.some(u => u.destino === 'reemplaza') ? ' (el del reemplazo)' : ''} en “Equipos y tarifas” o cámbiales el destino.</div>` : '';
+    // Seriales que entraron en una línea de OTRA modalidad (segundo pase de
+    // conciliarLineas): se dice, no se bloquea. La ficha del pool suele venir
+    // de una migración sin verificar y la línea es lo que el vendedor declara.
+    const otraMod = this._wcOtraModalidadHtml(r.otraModalidad);
     const modalidad = TransicionPlan.derivarModalidad(plan, lineas);
     if (modBox) {
       modBox.innerHTML = `<b>${modalidad.sin_equipo ? 'Renovación sin equipo' : 'Renovación con equipo'}</b> — ${modalidad.continuan} continúa${modalidad.continuan === 1 ? '' : 'n'}${modalidad.reemplazos ? ` · ${modalidad.reemplazos} reemplazo${modalidad.reemplazos === 1 ? '' : 's'}` : ''}${modalidad.nuevos ? ` · ${modalidad.nuevos} radio${modalidad.nuevos === 1 ? '' : 's'} nuevo${modalidad.nuevos === 1 ? '' : 's'}` : ''} · refurbished: ${modalidad.refurbished ? `<b>sí</b> (${modalidad.refurbished_n})` : 'no'}`;
@@ -4257,9 +4261,27 @@ window.Centro = {
       <div style="font-size:12.5px; color:var(--fg-3);">${this.esc(TransicionPlan.resumen(plan))}</div>
       ${partes.length ? `<div style="display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; margin-top:4px;">${partes.join('')}
         ${desajuste && !this._wcSoloPlan ? `<button type="button" class="btn btn-ghost cg-act" onclick="Centro._wcCuadrar()">Cuadrar cantidades con los seriales</button>` : ''}</div>` : ''}
-      ${sinLinea}
+      ${sinLinea}${otraMod}
       ${faltaModelo ? '<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;">Elige el modelo de cada serial agregado sin ficha.</div>' : ''}`;
-    return { ok: !sinDestino && !desajuste && !r.sinLinea.length && !faltaModelo, plan, desajuste, sinLinea: r.sinLinea, faltaModelo, sinDestino, modalidad };
+    return { ok: !sinDestino && !desajuste && !r.sinLinea.length && !faltaModelo, plan, desajuste, sinLinea: r.sinLinea, faltaModelo, sinDestino, modalidad, otraModalidad: r.otraModalidad || [] };
+  },
+
+  // Aviso (nunca bloqueo) de los seriales que cayeron en una línea de otra
+  // modalidad: qué dice la ficha del pool, qué dice la línea y qué manda.
+  _wcOtraModalidadHtml(lista) {
+    if (!Array.isArray(lista) || !lista.length) return '';
+    const como = (m) => m === 'propio' ? 'del cliente' : 'de alquiler';
+    const grupos = new Map();
+    for (const x of lista) {
+      const k = `${x.ficha}→${x.linea}`;
+      const g = grupos.get(k) || { ficha: x.ficha, linea: x.linea, seriales: [] };
+      g.seriales.push(x.unidad.serial || x.unidad.serial_norm || '');
+      grupos.set(k, g);
+    }
+    return [...grupos.values()].map(g => `<div style="color:var(--fg-3); font-size:12.5px; margin-top:4px;">
+      <b>${g.seriales.length} serial(es) que el sistema tiene como equipo ${como(g.ficha)}</b> entran en una línea
+      ${como(g.linea)}: ${this.esc(g.seriales.join(', '))}. Manda la línea del contrato — casi siempre la ficha viene
+      de una migración que nadie verificó. Si de verdad son ${como(g.ficha)}, agrégales una línea con esa modalidad.</div>`).join('');
   },
 
   // ── Corregir los seriales de una renovación YA APROBADA, antes de la firma
