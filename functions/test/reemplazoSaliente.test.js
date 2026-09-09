@@ -139,22 +139,16 @@ test("CASO SEGURIDAD IDEAL: el saliente correcto es el radio dañado, no la flot
 });
 
 // ── Cableado ────────────────────────────────────────────────────────────
-test("el formulario carga el dominio y usa su criterio", () => {
-  const html = leer("public", "contratos", "nuevo-contrato.html");
-  assert.ok(html.includes("domain/reemplazoSalientes.js"),
-    "nuevo-contrato.html no carga js/domain/reemplazoSalientes.js");
-  assert.ok(html.includes('id="reempBox"'), "falta el bloque del equipo saliente");
-
-  const form = leer("public", "js", "pages", "nc-form.js");
-  assert.ok(form.includes("ReemplazoSalientes.candidatas"), "nc-form no usa el dominio para las candidatas");
-  const guardar = leer("public", "js", "pages", "nc-guardar.js");
-  assert.ok(guardar.includes("reemplaza_seriales"), "nc-guardar no persiste reemplaza_seriales");
-  assert.ok(guardar.includes("ReemplazoSalientes.validar"),
-    "nc-guardar no revalida el saliente antes de reservar el correlativo");
-  const preview = leer("public", "js", "pages", "nc-preview.js");
-  assert.ok(preview.includes("validarReemp"), "nc-preview no bloquea el guardado sin saliente");
-
+// El REEMP dejó de crearse en el formulario clásico el 2026-09-07 (solo quedaba
+// alquiler nuevo) y la página se retiró el 2026-09-09: el reemplazo nace ahora
+// como gestión GR en el Centro. Lo que sigue vivo —y lo que este test protege—
+// es el CONSUMO del serial saliente: sin él, la entrega vuelve a reclamar el
+// contrato entero en vez del radio que salió.
+test("el consumidor del serial saliente sigue cableado", () => {
   const trigger = leer("functions", "src", "triggers", "contratos", "onEntregaTransicion.js");
   assert.ok(trigger.includes("reemplaza_seriales"),
     "onEntregaTransicion no consume el serial saliente — seguiría reclamando el contrato entero");
+  const tarifario = leer("public", "js", "domain", "contratoTarifario.js");
+  assert.ok(tarifario.includes("reemplaza_seriales"),
+    "construirDoc dejó de persistir reemplaza_seriales");
 });

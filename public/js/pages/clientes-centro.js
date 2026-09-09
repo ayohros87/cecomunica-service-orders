@@ -32,6 +32,7 @@ window.Centro = {
         const u = await UsuariosService.getUsuario(user.uid);
         this.rol = u ? u.rol : null;
         this.uid = user.uid;
+        this.email = user.email || null;
         // inventario entra para ASIGNAR seriales a las gestiones (llega por el
         // correo de bodega con deep-link ?id=&g=); no crea gestiones.
         const permitido = [ROLES.ADMIN, ROLES.GERENTE, ROLES.VENDEDOR, ROLES.RECEPCION, ROLES.INVENTARIO];
@@ -4910,6 +4911,11 @@ window.Centro = {
         <div class="cg-paso-t"><span class="n">4</span> Observaciones <span class="hint">opcional</span></div>
         <textarea class="form-input" id="wcObs" rows="2" style="resize:vertical;" aria-label="Observaciones"></textarea>
       </div>
+
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">5</span> Representante legal</div>
+        ${this._wcRepHtml()}
+      </div>
       </div>`,
       footer: `
         <span class="sep"></span>
@@ -4920,6 +4926,7 @@ window.Centro = {
       const ref = document.getElementById('wcLegacyRef');
       if (ref) ref.style.display = e.target.checked ? '' : 'none';
     });
+    this._wcRepMontar();
     this._wcPlanState = { destinos: {}, reemplazos: {}, refurb: {}, agregados: [] };
     // Precarga (plan 2026-09-08 §5): al regularizar/renovar la cuenta, los
     // radios en campo SIN contrato (D1) entran como "Continúa" — es lo que la
@@ -5383,8 +5390,70 @@ window.Centro = {
     cont.innerHTML = this._tarifarioHtml(t);
   },
 
+  // ── Validación del representante legal (Zuleika, 2026-09-03) ─────────────
+  // Se pedía solo en el formulario clásico; al retirarse nuevo-contrato.html
+  // (2026-09-09) el control se habría perdido, así que vive aquí. Mismo
+  // criterio y mismo módulo de dominio (js/domain/repValidacion.js): sin el
+  // check, "Guardar contrato" queda deshabilitado.
+  //
+  // El problema que resuelve: contratos confeccionados y luego ANULADOS porque
+  // el representante de la ficha ya no era el vigente.
+  _wcRepHtml() {
+    const c = this.cliente || {};
+    const rep = (c.representante || '').trim();
+    const ficha = `../clientes/centro.html?id=${encodeURIComponent(c.id || '')}`;
+    return rep
+      ? `<div>${this.esc(rep)}${c.representante_cedula ? ` — céd. ${this.esc(c.representante_cedula)}` : ''}</div>
+         <div id="wcRepCtx" class="hint" style="margin:4px 0 8px;">Consultando la ficha…</div>
+         <label class="cg-toggle">
+           <input type="checkbox" id="wcRepValidado" onchange="Centro._wcRepGate()">
+           Validé con el cliente que <b>${this.esc(rep)}</b> sigue siendo el representante legal.
+         </label>`
+      : `<div><b>⚠️ Este cliente no tiene representante legal registrado</b> — el contrato se imprime con ese espacio en blanco.</div>
+         <label class="cg-toggle" style="margin-top:8px;">
+           <input type="checkbox" id="wcRepValidado" onchange="Centro._wcRepGate()">
+           Confirmé con el cliente quién es el representante legal vigente.
+         </label>
+         <div class="hint" style="margin-top:6px;"><a href="${ficha}">Completar la ficha</a></div>`;
+  },
+
+  _wcRepGate() {
+    const btn = document.getElementById('wcGuardar');
+    const chk = document.getElementById('wcRepValidado');
+    if (!btn) return;
+    btn.disabled = !(chk && chk.checked);
+    btn.title = btn.disabled ? 'Marca la validación del representante legal para continuar' : '';
+  },
+
+  // Contexto que hace útil el check: la última validación estampada en la
+  // ficha o el último cambio del representante en el historial. Best-effort:
+  // sin dato legible, la línea queda en el texto neutro del dominio.
+  async _wcRepMontar() {
+    this._wcRepGate();
+    const n = document.getElementById('wcRepCtx');
+    if (!n) return;
+    let hist = [];
+    try {
+      const qs = await firebase.firestore().collection('clientes').doc(this.cliente.id)
+        .collection('historial').orderBy('at', 'desc').limit(30).get();
+      hist = qs.docs.map((d) => d.data());
+    } catch (_) { /* sin historial legible, la validación previa aún aplica */ }
+    const r = RepValidacion.resumen(this.cliente, hist, Date.now());
+    const nodo = document.getElementById('wcRepCtx');
+    if (!nodo) return;                      // el modal se cerró o re-renderizó
+    nodo.textContent = r.texto;
+    nodo.dataset.tono = r.tono;
+  },
+
   async crearContrato() {
     if (this._wcGuardando) return;
+    // Segundo candado del check (el botón ya sale deshabilitado): esta función
+    // es la única vía de creación y no debe depender de que la llamen bien.
+    const chkRep = document.getElementById('wcRepValidado');
+    if (!chkRep || !chkRep.checked) {
+      Toast.show('⚠️ Valida el representante legal con el cliente antes de guardar.', 'warn');
+      return;
+    }
     const tipo = document.getElementById('wcTipo')?.value || '';
     const tipoNombre = this.TIPOS_CONTRATO[tipo] || tipo;
     const accion = document.getElementById('wcAccion')?.value || 'Nuevo';
@@ -5479,6 +5548,9 @@ window.Centro = {
         // digital): el correo a activaciones enlaza a ese documento y no
         // adjunta el PDF del formato anterior (functions/lib/documentoContrato).
         documento_version: 'v2',
+        // Quién validó con el cliente qué nombre al confeccionar (Zuleika
+        // 2026-09-03). construirDoc le pone el `at`.
+        representante_validacion: RepValidacion.construir(cli, { uid: this.uid, email: this.email || null }),
         reemplaza_seriales: null,
         duracion: durUnidad === 'dias' ? `${durN} día${durN === 1 ? '' : 's'}` : `${durN} meses`,
         duracion_meses: meses,
@@ -5495,6 +5567,18 @@ window.Centro = {
       // cuentan como puntuales (Regularizacion.esPuntual).
       Object.assign(contrato, Centro._estampaReg());
       const docRef = await ContratosService.addContrato(contrato);
+
+      // La ficha recuerda la validación: el próximo contrato de este cliente
+      // muestra "Validado por última vez hace N" en vez de pedir fe ciega.
+      // Best-effort — el contrato ya quedó guardado y esto no debe estorbar.
+      try {
+        await firebase.firestore().collection('clientes').doc(cli.id).update({
+          representante_validacion: {
+            ...RepValidacion.construir(cli, { uid: this.uid, email: this.email || null }),
+            at: firebase.firestore.FieldValue.serverTimestamp(),
+          },
+        });
+      } catch (e) { console.warn('No se pudo estampar la validación del representante:', e); }
 
       try {
         const equiposHtml = contrato.equipos.map(e =>

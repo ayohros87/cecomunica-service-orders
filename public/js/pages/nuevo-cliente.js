@@ -130,7 +130,9 @@ auth.onAuthStateChanged(user => {
       } else if (params.get("from") === "cotizacion") {
         window.location.href = `../cotizaciones/nueva-cotizacion.html?cliente_id=${targetId}`;
       } else {
-        window.location.href = `nuevo-contrato.html?cliente_id=${targetId}`;
+        // El contrato se arma en el Centro desde 2026-09-09 (nuevo-contrato.html
+        // se retiró): saltar directo evita el rebote de la redirección.
+        window.location.href = `../clientes/centro.html?id=${targetId}`;
       }
     }, 800);
   });
@@ -279,6 +281,6 @@ function volverAContrato() {
   }
   const clienteId = params.get("id");
   window.location.href = clienteId
-    ? `nuevo-contrato.html?cliente_id=${clienteId}`
-    : "nuevo-contrato.html";
+    ? `../clientes/centro.html?id=${clienteId}`
+    : "../clientes/centro.html";
 }

@@ -131,17 +131,18 @@ test("construir: arma el objeto que viaja al contrato y a la ficha", () => {
 // Si alguien quita el check de la vista previa, el segundo candado de
 // nc-guardar o el passthrough del doc, este test lo grita.
 test("espejo: vista previa, segundo candado y campo del doc siguen cableados", () => {
-  const preview = leer("public", "js", "pages", "nc-preview.js");
-  assert.match(preview, /chkRepValidado/, "nc-preview debe renderizar el check");
-  assert.match(preview, /RepValidacion\.resumen/, "nc-preview debe pintar la línea de contexto");
-
-  const guardar = leer("public", "js", "pages", "nc-guardar.js");
-  assert.match(guardar, /chkRepValidado/, "nc-guardar debe re-verificar el check (segundo candado)");
-  assert.match(guardar, /representante_validacion/, "nc-guardar debe pasar la validación al doc y a la ficha");
+  // El candado se mudó al wizard del Centro (2026-09-09): nuevo-contrato.html
+  // se retiró y con él nc-preview/nc-guardar. Las tres puntas son las mismas.
+  const centro = leer("public", "js", "pages", "clientes-centro.js");
+  assert.match(centro, /wcRepValidado/, "el wizard debe renderizar el check");
+  assert.match(centro, /RepValidacion\.resumen/, "el wizard debe pintar la línea de contexto");
+  assert.match(centro, /_wcRepGate/, "el wizard debe deshabilitar Guardar sin el check");
+  assert.match(centro, /Valida el representante legal/, "crearContrato debe re-verificar el check (segundo candado)");
+  assert.match(centro, /representante_validacion/, "el wizard debe pasar la validación al doc y a la ficha");
 
   const tarifario = leer("public", "js", "domain", "contratoTarifario.js");
   assert.match(tarifario, /representante_validacion/, "construirDoc debe aceptar el campo opcional");
 
-  const html = leer("public", "contratos", "nuevo-contrato.html");
-  assert.match(html, /repValidacion\.js/, "nuevo-contrato.html debe cargar el módulo de dominio");
+  const html = leer("public", "clientes", "centro.html");
+  assert.match(html, /repValidacion\.js/, "clientes/centro.html debe cargar el módulo de dominio");
 });

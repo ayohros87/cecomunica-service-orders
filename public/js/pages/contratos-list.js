@@ -78,8 +78,6 @@ window.ContratosLista = {
   devolucionPill(data, id) {
     const estado = DevolucionContrato.estado(data);
     if (!estado) return '';
-    const cid = id || data.id || '';
-
     const faltan = DevolucionContrato.pendientes(data);
     const total  = DevolucionContrato.esperados(data);
     const ordenId = DevolucionContrato.ordenUnica(data);
@@ -117,7 +115,8 @@ window.ContratosLista = {
       icon = 'help-circle';
       label = 'Sin registro';
       title = 'El contrato terminó teniendo equipo afuera, pero nunca se registró la devolución — el sistema no sabe si los equipos regresaron';
-      href = `transicion.html?id=${cid}`;
+      // El archivo NO ofrece registrar la transición: eso es trabajo y vive en
+      // la bandeja de inventario del almacén. Aquí el chip solo informa.
     }
 
     const chip = `<span class="chip-estado" style="${css}" title="${title}"><i data-lucide="${icon}" style="width:12px;height:12px;"></i> ${label}</span>`;
