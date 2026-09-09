@@ -246,3 +246,52 @@ test("un serial sin ficha previa no dispara ningún aviso", async () => {
   assert.equal(h.registro.cerrados.length, 0);
   assert.ok(!h.registro.modales.some(m => /ficha abierta/i.test(m.title || "")));
 });
+
+// ── Fichas de OTROS clientes ───────────────────────────────────────────────
+// Nunca trancaron el lote (solo avisaban), pero el aviso mandaba a borrarlas a
+// mano en POC y nadie lo hacía: al 2026-09-09 había 817 seriales vivos en dos
+// o tres cuentas a la vez. Ahora se pueden cerrar sin salir del lote — y sin
+// obligar: un serial mal tecleado cae en la misma lista.
+const FICHA_AJENA = {
+  id: "devBalboa", serial: "21814A0123", unit_id: "274089", ip: "main.cecomunica.net",
+  cliente_id: "CLI9", cliente_nombre: "BALBOA LOGISTICS", activo: false, deleted: false,
+  sim_number: "8950702902411381722", created_at: ts("2025-11-11T15:00:00Z"),
+};
+
+// Igual que `montar`, pero con Modal.sheet (los 3 botones del aviso).
+function montarConSheet(opts, accion) {
+  const h = montar(opts);
+  h.sandbox.Modal.sheet = async (o) => { h.registro.modales.push(o); return accion; };
+  return h;
+}
+
+test("las fichas de otros clientes se pueden cerrar desde el mismo lote", async () => {
+  const h = montarConSheet({ existentes: [FICHA_AJENA] }, "cerrar");
+  await conFormularioLleno(h, { seriales: ["21814A0123"], unitIdInicial: 274600 });
+
+  await guardar(h);
+
+  assert.equal(h.registro.creados.length, 1, "el lote entra");
+  assert.deepEqual(h.registro.cerrados.map(c => c.id), ["devBalboa"],
+    "y la ficha del cliente anterior queda cerrada");
+});
+
+test("«crear sin tocarlas» crea el lote y no cierra nada", async () => {
+  const h = montarConSheet({ existentes: [FICHA_AJENA] }, "seguir");
+  await conFormularioLleno(h, { seriales: ["21814A0123"], unitIdInicial: 274600 });
+
+  await guardar(h);
+
+  assert.equal(h.registro.creados.length, 1);
+  assert.equal(h.registro.cerrados.length, 0, "quien no está seguro no borra nada");
+});
+
+test("cancelar en el aviso de otro cliente no crea el lote", async () => {
+  const h = montarConSheet({ existentes: [FICHA_AJENA] }, "cancelar");
+  await conFormularioLleno(h, { seriales: ["21814A0123"], unitIdInicial: 274600 });
+
+  await guardar(h);
+
+  assert.equal(h.registro.creados.length, 0);
+  assert.equal(h.registro.cerrados.length, 0);
+});

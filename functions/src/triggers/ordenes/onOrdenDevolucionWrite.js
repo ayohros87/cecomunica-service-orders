@@ -37,6 +37,38 @@ const { pendientesDevolucion, resumenDevolucion, derivarEstadoDevolucion } = req
 const cobros = require("../../lib/cobrosEquipos");
 const { emailAcuse } = require("../../lib/acuseDevolucion");
 const sust = require("../../domain/sustitucionSaliente");
+const { cerrarFichasPoc } = require("../../lib/pocCierre");
+
+// ── El radio que vuelve sale de POC (2026-09-09) ──────────────────────────
+// POC es la plataforma de airtime: si el radio ya no está con el cliente, su
+// ficha no puede seguir abierta. Nunca se cerraba, y el arrastre lo pagaba
+// recepción — el batch veía el serial "ya registrado con este cliente" y se
+// paraba en seco (Municipio de Arraiján: 20 radios de un evento trancados por
+// 3 fichas del evento anterior). Solo se cierran las fichas de ESTE cliente, y
+// el SIM vuelve al pool salvo que ya esté en otro radio (ver lib/pocCierre).
+// Best-effort: un fallo aquí no puede tumbar la devolución.
+async function cerrarPocDelCliente(e, after, ordenId, motivo) {
+  try {
+    const r = await cerrarFichasPoc({
+      serial: e.serial,
+      poolDocId: e.pool_doc_id || null,
+      clienteId: after.cliente_id || null,
+      clienteNombre: after.cliente_nombre || "",
+      motivo,
+      ref: { tipo: "orden", id: ordenId, label: `DEVOLUCIÓN ${ordenId}` },
+    });
+    if (r.cerradas.length || r.deOtros) {
+      logger.info("[onOrdenDevolucionWrite] POC al día", {
+        ordenId, serial: e.serial, cerradas: r.cerradas.length,
+        simsAjenos: r.simsAjenos, fichasDeOtrosClientes: r.deOtros,
+      });
+    }
+  } catch (err) {
+    logger.warn("[onOrdenDevolucionWrite] no se pudo cerrar la ficha POC (no crítico)", {
+      ordenId, serial: e.serial, message: err.message,
+    });
+  }
+}
 
 // ── Sustitución del serial saliente (2026-09-07) ─────────────────────────
 // El check-in permite "sustituir el esperado X por este" cuando el radio que
@@ -542,6 +574,7 @@ module.exports = onDocumentWritten(
                 });
           }
           logger.info("[onOrdenDevolucionWrite] recibido", { ordenId, serial: e.serial, r, modo: dev.modo || "recuperacion" });
+          await cerrarPocDelCliente(e, after, ordenId, "Devolución recibida");
           tandaRecibida.push({
             serial: e.serial, modelo: e.modelo, modelo_id: e.modelo_id,
             accesorios: e.accesorios || null,
@@ -561,6 +594,9 @@ module.exports = onDocumentWritten(
             ? await pool.transicionarPorId(e.pool_doc_id, opts)
             : await pool.transicionar(e.serial, e.modelo_id, e.modelo, opts);
           logger.info("[onOrdenDevolucionWrite] nunca_salio", { ordenId, serial: e.serial, r });
+          // Jamás salió: si alguien alcanzó a registrarlo en POC con ese
+          // cliente, esa ficha tampoco tiene por qué seguir abierta.
+          await cerrarPocDelCliente(e, after, ordenId, "Confirmado que nunca salió");
         } else if (res === "no_devuelve") {
           const { ref, data } = await pool.resolver(e.serial, e.modelo_id, e.modelo);
           const unidadRef = e.pool_doc_id ? db.collection("equipos_pool").doc(e.pool_doc_id) : (data ? ref : null);

@@ -1018,8 +1018,8 @@ document.getElementById("addCliente").onclick = async () => {
           return;
         }
 
-        // Fichas POC viejas del mismo cliente que este guardado CIERRA al
-        // terminar (registros anteriores que nadie cerró).
+        // Fichas POC viejas que este guardado CIERRA al terminar: las de este
+        // cliente siempre, y las de otros clientes si recepción lo elige.
         const cerrarFichas = [];
 
         bloquear(true);
@@ -1040,7 +1040,7 @@ document.getElementById("addCliente").onclick = async () => {
           const dbq = firebase.firestore();
           const nombreClienteSel = (clienteSelect.selectedOptions[0]?.textContent || '').trim().toUpperCase();
           const candidatosMismo = new Map();   // serialKey → [devices vivos del mismo cliente]
-          const otroCliente = [];
+          const otrosDocs = [];                // fichas vivas de OTROS clientes
           for (let i = 0; i < seriales.length; i += 10) {
             const snap = await dbq.collection('poc_devices')
               .where('serial', 'in', seriales.slice(i, i + 10)).get();
@@ -1051,7 +1051,7 @@ document.getElementById("addCliente").onclick = async () => {
                 ? v.cliente_id === cliente
                 : (v.cliente_nombre || v.cliente || '').trim().toUpperCase() === nombreClienteSel;
               if (!esMismo) {
-                otroCliente.push(`${v.serial} (${v.cliente_nombre || v.cliente || 'sin cliente'})`);
+                otrosDocs.push({ id: doc.id, ...v });
                 return;
               }
               const k = Serial.clave(v.serial);
@@ -1094,9 +1094,37 @@ document.getElementById("addCliente").onclick = async () => {
             });
             if (!ok) { bloquear(false); return; }
           }
-          if (otroCliente.length) {
-            const ok = await Modal.confirm({ title: 'Seriales con otro cliente', confirmLabel: 'Continuar de todos modos', message: `Estos seriales figuran en POC con OTRO cliente: ${otroCliente.join(', ')}.<br><br>Si el radio se reasignó (reemplazo o devolución), continúa — y luego borra o libera el equipo del cliente anterior para no dejarlo duplicado.` });
-            if (!ok) { bloquear(false); return; }
+          if (otrosDocs.length) {
+            // Antes esto solo avisaba y mandaba a "borrar el equipo del cliente
+            // anterior" a mano — nadie lo hacía, y por eso hay seriales vivos en
+            // dos y tres cuentas a la vez (817 al 2026-09-09). Ahora se puede
+            // limpiar aquí mismo, sin salir del lote y sin obligar a hacerlo:
+            // un serial mal tecleado también cae en esta lista.
+            const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            const filas = otrosDocs.slice(0, 12).map(d => {
+              const fecha = d.created_at?.toDate?.().toLocaleDateString('es-PA') || 'sin fecha';
+              return `<strong>${esc(d.serial)}</strong> — ${esc(d.cliente_nombre || d.cliente || 'sin cliente')}` +
+                ` · Unit ID ${esc(d.unit_id || '—')}${d.sim_number ? ` · SIM ${esc(d.sim_number)}` : ''}` +
+                ` · ${d.activo === false ? 'inactiva' : 'ACTIVA'} · del ${esc(fecha)}`;
+            }).join('<br>');
+            const mas = otrosDocs.length > 12 ? `<br>… y ${otrosDocs.length - 12} más` : '';
+            const cuerpo =
+              `Estos seriales tienen ficha abierta en POC con <strong>otro cliente</strong>:<br><br>${filas}${mas}<br><br>` +
+              `Si el radio se reasignó (reemplazo, devolución o evento), esas fichas ya no valen — el mismo radio no puede ` +
+              `estar vivo en dos cuentas a la vez, y dejarlas abiertas es lo que después tranca otros lotes. ` +
+              `Si crees que el serial está mal tecleado, cancela y revísalo.`;
+            const accion = typeof Modal.sheet === 'function'
+              ? await Modal.sheet({
+                  title: 'Estos radios figuran con otro cliente', icon: 'users', size: 'lg', html: cuerpo,
+                  buttons: [
+                    { action: 'cancelar', label: 'Cancelar' },
+                    { action: 'seguir', label: 'Crear sin tocarlas' },
+                    { action: 'cerrar', label: 'Crear y cerrar esas fichas', primary: true },
+                  ],
+                })
+              : (await Modal.confirm({ title: 'Seriales con otro cliente', confirmLabel: 'Continuar de todos modos', message: cuerpo }) ? 'seguir' : 'cancelar');
+            if (!accion || accion === 'cancelar') { bloquear(false); return; }
+            if (accion === 'cerrar') cerrarFichas.push(...otrosDocs);
           }
 
           // 3) Unit IDs del rango nuevo ya usados por equipos no borrados del
@@ -1240,9 +1268,9 @@ document.getElementById("addCliente").onclick = async () => {
           await PocService.addPocDevice(data);
         }
 
-        // Fichas viejas del mismo cliente: se cierran DESPUÉS de crear el lote
-        // nuevo — si la creación falla a medias, el cliente no se queda sin
-        // ningún registro. El trigger del pool tolera el orden: el desenlace
+        // Fichas viejas: se cierran DESPUÉS de crear el lote nuevo — si la
+        // creación falla a medias, el cliente no se queda sin ningún
+        // registro. El trigger del pool tolera el orden: el desenlace
         // solo suelta la ficha del pool si sigue apuntando al device viejo.
         let cerradas = 0, fallaronCierres = 0;
         if (cerrarFichas.length) {
