@@ -613,6 +613,46 @@ const OrdenesService = {
   },
 
   /**
+   * Pide la copia por correo de la nota de una tanda. Solo marca la solicitud;
+   * el correo lo arma y lo encola el backend (onOrdenEntregada →
+   * lib/notaTandaEntrega.js) y onMailQueued espeja el resultado real del SMTP
+   * de vuelta a `envio.status`. Mismo circuito que el acuse de devolución: el
+   * front nunca escribe en mail_queue, así el reenvío tras un fallo es un
+   * cambio de estado y no un correo duplicado.
+   *
+   * En transacción porque reescribe el array completo (no hay forma de tocar
+   * un solo elemento) y otra pestaña pudo agregar una tanda entre medio.
+   *
+   * @param {string} ordenId
+   * @param {string} numero  el `numero` de la tanda ({ordenId}-E{n})
+   * @param {string} to      correo del cliente
+   */
+  async solicitarEnvioTanda(ordenId, numero, to) {
+    const correo = String(to || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+      throw new Error("El correo del cliente no tiene un formato válido.");
+    }
+    const db = firebase.firestore();
+    const ref = db.collection("ordenes_de_servicio").doc(ordenId);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new Error("La orden ya no existe.");
+      const arr = EntregaTandas.tandas(snap.data()).map(t => ({ ...t }));
+      const i = arr.findIndex(t => (t.numero || `${ordenId}-E${t.n}`) === numero);
+      if (i < 0) throw new Error("Esa entrega ya no está en la orden.");
+      const st = arr[i].envio?.status;
+      if (st === 'solicitado' || st === 'encolado') {
+        throw new Error("Esa nota ya está en camino.");
+      }
+      arr[i].envio = {
+        status: 'solicitado', to: correo,
+        at: firebase.firestore.Timestamp.now(), error: null,
+      };
+      tx.update(ref, { "entrega.tandas": arr });
+    });
+  },
+
+  /**
    * Cierre por NO RETIRO — la válvula de casos viejos.
    *
    * El cliente nunca vino por sus radios y la orden lleva meses viva sonando

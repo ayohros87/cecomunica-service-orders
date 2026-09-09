@@ -69,6 +69,38 @@ async function mirrorAcuseDevolucion(after, ok, errorMsg) {
     console.error("[onMailQueued] no se pudo espejar el acuse de devolución:", e);
   }
 }
+// Espejo de la nota de ENTREGA PARCIAL (2026-09-09). Misma figura que el
+// acuse: la tarjeta de la tanda tiene que decir si el correo salió de verdad
+// y ofrecer reenviar si falló. Se identifica por `tanda_numero`
+// ({ordenId}-E{n}), único dentro de la orden y estable — el array es
+// append-only. Best-effort.
+async function mirrorNotaTanda(after, ok, errorMsg) {
+  const meta = after?.meta || {};
+  if (meta.source !== "entrega-parcial" || !meta.orden_id || !meta.tanda_numero) return;
+  try {
+    const ref = db.collection("ordenes_de_servicio").doc(meta.orden_id);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const arr = ((snap.data().entrega || {}).tandas || []).map(x => ({ ...x }));
+      const i = arr.findIndex((x, k) =>
+        x && (x.numero || `${meta.orden_id}-E${x.n || k + 1}`) === meta.tanda_numero);
+      if (i < 0) return;
+      // Un reenvío posterior ya pudo re-solicitar esta tanda: no pisarlo con
+      // el resultado de un correo viejo.
+      if ((arr[i].envio || {}).status !== "encolado") return;
+      arr[i].envio = ok
+        ? { ...(arr[i].envio || {}), status: "enviado",
+            at: admin.firestore.Timestamp.now(), error: null }
+        : { ...(arr[i].envio || {}), status: "fallo",
+            at: admin.firestore.Timestamp.now(), error: String(errorMsg || "Fallo de envío") };
+      tx.update(ref, { "entrega.tandas": arr });
+    });
+  } catch (e) {
+    console.error("[onMailQueued] no se pudo espejar la nota de entrega parcial:", e);
+  }
+}
+
 module.exports = onDocumentWritten(
   {
     document: "mail_queue/{mailId}",
@@ -144,6 +176,7 @@ module.exports = onDocumentWritten(
         error:    admin.firestore.FieldValue.delete(),
       });
       await mirrorAcuseDevolucion(after, true, null);
+      await mirrorNotaTanda(after, true, null);
       await mirrorAvisoFacturacion(after, true, null);
     } catch (err) {
       console.error("Error enviando correo encolado:", err);
@@ -174,6 +207,7 @@ module.exports = onDocumentWritten(
       // Solo el fallo TERMINAL se espeja: un transitorio en reintento aún
       // puede terminar en 'enviado'.
       await mirrorAcuseDevolucion(after, false, err?.message || err);
+      await mirrorNotaTanda(after, false, err?.message || err);
       await mirrorAvisoFacturacion(after, false, err?.message || err);
     }
   }

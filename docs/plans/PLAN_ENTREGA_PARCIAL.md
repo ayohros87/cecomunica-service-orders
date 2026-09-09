@@ -203,10 +203,30 @@ el caso y elige la puerta. El cron solo *lista*.
 - `entregaTandasAppendOnly()` en `firestore.rules`
 - contador "6 de 10 entregados" en la fila y en "Ver entrega"
 
-**F2 — El papel de la tanda**
-- nota de entrega parcial numerada `{ordenId}-E{n}`, imprimible y con copia al
-  cliente, y firma en tablet — reusando la maquinaria de acuses de devolución
-  (`firmas_tablet`, cola de correo, `emailRenderer`)
+**F2 — El papel de la tanda** ✅ hecha 2026-09-09
+- documento imprimible `{ordenId}-E{n}` en pestaña nueva (sin PDF ni servidor),
+  calcado del acuse de devolución. Dice las DOS cosas: lo que se llevó hoy y
+  **lo que queda en el taller** — la segunda es la pregunta con la que el
+  cliente se va del mostrador.
+- copia por correo con el mismo circuito del acuse: la UI marca
+  `entrega.tandas[].envio = {status:'solicitado', to}`, `onOrdenEntregada`
+  reclama en transacción y encola (`lib/notaTandaEntrega.js`), `onMailQueued`
+  espeja el resultado real del SMTP. El front nunca escribe en `mail_queue`.
+- se ofrece el papel justo después de registrar la tanda (el cliente está
+  parado ahí), y las notas viven además en **Ver entrega** — el único sitio
+  alcanzable cuando la orden ya cerró.
+
+Nota: el envío de tandas se procesa en `onOrdenEntregada` y NO en un trigger
+propio, para no sumar un séptimo `onDocumentWritten` sobre
+`ordenes_de_servicio`. Corre ANTES del corte de "solo la transición a
+ENTREGADO": una tanda ocurre con la orden en COMPLETADO, así que detrás de ese
+corte el correo no saldría nunca.
+
+Pendiente de F2: **firma en tablet** para la tanda. Hoy se firma en el canvas
+de la hoja, que es lo que ya hacía la entrega completa antes de tener tablet.
+El mecanismo (`firmas_tablet` + `/firmar/tablet.html`) existe pero vive privado
+dentro del IIFE de `ordenes-flujo.js`; sacarlo a un módulo compartido es el
+trabajo real, y conviene hacerlo cuando se toque también el acuse.
 
 **F3 — Válvula y bandeja de casos viejos** ✅ hecha 2026-09-09
 - estado de pool `no_retirado` (label, chip violeta, cola propia en Inventario)

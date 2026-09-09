@@ -48,20 +48,270 @@
   // Historial de tandas ya entregadas — el operador tiene que poder ver qué
   // se llevaron antes sin salir de la hoja (la pregunta del mostrador es
   // siempre "¿y qué me falta?").
+  const numeroDe = (ordenId, t) => t.numero || `${ordenId}-E${t.n || '?'}`;
+
+  const fechaLarga = (ts) => {
+    const d = ts?.toDate ? ts.toDate() : (ts instanceof Date ? ts : null);
+    return d ? d.toLocaleString('es-PA', {
+      day: 'numeric', month: 'long', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }) : '';
+  };
+
+  // Estado REAL del correo, no "se pidió el envío": lo espeja onMailQueued
+  // desde el resultado del SMTP. Misma paleta que el chip del acuse.
+  function chipEnvio(envio) {
+    const st = envio?.status || 'sin_enviar';
+    if (st === 'enviado') {
+      return `<span class="chip-estado" style="background:#e9f7f0;color:#067647;" title="Copia enviada a ${esc(envio.to || '')}">✓ Enviada al cliente</span>`;
+    }
+    if (st === 'solicitado' || st === 'encolado') {
+      return `<span class="chip-estado" style="background:#eef2ff;color:#4338ca;" title="En cola de envío${envio?.to ? ` hacia ${esc(envio.to)}` : ''}">Enviando…</span>`;
+    }
+    if (st === 'fallo') {
+      return `<span class="chip-estado" style="background:#fee2e2;color:#b91c1c;" title="${esc(envio?.error || 'El envío falló')}">⚠ Falló el envío</span>`;
+    }
+    return '';
+  }
+
+  // Tarjeta de una tanda ya entregada. Vive en DOS sitios a propósito: en esta
+  // hoja (mientras quedan equipos) y en "Ver entrega" (para siempre). Sin lo
+  // segundo, al cerrarse la orden las notas parciales se volverían
+  // irrecuperables — y son justo el papel que el cliente puede venir a pedir.
+  function tarjetaTanda(ordenId, t) {
+    const numero = numeroDe(ordenId, t);
+    const seriales = (t.equipos || []).map(x => x.serial || '—').join(', ');
+    const st = t.envio?.status;
+    const enCamino = st === 'solicitado' || st === 'encolado';
+    return `
+      <div class="ep-tanda" data-numero="${esc(numero)}"
+           style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:var(--surface-2,#F8FAFC);">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12.5px;">
+          <b style="font-family:var(--font-mono,monospace);">${esc(numero)}</b>
+          <span style="color:var(--fg-3);">${esc(fechaLarga(t.fecha))}</span>
+          <span style="color:var(--fg-2);">· ${esc(t.receptor_nombre || '—')}</span>
+          <span class="ep-chip-envio">${chipEnvio(t.envio)}</span>
+        </div>
+        <div style="font-family:var(--font-mono,monospace);font-size:12px;color:var(--fg-2);margin:3px 0 6px;">${esc(seriales)}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary ep-doc" data-numero="${esc(numero)}"
+                  style="height:26px;font-size:12px;" title="Abre la nota en una pestaña nueva, lista para imprimir">Ver / Imprimir</button>
+          <button type="button" class="btn btn-secondary ep-enviar" data-numero="${esc(numero)}"
+                  style="height:26px;font-size:12px;"${enCamino ? ' disabled' : ''}>${st === 'enviado' || st === 'fallo' ? 'Reenviar al cliente' : 'Enviar al cliente'}</button>
+        </div>
+      </div>`;
+  }
+
   function bloqueTandas(orden) {
     const previas = EntregaTandas.tandas(orden);
     if (!previas.length) return '';
-    const filas = previas.map(t => {
-      const f = t.fecha?.toDate ? t.fecha.toDate().toLocaleDateString('es-PA') : '';
-      const seriales = (t.equipos || []).map(x => x.serial || '—').join(', ');
-      return `<li style="margin-bottom:3px;"><b>${esc(t.numero || ('E' + t.n))}</b>${f ? ' · ' + esc(f) : ''}
-                · ${esc(t.receptor_nombre || '—')} · <span style="font-family:var(--font-mono,monospace);">${esc(seriales)}</span></li>`;
-    }).join('');
     return `
-      <div style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:12px;background:var(--surface-2,#F8FAFC);">
+      <div style="margin-bottom:12px;">
         <div style="font-size:12px;font-weight:600;color:var(--fg-2);margin-bottom:4px;">Ya entregado</div>
-        <ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--fg-2);">${filas}</ul>
+        ${previas.map(t => tarjetaTanda(orden.ordenId, t)).join('')}
       </div>`;
+  }
+
+  // ── Documento imprimible de la tanda ──────────────────────────────────
+  // Se renderiza en el navegador, en una pestaña nueva lista para Ctrl+P —
+  // sin PDF ni servidor, igual que el acuse de devolución. El CONTENIDO
+  // espeja el correo que arma functions/src/lib/notaTandaEntrega.js: si
+  // cambias columnas o la leyenda aquí, cámbialas también allá.
+  const LEYENDA_TANDA =
+    'Esta nota deja constancia de la entrega de los equipos listados arriba. ' +
+    'Los equipos que aún no se retiran permanecen en nuestro taller bajo la ' +
+    'misma orden de servicio, que sigue abierta hasta que se entregue el ' +
+    'último. La entrega de cada tanda se documenta por separado.';
+
+  function _docNotaTandaHtml(orden, t) {
+    const ordenId = orden.ordenId;
+    const numero = numeroDe(ordenId, t);
+    const fecha = fechaLarga(t.fecha);
+    const equipos = t.equipos || [];
+    // Lo que queda DESPUÉS de esta tanda. La nota sin esto contesta media
+    // pregunta: el cliente se va sabiendo qué se llevó pero no qué le falta.
+    const previas = EntregaTandas.tandas(orden);
+    const corte = previas.indexOf(t);
+    const fuera = new Set();
+    for (const p of (corte >= 0 ? previas.slice(0, corte + 1) : previas)) {
+      for (const u of (p.equipos || [])) {
+        if (u?.id) fuera.add(String(u.id));
+        const s = String(u?.serial || '').trim().toUpperCase();
+        if (s) fuera.add('s:' + s);
+      }
+    }
+    const quedan = EntregaTandas.equiposActivos(orden).filter(e => {
+      if (e.id && fuera.has(String(e.id))) return false;
+      const s = String(e.numero_de_serie || e.serial || '').trim().toUpperCase();
+      return !(s && fuera.has('s:' + s));
+    });
+
+    const filas = equipos.map(u => `
+      <tr><td class="mono">${esc(u.serial || '—')}</td><td>${esc(u.modelo || '—')}</td></tr>`).join('');
+    const filasPend = quedan.map(e => `
+      <tr><td class="mono">${esc(e.numero_de_serie || e.serial || '—')}</td><td>${esc(e.modelo || '—')}</td></tr>`).join('');
+
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+      <title>Nota de entrega ${esc(numero)}</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; }
+        body { background: #e8e6e0; font: 14px/1.55 'Source Serif 4', Georgia, 'Times New Roman', serif; color: #26221C; }
+        .toolbar { display: flex; gap: 10px; align-items: center; justify-content: flex-end; max-width: 780px; margin: 0 auto; padding: 12px 16px 0; font-family: 'Segoe UI', Arial, sans-serif; }
+        .toolbar button { font: 600 13.5px 'Segoe UI', Arial, sans-serif; border: 0; border-radius: 8px; cursor: pointer; padding: 9px 16px; background: #0B2A47; color: #fff; }
+        .hoja { background: #FDFCF8; max-width: 780px; margin: 12px auto 40px; padding: 44px 52px; box-shadow: 0 8px 30px rgba(20,20,30,.18); }
+        .memb { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; border-bottom: 2px solid #26221C; padding-bottom: 14px; flex-wrap: wrap; }
+        .memb img { height: 42px; }
+        .memb .datos-emp { font: 10.5px/1.5 'Segoe UI', Arial, sans-serif; color: #5C554A; margin-top: 4px; }
+        .docnum { text-align: right; font-size: 12.5px; color: #5C554A; }
+        .docnum b { display: block; font-family: Consolas, monospace; font-size: 14px; color: #26221C; }
+        h1 { font-size: 18px; text-align: center; margin: 26px 0 4px; letter-spacing: .02em; }
+        .subt { text-align: center; font-size: 12.5px; color: #5C554A; margin-bottom: 22px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; font-size: 13px; margin-bottom: 20px; }
+        .grid .lbl { display: block; font: 10.5px 'Segoe UI', Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #5C554A; }
+        h2 { font: 600 13px 'Segoe UI', Arial, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: #5C554A; margin: 20px 0 6px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+        th { font: 10.5px 'Segoe UI', Arial, sans-serif; letter-spacing: .07em; text-transform: uppercase; color: #5C554A; text-align: left; padding: 6px 10px; border-bottom: 1.5px solid #26221C; }
+        td { padding: 8px 10px; border-bottom: 1px solid #E4DFD2; vertical-align: top; }
+        td.mono { font-family: Consolas, monospace; font-size: 12px; white-space: nowrap; }
+        .legal { font-size: 11.5px; color: #5C554A; border-left: 2px solid #E4DFD2; padding-left: 14px; margin: 18px 0 34px; font-style: italic; }
+        .firmas { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+        .f-col { text-align: center; font-size: 12px; }
+        .f-line { border-bottom: 1px solid #26221C; min-height: 58px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 6px; }
+        .f-line img { max-height: 56px; max-width: 100%; }
+        .f-name { font-weight: 600; }
+        .f-role { font: 10.5px 'Segoe UI', Arial, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: #5C554A; }
+        .pie { margin-top: 34px; padding-top: 10px; border-top: 1px solid #E4DFD2; font: 10.5px 'Segoe UI', Arial, sans-serif; color: #5C554A; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        @media print { body { background: #fff; } .toolbar { display: none; } .hoja { box-shadow: none; margin: 0; max-width: none; padding: 6mm 4mm; } }
+      </style></head>
+      <body>
+        <div class="toolbar"><button onclick="window.print()">🖨 Imprimir</button></div>
+        <div class="hoja">
+          <div class="memb">
+            <div>
+              <img src="${location.origin}/brand/logo-lockup-horizontal.svg" alt="C Comunica">
+              <div class="datos-emp">C COMUNICA, S.A. · RUC 32977-27-249966 DV 39 · Panamá<br>ventas@cecomunica.com · +507 279-5570</div>
+            </div>
+            <div class="docnum">Nota de entrega N.º <b>${esc(numero)}</b>${esc(fecha)}</div>
+          </div>
+          <h1>Nota de entrega parcial</h1>
+          <p class="subt">Constancia de entrega de una parte de los equipos de la orden</p>
+          <div class="grid">
+            <div><span class="lbl">Cliente</span><b>${esc(orden.cliente_nombre || '—')}</b></div>
+            <div><span class="lbl">Orden de servicio</span><b>${esc(ordenId)}</b></div>
+            <div><span class="lbl">Entregado por</span><b>Mostrador — C Comunica</b></div>
+            <div><span class="lbl">Equipos en esta entrega</span><b>${equipos.length}</b></div>
+          </div>
+          <h2>Se lleva hoy (${equipos.length})</h2>
+          <table><thead><tr><th>Serial</th><th>Modelo</th></tr></thead><tbody>${filas}</tbody></table>
+          ${quedan.length ? `
+            <h2>Queda${quedan.length === 1 ? '' : 'n'} en el taller (${quedan.length})</h2>
+            <table><thead><tr><th>Serial</th><th>Modelo</th></tr></thead><tbody>${filasPend}</tbody></table>`
+            : '<h2>Nada pendiente</h2><p style="font-size:12.5px;">Con esta entrega no queda ningún equipo en el taller.</p>'}
+          ${t.notas ? `<h2>Notas</h2><p style="font-size:12.5px;">${esc(t.notas)}</p>` : ''}
+          <p class="legal">${esc(LEYENDA_TANDA)}</p>
+          <div class="firmas">
+            <div class="f-col">
+              <div class="f-line">${t.firma_url ? `<img src="${esc(t.firma_url)}" alt="Firma de ${esc(t.receptor_nombre || '')}">` : ''}</div>
+              <div class="f-name">${esc(t.receptor_nombre || '—')}</div>
+              ${t.receptor_cedula ? `<div style="font-size:11.5px;color:#5C554A;">Cédula ${esc(t.receptor_cedula)}</div>` : ''}
+              ${t.sin_id ? `<div style="font-size:11px;color:#5C554A;">Sin identificación — ${esc(t.sin_id_motivo || '')}</div>` : ''}
+              <div class="f-role">Recibe — por el cliente</div>
+            </div>
+            <div class="f-col">
+              <div class="f-line"></div>
+              <div class="f-name">Mostrador C Comunica</div>
+              <div class="f-role">Entrega — ${esc(fecha)}</div>
+            </div>
+          </div>
+          <div class="pie">
+            <span>Generado por el sistema de órdenes de servicio</span>
+            <span>${equipos.length} equipo(s) entregado(s) · ${esc(numero)}</span>
+          </div>
+        </div>
+      </body></html>`;
+  }
+
+  async function _ordenDe(ordenId) {
+    return (APP?.state?.orders || []).find(o => o.ordenId === ordenId)
+      || await OrdenesService.getOrder(ordenId);
+  }
+
+  async function abrirDocTanda(ordenId, numero) {
+    const orden = await _ordenDe(ordenId);
+    const t = EntregaTandas.tandas(orden).find(x => numeroDe(ordenId, x) === numero);
+    if (!t) { Toast.show('Esa entrega ya no está en la orden.', 'bad'); return; }
+    const w = window.open('', '_blank');
+    if (!w) { Toast.show('El navegador bloqueó la pestaña — permite ventanas emergentes.', 'bad'); return; }
+    w.document.write(_docNotaTandaHtml({ ...orden, ordenId }, t));
+    w.document.close();
+  }
+
+  // ── Copia al cliente ──────────────────────────────────────────────────
+  // Solo marca la solicitud; el correo lo arma y lo encola el backend, y
+  // onMailQueued espeja el resultado real. Sirve para el primer envío y para
+  // el reenvío tras un fallo, también con la orden ya cerrada.
+  async function enviarNotaTanda(ordenId, numero, onHecho) {
+    const orden = await _ordenDe(ordenId);
+    const t = EntregaTandas.tandas(orden).find(x => numeroDe(ordenId, x) === numero);
+    if (!t) { Toast.show('Esa entrega ya no está en la orden.', 'bad'); return; }
+
+    let prellenado = t.envio?.to || '';
+    if (!prellenado && orden.cliente_id) {
+      try {
+        const c = await ClientesService.getCliente(orden.cliente_id);
+        prellenado = (c?.email_acuses || c?.email || '').trim().toLowerCase();
+      } catch (_) { /* el operador lo teclea */ }
+    }
+
+    await Modal.sheet({
+      title: `Enviar nota ${numero}`, icon: 'mail', size: 'sm',
+      html: `
+        <p style="margin:0 0 10px;font-size:13px;color:var(--fg-2,#374151);">
+          El cliente recibe la nota completa — lo que se llevó, lo que queda en el taller y la firma.
+        </p>
+        <label class="form-label" for="epMail">Correo del cliente</label>
+        <input type="email" id="epMail" class="form-input" value="${esc(prellenado)}" placeholder="cliente@empresa.com">`,
+      buttons: [
+        { action: 'cerrar', label: 'Cancelar' },
+        { action: 'enviar', label: 'Enviar', primary: true, icon: 'send' },
+      ],
+      onAction: async (a, root) => {
+        if (a !== 'enviar') return null;
+        const to = (root.querySelector('#epMail').value || '').trim().toLowerCase();
+        const botones = root.querySelectorAll('button');
+        botones.forEach(b => { b.disabled = true; });
+        try {
+          await OrdenesService.solicitarEnvioTanda(ordenId, numero, to);
+          Toast.show('📧 La copia va en camino — el chip cambia solo cuando salga.', 'ok');
+          if (onHecho) onHecho(to);
+          return 'ok';
+        } catch (err) {
+          Toast.show('❌ ' + (err.message || 'No se pudo pedir el envío'), 'bad');
+          botones.forEach(b => { b.disabled = false; });
+          return false;
+        }
+      },
+    });
+  }
+
+  // Cablea los botones de las tarjetas de tanda. Lo usan esta hoja y
+  // "Ver entrega" (ordenes-events.js), que pinta las mismas tarjetas.
+  function cablearTandas(root, ordenId) {
+    root.addEventListener('click', async (ev) => {
+      const doc = ev.target.closest('.ep-doc');
+      if (doc) { abrirDocTanda(ordenId, doc.dataset.numero); return; }
+      const env = ev.target.closest('.ep-enviar');
+      if (!env) return;
+      const numero = env.dataset.numero;
+      await enviarNotaTanda(ordenId, numero, () => {
+        // Optimista: el snapshot en vivo no repinta una hoja ya montada.
+        const tarjeta = root.querySelector(`.ep-tanda[data-numero="${CSS.escape(numero)}"]`);
+        if (!tarjeta) return;
+        tarjeta.querySelector('.ep-chip-envio').innerHTML = chipEnvio({ status: 'solicitado' });
+        const b = tarjeta.querySelector('.ep-enviar');
+        if (b) { b.disabled = true; b.textContent = 'Enviando…'; }
+      });
+    });
   }
 
   async function abrir(ordenId) {
@@ -184,6 +434,8 @@
 
         pad = FirmaPad.mount(root.querySelector('#epFirma'), { alto: 140 });
         root.querySelector('#epLimpiarFirma').addEventListener('click', () => pad && pad.clear());
+        // Ver / Imprimir / Enviar de las tandas ya registradas.
+        cablearTandas(root, ordenId);
         refrescar();
       },
       onAction: async (action, root) => {
@@ -241,7 +493,7 @@
           }
 
           Toast.show(`✅ Entrega ${r.numero} registrada · ${plural(r.pendientes, 'equipo queda', 'equipos quedan')} en el taller`, 'ok');
-          return 'ok';
+          return { accion: 'ok', numero: r.numero };
         } catch (err) {
           console.error('[ordenes-entrega-parcial]', err);
           Toast.show('❌ ' + (err.message || 'No se pudo registrar la entrega'), 'bad');
@@ -254,8 +506,37 @@
     // Modal.sheet no tiene hook de cierre: la promesa resuelve cuando la hoja
     // se fue, y ahí es cuando el pad suelta sus listeners de document/window.
     if (pad) { pad.destroy(); pad = null; }
+
+    // El cliente está PARADO en el mostrador esperando su papel: ofrecerlo
+    // aquí y no hacerle buscar la hoja otra vez es la diferencia entre que la
+    // nota exista y que se use.
+    if (resultado && resultado.accion === 'ok') await _ofrecerPapel(ordenId, resultado.numero);
     return resultado;
   }
 
+  async function _ofrecerPapel(ordenId, numero) {
+    await Modal.sheet({
+      title: `Entrega ${numero} registrada`, icon: 'check-circle-2', size: 'sm',
+      html: `
+        <p style="margin:0;font-size:13.5px;color:var(--fg-2,#374151);">
+          ¿Le das el papel al cliente? Puedes hacerlo ahora o después, desde
+          <b>Ver entrega</b> de la orden.
+        </p>`,
+      buttons: [
+        { action: 'cerrar', label: 'Ahora no' },
+        { action: 'enviar', label: 'Enviar por correo', icon: 'mail' },
+        { action: 'imprimir', label: 'Imprimir', primary: true, icon: 'printer' },
+      ],
+      onAction: async (a) => {
+        if (a === 'imprimir') { await abrirDocTanda(ordenId, numero); return 'imprimir'; }
+        if (a === 'enviar') { await enviarNotaTanda(ordenId, numero); return 'enviar'; }
+        return null;
+      },
+    });
+  }
+
   window.abrirEntregaParcial = abrir;
+  // Lo que necesita "Ver entrega" (ordenes-events.js) para mostrar las notas
+  // parciales cuando la orden ya cerró y esta hoja no se puede abrir.
+  window.EntregaParcialDoc = { tarjetaTanda, cablearTandas, abrirDocTanda, enviarNotaTanda };
 })();

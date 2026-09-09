@@ -720,6 +720,22 @@ function mostrarEntregaRecepcion(ordenId) {
        </div>`
     : '';
 
+  // Entregas PARCIALES (entrega.tandas[]): cada tanda tiene su nota numerada,
+  // imprimible y reenviable. Vive aquí porque es el único sitio que sigue
+  // alcanzable cuando la orden ya cerró — la hoja de entrega parcial
+  // desaparece en cuanto no quedan equipos pendientes, y con ella se irían
+  // los papeles que el cliente puede venir a pedir dentro de seis meses.
+  // Las tarjetas las pinta el módulo diferido; si aún no cargó, se pinta un
+  // resumen sin botones y se rellena al llegar (abajo, en onMount).
+  const tandas = (typeof EntregaTandas !== 'undefined') ? EntregaTandas.tandas(o) : [];
+  const tandasHtml = tandas.length ? `
+    <div style="margin-top:14px;border:1px solid var(--line,#e5e7eb);border-radius:10px;padding:10px 12px;">
+      <div style="display:flex;align-items:center;gap:6px;font-weight:600;margin-bottom:6px;">
+        <i data-lucide="package-check"></i> Entregas parciales (${tandas.length})
+      </div>
+      <div id="epTandasMount"><div class="muted">Cargando notas…</div></div>
+    </div>` : '';
+
   const titulo = tieneCierreVisita ? 'Cierre de visita' : (tieneEntrega ? 'Entrega' : 'Recepción');
   const footerBtns = [
     tieneEntrega   ? `<button class="btn btn-primary" data-ver-comprobante="1"><i data-lucide="printer"></i> Imprimir entrega</button>` : '',
@@ -734,12 +750,25 @@ function mostrarEntregaRecepcion(ordenId) {
         ${recepcionHtml}
         ${entregaHtml}
         ${cierreHtml}
+        ${tandasHtml}
         ${equiposHtml}`,
     footerHtml: `
         ${footerBtns}`,
     onMount: (root, api) => {
       overlay = root; sheetApi = api;
       root.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) api.close(null); });
+      // Las tarjetas de tanda las sabe pintar el módulo de entrega parcial:
+      // se carga en diferido para no traer su documento imprimible a cada
+      // orden que solo se consulta.
+      const mount = root.querySelector('#epTandasMount');
+      if (!mount || !tandas.length) return;
+      CargaDiferida.entregaParcial().then(() => {
+        mount.innerHTML = tandas.map(t => EntregaParcialDoc.tarjetaTanda(ordenId, t)).join('');
+        EntregaParcialDoc.cablearTandas(mount, ordenId);
+        if (window.APP?.utils?.lucideRefresh) APP.utils.lucideRefresh(mount);
+      }).catch(() => {
+        mount.innerHTML = '<div class="muted">No se pudieron cargar las notas — recarga la página.</div>';
+      });
     },
   });
 

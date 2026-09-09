@@ -1135,7 +1135,8 @@ function botonesFlujo(ordenId, estado, ordenData) {
       || (estado || "").toUpperCase() === "CERRADA (ENTRADA)") {
     const tieneEnt = !!(od.firma_url || od.receptor_nombre || od.fecha_entrega || od.sin_id || od.identificacion_path || od.identificacion_url);
     const tieneRec = !!(od.firma_recepcion_url || od.receptor_recepcion_nombre || od.fecha_recepcion);
-    if (tieneEnt || tieneRec) {
+    const tieneTan = typeof EntregaTandas !== 'undefined' && EntregaTandas.tandas(od).length > 0;
+    if (tieneEnt || tieneRec || tieneTan) {
       const label = tieneEnt ? 'Ver entrega' : 'Ver recepción';
       html += `<button class="btn-flujo btn-flujo--ver-entrega" title="${label}" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> ${label}</button>`;
     }
@@ -1193,7 +1194,11 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   // para no duplicarlo.
   const tieneRecepcion = !!(o.firma_recepcion_url || o.receptor_recepcion_nombre || o.fecha_recepcion);
   const tieneEntrega   = !!(o.firma_url || o.receptor_nombre || o.fecha_entrega || o.sin_id || o.identificacion_path || o.identificacion_url);
-  if (!estadoUpper.includes("ENTREGAD") && (tieneRecepcion || tieneEntrega)) {
+  // Una entrega PARCIAL también tiene comprobante que consultar: sus notas
+  // numeradas viven dentro de "Ver entrega" y sin esto una orden que solo
+  // tiene tandas (aún sin entrega final) no tendría cómo llegar a ellas.
+  const tieneTandas = typeof EntregaTandas !== 'undefined' && EntregaTandas.tandas(o).length > 0;
+  if (!estadoUpper.includes("ENTREGAD") && (tieneRecepcion || tieneEntrega || tieneTandas)) {
     menuItems.unshift({
       icon: '<i data-lucide="package-check"></i>',
       label: tieneEntrega ? "Ver entrega" : "Ver recepción",
