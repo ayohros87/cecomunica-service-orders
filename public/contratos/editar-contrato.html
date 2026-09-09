@@ -143,12 +143,13 @@
           <div class="form-grid-3">
             <div class="form-field">
               <label class="form-label" for="tipo_contrato">Tipo de contrato <span class="req"></span></label>
+              <!-- 2026-09-09 (Alberto): solo Alquiler o Propio. Reemplazo, Demo y
+                   Temporal no se editan aquí (se crean y viven en el Centro). Si el
+                   contrato abierto es de otro tipo (p. ej. Servicio), el JS agrega
+                   ese tipo como opción actual para no cambiarlo sin querer. -->
               <select class="form-select" id="tipo_contrato" required>
                 <option value="ALQ">Alquiler</option>
                 <option value="PROP">Propio</option>
-                <option value="REEMP">Reemplazo</option>
-                <option value="DEMO">Demo</option>
-                <option value="TEMP">Temporal</option>
               </select>
             </div>
 
@@ -289,7 +290,7 @@
 
   <script src="../js/services/cargosService.js" defer></script>
   <script src="../js/pages/nc-cargos.js" defer></script>
-  <script src="../js/pages/editar-contrato.js?v=fk7" defer></script>
+  <script src="../js/pages/editar-contrato.js?v=fk8" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

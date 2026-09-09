@@ -71,8 +71,29 @@ async function cargarContrato() {
 
   // 4) Poblar formulario
   document.getElementById("cliente_nombre").value = c.cliente_nombre || "";
-  document.getElementById("tipo_contrato").value = c.codigo_tipo || "";
-  document.getElementById("accion").value = c.accion || "";
+  // Tipo: el select solo ofrece Alquiler/Propio (2026-09-09). Si el contrato es
+  // de otro tipo (Servicio, Temporal…) se agrega como opción actual: antes
+  // "SERV" no casaba con nada, el select caía en Alquiler y al guardar el
+  // contrato cambiaba de tipo en silencio.
+  const NOMBRES_TIPO = { SERV: "Servicio", ALQ: "Alquiler", PROP: "Propio", REEMP: "Reemplazo", DEMO: "Demo", TEMP: "Temporal" };
+  const selTipo = document.getElementById("tipo_contrato");
+  if (c.codigo_tipo && ![...selTipo.options].some(o => o.value === c.codigo_tipo)) {
+    const o = document.createElement("option");
+    o.value = c.codigo_tipo; o.textContent = `${NOMBRES_TIPO[c.codigo_tipo] || c.tipo_contrato || c.codigo_tipo} (actual)`;
+    selTipo.prepend(o);
+  }
+  selTipo.value = c.codigo_tipo || "";
+  // Acción: se decide al crear el contrato (Nuevo, Renovación, Adición…) y no
+  // se cambia editando — el select queda fijo en la acción con la que nació.
+  const selAccion = document.getElementById("accion");
+  if (c.accion && ![...selAccion.options].some(o => o.value === c.accion)) {
+    const o = document.createElement("option");
+    o.value = c.accion; o.textContent = c.accion;
+    selAccion.append(o);
+  }
+  selAccion.value = c.accion || "";
+  selAccion.disabled = true;
+  selAccion.title = "La acción se define al crear el contrato y no se cambia al editarlo";
   document.getElementById("renovacion_sin_equipo").checked = !!c.renovacion_sin_equipo;
   refreshRenovacionEditorUI();
   document.getElementById("estado").value = c.estado || "";
@@ -339,7 +360,7 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
   const actualizacion = ContratosService.updateContrato(contratoDocId, {
     ...reaprobacion,
     codigo_tipo: document.getElementById("tipo_contrato").value,
-    tipo_contrato: document.getElementById("tipo_contrato").selectedOptions[0].text,
+    tipo_contrato: (document.getElementById("tipo_contrato").selectedOptions[0]?.text || "").replace(/ \(actual\)$/, ""),
     accion: accionSeleccionada,
     renovacion_sin_equipo: renovacionSinEquipo,
     renovacion_refurbished_componentes: renovacionRefurbishedComponentes,
