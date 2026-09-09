@@ -321,6 +321,29 @@ const GestionesService = {
       'Anexo firmado por el cliente registrado — el sistema aplica las líneas al contrato y avisa a Bodega.');
   },
 
+  // Cierra un anexo de REGULARIZACIÓN sin mandarlo a firmar (2026-09-09,
+  // Alberto): "solo quiere dejar el sistema actualizado, sin enviar a firma".
+  // Son radios que el cliente tiene desde hace años; el anexo no le pide nada
+  // nuevo. Llega al mismo estado que la firma (pendiente_bodega +
+  // cierre.firma) porque es lo que dispara B3 en onGestionWrite, y `sin_firma`
+  // deja constancia de que NUNCA hubo firma del cliente: quién, cuándo y por
+  // qué. Solo para regularizaciones — un aumento con radios nuevos no.
+  async cerrarRegularizacionSinFirma(gestionId, motivo) {
+    const user = firebase.auth().currentUser;
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      estado: 'pendiente_bodega',
+      'cierre.firma': true,
+      sin_firma: {
+        motivo: (motivo || '').trim(),
+        por_uid: user?.uid || null,
+        por_email: user?.email || null,
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+    });
+    await this.registrarEvento(gestionId, 'firma',
+      `Regularización cerrada SIN firma del cliente (solo se pone al día el sistema)${(motivo || '').trim() ? ': ' + motivo.trim() : ''}. Las líneas se aplican al contrato igual que con un anexo firmado.`);
+  },
+
   // Bodega asigna los seriales del AUMENTO.
   async asignarAumento(gestionId, seriales) {
     await firebase.firestore().collection(this.COL).doc(gestionId).update({

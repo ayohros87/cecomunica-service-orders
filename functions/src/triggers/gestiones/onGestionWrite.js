@@ -769,11 +769,28 @@ module.exports = onDocumentWritten(
             for (const s of a.regulariza_seriales) {
               if (!s.pool_doc_id) continue;
               try {
-                await db.collection("equipos_pool").doc(s.pool_doc_id).update({
+                const ref = db.collection("equipos_pool").doc(s.pool_doc_id);
+                // De quién es el equipo: lo dice la LÍNEA del anexo, no la
+                // ficha (2026-09-09, Alberto). Este amarre escribe el pool
+                // directo — no pasa por onSerialWrite — así que la corrección
+                // se hace aquí, con el mismo criterio y el mismo rastro.
+                const mod = s.modalidad === "propio" ? "cliente" : s.modalidad === "alquiler" ? "cecomunica" : null;
+                const antes = mod ? (await ref.get()).get("propiedad") || null : null;
+                await ref.update({
                   "asignacion.contrato_doc_id": a.contrato_doc_id,
                   "asignacion.contrato_id": a.contrato_id || a.contrato_doc_id,
                   "asignacion.gestion_doc_id": gid,
+                  ...(mod ? { propiedad: mod } : {}),
                 });
+                if (mod && antes && antes !== mod) {
+                  await ref.collection("movimientos").add({
+                    at: admin.firestore.FieldValue.serverTimestamp(),
+                    por: "system", por_email: null,
+                    tipo: "correccion", de_estado: null, a_estado: null,
+                    ref: { tipo: "gestion", id: gid, label: gid },
+                    notas: `Propiedad corregida por la línea del anexo de regularización: ${antes} → ${mod}`,
+                  });
+                }
                 amarrados++;
               } catch (e) {
                 logger.warn("[onGestionWrite] amarre de regularización falló", { gid, serial: s.serial, message: e.message });

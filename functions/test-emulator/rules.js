@@ -328,6 +328,33 @@ async function main() {
   await assertSucceeds(as("administrador").doc("ordenes_de_servicio/oAumSinFirmaAdm").set(ENTREGADO, { merge: true }));
   ok("anexo: admin exento (override de casos excepcionales)");
 
+  // ── Cerrar la REGULARIZACIÓN sin firma del cliente (2026-09-09) ───────────
+  // Radios que el cliente tiene desde hace años: el anexo solo pone al día el
+  // sistema. Mismo destino que la firma, pero solo para regularizaciones, solo
+  // esos tres campos y con el uid de quien lo cierra.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const base = { tipo: "aumento", estado: "pendiente_firma", cliente_id: "x", deleted: false,
+      cierre: { aprobacion: true } };
+    for (const id of ["gRegA", "gRegB", "gRegC", "gRegD"]) {
+      await db.doc(`gestiones/${id}`).set({ ...base, aumento: { es_regularizacion: true, contrato_doc_id: "c1" } });
+    }
+    await db.doc("gestiones/gAumNormal").set({ ...base, aumento: { contrato_doc_id: "c1" } });
+  });
+  const cerrarSinFirma = (uid) => ({ estado: "pendiente_bodega", "cierre.firma": true,
+    sin_firma: { motivo: "equipos en campo desde 2021", por_uid: uid, por_email: uid + "@c.com" } });
+  await assertSucceeds(as("vendedor").doc("gestiones/gRegA").update(cerrarSinFirma("vendedor")));
+  ok("sin firma: el vendedor cierra la regularización (pendiente_firma → pendiente_bodega)");
+  await assertFails(as("vendedor").doc("gestiones/gAumNormal").update(cerrarSinFirma("vendedor")));
+  ok("sin firma: un aumento NORMAL sigue necesitando la firma del cliente");
+  await assertFails(as("vendedor").doc("gestiones/gRegB").update(cerrarSinFirma("otro")));
+  ok("sin firma: no se puede firmar el cierre a nombre de otro");
+  await assertFails(as("inventario").doc("gestiones/gRegC").update(cerrarSinFirma("inventario")));
+  ok("sin firma: bodega no cierra regularizaciones");
+  await assertFails(as("vendedor").doc("gestiones/gRegD").update({
+    ...cerrarSinFirma("vendedor"), "aumento.lineas": [{ modelo: "X", cantidad: 99, precio: 1 }] }));
+  ok("sin firma: no se cuelan cambios a las líneas en la misma escritura");
+
   // ── QC: los cuatro huecos de la auditoría del 2026-08-04 ──────────────────
   const COMPLETADO = "COMPLETADO (EN OFICINA)";
   const seedOrden = (id, data) => testEnv.withSecurityRulesDisabled(async (ctx) => {

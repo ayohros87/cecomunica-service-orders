@@ -867,6 +867,21 @@ service cloud.firestore {
           && request.resource.data.estado == "pendiente_bodega"
           && soloTocaG(["estado","cierre","anexo_firmado_path","anexo_firmado_at","anexo_firmado_por"]);
       }
+      // Cerrar un anexo de REGULARIZACIÓN sin mandarlo a firmar (2026-09-09,
+      // Alberto): el anexo solo pone al día el sistema con radios que el
+      // cliente ya tiene desde hace años — no hay nada nuevo que el cliente
+      // deba aceptar. Mismo destino que la firma (pendiente_bodega +
+      // cierre.firma, que es lo que dispara B3), con `sin_firma` diciendo
+      // quién lo cerró y por qué. SOLO para anexos de regularización: un
+      // aumento con radios nuevos sigue necesitando la firma del cliente.
+      function esRegularizacionSinFirmaGestion() {
+        return userRole() in ["administrador","gerente","vendedor","recepcion"]
+          && resource.data.estado == "pendiente_firma"
+          && request.resource.data.estado == "pendiente_bodega"
+          && resource.data.get("aumento", {}).get("es_regularizacion", false) == true
+          && request.resource.data.get("sin_firma", {}).get("por_uid", "") == request.auth.uid
+          && soloTocaG(["estado","cierre","sin_firma"]);
+      }
       // Vincular el enlace de firma digital del anexo.
       function esEnlaceFirmaGestion() {
         return userRole() in ["administrador","gerente","vendedor","recepcion"]
@@ -885,7 +900,8 @@ service cloud.firestore {
                     && request.resource.data.deleted == false;
       allow update: if isSignedIn() && (
                       esAprobacionGestion() || esAnulacionGestion() || esCartaGestion()
-                      || esFirmaAnexoGestion() || esEnlaceFirmaGestion() || esAsignacionGestion());
+                      || esFirmaAnexoGestion() || esRegularizacionSinFirmaGestion()
+                      || esEnlaceFirmaGestion() || esAsignacionGestion());
       allow delete: if false;
       // Linaje del reemplazo (espejo del patrón contratos/{cid}/mapeos):
       // append-only — onMapeoWrite generalizado los consume en la Ola 2.

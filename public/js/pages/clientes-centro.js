@@ -2381,10 +2381,15 @@ window.Centro = {
         ${g.anexo_firma_digital ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">
           ✓ Anexo firmado <b>digitalmente</b> por ${this.esc(g.anexo_firma_digital.firmante_nombre || '—')}
           (cédula ${this.esc(g.anexo_firma_digital.firmante_cedula || '—')})</p>` : ''}
+        ${g.sin_firma ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0;">✓ Regularización cerrada
+          <b>sin firma del cliente</b> por ${this.esc(g.sin_firma.por_email || '—')}${g.sin_firma.motivo ? ` — ${this.esc(g.sin_firma.motivo)}` : ''}</p>` : ''}
         ${g.estado === 'pendiente_firma' && this.puedeCrearGestion() ? `
           <div style="margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <button class="btn btn-primary cg-act"
               onclick="Centro.enviarFirmaAnexo('${this.esc(g.id)}')">Enviar anexo para firma digital</button>
+            ${a.es_regularizacion ? `<button class="btn btn-ghost cg-act"
+              title="Los equipos ya están con el cliente desde antes: el anexo solo pone al día el sistema"
+              onclick="Centro.cerrarRegSinFirma('${this.esc(g.id)}')">Cerrar sin firma (solo actualizar el sistema)</button>` : ''}
             ${g.firma_solicitud_estado === 'pendiente' ? '<span style="font-size:12px; color:var(--fg-3);">enlace enviado — esperando la firma del cliente</span>' : ''}
           </div>` : ''}
         ${g.firma_pendiente_validacion && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol) ? `
@@ -2561,6 +2566,28 @@ window.Centro = {
       Toast.show('Anexo firmado registrado — el sistema aplica las líneas y avisa a Bodega', 'ok');
       await this.recargarGestiones();   // el avance del trigger llega solo por la escucha en vivo
     } catch (e) { console.error(e); Toast.show('No se pudo subir el anexo', 'bad'); }
+  },
+
+  // Cerrar la regularización sin mandarla a firmar (2026-09-09, Alberto): son
+  // radios que el cliente tiene desde hace años y el anexo solo pone al día el
+  // sistema. Se pide el motivo porque queda en el expediente para siempre: es
+  // la única constancia de por qué ese anexo no lleva firma.
+  async cerrarRegSinFirma(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    if (!g || g.aumento?.es_regularizacion !== true) { Toast.show('Solo los anexos de regularización se cierran sin firma', 'warn'); return; }
+    const motivo = await Modal.prompt({
+      title: 'Cerrar sin firma del cliente',
+      confirmLabel: 'Cerrar y aplicar', multiline: true,
+      message: `Las líneas se aplican al contrato <b class="cg-mono">${this.esc(g.aumento.contrato_id || '')}</b> igual que
+        con un anexo firmado, pero <b>al cliente no se le envía nada</b>. Queda en el expediente quién lo cerró y por qué.
+        <br><br>Motivo (por ejemplo: “equipos en campo desde 2021, se pone al día el sistema”):`,
+    });
+    if (motivo === null) return;
+    try {
+      await GestionesService.cerrarRegularizacionSinFirma(gid, motivo);
+      Toast.show('Regularización cerrada — el sistema aplica las líneas al contrato', 'ok');
+      await this.recargarGestiones();   // el avance del trigger llega por la escucha en vivo
+    } catch (e) { console.error(e); Toast.show('No se pudo cerrar la regularización: ' + (e.message || e), 'bad'); }
   },
 
   async aprobarBajaGestion(gid) {
@@ -3261,8 +3288,9 @@ window.Centro = {
       cuerpo: `
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
         ${this._aumRegulariza
-          ? `El anexo formaliza equipos <b>ya en poder del cliente</b> que la renovación dejó sin línea —
-             <b>requiere la firma del cliente</b> y se aplica solo al firmarse.`
+          ? `El anexo formaliza equipos <b>ya en poder del cliente</b> que la renovación dejó sin línea.
+             Se aplica al firmarse; y si es solo poner al día el sistema —radios que el cliente tiene desde hace
+             años—, se puede <b>cerrar sin enviarlo a firma</b> desde el expediente, dejando el motivo.`
           : esPapel
           ? `La adenda agrega equipos <b>con vigencia propia</b> a un contrato que solo existe <b>en papel</b>:
              el período corre desde la entrega, el documento cita el número del contrato viejo y
