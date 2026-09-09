@@ -453,11 +453,19 @@ function abrirModalFacturaPendiente(orden, contrato) {
   });
 }
 
-window.entregarOrden = async function (ordenId) {
-  // Candado de QC: con control de calidad pendiente no se abre el modal de
-  // entrega (las rules además rechazan la transición). Al rol que puede
-  // ejecutar el QC se le abre directamente el checklist.
-  const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
+// Los cuatro candados que se corren ANTES de dejar salir un radio, en un
+// solo lugar: los comparten la entrega completa (entregarOrden) y la entrega
+// parcial por tandas (entregarParcialOrden). Vivían sueltos dentro de
+// entregarOrden, y al aparecer el segundo camino era cuestión de tiempo que
+// uno de los dos se quedara sin alguno.
+//
+// Devuelve true si se puede entregar. Si NO, ya dejó al operador frente a lo
+// que le falta (el checklist de QC, o la hoja que explica qué firma/factura
+// falta y cómo resolverla) — el llamador solo tiene que salirse.
+async function puedeEntregar(orden, ordenId) {
+  // Candado de QC: con control de calidad pendiente no se abre la entrega
+  // (las rules además rechazan la transición). Al rol que puede ejecutar el
+  // QC se le abre directamente el checklist.
   if (typeof OrdenesQC !== 'undefined' && OrdenesQC.qcPendiente(orden)) {
     const msg = OrdenesQC.qcCaducado(orden)
       ? 'El QC aprobado caducó: cambiaron los equipos de la orden. Hay que repetirlo.'
@@ -468,18 +476,39 @@ window.entregarOrden = async function (ordenId) {
     } else {
       Toast.show('⛔ ' + msg + ' (jefe de taller)', 'bad');
     }
-    return;
+    return false;
   }
   // Candado de firma del contrato (ver contratoSinFirmarParaEntrega arriba).
   const sinFirmar = await contratoSinFirmarParaEntrega(orden);
-  if (sinFirmar) { abrirModalFirmaPendiente(orden, sinFirmar); return; }
+  if (sinFirmar) { abrirModalFirmaPendiente(orden, sinFirmar); return false; }
   // Candado de firma del ANEXO (aumentos con la firma en paralelo — arriba).
   const anexoSinFirmar = await anexoSinFirmarParaEntrega(orden);
-  if (anexoSinFirmar) { abrirModalFirmaAnexoPendiente(orden, anexoSinFirmar); return; }
+  if (anexoSinFirmar) { abrirModalFirmaAnexoPendiente(orden, anexoSinFirmar); return false; }
   // Candado de factura de la venta (solo contratos "Propio" — ver arriba).
   const sinFactura = await contratoSinFacturaParaEntrega(orden);
-  if (sinFactura) { abrirModalFacturaPendiente(orden, sinFactura); return; }
+  if (sinFactura) { abrirModalFacturaPendiente(orden, sinFactura); return false; }
+  return true;
+}
+
+window.entregarOrden = async function (ordenId) {
+  const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
+  if (!(await puedeEntregar(orden, ordenId))) return;
   abrirModalEntrega(ordenId);
+};
+
+// Entrega PARCIAL — el cliente se lleva solo una tanda y la orden sigue
+// abierta. Mismos candados que la entrega completa: lo único que cambia es
+// que en vez del modal que CIERRA la orden se abre la hoja que registra la
+// tanda (domain/entregaTandas.js + ordenes-entrega-parcial.js, diferido).
+window.entregarParcialOrden = async function (ordenId) {
+  const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
+  if (!EntregaTandas.puedeEntregarParcial(orden)) {
+    Toast.show('No hay suficientes equipos pendientes para una entrega parcial.', 'warn');
+    return;
+  }
+  if (!(await puedeEntregar(orden, ordenId))) return;
+  await CargaDiferida.entregaParcial();
+  window.abrirEntregaParcial(ordenId);
 };
 
 // Cierre de una orden de ENTRADA (inspección de equipos devueltos): la

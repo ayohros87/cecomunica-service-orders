@@ -49,7 +49,10 @@
 <script defer src="../js/services/clientesService.js"></script>
 <!-- Predicados de pendiente: antes de ordenesService/senalesService/ordenes-qc, que delegan en él. -->
 <script defer src="../js/domain/pendientes.js?v=pen2"></script>
-<script defer src="../js/services/ordenesService.js?v=ser7"></script>
+<!-- Tandas de entrega parcial: lo usan ordenesService (la escritura),
+     ordenes-render (el contador de la fila) y ordenes-flujo (el despacho). -->
+<script defer src="../js/domain/entregaTandas.js?v=et1"></script>
+<script defer src="../js/services/ordenesService.js?v=ser8"></script>
 <!-- count() agregados para los chips/KPIs (mismos números que las señales
      del home) — auditoría M4/A8. -->
 <script type="module" src="../js/firebase-aggregates.js?v=agg1"></script>

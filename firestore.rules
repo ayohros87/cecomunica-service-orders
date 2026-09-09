@@ -629,6 +629,48 @@ service cloud.firestore {
                      in ["ENTREGADO AL CLIENTE", "CERRADA (VISITA)",
                          "CERRADA (DEVOLUCION)", "CERRADA (ENTRADA)"]));
       }
+      // ENTREGA PARCIAL por tandas (2026-09-09) — `entrega.tandas[]`. Una
+      // REPARACIÓN puede entregarse por partes: el cliente se lleva los radios
+      // listos y la orden sigue COMPLETADO hasta que salga el último (el cierre
+      // sigue siendo la transición a ENTREGADO de siempre). Cada tanda lleva la
+      // firma de quien recibió y el pool ya mandó esas unidades a en_cliente:
+      // es un HECHO firmado, así que la lista solo puede CRECER. Sin esto
+      // bastaba un write directo que borrara una tanda para "des-entregar"
+      // radios que el cliente ya tiene en la mano.
+      //
+      // Lo que estas reglas NO pueden mirar: que un mismo equipo no vaya en dos
+      // tandas — no se puede recorrer un array elemento por elemento. Ese
+      // candado vive en la transacción de OrdenesService.registrarTandaEntrega,
+      // igual que el de las unidades del acuse de devolución.
+      // Sumar una tanda ES entregar radios, así que exige exactamente los
+      // mismos candados que la transición a ENTREGADO — si no, la entrega
+      // parcial sería el hueco por donde salen los radios de un contrato sin
+      // firmar. Respaldo contra escrituras directas; admin exento por el OR de
+      // isAdmin() del allow.
+      //
+      // UNA sola función con `let`, y no dos: el presupuesto de evaluación de
+      // este match ya va justo (una denegación en ordenTransicionLegal llega al
+      // tope de 1000 expresiones — ver docs/plans/PLAN_ENTREGA_PARCIAL.md §6).
+      // Partirla en dos volvía a leer los mismos arrays cuatro veces.
+      //
+      // No se exige aquí el tipo REPARACIÓN a propósito: `tipo_de_servicio`
+      // sale de empresa/tipo_de_servicio ACENTUADO y estas reglas no saben
+      // quitar tildes — una comparación literal rompería la función en
+      // producción. El alcance por tipo lo imponen domain/entregaTandas.js y la
+      // UI; lo que de verdad protege radios son los candados de abajo.
+      function entregaTandasOk() {
+        let antes = resource.data.get("entrega", {}).get("tandas", []).size();
+        let despues = request.resource.data.get("entrega", {}).get("tandas", []).size();
+        return despues == antes
+          || (despues > antes
+              && resource.data.get("estado_reparacion", "") == "COMPLETADO (EN OFICINA)"
+              && request.resource.data.get("estado_reparacion", "") == "COMPLETADO (EN OFICINA)"
+              && (resource.data.get("qc_requerido", false) != true
+                  || resource.data.get("qc", {}).get("resultado", "") == "aprobado")
+              && contratoFirmadoParaEntregar()
+              && anexoFirmadoParaEntregar()
+              && facturaVentaParaEntregar());
+      }
       allow read: if isSignedIn();
       // create/update solo para los roles que operan órdenes (permiso 'crear-orden'
       // en roles.js): admin/vendedor/recepción/técnico/técnico_operativo/jefe_taller.
@@ -640,7 +682,7 @@ service cloud.firestore {
         && (isAdmin() || (ordenTransicionLegal() && qcFieldsUntouchedOrJefe()
                           && qcAprobadoTraeChecklist() && qcRequeridoNoSeApaga()
                           && qcMarcaAlCompletar() && devolucionAppendOnly()
-                          && eliminadoOk()));
+                          && entregaTandasOk() && eliminadoOk()));
       // El cliente nunca hace hard-delete de una orden a nivel doc (verificado:
       // solo borra líneas de la subcolección `consumos`; los borrados de orden
       // pasan por consola/admin SDK y la CF onOrdenHardDelete limpia después).

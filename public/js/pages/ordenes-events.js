@@ -159,6 +159,16 @@
       CargaDiferida.dividir().then(() => abrirDividirOrden(ordenId))
         .catch(() => Toast.show('Sin conexión — no se pudo abrir el reparto.', 'bad'));
     },
+    // Entrega parcial: el cliente se lleva una tanda y la orden sigue abierta
+    // (ordenes-entrega-parcial.js, diferido). entregarParcialOrden corre los
+    // mismos candados que el botón Entregar antes de abrir la hoja.
+    'entregar-parcial': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (!ordenId) return;
+      closeAllMenus();
+      entregarParcialOrden(ordenId)
+        .catch(() => Toast.show('Sin conexión — no se pudo abrir la entrega parcial.', 'bad'));
+    },
     // El taller propone reemplazar un radio (ordenes-reemplazo.js, diferido):
     // nace la gestión GR en pendiente_aprobacion y ventas la decide.
     'proponer-reemplazo': (el) => {

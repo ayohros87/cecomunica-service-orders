@@ -613,6 +613,97 @@ const OrdenesService = {
   },
 
   /**
+   * Entrega PARCIAL — registra una tanda de equipos que el cliente se lleva
+   * hoy, dejando el resto en el taller. NO toca `estado_reparacion`: la orden
+   * sigue COMPLETADO (EN OFICINA) y solo el camino normal (confirmarEntrega)
+   * la cierra, cuando salga lo último. Ver domain/entregaTandas.js.
+   *
+   * En transacción porque el mostrador puede tener dos pestañas abiertas (o
+   * dos personas atendiendo): sin ella, dos tandas simultáneas se pisarían el
+   * correlativo y podrían entregar el mismo radio dos veces. El array se lee
+   * y se reescribe completo — arrayUnion no sirve, hay que numerar contra lo
+   * que ya está.
+   *
+   * @param {string} ordenId
+   * @param {{equipoIds:string[], receptorNombre:string, receptorCedula?:string,
+   *          firmaUrl?:string, sinId?:boolean, sinIdMotivo?:string, notas?:string}} payload
+   * @returns {Promise<{n:number, numero:string, pendientes:number}>}
+   */
+  async registrarTandaEntrega(ordenId, {
+    equipoIds, receptorNombre, receptorCedula = '', firmaUrl = null,
+    sinId = false, sinIdMotivo = '', notas = '',
+  }) {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    const pedidos = [...new Set((equipoIds || []).filter(Boolean).map(String))];
+    if (!pedidos.length) throw new Error("Marca al menos un equipo para entregar.");
+    if (!String(receptorNombre || '').trim()) throw new Error("Falta el nombre de quien recibe.");
+
+    const ref = db.collection("ordenes_de_servicio").doc(ordenId);
+    let salida = null;
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new Error("La orden ya no existe.");
+      const o = snap.data();
+      if (o.eliminado === true) throw new Error("La orden está eliminada.");
+      if (!EntregaTandas.admiteTandas(o)) {
+        throw new Error("La entrega parcial es solo para órdenes de REPARACIÓN.");
+      }
+      if ((o.estado_reparacion || "").toUpperCase() !== "COMPLETADO (EN OFICINA)") {
+        throw new Error("La orden no está lista para entregar.");
+      }
+
+      // Los pendientes se recalculan DENTRO de la transacción: entre que se
+      // abrió la hoja y se confirmó, otra tanda pudo llevarse alguno.
+      const pendientes = EntregaTandas.equiposPendientes(o);
+      const porClave = new Map(pendientes.map(e => [EntregaTandas.claveEquipo(e), e]));
+      const elegidos = [];
+      for (const id of pedidos) {
+        const e = porClave.get(id);
+        if (!e) throw new Error("Un equipo marcado ya se entregó o salió de la orden. Vuelve a abrir la entrega.");
+        elegidos.push(e);
+      }
+      // La ÚLTIMA no se registra como tanda: esa es la entrega de siempre,
+      // que además cierra la orden y dispara pool/facturación. Dejarla pasar
+      // por aquí crearía un segundo camino de cierre.
+      if (elegidos.length >= pendientes.length) {
+        throw new Error("Estás marcando todo lo que queda: eso es la entrega completa, usa el botón Entregar.");
+      }
+
+      const previas = EntregaTandas.tandas(o);
+      const { n, numero } = EntregaTandas.siguienteTanda(o, ordenId);
+      const tanda = {
+        n, numero,
+        // serverTimestamp no es válido dentro de un array → Timestamp.now().
+        fecha: firebase.firestore.Timestamp.now(),
+        por_uid: user?.uid || '',
+        por_email: user?.email || null,
+        receptor_nombre: String(receptorNombre).trim(),
+        receptor_cedula: String(receptorCedula || '').trim() || null,
+        firma_url: firmaUrl || null,
+        sin_id: !!sinId,
+        sin_id_motivo: sinId ? String(sinIdMotivo || '').trim() : null,
+        notas: String(notas || '').trim() || null,
+        equipos: elegidos.map(e => ({
+          id: e.id || null,
+          serial: e.numero_de_serie || e.serial || null,
+          modelo: e.modelo || null,
+        })),
+      };
+      tx.update(ref, {
+        "entrega.tandas": [...previas, tanda],
+        fecha_modificacion: firebase.firestore.FieldValue.serverTimestamp(),
+        os_logs: firebase.firestore.FieldValue.arrayUnion({
+          action: 'ENTREGA_PARCIAL', by: user?.uid || '', tanda: numero,
+          equipos: elegidos.length, at: firebase.firestore.Timestamp.now(),
+        }),
+      });
+      salida = { n, numero, pendientes: pendientes.length - elegidos.length };
+    });
+    return salida;
+  },
+
+  /**
    * Soft delete order. El motivo y la autoría quedan en el doc y en la
    * bitácora (os_logs) — las rules exigen motivo (≥10 chars), rol
    * admin/recepción y estado NO terminal (auditoría órdenes P2).

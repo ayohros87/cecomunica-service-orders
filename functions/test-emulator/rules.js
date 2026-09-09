@@ -950,6 +950,62 @@ async function main() {
   }));
   ok("gestiones/eventos: el taller deja su traza en la bitácora");
 
+  // ── Entrega parcial por tandas (entrega.tandas[]) ─────────────────────────
+  // Lo que se protege: cada tanda lleva la firma del cliente y el pool ya
+  // mandó esas unidades a en_cliente. Es un hecho consumado — la lista solo
+  // crece, y sumarle una exige los mismos candados que entregar del todo.
+  //
+  // ⚠️ Los assertFails de aquí abajo son un SMOKE TEST, no la prueba del
+  // candado: este match ya llega al tope de evaluación de Firestore ("maximum
+  // of 1000 expressions") en los caminos de denegación — pasa hasta con una
+  // transición ilegal que ni toca la entrega parcial. Falla cerrado, así que
+  // no rompe nada, pero un assertFails contra el ruleset completo se cumpliría
+  // igual sin el candado. La prueba de verdad, con presupuesto aislado, vive
+  // en test-emulator/rules-entrega-parcial.js.
+  const EQUIPOS3 = [{ id: "e1", serial: "S1" }, { id: "e2", serial: "S2" }, { id: "e3", serial: "S3" }];
+  const T1 = { n: 1, numero: "oT-E1", receptor_nombre: "Ana", equipos: [{ id: "e1", serial: "S1" }] };
+  const T2 = { n: 2, numero: "oT-E2", receptor_nombre: "Ana", equipos: [{ id: "e2", serial: "S2" }] };
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const base = { tipo_de_servicio: "REPARACIÓN", equipos: EQUIPOS3, qc_requerido: false };
+    await db.doc("ordenes_de_servicio/oTanda").set({ ...base, estado_reparacion: "COMPLETADO (EN OFICINA)" });
+    await db.doc("ordenes_de_servicio/oTandaBorrar").set({
+      ...base, estado_reparacion: "COMPLETADO (EN OFICINA)", entrega: { tandas: [T1, T2] },
+    });
+    await db.doc("ordenes_de_servicio/oTandaAsignado").set({ ...base, estado_reparacion: "ASIGNADO" });
+    await db.doc("ordenes_de_servicio/oTandaQc").set({
+      ...base, estado_reparacion: "COMPLETADO (EN OFICINA)", qc_requerido: true,
+    });
+    await db.doc("ordenes_de_servicio/oTandaQcOk").set({
+      ...base, estado_reparacion: "COMPLETADO (EN OFICINA)", qc_requerido: true,
+      qc: { resultado: "aprobado", equipos_n: 3 },
+    });
+  });
+
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oTanda").update({ "entrega.tandas": [T1] }));
+  await assertSucceeds(as("vendedor").doc("ordenes_de_servicio/oTanda").update({ "entrega.tandas": [T1, T2] }));
+  ok("tandas: recepción y vendedor registran entregas parciales sobre una orden COMPLETADA");
+
+  // El atajo que cierra: borrar una tanda "des-entrega" radios que el cliente
+  // ya tiene en la mano y que el pool ya sacó del taller.
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oTandaBorrar").update({ "entrega.tandas": [T1] }));
+  await assertFails(as("tecnico").doc("ordenes_de_servicio/oTandaBorrar").update({ "entrega.tandas": [] }));
+  ok("tandas: la lista solo CRECE — no se puede borrar una entrega firmada");
+
+  // Una orden que todavía está en el banco del técnico no entrega nada.
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oTandaAsignado").update({ "entrega.tandas": [T1] }));
+  ok("tandas: solo desde COMPLETADO (EN OFICINA)");
+
+  // El candado de QC vale igual para la parcial: si no, la entrega parcial
+  // sería el hueco por donde salen radios sin control de calidad.
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oTandaQc").update({ "entrega.tandas": [T1] }));
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oTandaQcOk").update({ "entrega.tandas": [T1] }));
+  ok("tandas: con QC pendiente no se entrega ni una parte; con QC aprobado sí");
+
+  // Admin queda exento (correcciones manuales), como en el resto del bloque.
+  await assertSucceeds(as("administrador").doc("ordenes_de_servicio/oTandaBorrar").update({ "entrega.tandas": [] }));
+  ok("tandas: admin puede corregir a mano");
+
   await testEnv.cleanup();
   console.log(`\nTODOS LOS TESTS DE REGLAS PASARON (${n} grupos)`);
 }

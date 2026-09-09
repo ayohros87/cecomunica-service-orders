@@ -933,6 +933,21 @@ function badgePendientesDevolucion(od) {
 }
 window.badgePendientesDevolucion = badgePendientesDevolucion;
 
+// Chip "6 de 10 entregados" de una REPARACIÓN entregada por tandas. Sin esto,
+// una orden a medio salir se ve en la bandeja igual que una intacta: el
+// estado sigue siendo COMPLETADO (a propósito — ver domain/entregaTandas.js),
+// así que el único aviso de que ya salió parte de los radios sería abrir la
+// orden. Espeja a badgePendientesDevolucion, que resuelve lo mismo al revés.
+function badgeEntregaParcial(od) {
+  if (typeof EntregaTandas === 'undefined') return '';
+  const r = EntregaTandas.resumen(od);
+  if (!r.parcial) return '';
+  return `<span class="chip-estado chip-espera" style="margin-right:4px;white-space:nowrap;"
+    title="Entrega parcial: el cliente se llevó ${r.entregados} de ${r.total}; quedan ${r.pendientes} en el taller">
+    <i data-lucide="package-check" style="width:12px;height:12px;vertical-align:-1px;"></i> ${r.entregados} de ${r.total}</span>`;
+}
+window.badgeEntregaParcial = badgeEntregaParcial;
+
 function botonesFlujo(ordenId, estado, ordenData) {
   const rol = APP.state.userRole || "";
   let html = "";
@@ -1041,6 +1056,12 @@ function botonesFlujo(ordenId, estado, ordenData) {
     }
     return html || "<em>-</em>";
   }
+
+  // "6 de 10": una reparación entregada a medias sigue en COMPLETADO (a
+  // propósito), así que sin este chip se ve igual que una intacta. Va antes
+  // del dispatch por rol para pintarse una sola vez, y solo aparece cuando de
+  // verdad hay una entrega parcial en curso.
+  html += badgeEntregaParcial(od);
 
   // jefe_taller (supervisor de taller) comparte el flujo completo con
   // admin/recepción: recibir → asignar → completar → entregar. Tiene el
@@ -1214,6 +1235,26 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     });
   }
 
+
+  // Entrega parcial (2026-09-09): el cliente se lleva los radios que ya están
+  // listos y el resto se queda en el taller. Subrutina, no flujo principal:
+  // vive en el ⋯ y el botón "Entregar" de la fila no se mueve. Solo
+  // REPARACIÓN, solo en COMPLETADO y solo si quedan ≥2 pendientes (con uno
+  // solo, la parcial ES la completa). Los mismos roles que ya entregan.
+  const puedeEntregarParcial = estadoUpper === "COMPLETADO (EN OFICINA)"
+    && rol !== ROLES.VISTA
+    && typeof EntregaTandas !== 'undefined'
+    && EntregaTandas.puedeEntregarParcial(o);
+  if (puedeEntregarParcial) {
+    const r = EntregaTandas.resumen(o);
+    menuItems.unshift({
+      icon: '<i data-lucide="package-check"></i>',
+      label: r.tandas ? `Entregar otra parte (${r.entregados} de ${r.total} ya salieron)` : "Entregar solo algunos equipos",
+      action: "entregar-parcial",
+      dataAttributes: `data-orden-id="${ordenId}"`,
+      class: "highlighted"
+    });
+  }
 
   // Proponer el reemplazo de un radio desde el taller (2026-09-09): quien ve
   // que el equipo no tiene arreglo es el técnico, y hasta hoy tenía que

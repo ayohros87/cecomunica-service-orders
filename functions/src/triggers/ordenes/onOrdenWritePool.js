@@ -3,6 +3,7 @@ const logger = require("firebase-functions/logger");
 const pool = require("../../domain/equiposPool");
 const { catalogo } = require("../../domain/modeloCatalogo");
 const { decidirMarcaCancelacion } = require("../../domain/cancelacionEntrada");
+const tandas = require("../../domain/entregaTandas");
 const { admin, db } = require("../../lib/admin");
 
 // Pool de equipos ↔ órdenes de servicio ("migración por contacto", plan
@@ -355,6 +356,55 @@ module.exports = onDocumentWritten(
         contrato_doc_id: null, contrato_id: "",
         cliente_id: fuente.cliente_id || "", cliente_nombre: fuente.cliente_nombre || "",
       } : null;
+
+      // ── Tandas de entrega parcial (2026-09-09) ───────────────────────────
+      // Una REPARACIÓN puede entregarse por partes: el cliente se lleva los
+      // radios listos y el resto se queda en el taller. La orden NO cambia de
+      // estado (sigue COMPLETADO — ver public/js/domain/entregaTandas.js), así
+      // que sin esta rama las unidades que ya salieron seguirían "en taller"
+      // hasta el cierre: semanas de inventario diciendo que tenemos radios que
+      // están donde el cliente.
+      //
+      // Qué unidades entrega ESTA escritura lo decide domain/entregaTandas.js
+      // (probado en test/entregaParcialTandas.test.js sin Firestore).
+      //
+      // La entrega FINAL no pasa por aquí: esa es la transición a ENTREGADO de
+      // siempre, y su rama encuentra las unidades de tandas previas ya en
+      // en_cliente con orden_actual_id nulo, así que no las mueve dos veces.
+      for (const t of tandas.tandasNuevas(before, after)) {
+        for (const u of t.equipos) {
+          // El modelo sale de la fila viva de la orden: la tanda solo guarda
+          // el serial y una etiqueta, y `resolver` necesita el modelo para
+          // desempatar seriales repetidos entre modelos distintos.
+          const fila = despues.find((x) => pool.normSerial(x.serial) === pool.normSerial(u.serial))
+            || { serial: u.serial, modelo_id: null, modelo: "" };
+          try {
+            const r = await pool.transicionar(fila.serial, fila.modelo_id, fila.modelo, {
+              aEstado: pool.ESTADOS.EN_CLIENTE,
+              soloDesde: [pool.ESTADOS.EN_TALLER],
+              condicion: (d) => d.orden_actual_id === ordenId,
+              tipo: "salida_taller",
+              refMov,
+              notas: `Entrega parcial ${t.numero}`,
+              extra: {
+                orden_actual_id: null,
+                ...(custodiaCliente ? { asignacionSiFalta: custodiaCliente } : {}),
+              },
+            });
+            if (r === "no-existe") {
+              // Mismo criterio que el cierre de ENTRADA: un serial sin ficha es
+              // un radio físico sin rastro, no un detalle de log.
+              logger.error("[onOrdenWritePool] Entrega parcial con serial sin ficha", {
+                ordenId, tanda: t.numero, serial: fila.serial,
+              });
+            }
+          } catch (err) {
+            logger.warn("[onOrdenWritePool] No se pudo mover una unidad de la tanda", {
+              ordenId, tanda: t.numero, serial: fila.serial, message: err.message,
+            });
+          }
+        }
+      }
 
       // Venta ↔ orden de PROGRAMACIÓN (fix 2026-07-27): el feed del home
       // sugiere "crear orden" mientras venta.orden_programacion_id esté vacío,

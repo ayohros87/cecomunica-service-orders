@@ -40,6 +40,8 @@ window.CargaDiferida = (() => {
     notas:      "/js/pages/ordenes-notas.js?v=1",
     // Dividir una ENTRADA grande entre varias órdenes (Brenda, 2026-09-08).
     dividir:    "/js/pages/ordenes-dividir.js?v=1",
+    // Entrega parcial de una REPARACIÓN: el cliente se lleva solo una tanda.
+    entregaParcial: "/js/pages/ordenes-entrega-parcial.js?v=1",
     // Propuesta de reemplazo desde el taller: el módulo + lo que necesita
     // (expedientes de gestión y la garantía de la unidad), que no se cargan
     // en /ordenes/ para nada más.
@@ -79,6 +81,13 @@ window.CargaDiferida = (() => {
     },
     dividir() {
       return window.abrirDividirOrden ? Promise.resolve() : script(MODULOS.dividir);
+    },
+    // La hoja captura la firma de quien recibe y la sube a Storage.
+    entregaParcial() {
+      return window.abrirEntregaParcial ? Promise.resolve()
+        : this.storage()
+            .then(() => script(MODULOS.firmaPad))
+            .then(() => script(MODULOS.entregaParcial));
     },
     reemplazo() {
       return window.OrdenesReemplazo ? Promise.resolve()
