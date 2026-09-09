@@ -16,6 +16,7 @@
  * USAGE (desde functions/, PowerShell con $env:NODE_PATH):
  *   node scripts/analiza-casos-viejos.js
  *   node scripts/analiza-casos-viejos.js --dias 30 --top 15
+ *   node scripts/analiza-casos-viejos.js --excel C:/ruta/casos-viejos.xlsx
  */
 const admin = require("firebase-admin");
 admin.initializeApp({ projectId: "cecomunica-service-orders" });
@@ -25,6 +26,7 @@ const args = process.argv.slice(2);
 const flag = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 const DIAS = Number(flag("--dias", 30));
 const TOP = Number(flag("--top", 12));
+const EXCEL = flag("--excel", null);
 
 const COMPLETADO = "COMPLETADO (EN OFICINA)";
 const norm = (s) => String(s || "").trim().toLowerCase()
@@ -183,6 +185,89 @@ async function main() {
   console.log(`   reparaciones: ${suenanRep} · programaciones: ${suenan.length - suenanRep}`);
   console.log(`   casos viejos que ya se cierran desde la hoja: ${viejos.length}${pct(viejos.length, suenan.length)}`);
   console.log(`   seguirían sonando aunque se cerraran todos: ${suenan.length - viejos.length}\n`);
+
+  if (EXCEL) await exportar(viejos);
+}
+
+// ── Excel para trabajar la lista ─────────────────────────────────────────
+// Dos hojas porque son dos maneras de atacarlo: "Casos" para ir orden por
+// orden, y "Por cliente" porque el trabajo real son llamadas — cinco clientes
+// concentran la mayoría, y llamar una vez por radio sería absurdo.
+async function exportar(viejos) {
+  const ExcelJS = require("exceljs");
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "C Comunica · sistema de órdenes";
+  wb.created = new Date();
+
+  const fecha = (ts) => { const d = aDate(ts); return d ? d.toISOString().slice(0, 10) : ""; };
+  const ws = wb.addWorksheet("Casos");
+  ws.columns = [
+    { header: "Orden", key: "orden", width: 14 },
+    { header: "Cliente", key: "cliente", width: 46 },
+    { header: "Días sin retirar", key: "dias", width: 16 },
+    { header: "Terminada el", key: "completado", width: 14 },
+    { header: "Equipos", key: "n", width: 9 },
+    { header: "Seriales", key: "seriales", width: 40 },
+    { header: "Modelos", key: "modelos", width: 30 },
+    { header: "Técnico", key: "tecnico", width: 22 },
+    { header: "Motivo de la orden", key: "obs", width: 50 },
+    { header: "Decisión (llenar)", key: "decision", width: 22 },
+    { header: "Notas de la llamada", key: "notas", width: 34 },
+  ];
+  ws.getRow(1).font = { bold: true };
+  ws.views = [{ state: "frozen", ySplit: 1 }];
+
+  for (const o of viejos) {
+    const p = pendientesDe(o);
+    const fila = ws.addRow({
+      orden: o.ordenId,
+      cliente: o.cliente_nombre || "(sin cliente)",
+      dias: dias(o.fecha_completado || o.fecha_creacion),
+      completado: fecha(o.fecha_completado || o.fecha_creacion),
+      n: p.length,
+      seriales: p.map(e => e.numero_de_serie || e.serial || "—").join(", "),
+      modelos: [...new Set(p.map(e => e.modelo).filter(Boolean))].join(", "),
+      tecnico: o.tecnico_asignado || "",
+      obs: String(o.observaciones || "").replace(/\s+/g, " ").slice(0, 300),
+      decision: "",
+      notas: "",
+    });
+    // Los de 60+ días en rojo: son los que ya no se explican solos.
+    const d = dias(o.fecha_completado || o.fecha_creacion);
+    if (d >= 60) fila.getCell("dias").font = { color: { argb: "FFB91C1C" }, bold: true };
+  }
+  ws.autoFilter = { from: "A1", to: "K1" };
+  // La columna de decisión, con las DOS puertas de la hoja de Casos viejos.
+  ws.dataValidations.add(`J2:J${viejos.length + 1}`, {
+    type: "list", allowBlank: true,
+    formulae: ['"Ya se entregó,No vino - dejar en custodia,El cliente viene tal día"'],
+    showErrorMessage: false,
+  });
+
+  const ws2 = wb.addWorksheet("Por cliente");
+  ws2.columns = [
+    { header: "Cliente", key: "cliente", width: 50 },
+    { header: "Órdenes", key: "n", width: 10 },
+    { header: "Equipos", key: "eq", width: 10 },
+    { header: "Más viejo (días)", key: "max", width: 17 },
+    { header: "Órdenes", key: "ordenes", width: 44 },
+  ];
+  ws2.getRow(1).font = { bold: true };
+  ws2.views = [{ state: "frozen", ySplit: 1 }];
+  const porCliente = new Map();
+  for (const o of viejos) {
+    const c = o.cliente_nombre || "(sin cliente)";
+    const v = porCliente.get(c) || { n: 0, eq: 0, max: 0, ordenes: [] };
+    v.n++; v.eq += pendientesDe(o).length;
+    v.max = Math.max(v.max, dias(o.fecha_completado || o.fecha_creacion) || 0);
+    v.ordenes.push(o.ordenId);
+    porCliente.set(c, v);
+  }
+  [...porCliente].sort((a, b) => b[1].eq - a[1].eq || b[1].n - a[1].n)
+    .forEach(([cliente, v]) => ws2.addRow({ ...v, cliente, ordenes: v.ordenes.join(", ") }));
+
+  await wb.xlsx.writeFile(String(EXCEL));
+  console.log(`Excel escrito: ${EXCEL}  (${viejos.length} casos · ${porCliente.size} clientes)\n`);
 }
 
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });
