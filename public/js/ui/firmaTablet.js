@@ -27,6 +27,11 @@ window.FirmaTablet = (() => {
 
   const TIPOS = ['acuse_devolucion', 'recepcion', 'entrega'];
 
+  // Ventana de frescura de una solicitud, la misma que aplica la tablet para
+  // decidir qué sigue mostrando (TIPOS + corte de 4 h en /firmar/tablet.html).
+  // Más allá de eso, una solicitud es de otro día y no se retoma.
+  const VENTANA_FRESCA_MS = 4 * 60 * 60 * 1000;
+
   // La tablet vive EN EL MOSTRADOR. En un teléfono o pantalla táctil (un
   // vendedor en la calle) la opción se oculta: parecería el acceso para
   // firmar en el propio dispositivo, y ahí el recuadro de la pantalla ya
@@ -91,6 +96,56 @@ window.FirmaTablet = (() => {
       });
   }
 
+  // Corrige el correo de la copia con la tablet YA en la mano del cliente: él
+  // lo ve en pantalla y avisa si está mal antes de firmar. La tablet repinta
+  // en vivo. Es informativo — quién recibe la copia lo decide después el
+  // flujo que guarda el acuse, con el estado vigente de su casilla.
+  // Silencioso: si la solicitud ya se firmó, el dato dejó de importar.
+  async function actualizarCopia(id, correo) {
+    if (!id) return;
+    try {
+      await firebase.firestore().collection('firmas_tablet').doc(id)
+        .update({ copia_a: correo || null });
+    } catch (e) { /* ya firmada o cancelada */ }
+  }
+
+  // Solicitudes VIVAS de una orden, para retomarlas al reabrir la pantalla.
+  // Existe porque hay flujos donde la solicitud sobrevive al modal (el acuse
+  // de devolución): sin esto, cerrar la ventana dejaba al cliente firmando
+  // contra nadie.
+  //
+  // `excluir` son los ids ya aplicados (acuses guardados): una solicitud que
+  // ya se consumió no se vuelve a retomar.
+  //
+  // La 'firmada' solo se devuelve si es FRESCA (4 h, la misma ventana que
+  // muestra la tablet). Una firma de otra tanda, de otro día, pegada a lo que
+  // se está capturando ahora sería una constancia falsa.
+  //
+  // Solo igualdades + in: no necesita índice compuesto.
+  async function vivasDeOrden(ordenId, tipo, { excluir = [] } = {}) {
+    const vacio = { pendiente: null, firmada: null };
+    if (!ordenId || !tipo) return vacio;
+    try {
+      const s = await firebase.firestore().collection('firmas_tablet')
+        .where('orden_id', '==', ordenId)
+        .where('estado', 'in', ['pendiente', 'firmada'])
+        .where('tipo', '==', tipo)
+        .get();
+      const fuera = new Set(excluir.filter(Boolean));
+      const docs = s.docs.filter(d => !fuera.has(d.id));
+      const frescoMs = Date.now() - VENTANA_FRESCA_MS;
+      return {
+        pendiente: docs.find(d => d.data().estado === 'pendiente') || null,
+        firmada: docs.find(d => d.data().estado === 'firmada'
+          && (d.data().creado_at?.toDate?.().getTime() || 0) >= frescoMs) || null,
+      };
+    } catch (e) {
+      // Sin permiso, o la colección aún no existe: no es crítico — el
+      // operador simplemente vuelve a mandar la solicitud.
+      return vacio;
+    }
+  }
+
   // Cancela una solicitud que quedó colgando (el operador cerró el modal).
   // Silencioso a propósito: si ya la firmaron o cancelaron, no hay nada que
   // hacer y no es un error que merezca molestar a nadie.
@@ -117,5 +172,6 @@ window.FirmaTablet = (() => {
       }));
   }
 
-  return { TIPOS, disponible, solicitar, escuchar, cancelar, unidadesDeEquipos };
+  return { TIPOS, VENTANA_FRESCA_MS, disponible, solicitar, escuchar,
+           actualizarCopia, vivasDeOrden, cancelar, unidadesDeEquipos };
 })();

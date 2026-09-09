@@ -143,24 +143,17 @@
     // cerró justo cuando el cliente confirmaba) se recupera aquí mismo.
     // Solo igualdades + in: no requiere índice compuesto.
     _unsubTablet?.(); _unsubTablet = null;
-    try {
-      const s = await db.collection('firmas_tablet')
-        .where('orden_id', '==', ordenId)
-        .where('estado', 'in', ['pendiente', 'firmada'])
-        .where('tipo', '==', 'acuse_devolucion')
-        .get();
-      const aplicados = new Set((_orden.devolucion.acuses || []).map(a => a.solicitud_id).filter(Boolean));
-      const docs = s.docs.filter(d => !aplicados.has(d.id));
-      const pendiente = docs.find(d => d.data().estado === 'pendiente');
-      // Una firmada vieja (otra tanda, otro día) no debe pegarse a la tanda
-      // actual: solo se recupera si es de las últimas 4 horas — la misma
-      // ventana de frescura que muestra la tablet.
-      const frescoMs = Date.now() - 4 * 60 * 60 * 1000;
-      const firmada = docs.find(d => d.data().estado === 'firmada'
-        && (d.data().creado_at?.toDate?.().getTime() || 0) >= frescoMs);
+    {
+      // La solicitud SOBREVIVE al modal (a diferencia de la entrega): al
+      // reabrir se retoma la pendiente, y una firmada que nunca llegó a
+      // aplicarse —el modal se cerró justo cuando el cliente confirmaba— se
+      // recupera aquí. La regla de frescura vive en FirmaTablet.
+      const aplicados = (_orden.devolucion.acuses || []).map(a => a.solicitud_id);
+      const { pendiente, firmada } = await FirmaTablet.vivasDeOrden(
+        ordenId, 'acuse_devolucion', { excluir: aplicados });
       if (pendiente) { _solTabletId = pendiente.id; _suscribirTablet(); }
-      else if (firmada) { _acuseDesdeTablet(firmada.id, firmada.data()); }
-    } catch (e) { /* sin permiso o colección nueva: no crítico */ }
+      else if (firmada) { _acuseDesdeTablet(firmada.id, firmada.data().firma || {}); }
+    }
     // La orden EN VIVO: el estado del envío del acuse lo escriben los triggers
     // (encolado→enviado/fallo) y otra pestaña puede registrar tandas. Solo se
     // repinta cuando no hay una captura a medias — un re-render en frío
@@ -707,7 +700,7 @@
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
           <span style="font-weight:700;font-size:13px;">Acuse de recibido — firma del cliente</span>
           <span style="font-family:var(--font-mono,monospace);font-size:12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:1px 8px;">${esc(numeroSiguiente)}</span>
-          ${(!_solTabletId && _tabletMostradorDisponible()) ? `<button type="button" class="btn btn-sm btn-firma-tablet" id="acuseTabletBtn" style="margin-left:auto;"
+          ${(!_solTabletId && FirmaTablet.disponible()) ? `<button type="button" class="btn btn-sm btn-firma-tablet" id="acuseTabletBtn" style="margin-left:auto;"
               title="La solicitud aparece sola en la tablet del mostrador; cuando el cliente confirme allá, el acuse se guarda aquí automáticamente.">
               <i data-lucide="tablet"></i> Firmar en la tablet</button>` : ''}
         </div>
@@ -1659,16 +1652,6 @@
     return String((_acuseEmailDraft != null ? _acuseEmailDraft : _emailCliente) || '').trim().toLowerCase();
   }
 
-  // La tablet de firmas vive EN EL MOSTRADOR: en un teléfono o pantalla
-  // táctil (vendedor en la calle) el botón no se pinta — parecería el acceso
-  // para firmar en el propio dispositivo, y ahí el canvas del modal ya
-  // cumple. Mismo corte que .btn-firma-tablet en ordenes-index.css.
-  function _tabletMostradorDisponible() {
-    try {
-      return !window.matchMedia('(max-width: 768px), (hover: none) and (pointer: coarse)').matches;
-    } catch (e) { return true; }
-  }
-
   async function _persistirAcuse({ nombre, cedula, firmaUrl, sin, motivo, via, solicitudId, laxEmail }) {
     const dev = _orden.devolucion;
     const pendientes = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id);
@@ -1770,28 +1753,36 @@
     render();
   }
 
-  // ── Firma en tablet (firmas_tablet + /firmar/tablet.html) ──────────────
-  // "Firmar en la tablet" crea una solicitud que la tablet del mostrador
-  // muestra en vivo; cuando el cliente confirma allá, el onSnapshot de aquí
-  // guarda el acuse con esa firma. La solicitud sobrevive a cerrar el modal
-  // (abrir() la retoma) y recepción puede cancelarla en cualquier momento.
+  // ── Firma en tablet ────────────────────────────────────────────────────
+  // El PROTOCOLO (crear la solicitud, escucharla, corregir el correo de la
+  // copia, cancelarla, retomar las vivas) vive en js/ui/firmaTablet.js desde
+  // 2026-09-09: lo comparten este acuse, el modal de entrega y la hoja de
+  // entrega parcial. Aquí queda lo propio de la devolución.
+  //
+  // "Firmar en la tablet" crea una solicitud que el mostrador muestra en vivo;
+  // cuando el cliente confirma allá, la firma llega por el listener y se
+  // guarda el acuse. A diferencia de la entrega, esta solicitud SOBREVIVE a
+  // cerrar el modal (abrir() la retoma) y recepción puede cancelarla cuando
+  // quiera.
   async function enviarATablet() {
     const dev = _orden.devolucion || {};
     const sinAcuse = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id);
     if (!sinAcuse.length || _solTabletId) return;
-    if (!_tabletMostradorDisponible()) {
+    if (!FirmaTablet.disponible()) {
       Toast.show('La firma en tablet es de la tablet del mostrador de recepción — en este dispositivo el cliente firma en el recuadro de aquí mismo.', 'warn');
       return;
     }
-    const user = firebase.auth().currentUser;
     try {
-      const ref = await firebase.firestore().collection('firmas_tablet').add({
+      _solTabletId = await FirmaTablet.solicitar({
         tipo: 'acuse_devolucion',
-        estado: 'pendiente',
-        orden_id: _ordenId,
-        cliente_nombre: _orden.cliente_nombre || '',
-        contrato_id: dev.origen?.ref_papel || _orden.contrato?.contrato_id || null,
+        ordenId: _ordenId,
+        clienteNombre: _orden.cliente_nombre || '',
+        contratoId: dev.origen?.ref_papel || _orden.contrato?.contrato_id || null,
         numero: `${_ordenId}-A${(dev.acuses || []).length + 1}`,
+        titulo: 'Acuse de recibo de equipos',
+        nombreLabel: 'Nombre de quien entrega',
+        // Forma PROPIA de la devolución: la tablet detecta `accesorios` y le
+        // pinta al cliente el checklist por unidad en vez de un resumen.
         unidades: sinAcuse.map(e => ({
           serial: e.serial, modelo: e.modelo || '',
           accesorios: e.accesorios || null, dano_visible: e.dano_visible || null,
@@ -1799,12 +1790,8 @@
         // La tablet le muestra al cliente a qué correo llegará su copia (y él
         // mismo avisa si está mal ANTES de firmar). Es informativo: el envío
         // real lo decide _persistirAcuse con el estado vigente del checkbox.
-        copia_a: (_acuseEnviarCopia && _esEmail(_emailCopia())) ? _emailCopia() : null,
-        creado_at: firebase.firestore.FieldValue.serverTimestamp(),
-        creado_por_uid: user?.uid || null,
-        creado_por_email: user?.email || null,
+        copiaA: (_acuseEnviarCopia && _esEmail(_emailCopia())) ? _emailCopia() : null,
       });
-      _solTabletId = ref.id;
       _suscribirTablet();
       Toast.show('Solicitud enviada — ya aparece en la tablet del mostrador.', 'ok');
     } catch (e) {
@@ -1817,17 +1804,16 @@
   function _suscribirTablet() {
     _unsubTablet?.();
     if (!_solTabletId) return;
-    _unsubTablet = firebase.firestore().collection('firmas_tablet').doc(_solTabletId)
-      .onSnapshot((s) => {
-        const d = s.exists ? s.data() : null;
-        if (!d) return;
-        if (d.estado === 'firmada') {
-          _acuseDesdeTablet(s.id, d);
-        } else if (d.estado === 'cancelada') {
-          _unsubTablet?.(); _unsubTablet = null; _solTabletId = null;
-          if (_overlay) render();
-        }
-      });
+    // Se captura el id: _solTabletId se limpia al aplicar el acuse, y el
+    // callback tiene que seguir sabiendo de qué solicitud vino la firma.
+    const id = _solTabletId;
+    _unsubTablet = FirmaTablet.escuchar(id, {
+      onFirmada: (firma) => _acuseDesdeTablet(id, firma),
+      onCancelada: () => {
+        _unsubTablet?.(); _unsubTablet = null; _solTabletId = null;
+        if (_overlay) render();
+      },
+    });
   }
 
   // Corrección del correo con la tablet en la mano del cliente: el destino de
@@ -1837,26 +1823,20 @@
   function _pushCopiaATablet() {
     if (!_solTabletId) return;
     const email = _emailCopia();
-    firebase.firestore().collection('firmas_tablet').doc(_solTabletId)
-      .update({ copia_a: (_acuseEnviarCopia && _esEmail(email)) ? email : null })
-      .catch(() => { /* solicitud ya firmada/cancelada: el dato ya no importa */ });
+    FirmaTablet.actualizarCopia(_solTabletId,
+      (_acuseEnviarCopia && _esEmail(email)) ? email : null);
   }
 
   async function cancelarTablet() {
     if (!_solTabletId) return;
-    try {
-      await firebase.firestore().collection('firmas_tablet').doc(_solTabletId)
-        .update({ estado: 'cancelada' }); // el snapshot hace la limpieza
-    } catch (e) {
-      // Carrera benigna: la tablet firmó justo al cancelar — el snapshot
-      // entregará la firma de todos modos.
-      console.warn('[OrdenesDevolucion.cancelarTablet]', e);
-    }
+    // El snapshot hace la limpieza. Carrera benigna: si la tablet firmó justo
+    // al cancelar, la cancelación no pega y el snapshot entrega la firma.
+    await FirmaTablet.cancelar(_solTabletId);
   }
 
   // La tablet firmó: guarda el acuse UNA vez con la firma que subió la
   // tablet (Storage) y el nombre que tecleó el cliente allá.
-  async function _acuseDesdeTablet(solId, sol) {
+  async function _acuseDesdeTablet(solId, firma) {
     if (_tabletGuardando || !_orden?.devolucion) return;
     if ((_orden.devolucion.acuses || []).some(a => a.solicitud_id === solId)) {
       _unsubTablet?.(); _unsubTablet = null; _solTabletId = null;
@@ -1865,9 +1845,9 @@
     _tabletGuardando = true;
     try {
       await _persistirAcuse({
-        nombre: sol.firma?.nombre || '',
-        cedula: sol.firma?.cedula || '',
-        firmaUrl: sol.firma?.url || null,
+        nombre: firma?.nombre || '',
+        cedula: firma?.cedula || '',
+        firmaUrl: firma?.url || null,
         sin: false, motivo: '',
         via: 'tablet', solicitudId: solId,
         laxEmail: true,

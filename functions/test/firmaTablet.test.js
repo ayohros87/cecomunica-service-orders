@@ -161,6 +161,90 @@ test("la hoja de entrega parcial usa el mismo protocolo", () => {
   assert.match(codigo, /unidadesDeEquipos\(salen\)/);
 });
 
+test("el acuse de devolución también dejó de hablar con firmas_tablet", () => {
+  // La tercera copia, y la última: era la que sobrevivía al modal y por eso
+  // tenía además su propia consulta de solicitudes vivas.
+  const dev = leer("public", "js", "pages", "ordenes-devolucion.js");
+  const codigo = dev.replace(/\/\/.*$/gm, "");
+  assert.doesNotMatch(codigo, /collection\(['"]firmas_tablet['"]\)/,
+    "el acuse debe delegar en FirmaTablet");
+  for (const fn of ["solicitar", "escuchar", "cancelar", "actualizarCopia", "vivasDeOrden"]) {
+    assert.ok(codigo.includes("FirmaTablet." + fn), `falta FirmaTablet.${fn}`);
+  }
+  // Su forma de unidades es PROPIA (accesorios + daño): la tablet la detecta
+  // y pinta el checklist por unidad. No debe pasar por unidadesDeEquipos.
+  assert.match(codigo, /accesorios: e\.accesorios/);
+});
+
+test("retomar solicitudes vivas: solo las de la orden, y la firmada solo si es fresca", async () => {
+  const ctx = cargar();
+  const ahora = Date.now();
+  const doc = (id, estado, horas) => ({
+    id,
+    data: () => ({ estado, creado_at: { toDate: () => new Date(ahora - horas * 3600000) } }),
+  });
+  let filtros = [];
+  const q = (docs) => ({
+    where(c, op, v) { filtros.push([c, op, v]); return q(docs); },
+    get: async () => ({ docs }),
+  });
+  const docs = [doc("vieja", "firmada", 9), doc("fresca", "firmada", 1),
+                doc("pend", "pendiente", 2), doc("yaAplicada", "pendiente", 1)];
+  ctx.window.firebase.firestore = Object.assign(
+    () => ({ collection: () => q(docs) }), { FieldValue: { serverTimestamp: () => "TS" } });
+
+  const r = await ctx.window.FirmaTablet.vivasDeOrden("O1", "acuse_devolucion",
+    { excluir: ["yaAplicada"] });
+  assert.equal(r.pendiente.id, "pend", "una ya aplicada no se retoma");
+  assert.equal(r.firmada.id, "fresca",
+    "una firma de hace 9 h es de otra tanda: pegarla aquí sería una constancia falsa");
+  // Solo igualdades + in: si alguien mete un rango, hace falta índice compuesto.
+  assert.deepEqual(filtros.map(f => f[1]).sort(), ["==", "==", "in"].sort());
+});
+
+test("sin orden o sin tipo, retomar no consulta nada", async () => {
+  const ctx = cargar();
+  let consultó = false;
+  ctx.window.firebase.firestore = Object.assign(
+    () => ({ collection: () => { consultó = true; return {}; } }),
+    { FieldValue: { serverTimestamp: () => "TS" } });
+  const a = await ctx.window.FirmaTablet.vivasDeOrden(null, "entrega");
+  const b = await ctx.window.FirmaTablet.vivasDeOrden("O1", null);
+  assert.equal(consultó, false);
+  assert.equal(a.pendiente, null);
+  assert.equal(b.firmada, null);
+});
+
+test("un fallo al retomar no tumba la pantalla", async () => {
+  // Sin permiso o con la colección recién creada: el operador simplemente
+  // vuelve a mandar la solicitud; lo que no puede es reventar el modal.
+  const ctx = cargar();
+  ctx.window.firebase.firestore = Object.assign(
+    () => ({ collection: () => ({ where() { throw new Error("sin permiso"); } }) }),
+    { FieldValue: { serverTimestamp: () => "TS" } });
+  const r = await ctx.window.FirmaTablet.vivasDeOrden("O1", "entrega");
+  assert.deepEqual([r.pendiente, r.firmada], [null, null]);
+});
+
+test("la ventana de frescura es la MISMA que la de la tablet", () => {
+  const { window: { FirmaTablet } } = cargar();
+  const tablet = leer("public", "firmar", "tablet.html");
+  // La tablet la escribe como `4 * 60 * 60 * 1000`; si alguien mueve una,
+  // esto obliga a mover la otra.
+  assert.match(tablet, /4 \* 60 \* 60 \* 1000/);
+  assert.equal(FirmaTablet.VENTANA_FRESCA_MS, 4 * 60 * 60 * 1000);
+});
+
+test("corregir el correo de la copia no puede tocar nada más", async () => {
+  const ctx = cargar();
+  await ctx.window.FirmaTablet.actualizarCopia("sol1", "otro@acme.com");
+  assert.deepEqual(Object.keys(ctx.__update), ["copia_a"],
+    "solo copia_a: un update amplio podría pisar el estado de la solicitud");
+  assert.equal(ctx.__update.copia_a, "otro@acme.com");
+  await ctx.window.FirmaTablet.actualizarCopia("sol1", "");
+  assert.equal(ctx.__update.copia_a, null, "vaciarlo lo deja en null, no en cadena vacía");
+});
+
 test("firmaTablet.js se carga en la página de órdenes", () => {
   // ordenes-flujo.js NO es diferido: si el módulo no está en el HTML, el
   // botón de tablet revienta con ReferenceError en el primer clic.

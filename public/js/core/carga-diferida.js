@@ -48,7 +48,11 @@ window.CargaDiferida = (() => {
   const GSTATIC = "https://www.gstatic.com/firebasejs/10.10.0/";
   const MODULOS = {
     firmaPad:   "/js/ui/firmaPad.js?v=dev3",
-    devolucion: "/js/pages/ordenes-devolucion.js?v=dev19",
+    // Protocolo de la tablet de firmas. En /ordenes/ ya viene del HTML
+    // (ordenes-flujo lo usa y no es diferido); esto cubre a quien cargue
+    // un módulo de firma desde otra página.
+    firmaTablet: "/js/ui/firmaTablet.js?v=1",
+    devolucion: "/js/pages/ordenes-devolucion.js?v=dev20",
     // Solo lo necesita el cierre de una devolución con faltantes (itemizar lo
     // que el cliente no devolvió) — no tiene por qué pesar en cada orden.
     cobros:     "/js/services/cobrosEquiposService.js?v=nd1",
@@ -83,10 +87,15 @@ window.CargaDiferida = (() => {
     // Módulos de acción de órdenes. Cada uno garantiza sus dependencias:
     // el check-in de devolución necesita el pad de firma y storage; el
     // informe/cierre de visita y las fotos suben archivos a storage.
+    // El protocolo de la tablet: ya cargado, no se vuelve a traer.
+    firmaTablet() {
+      return window.FirmaTablet ? Promise.resolve() : script(MODULOS.firmaTablet);
+    },
     devolucion() {
       return window.OrdenesDevolucion ? Promise.resolve()
         : this.storage()
             .then(() => script(MODULOS.firmaPad))
+            .then(() => this.firmaTablet())
             .then(() => script(MODULOS.cobros))
             .then(() => script(MODULOS.devolucion));
     },
@@ -109,6 +118,7 @@ window.CargaDiferida = (() => {
       return window.abrirEntregaParcial ? Promise.resolve()
         : this.storage()
             .then(() => script(MODULOS.firmaPad))
+            .then(() => this.firmaTablet())
             .then(() => script(MODULOS.entregaParcial));
     },
     casosViejos() {
