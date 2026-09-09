@@ -144,4 +144,4 @@ async function cerrarFichasPoc({
   return { cerradas, simsAjenos, deOtros };
 }
 
-module.exports = { cerrarFichasPoc, fichasDelCliente, buscarFichasVivas, normSerial };
+module.exports = { cerrarFichasPoc, cerrarFicha: cerrarUna, fichasDelCliente, buscarFichasVivas, normSerial };
