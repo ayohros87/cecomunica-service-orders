@@ -6,10 +6,12 @@ const contratoDocId = params.get("id");
 // regresa a la ficha del cliente con el contrato reabierto. Sin él, la lista
 // vieja. El destino se arma con el cliente del contrato, por eso es función.
 const volverCentro = params.get("volver") === "centro";
-function destinoVolver() {
+function destinoVolver(aviso = "") {
   const cid = contratoActual?.cliente_id;
+  // `aviso`: por qué se rebota (el Centro lo muestra; aquí el toast moría
+  // con la redirección).
   return (volverCentro && cid)
-    ? `../clientes/centro.html?id=${encodeURIComponent(cid)}&contrato=${encodeURIComponent(contratoDocId)}`
+    ? `../clientes/centro.html?id=${encodeURIComponent(cid)}&contrato=${encodeURIComponent(contratoDocId)}${aviso ? `&aviso=${encodeURIComponent(aviso)}` : ""}`
     : "index.html";
 }
 let modelosDisponibles = [];
@@ -53,14 +55,14 @@ async function cargarContrato() {
   // 3) Bloquear edición si ya fue aprobado
   if (c.estado === "activo") {
     Toast.show('Este contrato ya fue aprobado y no se puede editar.', 'bad');
-    window.location.href = volverCentro ? destinoVolver() : `imprimir-contrato.html?id=${encodeURIComponent(contratoDocId)}`;
+    window.location.href = volverCentro ? destinoVolver("activo") : `imprimir-contrato.html?id=${encodeURIComponent(contratoDocId)}`;
     return;
   }
   // 3b) Con un enlace de firma pendiente el cliente está leyendo una copia
   // congelada: editar por debajo la dejaría firmando otra cosa (2026-09-04).
   if (c.estado === "aprobado" && c.firma_solicitud_estado === "pendiente") {
     Toast.show('Este contrato tiene un enlace de firma pendiente: no se edita hasta que el cliente firme o se anule la solicitud.', 'bad');
-    window.location.href = volverCentro ? destinoVolver() : `../clientes/centro.html?id=${encodeURIComponent(c.cliente_id || "")}`;
+    window.location.href = volverCentro ? destinoVolver("firma_pendiente") : `../clientes/centro.html?id=${encodeURIComponent(c.cliente_id || "")}&aviso=firma_pendiente`;
     return;
   }
   // Plan por serial del Centro: la modalidad (sin equipo / refurbished) se
@@ -106,7 +108,7 @@ async function cargarContrato() {
 
   // 6) Cargar filas de equipos
   (c.equipos || []).forEach(eq =>
-    agregarEquipo(eq.modelo_id || "", eq.modelo || "", eq.cantidad, eq.precio, eq.descripcion)
+    agregarEquipo(eq.modelo_id || "", eq.modelo || "", eq.cantidad, eq.precio, eq.descripcion, eq.modalidad)
   );
 
   // 6b) Cargar otros conceptos (del catálogo) y recalcular
@@ -114,17 +116,27 @@ async function cargarContrato() {
   calcularTotal();
 }
 
-function agregarEquipo(modelo_id = '', modeloNombre = '', cantidad = 1, precio = 0, descripcion = "Equipos de Comunicación") {
+// Modalidad por línea: 'alquiler' (equipo de CECOMUNICA) o 'propio' (del
+// cliente). El editor la ignoraba y al guardar la BORRABA de la línea — y sin
+// ella todo cuenta como alquiler (Cerdas, 2026-09-09). Obligatoria: sin valor
+// por defecto y no se guarda hasta que cada fila la tenga.
+function agregarEquipo(modelo_id = '', modeloNombre = '', cantidad = 1, precio = 0, descripcion = "Equipos de Comunicación", modalidad = '') {
   const tr = document.createElement("tr");
 
   const opciones = modelosDisponibles
     .map(m => `<option value="${m.modelo_id}">${m.modelo}</option>`)
     .join('');
+  const mod = (modalidad === 'propio' || modalidad === 'alquiler') ? modalidad : '';
 
   tr.innerHTML = `
     <td><select class="td-select modelo" aria-label="Modelo">${opciones}</select></td>
     <td><input class="td-input descripcion" type="text" value="${descripcion}" aria-label="Descripción"></td>
     <td><input class="td-input td-mono cantidad" type="number" min="1" value="${cantidad}" aria-label="Cantidad"></td>
+    <td><select class="td-select modalidad" aria-label="Modalidad" title="Alquiler = equipo de CECOMUNICA · Del cliente = equipo propiedad del cliente">
+      <option value="" ${mod ? '' : 'selected'}>¿De quién es?</option>
+      <option value="alquiler" ${mod === 'alquiler' ? 'selected' : ''}>Alquiler</option>
+      <option value="propio" ${mod === 'propio' ? 'selected' : ''}>Del cliente</option>
+    </select></td>
     <td><span class="minput"><input class="td-input td-mono precio" type="number" min="0" step="any" value="${precio}" aria-label="Precio unitario"></span></td>
     <td class="td-amount subtotal">$0.00</td>
     <td class="td-actions">
@@ -273,14 +285,22 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
     const modelo_id = row.querySelector(".modelo").value.trim();
     const modelo = modelosDisponibles.find(m => m.modelo_id === modelo_id)?.modelo || "";
     const descripcion = (row.querySelector(".descripcion")?.value || "").trim() || "Equipos de Comunicación";
+    const modalidad = row.querySelector(".modalidad")?.value || "";
     return {
       modelo_id,
       modelo,
       descripcion,
       cantidad: parseInt(row.querySelector(".cantidad").value || 0),
-      precio: parseFloat(row.querySelector(".precio").value || 0)
+      precio: parseFloat(row.querySelector(".precio").value || 0),
+      ...(modalidad === 'propio' || modalidad === 'alquiler' ? { modalidad } : {}),
     };
   });
+  if (equipos.some(e => !e.modalidad)) {
+    Toast.show('Indica en cada línea si el equipo es alquiler o del cliente', 'warn');
+    document.querySelector('#tablaEquipos .modalidad:not([disabled])')?.focus();
+    if (btnSubmit) btnSubmit.disabled = false;
+    return;
+  }
   const t = calcularTotal(); // recalcula equipos + otros conceptos (mensual + primer pago)
   const accionSeleccionada = document.getElementById("accion").value;
   const esRenovacion = accionSeleccionada === "Renovación";

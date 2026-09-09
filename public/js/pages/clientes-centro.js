@@ -64,6 +64,14 @@ window.Centro = {
         // Deep-link al contrato (?contrato=): el editor del módulo viejo vuelve
         // aquí y reabre el mismo contrato que se estaba viendo (2026-09-07).
         this.cSel = params.get('contrato') || null;
+        // ?aviso=: el editor de contratos rebota aquí cuando no puede editar
+        // y dice por qué (antes el toast se perdía en la redirección).
+        const AVISOS = {
+          activo: 'Ese contrato ya está ACTIVO y no se edita: los cambios van por anexo, ajuste de tarifa o renovación',
+          firma_pendiente: 'Ese contrato tiene un enlace de firma abierto: retira el enlace desde el expediente y podrás editarlo',
+        };
+        const aviso = AVISOS[params.get('aviso') || ''];
+        if (aviso) setTimeout(() => Toast.show(aviso, 'warn'), 300);
         if (id) await this.abrir(id, { push: false });
         else await this.cargarLista(true);
       } catch (e) { console.error(e); Toast.show('Error al iniciar', 'bad'); }
@@ -1011,9 +1019,11 @@ window.Centro = {
       ${c.observaciones ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0; max-width:72ch;">${this.esc(c.observaciones)}</p>` : ''}`,
       footer: `
         <a href="../contratos/documento.html?id=${encodeURIComponent(c.id)}" class="btn-quiet">Documento completo ›</a>
-        <a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}&volver=centro" class="btn-quiet">Editar</a>
+        ${this._btnEditarContrato(c)}
         <span class="sep"></span>
         ${this._btnsFirmadoContrato(c)}
+        ${c.estado === 'aprobado' && !c.firmado && c.firma_solicitud_estado === 'pendiente' && this.puedeCrearGestion()
+          ? `<button class="btn btn-ghost cg-act" onclick="Centro.retirarEnlaceFirma('${this.esc(c.id)}')" title="El enlace enviado deja de servir y el contrato vuelve a poder editarse">Retirar enlace de firma…</button>` : ''}
         ${c.estado === 'pendiente_aprobacion' && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
           ? `<button class="btn btn-primary cg-act" onclick="Centro.aprobarContrato('${this.esc(c.id)}')">Aprobar contrato</button>` : ''}
         ${ContratoAnulacion.esAnulable(c) && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
@@ -1115,6 +1125,40 @@ window.Centro = {
   _aceptaFirmado(c) {
     return (c?.estado === 'aprobado' && !c.firmado) || (c?.estado === 'activo' && !c.firmado_url);
   },
+  // "Editar" del expediente: el editor rechaza un contrato ACTIVO y uno con
+  // enlace de firma abierto (rebotaba al Centro sin decir por qué — Cerdas,
+  // 2026-09-09). Aquí se dice de frente y, si es el enlace, se ofrece retirarlo.
+  _btnEditarContrato(c) {
+    const quieto = (txt, why) => `<span class="btn-quiet" style="opacity:.65; cursor:default;" title="${this.esc(why)}">${txt}</span>`;
+    if (c.estado === 'activo') return quieto('Editar · no aplica (activo)', 'Un contrato activo ya no se edita: los cambios van por anexo, ajuste de tarifa o renovación');
+    if (c.estado === 'aprobado' && c.firma_solicitud_estado === 'pendiente') {
+      return quieto('Editar · retira el enlace de firma primero', 'El cliente tiene un enlace de firma abierto sobre una copia congelada del contrato: retira el enlace y podrás editar');
+    }
+    return `<a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}&volver=centro" class="btn-quiet">Editar</a>`;
+  },
+  // Retirar un enlace de firma pendiente: pendiente → cancelado en la
+  // solicitud (la página pública lo muestra como "no válido"; la regla lo
+  // permite a admin/gerente/vendedor) y el contrato vuelve a editarse. Al
+  // reenviar se genera un enlace nuevo con la copia actualizada.
+  async retirarEnlaceFirma(id) {
+    const c = this.contratos.find(x => x.id === id);
+    if (!c || c.firma_solicitud_estado !== 'pendiente' || !c.firma_solicitud_id) { Toast.show('Este contrato no tiene un enlace de firma pendiente', 'warn'); return; }
+    this._cerrarModal();
+    const ok = await Modal.confirm({
+      title: 'Retirar el enlace de firma', danger: true, confirmLabel: 'Retirar enlace',
+      message: `El enlace que se le envió al cliente deja de servir (verá "enlace no válido"). El contrato
+        <b class="cg-mono">${this.esc(c.contrato_id || c.id)}</b> vuelve a poder editarse; para firmar habrá que enviar un enlace nuevo.`,
+    });
+    if (!ok) { this.abrirGestion(`ct-${c.id}`); return; }
+    try {
+      await firebase.firestore().collection('firma_solicitudes').doc(c.firma_solicitud_id).update({ estado: 'cancelado' });
+      await ContratosService.updateContrato(c.id, { firma_solicitud_estado: 'cancelado' });
+      c.firma_solicitud_estado = 'cancelado';
+      Toast.show('Enlace retirado — el contrato ya se puede editar', 'ok');
+    } catch (e) { console.error(e); Toast.show('No se pudo retirar el enlace: ' + (e.message || e), 'bad'); }
+    this.abrirGestion(`ct-${c.id}`);
+  },
+
   _btnsFirmadoContrato(c) {
     if (!c || !this.puedeCrearGestion()) return '';
     const esperaFirma = c.estado === 'aprobado' && !c.firmado;
@@ -2843,15 +2887,27 @@ window.Centro = {
     } catch (e) { console.error(e); Toast.show('No se pudo crear la solicitud', 'bad'); }
   },
 
+  // Modalidad de la línea: de quién es el equipo. Antes era un ganchito
+  // "del cliente" que nadie marcaba y TODO salía como alquiler (Cerdas,
+  // 2026-09-09): ahora es una elección obligatoria sin valor por defecto —
+  // _lineasModelo devuelve modalidad null si no se eligió y los wizards
+  // no dejan crear/aumentar hasta que cada línea la tenga.
+  _selModalidad(pref, val, extra = '') {
+    const v = (val === 'propio' || val === 'alquiler') ? val : '';
+    return `<select class="form-select" data-${pref}-modalidad ${extra} style="width:150px; flex:none;"
+        title="Alquiler = equipo de CECOMUNICA en renta · Del cliente = equipo propiedad del cliente (tarifa de servicio)">
+        <option value="" ${v ? '' : 'selected'}>¿De quién es?</option>
+        <option value="alquiler" ${v === 'alquiler' ? 'selected' : ''}>Alquiler</option>
+        <option value="propio" ${v === 'propio' ? 'selected' : ''}>Del cliente</option>
+      </select>`;
+  },
   // Fila de línea modelo (+cantidad, +precio opcional) con el SELECT del catálogo.
   _lineaModeloHtml(pref, conPrecio) {
     return `<div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
       ${this._selModelo(`data-${pref}-modelo style="flex:1;"`)}
       <input class="form-input" data-${pref}-cant type="number" min="1" value="1" style="width:86px;" title="Cantidad">
       ${conPrecio ? `<input class="form-input" data-${pref}-precio type="number" min="0" step="1" placeholder="$/mes" style="width:110px;" title="Precio mensual">
-      <label class="cg-toggle" style="flex:none; font-size:12px; padding:4px 9px;"
-        title="Equipo propiedad del cliente — la línea es tarifa de servicio, no alquiler">
-        <input type="checkbox" data-${pref}-propio> del cliente</label>` : ''}
+      ${this._selModalidad(pref)}` : ''}
     </div>`;
   },
   _addLineaModelo(contId, pref, conPrecio) {
@@ -2971,16 +3027,20 @@ window.Centro = {
     const selects = [...document.querySelectorAll(`select[data-${pref}-modelo]`)];
     const cants = [...document.querySelectorAll(`input[data-${pref}-cant]`)];
     const precios = [...document.querySelectorAll(`input[data-${pref}-precio]`)];
-    const propios = [...document.querySelectorAll(`input[data-${pref}-propio]`)];
+    const modalidades = [...document.querySelectorAll(`select[data-${pref}-modalidad]`)];
     return selects.map((s, i) => {
       const m = this._modeloDeSelect(s);
+      // Modalidad por línea: 'propio' = equipo del cliente (tarifa de
+      // servicio); 'alquiler' = equipo de CECOMUNICA en renta; null = el
+      // vendedor todavía no dijo (los wizards lo exigen antes de guardar).
+      const mod = modalidades[i]?.value;
       return m ? { modelo: m.label, modelo_id: m.id,
         cantidad: Math.max(1, Number(cants[i]?.value || 1)), precio: Number(precios[i]?.value || 0),
-        // Modalidad por línea (SERV mixto): 'propio' = equipo del cliente,
-        // tarifa de servicio; 'alquiler' = equipo de CECOMUNICA en renta.
-        modalidad: propios[i]?.checked ? 'propio' : 'alquiler' } : null;
+        modalidad: (mod === 'propio' || mod === 'alquiler') ? mod : null } : null;
     }).filter(Boolean);
   },
+  _lineasSinModalidad(lineas) { return (lineas || []).filter(l => !l.modalidad).length; },
+  MSG_SIN_MODALIDAD: 'Indica en cada línea si el equipo es alquiler o del cliente',
   _aumLineas() { return this._lineasModelo('wau'); },
   _aumCargos() {
     return [...document.querySelectorAll('.wa-cargo')].map(f => {
@@ -3238,6 +3298,11 @@ window.Centro = {
     }
     if (!lineas.length) { Toast.show('Indica al menos un modelo (de la lista)', 'warn'); return; }
     if (lineas.some(l => !(l.precio > 0))) { Toast.show('Cada línea necesita su precio mensual', 'warn'); return; }
+    if (this._lineasSinModalidad(lineas)) {
+      Toast.show(this.MSG_SIN_MODALIDAD, 'warn');
+      document.querySelector('select[data-wau-modalidad]:not([disabled])')?.focus();
+      return;
+    }
     // Candado (verificación 2026-09-08): un anexo de regularización cierra
     // sin bodega, OS ni entrega — si llevara radios nuevos, esos radios
     // nunca saldrían. Las cantidades tienen que ser exactamente los seriales.
@@ -3593,8 +3658,7 @@ window.Centro = {
       ${this._selModelo(`data-${pref}-modelo disabled style="flex:1;"`, l?.modelo_id, l?.modelo)}
       <input class="form-input" data-${pref}-cant type="number" readonly value="${Math.max(1, Number(l?.cantidad || 1))}" style="width:86px; background:var(--surface-sunken, #EEF2F6);" title="Cantidad — fija por los seriales">
       <input class="form-input" data-${pref}-precio type="number" min="0" step="1" placeholder="$/mes" value="${l?.precio != null && l.precio !== '' ? Number(l.precio).toFixed(2) : ''}" style="width:110px;" title="Precio mensual">
-      <label class="cg-toggle" style="flex:none; font-size:12px; padding:4px 9px; opacity:.8;" title="Modalidad fija por la propiedad del serial">
-        <input type="checkbox" data-${pref}-propio disabled ${l?.modalidad === 'propio' ? 'checked' : ''}> del cliente</label>
+      ${this._selModalidad(pref, l?.modalidad === 'propio' ? 'propio' : 'alquiler', 'disabled')}
     </div>`;
   },
 
@@ -3603,9 +3667,7 @@ window.Centro = {
       ${this._selModelo(`data-${pref}-modelo style="flex:1;"`, l?.modelo_id, l?.modelo)}
       <input class="form-input" data-${pref}-cant type="number" min="1" value="${Math.max(1, Number(l?.cantidad || 1))}" style="width:86px;" title="Cantidad">
       ${conPrecio ? `<input class="form-input" data-${pref}-precio type="number" min="0" step="1" placeholder="$/mes" value="${l?.precio != null && l.precio !== '' ? Number(l.precio).toFixed(2) : ''}" style="width:110px;" title="Precio mensual">
-      <label class="cg-toggle" style="flex:none; font-size:12px; padding:4px 9px;"
-        title="Equipo propiedad del cliente — la línea es tarifa de servicio, no alquiler">
-        <input type="checkbox" data-${pref}-propio ${l?.modalidad === 'propio' ? 'checked' : ''}> del cliente</label>` : ''}
+      ${this._selModalidad(pref, l?.modalidad)}` : ''}
       <button type="button" class="btn btn-ghost" style="padding:4px 8px;" title="Quitar"
         onclick="this.parentElement.remove(); Centro._previewTarifario()">✕</button>
     </div>`;
@@ -3632,8 +3694,9 @@ window.Centro = {
       if (!l) continue;
       // La modalidad separa la fusión: alquiler y equipo-del-cliente del
       // mismo modelo son líneas DISTINTAS (tarifas distintas) en SERV mixto.
-      const mod = l.modalidad === 'propio' ? 'propio' : 'alquiler';
-      const k = (l.modelo_id || norm(l.modelo)) + '|' + mod;
+      // Sin modalidad (legacy) se fusiona aparte y llega al wizard sin elegir.
+      const mod = l.modalidad === 'propio' ? 'propio' : l.modalidad === 'alquiler' ? 'alquiler' : null;
+      const k = (l.modelo_id || norm(l.modelo)) + '|' + (mod || '?');
       if (!l.modelo_id && !norm(l.modelo)) continue;
       const cur = out.get(k);
       if (!cur) out.set(k, { modelo_id: l.modelo_id || null, modelo: l.modelo || '', modalidad: mod,
@@ -3692,14 +3755,17 @@ window.Centro = {
     for (const c of origenesSel) {
       (c.equipos || []).forEach(l => lineas.push({ modelo_id: l.modelo_id, modelo: l.modelo,
         cantidad: l.cantidad, precio: l.precio,
-        // Un origen PROP entero era "equipo del cliente"; SERV ya lo trae por línea.
-        modalidad: l.modalidad || (this._codigoTipo(c) === 'PROP' ? 'propio' : 'alquiler') }));
+        // Un origen PROP entero era "equipo del cliente" y uno ALQ, alquiler;
+        // SERV lo trae por línea — y si no lo trae (legacy), queda SIN
+        // modalidad para que el vendedor la declare (no se asume alquiler).
+        modalidad: l.modalidad || (this._codigoTipo(c) === 'PROP' ? 'propio' : this._codigoTipo(c) === 'ALQ' ? 'alquiler' : null) }));
     }
     if (opts.renovarCuenta && custodia.length) {
       const porModelo = new Map();
       custodia.forEach(e => {
-        const mod = e.propiedad === 'cliente' ? 'propio' : 'alquiler';
-        const k = (e.modelo_id || (e.modelo_label || '?')) + '|' + mod;
+        // Propiedad desconocida → sin modalidad: la declara el vendedor.
+        const mod = e.propiedad === 'cliente' ? 'propio' : (e.propiedad && e.propiedad !== 'desconocida') ? 'alquiler' : null;
+        const k = (e.modelo_id || (e.modelo_label || '?')) + '|' + (mod || '?');
         const cur = porModelo.get(k) || { modelo_id: e.modelo_id || null, modelo: e.modelo_label || '', modalidad: mod, cantidad: 0, precio: '' };
         cur.cantidad += 1; porModelo.set(k, cur);
       });
@@ -4304,6 +4370,11 @@ window.Centro = {
     if (!lineas.length) { Toast.show('Indica al menos un modelo (de la lista)', 'warn'); return; }
     if (['SERV', 'ALQ', 'PROP'].includes(tipo) && lineas.some(l => !(l.precio > 0))) {
       Toast.show('Cada línea necesita su precio mensual', 'warn'); return;
+    }
+    if (['SERV', 'ALQ', 'PROP'].includes(tipo) && this._lineasSinModalidad(lineas)) {
+      Toast.show(this.MSG_SIN_MODALIDAD, 'warn');
+      document.querySelector('select[data-wcm-modalidad]:not([disabled])')?.focus();
+      return;
     }
 
     const candidatos = this._wcCandidatos();
