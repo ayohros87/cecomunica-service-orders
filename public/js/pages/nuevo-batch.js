@@ -1018,21 +1018,21 @@ document.getElementById("addCliente").onclick = async () => {
           return;
         }
 
-        // Fichas POC que este guardado ACTUALIZA en vez de crear (re-registro
-        // del mismo radio para el mismo cliente). serialKey → device existente.
-        const reRegistro = new Map();
+        // Fichas POC viejas del mismo cliente que este guardado CIERRA al
+        // terminar (registros anteriores que nadie cerró).
+        const cerrarFichas = [];
 
         bloquear(true);
         try {
-          // 2) Seriales que YA existen como equipo no borrado. Para el MISMO
-          //    cliente es un RE-REGISTRO: el mismo radio del mismo cliente se
-          //    vuelve a programar (evento que se repite, contrato temporal que
-          //    se renueva). Antes era un hard-stop que mandaba a borrar los
-          //    registros uno por uno desde POC — 20 radios de Municipio de
-          //    Arraiján se quedaron sin cargar por eso (2026-09-09). Ahora se
-          //    ofrece ACTUALIZAR el registro existente con la programación
-          //    nueva: mismo doc (conserva SIM, historial y el enlace al pool),
-          //    Unit ID / IP / grupos / contrato nuevos.
+          // 2) Seriales que YA existen como equipo no borrado. Con el MISMO
+          //    cliente casi siempre es una ficha ANTERIOR que no se cerró: el
+          //    radio volvió, se vuelve a programar y el lote nuevo trae SU
+          //    PROPIO Unit ID y SU PROPIO SIM (Municipio de Arraiján,
+          //    2026-09-09 — 20 radios trancados por esto). Antes era un
+          //    hard-stop que mandaba a borrar las fichas una por una desde POC.
+          //    Ahora el lote se crea NUEVO y las fichas viejas se cierran en el
+          //    mismo guardado, para que el radio no quede con dos registros
+          //    abiertos en la plataforma.
           //    Para OTRO cliente solo se avisa (decisión 2026-07-22): el radio
           //    pudo reasignarse por reemplazo/devolución sin que nadie liberara
           //    el device viejo — quien registra confirma y queda a cargo de
@@ -1060,35 +1060,37 @@ document.getElementById("addCliente").onclick = async () => {
             });
           }
           if (candidatosMismo.size) {
-            // Con más de un registro vivo por serial (dato sucio anterior al
-            // candado) se actualiza el más reciente y los otros quedan como
-            // están — el aviso lo dice, no se toca nada en silencio.
-            let duplicados = 0;
-            for (const [k, lista] of candidatosMismo) {
+            // Se cierran TODAS las fichas vivas de esos seriales con este
+            // cliente (si un serial trae más de una, es dato sucio anterior al
+            // candado y tampoco puede quedarse abierto).
+            for (const lista of candidatosMismo.values()) {
               lista.sort((a, b) => (b.created_at?.toMillis?.() || 0) - (a.created_at?.toMillis?.() || 0));
-              if (lista.length > 1) duplicados += lista.length - 1;
-              reRegistro.set(k, lista[0]);
+              cerrarFichas.push(...lista);
             }
             const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
-            const filas = [...reRegistro.values()].slice(0, 12).map(d => {
+            const filas = cerrarFichas.slice(0, 12).map(d => {
               const fecha = d.created_at?.toDate?.().toLocaleDateString('es-PA') || 'sin fecha';
               return `<strong>${esc(d.serial)}</strong> — Unit ID ${esc(d.unit_id || '—')}` +
                 `${d.contrato_id ? ` · contrato ${esc(d.contrato_id)}` : ''}` +
-                ` · ${d.activo === false ? 'inactivo' : 'ACTIVO'} · registrado ${esc(fecha)}`;
+                `${d.sim_number ? ` · SIM ${esc(d.sim_number)}` : ''}` +
+                ` · ${d.activo === false ? 'inactiva' : 'ACTIVA'} · del ${esc(fecha)}`;
             }).join('<br>');
-            const mas = reRegistro.size > 12 ? `<br>… y ${reRegistro.size - 12} más` : '';
-            const activos = [...reRegistro.values()].filter(d => d.activo !== false).length;
+            const mas = cerrarFichas.length > 12 ? `<br>… y ${cerrarFichas.length - 12} más` : '';
+            const activas = cerrarFichas.filter(d => d.activo !== false).length;
+            const conSim = cerrarFichas.filter(d => (d.sim_number || '').toString().trim()).length;
             const ok = await Modal.confirm({
-              title: 'Estos radios ya están en POC para este cliente',
-              confirmLabel: 'Re-registrar (actualizar los existentes)',
+              title: 'Estos radios ya tienen ficha abierta en POC con este cliente',
+              confirmLabel: 'Crear el lote y cerrar las fichas viejas',
               cancelLabel: 'Cancelar',
               message:
-                `${reRegistro.size === 1 ? 'Este radio ya tiene' : `Estos ${reRegistro.size} radios ya tienen`} ficha en POC con este mismo cliente:<br><br>${filas}${mas}<br><br>` +
-                `Si es un <strong>re-registro</strong> (el mismo radio se vuelve a programar para el cliente), ` +
-                `se actualiza la ficha existente con el Unit ID, IP, grupos y contrato de este lote — ` +
-                `no se crea un duplicado y se conserva el SIM y el historial de cada radio.` +
-                (activos ? `<br><br>⚠️ ${activos} de ${reRegistro.size} figura(n) todavía <strong>ACTIVO(S)</strong> en la plataforma: confirma que la programación vieja ya no está en uso.` : '') +
-                (duplicados ? `<br><br>Ojo: hay ${duplicados} ficha(s) repetida(s) de estos mismos seriales. Se actualiza la más reciente; las otras quedan como están — revísalas en POC.` : ''),
+                `${cerrarFichas.length === 1 ? 'Este radio arrastra' : `Estos radios arrastran ${cerrarFichas.length}`} ` +
+                `ficha${cerrarFichas.length === 1 ? '' : 's'} de un registro anterior con este mismo cliente:<br><br>${filas}${mas}<br><br>` +
+                `El lote se crea <strong>nuevo</strong>, con el Unit ID y el SIM que le toquen ahora. ` +
+                `Las fichas de arriba se <strong>cierran</strong> (baja lógica) para que el radio no quede con dos ` +
+                `registros abiertos en la plataforma; quedan en el historial y se pueden restaurar desde POC.` +
+                (conSim ? `<br><br>${conSim} de esas fichas trae un SIM viejo. Te pregunto aparte qué hacer con ${conSim === 1 ? 'él' : 'ellos'}: ` +
+                  `si el SIM ya está asignado a otro radio en el pool, no se toca.` : '') +
+                (activas ? `<br><br>⚠️ ${activas} figura${activas === 1 ? '' : 'n'} todavía <strong>ACTIVA${activas === 1 ? '' : 'S'}</strong> en la plataforma.` : ''),
             });
             if (!ok) { bloquear(false); return; }
           }
@@ -1098,12 +1100,12 @@ document.getElementById("addCliente").onclick = async () => {
           }
 
           // 3) Unit IDs del rango nuevo ya usados por equipos no borrados del
-          //    mismo cliente. Los que se van a re-registrar NO cuentan: su Unit
-          //    ID viejo se libera en el mismo guardado.
-          const idsReRegistro = new Set([...reRegistro.values()].map(d => d.id));
+          //    mismo cliente. Las fichas que se cierran en este mismo guardado
+          //    NO cuentan: su Unit ID queda libre.
+          const idsACerrar = new Set(cerrarFichas.map(d => d.id));
           const delCliente = await PocService.getByCliente({ clienteId: cliente, fresh: true });
           const unitsEnUso = new Set(delCliente
-            .filter(d => d.deleted !== true && !idsReRegistro.has(d.id))
+            .filter(d => d.deleted !== true && !idsACerrar.has(d.id))
             .map(d => (d.unit_id ?? '').toString().trim()).filter(Boolean));
           const choques = [];
           for (let i = 0; i < seriales.length; i++) {
@@ -1235,44 +1237,37 @@ document.getElementById("addCliente").onclick = async () => {
         activo: true,
         deleted: false
         };
-          // Re-registro: se ACTUALIZA la ficha que ya tiene el radio con este
-          // cliente. No se pisa el alta original (created_at / creado_por) ni
-          // el SIM — el radio sigue siendo el mismo, solo cambia cómo quedó
-          // programado. El trigger del pool no se altera: mismo doc, mismo
-          // serial, así que el enlace serial↔ficha se mantiene.
-          const existente = reRegistro.get(Serial.clave(serialesFinal[i]));
-          if (existente) {
-            const { created_at, creado_por_uid, creado_por_email, ...cambia } = data;
-            await PocService.updatePocDevice(existente.id, {
-              ...cambia,
-              // El ancla vieja no puede sobrevivir al re-registro: si este lote
-              // no sale de una gestión, la ficha deja de apuntar a la anterior.
-              gestion_id: gestionSel ? gestionSel.id : null,
-              gestion_tipo: gestionSel ? (gestionSel.tipo || null) : null,
-              updated_by: firebase.auth().currentUser.uid,
-              updated_by_email: firebase.auth().currentUser.email,
-            });
-            PocService.addLog({
-              equipo_id: existente.id,
-              fecha: firebase.firestore.FieldValue.serverTimestamp(),
-              usuario: firebase.auth().currentUser.email,
-              accion: 're-registro',
-              origen: 'nuevo-batch',
-              cambios: {
-                antes: {
-                  unit_id: existente.unit_id ?? null, ip: existente.ip ?? null,
-                  contrato_id: existente.contrato_id ?? null, radio_name: existente.radio_name ?? null,
-                  grupos: existente.grupos || [], activo: existente.activo !== false,
-                },
-                despues: {
-                  unit_id: cambia.unit_id, ip: cambia.ip,
-                  contrato_id: cambia.contrato_id ?? null, radio_name: cambia.radio_name,
-                  grupos: cambia.grupos, activo: true,
-                },
-              },
-            }).catch(e => console.warn('[nuevo-batch] poc_log del re-registro falló (no crítico):', e));
-          } else {
-            await PocService.addPocDevice(data);
+          await PocService.addPocDevice(data);
+        }
+
+        // Fichas viejas del mismo cliente: se cierran DESPUÉS de crear el lote
+        // nuevo — si la creación falla a medias, el cliente no se queda sin
+        // ningún registro. El trigger del pool tolera el orden: el desenlace
+        // solo suelta la ficha del pool si sigue apuntando al device viejo.
+        let cerradas = 0, fallaronCierres = 0;
+        if (cerrarFichas.length) {
+          const user = firebase.auth().currentUser;
+          const cambios = [];
+          for (const vieja of cerrarFichas) {
+            if (btnSubmitRef) btnSubmitRef.textContent = `Cerrando fichas viejas ${cerradas + fallaronCierres + 1}/${cerrarFichas.length}…`;
+            try {
+              await PocService.softDeletePocDevice(vieja.id, { antes: vieja, user, origen: 'nuevo-batch' });
+              cambios.push({ id: vieja.id, antes: vieja, despues: { ...vieja, deleted: true } });
+              cerradas++;
+            } catch (e) {
+              console.error('[nuevo-batch] no se pudo cerrar la ficha vieja', vieja.id, e);
+              fallaronCierres++;
+            }
+          }
+          // SIM del registro viejo: la pregunta la hace el mismo módulo que la
+          // lista de POC. Si el pool ya tiene ese SIM en OTRO equipo (se
+          // reasignó), liberarDeEquipo limpia solo la ficha y no toca el pool.
+          if (cambios.length && window.SimLiberar) {
+            try { await SimLiberar.procesarDesactivados(cambios); }
+            catch (e) { console.warn('[nuevo-batch] liberación de SIMs no completada:', e); }
+          }
+          if (fallaronCierres) {
+            Toast.show(`El lote se creó, pero ${fallaronCierres} ficha(s) vieja(s) no se pudieron cerrar. Ciérralas desde POC para no dejar el radio duplicado.`, 'bad');
           }
         }
 
@@ -1298,10 +1293,8 @@ document.getElementById("addCliente").onclick = async () => {
           }
         }
 
-        const nuevos = serialesFinal.length - [...reRegistro.keys()]
-          .filter(k => serialesFinal.some(s => Serial.clave(s) === k)).length;
-        Toast.show(reRegistro.size
-          ? `Listo: ${nuevos} equipo(s) creado(s) y ${serialesFinal.length - nuevos} re-registrado(s).`
+        Toast.show(cerradas
+          ? `Listo: ${serialesFinal.length} equipo(s) creado(s) y ${cerradas} ficha(s) vieja(s) cerrada(s).`
           : 'Equipos creados correctamente.', 'ok');
         window.location.href = "index.html";
         } catch (err) {
