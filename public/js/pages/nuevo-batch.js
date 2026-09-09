@@ -616,20 +616,32 @@ async function cargarClientes() {
 
 // Aplica el IP asignado del cliente al <select id="ip">. Si el cliente no tiene
 // IP, limpia la selección y muestra el aviso "Sin información de IP".
+//
+// NO pisa el IP que recepción ya eligió a mano mientras el cliente NO cambie:
+// cargar el archivo del vendedor re-dispara onClienteChange y antes dejaba el
+// campo en el IP de la ficha (o en blanco), borrando la corrección —
+// Municipio de Arraiján, 2026-09-09: la ficha arrastra "gob.cecomunica.com"
+// del import de 2025 y todos sus lotes van a "gob.cecomunica.net". Es el mismo
+// caso que el select de contrato (ver cargarContratosDelCliente).
 function aplicarIpDelCliente() {
   const clienteSelect = document.getElementById("cliente");
   const ipSelect = document.getElementById("ip");
   const aviso = document.getElementById("ipSinInfo");
   const ipCliente = (clienteSelect.selectedOptions[0]?.dataset.ip || "").trim();
+  const clienteId = clienteSelect.value || "";
+  const mismoCliente = !!clienteId && clienteId === ipSelect.dataset.clienteId;
+  const elegidoAMano = (ipSelect.value || "").trim();
+  const conservar = mismoCliente && !!elegidoAMano;
+  ipSelect.dataset.clienteId = clienteId;
 
   if (ipCliente) {
     if (![...ipSelect.options].some(o => o.value === ipCliente)) {
       ipSelect.appendChild(new Option(ipCliente, ipCliente));
     }
-    ipSelect.value = ipCliente;
+    if (!conservar) ipSelect.value = ipCliente;
     if (aviso) aviso.style.display = "none";
   } else {
-    ipSelect.value = "";
+    if (!conservar) ipSelect.value = "";
     if (aviso) aviso.style.display = "";
   }
 }
@@ -1006,17 +1018,29 @@ document.getElementById("addCliente").onclick = async () => {
           return;
         }
 
+        // Fichas POC que este guardado ACTUALIZA en vez de crear (re-registro
+        // del mismo radio para el mismo cliente). serialKey → device existente.
+        const reRegistro = new Map();
+
         bloquear(true);
         try {
           // 2) Seriales que YA existen como equipo no borrado. Para el MISMO
-          //    cliente es un re-registro y se bloquea (borra/edita el existente).
+          //    cliente es un RE-REGISTRO: el mismo radio del mismo cliente se
+          //    vuelve a programar (evento que se repite, contrato temporal que
+          //    se renueva). Antes era un hard-stop que mandaba a borrar los
+          //    registros uno por uno desde POC — 20 radios de Municipio de
+          //    Arraiján se quedaron sin cargar por eso (2026-09-09). Ahora se
+          //    ofrece ACTUALIZAR el registro existente con la programación
+          //    nueva: mismo doc (conserva SIM, historial y el enlace al pool),
+          //    Unit ID / IP / grupos / contrato nuevos.
           //    Para OTRO cliente solo se avisa (decisión 2026-07-22): el radio
           //    pudo reasignarse por reemplazo/devolución sin que nadie liberara
           //    el device viejo — quien registra confirma y queda a cargo de
           //    depurar el anterior para no dejarlo duplicado.
           const dbq = firebase.firestore();
           const nombreClienteSel = (clienteSelect.selectedOptions[0]?.textContent || '').trim().toUpperCase();
-          const mismoCliente = [], otroCliente = [];
+          const candidatosMismo = new Map();   // serialKey → [devices vivos del mismo cliente]
+          const otroCliente = [];
           for (let i = 0; i < seriales.length; i += 10) {
             const snap = await dbq.collection('poc_devices')
               .where('serial', 'in', seriales.slice(i, i + 10)).get();
@@ -1026,14 +1050,47 @@ document.getElementById("addCliente").onclick = async () => {
               const esMismo = v.cliente_id
                 ? v.cliente_id === cliente
                 : (v.cliente_nombre || v.cliente || '').trim().toUpperCase() === nombreClienteSel;
-              (esMismo ? mismoCliente : otroCliente)
-                .push(`${v.serial} (${v.cliente_nombre || v.cliente || 'sin cliente'})`);
+              if (!esMismo) {
+                otroCliente.push(`${v.serial} (${v.cliente_nombre || v.cliente || 'sin cliente'})`);
+                return;
+              }
+              const k = Serial.clave(v.serial);
+              if (!candidatosMismo.has(k)) candidatosMismo.set(k, []);
+              candidatosMismo.get(k).push({ id: doc.id, ...v });
             });
           }
-          if (mismoCliente.length) {
-            Toast.show(`Estos seriales ya existen en POC para este cliente: ${mismoCliente.join(', ')}. Si es un re-registro, borra o edita el equipo existente.`, 'bad');
-            bloquear(false);
-            return;
+          if (candidatosMismo.size) {
+            // Con más de un registro vivo por serial (dato sucio anterior al
+            // candado) se actualiza el más reciente y los otros quedan como
+            // están — el aviso lo dice, no se toca nada en silencio.
+            let duplicados = 0;
+            for (const [k, lista] of candidatosMismo) {
+              lista.sort((a, b) => (b.created_at?.toMillis?.() || 0) - (a.created_at?.toMillis?.() || 0));
+              if (lista.length > 1) duplicados += lista.length - 1;
+              reRegistro.set(k, lista[0]);
+            }
+            const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            const filas = [...reRegistro.values()].slice(0, 12).map(d => {
+              const fecha = d.created_at?.toDate?.().toLocaleDateString('es-PA') || 'sin fecha';
+              return `<strong>${esc(d.serial)}</strong> — Unit ID ${esc(d.unit_id || '—')}` +
+                `${d.contrato_id ? ` · contrato ${esc(d.contrato_id)}` : ''}` +
+                ` · ${d.activo === false ? 'inactivo' : 'ACTIVO'} · registrado ${esc(fecha)}`;
+            }).join('<br>');
+            const mas = reRegistro.size > 12 ? `<br>… y ${reRegistro.size - 12} más` : '';
+            const activos = [...reRegistro.values()].filter(d => d.activo !== false).length;
+            const ok = await Modal.confirm({
+              title: 'Estos radios ya están en POC para este cliente',
+              confirmLabel: 'Re-registrar (actualizar los existentes)',
+              cancelLabel: 'Cancelar',
+              message:
+                `${reRegistro.size === 1 ? 'Este radio ya tiene' : `Estos ${reRegistro.size} radios ya tienen`} ficha en POC con este mismo cliente:<br><br>${filas}${mas}<br><br>` +
+                `Si es un <strong>re-registro</strong> (el mismo radio se vuelve a programar para el cliente), ` +
+                `se actualiza la ficha existente con el Unit ID, IP, grupos y contrato de este lote — ` +
+                `no se crea un duplicado y se conserva el SIM y el historial de cada radio.` +
+                (activos ? `<br><br>⚠️ ${activos} de ${reRegistro.size} figura(n) todavía <strong>ACTIVO(S)</strong> en la plataforma: confirma que la programación vieja ya no está en uso.` : '') +
+                (duplicados ? `<br><br>Ojo: hay ${duplicados} ficha(s) repetida(s) de estos mismos seriales. Se actualiza la más reciente; las otras quedan como están — revísalas en POC.` : ''),
+            });
+            if (!ok) { bloquear(false); return; }
           }
           if (otroCliente.length) {
             const ok = await Modal.confirm({ title: 'Seriales con otro cliente', confirmLabel: 'Continuar de todos modos', message: `Estos seriales figuran en POC con OTRO cliente: ${otroCliente.join(', ')}.<br><br>Si el radio se reasignó (reemplazo o devolución), continúa — y luego borra o libera el equipo del cliente anterior para no dejarlo duplicado.` });
@@ -1041,10 +1098,12 @@ document.getElementById("addCliente").onclick = async () => {
           }
 
           // 3) Unit IDs del rango nuevo ya usados por equipos no borrados del
-          //    mismo cliente.
+          //    mismo cliente. Los que se van a re-registrar NO cuentan: su Unit
+          //    ID viejo se libera en el mismo guardado.
+          const idsReRegistro = new Set([...reRegistro.values()].map(d => d.id));
           const delCliente = await PocService.getByCliente({ clienteId: cliente, fresh: true });
           const unitsEnUso = new Set(delCliente
-            .filter(d => d.deleted !== true)
+            .filter(d => d.deleted !== true && !idsReRegistro.has(d.id))
             .map(d => (d.unit_id ?? '').toString().trim()).filter(Boolean));
           const choques = [];
           for (let i = 0; i < seriales.length; i++) {
@@ -1176,7 +1235,45 @@ document.getElementById("addCliente").onclick = async () => {
         activo: true,
         deleted: false
         };
-          await PocService.addPocDevice(data);
+          // Re-registro: se ACTUALIZA la ficha que ya tiene el radio con este
+          // cliente. No se pisa el alta original (created_at / creado_por) ni
+          // el SIM — el radio sigue siendo el mismo, solo cambia cómo quedó
+          // programado. El trigger del pool no se altera: mismo doc, mismo
+          // serial, así que el enlace serial↔ficha se mantiene.
+          const existente = reRegistro.get(Serial.clave(serialesFinal[i]));
+          if (existente) {
+            const { created_at, creado_por_uid, creado_por_email, ...cambia } = data;
+            await PocService.updatePocDevice(existente.id, {
+              ...cambia,
+              // El ancla vieja no puede sobrevivir al re-registro: si este lote
+              // no sale de una gestión, la ficha deja de apuntar a la anterior.
+              gestion_id: gestionSel ? gestionSel.id : null,
+              gestion_tipo: gestionSel ? (gestionSel.tipo || null) : null,
+              updated_by: firebase.auth().currentUser.uid,
+              updated_by_email: firebase.auth().currentUser.email,
+            });
+            PocService.addLog({
+              equipo_id: existente.id,
+              fecha: firebase.firestore.FieldValue.serverTimestamp(),
+              usuario: firebase.auth().currentUser.email,
+              accion: 're-registro',
+              origen: 'nuevo-batch',
+              cambios: {
+                antes: {
+                  unit_id: existente.unit_id ?? null, ip: existente.ip ?? null,
+                  contrato_id: existente.contrato_id ?? null, radio_name: existente.radio_name ?? null,
+                  grupos: existente.grupos || [], activo: existente.activo !== false,
+                },
+                despues: {
+                  unit_id: cambia.unit_id, ip: cambia.ip,
+                  contrato_id: cambia.contrato_id ?? null, radio_name: cambia.radio_name,
+                  grupos: cambia.grupos, activo: true,
+                },
+              },
+            }).catch(e => console.warn('[nuevo-batch] poc_log del re-registro falló (no crítico):', e));
+          } else {
+            await PocService.addPocDevice(data);
+          }
         }
 
         // Write-back del IP a la ficha del cliente:
@@ -1201,7 +1298,11 @@ document.getElementById("addCliente").onclick = async () => {
           }
         }
 
-        Toast.show('Equipos creados correctamente.', 'ok');
+        const nuevos = serialesFinal.length - [...reRegistro.keys()]
+          .filter(k => serialesFinal.some(s => Serial.clave(s) === k)).length;
+        Toast.show(reRegistro.size
+          ? `Listo: ${nuevos} equipo(s) creado(s) y ${serialesFinal.length - nuevos} re-registrado(s).`
+          : 'Equipos creados correctamente.', 'ok');
         window.location.href = "index.html";
         } catch (err) {
           console.error('[nuevo-batch] error creando equipos:', err);

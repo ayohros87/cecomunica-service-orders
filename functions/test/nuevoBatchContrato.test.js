@@ -48,6 +48,7 @@ class FakeSelect {
   set value(v) { this._value = this.options.some(o => o.value === v) ? v : ""; }
   get value() { return this._value; }
   get selectedOptions() { const o = this.options.find(x => x.value === this._value); return o ? [o] : []; }
+  appendChild(opt) { this.options.push(opt); return opt; }
   addEventListener() {}
 }
 
@@ -121,6 +122,9 @@ function montar({ contratos = CONTRATOS, modelos = MODELOS } = {}) {
     console,
     document: doc,
     confirm: () => estado.confirmar,      // window.confirm (sandbox.window = sandbox)
+    // `new Option(v, t)` del navegador: lo usa aplicarIpDelCliente para no
+    // perder un IP legacy que no está en la lista de empresa/IPs.
+    Option: class { constructor(value, text) { this.value = value; this.textContent = text ?? value; this.dataset = {}; } },
     Toast: { show: (msg, tipo) => toasts.push({ msg, tipo }) },
     // Desde 2026-09-08 el recorte pregunta con Modal.confirm (no con el nativo).
     Modal: { confirm: async () => estado.confirmar },
@@ -411,4 +415,65 @@ test("un contrato sin consolas no muestra el aviso", async () => {
   await h.sandbox.cargarModeloContrato("docALQ");
 
   assert.equal(h.el("avisoConsolas").hidden, true);
+});
+
+// ── IP del servidor: misma trampa que el contrato ───────────────────────────
+// Brenda, 9-sep-2026: "al cargar el JSON desde el BATCH se está borrando el
+// servidor del cliente". La ficha de MUNICIPIO DE ARRAIJAN arrastra
+// "gob.cecomunica.com" del import de 2025 y todos sus lotes van a
+// "gob.cecomunica.net": recepción corregía el campo, cargaba el archivo del
+// vendedor y la cascada (autoSeleccionarCliente → onClienteChange →
+// aplicarIpDelCliente) volvía a poner el de la ficha. Con un cliente SIN IP el
+// campo quedaba en blanco, que es como se ve "se borró".
+function conListaDeIPs(h) {
+  h.el("ip").innerHTML =
+    '<option value="">Seleccione...</option>' +
+    '<option value="main.cecomunica.net">main.cecomunica.net</option>' +
+    '<option value="gob.cecomunica.net">gob.cecomunica.net</option>' +
+    '<option value="segu.cecomunica.net">segu.cecomunica.net</option>';
+}
+
+test("cargar el archivo del vendedor NO borra el IP corregido a mano", async () => {
+  const h = montar();
+  conListaDeIPs(h);
+  h.el("cliente").options[0].dataset.ip = "gob.cecomunica.com";   // IP legacy de la ficha
+  h.el("cliente").value = "CLI1";
+  h.sandbox.aplicarIpDelCliente();
+  assert.equal(h.el("ip").value, "gob.cecomunica.com", "precondición: entra el IP de la ficha");
+
+  h.el("ip").value = "gob.cecomunica.net";   // recepción lo corrige
+  h.sandbox.aplicarIpDelCliente();           // el archivo del vendedor re-dispara la cascada
+
+  assert.equal(h.el("ip").value, "gob.cecomunica.net",
+    "el IP elegido a mano debe sobrevivir a la carga del archivo");
+});
+
+test("cliente sin IP en la ficha: el IP elegido a mano sobrevive al archivo", async () => {
+  const h = montar();
+  conListaDeIPs(h);
+  h.el("cliente").value = "CLI2";            // sin dataset.ip
+  h.sandbox.aplicarIpDelCliente();
+  assert.equal(h.el("ip").value, "", "precondición: sin IP en la ficha, el campo arranca vacío");
+  assert.equal(h.el("ipSinInfo").style.display, "", "y el aviso 'Sin información de IP' se ve");
+
+  h.el("ip").value = "segu.cecomunica.net";
+  h.sandbox.aplicarIpDelCliente();
+
+  assert.equal(h.el("ip").value, "segu.cecomunica.net");
+});
+
+test("cambiar de cliente sí trae el IP del cliente nuevo", async () => {
+  const h = montar();
+  conListaDeIPs(h);
+  h.el("cliente").options[0].dataset.ip = "gob.cecomunica.com";
+  h.el("cliente").options[1].dataset.ip = "main.cecomunica.net";
+  h.el("cliente").value = "CLI1";
+  h.sandbox.aplicarIpDelCliente();
+  h.el("ip").value = "gob.cecomunica.net";   // corregido a mano para ESE cliente
+
+  h.el("cliente").value = "CLI2";            // otro cliente
+  h.sandbox.aplicarIpDelCliente();
+
+  assert.equal(h.el("ip").value, "main.cecomunica.net",
+    "el IP de un cliente jamás debe quedarse pegado al siguiente");
 });
