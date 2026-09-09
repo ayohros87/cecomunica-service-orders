@@ -57,6 +57,10 @@ window.EquiposPool = {
     migracion_orden: 'Migración · orden',
     migracion_poc: 'Migración · POC',
     venta: 'Venta directa',
+    // Radio que el cliente tenía y el sistema no conocía: lo declaró el
+    // vendedor en un anexo de regularización o en una solicitud de reemplazo
+    // (2026-09-09). Nace sin verificar, como toda ficha que nadie tocó.
+    declarado_vendedor: 'Declarado por el vendedor',
   },
 
 

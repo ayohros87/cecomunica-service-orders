@@ -440,6 +440,57 @@ module.exports = onDocumentWritten(
       return null;
     }
 
+    // ── A00) REEMPLAZO de un radio que el sistema NO conocía ─────────────
+    // (2026-09-09, Alberto). El cliente reporta un radio dañado que nunca
+    // entró al pool: sin ficha no había con qué armar la solicitud, y obligar
+    // a regularizar la cuenta primero para poder reemplazar un radio es pedir
+    // el trámite largo para el trámite corto. El vendedor lo declara en el
+    // wizard y la ficha nace aquí, en custodia del cliente (en cliente, sin
+    // contrato) — exactamente el estado en que ya vivían tantos radios de
+    // campo, así que el resto del flujo de reemplazo no cambia en nada.
+    // El alta la hace el trigger porque las reglas no dejan a un vendedor
+    // crear fichas del pool: se declara, no se inventa inventario.
+    if (creada && after.tipo === "reemplazo" && (after.items || []).some(it => it && it.saliente_sin_ficha === true)) {
+      try {
+        const items = [...(after.items || [])];
+        let nacidas = 0;
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i];
+          if (!it || it.saliente_sin_ficha !== true || it.pool_doc_id_saliente) continue;
+          const r = await pool.upsertContacto({
+            serial: it.serial_saliente,
+            modelo_id: it.modelo_id || null,
+            modelo_label: it.modelo || "",
+            estado: pool.ESTADOS.EN_CLIENTE,
+            noTocarDesde: [pool.ESTADOS.EN_TALLER],
+            tipo: "declaracion_vendedor",
+            refMov: { tipo: "gestion", id: gid, label: gid },
+            origen: "declarado_vendedor",
+            notas: `Declarado en la solicitud de reemplazo ${gid}: el cliente lo tenía y el sistema no lo sabía`,
+            extra: {
+              asignacionSiFalta: {
+                contrato_doc_id: null, contrato_id: "",
+                cliente_id: after.cliente_id || "", cliente_nombre: after.cliente_nombre || "",
+              },
+            },
+          });
+          const { ref: fRef } = await pool.resolver(it.serial_saliente, it.modelo_id || null, it.modelo || "");
+          items[i] = { ...it, pool_doc_id_saliente: fRef.id, saliente_ficha_creada: r === "creado" };
+          if (r === "creado") nacidas++;
+          logger.info("[onGestionWrite] saliente declarado por el vendedor", { gid, serial: it.serial_saliente, resultado: r });
+        }
+        await ref.set({ items }, { merge: true });
+        if (nacidas) {
+          await G.registrarEvento(gid, "declaracion",
+            `${nacidas} equipo(s) que el sistema no conocía quedaron declarados en la cuenta del cliente para poder reemplazarlos: `
+            + `${items.filter(it => it.saliente_ficha_creada).map(it => it.serial_saliente).join(", ")}. `
+            + "Quedan en campo sin contrato — la cuenta sigue pidiendo regularización.");
+        }
+      } catch (e) {
+        logger.error("[onGestionWrite] alta del saliente declarado falló", { gid, message: e.message });
+      }
+    }
+
     // ── A/B) correos de arranque, por flanco de estado ──────────────────
     try {
       if (creada && after.estado === "pendiente_aprobacion") {
@@ -898,7 +949,7 @@ module.exports = onDocumentWritten(
                     noTocarDesde: [pool.ESTADOS.EN_TALLER],
                     tipo: "regularizacion",
                     refMov: { tipo: "gestion", id: gid, label: gid },
-                    origen: "migracion_contrato",
+                    origen: "declarado_vendedor",
                     notas: `Alta por anexo de regularización ${gid} — el cliente lo tenía y el sistema no lo sabía`,
                     propiedadDeclarada: true,
                     extra: {

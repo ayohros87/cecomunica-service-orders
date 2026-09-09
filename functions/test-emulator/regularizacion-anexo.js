@@ -102,6 +102,40 @@ const gestion = (estado, cierre) => ({
   assert.equal(g.estado, "cerrada", "sin bodega ni entrega, la gestión cierra sola");
   ok("el contrato gana la línea y la gestión cierra");
 
+  // 5) REEMPLAZO de un radio que el sistema no conocía (2026-09-09): el
+  //    vendedor lo declara en el wizard y la ficha nace con la solicitud, en
+  //    campo y sin contrato — de ahí en adelante es un reemplazo normal.
+  const DANADO = "20919D0999";
+  const GR = "GR20260909-01";
+  const rRef = db.doc(`gestiones/${GR}`);
+  const reemplazo = {
+    tipo: "reemplazo", estado: "pendiente_bodega", cliente_id: CLIENTE,
+    cliente_nombre: "FORTUNATO MANGRAVITA", deleted: false, cierre: {}, ordenes: {},
+    items: [{
+      serial_saliente: DANADO, pool_doc_id_saliente: null, saliente_sin_ficha: true,
+      modelo_id: "m1", modelo: "HYTERA PD606-R", contrato_doc_id: null, contrato_id: null,
+      elegibilidad: "alquiler", motivo_codigo: "dano_no_reparable", motivo_detalle: "no enciende",
+      modelo_solicitado: "HYTERA PD606-R", modelo_solicitado_id: "m1",
+      serial_nuevo: null, pool_doc_id_nuevo: null,
+    }],
+  };
+  await rRef.set(reemplazo);
+  const rAfter = await rRef.get();
+  await trigger.run({ data: { before: { exists: false }, after: rAfter }, params: { gid: GR } });
+
+  const danado = (await db.doc(`equipos_pool/${DANADO}`).get()).data();
+  assert.ok(danado, "la ficha del radio declarado nace con la solicitud");
+  assert.equal(danado.estado, "en_cliente");
+  assert.equal(danado.origen, "declarado_vendedor");
+  assert.equal(danado.verificado, false, "nadie lo verificó: queda por confirmar");
+  assert.equal(danado.asignacion?.cliente_id, CLIENTE);
+  assert.equal(danado.asignacion?.contrato_doc_id, null, "sin contrato: la cuenta sigue pidiendo regularización");
+  const g2 = (await rRef.get()).data();
+  assert.equal(g2.items[0].pool_doc_id_saliente, DANADO, "la solicitud queda apuntando a la ficha nueva");
+  const ev = await db.collection(`gestiones/${GR}/eventos`).get();
+  assert.ok(ev.docs.some(d => (d.data().accion || "") === "declaracion"), "queda dicho en el expediente");
+  ok("reemplazo de un radio que el sistema no conocía: la ficha nace y la solicitud la apunta");
+
   console.log(`\nOK — ${n} comprobaciones del anexo de regularización`);
   process.exit(0);
 })().catch((e) => { console.error("FALLO:", e.stack || e); process.exit(1); });
