@@ -36,6 +36,14 @@
 // firmarse allá, este modal la recoge (onSnapshot) y guarda el acuse solo.
 // El modal además escucha la orden en vivo (estado del envío, tandas de otra
 // pestaña) sin pisar capturas a medias.
+// CIERRE AUTOMÁTICO (2026-09-09): "Cerrar devolución" era un paso que no
+// decidía nada — con todo resuelto y firmado el botón solo estampaba el
+// estado, y cuando nadie lo pulsaba la orden seguía viva en el recordatorio
+// diario. Ahora la orden se cierra SOLA en la misma escritura que resuelve la
+// última unidad o guarda el último acuse (_cierraSola + _guardarDevolucion).
+// Queda cierre manual en un solo caso: el contrato de PAPEL, donde solo
+// recepción sabe si el cliente traerá más y hay que itemizar lo que quede
+// debiendo (y como salvavidas de órdenes viejas que quedaron abiertas).
 (function () {
   'use strict';
 
@@ -64,6 +72,7 @@
     ['cargador', 'Cargador'], ['fuente', 'Fuente'], ['cubrepolvo', 'Cubrepolvo'],
   ];
   const esc = (v) => window.FMT ? FMT.esc(String(v ?? '')) : String(v ?? '');
+  const ESTADO_CERRADA = 'CERRADA (DEVOLUCION)';   // terminal del tiquete
 
   let _orden = null;      // copia fresca del doc
   let _ordenId = null;
@@ -471,7 +480,7 @@
     const esperados = dev.esperados || [];
     const porModelo = dev.esperados_por_modelo || [];
     const acuses = dev.acuses || [];
-    const cerrada = (_orden.estado_reparacion || '').toUpperCase() === 'CERRADA (DEVOLUCION)';
+    const cerrada = (_orden.estado_reparacion || '').toUpperCase() === ESTADO_CERRADA;
     const editable = !cerrada && puedeOperar();
     const esConfirmacion = dev.modo === 'confirmacion';
     const esSinContrato = dev.modo === 'sin_contrato';
@@ -492,6 +501,16 @@
     // Con contrato el cierre exige resolver todo; sin contrato el faltante
     // puede ser real (el cliente no trajo el resto) y se cierra con constancia.
     const bloqueaCierre = pendientes + modelosPend > 0;
+    // El cierre ya NO es un paso del mostrador: la orden se cierra sola al
+    // resolver y firmar todo (_cierraSola / _guardarDevolucion). El botón al
+    // pie queda para los dos casos donde eso no puede pasar:
+    //   · contrato de PAPEL — solo recepción sabe si el cliente traerá más, y
+    //     lo que no traiga hay que itemizarlo para cobrarlo;
+    //   · órdenes que quedaron abiertas con todo resuelto (las de antes de
+    //     este cambio, o un cierre automático que falló) — sin botón se
+    //     quedarían trabadas.
+    const cierreManual = !cerrada && puedeOperar()
+      && (esSinContrato || (!bloqueaCierre && !sinAcuse.length));
 
     const intro = esConfirmacion
       ? 'Anulación de contrato: lo usual es que los equipos <b>nunca hayan salido</b>. Confirma unidad por unidad — <b>Nunca salió</b> los regresa a bodega directo; <b>Recibido</b> los manda a inspección.'
@@ -525,8 +544,10 @@
             : 'todas las unidades están resueltas';
           const siguiente = cerrada ? ''
             : sinAcuse.length
-            ? ` Siguiente paso: el cliente <b>firma el acuse</b> de ${sinAcuse.length} unidad(es) — más abajo.`
-            : ' Siguiente paso: <b>Cerrar devolución</b> (botón al pie).';
+            ? ` Siguiente paso: el cliente <b>firma el acuse</b> de ${sinAcuse.length} unidad(es) — más abajo. Con eso la orden se cierra sola.`
+            : esSinContrato
+            ? ' Cuando el cliente no tenga nada más que traer, <b>cierra la devolución</b> (botón al pie).'
+            : '';
           return `<div style="margin:0 0 12px;border:1px solid #A7F3D0;background:#ECFDF5;border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:8px;">
              <i data-lucide="package-check" style="width:16px;height:16px;color:#059669;flex:none;"></i>
              <span style="font-size:13px;color:#065F46;"><b>Completo:</b> ${detalle}.${siguiente}</span>
@@ -892,8 +913,8 @@
         <div class="sheet-footer" style="display:flex;justify-content:space-between;gap:8px;padding:12px 18px;border-top:1px solid var(--border-subtle,#e5e7eb);">
           <span style="font-size:12px;color:var(--fg-3,#6b7280);align-self:center;">${cerrada
             ? `Orden cerrada.${Number(dev.cierre_pendientes || 0) ? ` <b style="color:#92400e;">Cerró con ${dev.cierre_pendientes} equipo(s) sin devolver.</b>` : ''}`
-            : `${totalPend} equipo(s) pendiente(s) por devolver${sinAcuse.length ? ` · ${sinAcuse.length} sin acuse firmado` : ''}`}</span>
-          ${(!cerrada && puedeOperar()) ? `<button type="button" class="btn btn-primary" id="devCerrarOrden" ${bloqueaCierre ? 'disabled title="Resuelve todas las unidades para cerrar"' : ''}><i data-lucide="check"></i> Cerrar devolución</button>` : ''}
+            : `${totalPend} equipo(s) pendiente(s) por devolver${sinAcuse.length ? ` · ${sinAcuse.length} sin acuse firmado` : ''}${esSinContrato ? '' : ' · se cierra sola al resolver y firmar todo'}`}</span>
+          ${cierreManual ? `<button type="button" class="btn btn-primary" id="devCerrarOrden" ${bloqueaCierre ? 'disabled title="Resuelve todas las unidades para cerrar"' : ''}><i data-lucide="check"></i> Cerrar devolución</button>` : ''}
         </div>
       </div>`;
 
@@ -1067,12 +1088,89 @@
     if (cv) requestAnimationFrame(() => { _firmaAcuse = _montarFirma(cv); });
   }
 
+  // ── Cierre automático (2026-09-09) ──────────────────────────────────────
+  // Antes el cierre era un paso aparte: con todo resuelto y el acuse firmado,
+  // recepción todavía tenía que pulsar "Cerrar devolución" y confirmar un
+  // modal que no decidía nada — solo dejaba órdenes abiertas cuando nadie lo
+  // pulsaba (y esas siguen sonando en el recordatorio diario). Ahora la orden
+  // se cierra SOLA, en la misma escritura que resuelve la última unidad o
+  // guarda el último acuse.
+  // El cierre manual (cerrarOrden) sobrevive para el único caso donde cerrar
+  // SÍ es una decisión: el contrato de PAPEL, donde nadie más sabe si el
+  // cliente va a traer el resto — y si no lo trae, hay que itemizar lo que
+  // queda debiendo antes de cerrar.
+  function _cierraSola() {
+    if (!_orden || !puedeOperar()) return false;
+    if ((_orden.estado_reparacion || '').toUpperCase() === ESTADO_CERRADA) return false;
+    const dev = _orden.devolucion || {};
+    const esperados = dev.esperados || [];
+    const porModelo = dev.esperados_por_modelo || [];
+    // Queda algo por resolver / por recibir.
+    if (esperados.some(e => !e.resolucion)) return false;
+    // Recibido sin acuse: el cliente todavía tiene que firmar la tanda — ese
+    // es el paso que no se puede saltar, y el que dispara el cierre al final.
+    if (esperados.some(e => e.resolucion === 'recibido' && !e.acuse_id)) return false;
+    // Faltantes sin fila propia (por modelo o contrato de papel): hay que
+    // itemizarlos para cobrarlos, y eso vive en el cierre manual.
+    if (_faltantesSinFila(dev).total > 0) return false;
+    if (dev.modo === 'sin_contrato') {
+      // Sin lista previa nadie sabe si ya llegó todo: el único ancla es el
+      // total declarado del contrato de papel. Sin él, cierra recepción.
+      const total = Number(dev.total_esperado || 0);
+      if (!total) return false;
+      return esperados.filter(e => e.resolucion === 'recibido').length >= total;
+    }
+    // Tiquete vacío (sin esperados ni cantidades): no hay nada que dar por
+    // terminado — cerrarlo solo sería inventarse un cierre.
+    return esperados.length > 0 || porModelo.some(m => Number(m.cantidad || 0) > 0);
+  }
+
   async function _guardarDevolucion(log) {
     const user = firebase.auth().currentUser;
-    await OrdenesService.mergeOrder(_ordenId, {
-      devolucion: _orden.devolucion,
-      os_logs: firebase.firestore.FieldValue.arrayUnion({ action: log, by: user?.uid || '' }),
-    });
+    const dev = _orden.devolucion;
+    const cierra = _cierraSola();
+    const previoPend = dev.cierre_pendientes;
+    // El cierre automático nunca deja faltantes (los faltantes van por el
+    // cierre manual), así que el contador queda en 0 explícito.
+    if (cierra) dev.cierre_pendientes = 0;
+    const patch = {
+      devolucion: dev,
+      os_logs: cierra
+        ? firebase.firestore.FieldValue.arrayUnion(
+            { action: log, by: user?.uid || '' },
+            { action: 'CERRAR_DEVOLUCION', by: user?.uid || '' })
+        : firebase.firestore.FieldValue.arrayUnion({ action: log, by: user?.uid || '' }),
+    };
+    if (cierra) {
+      patch.estado_reparacion = ESTADO_CERRADA;
+      patch.fecha_completado = firebase.firestore.FieldValue.serverTimestamp();
+      patch.completado_por_uid = user?.uid || null;
+    }
+    try {
+      await OrdenesService.mergeOrder(_ordenId, patch);
+    } catch (err) {
+      dev.cierre_pendientes = previoPend;
+      throw err;
+    }
+    if (cierra) {
+      _orden.estado_reparacion = ESTADO_CERRADA;
+      _avisarCierre(dev);
+    }
+  }
+
+  // Las copias del acuse que quedaron sin enviar NO frenan el cierre (se
+  // envían después desde la tarjeta, con la orden cerrada), pero tienen que
+  // decirse: es lo único que queda por hacer con el cliente.
+  function _acusesSinEnvio(dev) {
+    return (dev.acuses || []).filter(a =>
+      !a.envio || ['sin_enviar', 'fallo'].includes(a.envio.status)).length;
+  }
+
+  function _avisarCierre(dev) {
+    const sinEnviar = _acusesSinEnvio(dev);
+    Toast.show(sinEnviar
+      ? `Devolución cerrada — ${sinEnviar} acuse(s) sin enviar al cliente (se envían desde su tarjeta).`
+      : 'Devolución cerrada: todo quedó resuelto.', 'ok');
   }
 
   // Confirmación del mini-checklist: única escritura del "recibido" (unidad
@@ -2157,8 +2255,7 @@
     const sinAcuse = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id).length;
     const pend = (typeof pendientesDevolucion === 'function') ? pendientesDevolucion(_orden) : 0;
     const aviso = sinAcuse ? `\n\nOJO: ${sinAcuse} unidad(es) recibida(s) quedan SIN acuse firmado del cliente.` : '';
-    const acusesSinEnvio = (dev.acuses || []).filter(a =>
-      !a.envio || ['sin_enviar', 'fallo'].includes(a.envio.status)).length;
+    const acusesSinEnvio = _acusesSinEnvio(dev);
     const avisoEnvio = acusesSinEnvio
       ? `\n\n${acusesSinEnvio} acuse(s) aún sin enviar al cliente — se pueden enviar desde su tarjeta, también con la orden cerrada.`
       : '';
@@ -2182,8 +2279,15 @@
         (faltan.total > 0
           ? `Los ${faltan.total} faltantes quedarán registrados como equipos por cobrar, visibles en "Equipos no devueltos" hasta que se facturen, se condonen o aparezcan.`
           : 'Quedará registrado en la orden — coordina el cobro o la excepción antes de cerrar.')
-      : '¿Cerrar la devolución? Todas las unidades quedaron resueltas; los equipos recibidos ya están (o quedarán) en la orden de ENTRADA de inspección.';
-    if (!await Modal.confirm({ title: 'Cerrar devolución', confirmLabel: 'Cerrar', message: (base + aviso + avisoEnvio).replace(/\n/g, '<br>') })) return;
+      : '';
+    // Confirmar solo cuando hay algo que DECIDIR: equipos sin devolver o
+    // unidades recibidas que el cliente nunca firmó. Si todo quedó resuelto y
+    // firmado no hay pregunta que hacer — cierra directo, igual que el cierre
+    // automático. (Las copias sin enviar no deciden nada: se avisan al cerrar.)
+    const hayQueDecidir = pend > 0 || faltan.total > 0 || sinAcuse > 0;
+    if (hayQueDecidir && !await Modal.confirm({
+      title: 'Cerrar devolución', confirmLabel: 'Cerrar',
+      message: (base + aviso + avisoEnvio).trim().replace(/\n/g, '<br>') })) return;
     const user = firebase.auth().currentUser;
     const previo = dev.cierre_pendientes;
     dev.cierre_pendientes = pend;
@@ -2221,14 +2325,14 @@
       // `devolucion` va completo: mergeOrder usa set({merge:true}) y una clave
       // con punto crearía un campo literal "devolucion.cierre_pendientes".
       await OrdenesService.mergeOrder(_ordenId, {
-        estado_reparacion: 'CERRADA (DEVOLUCION)',
+        estado_reparacion: ESTADO_CERRADA,
         fecha_completado: firebase.firestore.FieldValue.serverTimestamp(),
         completado_por_uid: user?.uid || null,
         devolucion: dev,
         os_logs: firebase.firestore.FieldValue.arrayUnion({ action: 'CERRAR_DEVOLUCION', by: user?.uid || '' }),
       });
-      _orden.estado_reparacion = 'CERRADA (DEVOLUCION)';
-      Toast.show('Devolución cerrada.', 'ok');
+      _orden.estado_reparacion = ESTADO_CERRADA;
+      _avisarCierre(dev);
       render();
     } catch (e) {
       console.error(e);
@@ -2345,7 +2449,6 @@
       const nombre = (overlay.querySelector('#devNuevaCliente')?.value || '').trim();
       return clientes.find(c => (c.nombre || '').trim().toLowerCase() === nombre.toLowerCase()) || null;
     };
-    const ESTADO_CERRADA_DEV = 'CERRADA (DEVOLUCION)';
     async function revisarCliente() {
       const cli = clienteDe();
       if (!cli || !panel) { if (panel) panel.innerHTML = ''; return; }
@@ -2361,7 +2464,7 @@
             && Number(c.seriales_count || 0) > 0 && c.entrega_confirmada !== true)
           .sort((a, b) => String(b.contrato_id || '').localeCompare(String(a.contrato_id || '')));
         const abiertas = ds.docs.map(d => ({ id: d.id, ...d.data() }))
-          .filter(o => o.eliminado !== true && (o.estado_reparacion || '').toUpperCase() !== ESTADO_CERRADA_DEV)
+          .filter(o => o.eliminado !== true && (o.estado_reparacion || '').toUpperCase() !== ESTADO_CERRADA)
           .sort((a, b) => b.id.localeCompare(a.id));
         if (clienteDe()?.id !== cli.id) return; // cambió el cliente mientras cargaba
         if (!sinEntrega.length && !abiertas.length) { panel.innerHTML = ''; return; }

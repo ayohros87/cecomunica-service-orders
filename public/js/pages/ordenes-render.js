@@ -963,7 +963,11 @@ function botonesFlujo(ordenId, estado, ordenData) {
       // Dos estados del mismo botón (ambos abren el check-in):
       //   · faltan equipos  → ámbar "Registrar equipos": es un prompt de captura.
       //     El verde con package-check se leía como "seriales ya registrados".
-      //   · todos recibidos → verde "Lista para cerrar": solo falta el acuse.
+      //   · todos recibidos → verde: lo que falta es la FIRMA del acuse — con
+      //     ella la orden se cierra sola (ordenes-devolucion.js: _cierraSola),
+      //     así que el botón nombra el acuse, no un cierre que ya no se pulsa.
+      //     Sin nada por firmar (contrato de papel) sigue diciendo "Lista para
+      //     cerrar": ahí el cierre sí lo declara recepción.
       // Ojo: pendientesDevolucion da 0 también cuando una devolución
       // sin_contrato no declaró total_esperado — ahí NO está lista, no hay
       // contra qué comparar; se exige que haya habido algo esperado.
@@ -973,7 +977,11 @@ function botonesFlujo(ordenId, estado, ordenData) {
         || (dev.esperados_por_modelo || []).some(m => Number(m.cantidad || 0) > 0)
         || Number(dev.total_esperado || 0) > 0;
       if (pend === 0 && huboEsperados) {
-        html += `<button class="btn-flujo btn-flujo--completar" title="El cliente ya devolvió todos los equipos — abre la devolución para firmar el acuse y cerrarla" data-action="checkin-devolucion" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Lista para cerrar</button>`;
+        const sinAcuse = (dev.esperados || [])
+          .filter(e => e.resolucion === 'recibido' && !e.acuse_id).length;
+        html += sinAcuse
+          ? `<button class="btn-flujo btn-flujo--completar" title="El cliente ya devolvió todo — falta que firme el acuse de ${sinAcuse} unidad(es); con eso la orden se cierra sola" data-action="checkin-devolucion" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="pen-line"></i> Firmar acuse</button>`
+          : `<button class="btn-flujo btn-flujo--completar" title="El cliente ya devolvió todos los equipos — abre la devolución para cerrarla" data-action="checkin-devolucion" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Lista para cerrar</button>`;
       } else {
         // Cuántos radios sigue debiendo el cliente, sin abrir el check-in: es el
         // dato que se perdía de vista cuando devuelven solo una parte.
