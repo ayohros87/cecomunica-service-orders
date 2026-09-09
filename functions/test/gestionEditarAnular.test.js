@@ -252,26 +252,32 @@ test("R2 · el expediente ofrece retirar el enlace solo cuando hay uno vivo", ()
   assert.ok(!/retirarFirmaAnexo/.test(firmado));
 });
 
-test("E5 · el pie del expediente ofrece corregir/anular, o dice por qué no", () => {
+// Desde 2026-09-09 el expediente no tiene botonera propia: corregir y anular
+// viven en el menú único de acciones (accionesMenuCentro.test.js cubre la
+// lista). Aquí se comprueba que el detalle SIEMPRE cierra con ese menú y que
+// lo que no se puede sigue diciendo por qué — que era el punto original.
+test("E5 · el pie del expediente es el menú único, y dice por qué no se puede", () => {
   const g = { ...blanda, tipo: "reemplazo", items: [{ serial_saliente: "A1", modelo: "NX-410" }],
     estado: "pendiente_bodega", cierre: {} };
   const { Centro } = montarCentro({ gestiones: [g] });
   const abierto = Centro._detalleGestion(g);
-  assert.match(abierto, /Centro\.editarGestion\('GA20260909-01'\)/, "falta el botón de editar");
+  assert.match(abierto, /Acciones ⋯/, "el detalle cierra con el menú único");
+  assert.match(abierto, /id="accm-dg-GA20260909-01"/);
+  assert.match(abierto, /Centro\.editarGestion\('GA20260909-01'\)/, "editar sigue estando, dentro del menú");
   assert.match(abierto, /Centro\.anularGestion\('GA20260909-01'\)/, "el vendedor que la creó debe poder anular la suya");
 
-  // Ya con la OS afuera: no se edita, y se DICE por qué (esconder el botón sin
-  // explicación es lo que manda a la gente a crear una gestión nueva).
+  // Ya con la OS afuera: editar sale DESHABILITADO con el motivo, no ausente.
   const conOS = { ...g, cierre: { asignacion: true }, ordenes: { programacion_id: "OS-1" } };
   const html = Centro._detalleGestion(conOS);
-  assert.ok(!/Centro\.editarGestion/.test(html), "con la OS afuera no se ofrece editar");
-  assert.match(html, /No se puede editar:/);
+  assert.ok(!/Centro\.editarGestion/.test(html), "sin acción: la entrada queda inerte");
+  assert.match(html, /Editar…<span class="cg-menu-hint">[^<]*(asignó|programación)/i);
 
-  // Entregada: ni editar ni anular.
+  // Entregada: ni editar ni anular llevan acción.
   const entregada = { ...g, estado: "en_proceso", cierre: { entrega: true, asignacion: true } };
   const htmlE = Centro._detalleGestion(entregada);
   assert.ok(!/Centro\.editarGestion/.test(htmlE) && !/Centro\.anularGestion/.test(htmlE),
     "una gestión entregada no se edita ni se anula");
+  assert.match(htmlE, /Anular gestión…<span class="cg-menu-hint">[^<]*entregaron/i, "y se dice por qué");
 
   // Administración sí anula una que ya está en proceso.
   Centro.rol = "administrador";

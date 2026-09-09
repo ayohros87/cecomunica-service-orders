@@ -960,7 +960,7 @@ window.Centro = {
       <td style="text-align:right;">${this._unidadesActivas(c)}</td>
       <td>${this._vidaHtml(c)}</td>
       <td style="text-align:right; white-space:nowrap;">
-        <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver</button></td></tr>`;
+        ${this._masFila('tc-' + c.id, this._accionesContrato(c), c.contrato_id || c.id)}</td></tr>`;
   },
 
   // Vista previa del contrato en un modal: todo lo esencial sin navegar.
@@ -1055,22 +1055,12 @@ window.Centro = {
              <button class="btn btn-ghost cg-act" style="margin-left:8px;" onclick="Centro.wizSerialesRenovacion('${this.esc(c.id)}')">Seriales de la cuenta</button></p>` : '')}
       ${this._osCache[id] && !this._osCache[id].loading && this._osCache[id].os.length ? this._osTramiteHtml(c) : ''}
       ${c.observaciones ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0; max-width:72ch;">${this.esc(c.observaciones)}</p>` : ''}`,
-      footer: `
-        <a href="../contratos/documento.html?id=${encodeURIComponent(c.id)}" class="btn-quiet">Documento completo ›</a>
-        ${this._btnEditarContrato(c)}
-        <span class="sep"></span>
-        ${this._btnsFirmadoContrato(c)}
-        ${c.estado === 'aprobado' && !c.firmado && c.firma_solicitud_estado === 'pendiente' && this.puedeCrearGestion()
-          ? `<button class="btn btn-ghost cg-act" onclick="Centro.retirarEnlaceFirma('${this.esc(c.id)}')" title="El enlace enviado deja de servir y el contrato vuelve a poder editarse">Retirar enlace de firma…</button>` : ''}
-        ${c.estado === 'pendiente_aprobacion' && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
-          ? `<button class="btn btn-primary cg-act" onclick="Centro.aprobarContrato('${this.esc(c.id)}')">Aprobar contrato</button>` : ''}
-        ${ContratoAnulacion.esAnulable(c) && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
-          ? `<button class="btn-danger cg-act" onclick="Centro.anularContrato('${this.esc(c.id)}')">Anular contrato…</button>` : ''}
-        ${c.firmado_pendiente_validacion && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
-          ? `<button class="btn btn-primary cg-act" onclick="Centro.aceptarFirmante('${this.esc(c.id)}')">Aceptar firmante…</button>` : ''}
-        ${c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
-          ? `<button class="btn btn-primary cg-act" onclick="Centro.enviarFirma('${this.esc(c.id)}')">Enviar para firma</button>` : ''}
-        <button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal()">Cerrar</button>`,
+      // MISMA lista de acciones que el "⋯" de la fila: el footer dejó de ser
+      // una botonera propia (2026-09-09) — "Ver el contrato" sale de la lista
+      // porque es esta misma pantalla.
+      footer: `<span class="sep"></span>
+        <button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal()">Cerrar</button>
+        ${this._pieAcciones('vc-' + c.id, this._accionesContrato(c).filter(a => a.id !== 'ver'))}`,
     });
   },
 
@@ -1166,14 +1156,6 @@ window.Centro = {
   // "Editar" del expediente: el editor rechaza un contrato ACTIVO y uno con
   // enlace de firma abierto (rebotaba al Centro sin decir por qué — Cerdas,
   // 2026-09-09). Aquí se dice de frente y, si es el enlace, se ofrece retirarlo.
-  _btnEditarContrato(c) {
-    const quieto = (txt, why) => `<span class="btn-quiet" style="opacity:.65; cursor:default;" title="${this.esc(why)}">${txt}</span>`;
-    if (c.estado === 'activo') return quieto('Editar · no aplica (activo)', 'Un contrato activo ya no se edita: los cambios van por anexo, ajuste de tarifa o renovación');
-    if (c.estado === 'aprobado' && c.firma_solicitud_estado === 'pendiente') {
-      return quieto('Editar · retira el enlace de firma primero', 'El cliente tiene un enlace de firma abierto sobre una copia congelada del contrato: retira el enlace y podrás editar');
-    }
-    return `<a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}&volver=centro" class="btn-quiet">Editar</a>`;
-  },
   // Retirar un enlace de firma pendiente: pendiente → cancelado en la
   // solicitud (la página pública lo muestra como "no válido"; la regla lo
   // permite a admin/gerente/vendedor) y el contrato vuelve a editarse. Al
@@ -1197,17 +1179,6 @@ window.Centro = {
     this.abrirGestion(`ct-${c.id}`);
   },
 
-  _btnsFirmadoContrato(c) {
-    if (!c || !this.puedeCrearGestion()) return '';
-    const esperaFirma = c.estado === 'aprobado' && !c.firmado;
-    const imprimir = esperaFirma
-      ? `<a class="btn btn-ghost cg-act" target="_blank" href="../contratos/documento.html?id=${encodeURIComponent(c.id)}">Imprimir contrato</a>` : '';
-    const subir = this._aceptaFirmado(c) && this._puedeSubirFirmado()
-      ? `<label class="btn btn-ghost cg-act" style="cursor:pointer;" title="PDF, o fotos del contrato firmado (se arman en un solo PDF)">Subir firmado
-           <input type="file" multiple accept="application/pdf,image/*" style="display:none;"
-             onchange="Centro.subirFirmadoContrato('${this.esc(c.id)}', this.files)"></label>` : '';
-    return imprimir + subir;
-  },
   async subirFirmadoContrato(id, fileList) {
     const files = [...(fileList || [])];
     if (!files.length) return;
@@ -1217,8 +1188,11 @@ window.Centro = {
     const modo = c.estado === 'aprobado' ? 'activacion' : c.estado === 'activo' ? 'reemplazo' : null;
     if (!modo) { Toast.show('Solo se sube el firmado a contratos aprobados o activos', 'warn'); return; }
     const legible = c.contrato_id || id;
-    if (modo === 'reemplazo' && c.firmado_url
-        && !window.confirm(`Vas a sustituir el archivo firmado de ${legible}. El actual queda archivado en el historial (no se borra); el estado y la fecha de activación no cambian. ¿Continuar?`)) return;
+    if (modo === 'reemplazo' && c.firmado_url && !(await Modal.confirm({
+      title: 'Sustituir el archivo firmado', confirmLabel: 'Sustituir',
+      message: `Vas a sustituir el archivo firmado de <b class="cg-mono">${this.esc(legible)}</b>. El actual queda
+        archivado en el historial (no se borra); el estado y la fecha de activación no cambian.`,
+    }))) return;
     // storage.rules exige application/pdf en contratos_firmados/: un PDF pasa
     // directo; las FOTOS (WhatsApp) se arman en un solo PDF con el conversor
     // de contratos-upload.js. Mezclar PDF con fotos no tiene orden: se rechaza.
@@ -2191,23 +2165,12 @@ window.Centro = {
         <span class="cg-tl-dot">${ok ? '✓' : ''}</span>
         <span class="cg-tl-t"><b>${t}</b><span class="s">${s}</span></span></div>`;
     }).join('') + `</div>`;
-    const acciones = `
-      ${c.estado === 'pendiente_aprobacion' && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
-        ? `<button class="btn btn-primary cg-act" onclick="Centro.aprobarContrato('${this.esc(c.id)}')">Aprobar contrato</button>` : ''}
-      ${c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
-        ? `<button class="btn btn-primary cg-act" onclick="Centro.enviarFirma('${this.esc(c.id)}')">Enviar para firma</button>` : ''}
-      ${this._btnsFirmadoContrato(c)}
-      ${esRenov && c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
-        ? `<button class="btn btn-ghost cg-act" onclick="Centro.wizSerialesRenovacion('${this.esc(c.id)}')" title="Qué seriales siguen con el cliente, cuáles no tiene y cuáles faltan — antes de la firma">Seriales de la cuenta</button>` : ''}
-      ${reg?.motivo === 'sobrantes' && this.puedeCrearGestion()
-        ? `<button class="btn btn-primary cg-act" onclick="Centro.wizAumento('${this.esc(c.id)}',{regularizar:true})">Actualizar seriales</button>` : ''}
-      <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver contrato</button>`;
-    // Pie del expediente, abajo a la derecha — MISMO sitio y MISMO botón que
-    // "Anular gestión" en _detalleGestion (Alberto 2026-09-04: dos lugares
-    // distintos para lo mismo, y el btn-quiet casi no se veía).
-    const anular = ContratoAnulacion.esAnulable(c) && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
-      ? `<button class="btn-danger cg-act" onclick="Centro.anularContrato('${this.esc(c.id)}')">Anular contrato…</button>`
-      : '';
+    // Las acciones ya NO se pintan aquí sueltas: viven en el "⋯" de la fila y
+    // en el pie del detalle, la misma lista y en el mismo orden que la de una
+    // gestión (2026-09-09). Se deja el atajo al siguiente paso, que sale de
+    // esa misma lista — no es una botonera aparte.
+    const acc = this._accionesContrato(c);
+    const acciones = this._pieAcciones('dct-' + c.id, acc);
     return `
       <div class="cg-row" id="grow-ct-${this.esc(c.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('ct-${this.esc(c.id)}')"
            onkeydown="if(event.key==='Enter')this.click()" style="${abierta ? 'border-color:var(--accent);' : ''}">
@@ -2215,6 +2178,7 @@ window.Centro = {
           <div class="s">${esRenov ? 'Renovación de cuenta' : 'Contrato nuevo'} · ${unid} unid. · $${Number(c.total_mensual || 0).toFixed(2)}/mes</div></div>
         <span class="num" style="font-size:12px; color:var(--fg-3); flex:none;">${done}/4</span>
         <span class="cg-chip ${chipCls}" style="flex:none;">${chipTxt}</span>
+        ${this._masFila('ct-' + c.id, this._accionesContrato(c), c.contrato_id || c.id)}
         <span class="arr" style="margin-left:0;">${abierta ? '▾' : '›'}</span>
       </div>
       ${abierta ? `<div class="ds-card" style="padding:var(--sp-4); margin:-4px 0 10px; border-top:none;">
@@ -2229,7 +2193,6 @@ window.Centro = {
           </div>
           <div>${timeline}</div>
         </div>
-        ${anular ? `<div style="display:flex; justify-content:flex-end; margin-top:8px;">${anular}</div>` : ''}
       </div>` : ''}`;
   },
 
@@ -2324,6 +2287,7 @@ window.Centro = {
         ${atenuada ? '' : `<span class="num" style="font-size:12px; color:var(--fg-3); flex:none;">${done}/${defsG.length}</span>`}
         ${g.regularizacion_bloqueada ? `<span class="cg-chip cg-chip--bad" style="flex:none;" title="Las cantidades del anexo no coinciden con los seriales — no se aplicó">No aplicado</span>` : ''}
         <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}" style="flex:none;">${this.esc(GestionesService.estadoLabel(g.estado))}</span>
+        ${this._masFila(g.id, this._accionesGestion(g), g.id)}
         <span class="arr" style="margin-left:0;">${abierta ? '▾' : '›'}</span>
       </div>
       ${abierta ? this._detalleGestion(g) : ''}`;
@@ -2356,10 +2320,8 @@ window.Centro = {
   // La asignación de seriales de bodega (aumento/demo/reemplazo) se hace en
   // Almacén · Asignar desde 2026-09-03 (propuesta "Asignar desde Almacén"):
   // mismo formulario que los contratos, picker del estante y política dura.
-  // El expediente solo la MUESTRA y, a quien puede asignar, le da el enlace.
-  _linkAsignar(g, texto = 'Asignar en Almacén') {
-    return `<a class="btn btn-primary cg-act" href="../almacen/index.html?tab=asignar&g=${encodeURIComponent(g.id)}">${texto}</a>`;
-  },
+  // El expediente solo la MUESTRA y, a quien puede asignar, le da el enlace
+  // desde el menú de acciones (_accionesGestion → "Asignar seriales en Almacén").
 
   _detalleGestion(g) {
     // Checklist como timeline del kit: done = completado; next = el paso que
@@ -2474,35 +2436,18 @@ window.Centro = {
           (cédula ${this.esc(g.anexo_firma_digital.firmante_cedula || '—')})</p>` : ''}
         ${g.sin_firma ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0;">✓ Regularización cerrada
           <b>sin firma del cliente</b> por ${this.esc(g.sin_firma.por_email || '—')}${g.sin_firma.motivo ? ` — ${this.esc(g.sin_firma.motivo)}` : ''}</p>` : ''}
-        ${g.estado === 'pendiente_firma' && this.puedeCrearGestion() ? `
-          <div style="margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            ${a.es_regularizacion
-              // Actualización de seriales: NO se firma (2026-09-09). Las que
-              // quedaron esperando firma de antes se cierran y se aplican con
-              // este botón; no se les vuelve a ofrecer el enlace.
-              ? `<button class="btn btn-primary cg-act"
-                  title="Solo pone el sistema al día con equipos que el cliente ya tiene"
-                  onclick="Centro.cerrarRegSinFirma('${this.esc(g.id)}')">Aplicar sin firma</button>`
-              : `<button class="btn btn-primary cg-act"
-                  onclick="Centro.enviarFirmaAnexo('${this.esc(g.id)}')">${g.firma_solicitud_estado === 'pendiente'
-                    ? 'Ver o reenviar el enlace' : 'Enviar anexo para firma digital'}</button>`}
-            ${g.firma_solicitud_estado === 'pendiente' ? `<button class="btn btn-ghost cg-act"
-              title="El enlace que se le envió al cliente deja de servir y el anexo vuelve a poder corregirse"
-              onclick="Centro.retirarFirmaAnexo('${this.esc(g.id)}')">Retirar enlace de firma…</button>` : ''}
-            ${g.firma_solicitud_estado === 'pendiente' ? '<span style="font-size:12px; color:var(--fg-3);">enlace enviado — esperando la firma del cliente</span>' : ''}
-          </div>` : ''}
-        ${g.firma_pendiente_validacion && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol) ? `
-          <div class="cg-senal warn" style="margin-top:8px; align-items:center;">
-            <span>Anexo firmado por persona <b>distinta al representante</b> — falta validar al firmante.</span>
-            <button class="btn btn-primary" style="margin-left:auto; flex:none; padding:3px 11px; font-size:12px;"
-              onclick="Centro.aceptarFirmanteGestion('${this.esc(g.id)}')">Aceptar firmante…</button></div>` : ''}
+        ${g.firma_solicitud_estado === 'pendiente' ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0;">
+          Enlace de firma enviado — esperando al cliente. Se reenvía o se retira desde <b>Acciones</b>.</p>` : ''}
+        ${g.firma_pendiente_validacion ? `
+          <div class="cg-senal warn" style="margin-top:8px;">
+            <span>Anexo firmado por persona <b>distinta al representante</b> — falta validar al firmante
+              (<b>Acciones › Aceptar al firmante</b>).</span></div>` : ''}
         ${asignados.length ? `<p style="font-size:13px; margin:8px 0 0;"><b>Seriales:</b>
               ${asignados.map(s => `<span class="cg-mono">${this.esc(s.serial)}</span>`).join(', ')}
               ${total > asignados.length ? `<span style="color:var(--fg-3);">· ${asignados.length} de ${total}</span>` : ''}</p>` : ''}
         ${asignando
-          ? `<div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-               ${this._linkAsignar(g, asignados.length ? 'Completar en Almacén' : 'Asignar en Almacén')}
-               <span style="font-size:12.5px; color:var(--fg-3);">Bodega asigna los seriales desde Almacén · Asignar.${preAsignando ? ' La firma del anexo corre <b>en paralelo</b> — la orden de programación saldrá sola al firmarse.' : ''}</span></div>`
+          ? `<p style="font-size:12.5px; color:var(--fg-3); margin:10px 0 0;">Bodega asigna los seriales desde
+               <b>Almacén · Asignar</b> (Acciones ›).${preAsignando ? ' La firma del anexo corre <b>en paralelo</b> — la orden de programación saldrá sola al firmarse.' : ''}</p>`
           : ''}`;
     } else if (g.tipo === 'baja') {
       const pen = g.penalidad_estimada;
@@ -2511,10 +2456,8 @@ window.Centro = {
         ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:0 0 8px;">✓ Carta del cliente adjunta${g.fecha_nota_cliente ? ` (nota del ${this.esc(g.fecha_nota_cliente)})` : ''}
              <button class="btn btn-ghost cg-act" onclick="Centro.verAnexo('${this.esc(g.carta_path)}')">Ver carta</button></p>`
         : `<div class="cg-senal warn" style="margin:0 0 8px;">
-             <span><b>Falta la carta de solicitud del cliente</b> — la aprobación queda bloqueada hasta adjuntarla.</span>
-             ${this.puedeCrearGestion() ? `<label class="btn btn-primary" style="margin-left:auto; padding:3px 11px; font-size:12px; cursor:pointer;">Subir carta
-               <input type="file" accept="image/*,application/pdf" style="display:none;"
-                 onchange="Centro.subirCarta('${this.esc(g.id)}', this.files[0])"></label>` : ''}</div>`;
+             <span><b>Falta la carta de solicitud del cliente</b> — la aprobación queda bloqueada hasta adjuntarla
+               (<b>Acciones › Subir la carta del cliente</b>).</span></div>`;
       cuerpo = (esTerm ? `<div class="cg-senal bad" style="margin:0 0 8px;"><span><b>TERMINACIÓN TOTAL</b> — se desconectan todos los seriales del contrato.</span></div>` : '')
         + cartaHtml
         + `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
@@ -2563,10 +2506,9 @@ window.Centro = {
             ${it.elegibilidad === 'propio_excepcion' ? '<br><span class="cg-venc por_vencer">excepción serv. cliente</span>' : ''}</td>
           <td class="cg-mono" style="font-size:12px;">${this.esc(it.contrato_id || '—')}</td>
         </tr>`).join('')}</tbody></table></div>
-        ${asignando ? `<div style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          ${this._linkAsignar(g)}
-          <span style="font-size:12.5px; color:var(--fg-3);">Bodega elige en Almacén · Asignar la unidad que sustituye a cada radio.
-            Al completar todos, el sistema crea la OS de programación y avisa a Recepción.</span></div>` : ''}`;
+        ${asignando ? `<p style="font-size:12.5px; color:var(--fg-3); margin:10px 0 0;">Bodega elige en
+          <b>Almacén · Asignar</b> (Acciones ›) la unidad que sustituye a cada radio.
+          Al completar todos, el sistema crea la OS de programación y avisa a Recepción.</p>` : ''}`;
     } else {
       const total = (g.demo?.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
       const asignados = g.demo?.seriales_asignados || [];
@@ -2580,9 +2522,8 @@ window.Centro = {
                 + (total > asignados.length ? ` <span style="color:var(--fg-3);">· ${asignados.length} de ${total}</span>` : '')
               : 'pendiente de bodega'}</p>
         ${asignando
-          ? `<div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-               ${this._linkAsignar(g, asignados.length ? 'Completar en Almacén' : 'Asignar en Almacén')}
-               <span style="font-size:12.5px; color:var(--fg-3);">Stock nuevo o refurbished, de bodega — se asigna en Almacén · Asignar.</span></div>`
+          ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0;">Stock nuevo o refurbished, de bodega —
+               se asigna en <b>Almacén · Asignar</b> (Acciones ›).</p>`
           : ''}`;
     }
 
@@ -2611,12 +2552,8 @@ window.Centro = {
                : g.origen?.tipo === 'taller'
                  ? 'El taller propone este reemplazo y espera la decisión de ventas. Al aprobar, Bodega recibe el aviso para asignar el equipo que sustituye a cada radio (mismo modelo).'
                  : 'Excepción por servicio al cliente (propio sin garantía) — requiere aprobación de administración.'}</span>
-           ${puede ? `<span style="margin-left:auto; display:flex; gap:8px;">
-             <button class="btn btn-primary cg-act" style="${sinCarta ? 'opacity:.5; cursor:not-allowed;' : ''}"
-               ${sinCarta ? 'disabled title="Falta la carta de solicitud del cliente"' : ''}
-               onclick="Centro.${fnAprobar}('${this.esc(g.id)}')">${esActSeriales ? 'Aprobar y aplicar' : 'Aprobar'}</button>
-             <button class="btn-danger cg-act" onclick="Centro.anularGestion('${this.esc(g.id)}')">Rechazar</button>
-           </span>` : ''}</div>`;
+           </div>`;
+      void puede; void fnAprobar; void sinCarta;
     } else if (g.estado === 'pendiente_firma' && g.tipo === 'aumento' && g.aumento?.es_regularizacion === true) {
       aprobacion = `<div class="cg-senal warn" style="margin:10px 0 0;">
            <span><b>Quedó esperando firma de antes.</b> Las actualizaciones de seriales ya no se firman
@@ -2627,35 +2564,17 @@ window.Centro = {
              del equipo nuevo), recoge la firma y sube el archivo firmado. La preparación corre
              <b>en paralelo</b>: bodega asigna y la orden de programación sale sola — la firma solo
              frena la <b>entrega</b>.</span>
-           ${this.puedeCrearGestion() ? `<span style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
-             <a class="btn btn-ghost cg-act" target="_blank"
-                href="./anexo-aumento.html?g=${encodeURIComponent(g.id)}">Imprimir anexo</a>
-             <label class="btn btn-primary cg-act" style="cursor:pointer;">Subir firmado
-               <input type="file" accept="application/pdf,image/*" style="display:none;"
-                 onchange="Centro.subirAnexo('${this.esc(g.id)}', this.files[0])"></label>
-           </span>` : ''}</div>`;
+           </div>`;
     }
-    // Pie del expediente: corregir y anular. El "Rechazar" del aviso de
-    // aprobación es la misma anulación — no se repite abajo.
-    const permEd = GestionesService.puedeEditarse(g);
-    const permAn = GestionesService.puedeAnularse(g, { rol: this.rol, uid: firebase.auth().currentUser?.uid });
-    const rechazoArriba = g.estado === 'pendiente_aprobacion'
-      && ((g.tipo === 'baja' || g.tipo === 'aumento') ? this.puedeAprobarBaja() : this.puedeAprobar());
-    const editar = this.puedeCrearGestion() && permEd.ok
-      ? `<button class="btn btn-ghost cg-act" onclick="Centro.editarGestion('${this.esc(g.id)}')">Editar…</button>` : '';
-    const anular = permAn.ok && !rechazoArriba
-      ? `<button class="btn-danger cg-act" onclick="Centro.anularGestion('${this.esc(g.id)}')">Anular gestión…</button>` : '';
-    // Cuando ya no se puede corregir, se DICE por qué: esconder el botón sin
-    // explicación es lo que manda a la gente a crear una gestión nueva.
-    const porQueNo = !editar && this.puedeCrearGestion() && !['cerrada', 'anulada'].includes(g.estado)
-      ? `<span style="font-size:12px; color:var(--fg-3);">No se puede editar: ${this.esc(permEd.motivo)}</span>` : '';
+    // Pie del expediente: el siguiente paso y "Acciones ⋯" — la MISMA lista
+    // del "⋯" de la fila. Nada de botoneras por estado repartidas por el
+    // cuerpo (M.A.M. PROTECTION, 2026-09-09).
     const fEd = g.editada?.at?.toDate ? g.editada.at.toDate().toLocaleDateString('es-PA') : '';
     const editada = g.editada
       ? `<span style="font-size:12px; color:var(--fg-3);">✎ Corregida por ${this.esc(g.editada.por_email || '—')}${fEd ? ` el ${fEd}` : ''}</span>` : '';
-    const pie = (editada || porQueNo || editar || anular)
-      ? `<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px;">
-           <span style="margin-right:auto; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">${editada}${porQueNo}</span>
-           ${editar}${anular}</div>` : '';
+    const pie = `<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
+           <span style="margin-right:auto;">${editada}</span>
+           ${this._pieAcciones('dg-' + g.id, this._accionesGestion(g))}</div>`;
 
     return `<div class="ds-card" style="padding:var(--sp-4); margin:-4px 0 10px; border-top:none;">
       <div class="cg-exp">
@@ -3076,6 +2995,276 @@ window.Centro = {
       Toast.show('Gestión corregida', 'ok');
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo guardar: ' + (e.message || e), 'bad'); }
+  },
+
+  /* ═════════ Acciones: UN menú, siempre en el mismo sitio ═════════
+     Antes cada acción vivía donde cupo: aprobar en el aviso amarillo,
+     editar/anular al pie, la firma en medio del cuerpo, "anular contrato" en
+     otro pie y el resto en el footer del modal "Ver contrato". Tres gestiones
+     del MISMO cliente enseñaban tres botoneras distintas (M.A.M. PROTECTION,
+     2026-09-09: "algunas le sale editar, otra anular… cada vez hay que buscar
+     botones en lugares distintos").
+
+     Ahora hay UNA lista por expediente —gestión o contrato—, se pinta en el
+     "⋯" de la fila y en el pie del detalle, y lo que NO se puede sale en gris
+     con el motivo, nunca escondido. Editar y Anular están SIEMPRE: son las dos
+     que se buscan cuando algo salió mal. */
+
+  // Descriptor: { id, label, hint, grupo, ok, motivo, onclick|href|file, danger, primaria }
+  _acc(a) { return { grupo: 'Avanzar', ok: true, motivo: '', ...a }; },
+
+  _accionesGestion(g) {
+    const id = this.esc(g.id);
+    const A = [];
+    const puedeG = this.puedeCrearGestion();
+    const esBaja = g.tipo === 'baja';
+    const esAum = g.tipo === 'aumento';
+    const esAct = esAum && g.aumento?.es_regularizacion === true;   // actualización de seriales
+    const terminal = ['cerrada', 'anulada'].includes(g.estado);
+
+    // ── Avanzar: lo que mueve el expediente al siguiente paso ──
+    if (g.estado === 'pendiente_aprobacion') {
+      const puede = (esBaja || esAum) ? this.puedeAprobarBaja() : this.puedeAprobar();
+      const sinCarta = esBaja && !g.carta_path;
+      const fn = esBaja ? 'aprobarBajaGestion' : esAct ? 'aprobarActualizacionSeriales'
+        : esAum ? 'aprobarAumentoGestion' : 'aprobarGestion';
+      A.push(this._acc({ id: 'aprobar', label: esAct ? 'Aprobar y aplicar' : 'Aprobar', primaria: true,
+        hint: esAct ? 'aplica las líneas al contrato y amarra los seriales'
+          : esBaja ? 'una sola aprobación, con el desglose por contrato' : 'la gestión pasa al siguiente paso',
+        onclick: `Centro.${fn}('${id}')`,
+        ok: puede && !sinCarta,
+        motivo: !puede ? 'solo administración o gerencia aprueba' : 'falta la carta de solicitud del cliente' }));
+    }
+    if (esAct && g.estado === 'pendiente_firma') {
+      A.push(this._acc({ id: 'aplicar_sin_firma', label: 'Aplicar sin firma', primaria: true,
+        hint: 'las actualizaciones de seriales ya no se firman — se aplican',
+        onclick: `Centro.cerrarRegSinFirma('${id}')`, ok: puedeG, motivo: 'tu rol no mueve gestiones' }));
+    }
+    if (esAum && !esAct && g.estado === 'pendiente_firma') {
+      const conEnlace = g.firma_solicitud_estado === 'pendiente';
+      A.push(this._acc({ id: 'firma', label: conEnlace ? 'Ver o reenviar el enlace de firma' : 'Enviar anexo para firma digital',
+        primaria: !conEnlace, hint: conEnlace ? 'el cliente ya lo tiene — se puede reenviar' : 'el cliente firma con el dedo, desde el celular',
+        onclick: `Centro.enviarFirmaAnexo('${id}')`, ok: puedeG, motivo: 'tu rol no mueve gestiones' }));
+      A.push(this._acc({ id: 'subir_firmado', label: 'Subir el anexo firmado', hint: 'PDF o foto del papel firmado',
+        file: `Centro.subirAnexo('${id}', this.files[0])`, accept: 'application/pdf,image/*',
+        ok: puedeG, motivo: 'tu rol no mueve gestiones' }));
+    }
+    if (g.firma_pendiente_validacion) {
+      A.push(this._acc({ id: 'firmante', label: 'Aceptar al firmante…', primaria: true,
+        hint: 'firmó alguien distinto al representante registrado',
+        onclick: `Centro.aceptarFirmanteGestion('${id}')`,
+        ok: [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol), motivo: 'lo valida administración o gerencia' }));
+    }
+    // Bodega. El formulario vive en Almacén · Asignar desde 2026-09-03.
+    const faltanSeriales = !g.ordenes?.programacion_id && !esAct && !g.aumento?.es_ajuste
+      && (g.estado === 'pendiente_bodega' || (esAum && g.estado === 'pendiente_firma'));
+    if (faltanSeriales) {
+      const yaHay = (g.aumento?.seriales_asignados || []).length || (g.demo?.seriales_asignados || []).length
+        || (g.items || []).some(i => i.serial_nuevo);
+      A.push(this._acc({ id: 'asignar', label: yaHay ? 'Completar seriales en Almacén' : 'Asignar seriales en Almacén',
+        primaria: g.estado === 'pendiente_bodega', hint: 'el picker del estante y la política dura viven allá',
+        href: `../almacen/index.html?tab=asignar&g=${encodeURIComponent(g.id)}`,
+        ok: this.puedeAsignar(), motivo: 'los seriales los declara bodega (Almacén · Asignar)' }));
+    }
+
+    // ── Documentos: papeles y órdenes ──
+    if (esAum && !esAct) {
+      A.push(this._acc({ id: 'imprimir', grupo: 'Documentos', label: 'Imprimir el anexo',
+        hint: 'deja explícito el período propio del equipo nuevo', blank: true,
+        href: `./anexo-aumento.html?g=${encodeURIComponent(g.id)}` }));
+    }
+    if (esBaja) {
+      A.push(g.carta_path
+        ? this._acc({ id: 'ver_carta', grupo: 'Documentos', label: 'Ver la carta del cliente',
+            onclick: `Centro.verAnexo('${this.esc(g.carta_path)}')` })
+        : this._acc({ id: 'subir_carta', grupo: 'Documentos', label: 'Subir la carta del cliente',
+            hint: 'obligatoria: sin ella la baja no se aprueba', accept: 'image/*,application/pdf',
+            file: `Centro.subirCarta('${id}', this.files[0])`, ok: puedeG, motivo: 'tu rol no mueve gestiones' }));
+    }
+    if (g.anexo_firmado_path) {
+      A.push(this._acc({ id: 'ver_anexo', grupo: 'Documentos', label: 'Ver el anexo firmado',
+        onclick: `Centro.verAnexo('${this.esc(g.anexo_firmado_path)}')` }));
+    }
+    const ordenes = [
+      ...(g.ordenes?.programacion_ids || (g.ordenes?.programacion_id ? [g.ordenes.programacion_id] : [])).map(x => ['PROGRAMACIÓN', x]),
+      ...(g.ordenes?.devolucion_id ? [['DEVOLUCIÓN', g.ordenes.devolucion_id]] : []),
+      ...(g.ordenes?.entrada_id ? [['ENTRADA', g.ordenes.entrada_id]] : []),
+    ];
+    for (const [tipo, oid] of ordenes) {
+      A.push(this._acc({ id: `os-${oid}`, grupo: 'Documentos', label: `Ver la orden ${tipo}`, hint: oid,
+        href: `../ordenes/editar-orden.html?id=${encodeURIComponent(oid)}` }));
+    }
+
+    // ── Corregir: SIEMPRE las dos, con el motivo cuando no se puede ──
+    const pEd = GestionesService.puedeEditarse(g);
+    A.push(this._acc({ id: 'editar', grupo: 'Corregir', label: 'Editar…',
+      hint: 'cantidades, precios, fechas, motivos y qué seriales entran',
+      onclick: `Centro.editarGestion('${id}')`,
+      ok: puedeG && pEd.ok, motivo: !puedeG ? 'tu rol no edita gestiones' : pEd.motivo }));
+    if (g.firma_solicitud_estado === 'pendiente') {
+      A.push(this._acc({ id: 'retirar_firma', grupo: 'Corregir', label: 'Retirar el enlace de firma…',
+        hint: 'el enlace del cliente deja de servir y el anexo vuelve a poder corregirse',
+        onclick: `Centro.retirarFirmaAnexo('${id}')`, ok: puedeG, motivo: 'tu rol no mueve gestiones' }));
+    }
+    const pAn = GestionesService.puedeAnularse(g, { rol: this.rol, uid: firebase.auth().currentUser?.uid });
+    A.push(this._acc({ id: 'anular', grupo: 'Corregir', label: 'Anular gestión…', danger: true,
+      hint: g.estado === 'pendiente_aprobacion' ? 'es también el “rechazar” de la aprobación — pide el motivo' : 'pide el motivo y revierte lo que se pueda',
+      onclick: `Centro.anularGestion('${id}')`, ok: pAn.ok, motivo: pAn.motivo }));
+    void terminal;
+    return A;
+  },
+
+  _accionesContrato(c) {
+    const id = this.esc(c.id);
+    const A = [];
+    const puedeG = this.puedeCrearGestion();
+    const mando = [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol);
+    const esperaFirma = c.estado === 'aprobado' && !c.firmado;
+    const conEnlace = esperaFirma && c.firma_solicitud_estado === 'pendiente';
+    const reg = this._regPendiente(c);
+
+    if (c.estado === 'pendiente_aprobacion') {
+      A.push(this._acc({ id: 'aprobar', label: 'Aprobar contrato', primaria: true,
+        hint: 'después se le manda a firmar al cliente',
+        onclick: `Centro.aprobarContrato('${id}')`, ok: mando, motivo: 'lo aprueba administración o gerencia' }));
+    }
+    if (esperaFirma) {
+      A.push(this._acc({ id: 'firma', label: conEnlace ? 'Ver o reenviar el enlace de firma' : 'Enviar para firma',
+        primaria: !conEnlace, hint: conEnlace ? 'el cliente ya lo tiene — se puede reenviar' : 'el cliente firma con el dedo, desde el celular',
+        onclick: `Centro.enviarFirma('${id}')`, ok: puedeG, motivo: 'tu rol no mueve contratos' }));
+      A.push(this._acc({ id: 'subir_firmado', label: 'Subir el contrato firmado', hint: 'PDF, o fotos que se arman en un solo PDF',
+        file: `Centro.subirFirmadoContrato('${id}', this.files)`, accept: 'application/pdf,image/*', multiple: true,
+        ok: this._aceptaFirmado(c) && this._puedeSubirFirmado(),
+        motivo: !this._puedeSubirFirmado() ? 'lo sube administración o el vendedor' : 'este contrato no está esperando un firmado' }));
+    }
+    if (c.firmado_pendiente_validacion) {
+      A.push(this._acc({ id: 'firmante', label: 'Aceptar al firmante…', primaria: true,
+        hint: 'firmó alguien distinto al representante registrado',
+        onclick: `Centro.aceptarFirmante('${id}')`, ok: mando, motivo: 'lo valida administración o gerencia' }));
+    }
+    if (c.accion === 'Renovación' && esperaFirma) {
+      A.push(this._acc({ id: 'seriales', label: 'Seriales de la cuenta',
+        hint: 'cuáles siguen con el cliente, cuáles no tiene y cuáles faltan — antes de la firma',
+        onclick: `Centro.wizSerialesRenovacion('${id}')`, ok: puedeG, motivo: 'tu rol no mueve contratos' }));
+    }
+    if (reg?.motivo === 'sobrantes') {
+      A.push(this._acc({ id: 'actualizar', label: 'Actualizar seriales',
+        hint: `${reg.sob} radio(s) del cliente sin línea en este contrato`,
+        onclick: `Centro.wizAumento('${id}',{regularizar:true})`, ok: puedeG, motivo: 'tu rol no mueve contratos' }));
+    }
+
+    A.push(this._acc({ id: 'ver', grupo: 'Documentos', label: 'Ver el contrato', hint: 'líneas, totales, equipos en campo',
+      onclick: `Centro.verContrato('${id}')` }));
+    A.push(this._acc({ id: 'documento', grupo: 'Documentos', label: 'Documento completo', blank: true,
+      hint: esperaFirma ? 'para imprimirlo y recoger la firma en papel' : '',
+      href: `../contratos/documento.html?id=${encodeURIComponent(c.id)}` }));
+
+    // Corregir: mismas dos de siempre, con el porqué.
+    const edOk = c.estado !== 'activo' && !conEnlace;
+    A.push(this._acc({ id: 'editar', grupo: 'Corregir', label: 'Editar…',
+      hint: 'abre el editor del contrato',
+      href: `../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}&volver=centro`,
+      ok: edOk && puedeG,
+      motivo: !puedeG ? 'tu rol no edita contratos'
+        : c.estado === 'activo' ? 'un contrato activo ya no se edita: los cambios van por anexo, ajuste o renovación'
+        : 'el cliente tiene un enlace de firma abierto sobre una copia congelada: retíralo primero' }));
+    if (conEnlace) {
+      A.push(this._acc({ id: 'retirar_firma', grupo: 'Corregir', label: 'Retirar el enlace de firma…',
+        hint: 'el enlace del cliente deja de servir y el contrato vuelve a poder editarse',
+        onclick: `Centro.retirarEnlaceFirma('${id}')`, ok: puedeG, motivo: 'tu rol no mueve contratos' }));
+    }
+    const anulable = ContratoAnulacion.esAnulable(c);
+    A.push(this._acc({ id: 'anular', grupo: 'Corregir', label: 'Anular contrato…', danger: true,
+      hint: 'pide el motivo y queda en el historial',
+      onclick: `Centro.anularContrato('${id}')`,
+      ok: anulable && mando,
+      motivo: !anulable ? `un contrato ${this.esc(c.estado || '')} ya no se anula desde aquí` : 'lo anula administración o gerencia' }));
+    return A;
+  },
+
+  // Render del menú (mismos estilos que el de "Nueva gestión": .cg-menu).
+  _menuAccionesHtml(acc) {
+    const item = (a) => {
+      const hint = a.ok ? (a.hint || '') : (a.motivo || 'no se puede ahora');
+      const cls = [a.ok ? '' : 'off', a.ok && a.primaria ? 'top' : '', a.ok && a.danger ? 'mal' : ''].filter(Boolean).join(' ');
+      const cuerpo = `${this.esc(a.label)}${hint ? `<span class="cg-menu-hint">${hint}</span>` : ''}`;
+      if (!a.ok) return `<button type="button" class="${cls}" disabled aria-disabled="true">${cuerpo}</button>`;
+      if (a.file) return `<label class="${cls}" style="cursor:pointer; display:block;">${cuerpo}
+        <input type="file" ${a.multiple ? 'multiple' : ''} accept="${this.esc(a.accept || '')}" style="display:none;"
+          onchange="Centro._cerrarAcciones(); ${a.file}"></label>`;
+      if (a.href) return `<a class="${cls}" href="${a.href}"${a.blank ? ' target="_blank" rel="noopener"' : ''}>${cuerpo}</a>`;
+      return `<button type="button" class="${cls}" onclick="Centro._cerrarAcciones(); ${a.onclick}">${cuerpo}</button>`;
+    };
+    return ['Avanzar', 'Documentos', 'Corregir'].map(gr => {
+      const xs = acc.filter(a => a.grupo === gr);
+      return xs.length ? `<div class="hd">${gr}</div>${xs.map(item).join('')}` : '';
+    }).join('');
+  },
+
+  // El "⋯" de una fila: SIEMPRE al final, gestión o contrato, abierta o no.
+  _masFila(key, acc, etiqueta) {
+    if (!acc.length) return '';
+    return `<span class="cg-rowacts" onclick="event.stopPropagation();">
+      <button type="button" class="cg-masbtn" aria-haspopup="true" title="Acciones"
+        aria-label="Acciones de ${this.esc(etiqueta)}" onclick="Centro.toggleAcciones('${this.esc(key)}', event)">⋯</button>
+      <div class="cg-menu cg-accmenu hidden" id="accm-${this.esc(key)}">${this._menuAccionesHtml(acc)}</div>
+    </span>`;
+  },
+
+  // Pie del detalle: el siguiente paso como botón (sale de la MISMA lista) y
+  // el resto detrás de "Acciones ⋯", que abre el mismo menú de la fila. Con el
+  // expediente abierto el "⋯" de arriba queda lejos; esto lo repite al pie,
+  // pero es la misma lista, no otra botonera.
+  _pieAcciones(key, acc) {
+    const P = acc.find(a => a.primaria && a.ok);
+    const btn = !P ? ''
+      : P.file
+        ? `<label class="btn btn-primary cg-act" style="cursor:pointer;">${this.esc(P.label)}
+             <input type="file" ${P.multiple ? 'multiple' : ''} accept="${this.esc(P.accept || '')}" style="display:none;" onchange="${P.file}"></label>`
+        : P.href
+          ? `<a class="btn btn-primary cg-act" href="${P.href}"${P.blank ? ' target="_blank" rel="noopener"' : ''}>${this.esc(P.label)}</a>`
+          : `<button class="btn btn-primary cg-act" onclick="${P.onclick}">${this.esc(P.label)}</button>`;
+    return `<span class="cg-rowacts">${btn}
+      <button type="button" class="btn btn-ghost cg-act" onclick="Centro.toggleAcciones('${this.esc(key)}', event)">Acciones ⋯</button>
+      <div class="cg-menu cg-accmenu cg-up hidden" id="accm-${this.esc(key)}">${this._menuAccionesHtml(acc)}</div></span>`;
+  },
+
+  // Un solo menú abierto a la vez (incluidos los dos de la cabecera).
+  toggleAcciones(key, ev) {
+    ev?.stopPropagation();
+    const el = document.getElementById('accm-' + key);
+    const abierto = el && !el.classList.contains('hidden');
+    this._cerrarAcciones();
+    if (!el || abierto) return;
+    el.classList.remove('hidden');
+    // Posición FIJA calculada desde el botón: el menú vive dentro de filas y
+    // de la tabla de contratos, que tiene overflow — ahí un `absolute` se
+    // corta a la mitad. Y si abajo no cabe, se abre hacia arriba.
+    const btn = ev?.currentTarget?.getBoundingClientRect ? ev.currentTarget : null;
+    const r = btn?.getBoundingClientRect();
+    if (r) {
+      const ancho = el.offsetWidth || 300, alto = el.offsetHeight || 260;
+      const izq = Math.max(8, Math.min(window.innerWidth - ancho - 8, r.right - ancho));
+      const cabeAbajo = r.bottom + alto + 10 <= window.innerHeight;
+      el.style.position = 'fixed';
+      el.style.left = `${izq}px`;
+      el.style.top = `${cabeAbajo || r.top - alto - 10 < 0 ? r.bottom + 6 : r.top - alto - 6}px`;
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+      el.style.maxHeight = `${Math.max(180, window.innerHeight - (cabeAbajo ? r.bottom : 0) - 16)}px`;
+    }
+    setTimeout(() => {
+      document.addEventListener('click', Centro._cerrarAcciones, { once: true });
+      window.addEventListener('scroll', Centro._cerrarAcciones, { once: true, capture: true });
+    }, 0);
+  },
+  _cerrarAcciones() {
+    document.querySelectorAll('.cg-accmenu:not(.hidden)').forEach(m => {
+      m.classList.add('hidden');
+      m.style.position = ''; m.style.left = ''; m.style.top = ''; m.style.right = ''; m.style.bottom = ''; m.style.maxHeight = '';
+    });
+    document.getElementById('cgMenu')?.classList.add('hidden');
+    document.getElementById('cgMasMenu')?.classList.add('hidden');
   },
 
   /* ═════════ Menú "Nueva gestión" ═════════ */

@@ -110,6 +110,20 @@
     .cg-menu .cg-menu-hint { display:block; font-size:11px; font-weight:400; color:var(--fg-4); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .cg-menu .pie { font-size:12px; color:var(--fg-3); border-bottom:0; }
     .cg-menu .off:hover { background:none; }
+    /* Acciones del expediente (2026-09-09): UN menú por gestión o contrato,
+       siempre en el mismo sitio — el "⋯" de la fila y el pie del detalle.
+       Lo que no se puede sale en gris CON el motivo, nunca escondido. */
+    .cg-rowacts { position:relative; flex:none; display:inline-flex; gap:8px; align-items:center; }
+    .cg-masbtn { background:none; border:1px solid var(--border-subtle); border-radius:8px; width:32px; height:28px;
+                 line-height:1; font-size:17px; color:var(--fg-3); cursor:pointer; padding:0; }
+    .cg-masbtn:hover { background:var(--surface-sunken, #F6F9FB); color:var(--fg-1); border-color:var(--border-default); }
+    /* text-align propio: la celda de la tabla de contratos alinea a la
+       derecha y el menú lo heredaba (títulos y "subir…" pegados al borde). */
+    .cg-accmenu { min-width:288px; max-width:340px; text-align:left; }
+    .cg-accmenu label { text-align:left; }
+    .cg-accmenu .cg-menu-hint { white-space:normal; line-height:1.35; margin-top:2px; }
+    .cg-accmenu .mal { color:var(--bad-deep, #991B1B); }
+    .cg-accmenu.cg-up { top:auto; bottom:calc(100% + 6px); }
     .cg-vacio { color:var(--fg-3); font-size:13px; padding:14px; text-align:center; }
     /* ── Ficha reordenada (2026-09-08): cola "Ahora", franja de números,
        bloques plegables, equipos por grupo, dock móvil ── */
@@ -304,7 +318,7 @@
 <script defer src="../js/pages/contratos-upload.js?v=firm2"></script>
 <!-- Garantía de la unidad (cláusula 8): una sola definición, compartida con la propuesta de reemplazo del taller. -->
 <script defer src="../js/domain/garantiaEquipo.js?v=1"></script>
-<script src="../js/pages/clientes-centro.js?v=cg94" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg95" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
