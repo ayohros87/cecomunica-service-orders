@@ -68,6 +68,10 @@
 <script defer src="../js/ui/serial-field.js?v=cond1"></script>
 <script defer src="../js/domain/scoring.js"></script>
 <script defer src="../js/ui/toast.js"></script>
+<!-- Protocolo de la tablet de firmas del mostrador (crear/escuchar/cancelar la
+     solicitud). Lo usan el modal de entrega (ordenes-flujo) y la hoja de
+     entrega parcial; va en el HTML porque el primero no es diferido. -->
+<script defer src="../js/ui/firmaTablet.js?v=1"></script>
 <script defer src="../js/ui/modal.js?v=f5"></script>
 <!-- firmaPad DIFERIDO (P3.15): solo lo usa el check-in de devolución;
      lo trae CargaDiferida.devolucion() al primer uso. -->
@@ -75,7 +79,7 @@
 <script defer src="../js/pages/ordenes-data.js?v=dup2"></script>
 <script defer src="../js/pages/ordenes-render.js?v=rp2"></script>
 <script defer src="../js/pages/ordenes-filters.js?v=busq3"></script>
-<script defer src="../js/pages/ordenes-flujo.js?v=sh1"></script>
+<script defer src="../js/pages/ordenes-flujo.js?v=ft1"></script>
 <script defer src="../js/pages/ordenes-qc.js?v=sh1"></script>
 <script defer src="../js/pages/ordenes-equipos.js?v=rp1"></script>
 <!-- Módulos de acción DIFERIDOS (P3.15) — los carga CargaDiferida al primer

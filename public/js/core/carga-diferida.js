@@ -58,7 +58,7 @@ window.CargaDiferida = (() => {
     // Dividir una ENTRADA grande entre varias órdenes (Brenda, 2026-09-08).
     dividir:    "/js/pages/ordenes-dividir.js?v=1",
     // Entrega parcial de una REPARACIÓN: el cliente se lleva solo una tanda.
-    entregaParcial: "/js/pages/ordenes-entrega-parcial.js?v=1",
+    entregaParcial: "/js/pages/ordenes-entrega-parcial.js?v=2",
     // Válvula de casos viejos: cerrar reparaciones que llevan ≥30 días.
     // Necesita el kit de bandeja (fila + semáforo), que /ordenes/ no carga.
     casosViejos: "/js/pages/ordenes-casos-viejos.js?v=1",

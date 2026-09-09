@@ -1217,24 +1217,16 @@ window.copiarSeriales = function (ordenId) {
   window.limpiarEntregaFirma = _clearCanvas;
 
   // ── Firma en tablet (firmas_tablet + /firmar/tablet.html) ────────────
-  // Mismo mecanismo que el acuse de devolución (ordenes-devolucion.js), con
-  // un ciclo de vida más simple: este modal es TRANSIENTE y compartido entre
-  // órdenes, así que la solicitud se cancela al cerrar/reabrir el modal en
-  // vez de sobrevivirlo. La firma llega como URL (la tablet ya la subió a
-  // ordenes_firmas/) y el confirm la usa tal cual, sin canvas ni upload.
+  // El PROTOCOLO (crear la solicitud, escucharla, cancelarla) vive en
+  // js/ui/firmaTablet.js desde 2026-09-09: lo comparten este modal y la hoja
+  // de entrega parcial. Aquí queda solo la UI, que es lo propio de cada
+  // pantalla. El ciclo de vida sí es de aquí: este modal es TRANSIENTE y
+  // compartido entre órdenes, así que la solicitud se cancela al cerrar o
+  // reabrir en vez de sobrevivirlo. La firma llega como URL (la tablet ya la
+  // subió a ordenes_firmas/) y el confirm la usa tal cual, sin canvas.
   let _solTablet = null;    // id de la solicitud pendiente en firmas_tablet
   let _unsubTablet = null;
   let _firmaTablet = null;  // {url, nombre} cuando la tablet ya firmó
-
-  // La tablet de firmas vive EN EL MOSTRADOR: en un teléfono o pantalla
-  // táctil (vendedor en la calle) la opción se oculta — parecería el acceso
-  // para firmar en el propio dispositivo, y ahí el canvas del modal ya
-  // cumple. Mismo corte que .btn-firma-tablet en ordenes-index.css.
-  function _tabletMostradorDisponible() {
-    try {
-      return !window.matchMedia('(max-width: 768px), (hover: none) and (pointer: coarse)').matches;
-    } catch (e) { return true; }
-  }
 
   function _tabletUI() {
     const esperando = !!_solTablet && !_firmaTablet;
@@ -1254,11 +1246,7 @@ window.copiarSeriales = function (ordenId) {
   // huérfana en la tablet. La firmada no se toca: ya es constancia.
   function _tabletReset(cancelarPendiente) {
     _unsubTablet?.(); _unsubTablet = null;
-    if (cancelarPendiente && _solTablet && !_firmaTablet) {
-      firebase.firestore().collection('firmas_tablet').doc(_solTablet)
-        .update({ estado: 'cancelada' })
-        .catch(() => { /* ya firmada/cancelada: nada que hacer */ });
-    }
+    if (cancelarPendiente && _solTablet && !_firmaTablet) FirmaTablet.cancelar(_solTablet);
     _solTablet = null;
     _firmaTablet = null;
     _tabletUI();
@@ -1266,63 +1254,44 @@ window.copiarSeriales = function (ordenId) {
 
   window._entregaFirmarEnTablet = async function () {
     if (!_ordenId || _solTablet || _firmaTablet) return;
-    if (!_tabletMostradorDisponible()) {
+    if (!FirmaTablet.disponible()) {
       Toast.show('La firma en tablet es de la tablet del mostrador de recepción — en este dispositivo el cliente firma en el recuadro de aquí mismo.', 'warn');
       return;
     }
     const orden = APP.state.orders.find(o => o.ordenId === _ordenId) || {};
     const esRecepcion = _modo === 'recepcion';
-    const ACC = [['bateria', 'Batería'], ['antena', 'Antena'], ['clip', 'Clip'],
-                 ['cargador', 'Cargador'], ['fuente', 'Fuente'], ['cubrepolvo', 'Cubrepolvo']];
-    const unidades = (Array.isArray(orden.equipos) ? orden.equipos : [])
-      .filter(e => e && !e.eliminado)
-      .map(e => ({
-        serial: e.numero_de_serie || e.SERIAL || e.serial || '—',
-        modelo: e.modelo || '',
-        detalle: ACC.filter(([k]) => e[k]).map(([, l]) => l).join(', ') || 'Sin accesorios',
-      }));
+    const unidades = FirmaTablet.unidadesDeEquipos(orden.equipos);
     // La leyenda que firma el cliente: solo aplica al dejar equipos de una
     // ENTRADA (mismo criterio que _toggleLegendaEntrada).
     const leyenda = String(orden.tipo_de_servicio || '').toUpperCase().includes('ENTRADA')
       ? 'Los radios ingresarán al taller para su revisión. Cualquier daño identificado como causado por mal uso, así como los accesorios o equipos no devueltos, serán notificados oportunamente mediante cotización para su posterior facturación.'
       : null;
-    const user = firebase.auth().currentUser;
     try {
-      const ref = await firebase.firestore().collection('firmas_tablet').add({
+      _solTablet = await FirmaTablet.solicitar({
         tipo: esRecepcion ? 'recepcion' : 'entrega',
-        estado: 'pendiente',
-        orden_id: _ordenId,
-        cliente_nombre: orden.cliente_nombre || '',
-        contrato_id: orden.contrato?.contrato_id || null,
+        ordenId: _ordenId,
         numero: _ordenId,
         titulo: esRecepcion ? 'Acuse de recibo en mostrador' : 'Acuse de entrega de equipos',
-        nombre_label: esRecepcion ? 'Nombre de quien entrega' : 'Nombre de quien recibe',
+        nombreLabel: esRecepcion ? 'Nombre de quien entrega' : 'Nombre de quien recibe',
         leyenda,
-        copia_a: null,
         unidades,
-        creado_at: firebase.firestore.FieldValue.serverTimestamp(),
-        creado_por_uid: user?.uid || null,
-        creado_por_email: user?.email || null,
+        clienteNombre: orden.cliente_nombre || '',
+        contratoId: orden.contrato?.contrato_id || null,
       });
-      _solTablet = ref.id;
       _firmaTablet = null;
-      _unsubTablet = firebase.firestore().collection('firmas_tablet').doc(ref.id)
-        .onSnapshot((s) => {
-          const d = s.exists ? s.data() : null;
-          if (!d) return;
-          if (d.estado === 'firmada') {
-            _firmaTablet = { url: d.firma?.url || null, nombre: d.firma?.nombre || '', cedula: d.firma?.cedula || '' };
-            _unsubTablet?.(); _unsubTablet = null; _solTablet = null;
-            // El nombre que tecleó el cliente en la tablet prellena el campo
-            // (editable); si recepción ya había escrito uno, se respeta.
-            const inp = document.getElementById('entregaReceptorNombre');
-            if (inp && !inp.value.trim() && _firmaTablet.nombre) inp.value = _firmaTablet.nombre;
-            _tabletUI();
-            Toast.show('Firma recibida de la tablet.', 'ok');
-          } else if (d.estado === 'cancelada') {
-            _tabletReset(false);
-          }
-        });
+      _unsubTablet = FirmaTablet.escuchar(_solTablet, {
+        onFirmada: (f) => {
+          _firmaTablet = f;
+          _unsubTablet?.(); _unsubTablet = null; _solTablet = null;
+          // El nombre que tecleó el cliente en la tablet prellena el campo
+          // (editable); si recepción ya había escrito uno, se respeta.
+          const inp = document.getElementById('entregaReceptorNombre');
+          if (inp && !inp.value.trim() && f.nombre) inp.value = f.nombre;
+          _tabletUI();
+          Toast.show('Firma recibida de la tablet.', 'ok');
+        },
+        onCancelada: () => _tabletReset(false),
+      });
       _tabletUI();
       Toast.show('Solicitud enviada — ya aparece en la tablet del mostrador.', 'ok');
     } catch (err) {

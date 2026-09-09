@@ -335,6 +335,13 @@
 
     let pad = null;
     let overlay = null;
+    // Firma en la tablet del mostrador: `solTablet` es la solicitud viva y
+    // `firmaTablet` la firma ya recibida (URL, la tablet la subió a Storage).
+    // Solo una de las dos vías vale a la vez — el recuadro se esconde
+    // mientras la tablet manda.
+    let solTablet = null, unsubTablet = null, firmaTablet = null;
+    // La cablea onMount (necesita el root); la usa también el cierre de la hoja.
+    let soltarTablet = () => {};
     const marcados = () => [...overlay.querySelectorAll('.ep-check:checked')].map(c => c.value);
 
     const refrescar = () => {
@@ -402,11 +409,29 @@
         <textarea id="epNotas" class="form-input" rows="2" placeholder="Opcional — qué se acordó sobre lo que queda"></textarea>
 
         <div style="margin-top:12px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;">
             <label class="form-label" style="margin:0;">Firma de quien recibe *</label>
-            <button type="button" class="btn btn-secondary" id="epLimpiarFirma" style="height:26px;font-size:12px;">Limpiar</button>
+            <span style="display:flex;gap:6px;">
+              ${FirmaTablet.disponible()
+                ? '<button type="button" class="btn btn-secondary" id="epTabletPedir" style="height:26px;font-size:12px;">Firmar en la tablet</button>'
+                : ''}
+              <button type="button" class="btn btn-secondary" id="epLimpiarFirma" style="height:26px;font-size:12px;">Limpiar</button>
+            </span>
           </div>
-          <canvas id="epFirma" style="width:100%;height:140px;border:1px dashed var(--border);border-radius:8px;background:#fff;touch-action:none;"></canvas>
+          <div id="epCanvasWrap">
+            <canvas id="epFirma" style="width:100%;height:140px;border:1px dashed var(--border);border-radius:8px;background:#fff;touch-action:none;"></canvas>
+          </div>
+          <div id="epTabletEspera" class="hidden" style="border:1px dashed var(--border);border-radius:8px;padding:14px;text-align:center;font-size:13px;color:var(--fg-2);">
+            Esperando la firma en la tablet del mostrador…
+            <div style="margin-top:8px;"><button type="button" class="btn btn-secondary" id="epTabletCancelar" style="height:26px;font-size:12px;">Cancelar y firmar aquí</button></div>
+          </div>
+          <div id="epTabletListo" class="hidden" style="border:1px solid var(--border);border-radius:8px;padding:10px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <b id="epTabletNombre" style="font-size:13px;"></b>
+              <button type="button" class="btn btn-secondary" id="epTabletDescartar" style="height:26px;font-size:12px;">Descartar firma</button>
+            </div>
+            <img id="epTabletPreview" alt="Firma recibida" style="max-height:80px;margin-top:6px;">
+          </div>
         </div>`,
       buttons: [
         { action: 'cerrar', label: 'Cancelar' },
@@ -434,6 +459,90 @@
 
         pad = FirmaPad.mount(root.querySelector('#epFirma'), { alto: 140 });
         root.querySelector('#epLimpiarFirma').addEventListener('click', () => pad && pad.clear());
+
+        const pintarTablet = () => {
+          const esperando = !!solTablet && !firmaTablet;
+          root.querySelector('#epCanvasWrap').classList.toggle('hidden', esperando || !!firmaTablet);
+          root.querySelector('#epTabletEspera').classList.toggle('hidden', !esperando);
+          root.querySelector('#epTabletListo').classList.toggle('hidden', !firmaTablet);
+          root.querySelector('#epLimpiarFirma').classList.toggle('hidden', esperando || !!firmaTablet);
+          const pedir = root.querySelector('#epTabletPedir');
+          if (pedir) pedir.classList.toggle('hidden', esperando || !!firmaTablet);
+          if (firmaTablet) {
+            root.querySelector('#epTabletNombre').textContent =
+              (firmaTablet.nombre || '—') + (firmaTablet.cedula ? ` · Céd. ${firmaTablet.cedula}` : '');
+            if (firmaTablet.url) root.querySelector('#epTabletPreview').src = firmaTablet.url;
+          }
+        };
+        // Suelta el listener y, si el operador abandona, cancela la solicitud
+        // para que no quede colgando en la tablet. Una firma ya recibida NO
+        // se cancela: es constancia.
+        soltarTablet = (cancelarPendiente) => {
+          if (unsubTablet) { unsubTablet(); unsubTablet = null; }
+          if (cancelarPendiente && solTablet && !firmaTablet) FirmaTablet.cancelar(solTablet);
+          solTablet = null;
+        };
+
+        root.querySelector('#epTabletPedir')?.addEventListener('click', async () => {
+          if (solTablet || firmaTablet) return;
+          const marcadosAhora = marcados();
+          if (!marcadosAhora.length) {
+            Toast.show('Marca primero qué equipos se lleva: es lo que el cliente va a ver en la tablet.', 'warn');
+            return;
+          }
+          const set = new Set(marcadosAhora);
+          const salen = pendientes.filter(e => set.has(EntregaTandas.claveEquipo(e)));
+          try {
+            const { n } = EntregaTandas.siguienteTanda(orden, ordenId);
+            solTablet = await FirmaTablet.solicitar({
+              tipo: 'entrega',
+              ordenId,
+              numero: `${ordenId}-E${n}`,
+              titulo: 'Entrega parcial de equipos',
+              nombreLabel: 'Nombre de quien recibe',
+              // La tablet muestra SOLO lo que se lleva hoy: firmar una lista
+              // con los que se quedan en el taller sería firmar de más.
+              unidades: FirmaTablet.unidadesDeEquipos(salen),
+              clienteNombre: orden.cliente_nombre || '',
+              contratoId: orden.contrato?.contrato_id || null,
+              leyenda: null,
+            });
+            firmaTablet = null;
+            unsubTablet = FirmaTablet.escuchar(solTablet, {
+              onFirmada: (f) => {
+                firmaTablet = f;
+                if (unsubTablet) { unsubTablet(); unsubTablet = null; }
+                solTablet = null;
+                // El nombre que tecleó el cliente prellena el campo, sin pisar
+                // lo que recepción ya hubiera escrito.
+                const inp = root.querySelector('#epReceptor');
+                if (inp && !inp.value.trim() && f.nombre) inp.value = f.nombre;
+                const ced = root.querySelector('#epCedula');
+                if (ced && !ced.value.trim() && f.cedula) ced.value = f.cedula;
+                pintarTablet();
+                Toast.show('Firma recibida de la tablet.', 'ok');
+              },
+              onCancelada: () => { soltarTablet(false); pintarTablet(); },
+            });
+            pintarTablet();
+            Toast.show('Solicitud enviada — ya aparece en la tablet del mostrador.', 'ok');
+          } catch (err) {
+            console.error('[ordenes-entrega-parcial] tablet', err);
+            Toast.show('No se pudo enviar la solicitud a la tablet.', 'bad');
+            solTablet = null;
+            pintarTablet();
+          }
+        });
+        root.querySelector('#epTabletCancelar').addEventListener('click', () => {
+          soltarTablet(true); pintarTablet();
+        });
+        // Firmó la persona equivocada: se descarta y vuelve el recuadro. La
+        // firma queda archivada en la solicitud; la orden solo guarda la que
+        // esté vigente al confirmar.
+        root.querySelector('#epTabletDescartar').addEventListener('click', () => {
+          firmaTablet = null; pintarTablet();
+        });
+        pintarTablet();
         // Ver / Imprimir / Enviar de las tandas ya registradas.
         cablearTandas(root, ordenId);
         refrescar();
@@ -451,7 +560,12 @@
         const sinIdMotivo = sinId ? (root.querySelector('#epSinIdMotivo').value || '').trim() : '';
         if (sinId && !sinIdMotivo) { Toast.show('Indique por qué el cliente no presenta identificación', 'bad'); return false; }
 
-        if (!pad || pad.isEmpty()) { Toast.show('La firma de quien recibe es obligatoria', 'bad'); return false; }
+        if (!firmaTablet && (!pad || pad.isEmpty())) {
+          Toast.show(solTablet
+            ? 'La tablet todavía no devuelve la firma — espera o cancela para firmar aquí.'
+            : 'La firma de quien recibe es obligatoria', 'bad');
+          return false;
+        }
 
         const ok = await Modal.confirm({
           title: 'Registrar entrega parcial',
@@ -464,16 +578,22 @@
         const botones = root.querySelectorAll('button');
         botones.forEach(b => { b.disabled = true; });
         try {
-          const blob = await pad.toBlob();
-          const path = `ordenes_firmas/${ordenId}_tanda_${Date.now()}.png`;
-          const refFirma = firebase.storage().ref(path);
-          await refFirma.put(blob, { contentType: 'image/png' });
-          const firmaUrl = await refFirma.getDownloadURL();
+          // La firma de la tablet YA está en Storage (la subió allá): se usa
+          // tal cual, sin canvas ni segunda subida.
+          let firmaUrl = firmaTablet?.url || null;
+          if (!firmaUrl) {
+            const blob = await pad.toBlob();
+            const path = `ordenes_firmas/${ordenId}_tanda_${Date.now()}.png`;
+            const refFirma = firebase.storage().ref(path);
+            await refFirma.put(blob, { contentType: 'image/png' });
+            firmaUrl = await refFirma.getDownloadURL();
+          }
 
           const r = await OrdenesService.registrarTandaEntrega(ordenId, {
             equipoIds: ids,
             receptorNombre,
-            receptorCedula: (root.querySelector('#epCedula').value || '').trim(),
+            receptorCedula: (root.querySelector('#epCedula').value || '').trim()
+              || firmaTablet?.cedula || '',
             firmaUrl,
             sinId, sinIdMotivo,
             notas: (root.querySelector('#epNotas').value || '').trim(),
@@ -504,8 +624,11 @@
       },
     });
     // Modal.sheet no tiene hook de cierre: la promesa resuelve cuando la hoja
-    // se fue, y ahí es cuando el pad suelta sus listeners de document/window.
+    // se fue, y ahí es cuando el pad suelta sus listeners de document/window
+    // y se cancela la solicitud de tablet que nadie llegó a firmar (si no,
+    // se queda para siempre en la pantalla del mostrador).
     if (pad) { pad.destroy(); pad = null; }
+    soltarTablet(true);
 
     // El cliente está PARADO en el mostrador esperando su papel: ofrecerlo
     // aquí y no hacerle buscar la hoja otra vez es la diferencia entre que la
