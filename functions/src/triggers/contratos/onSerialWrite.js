@@ -2,6 +2,8 @@ const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
+const { catalogo } = require("../../domain/modeloCatalogo");
+const { propiedadDeUnidad } = require("../../domain/propiedadUnidad");
 
 // Mantiene `seriales_count` en el contrato cuando cambia su subcolección de
 // seriales. Con admin SDK (esquiva el guard touchesCFOwnedFields). El índice usa
@@ -113,11 +115,20 @@ module.exports = onDocumentWritten(
         // ya_en_cliente: fila de un radio que YA tiene el cliente (plan de
         // renovación 'continúa') — no espera entrega.
         const entregado = c.entrega_confirmada === true || c.seriales_estado === "legacy" || after.ya_en_cliente === true;
-        // Propiedad de la unidad según el tipo de contrato: "Propio" (venta con
-        // contrato de servicio) = equipo del cliente; Alquiler/Temporal/Demo/
-        // Reemplazo = flota Cecomunica.
-        const propiedad = (c.tipo_contrato === "Propio" || c.codigo_tipo === "PROP")
-          ? "cliente" : "cecomunica";
+        // Propiedad de la unidad: sale de la LÍNEA a la que pertenece el
+        // serial (2026-09-09). El criterio viejo preguntaba por el tipo del
+        // contrato y con todo en SERV respondía siempre "flota", aunque el
+        // vendedor hubiera marcado la línea "del cliente". Para los contratos
+        // sin modalidad por línea (los viejos) el helper cae al mismo criterio
+        // de antes, así que ahí no cambia nada. Ambigua = no se estampa.
+        await catalogo().catch(() => null);   // familia por catálogo, no por texto
+        const { propiedad, origen: origenProp } = propiedadDeUnidad(
+          { modelo_id: after.modelo_id || null, modelo: after.modelo || "" },
+          c.equipos, c);
+        if (!propiedad) {
+          logger.warn("[onSerialWrite] Propiedad ambigua: el modelo aparece en dos modalidades",
+            { cid, serial: serialDespues, modelo: after.modelo || "" });
+        }
         const r = await pool.upsertContacto({
           serial: serialDespues,
           modelo_id: after.modelo_id || null,
@@ -132,7 +143,9 @@ module.exports = onDocumentWritten(
           refMov: { tipo: "contrato", id: cid, label: after.contrato_id || "" },
           origen: "migracion_contrato",
           extra: {
-            propiedad,
+            // Ambigua: se omite el campo para que la ficha nueva quede
+            // 'desconocida' ("Sin clasificar") en vez de una flota inventada.
+            ...(propiedad ? { propiedad } : {}),
             asignacion: {
               contrato_doc_id: cid,
               contrato_id:     after.contrato_id || c.contrato_id || "",
@@ -141,7 +154,8 @@ module.exports = onDocumentWritten(
             },
           },
         });
-        logger.info("[onSerialWrite] Pool sync", { cid, serial: serialDespues, resultado: r });
+        logger.info("[onSerialWrite] Pool sync",
+          { cid, serial: serialDespues, resultado: r, propiedad: propiedad || "(sin estampar)", origen_propiedad: origenProp });
 
         // Venta con contrato ("Propio") ya facturada: el serial recién asignado
         // hereda la factura QBO del contrato (contratos.factura_venta, la
