@@ -290,6 +290,27 @@ async function limpiarAnulacion(gid, g) {
   const acciones = [];
   const ABIERTOS = ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO"];
 
+  // 0) ENLACE DE FIRMA vivo: lo primero, porque es lo único que está FUERA
+  //    de la empresa. Una gestión anulada con el enlace en la calle se podía
+  //    firmar igual: el cliente recibía la constancia de un anexo que ya no
+  //    existe. La página también lo retira al anular (respuesta inmediata);
+  //    esto cubre cualquier otra vía y es idempotente — solo toca la
+  //    solicitud si sigue 'pendiente'.
+  if (g.firma_solicitud_id && g.firma_solicitud_estado === "pendiente") {
+    try {
+      const fRef = db.collection("firma_solicitudes").doc(g.firma_solicitud_id);
+      const fSnap = await fRef.get();
+      if (fSnap.exists && fSnap.data().estado === "pendiente") {
+        await fRef.update({ estado: "cancelado" });
+        // El expediente queda diciendo lo mismo que la solicitud. Esta
+        // escritura re-dispara onGestionWrite, que sale de una porque el
+        // estado sigue siendo 'anulada' (mismo before y after).
+        await db.collection("gestiones").doc(gid).update({ firma_solicitud_estado: "cancelado" });
+        acciones.push("enlace de firma retirado (el cliente verá “enlace no válido”)");
+      }
+    } catch (e) { logger.warn("[gestiones] retiro del enlace de firma falló", { gid, message: e.message }); }
+  }
+
   // 1) Orden de DEVOLUCIÓN
   const devId = g.ordenes?.devolucion_id;
   if (devId) {
