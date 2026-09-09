@@ -219,6 +219,79 @@ const GestionesService = {
     await this.registrarEvento(gestionId, 'anular', motivo ? `Anulada: ${motivo}` : 'Anulada.');
   },
 
+  /* ── Corregir / anular un expediente que todavía no surtió efecto ── */
+
+  // Estados en los que la gestión sigue BLANDA: nada se aplicó al contrato,
+  // bodega no asignó seriales y no hay orden de servicio dando vueltas.
+  EDITABLES: ['pendiente_aprobacion', 'pendiente_firma', 'pendiente_bodega'],
+
+  // Devuelve { ok, motivo }: la página DICE por qué no se puede en vez de
+  // esconder el botón (misma decisión que el editor de contratos, 2026-09-09).
+  // Se corrige una cantidad, un precio, una fecha o un motivo mal puestos sin
+  // tener que anular y volver a crear la gestión — pero solo mientras nadie
+  // haya actuado sobre ella.
+  puedeEditarse(g) {
+    if (!g) return { ok: false, motivo: 'Expediente no encontrado.' };
+    if (g.estado === 'cerrada') return { ok: false, motivo: 'La gestión ya está cerrada.' };
+    if (g.estado === 'anulada') return { ok: false, motivo: 'La gestión está anulada.' };
+    if (!this.EDITABLES.includes(g.estado)) {
+      return { ok: false, motivo: `Ya está ${this.estadoLabel(g.estado).toLowerCase()}: sus efectos están regados en contratos y órdenes. Anúlala si hay que rehacerla.` };
+    }
+    if (g.cierre?.derivacion === true) return { ok: false, motivo: 'Las líneas ya se aplicaron al contrato.' };
+    if (g.cierre?.asignacion === true || g.ordenes?.programacion_id) {
+      return { ok: false, motivo: 'Bodega ya asignó los seriales y salió la orden de programación.' };
+    }
+    if (g.cierre?.entrega === true) return { ok: false, motivo: 'Los equipos ya se entregaron.' };
+    if ((g.aumento?.seriales_asignados || []).length || (g.demo?.seriales_asignados || []).length
+        || (g.items || []).some(it => it.serial_nuevo)) {
+      return { ok: false, motivo: 'Bodega ya asignó seriales a esta gestión — anúlala si hay que rehacerla.' };
+    }
+    if (g.firma_solicitud_estado === 'pendiente') {
+      return { ok: false, motivo: 'El anexo está en manos del cliente para firma digital: retira el enlace primero.' };
+    }
+    if (g.anexo_firmado_path || g.anexo_firma_digital) return { ok: false, motivo: 'El anexo ya está firmado por el cliente.' };
+    return { ok: true, motivo: '' };
+  },
+
+  // Anular: administración y gerencia siempre (mientras no esté cerrada,
+  // anulada o entregada). Quien la creó puede anular LA SUYA mientras siga
+  // blanda — antes, equivocarse al crearla dejaba al vendedor sin salida.
+  puedeAnularse(g, { rol, uid } = {}) {
+    if (!g) return { ok: false, motivo: 'Expediente no encontrado.' };
+    if (['cerrada', 'anulada'].includes(g.estado)) {
+      return { ok: false, motivo: `La gestión ya está ${this.estadoLabel(g.estado).toLowerCase()}.` };
+    }
+    if (g.cierre?.entrega === true) {
+      return { ok: false, motivo: 'Los equipos ya se entregaron: lo físico no se deshace anulando.' };
+    }
+    if (['administrador', 'gerente'].includes(rol)) return { ok: true, motivo: '' };
+    if (['vendedor', 'recepcion'].includes(rol) && uid && g.responsable_uid === uid) {
+      if (!this.EDITABLES.includes(g.estado) || g.cierre?.derivacion === true || g.cierre?.asignacion === true) {
+        return { ok: false, motivo: 'La gestión ya está en proceso — pídele a administración o gerencia que la anule.' };
+      }
+      return { ok: true, motivo: '' };
+    }
+    return { ok: false, motivo: 'Solo administración o gerencia puede anular una gestión que no creaste.' };
+  },
+
+  // Escribe la corrección. `cambios` viene con las claves del tipo (rutas con
+  // punto incluidas: 'aumento.lineas', 'demo.finalidad'…); el estado NUNCA se
+  // toca aquí. `resumen` es lo que queda dicho en la bitácora.
+  async editar(gestionId, cambios, resumen) {
+    const user = firebase.auth().currentUser;
+    const chk = this.puedeEditarse(await this.get(gestionId));
+    if (!chk.ok) throw new Error(chk.motivo);
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      ...cambios,
+      editada: {
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+        por_uid: user?.uid || null,
+        por_email: user?.email || null,
+      },
+    });
+    await this.registrarEvento(gestionId, 'editar', resumen || 'Expediente corregido antes de surtir efecto.');
+  },
+
   // Aprobación de una BAJA por serial (admin/gerente — UNA sola aprobación por
   // gestión aunque cruce contratos, decisión §8.10). El trigger deriva el fin
   // de facturación por contrato y crea la devolución por serial.

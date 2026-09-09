@@ -2508,18 +2508,34 @@ window.Centro = {
                  onchange="Centro.subirAnexo('${this.esc(g.id)}', this.files[0])"></label>
            </span>` : ''}</div>`;
     }
-    const anular = (this.puedeAprobar() || this.rol === ROLES.GERENTE)
-      && !['cerrada', 'anulada', 'pendiente_aprobacion'].includes(g.estado)
-      && !g.cierre?.entrega
-      ? `<button class="btn-danger cg-act" onclick="Centro.anularGestion('${this.esc(g.id)}')">Anular gestión…</button>`
-      : '';
+    // Pie del expediente: corregir y anular. El "Rechazar" del aviso de
+    // aprobación es la misma anulación — no se repite abajo.
+    const permEd = GestionesService.puedeEditarse(g);
+    const permAn = GestionesService.puedeAnularse(g, { rol: this.rol, uid: firebase.auth().currentUser?.uid });
+    const rechazoArriba = g.estado === 'pendiente_aprobacion'
+      && ((g.tipo === 'baja' || g.tipo === 'aumento') ? this.puedeAprobarBaja() : this.puedeAprobar());
+    const editar = this.puedeCrearGestion() && permEd.ok
+      ? `<button class="btn btn-ghost cg-act" onclick="Centro.editarGestion('${this.esc(g.id)}')">Editar…</button>` : '';
+    const anular = permAn.ok && !rechazoArriba
+      ? `<button class="btn-danger cg-act" onclick="Centro.anularGestion('${this.esc(g.id)}')">Anular gestión…</button>` : '';
+    // Cuando ya no se puede corregir, se DICE por qué: esconder el botón sin
+    // explicación es lo que manda a la gente a crear una gestión nueva.
+    const porQueNo = !editar && this.puedeCrearGestion() && !['cerrada', 'anulada'].includes(g.estado)
+      ? `<span style="font-size:12px; color:var(--fg-3);">No se puede editar: ${this.esc(permEd.motivo)}</span>` : '';
+    const fEd = g.editada?.at?.toDate ? g.editada.at.toDate().toLocaleDateString('es-PA') : '';
+    const editada = g.editada
+      ? `<span style="font-size:12px; color:var(--fg-3);">✎ Corregida por ${this.esc(g.editada.por_email || '—')}${fEd ? ` el ${fEd}` : ''}</span>` : '';
+    const pie = (editada || porQueNo || editar || anular)
+      ? `<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+           <span style="margin-right:auto; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">${editada}${porQueNo}</span>
+           ${editar}${anular}</div>` : '';
 
     return `<div class="ds-card" style="padding:var(--sp-4); margin:-4px 0 10px; border-top:none;">
       <div class="cg-exp">
         <div>${cuerpo}${osHtml}</div>
         <div>${check}${aprobacion}</div>
       </div>
-      <div style="display:flex; justify-content:flex-end; margin-top:8px;">${anular}</div>
+      ${pie}
     </div>`;
   },
 
@@ -2599,6 +2615,9 @@ window.Centro = {
   },
 
   async anularGestion(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    const perm = GestionesService.puedeAnularse(g, { rol: this.rol, uid: firebase.auth().currentUser?.uid });
+    if (!perm.ok) { Toast.show(perm.motivo, 'warn'); return; }
     const motivo = await Modal.prompt({ title: 'Anular gestión', confirmLabel: 'Anular', message: 'Motivo de la anulación (queda en el expediente):', multiline: true });
     if (motivo === null) return;
     try {
@@ -2608,6 +2627,270 @@ window.Centro = {
       // para que equipos y señales dejen de mostrar los flags viejos.
       setTimeout(() => { if (this.cliente) this.abrir(this.cliente.id, { push: false }); }, 1800);
     } catch (e) { console.error(e); Toast.show('No se pudo anular', 'bad'); }
+  },
+
+  /* ── Editar el expediente antes de que surta efecto (2026-09-09) ──────
+     Hasta hoy, un dedo mal puesto al crear la gestión (una cantidad, un
+     precio, una fecha, el motivo) solo se arreglaba anulando y volviendo a
+     crearla: correlativo nuevo, otro correo de aprobación y el historial
+     lleno de anuladas. Aquí se corrige en el sitio, mientras nadie haya
+     actuado sobre ella — GestionesService.puedeEditarse dice hasta cuándo, y
+     por qué no cuando ya no se puede. El estado NUNCA cambia al editar. */
+
+  async editarGestion(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    const perm = GestionesService.puedeEditarse(g);
+    if (!perm.ok) { Toast.show(perm.motivo, 'warn'); return; }
+    if (!this.puedeCrearGestion()) { Toast.show('Tu rol no edita gestiones', 'warn'); return; }
+    await Promise.all([this._cargarModelos(), this._cargarCargos()]);
+    const cuerpo = g.tipo === 'aumento' ? this._edAumentoHtml(g)
+      : g.tipo === 'baja' ? this._edBajaHtml(g)
+      : g.tipo === 'reemplazo' ? this._edReemplazoHtml(g)
+      : this._edDemoHtml(g);
+    this._abrirModalA({
+      banda: false,
+      titulo: `Corregir ${this.esc(GestionesService.tipoLabel(g.tipo).toLowerCase())} — <span class="cg-mono">${this.esc(g.id)}</span>`,
+      cuerpo: `
+      <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
+        ${g.estado === 'pendiente_aprobacion'
+          ? 'Sigue esperando aprobación: quien la apruebe verá ya los datos corregidos (el correo de aprobación no se reenvía).'
+          : `La gestión se queda en <b>${this.esc(GestionesService.estadoLabel(g.estado).toLowerCase())}</b> — solo cambia lo que dice el expediente.`}
+        Queda en la bitácora quién corrigió y qué.</p>
+      ${cuerpo}
+      <div class="form-field" style="margin:12px 0 0;">
+        <label class="form-label" for="geNotas">Notas del expediente</label>
+        <textarea class="form-input" id="geNotas" rows="2" placeholder="Opcional">${this.esc(g.notas || '')}</textarea></div>`,
+      footer: `<span class="sep"></span>
+        <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="Centro.guardarEdicionGestion('${this.esc(g.id)}')">Guardar cambios</button>`,
+    });
+    if (g.tipo === 'aumento') this._aumPreview();
+  },
+
+  // Aumento / adenda / regularización / ajuste: mismas filas del wizard, ya
+  // prellenadas (por eso reusa los prefijos `wau`/`wac` y #waTot).
+  _edAumentoHtml(g) {
+    const a = g.aumento || {};
+    const esReg = a.es_regularizacion === true;
+    const itbms = a.totales?.itbms_aplica !== false;
+    // La regularización trabaja sobre seriales concretos: se rehidrata el
+    // estado del wizard para que cambiar "de quién es" baje a los seriales
+    // (es lo que B3 lee al aplicar el anexo) y no se quede solo en la línea.
+    this._aumRegulariza = esReg ? (a.regulariza_seriales || []).map(s => ({ ...s })) : null;
+    this._aumRegularizaTodos = esReg ? [...this._aumRegulariza] : null;
+    const lineas = esReg
+      ? this._aumLineasFijasHtml(Object.fromEntries((a.lineas || []).map(l =>
+          [(l.modelo_id || l.modelo) + '|' + (l.modalidad || 'alquiler'), l.precio ?? ''])))
+      : (a.lineas || []).map(l => this._lineaModeloPre('wau', true, l)).join('');
+    return `
+      ${esReg ? `<div class="cg-senal warn" style="margin-bottom:10px;"><span>Anexo de <b>regularización</b>: el modelo y la
+        cantidad los mandan los ${(a.regulariza_seriales || []).length} serial(es) que el cliente ya tiene — aquí se corrige el
+        <b>precio</b> y <b>de quién es</b> cada equipo. Para cambiar qué seriales entran, anula el anexo y créalo de nuevo.</span></div>` : ''}
+      <div ${esReg ? '' : 'oninput="Centro._aumPreview()" onchange="Centro._aumPreview()"'}>
+      ${a.es_ajuste ? '' : `<div class="form-field" style="margin-bottom:10px;">
+        <label class="form-label">Equipos (modelo · cantidad · precio mensual)</label>
+        <div id="waLineas" ${esReg ? 'oninput="Centro._aumPreview()"' : ''}>${lineas}</div>
+        ${esReg ? '' : `<button class="btn btn-ghost cg-act"
+          onclick="Centro._addLineaModelo('waLineas','wau',true); Centro._aumPreview()">+ Agregar otro modelo</button>`}</div>`}
+      <div class="form-field" style="margin-bottom:10px;">
+        <label class="form-label">Otros conceptos (cargos del catálogo)</label>
+        <div id="waCargos">${(a.cargos || []).map(c => this._cargoLineaHtml(c)).join('')}</div>
+        <button class="btn btn-ghost cg-act"
+          onclick="document.getElementById('waCargos').insertAdjacentHTML('beforeend', Centro._cargoLineaHtml()); Centro._aumPreview()">+ Agregar cargo</button></div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
+        <div class="form-field" style="margin:0; max-width:200px;">
+          <label class="form-label" for="waMeses">Vigencia del tramo (meses)</label>
+          <input class="form-input" type="number" id="waMeses" min="1" value="${Number(a.duracion_meses || 0) || ''}"></div>
+        <label class="cg-toggle" style="margin-bottom:2px;">
+          <input type="checkbox" id="waItbms" ${itbms ? 'checked' : ''} onchange="Centro._aumPreview()">
+          Aplica ITBMS${this.cliente?.itbms_exento === true ? ' <span style="color:var(--fg-4);">(cliente exento)</span>' : ''}</label>
+      </div>
+      <div id="waTot" class="ds-card" style="padding:10px 14px; max-width:380px;"></div>
+      </div>`;
+  },
+
+  // Baja: qué seriales entran, el motivo y las dos fechas que decide la nota
+  // del cliente. La terminación total no deja quitar seriales — es del
+  // contrato entero.
+  _edBajaHtml(g) {
+    const esTerm = Array.isArray(g.terminacion_total_de) && g.terminacion_total_de.length;
+    const it0 = (g.items || [])[0] || {};
+    return `
+      ${esTerm ? `<div class="cg-senal bad" style="margin-bottom:10px;"><span><b>Terminación total</b>: entran todos los
+        seriales del contrato — aquí solo se corrigen el motivo y las fechas.</span></div>` : ''}
+      <div class="cg-twrap" style="max-height:30vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
+        <th style="width:34px;"></th><th>Serial</th><th>Modelo</th><th>Contrato</th></tr></thead><tbody>
+        ${(g.items || []).map((it, i) => `<tr>
+          <td><input type="checkbox" data-gesel="${i}" checked ${esTerm ? 'disabled' : ''}></td>
+          <td class="cg-mono">${this.esc(it.serial_saliente || it.serial || '—')}</td>
+          <td>${this.esc(it.modelo || '—')}</td>
+          <td class="cg-mono" style="font-size:12px;">${this.esc(it.contrato_id || '—')}</td></tr>`).join('')}
+      </tbody></table></div>
+      ${esTerm ? '' : '<p style="margin:6px 0 0; font-size:12px; color:var(--fg-3);">Desmarca los seriales que no van en esta baja.</p>'}
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+        <select class="form-select" id="geMotivo" style="max-width:260px;">
+          <option value="">— Motivo —</option>
+          ${this.MOTIVOS_BAJA.map(([k, l]) => `<option value="${k}" ${k === (g.motivo_codigo || it0.motivo_codigo) ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
+        <input class="form-input" id="geDet" style="flex:1; min-width:160px;" placeholder="Detalle (opcional)" value="${this.esc(it0.motivo_detalle || '')}">
+      </div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:10px;">
+        <div class="form-field" style="margin:0;"><label class="form-label" for="geNota">Fecha de la nota del cliente</label>
+          <input class="form-input" type="date" id="geNota" style="width:165px;" value="${this.esc(g.fecha_nota_cliente || '')}"></div>
+        <div class="form-field" style="margin:0;"><label class="form-label" for="geFin">Fin de facturación</label>
+          <input class="form-input" type="date" id="geFin" style="width:165px;" value="${this.esc(g.fecha_fin_facturacion || '')}"></div>
+      </div>
+      <p style="margin:6px 0 0; font-size:12px; color:var(--fg-3);">La liquidación estimada se recalcula sola con los seriales que queden.</p>`;
+  },
+
+  // Reemplazo: qué radios salen, con qué modelo se piden y por qué. El serial
+  // que ENTRA no se toca aquí — eso lo declara bodega en Almacén · Asignar.
+  _edReemplazoHtml(g) {
+    return `
+      <div class="cg-twrap" style="max-height:38vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
+        <th style="width:34px;"></th><th>Sale</th><th>Modelo solicitado</th><th>Motivo</th><th>Detalle</th>
+        </tr></thead><tbody>
+        ${(g.items || []).map((it, i) => `<tr>
+          <td><input type="checkbox" data-gesel="${i}" checked></td>
+          <td class="cg-mono">${this.esc(it.serial_saliente || '—')}<div style="font-size:11.5px; color:var(--fg-4);">${this.esc(it.modelo || '')}</div></td>
+          <td>${this._selModelo(`data-gemod="${i}" style="min-width:170px;"`, it.modelo_solicitado_id, it.modelo_solicitado)}</td>
+          <td><select class="form-select" data-gemot="${i}" style="min-width:170px;">
+            <option value="">— Motivo —</option>
+            ${this.MOTIVOS.map(([k, l]) => `<option value="${k}" ${k === it.motivo_codigo ? 'selected' : ''}>${l}</option>`).join('')}
+          </select></td>
+          <td><input class="form-input" data-gedet="${i}" style="min-width:150px;" value="${this.esc(it.motivo_detalle || '')}" placeholder="Opcional"></td>
+        </tr>`).join('')}
+      </tbody></table></div>
+      <p style="margin:6px 0 0; font-size:12px; color:var(--fg-3);">Desmarca los radios que no van en esta solicitud.
+        El serial que <b>entra</b> lo declara bodega en Almacén · Asignar.</p>`;
+  },
+
+  _edDemoHtml(g) {
+    const d = g.demo || {};
+    return `
+      <div class="form-field" style="margin-bottom:10px;">
+        <label class="form-label">Equipos (modelo · cantidad)</label>
+        <div id="wdLineas">${(d.lineas || []).map(l => this._lineaModeloPre('wdl', false, l)).join('')}</div>
+        <button class="btn btn-ghost cg-act" onclick="Centro._addLineaModelo('wdLineas','wdl')">+ Agregar otro modelo</button></div>
+      <div class="form-field" style="margin-bottom:10px;">
+        <label class="form-label" for="wdFin">Finalidad del demo</label>
+        <input class="form-input" id="wdFin" value="${this.esc(d.finalidad || '')}" placeholder="Para qué lo quiere el cliente"></div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap;">
+        <div class="form-field" style="margin:0;"><label class="form-label" for="wdSalida">Salida</label>
+          <input class="form-input" type="date" id="wdSalida" style="width:165px;" value="${this.esc(d.fecha_salida || '')}"></div>
+        <div class="form-field" style="margin:0;"><label class="form-label" for="wdDevol">Devolución estimada</label>
+          <input class="form-input" type="date" id="wdDevol" style="width:165px;" value="${this.esc(d.fecha_devolucion_estimada || '')}"></div>
+      </div>`;
+  },
+
+  // Lee el formulario, arma el parche del tipo y lo escribe. Cada rama valida
+  // lo mismo que su wizard: una gestión corregida no puede quedar peor que
+  // una recién creada.
+  async guardarEdicionGestion(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    if (!g) { Toast.show('Expediente no encontrado', 'bad'); return; }
+    const notas = document.getElementById('geNotas')?.value.trim() || '';
+    const cambios = { notas };
+    const dicho = [];
+    if (notas !== (g.notas || '')) dicho.push('notas');
+
+    if (g.tipo === 'aumento') {
+      const a = g.aumento || {};
+      const lineas = a.es_ajuste ? [] : this._aumLineas();
+      const cargos = this._aumCargos();
+      if (!a.es_ajuste && !lineas.length) { Toast.show('Indica al menos un modelo (de la lista)', 'warn'); return; }
+      if (lineas.some(l => !(l.precio > 0))) { Toast.show('Cada línea necesita su precio mensual', 'warn'); return; }
+      if (this._lineasSinModalidad(lineas)) { Toast.show(this.MSG_SIN_MODALIDAD, 'warn'); return; }
+      if (a.es_ajuste && !cargos.length) { Toast.show('Un ajuste de tarifa necesita al menos un cargo', 'warn'); return; }
+      // Un anexo de regularización cubre EXACTAMENTE los seriales que ya
+      // están con el cliente: cierra sin bodega, y un radio de más nunca
+      // saldría (mismo candado que crearAumento).
+      if (a.es_regularizacion) {
+        const total = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
+        const n = (this._aumRegulariza || []).length;
+        if (total !== n) { Toast.show(`El anexo cubre exactamente ${n} equipo(s) que el cliente ya tiene`, 'warn'); return; }
+      }
+      const meses = Number(document.getElementById('waMeses')?.value || 0);
+      if (!(meses > 0)) { Toast.show('Indica la vigencia del tramo en meses', 'warn'); return; }
+      const itbmsAplica = document.getElementById('waItbms')?.checked !== false;
+      const totales = this._totAumento(lineas, cargos, itbmsAplica);
+      Object.assign(cambios, {
+        'aumento.lineas': lineas,
+        'aumento.cargos': cargos,
+        'aumento.duracion_meses': meses,
+        'aumento.itbms': { aplica: itbmsAplica, porcentaje: totales.itbms_porcentaje },
+        'aumento.totales': totales,
+        ...(a.es_regularizacion ? { 'aumento.regulariza_seriales': this._aumRegulariza || [] } : {}),
+      });
+      dicho.push(`${lineas.length} línea(s), ${cargos.length} cargo(s), ${meses} meses, total $${Number(totales.total_mensual || 0).toFixed(2)}/mes`);
+
+    } else if (g.tipo === 'baja') {
+      const sel = new Set([...document.querySelectorAll('input[data-gesel]:checked')].map(i => Number(i.dataset.gesel)));
+      const esTerm = Array.isArray(g.terminacion_total_de) && g.terminacion_total_de.length;
+      const items = (g.items || []).filter((_, i) => esTerm || sel.has(i));
+      if (!items.length) { Toast.show('Deja al menos un serial en la baja', 'warn'); return; }
+      const motivo = document.getElementById('geMotivo')?.value || '';
+      if (!motivo) { Toast.show('Indica el motivo de la baja', 'warn'); return; }
+      const detalle = document.getElementById('geDet')?.value.trim() || '';
+      const fin = document.getElementById('geFin')?.value || null;
+      const nuevos = items.map(it => ({ ...it, motivo_codigo: motivo, motivo_detalle: detalle, fecha_fin_facturacion: fin || null }));
+      Object.assign(cambios, {
+        items: nuevos,
+        motivo_codigo: motivo,
+        fecha_fin_facturacion: fin,
+        fecha_nota_cliente: document.getElementById('geNota')?.value || null,
+        penalidad_estimada: this._penalidadBaja(nuevos),
+        contratos_afectados: Array.from(new Set([
+          ...nuevos.map(i => i.contrato_doc_id).filter(Boolean),
+          ...(Array.isArray(g.terminacion_total_de) ? g.terminacion_total_de : []),
+        ])),
+      });
+      dicho.push(`${nuevos.length} serial(es), motivo "${motivo}"${fin ? `, fin de facturación ${fin}` : ''}`);
+
+    } else if (g.tipo === 'reemplazo') {
+      const sel = [...document.querySelectorAll('input[data-gesel]:checked')].map(i => Number(i.dataset.gesel));
+      if (!sel.length) { Toast.show('Deja al menos un radio en la solicitud', 'warn'); return; }
+      const nuevos = [];
+      for (const i of sel) {
+        const it = g.items[i];
+        const motivo = document.querySelector(`select[data-gemot="${i}"]`)?.value || '';
+        if (!motivo) { Toast.show(`Indica el motivo del serial ${it.serial_saliente}`, 'warn'); return; }
+        const m = this._modeloDeSelect(document.querySelector(`select[data-gemod="${i}"]`));
+        if (!m) { Toast.show(`Elige el modelo de reemplazo del serial ${it.serial_saliente}`, 'warn'); return; }
+        nuevos.push({ ...it,
+          motivo_codigo: motivo,
+          motivo_detalle: document.querySelector(`input[data-gedet="${i}"]`)?.value.trim() || '',
+          modelo_solicitado: m.label, modelo_solicitado_id: m.id,
+        });
+      }
+      Object.assign(cambios, {
+        items: nuevos,
+        contratos_afectados: Array.from(new Set(nuevos.map(i => i.contrato_doc_id).filter(Boolean))),
+      });
+      dicho.push(`${nuevos.length} radio(s): ${nuevos.map(i => `${i.serial_saliente}→${i.modelo_solicitado}`).join(', ')}`);
+
+    } else {
+      const lineas = this._lineasModelo('wdl').map(l => ({ modelo: l.modelo, modelo_id: l.modelo_id, cantidad: l.cantidad }));
+      const finalidad = document.getElementById('wdFin')?.value.trim() || '';
+      if (!lineas.length) { Toast.show('Indica al menos un modelo', 'warn'); return; }
+      if (!finalidad) { Toast.show('Indica la finalidad del demo', 'warn'); return; }
+      Object.assign(cambios, {
+        'demo.lineas': lineas,
+        'demo.finalidad': finalidad,
+        'demo.fecha_salida': document.getElementById('wdSalida')?.value || '',
+        'demo.fecha_devolucion_estimada': document.getElementById('wdDevol')?.value || null,
+      });
+      dicho.push(`${lineas.reduce((s, l) => s + l.cantidad, 0)} equipo(s), "${finalidad}"`);
+    }
+
+    try {
+      await GestionesService.editar(gid, cambios, `Expediente corregido — ${dicho.join(' · ')}.`);
+      this._aumRegulariza = null;
+      this._aumRegularizaTodos = null;
+      this._cerrarModal();
+      Toast.show('Gestión corregida', 'ok');
+      await this.recargarGestiones();
+    } catch (e) { console.error(e); Toast.show('No se pudo guardar: ' + (e.message || e), 'bad'); }
   },
 
   /* ═════════ Menú "Nueva gestión" ═════════ */
@@ -3062,16 +3345,22 @@ window.Centro = {
     return this.cargosCat;
   },
 
-  _cargoLineaHtml() {
+  // `val` prellena la fila con un cargo YA guardado (edición del expediente).
+  // Los seriales amarrados viajan en el data-attr para no perderse al releer:
+  // un cargo de GPS pegado a 3 radios sigue pegado a esos 3 radios.
+  _cargoLineaHtml(val = null) {
+    const v = val || {};
     const opts = (this.cargosCat || []).map(c =>
-      `<option value="${this.esc(c.id)}" data-monto="${Number(c.monto_default) || 0}" data-rec="${c.recurrente ? 1 : 0}">${this.esc(c.concepto || '')}</option>`).join('');
-    return `<div class="wa-cargo" style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
+      `<option value="${this.esc(c.id)}" ${v.cargo_id === c.id ? 'selected' : ''} data-monto="${Number(c.monto_default) || 0}" data-rec="${c.recurrente ? 1 : 0}">${this.esc(c.concepto || '')}</option>`).join('');
+    const ser = Array.isArray(v.seriales) && v.seriales.length
+      ? ` data-wac-seriales="${this.esc(JSON.stringify(v.seriales))}"` : '';
+    return `<div class="wa-cargo" style="display:flex; gap:8px; margin-bottom:8px; align-items:center;"${ser}>
       <select class="form-select" data-wac-sel style="flex:1;" onchange="Centro._cargoSelChange(this)">
         <option value="">— cargo del catálogo —</option>${opts}</select>
-      <input class="form-input" data-wac-cant type="number" min="1" value="1" style="width:70px;" title="Cantidad" onchange="Centro._previewTarifario()">
-      <input class="form-input" data-wac-monto type="number" min="0" step="1" placeholder="$" style="width:100px;" onchange="Centro._previewTarifario()">
+      <input class="form-input" data-wac-cant type="number" min="1" value="${Math.max(1, Number(v.cantidad || 1))}" style="width:70px;" title="Cantidad" onchange="Centro._previewTarifario()">
+      <input class="form-input" data-wac-monto type="number" min="0" step="1" placeholder="$" value="${v.monto != null && v.monto !== '' ? Number(v.monto) : ''}" style="width:100px;" onchange="Centro._previewTarifario()">
       <select class="form-select" data-wac-tipo style="width:110px;" onchange="Centro._previewTarifario()">
-        <option value="unico">Único</option><option value="recurrente">Mensual</option></select>
+        <option value="unico" ${v.recurrente ? '' : 'selected'}>Único</option><option value="recurrente" ${v.recurrente ? 'selected' : ''}>Mensual</option></select>
       <button type="button" class="btn btn-ghost" style="padding:4px 8px;" title="Quitar"
         onclick="this.parentElement.remove(); Centro._previewTarifario()">✕</button>
     </div>`;
@@ -3116,12 +3405,17 @@ window.Centro = {
     return [...document.querySelectorAll('.wa-cargo')].map(f => {
       const sel = f.querySelector('[data-wac-sel]');
       const opt = sel?.selectedOptions[0];
+      // Seriales amarrados de un cargo ya guardado (solo en la edición del
+      // expediente; en los wizards el data-attr no existe y no se escribe).
+      let seriales = null;
+      try { seriales = f.dataset.wacSeriales ? JSON.parse(f.dataset.wacSeriales) : null; } catch (e) { seriales = null; }
       return {
         cargo_id: sel?.value || '',
         concepto: opt ? (opt.textContent || '').trim() : '',
         cantidad: Math.max(1, Math.round(Number(f.querySelector('[data-wac-cant]')?.value)) || 1),
         monto: Math.max(0, Number(f.querySelector('[data-wac-monto]')?.value || 0)),
         recurrente: f.querySelector('[data-wac-tipo]')?.value === 'recurrente',
+        ...(Array.isArray(seriales) && seriales.length ? { seriales } : {}),
       };
     }).filter(c => c.cargo_id && c.monto > 0);
   },

@@ -847,9 +847,38 @@ service cloud.firestore {
           && (resource.data.tipo != "baja"
               || ("carta_path" in resource.data && resource.data.carta_path is string));
       }
+      // La gestión sigue BLANDA: nada aplicado al contrato, bodega sin asignar
+      // y sin orden de programación. Es la ventana en la que todavía se puede
+      // corregir o anular sin dejar efectos regados.
+      function gestionBlanda() {
+        return resource.data.estado in ["pendiente_aprobacion","pendiente_firma","pendiente_bodega"]
+          && resource.data.get("cierre", {}).get("derivacion", false) != true
+          && resource.data.get("cierre", {}).get("asignacion", false) != true
+          && !("programacion_id" in resource.data.get("ordenes", {}));
+      }
+      // Editar una gestión que todavía no surtió efecto (2026-09-09): arreglar
+      // una cantidad, un precio, una fecha o un motivo mal puestos sin anular
+      // y volver a crearla. El estado NUNCA cambia aquí; los seriales
+      // asignados los sigue escribiendo solo bodega (esAsignacionGestion).
+      function esEdicionGestion() {
+        return userRole() in ["administrador","gerente","vendedor","recepcion"]
+          && gestionBlanda()
+          && request.resource.data.estado == resource.data.estado
+          && resource.data.get("cierre", {}).get("entrega", false) != true
+          && resource.data.get("aumento", {}).get("seriales_asignados", []).size() == 0
+          && resource.data.get("demo", {}).get("seriales_asignados", []).size() == 0
+          && soloTocaG(["items","aumento","demo","notas","motivo_codigo",
+                        "fecha_fin_facturacion","fecha_nota_cliente",
+                        "penalidad_estimada","contratos_afectados","editada"]);
+      }
       // Anular / rechazar: nunca una cerrada, otra anulada o una ya entregada.
+      // Administración y gerencia siempre; quien la CREÓ, solo mientras la
+      // gestión siga blanda (antes, equivocarse al crearla no tenía salida).
       function esAnulacionGestion() {
-        return userRole() in ["administrador","gerente"]
+        return (userRole() in ["administrador","gerente"]
+                || (userRole() in ["vendedor","recepcion"]
+                    && resource.data.get("responsable_uid", "") == request.auth.uid
+                    && gestionBlanda()))
           && request.resource.data.estado == "anulada"
           && !(resource.data.estado in ["cerrada","anulada"])
           && resource.data.get("cierre", {}).get("entrega", false) != true
@@ -901,7 +930,8 @@ service cloud.firestore {
       allow update: if isSignedIn() && (
                       esAprobacionGestion() || esAnulacionGestion() || esCartaGestion()
                       || esFirmaAnexoGestion() || esRegularizacionSinFirmaGestion()
-                      || esEnlaceFirmaGestion() || esAsignacionGestion());
+                      || esEnlaceFirmaGestion() || esAsignacionGestion()
+                      || esEdicionGestion());
       allow delete: if false;
       // Linaje del reemplazo (espejo del patrón contratos/{cid}/mapeos):
       // append-only — onMapeoWrite generalizado los consume en la Ola 2.

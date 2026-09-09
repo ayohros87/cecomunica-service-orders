@@ -355,6 +355,53 @@ async function main() {
     ...cerrarSinFirma("vendedor"), "aumento.lineas": [{ modelo: "X", cantidad: 99, precio: 1 }] }));
   ok("sin firma: no se cuelan cambios a las líneas en la misma escritura");
 
+  // ── Editar / anular una gestión que todavía no surtió efecto (2026-09-09) ─
+  // Se corrige en el sitio mientras nadie actuó: sin derivación, sin
+  // asignación y sin OS. Y quien la creó puede anular LA SUYA en esa misma
+  // ventana; después, solo administración o gerencia.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const base = { tipo: "aumento", estado: "pendiente_aprobacion", cliente_id: "x", deleted: false,
+      responsable_uid: "vendedor", cierre: {}, aumento: { contrato_doc_id: "c1", lineas: [] } };
+    await db.doc("gestiones/gEd1").set(base);
+    await db.doc("gestiones/gEd2").set(base);
+    await db.doc("gestiones/gEd3").set({ ...base, responsable_uid: "otro" });
+    await db.doc("gestiones/gEd4").set(base);
+    await db.doc("gestiones/gEdAsig").set({ ...base, estado: "pendiente_bodega",
+      cierre: { asignacion: true }, ordenes: { programacion_id: "OS-1" } });
+    await db.doc("gestiones/gEdDeriv").set({ ...base, estado: "en_proceso", cierre: { derivacion: true } });
+    await db.doc("gestiones/gEdDeriv2").set({ ...base, estado: "en_proceso", cierre: { derivacion: true } });
+    await db.doc("gestiones/gEdSer").set({ ...base, estado: "pendiente_bodega",
+      aumento: { contrato_doc_id: "c1", seriales_asignados: [{ serial: "A1" }] } });
+    await db.doc("gestiones/gEdEntreg").set({ ...base, estado: "pendiente_bodega", cierre: { entrega: true } });
+  });
+  const corregir = { "aumento.lineas": [{ modelo: "NX-410", cantidad: 2, precio: 25 }], notas: "corregido",
+    editada: { por_uid: "vendedor", por_email: "v@c.com" } };
+  await assertSucceeds(as("vendedor").doc("gestiones/gEd1").update(corregir));
+  ok("editar: el vendedor corrige una gestión que todavía no surtió efecto");
+  await assertFails(as("vendedor").doc("gestiones/gEdDeriv").update(corregir));
+  ok("editar: con las líneas ya aplicadas al contrato, no se edita");
+  await assertFails(as("vendedor").doc("gestiones/gEdAsig").update(corregir));
+  ok("editar: con la OS de programación afuera, no se edita");
+  await assertFails(as("vendedor").doc("gestiones/gEdSer").update(corregir));
+  ok("editar: con seriales ya asignados por bodega, no se edita");
+  await assertFails(as("vendedor").doc("gestiones/gEd4").update({ ...corregir, estado: "pendiente_bodega" }));
+  ok("editar: no se cuela un cambio de estado en la corrección");
+  await assertFails(as("contabilidad").doc("gestiones/gEd4").update(corregir));
+  ok("editar: contabilidad no toca gestiones");
+  const anular = (uid) => ({ estado: "anulada", anulada_motivo: "me equivoqué",
+    anulada_por_uid: uid, anulada_at: new Date() });
+  await assertSucceeds(as("vendedor").doc("gestiones/gEd2").update(anular("vendedor")));
+  ok("anular: quien la creó anula la suya mientras siga blanda");
+  await assertFails(as("vendedor").doc("gestiones/gEd3").update(anular("vendedor")));
+  ok("anular: el vendedor NO anula la gestión de otro");
+  await assertFails(as("vendedor").doc("gestiones/gEdDeriv2").update(anular("vendedor")));
+  ok("anular: ya en proceso, el vendedor no la anula (queda para admin/gerencia)");
+  await assertSucceeds(as("gerente").doc("gestiones/gEdDeriv2").update(anular("gerente")));
+  ok("anular: gerencia sí anula una gestión en proceso");
+  await assertFails(as("gerente").doc("gestiones/gEdEntreg").update(anular("gerente")));
+  ok("anular: con los equipos ya entregados, nadie la anula");
+
   // ── QC: los cuatro huecos de la auditoría del 2026-08-04 ──────────────────
   const COMPLETADO = "COMPLETADO (EN OFICINA)";
   const seedOrden = (id, data) => testEnv.withSecurityRulesDisabled(async (ctx) => {
