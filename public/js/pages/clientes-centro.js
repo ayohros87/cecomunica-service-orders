@@ -93,8 +93,11 @@ window.Centro = {
     // El bloque Actividad carga el historial la primera vez que se abre.
     document.getElementById('blkActividad')?.addEventListener('toggle', (e) => { if (e.target.open) this.cargarActividad(); });
     document.addEventListener('click', (e) => {
-      const menu = document.getElementById('cgMenu');
-      if (menu && !menu.classList.contains('hidden') && !e.target.closest('.cg-acts')) menu.classList.add('hidden');
+      if (e.target.closest('.cg-acts')) return;
+      for (const id of ['cgMenu', 'cgMasMenu']) {
+        const menu = document.getElementById(id);
+        if (menu && !menu.classList.contains('hidden')) menu.classList.add('hidden');
+      }
     });
   },
 
@@ -3023,6 +3026,11 @@ window.Centro = {
 
   toggleMenu(e) {
     e.stopPropagation();
+    // El "⋯" se cierra al abrir este (2026-09-09, Alberto: "aprieto los 3
+    // puntitos y luego nueva gestión y no se cierra el menú"). toggleMas ya
+    // hacía lo simétrico, y el stopPropagation de aquí impedía que el
+    // listener {once:true} que deja toggleMas llegara a cerrarlo.
+    document.getElementById('cgMasMenu')?.classList.add('hidden');
     document.getElementById('cgMenu').classList.toggle('hidden');
   },
 
@@ -3070,10 +3078,17 @@ window.Centro = {
     // de CUENTA —abarca todo lo que el cliente tiene, venga del contrato que
     // venga— y por eso vive en el menú, como las demás.
     const d1Menu = this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id && !e.pendiente_devolucion);
+    // Se ofrece SIEMPRE que haya contrato vigente, tenga o no radios sueltos
+    // (Alberto 2026-09-09: "no estoy viendo el menú actualizar seriales del
+    // cliente"). Con la cuenta al día el camino sigue sirviendo para declarar
+    // seriales que el sistema no conoce y para sacar los que el cliente ya no
+    // tiene; el hint dice cuál de los dos casos es.
     const alDia = grupo('Actualizar', [
-      hayContrato && !tram && d1Menu.length
+      hayContrato && !tram
         ? item('Centro.wizRegularizarCuenta()', 'Actualizar seriales del cliente',
-          `amarra al contrato los ${d1Menu.length} radio(s) que ya tiene — sin firma, sin bodega y sin entrega`) : '',
+          d1Menu.length
+            ? `amarra al contrato los ${d1Menu.length} radio(s) que ya tiene — sin firma, sin bodega y sin entrega`
+            : 'declara los que el sistema no conoce o saca los que el cliente ya no tiene — sin firma') : '',
     ]);
     const dar = grupo('Dar equipos', [
       hayContrato && !tram ? item('Centro.wizAgregarEquipos()', 'Agregar equipos', 'anexo al contrato de la cuenta') : '',
@@ -3735,7 +3750,11 @@ window.Centro = {
       const unidades = opts.regularizarD1
         ? this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id && !e.pendiente_devolucion)
         : sobr.map(s => this.equipos.find(e => (e.serial || e.id) === s)).filter(Boolean);
-      if (!unidades.length) { Toast.show(opts.regularizarD1 ? 'La cuenta no tiene radios en campo sin contrato' : 'Este contrato no tiene sobrantes de regularización', 'warn'); return; }
+      // Sin radios sueltos NO se cierra la puerta (2026-09-09): la lista abre
+      // vacía y el vendedor declara los seriales que el sistema no conoce.
+      // Lo que sí necesita algo que mostrar es el camino por sobrantes de UN
+      // contrato, que se entra desde su expediente.
+      if (!unidades.length && !opts.regularizarD1) { Toast.show('Este contrato no tiene sobrantes de regularización', 'warn'); return; }
       this._aumRegulariza = unidades.map(u => ({
         pool_doc_id: u.id, serial: u.serial || u.id,
         modelo_id: u.modelo_id || null, modelo: u.modelo_label || u.modelo || '',
