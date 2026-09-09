@@ -301,7 +301,7 @@ window.Centro = {
       // D1: la renovación consolidadora los cubre; con un contrato vigente
       // también sirve el anexo de regularización (sin bodega, sin OS).
       if (f.codigo === 'd1') return regularizarBtn + (puede && !tram && est.renovables.length
-        ? ` <button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal(); Centro.wizRegularizarCuenta()">Poner la cuenta al día</button>` : '');
+        ? ` <button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal(); Centro.wizRegularizarCuenta()">Regularizar por anexo</button>` : '');
       if (f.codigo === 'd2') return f.ids.map(id => {
         const c = this.contratos.find(x => (x.contrato_id || x.id) === id);
         return c && this.puedeAsignar()
@@ -327,7 +327,7 @@ window.Centro = {
           <b>${this.esc(Regularizacion.NIVEL_LABEL[r.nivel] || r.nivel)} · ${r.puntos} punto${r.puntos === 1 ? '' : 's'}</b>
           ${r.etiqueta === 'migracion' ? ' · deuda de migración (contratos anteriores al sistema)' : ''}.
           Ninguna gestión se frena por esto: cada gestión que declare seriales baja la deuda.
-          <b>Poner la cuenta al día</b> (también en el menú) amarra por anexo lo que el cliente ya tiene, sin
+          <b>Regularizar por anexo</b> (también en el menú) amarra al contrato lo que el cliente ya tiene, sin
           renovar y sin firma obligatoria; <b>Regularizar con contrato nuevo</b> abre la renovación con el
           plan por serial ya precargado.
           ${puntuales ? `<br>Gestiones puntuales hechas sobre esta deuda: <b>${puntuales}</b>${r.excede_margen ? ' — <span style="color:var(--cg-bad-deep, #991B1B);">excede el margen sin regularizar</span>' : ''}.` : ''}
@@ -1847,6 +1847,11 @@ window.Centro = {
     // "por clasificar" primero — el 67 % de la ficha. Un grupo por contrato,
     // con conteo, modelos y vencimiento; "sin contrato" y "por clasificar"
     // aparte con su salida; los seriales aparecen al abrir el grupo.
+    // …pero agrupar tiene sentido cuando hay MUCHO que ordenar. En una cuenta
+    // chica (Alberto 2026-09-09, caso FORTUNATO MANGRAVITA: 13 radios, todos
+    // del mismo contrato) el grupo es un clic de más para ver la lista que
+    // cabe entera: hasta 15 equipos, o cuando todo cae en un solo grupo, la
+    // tabla va plana. La columna "Contrato" ya dice de dónde viene cada uno.
     const grupos = new Map();
     for (const e of this.equipos) {
       let k, orden;
@@ -1858,6 +1863,26 @@ window.Centro = {
       } else { k = `otros:${e.estado}`; orden = 5; }
       if (!grupos.has(k)) grupos.set(k, { k, orden, items: [] });
       grupos.get(k).items.push(e);
+    }
+    // Cuenta chica o de un solo grupo: la lista entera, sin clics de por medio.
+    if (this.equipos.length <= 15 || grupos.size === 1) {
+      const sinContrato = (grupos.get('sin_contrato')?.items || []).length;
+      const porClasificar = (grupos.get('por_clasificar')?.items || []).length;
+      const aviso = (sinContrato || porClasificar) && this.puedeCrearGestion()
+        ? `<div class="cg-senal warn" style="margin-bottom:8px; align-items:center;">
+            <span>${[sinContrato ? `<b>${sinContrato}</b> en campo sin contrato` : '',
+                     porClasificar ? `<b>${porClasificar}</b> por clasificar` : ''].filter(Boolean).join(' · ')}
+              — cuentan como deuda de la cuenta.</span>
+            <button class="btn btn-ghost" style="margin-left:auto; flex:none; padding:3px 11px; font-size:12px;"
+              onclick="event.preventDefault(); Centro.verRegularizacion()">Qué falta</button></div>`
+        : '';
+      const orden = (e) => (['en_cliente', 'asignado_contrato'].includes(e.estado) ? 0 : 1);
+      const todos = [...this.equipos].sort((a, b) => orden(a) - orden(b)
+        || String(a.asignacion?.contrato_id || 'zzz').localeCompare(String(b.asignacion?.contrato_id || 'zzz'))
+        || String(a.serial || a.id).localeCompare(String(b.serial || b.id)));
+      const resumen = resProp(todos);
+      cont.innerHTML = `${aviso}${resumen ? `<div style="font-size:12.5px; color:var(--fg-3); margin-bottom:6px;">${this.esc(resumen)}</div>` : ''}${tabla(todos.map(fila).join(''))}`;
+      return;
     }
     const venceDe = (c) => { const d = c?.fecha_vencimiento?.toDate ? c.fecha_vencimiento.toDate() : (c?.fecha_vencimiento ? new Date(c.fecha_vencimiento) : null); return d && !isNaN(d) ? d.getTime() : Infinity; };
     const lista = [...grupos.values()].sort((a, b) => a.orden - b.orden
@@ -3005,10 +3030,10 @@ window.Centro = {
     // de CUENTA —abarca todo lo que el cliente tiene, venga del contrato que
     // venga— y por eso vive en el menú, como las demás.
     const d1Menu = this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id && !e.pendiente_devolucion);
-    const alDia = grupo('Poner al día', [
+    const alDia = grupo('Regularizar', [
       hayContrato && !tram && d1Menu.length
-        ? item('Centro.wizRegularizarCuenta()', 'Regularizar lo que el cliente tiene',
-          `${d1Menu.length} radio(s) en campo sin contrato — anexo a la cuenta, sin bodega ni entrega`) : '',
+        ? item('Centro.wizRegularizarCuenta()', 'Regularizar por anexo',
+          `amarra al contrato los ${d1Menu.length} radio(s) que el cliente ya tiene — sin bodega ni entrega`) : '',
     ]);
     const dar = grupo('Dar equipos', [
       hayContrato && !tram ? item('Centro.wizAgregarEquipos()', 'Agregar equipos', 'anexo al contrato de la cuenta') : '',
@@ -3775,7 +3800,7 @@ window.Centro = {
           <b>custodia con su tramo propio</b> y la cuenta sigue marcada <b>sin contrato formal</b>: hay que
           regularizarla con un contrato nuevo cuando se pueda.</span></div>` : '';
     this._abrirModalA({
-      titulo: `${this._aumRegulariza ? 'Poner la cuenta al día (regularización)' : esPapel ? 'Adenda a contrato en papel' : 'Aumento de equipos (enmienda)'} — ${this.esc(this.cliente.nombre)}`,
+      titulo: `${this._aumRegulariza ? 'Regularizar por anexo' : esPapel ? 'Adenda a contrato en papel' : 'Aumento de equipos (enmienda)'} — ${this.esc(this.cliente.nombre)}`,
       cuerpo: `
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
         ${this._aumRegulariza
