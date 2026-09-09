@@ -1519,7 +1519,11 @@ window.Centro = {
             ...(Array.isArray(a.ajustes_precio) && a.ajustes_precio.length
               ? { ajustes_precio: a.ajustes_precio } : {}) } : {}),
           ...(a.es_regularizacion ? { es_regularizacion: true,
-            regulariza_seriales: (a.regulariza_seriales || []).map(s => ({ serial: s.serial || '', modelo: s.modelo || '' })) } : {}),
+            // La modalidad viaja en el congelado (2026-09-09): el cliente que
+            // firma tiene que ver de quién es cada radio que se le amarra.
+            regulariza_seriales: (a.regulariza_seriales || []).map(s => ({
+              serial: s.serial || '', modelo: s.modelo || '',
+              ...(s.modalidad ? { modalidad: s.modalidad } : {}) })) } : {}),
           // Texto del anexo CONGELADO con su versión (misma regla que el
           // contrato: la firma cae sobre lo que el cliente leyó, inmutable) +
           // las cláusulas del marco que el anexo cita, para leerlas ahí mismo.
