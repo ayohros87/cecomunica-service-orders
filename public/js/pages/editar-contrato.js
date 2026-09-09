@@ -71,10 +71,11 @@ async function cargarContrato() {
 
   // 4) Poblar formulario
   document.getElementById("cliente_nombre").value = c.cliente_nombre || "";
-  // Tipo: el select solo ofrece Alquiler/Propio (2026-09-09). Si el contrato es
-  // de otro tipo (Servicio, Temporal…) se agrega como opción actual: antes
-  // "SERV" no casaba con nada, el select caía en Alquiler y al guardar el
-  // contrato cambiaba de tipo en silencio.
+  // Tipo: el select solo ofrece Servicio (2026-09-09, Alberto: alquiler o
+  // propio se declara POR LÍNEA). Si el contrato es de un tipo viejo (ALQ,
+  // PROP, TEMP…) se agrega como opción actual: antes un tipo que no casaba
+  // caía en la primera opción y al guardar el contrato cambiaba de tipo en
+  // silencio.
   const NOMBRES_TIPO = { SERV: "Servicio", ALQ: "Alquiler", PROP: "Propio", REEMP: "Reemplazo", DEMO: "Demo", TEMP: "Temporal" };
   const selTipo = document.getElementById("tipo_contrato");
   if (c.codigo_tipo && ![...selTipo.options].some(o => o.value === c.codigo_tipo)) {
