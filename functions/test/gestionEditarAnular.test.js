@@ -32,6 +32,26 @@ function cargarServicio() {
   return ctx.window.GestionesService;
 }
 
+// Servicio + un Firestore de mentira que apunta cada escritura, en orden.
+function cargarServicioConDb(doc) {
+  const ops = [];
+  const firestore = () => ({
+    collection: (col) => ({
+      doc: (id) => ({
+        get: async () => ({ exists: !!doc, id, data: () => doc }),
+        update: async (u) => { ops.push({ col, id, update: u }); },
+        collection: (sub) => ({ add: async (d) => { ops.push({ col, id, sub, add: d }); } }),
+      }),
+    }),
+  });
+  firestore.FieldValue = { serverTimestamp: () => "TS" };
+  const ctx = { window: {}, console,
+    firebase: { firestore, auth: () => ({ currentUser: { uid: "u1", email: "v@c.com" } }) } };
+  vm.createContext(ctx);
+  vm.runInContext(leer("public", "js", "services", "gestionesService.js"), ctx);
+  return { G: ctx.window.GestionesService, ops };
+}
+
 // Nodo del DOM falso: lo mínimo que leen los lectores de formulario.
 function el(extra = {}) {
   return { style: {}, dataset: {}, value: "", checked: false, innerHTML: "",
@@ -179,6 +199,57 @@ test("E3b · una BAJA no puede quedarse sin seriales ni sin motivo", async () =>
   await sinMotivo.Centro.guardarEdicionGestion("GB2");
   assert.equal(sinMotivo.escrito.cambios, undefined, "sin motivo no se guarda");
   assert.match(sinMotivo.escrito.toast.msg, /motivo/i);
+});
+
+test("R1 · el enlace de firma del anexo se retira mientras el cliente no firme", async () => {
+  const enFirma = { ...blanda, estado: "pendiente_firma",
+    firma_solicitud_id: "sol1", firma_solicitud_estado: "pendiente" };
+
+  // Con el enlace pendiente: primero muere la solicitud (que es lo que el
+  // cliente tiene en la mano), después se estampa el expediente.
+  const { G, ops } = cargarServicioConDb(enFirma);
+  await G.retirarEnlaceFirma("GA20260909-01");
+  assert.equal(ops[0].col, "firma_solicitudes");
+  assert.equal(ops[0].id, "sol1");
+  assert.equal(ops[0].update.estado, "cancelado");
+  assert.equal(ops[1].col, "gestiones");
+  assert.equal(ops[1].update.firma_solicitud_estado, "cancelado");
+  assert.equal(ops[2].sub, "eventos", "el retiro queda en la bitácora");
+  assert.match(ops[2].add.detalle, /Enlace de firma retirado/);
+
+  const falla = async (doc, re) => {
+    const { G } = cargarServicioConDb(doc);
+    await assert.rejects(() => G.retirarEnlaceFirma("x"), re);
+  };
+  await falla({ ...blanda, estado: "pendiente_firma" }, /no tiene un enlace de firma pendiente/);
+  await falla({ ...enFirma, firma_solicitud_estado: "cancelado" }, /no tiene un enlace de firma pendiente/);
+  await falla({ ...enFirma, firma_solicitud_estado: "validacion" }, /ya firmó/);
+  await falla({ ...enFirma, cierre: { firma: true } }, /ya está firmado/);
+  await falla({ ...enFirma, anexo_firma_digital: { firmante_nombre: "X" } }, /ya está firmado/);
+
+  // Y con el enlace retirado, el anexo vuelve a poder corregirse.
+  const S = cargarServicio();
+  assert.equal(S.puedeEditarse(enFirma).ok, false);
+  assert.equal(S.puedeEditarse({ ...enFirma, firma_solicitud_estado: "cancelado" }).ok, true);
+});
+
+test("R2 · el expediente ofrece retirar el enlace solo cuando hay uno vivo", () => {
+  const base = { ...blanda, tipo: "aumento", estado: "pendiente_firma",
+    cierre: { aprobacion: true }, aumento: { contrato_id: "ALQ-1", lineas: [], cargos: [], totales: {} } };
+  const { Centro } = montarCentro({ gestiones: [base] });
+
+  const conEnlace = Centro._detalleGestion({ ...base, firma_solicitud_id: "sol1", firma_solicitud_estado: "pendiente" });
+  assert.match(conEnlace, /Centro\.retirarFirmaAnexo\('GA20260909-01'\)/);
+  assert.match(conEnlace, /Ver o reenviar el enlace/);
+
+  const sinEnlace = Centro._detalleGestion(base);
+  assert.ok(!/retirarFirmaAnexo/.test(sinEnlace), "sin enlace enviado no hay nada que retirar");
+  assert.match(sinEnlace, /Enviar anexo para firma digital/);
+
+  // Ya firmado: ni retirar ni reenviar.
+  const firmado = Centro._detalleGestion({ ...base, estado: "pendiente_bodega",
+    cierre: { aprobacion: true, firma: true }, anexo_firma_digital: { firmante_nombre: "Juan" } });
+  assert.ok(!/retirarFirmaAnexo/.test(firmado));
 });
 
 test("E5 · el pie del expediente ofrece corregir/anular, o dice por qué no", () => {

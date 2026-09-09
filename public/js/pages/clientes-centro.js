@@ -2388,7 +2388,11 @@ window.Centro = {
         ${g.estado === 'pendiente_firma' && this.puedeCrearGestion() ? `
           <div style="margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <button class="btn btn-primary cg-act"
-              onclick="Centro.enviarFirmaAnexo('${this.esc(g.id)}')">Enviar anexo para firma digital</button>
+              onclick="Centro.enviarFirmaAnexo('${this.esc(g.id)}')">${g.firma_solicitud_estado === 'pendiente'
+                ? 'Ver o reenviar el enlace' : 'Enviar anexo para firma digital'}</button>
+            ${g.firma_solicitud_estado === 'pendiente' ? `<button class="btn btn-ghost cg-act"
+              title="El enlace que se le envió al cliente deja de servir y el anexo vuelve a poder corregirse"
+              onclick="Centro.retirarFirmaAnexo('${this.esc(g.id)}')">Retirar enlace de firma…</button>` : ''}
             ${a.es_regularizacion ? `<button class="btn btn-ghost cg-act"
               title="Los equipos ya están con el cliente desde antes: el anexo solo pone al día el sistema"
               onclick="Centro.cerrarRegSinFirma('${this.esc(g.id)}')">Cerrar sin firma (solo actualizar el sistema)</button>` : ''}
@@ -2623,6 +2627,32 @@ window.Centro = {
     } catch (e) { console.error(e); Toast.show('No se pudo cerrar la regularización: ' + (e.message || e), 'bad'); }
   },
 
+  // Retirar el enlace de firma del ANEXO — el mismo gesto que en el contrato
+  // (2026-09-09, Alberto: "si se envió para firma y el cliente aún no ha
+  // firmado igual se debe poder retirar"). Sin esto, mandar el enlace dejaba
+  // el anexo trancado: no se corregía, y el cliente seguía teniendo en la mano
+  // un enlace con la copia vieja.
+  async retirarFirmaAnexo(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    if (!g || g.firma_solicitud_estado !== 'pendiente' || !g.firma_solicitud_id) {
+      Toast.show('Este anexo no tiene un enlace de firma pendiente', 'warn'); return;
+    }
+    this._cerrarModal();
+    const ok = await Modal.confirm({
+      title: 'Retirar el enlace de firma', danger: true, confirmLabel: 'Retirar enlace',
+      message: `El enlace que se le envió al cliente deja de servir (verá “enlace no válido”). El anexo
+        <b class="cg-mono">${this.esc(gid)}</b> se queda esperando firma y <b>vuelve a poder corregirse</b>;
+        para firmar habrá que enviar un enlace nuevo, con la copia al día.`,
+    });
+    if (!ok) { this.abrirGestion(gid); return; }
+    try {
+      await GestionesService.retirarEnlaceFirma(gid);
+      Toast.show('Enlace retirado — el anexo ya se puede corregir', 'ok');
+      await this.recargarGestiones();
+    } catch (e) { console.error(e); Toast.show('No se pudo retirar el enlace: ' + (e.message || e), 'bad'); }
+    this.abrirGestion(gid);
+  },
+
   async aprobarBajaGestion(gid) {
     try {
       await GestionesService.aprobarBaja(gid);
@@ -2635,9 +2665,18 @@ window.Centro = {
     const g = (this.gestiones || []).find(x => x.id === gid);
     const perm = GestionesService.puedeAnularse(g, { rol: this.rol, uid: firebase.auth().currentUser?.uid });
     if (!perm.ok) { Toast.show(perm.motivo, 'warn'); return; }
-    const motivo = await Modal.prompt({ title: 'Anular gestión', confirmLabel: 'Anular', message: 'Motivo de la anulación (queda en el expediente):', multiline: true });
+    const enlaceVivo = g?.firma_solicitud_estado === 'pendiente' && !!g?.firma_solicitud_id;
+    const motivo = await Modal.prompt({ title: 'Anular gestión', confirmLabel: 'Anular', multiline: true,
+      message: `${enlaceVivo ? 'El <b>enlace de firma</b> que tiene el cliente se retira con la anulación: verá “enlace no válido”.<br><br>' : ''}Motivo de la anulación (queda en el expediente):` });
     if (motivo === null) return;
     try {
+      // El enlace vivo se retira ANTES: una gestión anulada con el enlace en
+      // la calle se puede firmar igual, y el cliente recibiría la constancia
+      // de un anexo que ya no existe.
+      if (enlaceVivo) {
+        try { await GestionesService.retirarEnlaceFirma(gid); }
+        catch (e) { console.error(e); Toast.show('Ojo: el enlace de firma NO se retiró — ' + (e.message || e), 'warn'); }
+      }
       await GestionesService.anular(gid, motivo);
       Toast.show('Gestión anulada — el sistema revierte sus efectos (órdenes, flags del pool)…', 'ok');
       // La limpieza corre en el trigger (~1-2s): refrescar la FICHA COMPLETA
@@ -3573,25 +3612,30 @@ window.Centro = {
     // pone precio. Un anexo de regularización no lleva radios nuevos (no pasa
     // por bodega ni genera OS — verificación 2026-09-08).
     this._aumRegularizaTodos = this._aumRegulariza ? [...this._aumRegulariza] : null;
+    this._aumRegDestino = {};
+    (this._aumRegularizaTodos || []).forEach(u => { this._aumRegDestino[u.serial] = 'entra'; });
     const lineasIni = this._aumRegulariza ? this._aumLineasFijasHtml({}) : this._lineaModeloHtml('wau', true);
-    // El vendedor decide qué seriales entran (Alberto 2026-09-08: la cuenta
-    // tiene fugas — reemplazos sin devolución, radios que ya no están). Lo que
-    // desmarca NO entra al anexo y sigue como deuda; "no lo tiene" y agregar
-    // seriales que faltan se hacen en Regularizar cuenta (plan por serial).
-    const regSenal = this._aumRegulariza
-      ? `<div class="cg-senal warn" style="margin-bottom:10px; display:block;">
-          <div>Anexo de <b>regularización</b>: amarra al contrato los equipos que el cliente <b>YA tiene</b>. Al firmarlo,
-            quedan amarrados con el tramo desde <b>hoy</b> — <b>sin bodega, sin orden de servicio y sin entrega</b>.
-            Desmarca los que NO están con el cliente: no entran al anexo.</div>
-          <div id="waRegSeriales" style="display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:8px;">
-            ${this._aumRegularizaTodos.map(u => `<label style="display:inline-flex; gap:5px; align-items:center; font-size:12.5px; cursor:pointer;">
-              <input type="checkbox" checked data-wareg="${this.esc(u.serial)}" onchange="Centro._aumRegToggle(this.dataset.wareg, this.checked)" style="width:auto; margin:0;">
-              <span class="cg-mono">${this.esc(u.serial)}</span><span style="color:var(--fg-4);">${this.esc(u.modelo || '')}</span></label>`).join('')}
+    // El vendedor declara la cuenta COMPLETA aquí (Alberto 2026-09-09: "el
+    // vendedor quiere regularizar sin mandar al cliente a firma, para que
+    // quede documentado qué tiene y la cuenta esté lista para el próximo
+    // trámite"). Antes solo se podía desmarcar —el serial seguía colgado del
+    // cliente como deuda— y lo que faltaba obligaba a irse a Regularizar
+    // cuenta. Ahora: destino por serial y "+ Agregar serial" (con o sin ficha
+    // en el sistema). La cuenta que motivó todo esto: FORTUNATO MANGRAVITA.
+    const regSenal = this._aumRegulariza ? `<div class="cg-senal warn" style="margin-bottom:10px; display:block;">
+          <div>Anexo de <b>regularización</b>: pone al día lo que el cliente <b>YA tiene</b>. Al aplicarse, los que
+            entran quedan amarrados al contrato con el tramo desde <b>hoy</b> — <b>sin bodega, sin orden de servicio
+            y sin entrega</b> — y los marcados <b>“no lo tiene”</b> salen de la cuenta (quedan por clasificar).</div>
+          <div id="waRegSeriales" style="margin-top:8px;">${this._aumRegSerialesHtml()}</div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+            <input class="form-input" id="waRegSerialNuevo" placeholder="Serial que el cliente tiene y no aparece…"
+              style="max-width:250px;" aria-label="Serial a agregar"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();Centro._aumRegAgregarSerial();}">
+            ${this._selModelo('id="waRegModeloNuevo" style="max-width:210px;" aria-label="Modelo del serial a agregar"')}
+            <button type="button" class="btn btn-ghost cg-act" onclick="Centro._aumRegAgregarSerial()">+ Agregar serial</button>
           </div>
-          <div style="margin-top:6px; font-size:12px; color:var(--fg-3);"><span id="waRegN">${this._aumRegulariza.length}</span> de ${this._aumRegularizaTodos.length} entran al anexo.
-            ¿Un serial que el cliente NO tiene, o uno que sí tiene y no aparece? Eso se declara en
-            <button type="button" style="background:none; border:0; padding:0; font:inherit; font-weight:600; color:var(--accent); cursor:pointer;"
-              onclick="Centro._cerrarModal(); Centro.wizContrato({renovarCuenta:true})">Regularizar cuenta</button> (plan por serial).</div></div>` : '';
+          <div style="margin-top:6px; font-size:12px; color:var(--fg-3);"><span id="waRegN">${this._aumRegulariza.length}</span>
+            de ${this._aumRegularizaTodos.length} entran al anexo. El modelo solo hace falta si el serial no está en el sistema.</div></div>` : '';
     const papelSenal = esPapel
       ? `<div class="cg-senal warn" style="margin-bottom:10px;">
           <span><b>Salida para seguir sin regularizar hoy.</b> La adenda agrega equipos al contrato viejo
@@ -3694,6 +3738,8 @@ window.Centro = {
     // nunca saldrían. Las cantidades tienen que ser exactamente los seriales.
     if (this._aumRegulariza) {
       if (!this._aumRegulariza.length) { Toast.show('Marca al menos un serial que el cliente sí tiene — si no tiene ninguno, decláralo en Regularizar cuenta', 'warn'); return; }
+      const sinModelo = this._aumRegulariza.filter(u => !u.modelo_id && !u.modelo);
+      if (sinModelo.length) { Toast.show(`Elige el modelo de ${sinModelo.map(u => u.serial).join(', ')}`, 'warn'); return; }
       const total = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
       if (total !== this._aumRegulariza.length) {
         Toast.show(`El anexo de regularización cubre exactamente ${this._aumRegulariza.length} equipo(s) que ya están con el cliente — los radios nuevos van en un aumento aparte`, 'warn');
@@ -3730,17 +3776,31 @@ window.Centro = {
           // Regularización: B3 amarra estos seriales (ya en campo) al
           // firmarse el anexo y cierra la gestión — sin bodega ni entrega.
           ...(this._aumRegulariza
-            ? { es_regularizacion: true, regulariza_seriales: this._aumRegulariza } : {}),
+            ? { es_regularizacion: true,
+                regulariza_seriales: this._aumRegulariza.map(u => ({
+                  pool_doc_id: u.pool_doc_id || null, serial: u.serial,
+                  modelo_id: u.modelo_id || null, modelo: u.modelo || '',
+                  ...(u.modalidad ? { modalidad: u.modalidad } : {}) })),
+                // Los que el cliente NO tiene: al aplicarse el anexo salen de
+                // la cuenta (por clasificar), igual que el destino 'no_tiene'
+                // del plan por serial de una renovación.
+                ...(this._aumRegNoTiene().length
+                  ? { regulariza_no_tiene: this._aumRegNoTiene().map(u => ({
+                      serial: u.serial, ...(u.pool_doc_id ? { pool_doc_id: u.pool_doc_id } : {}),
+                      modelo_id: u.modelo_id || null, modelo: u.modelo || '' })) } : {}) } : {}),
         },
       });
       this._cerrarModal();
       this.gSel = gid;
+      const nNoTiene = this._aumRegulariza ? this._aumRegNoTiene().length : 0;
       Toast.show(this._aumRegulariza
-        ? `Regularización ${gid} enviada a aprobación — al firmarse amarra los equipos de una vez`
+        ? `Regularización ${gid} enviada a aprobación — al aplicarse amarra ${this._aumRegulariza.length} equipo(s)${nNoTiene ? ` y suelta ${nNoTiene} de la cuenta` : ''}`
         : esPapel
         ? `Adenda ${gid} al contrato en papel ${refPapel} enviada a aprobación comercial — la cuenta sigue pendiente de regularizar`
         : `Aumento ${gid} enviado a aprobación comercial`, 'ok');
       this._aumRegulariza = null;
+      this._aumRegularizaTodos = null;
+      this._aumRegDestino = {};
       this._aumPapel = false;
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo crear el aumento', 'bad'); }
@@ -4020,20 +4080,96 @@ window.Centro = {
     });
     return [...m.values()].map(l => this._lineaModeloFija('wau', l)).join('');
   },
-  // Marcar / desmarcar un serial del anexo de regularización: se re-pintan las
-  // líneas fijas con la cantidad nueva (el precio tecleado se conserva).
-  _aumRegToggle(serial, on) {
-    if (!this._aumRegularizaTodos) return;
+  // Los tres destinos posibles de un serial en el anexo de regularización.
+  // 'pendiente' es el viejo "desmarcado": ni entra ni se suelta — sigue como
+  // deuda de la cuenta, que a veces es lo honesto ("no sé si lo tiene").
+  AUM_REG_DESTINOS: [
+    ['entra', 'Lo tiene — entra al anexo'],
+    ['no_tiene', 'El cliente NO lo tiene — sale de la cuenta'],
+    ['pendiente', 'Dejarlo pendiente — sigue como deuda'],
+  ],
+  _aumRegSerialesHtml() {
+    const filas = (this._aumRegularizaTodos || []).map((u, i) => {
+      const d = this._aumRegDestino[u.serial] || 'entra';
+      return `<tr>
+        <td class="cg-mono">${this.esc(u.serial)}${u.nuevo ? ' <span style="color:var(--ok-deep, #065F46); font-size:11px;">agregado</span>' : ''}</td>
+        <td style="font-size:12.5px;">${this.esc(u.modelo || '—')}${u.sinFicha ? ' <span style="color:var(--fg-4); font-size:11px;">sin ficha — nace con el anexo</span>' : ''}</td>
+        <td><select class="form-select" style="min-width:250px;" aria-label="Destino de ${this.esc(u.serial)}"
+              onchange="Centro._aumRegDestinoSet('${this.esc(u.serial)}', this.value)">
+          ${this.AUM_REG_DESTINOS.map(([v, l]) => `<option value="${v}" ${v === d ? 'selected' : ''}>${l}</option>`).join('')}
+        </select></td>
+        <td>${u.nuevo ? `<button type="button" class="btn btn-ghost" style="padding:2px 8px;" title="Quitar de la lista"
+              onclick="Centro._aumRegQuitarAgregado(${i})">✕</button>` : ''}</td></tr>`;
+    }).join('');
+    return `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
+      <th>Serial</th><th>Modelo</th><th>¿Lo tiene el cliente?</th><th></th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="4" class="cg-empty">Ningún serial declarado todavía.</td></tr>'}</tbody></table></div>`;
+  },
+  // Re-pinta seriales y líneas fijas conservando los precios tecleados.
+  _aumRegRepintar() {
     const precios = {};
     for (const l of this._lineasModelo('wau')) precios[(l.modelo_id || l.modelo) + '|' + (l.modalidad || 'alquiler')] = l.precio || '';
-    const sel = new Set((this._aumRegulariza || []).map(u => u.serial));
-    if (on) sel.add(serial); else sel.delete(serial);
-    this._aumRegulariza = this._aumRegularizaTodos.filter(u => sel.has(u.serial));
+    this._aumRegulariza = (this._aumRegularizaTodos || []).filter(u => (this._aumRegDestino[u.serial] || 'entra') === 'entra');
+    const ser = document.getElementById('waRegSeriales');
+    if (ser) ser.innerHTML = this._aumRegSerialesHtml();
     const cont = document.getElementById('waLineas');
     if (cont) cont.innerHTML = this._aumLineasFijasHtml(precios);
     const n = document.getElementById('waRegN');
     if (n) n.textContent = String(this._aumRegulariza.length);
     this._aumPreview();
+  },
+  _aumRegDestinoSet(serial, valor) {
+    if (!this._aumRegularizaTodos) return;
+    this._aumRegDestino[serial] = valor;
+    this._aumRegRepintar();
+  },
+  _aumRegNoTiene() {
+    return (this._aumRegularizaTodos || []).filter(u => this._aumRegDestino[u.serial] === 'no_tiene');
+  },
+  _aumRegQuitarAgregado(i) {
+    const u = (this._aumRegularizaTodos || [])[i];
+    if (!u || !u.nuevo) return;
+    this._aumRegularizaTodos.splice(i, 1);
+    delete this._aumRegDestino[u.serial];
+    this._aumRegRepintar();
+  },
+  // Agrega al anexo un serial que el cliente tiene y la lista no trae. Si el
+  // sistema no lo conoce, nace con el anexo (por eso el modelo es obligatorio
+  // ahí); si ya tiene ficha con contrato, no se toca desde aquí.
+  async _aumRegAgregarSerial() {
+    if (!this._aumRegularizaTodos) return;
+    const inp = document.getElementById('waRegSerialNuevo');
+    const raw = (inp?.value || '').trim();
+    if (!raw) return;
+    const norm = EquiposPoolService.normalizarSerial(raw);
+    if (!EquiposPoolService.esSerialValido(norm)) { Toast.show('Ese serial no parece válido', 'warn'); return; }
+    if (this._aumRegularizaTodos.some(u => EquiposPoolService.normalizarSerial(u.serial) === norm)) {
+      Toast.show(`${norm} ya está en la lista`, 'warn'); return;
+    }
+    let ficha = null;
+    try { ficha = await EquiposPoolService.findBySerial(raw); } catch (_) { /* sin red: se agrega sin ficha */ }
+    if (ficha?.estado === 'baja') { Toast.show(`${norm} está dado de BAJA — no se puede reactivar desde aquí`, 'bad'); return; }
+    if (ficha?.asignacion?.contrato_doc_id) {
+      Toast.show(`${norm} ya está amarrado al contrato ${ficha.asignacion.contrato_id || ''} — no hace falta regularizarlo`, 'warn');
+      return;
+    }
+    const mSel = this._modeloDeSelect(document.getElementById('waRegModeloNuevo'));
+    if (!ficha && !mSel) { Toast.show('Ese serial no está en el sistema: elige su modelo para darlo de alta', 'warn'); return; }
+    const modelo = ficha ? { id: ficha.modelo_id || mSel?.id || null, label: ficha.modelo_label || mSel?.label || '' } : mSel;
+    this._aumRegularizaTodos.push({
+      pool_doc_id: ficha ? ficha.id : null,
+      serial: ficha ? (ficha.serial || raw) : raw,
+      serial_norm: norm,
+      modelo_id: modelo.id || null, modelo: modelo.label || '',
+      // La modalidad la manda la LÍNEA: se arranca con lo que diga la ficha
+      // (si la hay) y el vendedor la corrige arriba si está mal.
+      modalidad: ficha?.propiedad === 'cliente' ? 'propio' : 'alquiler',
+      nuevo: true, sinFicha: !ficha,
+    });
+    this._aumRegDestino[ficha ? (ficha.serial || raw) : raw] = 'entra';
+    if (inp) inp.value = '';
+    this._aumRegRepintar();
+    inp?.focus();
   },
 
   // Línea FIJA (anexo de regularización): el modelo y la cantidad salen de los

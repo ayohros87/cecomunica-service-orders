@@ -882,8 +882,44 @@ module.exports = onDocumentWritten(
             // 1) Amarrar cada serial (ya en campo) al contrato — update con
             //    dot-paths: jamás set(merge) sobre rutas anidadas del pool.
             let amarrados = 0;
+            let nacidos = 0;
             for (const s of a.regulariza_seriales) {
-              if (!s.pool_doc_id) continue;
+              // Serial que el sistema NO conocía (2026-09-09): el vendedor lo
+              // agregó al anexo y la ficha nace aquí, ya en cliente y con la
+              // propiedad que declara la línea — mismo upsertContacto que usa
+              // onSerialWrite, así que el kardex y las guardias son las mismas.
+              if (!s.pool_doc_id) {
+                try {
+                  const r = await pool.upsertContacto({
+                    serial: s.serial,
+                    modelo_id: s.modelo_id || null,
+                    modelo_label: s.modelo || "",
+                    estado: pool.ESTADOS.EN_CLIENTE,
+                    noTocarDesde: [pool.ESTADOS.EN_TALLER],
+                    tipo: "regularizacion",
+                    refMov: { tipo: "gestion", id: gid, label: gid },
+                    origen: "migracion_contrato",
+                    notas: `Alta por anexo de regularización ${gid} — el cliente lo tenía y el sistema no lo sabía`,
+                    propiedadDeclarada: true,
+                    extra: {
+                      ...(s.modalidad === "propio" ? { propiedad: "cliente" }
+                        : s.modalidad === "alquiler" ? { propiedad: "cecomunica" } : {}),
+                      asignacion: {
+                        contrato_doc_id: a.contrato_doc_id,
+                        contrato_id: a.contrato_id || a.contrato_doc_id,
+                        cliente_id: gA.cliente_id || "",
+                        cliente_nombre: gA.cliente_nombre || "",
+                        gestion_doc_id: gid,
+                      },
+                    },
+                  });
+                  if (r !== "ignorado") { amarrados++; nacidos++; }
+                  logger.info("[onGestionWrite] serial nuevo por regularización", { gid, serial: s.serial, resultado: r });
+                } catch (e) {
+                  logger.warn("[onGestionWrite] alta de serial por regularización falló", { gid, serial: s.serial, message: e.message });
+                }
+                continue;
+              }
               try {
                 const ref = db.collection("equipos_pool").doc(s.pool_doc_id);
                 // De quién es el equipo: lo dice la LÍNEA del anexo, no la
@@ -910,6 +946,24 @@ module.exports = onDocumentWritten(
                 amarrados++;
               } catch (e) {
                 logger.warn("[onGestionWrite] amarre de regularización falló", { gid, serial: s.serial, message: e.message });
+              }
+            }
+            // 1b) Los que el cliente NO tiene (2026-09-09): salen de la cuenta
+            //     y quedan por clasificar, igual que el destino 'no_tiene' del
+            //     plan por serial de una renovación. Así el anexo deja la
+            //     cuenta al día en los dos sentidos, no solo sumando.
+            let soltados = 0;
+            for (const s of (a.regulariza_no_tiene || [])) {
+              try {
+                const r = await pool.soltarDelCliente(s.serial, s.modelo_id || null, s.modelo || "", {
+                  cliente_id: gA.cliente_id || "",
+                  refMov: { tipo: "gestion", id: gid, label: gid },
+                  notas: `Anexo de regularización ${gid}: el cliente declaró que NO tiene este equipo`,
+                });
+                if (r === "liberado") soltados++;
+                else logger.info("[onGestionWrite] no_tiene sin efecto", { gid, serial: s.serial, resultado: r });
+              } catch (e) {
+                logger.warn("[onGestionWrite] no se pudo soltar el serial", { gid, serial: s.serial, message: e.message });
               }
             }
             // 2) La conciliación del contrato baja: esos seriales dejan de
@@ -944,8 +998,11 @@ module.exports = onDocumentWritten(
               cierre: { ...(gA.cierre || {}), derivacion: true, asignacion: true, programacion: true, entrega: true },
             }, { merge: true });
             await G.registrarEvento(gid, "entrega",
-              `Anexo de REGULARIZACIÓN aplicado: ${amarrados} equipo(s) ya en campo amarrados al contrato ${a.contrato_id || a.contrato_doc_id} (${a.regulariza_seriales.map(s => s.serial).join(", ")}); el tramo de ${a.duracion_meses || "?"} meses arranca hoy. Sin bodega ni entrega — la gestión cierra.`);
-            logger.info("[onGestionWrite] regularización por anexo aplicada", { gid, contrato: a.contrato_doc_id, amarrados });
+              `Anexo de REGULARIZACIÓN aplicado: ${amarrados} equipo(s) ya en campo amarrados al contrato ${a.contrato_id || a.contrato_doc_id} (${a.regulariza_seriales.map(s => s.serial).join(", ")})`
+              + `${nacidos ? `, ${nacidos} de ellos dados de alta con este anexo` : ""}`
+              + `${soltados ? `; ${soltados} serial(es) que el cliente NO tiene salieron de la cuenta (${(a.regulariza_no_tiene || []).map(s => s.serial).join(", ")})` : ""}`
+              + `; el tramo de ${a.duracion_meses || "?"} meses arranca hoy. Sin bodega ni entrega — la gestión cierra.`);
+            logger.info("[onGestionWrite] regularización por anexo aplicada", { gid, contrato: a.contrato_doc_id, amarrados, nacidos, soltados });
             await G.avisoFacturacion({
               subject: `FACTURACIÓN: regularización EFECTIVA — ${gA.cliente_nombre || "Cliente"} (${a.contrato_id || ""})`,
               titulo: "Regularización aplicada — el tramo arranca hoy",

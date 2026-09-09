@@ -402,6 +402,30 @@ async function main() {
   await assertFails(as("gerente").doc("gestiones/gEdEntreg").update(anular("gerente")));
   ok("anular: con los equipos ya entregados, nadie la anula");
 
+  // ── Retirar un enlace de firma que el cliente no ha firmado (2026-09-09) ──
+  // Vale igual para el contrato y para el anexo de aumento: pendiente →
+  // cancelado, solo ese campo, y nunca sobre uno ya firmado.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const base = { estado: "pendiente", contrato_doc_id: "c1", cliente_id: "x" };
+    for (const id of ["fsA", "fsB", "fsC", "fsD", "fsE"]) await db.doc(`firma_solicitudes/${id}`).set(base);
+    await db.doc("firma_solicitudes/fsFirmado").set({ ...base, estado: "firmado" });
+    await db.doc("firma_solicitudes/fsAnexo").set({ ...base, tipo: "anexo_aumento", gestion_id: "gX" });
+  });
+  const cancelar = { estado: "cancelado" };
+  await assertSucceeds(as("vendedor").doc("firma_solicitudes/fsA").update(cancelar));
+  ok("firma: el vendedor retira un enlace pendiente");
+  await assertSucceeds(as("recepcion").doc("firma_solicitudes/fsB").update(cancelar));
+  ok("firma: recepción también lo retira (el botón vive donde ella trabaja)");
+  await assertSucceeds(as("administrador").doc("firma_solicitudes/fsAnexo").update(cancelar));
+  ok("firma: el enlace del ANEXO se retira igual que el del contrato");
+  await assertFails(as("tecnico").doc("firma_solicitudes/fsC").update(cancelar));
+  ok("firma: el taller no retira enlaces de firma");
+  await assertFails(as("vendedor").doc("firma_solicitudes/fsFirmado").update(cancelar));
+  ok("firma: un enlace YA FIRMADO no se retira");
+  await assertFails(as("vendedor").doc("firma_solicitudes/fsD").update({ ...cancelar, resumen: { total_mensual: 1 } }));
+  ok("firma: al retirar no se cuela ningún otro campo");
+
   // ── QC: los cuatro huecos de la auditoría del 2026-08-04 ──────────────────
   const COMPLETADO = "COMPLETADO (EN OFICINA)";
   const seedOrden = (id, data) => testEnv.withSecurityRulesDisabled(async (ctx) => {

@@ -992,8 +992,12 @@ service cloud.firestore {
           && request.resource.data.estado == "aceptado"
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(["estado","validado_por_uid","validado_at","actualizar_ficha"]))
-        // Cancelar un enlace pendiente (se generó por error / venció el trato).
-        || (isSignedIn() && userRole() in ["administrador","gerente","vendedor"]
+        // Cancelar un enlace pendiente (se generó por error / venció el trato,
+        // o hay que corregir el contrato o el anexo antes de que firmen).
+        // Recepción también: el botón "Retirar enlace de firma" vive donde
+        // ella trabaja (ficha del cliente y expediente del anexo), y sin este
+        // rol el botón fallaba con "permisos insuficientes".
+        || (isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion"]
           && resource.data.estado == "pendiente"
           && request.resource.data.estado == "cancelado"
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado"]));

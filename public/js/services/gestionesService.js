@@ -292,6 +292,33 @@ const GestionesService = {
     await this.registrarEvento(gestionId, 'editar', resumen || 'Expediente corregido antes de surtir efecto.');
   },
 
+  // Retirar un enlace de firma que el cliente TODAVÍA no firmó — el mismo
+  // gesto que en el contrato (2026-09-09, Alberto). La solicitud pasa a
+  // 'cancelado' (quien abra el enlace verá "no válido") y el anexo vuelve a
+  // poder corregirse; para firmar hay que mandar uno nuevo, con la copia al
+  // día. Si el cliente firma en ese mismo instante, la regla ya no acepta
+  // pendiente→cancelado y esto falla ruidosamente en vez de dejar el
+  // expediente diciendo una cosa y la solicitud otra.
+  async retirarEnlaceFirma(gestionId) {
+    const g = await this.get(gestionId);
+    if (!g) throw new Error('Expediente no encontrado.');
+    if (g.cierre?.firma === true || g.anexo_firma_digital || g.anexo_firmado_path) {
+      throw new Error('El anexo ya está firmado: el enlace no se retira.');
+    }
+    if (g.firma_solicitud_estado === 'validacion') {
+      throw new Error('El cliente ya firmó y falta validar al firmante — no hay enlace que retirar.');
+    }
+    if (g.firma_solicitud_estado !== 'pendiente' || !g.firma_solicitud_id) {
+      throw new Error('Este anexo no tiene un enlace de firma pendiente.');
+    }
+    const db = firebase.firestore();
+    // La solicitud PRIMERO: es la que le sirve al cliente.
+    await db.collection('firma_solicitudes').doc(g.firma_solicitud_id).update({ estado: 'cancelado' });
+    await db.collection(this.COL).doc(gestionId).update({ firma_solicitud_estado: 'cancelado' });
+    await this.registrarEvento(gestionId, 'firma',
+      'Enlace de firma retirado: el que se le envió al cliente deja de servir. El anexo vuelve a poder corregirse; para firmar hay que enviar uno nuevo.');
+  },
+
   // Aprobación de una BAJA por serial (admin/gerente — UNA sola aprobación por
   // gestión aunque cruce contratos, decisión §8.10). El trigger deriva el fin
   // de facturación por contrato y crea la devolución por serial.
