@@ -29,7 +29,15 @@
 
     // ── Toolbar / aviso de estado ──
     $('lnkFicha').href = `../clientes/centro.html?id=${encodeURIComponent(c.cliente_id || '')}`;
-    $('lnkClasico').href = `imprimir-contrato.html?id=${encodeURIComponent(docId)}`;
+    // "Formato anterior" solo tiene sentido para lo de ANTES del corte
+    // (2026-09-09): en un contrato nacido después, ese enlace ofrecía imprimir
+    // un papel que el cliente nunca firmó. Se esconde, no se borra — los
+    // históricos lo siguen necesitando.
+    const lnkClasico = $('lnkClasico');
+    lnkClasico.href = `imprimir-contrato.html?id=${encodeURIComponent(docId)}`;
+    const nacidoDespuesDelCorte = window.DocumentoContrato
+      && DocumentoContrato._millis(c.fecha_creacion) >= DocumentoContrato.CORTE_V2;
+    if (nacidoDespuesDelCorte) lnkClasico.hidden = true;
     if (c.estado === 'pendiente_aprobacion' || (!c.firmado && c.estado !== 'activo')) {
       const av = $('avisoEstado');
       av.style.display = 'block';

@@ -785,7 +785,11 @@ window.ContratosLista = {
   // Recibe el DOC ID, no el número: el número es mutable y no fue único hasta
   // el 2026-07-28, así que un enlace por número puede abrir otro contrato.
   ver(docId) {
-    window.open(`imprimir-contrato.html?id=${encodeURIComponent(docId)}`, '_blank');
+    // El corte (2026-09-09) decide el papel: v2 → documento.html, lo anterior
+    // → imprimir-contrato.html. Misma regla que el trigger, o el archivo abre
+    // un documento distinto al que se le mandó a activaciones.
+    const data = CS.contratos.find((c) => c.id === docId) || {};
+    window.open(DocumentoContrato.urlDocumento(docId, data), '_blank');
   },
 
   ordenarPor(campo) {

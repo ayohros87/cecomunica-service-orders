@@ -55,7 +55,8 @@ async function cargarContrato() {
   // 3) Bloquear edición si ya fue aprobado
   if (c.estado === "activo") {
     Toast.show('Este contrato ya fue aprobado y no se puede editar.', 'bad');
-    window.location.href = volverCentro ? destinoVolver("activo") : `imprimir-contrato.html?id=${encodeURIComponent(contratoDocId)}`;
+    window.location.href = volverCentro ? destinoVolver("activo")
+      : DocumentoContrato.urlDocumento(contratoDocId, c);
     return;
   }
   // 3b) Con un enlace de firma pendiente el cliente está leyendo una copia
