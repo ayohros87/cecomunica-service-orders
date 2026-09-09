@@ -81,7 +81,11 @@
       chip: r.parcial ? 'parcial' : 'completa',
       tono: r.parcial ? 'info' : 'aviso',
       txt, dias: d, clase: 'senal', ctaHtml,
-      data: { ordenId: o.ordenId },
+      // `orden-id` en kebab, no `ordenId`: Bandeja.fila escribe la clave tal
+      // cual en el atributo, HTML la baja a minúsculas (`data-ordenid`) y
+      // `dataset.ordenId` —que busca `data-orden-id`— nunca la encuentra. Los
+      // demás usos del kit pasan claves de una palabra y no se topan con esto.
+      data: { 'orden-id': o.ordenId },
     });
   }
 
