@@ -3693,16 +3693,39 @@ window.Centro = {
     this._aumPreview();
   },
 
-  // Línea FIJA (anexo de regularización): modelo, cantidad y modalidad vienen
-  // de los seriales y no se editan; solo el precio. Mismos data-attrs que la
-  // línea normal para que _lineasModelo la lea igual.
+  // Línea FIJA (anexo de regularización): el modelo y la cantidad salen de los
+  // seriales y no se editan. El precio y la MODALIDAD sí: la modalidad venía
+  // de `propiedad` de la ficha y estaba bloqueada, así que una marca falsa de
+  // la migración ("del cliente") se colaba al anexo sin que el vendedor
+  // pudiera corregirla — justo el caso FORTUNATO MANGRAVITA (2026-09-09).
+  // Quien declara de quién es el equipo es la línea, no la ficha.
   _lineaModeloFija(pref, l) {
+    const k = (l?.modelo_id || l?.modelo || '') + '|' + (l?.modalidad === 'propio' ? 'propio' : 'alquiler');
     return `<div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
       ${this._selModelo(`data-${pref}-modelo disabled style="flex:1;"`, l?.modelo_id, l?.modelo)}
       <input class="form-input" data-${pref}-cant type="number" readonly value="${Math.max(1, Number(l?.cantidad || 1))}" style="width:86px; background:var(--surface-sunken, #EEF2F6);" title="Cantidad — fija por los seriales">
       <input class="form-input" data-${pref}-precio type="number" min="0" step="1" placeholder="$/mes" value="${l?.precio != null && l.precio !== '' ? Number(l.precio).toFixed(2) : ''}" style="width:110px;" title="Precio mensual">
-      ${this._selModalidad(pref, l?.modalidad === 'propio' ? 'propio' : 'alquiler', 'disabled')}
+      ${this._selModalidad(pref, l?.modalidad === 'propio' ? 'propio' : 'alquiler',
+        `onchange="Centro._aumRegModalidad('${this.esc(k)}', this.value)"`)}
     </div>`;
+  },
+
+  // Cambiar "de quién es" una línea del anexo de regularización: la modalidad
+  // baja a los seriales de esa línea (y a la lista completa, para que marcar y
+  // desmarcar no la revierta) y las líneas se re-pintan conservando el precio.
+  _aumRegModalidad(k, valor) {
+    if (!this._aumRegulariza || (valor !== 'propio' && valor !== 'alquiler')) return;
+    const clave = (u) => (u.modelo_id || u.modelo || '') + '|' + (u.modalidad === 'propio' ? 'propio' : 'alquiler');
+    const precios = {};
+    for (const l of this._lineasModelo('wau')) precios[(l.modelo_id || l.modelo) + '|' + (l.modalidad || 'alquiler')] = l.precio || '';
+    const base = k.split('|')[0];
+    precios[base + '|' + valor] = precios[k] ?? precios[base + '|' + valor] ?? '';
+    for (const lista of [this._aumRegulariza, this._aumRegularizaTodos || []]) {
+      lista.forEach(u => { if (clave(u) === k) u.modalidad = valor; });
+    }
+    const cont = document.getElementById('waLineas');
+    if (cont) cont.innerHTML = this._aumLineasFijasHtml(precios);
+    this._aumPreview();
   },
 
   _lineaModeloPre(pref, conPrecio, l) {
