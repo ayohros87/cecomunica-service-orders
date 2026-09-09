@@ -253,6 +253,61 @@ const EquiposPoolService = {
     return `<span class="eqpool-chip eqpool-chip-${esc(cls)}">${esc(this.ESTADO_LABELS[estado] || estado || '—')}</span>`;
   },
 
+  // ── Propiedad: ¿el radio es nuestro o del cliente? ───────────────────
+  // UNA sola voz en todo el sistema (2026-09-09). Antes había tres
+  // vocabularios para lo mismo: "Flota"/"Cliente"/"?" en inventario, "Flota
+  // Cecomunica"/"Del cliente" en la ficha del equipo y "Alquiler"/"Del
+  // cliente" en el modal de equipos. Con la cuenta manejada POR SERIAL el
+  // tipo de contrato (ALQ/PROP) ya no responde la pregunta: esta etiqueta es
+  // la única respuesta, y es la MISMA que decide el backend (la devolución
+  // nunca reclama un equipo del cliente — functions/src/lib/devolucion.js).
+  // La flota se llama "Alquiler" solo cuando está CON el cliente: un radio en
+  // bodega no está alquilado a nadie.
+  propiedadLabel(e) {
+    const obj = e && typeof e === 'object';
+    const p = (obj ? e.propiedad : e) || 'desconocida';
+    if (p === 'cliente') return 'Del cliente';
+    if (p !== 'cecomunica') return 'Sin clasificar';
+    const conCliente = obj && [this.ESTADOS.EN_CLIENTE, this.ESTADOS.ASIGNADO].includes(e.estado);
+    return conCliente ? 'Alquiler' : 'Flota';
+  },
+  propiedadTitulo(e) {
+    const p = ((e && typeof e === 'object') ? e.propiedad : e) || 'desconocida';
+    if (p === 'cliente') return 'Equipo propiedad del cliente — no se recupera al terminar el contrato';
+    if (p === 'cecomunica') return 'Equipo de la flota de CECOMUNICA — se recupera al terminar el contrato';
+    return 'Propiedad sin clasificar — hay que definirla en la ficha del equipo';
+  },
+  // Chip de propiedad (clases .eqpool-prop en ceco-ui.css), mismo lenguaje
+  // visual del chip de estado.
+  chipPropiedadHtml(e) {
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
+    const p = ((e && typeof e === 'object') ? e.propiedad : e) || 'desconocida';
+    const cls = ['cliente', 'cecomunica'].includes(p) ? p : 'desconocida';
+    return `<span class="eqpool-prop eqpool-prop-${cls}" title="${esc(this.propiedadTitulo(e))}">${esc(this.propiedadLabel(e))}</span>`;
+  },
+  // Conteo por propiedad de una lista de unidades, para los resúmenes
+  // ("5 en alquiler · 3 del cliente").
+  resumenPropiedad(items) {
+    const r = { alquiler: 0, cliente: 0, sin: 0, total: 0 };
+    for (const e of (items || [])) {
+      r.total++;
+      if (e?.propiedad === 'cliente') r.cliente++;
+      else if (e?.propiedad === 'cecomunica') r.alquiler++;
+      else r.sin++;
+    }
+    return r;
+  },
+  resumenPropiedadTexto(items) {
+    const r = this.resumenPropiedad(items);
+    if (!r.total) return '';
+    const partes = [];
+    if (r.alquiler) partes.push(`${r.alquiler} en alquiler`);
+    if (r.cliente) partes.push(`${r.cliente} del cliente`);
+    if (r.sin) partes.push(`${r.sin} sin clasificar`);
+    return partes.join(' · ');
+  },
+
   // Link al kardex de una unidad: la página del pool con ?serial= abre la
   // pestaña "todos" con la búsqueda precargada.
   kardexUrl(serial, { desdeRaiz = false } = {}) {

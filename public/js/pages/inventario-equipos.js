@@ -55,7 +55,6 @@ window.EquiposPool = {
     venta: 'Venta directa',
   },
 
-  PROP_LABELS: { cecomunica: 'Flota', cliente: 'Cliente', desconocida: '?' },
 
   puedeEscribir() {
     return this._rol === ROLES.ADMIN || this._rol === ROLES.INVENTARIO;
@@ -723,7 +722,6 @@ window.EquiposPool = {
           : '';
         const noVerif = eq.verificado === false
           ? `<span class="eqpool-noverif" title="Creado por migración automática — pendiente de confirmación">Sin verificar</span>` : '';
-        const prop = eq.propiedad || 'desconocida';
         const casilla = puede
           ? `<input type="checkbox" class="eq-sel" value="${esc(eq.id)}" ${this._sel.has(eq.id) ? 'checked' : ''}
                     onchange="EquiposPool.toggleSel('${esc(eq.id)}', this.checked)"
@@ -733,7 +731,7 @@ window.EquiposPool = {
           <td class="td-mono">${esc(eq.serial || eq.serial_norm)}${compartido}${noVerif}</td>
           <td>${esc(eq.modelo_label || '—')}</td>
           <td>${eq.condicion === 'reuso' ? 'Refurbished' : 'Nuevo'}</td>
-          <td><span class="eqpool-prop eqpool-prop-${esc(prop)}" title="${prop === 'cecomunica' ? 'Flota propia de Cecomunica' : prop === 'cliente' ? 'Equipo propiedad del cliente' : 'Propiedad sin clasificar'}">${esc(this.PROP_LABELS[prop] || prop)}</span></td>
+          <td>${EquiposPoolService.chipPropiedadHtml(eq)}</td>
           <td><span class="eqpool-chip eqpool-chip-lg eqpool-chip-${esc(EquiposPoolService.ESTADO_LABELS[eq.estado] ? eq.estado : 'desconocido')}">${esc(EquiposPoolService.ESTADO_LABELS[eq.estado] || eq.estado)}</span>${this._listoParaEntrega(eq) ? `<span class="eqpool-chip" style="background:#e9f7f0;color:#067647;display:inline-block;margin-top:3px;" title="La orden ya está COMPLETADO (EN OFICINA) — el radio está terminado; falta registrar la entrega al cliente">→ listo para entrega</span>` : ''}${EquiposPoolService.chipPendienteDevolucionHtml(eq)}${eq.reemplaza_a ? `<span class="eq-sub" title="Linaje: esta unidad sustituyó a la anterior en una renovación/reemplazo">reemplaza a ${esc(eq.reemplaza_a)}</span>` : ''}</td>
           <td>${asignadoA}</td>
           <td style="font-size:12px; color:var(--fg-3);" title="${esc(eq.origen || '')}">${esc(this.ORIGEN_LABELS[eq.origen] || eq.origen || '—')}</td>

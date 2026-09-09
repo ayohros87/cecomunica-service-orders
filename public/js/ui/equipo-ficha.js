@@ -150,7 +150,9 @@ window.EquipoFicha = {
       ['Contrato', linkContrato],
       ['Orden actual', linkOrden],
       ['Condición', eq.condicion === 'reuso' ? 'Refurbished' : 'Nuevo'],
-      ['Propiedad', eq.propiedad === 'cecomunica' ? 'Flota Cecomunica' : eq.propiedad === 'cliente' ? 'Del cliente' : 'Sin clasificar'],
+      ['Propiedad', window.EquiposPoolService?.chipPropiedadHtml
+        ? EquiposPoolService.chipPropiedadHtml(eq)
+        : (eq.propiedad === 'cliente' ? 'Del cliente' : 'Sin clasificar')],
       ['Plataforma POC', eq.poc_device_id ? 'Registrado' : '—'],
       eq.reemplaza_a ? ['Reemplaza a', `<span style="font-family:var(--mono, monospace);">${esc(eq.reemplaza_a)}</span>`] : null,
       (eq.venta && eq.venta.factura) ? ['Factura QBO', esc(eq.venta.factura)] : null,

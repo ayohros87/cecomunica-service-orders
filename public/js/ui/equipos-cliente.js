@@ -70,7 +70,7 @@ window.EquiposCliente = {
             ${EquiposPoolService.chipEstadoHtml(u.estado)}
             ${typeof EquiposPoolService.chipPendienteDevolucionHtml === 'function' ? EquiposPoolService.chipPendienteDevolucionHtml(u) : ''}
           </td>
-          <td style="padding:5px 8px; border-bottom:1px solid var(--border-subtle); color:var(--fg-3);">${u.propiedad === 'cliente' ? 'Del cliente' : u.propiedad === 'cecomunica' ? 'Alquiler' : '—'}</td>
+          <td style="padding:5px 8px; border-bottom:1px solid var(--border-subtle);">${EquiposPoolService.chipPropiedadHtml(u)}</td>
         </tr>`).join('');
       return `
         <div style="margin:14px 0 6px; font-weight:600; font-size:13px;">${titulo}

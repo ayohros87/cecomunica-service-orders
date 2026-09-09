@@ -963,17 +963,39 @@ window.Centro = {
     const renovador = this._renovadoPor(c);
     const dato = (l, v) => v ? `<div style="display:flex; gap:8px; font-size:13px; padding:2px 0;">
       <span style="color:var(--fg-3); min-width:120px;">${l}</span><span>${v}</span></div>` : '';
+    // Modalidad de la línea: de quién es el equipo (2026-09-09). Sin esto el
+    // contrato no decía por ningún lado si el radio es de alquiler o del
+    // cliente — antes se leía del tipo ALQ/PROP, que ya no existe.
+    const modLinea = (l) => l.modalidad === 'propio'
+      ? '<span class="eqpool-prop eqpool-prop-cliente" title="Equipo propiedad del cliente — la línea es tarifa de servicio">Del cliente</span>'
+      : l.modalidad === 'alquiler'
+        ? '<span class="eqpool-prop eqpool-prop-cecomunica" title="Equipo de la flota de CECOMUNICA en renta">Alquiler</span>'
+        : '<span class="eqpool-prop eqpool-prop-desconocida" title="Contrato anterior a la modalidad por línea — la propiedad real es la de cada serial, abajo">Sin declarar</span>';
     const lineas = (c.equipos || []).map(l => `<tr>
       <td>${this.esc(l.modelo || '—')}</td>
+      <td>${modLinea(l)}</td>
       <td style="text-align:right;">${Number(l.cantidad || 0)}</td>
       <td style="text-align:right;" class="num">$${Number(l.precio || 0).toFixed(2)}</td>
       <td style="text-align:right;" class="num">$${(Number(l.cantidad || 0) * Number(l.precio || 0)).toFixed(2)}</td></tr>`).join('');
     const cargos = (c.cargos || []).map(x => `<tr>
       <td>${this.esc(x.concepto || '—')} <span style="color:var(--fg-4); font-size:11px;">${x.recurrente ? 'mensual' : 'único'}</span></td>
+      <td></td>
       <td style="text-align:right;">${Number(x.cantidad || 1)}</td>
       <td style="text-align:right;" class="num">$${Number(x.monto || 0).toFixed(2)}</td>
       <td style="text-align:right;" class="num">$${(Number(x.cantidad || 1) * Number(x.monto || 0)).toFixed(2)}</td></tr>`).join('');
-    const serialesCampo = enCampo.slice(0, 8).map(e => `<span class="cg-mono">${this.esc(e.serial || e.id)}</span>`).join(', ');
+    // Los equipos en campo, con la propiedad de CADA serial: es la que manda
+    // (la devolución nunca reclama un radio del cliente). Los del cliente van
+    // primero — son la excepción que hay que notar.
+    const P = window.EquiposPoolService;
+    const enCampoOrd = [...enCampo].sort((a, b) =>
+      (b.propiedad === 'cliente' ? 1 : 0) - (a.propiedad === 'cliente' ? 1 : 0)
+      || String(a.serial || '').localeCompare(String(b.serial || '')));
+    const filasCampo = enCampoOrd.map(e => `<tr>
+      <td class="cg-mono"><a href="#" onclick="Centro.verKardex('${this.esc(e.id)}'); return false;">${this.esc(e.serial || e.id)}</a></td>
+      <td>${this.esc(e.modelo_label || '—')}</td>
+      <td>${P?.chipPropiedadHtml ? P.chipPropiedadHtml(e) : this.esc(e.propiedad || '')}</td>
+      <td>${P?.chipEstadoHtml ? P.chipEstadoHtml(e.estado) : this.esc(e.estado || '')}</td></tr>`).join('');
+    const resumenCampo = P?.resumenPropiedadTexto ? P.resumenPropiedadTexto(enCampo) : '';
     const reg = c.regularizacion;
     this._abrirModalA({
       titulo: `<span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>
@@ -994,7 +1016,7 @@ window.Centro = {
           : (!c.firmado && c.firma_solicitud_estado === 'pendiente' ? 'enlace enviado — esperando firma' : ''))}
       </div>
       ${lineas || cargos ? `<div class="cg-twrap" style="max-height:30vh; overflow:auto;">
-        <table class="cg-tabla"><thead><tr><th>Línea</th><th style="text-align:right;">Cant.</th>
+        <table class="cg-tabla"><thead><tr><th>Línea</th><th>De quién es</th><th style="text-align:right;">Cant.</th>
           <th style="text-align:right;">Precio</th><th style="text-align:right;">Total</th></tr></thead>
         <tbody>${lineas}${cargos}</tbody></table></div>` : ''}
       ${t ? `<div style="display:flex; gap:18px; font-size:13.5px; margin-top:8px; flex-wrap:wrap;">
@@ -1002,8 +1024,13 @@ window.Centro = {
         <span style="margin-left:auto;"><b>Mensual: <span class="num">$${Number(t.totalMensual || 0).toFixed(2)}</span></b></span>
         ${t.tieneCargosUnicos ? `<span><b>Primer pago: <span class="num">$${Number(t.primerPago || 0).toFixed(2)}</span></b></span>` : ''}
       </div>` : ''}
-      ${enCampo.length ? `<p style="font-size:12.5px; color:var(--fg-3); margin:10px 0 0;">
-        <b>${enCampo.length}</b> equipo(s) en campo bajo este contrato${serialesCampo ? `: ${serialesCampo}${enCampo.length > 8 ? ` … y ${enCampo.length - 8} más` : ''}` : ''}.</p>` : ''}
+      ${enCampo.length ? `<div style="margin:12px 0 0;">
+        <div style="display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; font-size:12.5px; margin-bottom:6px;">
+          <b>${enCampo.length} equipo${enCampo.length === 1 ? '' : 's'} en campo bajo este contrato</b>
+          ${resumenCampo ? `<span style="color:var(--fg-3);">${resumenCampo}</span>` : ''}</div>
+        <div class="cg-twrap" style="max-height:26vh; overflow:auto;">
+          <table class="cg-tabla"><thead><tr><th>Serial</th><th>Modelo</th><th>De quién es</th><th>Situación</th></tr></thead>
+          <tbody>${filasCampo}</tbody></table></div></div>` : ''}
       ${reg?.amarradas != null ? `<p style="font-size:12.5px; color:var(--fg-3); margin:6px 0 0;">
         Regularización: ${reg.amarradas} radio(s) amarrados${reg.sin_cupo ? ` · <b style="color:var(--warn-deep, #92400E);">${reg.sin_cupo} sin cupo</b>` : ''}${reg.sin_linea ? ` · <b style="color:var(--warn-deep, #92400E);">${reg.sin_linea} sin línea: ${(reg.sin_linea_seriales || []).join(', ')}</b>` : ''}.</p>` : ''}
       ${c.transicion_plan?.nivel === 'serial' && window.TransicionPlan ? `<p style="font-size:12.5px; color:var(--fg-3); margin:6px 0 0;">
@@ -1777,9 +1804,16 @@ window.Centro = {
     const chip = (e) => (window.EquiposPoolService?.chipEstadoHtml)
       ? EquiposPoolService.chipEstadoHtml(e.estado)
       : this.esc(e.estado || '—');
+    // "De quién es" por serial (2026-09-09): la propiedad de CADA unidad, que
+    // es la que manda desde que la cuenta se maneja por serial y no por el
+    // tipo del contrato.
+    const chipProp = (e) => (window.EquiposPoolService?.chipPropiedadHtml)
+      ? EquiposPoolService.chipPropiedadHtml(e)
+      : this.esc(e.propiedad || '—');
     const fila = (e) => `<tr>
       <td class="cg-mono">${this.esc(e.serial || e.id)}</td>
       <td>${this.esc(e.modelo_label || '—')}</td>
+      <td>${chipProp(e)}</td>
       <td>${chip(e)}${e.pendiente_devolucion ? ' <span class="cg-venc por_vencer">pend. devolución</span>' : ''}</td>
       <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || '—')}</td>
       <td style="text-align:right;">${this._tarifaEquipo(e)}</td>
@@ -1787,8 +1821,10 @@ window.Centro = {
       <td style="text-align:right;"><button class="btn btn-ghost cg-act"
         title="Historia completa de esta unidad" onclick="Centro.verKardex('${this.esc(e.id)}')">Kardex ›</button></td></tr>`;
     const tabla = (rows) => `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
-      <th>Serial</th><th>Modelo</th><th>Situación</th><th>Contrato</th><th style="text-align:right;">Tarifa</th><th>Vence</th><th></th>
+      <th>Serial</th><th>Modelo</th><th>De quién es</th><th>Situación</th><th>Contrato</th><th style="text-align:right;">Tarifa</th><th>Vence</th><th></th>
       </tr></thead><tbody>${rows}</tbody></table></div>`;
+    const resProp = (items) => (window.EquiposPoolService?.resumenPropiedadTexto)
+      ? EquiposPoolService.resumenPropiedadTexto(items) : '';
     if (!this.equipos.length) { cont.innerHTML = '<div class="cg-empty">Sin equipos asignados en el inventario.</div>'; return; }
     // Buscar un serial lo abre directo: con filtro, lista plana.
     if (q) {
@@ -1840,8 +1876,11 @@ window.Centro = {
         titulo = `<b>${this.esc((window.EquiposPoolService?.ESTADO_LABELS || {})[g.items[0].estado] || g.items[0].estado)}</b> · ${modelos(g.items)}`;
       }
       const open = abiertos.has(g.k) || (lista.length === 1);
+      // El desglose de propiedad va en el MISMO span del conteo: la rejilla
+      // del summary tiene 5 celdas fijas y en móvil se oculta la segunda .k.
+      const rp = resProp(g.items);
       return `<details class="cg-eqgrp ${tono}" data-grp="${this.esc(g.k)}" ${open ? 'open' : ''} ontoggle="Centro._eqToggle(this)">
-        <summary><span>${titulo}</span><span class="k">${n} equipo${n === 1 ? '' : 's'}</span><span class="k">${k2}</span><span>${accion}</span><span class="chev">›</span></summary>
+        <summary><span>${titulo}</span><span class="k">${n} equipo${n === 1 ? '' : 's'}${rp ? ` · ${rp}` : ''}</span><span class="k">${k2}</span><span>${accion}</span><span class="chev">›</span></summary>
         <div style="padding:6px 8px 8px;">${tabla(g.items.map(fila).join(''))}</div>
       </details>`;
     }).join('');
