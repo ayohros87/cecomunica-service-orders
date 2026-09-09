@@ -553,62 +553,33 @@
   // como Convertida (venta cerrada) o Rechazada (cliente declinó), evitando
   // tener dos botones separados. Devuelve Promise<'convertida'|'rechazada'|null>.
   function cerrarPrompt({ cotizacionId, total, totalTexto, cliente } = {}) {
-    return new Promise((resolve) => {
-      const overlay = document.createElement('div');
-      overlay.className = 'modal-backdrop';
-      overlay.style.display = 'flex';
-      overlay.innerHTML = `
-        <div class="modal" style="max-width:480px;">
-          <div class="modal-header">
-            <h3 class="modal-title"><i data-lucide="flag"></i> Cerrar cotización</h3>
-            <button class="modal-close" data-act="cancel" aria-label="Cerrar"><i data-lucide="x"></i></button>
-          </div>
-          <div class="modal-body">
-            <p style="margin:0 0 12px; font-size:14px; color:var(--fg-2);">
-              ${cotizacionId ? '<b>' + cotizacionId + '</b> · ' : ''}${cliente || ''}${totalTexto ? ' · ' + esc(totalTexto) : (total != null ? ' · ' + window.FMT.money(total) : '')}
-            </p>
-            <p style="margin:0 0 16px; font-size:13.5px; color:var(--fg-2); line-height:1.5;">
-              ¿Cómo terminó esta cotización? Solo las cotizaciones convertidas a venta cuentan en el "Monto cerrado" del tablero.
-            </p>
-            <div style="display:flex; flex-direction:column; gap:10px;">
-              <button class="btn btn-secondary" data-act="convertida"
-                      style="background:#065F46; color:#fff; border-color:#065F46; justify-content:flex-start;">
-                <i data-lucide="trophy"></i>
-                <span style="margin-left:8px;"><b>Convertida a venta</b> — el cliente aceptó y se cerró el negocio</span>
-              </button>
-              <button class="btn btn-secondary" data-act="rechazada"
-                      style="background:#991B1B; color:#fff; border-color:#991B1B; justify-content:flex-start;">
-                <i data-lucide="x-circle"></i>
-                <span style="margin-left:8px;"><b>Rechazada</b> — el cliente declinó la propuesta</span>
-              </button>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-ghost" data-act="cancel">Cancelar</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(overlay);
-      document.body.style.overflow = 'hidden';
-      if (window.lucide) lucide.createIcons();
-
-      function close(result) {
-        document.body.style.overflow = '';
-        overlay.remove();
-        resolve(result);
-      }
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) return close(null);
-        const btn = e.target.closest('[data-act]');
-        if (!btn) return;
-        const act = btn.dataset.act;
-        if (act === 'cancel') return close(null);
-        if (act === 'convertida' || act === 'rechazada') return close(act);
-      });
-      const onKey = (e) => {
-        if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); close(null); }
-      };
-      document.addEventListener('keydown', onKey);
+    return Modal.sheet({
+      title: 'Cerrar cotización', icon: 'flag', size: 'sm',
+      html: `
+        <p style="margin:0 0 12px; font-size:14px; color:var(--fg-2);">
+          ${cotizacionId ? '<b>' + cotizacionId + '</b> · ' : ''}${cliente || ''}${totalTexto ? ' · ' + esc(totalTexto) : (total != null ? ' · ' + window.FMT.money(total) : '')}
+        </p>
+        <p style="margin:0 0 16px; font-size:13.5px; color:var(--fg-2); line-height:1.5;">
+          ¿Cómo terminó esta cotización? Solo las cotizaciones convertidas a venta cuentan en el "Monto cerrado" del tablero.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <button type="button" class="btn btn-secondary" data-act="convertida"
+                  style="background:#065F46; color:#fff; border-color:#065F46; justify-content:flex-start;">
+            <i data-lucide="trophy"></i>
+            <span style="margin-left:8px;"><b>Convertida a venta</b> — el cliente aceptó y se cerró el negocio</span>
+          </button>
+          <button type="button" class="btn btn-secondary" data-act="rechazada"
+                  style="background:#991B1B; color:#fff; border-color:#991B1B; justify-content:flex-start;">
+            <i data-lucide="x-circle"></i>
+            <span style="margin-left:8px;"><b>Rechazada</b> — el cliente declinó la propuesta</span>
+          </button>
+        </div>`,
+      buttons: [{ action: 'cancel', label: 'Cancelar' }],
+      onMount: (root, api) => root.addEventListener('click', (e) => {
+        const act = e.target.closest('[data-act]')?.dataset.act;
+        if (act === 'convertida' || act === 'rechazada') api.close(act);
+      }),
+      onAction: () => null,
     });
   }
 
@@ -619,7 +590,6 @@
   //         intro, validezDias, ejecutivo, link }
   // Devuelve Promise<{ dest, subject, html } | null>.
   function reenviarPrompt(opts) {
-    return new Promise((resolve) => {
       const esc = window.FMT.esc; // helper canónico (core/formatting.js)
       // El nombre de la empresa va en el asunto y el cuerpo: sin él, ubicar la
       // cotización desde el buzón obliga a abrir el panel y cruzar el número.
@@ -658,16 +628,9 @@
   </p>
 </div>`;
 
-      const overlay = document.createElement('div');
-      overlay.className = 'modal-backdrop';
-      overlay.style.display = 'flex';
-      overlay.innerHTML = `
-        <div class="modal modal-lg" style="max-width:680px;">
-          <div class="modal-header">
-            <h3 class="modal-title"><i data-lucide="send"></i> Enviar cotización al cliente</h3>
-            <button class="modal-close" data-act="cancel" aria-label="Cerrar"><i data-lucide="x"></i></button>
-          </div>
-          <div class="modal-body">
+      return Modal.sheet({
+        title: 'Enviar cotización al cliente', icon: 'send', size: 'lg',
+        html: `
             <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-3); margin-bottom:var(--sp-3);">
               <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="mail"></i> Encabezado</legend>
               <div class="form-field" style="margin-bottom:8px;">
@@ -697,48 +660,26 @@
             <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-3);">
               <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="eye"></i> Vista previa del correo</legend>
               <div style="background:#F5F7FA; padding:16px; border-radius:6px; max-height:280px; overflow:auto;">${bodyHtml}</div>
-            </fieldset>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-ghost" data-act="cancel"><i data-lucide="x-circle"></i> Cancelar</button>
-            <button class="btn btn-primary" data-act="send"><i data-lucide="send"></i> Enviar</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(overlay);
-      document.body.style.overflow = 'hidden';
-      if (window.lucide) lucide.createIcons();
-      const destInput = overlay.querySelector('#rxDest');
-      const subjInput = overlay.querySelector('#rxSubject');
-      destInput.focus();
-
-      function close(result) {
-        document.body.style.overflow = '';
-        overlay.remove();
-        resolve(result);
-      }
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) return close(null);
-        const btn = e.target.closest('[data-act]');
-        if (!btn) return;
-        if (btn.dataset.act === 'cancel') return close(null);
-        if (btn.dataset.act === 'send') {
+            </fieldset>`,
+        buttons: [
+          { action: 'cancel', label: 'Cancelar', icon: 'x-circle' },
+          { action: 'send', label: 'Enviar', primary: true, icon: 'send' },
+        ],
+        onMount: (root) => { root.querySelector('#rxDest')?.focus(); },
+        onAction: (act, root) => {
+          if (act !== 'send') return null;
+          const destInput = root.querySelector('#rxDest');
           const dest = (destInput.value || '').trim();
-          if (!dest) { destInput.focus(); return; }
-          const chkCarta = overlay.querySelector('#rxCarta');
-          return close({
+          if (!dest) { destInput.focus(); return false; }
+          const chkCarta = root.querySelector('#rxCarta');
+          return {
             dest,
-            subject: (subjInput.value || '').trim() || subject,
+            subject: (root.querySelector('#rxSubject').value || '').trim() || subject,
             html: bodyHtml,
             llevaCarta: chkCarta ? chkCarta.checked : null,
-          });
-        }
+          };
+        },
       });
-      const onKey = (e) => {
-        if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); close(null); }
-      };
-      document.addEventListener('keydown', onKey);
-    });
   }
 
   // ── Correo de solicitud de aprobación a ventas@cecomunica.com ────────────

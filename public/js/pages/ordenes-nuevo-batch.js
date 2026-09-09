@@ -576,48 +576,21 @@ function volcarDevicesEnTabla(devices, origen = "") {
 // elegido, la cadena "__todos__", o null si se cancela. Construido a mano (no hay
 // picker de lista en Modal) siguiendo el patrón de Modal.confirm.
 function abrirSelectorBatchPoc(batches, total) {
-  return new Promise(resolve => {
-    const filas = batches.map((b, i) => `
-      <button type="button" class="lote-item" data-idx="${i}">
-        <span class="lote-nombre">${escHtml(b.nombre)}${i === 0 ? ' <span class="lote-badge">último</span>' : ''}</span>
-        <span class="lote-meta">${b.devices.length} equipo(s)</span>
-      </button>`).join("");
-
-    const overlay = document.createElement("div");
-    overlay.className = "overlay";
-    overlay.style.display = "flex";
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:520px">
-        <div class="sheet-header"><h3 class="sheet-title">Jalar equipos desde POC</h3></div>
-        <div class="sheet-body" style="padding:12px 8px">
-          <p style="margin:0 0 10px;font-size:14px;color:var(--fg-3)">Elige el batch de importación a jalar. El último importado aparece primero; solo se jalarán los equipos de ese batch.</p>
-          <div class="lote-list">${filas}</div>
-        </div>
-        <div class="footer">
-          <button class="btn btn-ghost" data-action="cancel">Cancelar</button>
-          <button class="btn btn-secondary" data-action="todos">Jalar todos (${total})</button>
-        </div>
-      </div>`;
-
-    const cleanup = (result) => {
-      overlay.remove();
-      document.body.style.overflow = "";
-      document.removeEventListener("keydown", kb);
-      resolve(result);
-    };
-    const kb = (e) => { if (e.key === "Escape") cleanup(null); };
-    overlay.addEventListener("click", (e) => {
+  const filas = batches.map((b, i) => `
+    <button type="button" class="lote-item" data-idx="${i}">
+      <span class="lote-nombre">${escHtml(b.nombre)}${i === 0 ? ' <span class="lote-badge">último</span>' : ''}</span>
+      <span class="lote-meta">${b.devices.length} equipo(s)</span>
+    </button>`).join("");
+  return Modal.sheet({
+    title: "Jalar equipos desde POC", icon: "download", size: "md",
+    html: `<p style="margin:0 0 10px;font-size:14px;color:var(--fg-3)">Elige el batch de importación a jalar. El último importado aparece primero; solo se jalarán los equipos de ese batch.</p>
+      <div class="lote-list">${filas}</div>`,
+    buttons: [{ action: "cancel", label: "Cancelar" }, { action: "todos", label: `Jalar todos (${total})` }],
+    onMount: (root, api) => root.addEventListener("click", (e) => {
       const item = e.target.closest(".lote-item");
-      if (item) { cleanup(batches[Number(item.dataset.idx)]); return; }
-      const action = e.target.closest("[data-action]")?.dataset?.action;
-      if (action === "todos") cleanup("__todos__");
-      else if (action === "cancel" || e.target === overlay) cleanup(null);
-    });
-
-    document.addEventListener("keydown", kb);
-    document.body.appendChild(overlay);
-    document.body.style.overflow = "hidden";
-    if (typeof lucide !== "undefined") lucide.createIcons();
+      if (item) api.close(batches[Number(item.dataset.idx)]);
+    }),
+    onAction: (a) => (a === "todos" ? "__todos__" : null),
   });
 }
 

@@ -807,95 +807,68 @@ window.ContratosLista = {
   //
   // Devuelve null si se cancela, o { motivo, tipo, sustitutoId }.
   _dialogoAnulacion(c, candidatos) {
-    return new Promise(resolve => {
-      const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({
-        '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;'
-      }[m]));
-      const opciones = candidatos.map(x =>
-        `<option value="${esc(x.id)}">${esc(x.contrato_id || x.id)}${x.total_mensual ? ` — $${Number(x.total_mensual).toFixed(2)}/mes` : ''}</option>`
-      ).join('');
-
-      const overlay = document.createElement('div');
-      overlay.className = 'overlay';
-      overlay.style.display = 'flex';
-      overlay.innerHTML = `
-        <div class="modal" style="max-width:560px">
-          <div class="sheet-header">
-            <h3 class="sheet-title">Anular ${esc(c.contrato_id || '')}</h3>
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;'
+    }[m]));
+    const opciones = candidatos.map(x =>
+      `<option value="${esc(x.id)}">${esc(x.contrato_id || x.id)}${x.total_mensual ? ` — $${Number(x.total_mensual).toFixed(2)}/mes` : ''}</option>`
+    ).join('');
+    return Modal.sheet({
+      title: `Anular ${c.contrato_id || ''}`, icon: 'file-x', size: 'md',
+      html: `
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div>
+            <label style="display:block;font-weight:600;margin-bottom:6px">¿Qué pasa con los equipos?</label>
+            <label style="display:flex;gap:8px;align-items:flex-start;padding:10px;border:1px solid var(--border,#ddd);border-radius:8px;cursor:pointer;margin-bottom:6px">
+              <input type="radio" name="anulTipo" value="sustitucion" checked style="margin-top:3px">
+              <span>
+                <b>Se rehace el contrato</b> — el cliente conserva los equipos.<br>
+                <small style="color:var(--muted,#666)">Error de precio, de representante legal, de modelo… El equipo no se mueve.</small>
+              </span>
+            </label>
+            <label style="display:flex;gap:8px;align-items:flex-start;padding:10px;border:1px solid var(--border,#ddd);border-radius:8px;cursor:pointer">
+              <input type="radio" name="anulTipo" value="terminacion" style="margin-top:3px">
+              <span>
+                <b>Termina el acuerdo</b> — el cliente devuelve los equipos.<br>
+                <small style="color:var(--muted,#666)">Se abrirá una orden de DEVOLUCIÓN para recuperarlos.</small>
+              </span>
+            </label>
           </div>
-          <div class="sheet-body" style="padding:16px 8px;display:flex;flex-direction:column;gap:14px">
-            <div>
-              <label style="display:block;font-weight:600;margin-bottom:6px">¿Qué pasa con los equipos?</label>
-              <label style="display:flex;gap:8px;align-items:flex-start;padding:10px;border:1px solid var(--border,#ddd);border-radius:8px;cursor:pointer;margin-bottom:6px">
-                <input type="radio" name="anulTipo" value="sustitucion" checked style="margin-top:3px">
-                <span>
-                  <b>Se rehace el contrato</b> — el cliente conserva los equipos.<br>
-                  <small style="color:var(--muted,#666)">Error de precio, de representante legal, de modelo… El equipo no se mueve.</small>
-                </span>
-              </label>
-              <label style="display:flex;gap:8px;align-items:flex-start;padding:10px;border:1px solid var(--border,#ddd);border-radius:8px;cursor:pointer">
-                <input type="radio" name="anulTipo" value="terminacion" style="margin-top:3px">
-                <span>
-                  <b>Termina el acuerdo</b> — el cliente devuelve los equipos.<br>
-                  <small style="color:var(--muted,#666)">Se abrirá una orden de DEVOLUCIÓN para recuperarlos.</small>
-                </span>
-              </label>
-            </div>
-            <div data-role="bloque-sustituto">
-              <label style="display:block;font-weight:600;margin-bottom:6px">Contrato que lo sustituye <small style="font-weight:400;color:var(--muted,#666)">(opcional)</small></label>
-              <select class="input" data-role="sustituto" style="width:100%">
-                <option value="">Todavía no lo he creado</option>
-                ${opciones}
-              </select>
-              <small style="color:var(--muted,#666)">Si lo indicas, los equipos pasan solos al contrato nuevo.</small>
-            </div>
-            <div>
-              <label style="display:block;font-weight:600;margin-bottom:6px">Motivo</label>
-              <textarea class="input" data-role="motivo" rows="3" style="width:100%;resize:vertical"
-                placeholder="Ej: el precio no incluyó el ajuste del micrófono"></textarea>
-            </div>
+          <div data-role="bloque-sustituto">
+            <label style="display:block;font-weight:600;margin-bottom:6px">Contrato que lo sustituye <small style="font-weight:400;color:var(--muted,#666)">(opcional)</small></label>
+            <select class="input" data-role="sustituto" style="width:100%">
+              <option value="">Todavía no lo he creado</option>
+              ${opciones}
+            </select>
+            <small style="color:var(--muted,#666)">Si lo indicas, los equipos pasan solos al contrato nuevo.</small>
           </div>
-          <div class="footer">
-            <button class="btn btn-ghost"  data-action="cancel">Cancelar</button>
-            <button class="btn btn-danger" data-action="confirm">Anular contrato</button>
+          <div>
+            <label style="display:block;font-weight:600;margin-bottom:6px">Motivo</label>
+            <textarea class="input" data-role="motivo" rows="3" style="width:100%;resize:vertical"
+              placeholder="Ej: el precio no incluyó el ajuste del micrófono"></textarea>
           </div>
-        </div>`;
-
-      const motivoEl = overlay.querySelector('[data-role="motivo"]');
-      const sustEl   = overlay.querySelector('[data-role="sustituto"]');
-      const bloque   = overlay.querySelector('[data-role="bloque-sustituto"]');
-
-      // El selector de sustituto solo tiene sentido en una sustitución.
-      const sync = () => {
-        const tipo = overlay.querySelector('input[name="anulTipo"]:checked')?.value;
-        bloque.style.display = tipo === 'sustitucion' ? '' : 'none';
-      };
-      overlay.querySelectorAll('input[name="anulTipo"]').forEach(r =>
-        r.addEventListener('change', sync));
-      sync();
-
-      const cleanup = result => {
-        overlay.remove();
-        document.body.style.overflow = '';
-        document.removeEventListener('keydown', kb);
-        resolve(result);
-      };
-      const kb = e => { if (e.key === 'Escape') cleanup(null); };
-
-      overlay.addEventListener('click', e => {
-        const action = e.target.closest('[data-action]')?.dataset?.action;
-        if (action === 'cancel' || e.target === overlay) { cleanup(null); return; }
-        if (action !== 'confirm') return;
+        </div>`,
+      buttons: [{ action: 'cancel', label: 'Cancelar' }, { action: 'confirm', label: 'Anular contrato', danger: true }],
+      onMount: (root) => {
+        const bloque = root.querySelector('[data-role="bloque-sustituto"]');
+        // El selector de sustituto solo tiene sentido en una sustitución.
+        const sync = () => {
+          const tipo = root.querySelector('input[name="anulTipo"]:checked')?.value;
+          bloque.style.display = tipo === 'sustitucion' ? '' : 'none';
+        };
+        root.querySelectorAll('input[name="anulTipo"]').forEach(r => r.addEventListener('change', sync));
+        sync();
+        root.querySelector('[data-role="motivo"]')?.focus();
+      },
+      onAction: (a, root) => {
+        if (a !== 'confirm') return null;
+        const motivoEl = root.querySelector('[data-role="motivo"]');
         const motivo = (motivoEl.value || '').trim();
-        if (!motivo) { motivoEl.focus(); Toast.show('Debes indicar un motivo.', 'bad'); return; }
-        const tipo = overlay.querySelector('input[name="anulTipo"]:checked')?.value || 'terminacion';
-        cleanup({ motivo, tipo, sustitutoId: tipo === 'sustitucion' ? (sustEl.value || null) : null });
-      });
-
-      document.addEventListener('keydown', kb);
-      document.body.appendChild(overlay);
-      document.body.style.overflow = 'hidden';
-      motivoEl.focus();
+        if (!motivo) { motivoEl.focus(); Toast.show('Debes indicar un motivo.', 'bad'); return false; }
+        const tipo = root.querySelector('input[name="anulTipo"]:checked')?.value || 'terminacion';
+        const sustEl = root.querySelector('[data-role="sustituto"]');
+        return { motivo, tipo, sustitutoId: tipo === 'sustitucion' ? (sustEl.value || null) : null };
+      },
     });
   },
 

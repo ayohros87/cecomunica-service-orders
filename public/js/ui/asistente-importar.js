@@ -1239,34 +1239,21 @@ window.AsistenteImportar = (() => {
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
-  // ── Overlay (mismo patrón que asistente-recibir) ────────────────────────
-
+  // ── Hoja del kit (Modal.sheet, 2026-09-08). El cuerpo y el pie se
+  // repintan con cuerpo(); closable consulta ctx.busy.
   function render() {
-    document.getElementById('asistenteImportarOverlay')?.remove();
-    const overlay = document.createElement('div');
-    overlay.id = 'asistenteImportarOverlay';
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:720px; width:min(720px, 96vw);">
-        <div class="sheet-header" style="display:flex; justify-content:space-between; align-items:center;">
-          <h3 class="sheet-title" style="margin:0;">
-            <i data-lucide="file-spreadsheet"></i> Asistente de bodega</h3>
-          <button class="btn btn-ghost btn-icon" data-action="cerrar" aria-label="Cerrar">✕</button>
-        </div>
-        <div class="sheet-body" id="aiCuerpo" style="padding:14px 10px;"></div>
-        <div class="footer" id="aiPie" style="display:flex; justify-content:flex-end; gap:8px;"></div>
-      </div>`;
-    const kb = (e) => { if (e.key === 'Escape') cerrar(); };
-    ctx.kb = kb;
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay || e.target.closest('[data-action="cerrar"]')) cerrar();
-    });
-    document.addEventListener('keydown', kb);
-    document.body.appendChild(overlay);
-    document.body.style.overflow = 'hidden';
-    ctx.el = overlay;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    cerrarForzado();
+    Modal.sheet({
+      title: 'Asistente de bodega', icon: 'file-spreadsheet', size: 'lg',
+      closable: () => !ctx.busy,
+      html: '<div id="aiCuerpo"></div>',
+      footerHtml: '<span id="aiPie" style="display:contents;"></span>',
+      onMount: (root, api) => {
+        root.id = 'asistenteImportarOverlay';
+        ctx.el = root; ctx.api = api;
+        root.addEventListener('click', (e) => { if (e.target.closest('[data-action="cerrar"]')) cerrar(); });
+      },
+    }).then(() => { if (ctx.el && !ctx.el.isConnected) { ctx.el = null; ctx.api = null; } });
   }
 
   function cuerpo(html, pie) {
@@ -1279,10 +1266,13 @@ window.AsistenteImportar = (() => {
 
   function cerrar() {
     if (ctx.busy || !ctx.el) return;
-    ctx.el.remove();
-    ctx.el = null;
-    document.body.style.overflow = '';
-    if (ctx.kb) { document.removeEventListener('keydown', ctx.kb); ctx.kb = null; }
+    cerrarForzado();
+  }
+
+  function cerrarForzado() {
+    const api = ctx.api;
+    ctx.el = null; ctx.api = null;
+    if (api) api.close(null);
   }
 
   return { abrir, _setIntencion, _setModelo, _setUbicacion, _setNota, _setColSerial,

@@ -491,22 +491,13 @@
     const condRegDe = (eq) => typeof EquiposCondicionesService === 'undefined' ? null
       : (condiciones.get(EquiposCondicionesService.normalizar(String(eq.numero_de_serie || eq.serial || ''))) || null);
 
-    const overlay = document.createElement('div');
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.style.zIndex = '9500';
+    let overlay = null, sheetApi = null;
 
     const tituloTipo = tipo === 'programacion' ? 'Programación' : 'Reparación';
 
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:560px;width:min(94vw,560px);">
-        <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <h3 class="sheet-title" style="display:flex;align-items:center;gap:6px;">
-            <i data-lucide="clipboard-check"></i> Control de calidad — Orden ${esc(ordenId)}
-          </h3>
-          <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
-        </div>
-        <div class="sheet-body" style="padding:12px 14px;max-height:72vh;overflow:auto;">
+    Modal.sheet({
+      title: `Control de calidad — Orden ${ordenId}`, icon: 'clipboard-check', size: 'md',
+      html: `
           <div class="muted" style="margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap;">
             <span><b>Tipo:</b> ${esc(orden.tipo_de_servicio || tituloTipo)}</span>
             ${orden.tecnico_asignado ? `<span><b>Técnico:</b> ${esc(orden.tecnico_asignado)}</span>` : ''}
@@ -595,9 +586,8 @@
               <textarea class="form-input form-textarea" id="qcObservaciones" rows="3"
                 placeholder="Observaciones para el técnico o para el registro (obligatorias al rechazar si no marca motivo)"></textarea>
             </div>
-          `}
-        </div>
-        <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);">
+          `}`,
+      footerHtml: `
           <button class="btn btn-secondary" data-close="1">${soloLectura ? 'Cerrar' : 'Cancelar'}</button>
           ${soloLectura && puedeEjecutar ? `
             <button class="btn btn-secondary" id="qcRepetirBtn"><i data-lucide="rotate-ccw"></i> Repetir QC</button>
@@ -608,13 +598,14 @@
                     title="Marque todos los puntos (OK o N/A) para aprobar">
               <i data-lucide="check-circle"></i> Aprobar QC
             </button>
-          `}
-        </div>
-      </div>`;
+          `}`,
+      onMount: (root, api) => {
+        overlay = root; sheetApi = api;
+        root.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) api.close(null); });
+      },
+    });
 
-    const cleanup = () => { overlay.remove(); document.removeEventListener('keydown', kb); };
-    const kb = e => { if (e.key === 'Escape') cleanup(); };
-    document.addEventListener('keydown', kb);
+    const cleanup = () => sheetApi.close(null);
 
     // Estado del formulario. `checklist` es el camino legacy (orden sin
     // equipos); con equipos manda `porEquipo`, y el checklist de orden se
@@ -1002,11 +993,9 @@
       }
     };
 
-    document.body.appendChild(overlay);
     // Pinta de una vez "Faltan N equipo(s) por resolver": sin esto el modal
     // abre mudo y no se ve por qué "Aprobar QC" está deshabilitado.
     if (!soloLectura) _refrescarEstado();
-    APP.utils.lucideRefresh(overlay);
   }
 
   window.OrdenesQC = {

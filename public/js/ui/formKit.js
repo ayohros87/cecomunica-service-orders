@@ -160,10 +160,9 @@
     async function confirmarSalida() {
       if (!sucios.size) return true;
       const msg = "Tienes cambios sin guardar. ¿Salir y descartarlos?";
-      if (window.Modal && Modal.confirm) {
-        return Modal.confirm({ message: msg, danger: true });
-      }
-      return window.confirm(msg);
+      // Modal.confirm es obligatorio: toda página con formKit carga ui/modal.js
+      // (2026-09-08, sin respaldo nativo).
+      return Modal.confirm({ message: msg, danger: true });
     }
 
     // Al salir con confirmación propia, quitar el guard nativo para no

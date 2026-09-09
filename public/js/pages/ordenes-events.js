@@ -509,35 +509,22 @@ window.abrirImpresionOrden = abrirImpresionOrden;
 // entrada del menú: imprimir la orden y generar la nota de entrega.
 function mostrarDocumentos(ordenId) {
   const esc = _entregaEsc;
-  const overlay = document.createElement('div');
-  overlay.className = 'overlay';
-  overlay.style.display = 'flex';
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:420px;">
-      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <h3 class="sheet-title"><i data-lucide="printer"></i> Documentos — Orden ${esc(ordenId)}</h3>
-        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
-      </div>
-      <div class="sheet-body" style="padding:14px 10px;display:flex;flex-direction:column;gap:8px;">
-        <button class="btn" data-doc="orden" style="justify-content:flex-start;"><i data-lucide="file-text"></i> Imprimir orden</button>
-        <button class="btn" data-doc="nota" style="justify-content:flex-start;"><i data-lucide="clipboard-list"></i> Nota de entrega</button>
-      </div>
-    </div>`;
-  const cleanup = () => { overlay.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', kb); };
-  const kb = e => { if (e.key === 'Escape') cleanup(); };
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay || e.target.closest('[data-close]')) { cleanup(); return; }
-    const doc = e.target.closest('[data-doc]')?.dataset.doc;
-    if (doc === 'orden') { abrirImpresionOrden(ordenId); cleanup(); }
-    else if (doc === 'nota') {
-      if (typeof generarNotaEntregaIntervenciones === 'function') generarNotaEntregaIntervenciones(ordenId);
-      cleanup();
-    }
+  Modal.sheet({
+    title: `Documentos — Orden ${esc(ordenId)}`, icon: 'printer', size: 'sm',
+    html: `
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button type="button" class="btn" data-doc="orden" style="justify-content:flex-start;"><i data-lucide="file-text"></i> Imprimir orden</button>
+        <button type="button" class="btn" data-doc="nota" style="justify-content:flex-start;"><i data-lucide="clipboard-list"></i> Nota de entrega</button>
+      </div>`,
+    buttons: [],
+    onMount: (root, api) => root.addEventListener('click', (e) => {
+      const doc = e.target.closest('[data-doc]')?.dataset.doc;
+      if (!doc) return;
+      api.close(doc);
+      if (doc === 'orden') abrirImpresionOrden(ordenId);
+      else if (typeof generarNotaEntregaIntervenciones === 'function') generarNotaEntregaIntervenciones(ordenId);
+    }),
   });
-  document.addEventListener('keydown', kb);
-  document.body.appendChild(overlay);
-  document.body.style.overflow = 'hidden';
-  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 window.mostrarDocumentos = mostrarDocumentos;
 
@@ -713,29 +700,24 @@ function mostrarEntregaRecepcion(ordenId) {
     tieneRecepcion ? `<button class="btn" data-ver-acuse="1"><i data-lucide="printer"></i> Imprimir acuse</button>` : '',
   ].filter(Boolean).join('');
 
-  const overlay = document.createElement('div');
-  overlay.className = 'overlay';
-  overlay.style.display = 'flex';
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:560px;">
-      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <h3 class="sheet-title"><i data-lucide="package-check"></i> ${titulo} — Orden ${esc(ordenId)}</h3>
-        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
-      </div>
-      <div class="sheet-body" style="padding:12px 8px;max-height:70vh;overflow:auto;">
+  let overlay = null, sheetApi = null;
+  Modal.sheet({
+    title: `${titulo} — Orden ${ordenId}`, icon: 'package-check', size: 'md',
+    html: `
         ${cabecera}
         ${recepcionHtml}
         ${entregaHtml}
         ${cierreHtml}
-        ${equiposHtml}
-      </div>
-      <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px 8px;border-top:1px solid var(--line,#eee);">
-        ${footerBtns}
-      </div>
-    </div>`;
+        ${equiposHtml}`,
+    footerHtml: `
+        ${footerBtns}`,
+    onMount: (root, api) => {
+      overlay = root; sheetApi = api;
+      root.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) api.close(null); });
+    },
+  });
 
-  const cleanup = () => { overlay.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', kb); };
-  const kb = e => { if (e.key === 'Escape') cleanup(); };
+  const cleanup = () => sheetApi.close(null);
   overlay.addEventListener('click', async (e) => {
     if (e.target === overlay || e.target.closest('[data-close]')) { cleanup(); return; }
     if (e.target.closest('[data-ver-comprobante]')) { verEntregaComprobante(ordenId); return; }
@@ -753,9 +735,6 @@ function mostrarEntregaRecepcion(ordenId) {
       }
     }
   });
-  document.addEventListener('keydown', kb);
-  document.body.appendChild(overlay);
-  document.body.style.overflow = 'hidden';
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 window.mostrarEntregaRecepcion = mostrarEntregaRecepcion;

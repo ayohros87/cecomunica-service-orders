@@ -277,93 +277,38 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Text Display Modal System
-let textModalEl = null;
-
-function createTextModal() {
-  if (textModalEl) return textModalEl;
-  
-  const overlay = document.createElement('div');
-  overlay.className = 'text-modal-overlay';
-  overlay.id = 'textModalOverlay';
-  
-  overlay.innerHTML = `
-    <div class="text-modal-content" data-stop-propagation="true">
-      <div class="text-modal-header">
-        <div class="text-modal-title" id="textModalTitle"></div>
-        <button class="text-modal-close" data-action="close-text-modal" aria-label="Cerrar"><i data-lucide="x"></i></button>
-      </div>
-      <div class="text-modal-body">
-        <div class="text-modal-text" id="textModalBody"></div>
-      </div>
-      <div class="text-modal-footer">
-        <button class="text-modal-btn secondary" data-action="copy-text-modal"><i data-lucide="copy"></i> Copiar</button>
-        <button class="text-modal-btn primary" data-action="close-text-modal">Cerrar</button>
-      </div>
-    </div>
-  `;
-  
-  // Close on overlay click
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) closeTextModal();
-  });
-  
-  // Close on ESC key
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && overlay.classList.contains('show')) {
-      closeTextModal();
-    }
-  });
-  
-  document.body.appendChild(overlay);
-  APP.utils.lucideRefresh(overlay);
-  textModalEl = overlay;
-  return overlay;
-}
+// Ver texto largo (observaciones, notas) — hoja del kit (Modal.sheet,
+// 2026-09-08). Antes era un overlay singleton .text-modal-* con listener
+// permanente en document.
+let _textModalTexto = '';
 
 window.showTextModal = function(title, text, isEmpty = false) {
-  const modal = createTextModal();
-  const titleEl = document.getElementById('textModalTitle');
-  const bodyEl = document.getElementById('textModalBody');
-  
-  titleEl.innerHTML = escapeHtml(title);
-  
-  if (isEmpty || !text || text.trim() === '') {
-    bodyEl.innerHTML = '<div class="text-modal-empty">📭 Sin contenido para mostrar</div>';
-    bodyEl.dataset.text = '';
-  } else {
-    bodyEl.textContent = text;
-    bodyEl.dataset.text = text;
-  }
-  
-  modal.classList.add('show');
-  
-  // Prevent body scroll when modal is open
-  document.body.style.overflow = 'hidden';
+  const vacio = isEmpty || !text || text.trim() === '';
+  _textModalTexto = vacio ? '' : text;
+  Modal.sheet({
+    title: String(title || ''), icon: 'file-text', size: 'md',
+    html: vacio
+      ? '<div style="color:var(--fg-3);text-align:center;padding:12px;">📭 Sin contenido para mostrar</div>'
+      : `<div style="white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.55;">${escapeHtml(text)}</div>`,
+    buttons: [
+      { action: 'copiar', label: 'Copiar', icon: 'copy' },
+      { action: 'cerrar', label: 'Cerrar', primary: true },
+    ],
+    onAction: (a) => { if (a === 'copiar') { copyTextModalContent(); return false; } return null; },
+  });
 };
 
-window.closeTextModal = function() {
-  if (textModalEl) {
-    textModalEl.classList.remove('show');
-    document.body.style.overflow = '';
-  }
-};
+// Compatibilidad con la delegación de acciones de ordenes-events
+// (data-action="close-text-modal" / "copy-text-modal").
+window.closeTextModal = function() {};
 
 window.copyTextModalContent = function() {
-  const bodyEl = document.getElementById('textModalBody');
-  const text = bodyEl?.dataset?.text || bodyEl?.textContent || '';
-  
+  const text = _textModalTexto || '';
   if (!text || text.trim() === '') {
     Toast.show('⚠️ No hay contenido para copiar', 'bad');
     return;
   }
-  
   navigator.clipboard.writeText(text)
-    .then(() => {
-      Toast.show('✅ Copiado al portapapeles', 'ok');
-    })
-    .catch(err => {
-      console.error('Error copying:', err);
-      Toast.show('❌ Error al copiar', 'bad');
-    });
+    .then(() => { Toast.show('✅ Copiado al portapapeles', 'ok'); })
+    .catch(err => { console.error('Error copying:', err); Toast.show('❌ Error al copiar', 'bad'); });
 };

@@ -183,10 +183,6 @@ test("K9 · F4: sin confirm/prompt/alert nativos, sin CSS muerto, modales oculto
     if (e.isDirectory()) { if (!/vendor|node_modules/.test(e.name)) walk(p); } else if (e.name.endsWith(".js")) js.push(p); } })(path2.join(RAIZ, "public", "js"));
   for (const f of js) {
     if (/ui[\\/]modal\.js$/.test(f)) continue;
-    // formKit.js conserva un window.confirm de RESPALDO declarado, para las
-    // páginas que aún no cargan modal.js (la guardia de salida no puede
-    // quedarse muda).
-    if (/ui[\\/]formKit\.js$/.test(f)) continue;
     const src = sinComentarios(fs2.readFileSync(f, "utf8"));
     const nativos = src.match(/(^|[^.\w])(window\.)?(confirm|prompt|alert)\(/g) || [];
     assert.equal(nativos.length, 0, `${path2.relative(RAIZ, f)}: quedan diálogos nativos (${nativos.length}) — usa Modal.confirm/prompt/alert`);
@@ -212,6 +208,42 @@ test("K9 · F4: sin confirm/prompt/alert nativos, sin CSS muerto, modales oculto
   }
   // Chips del asignador con clase del kit, no con color inline.
   assert.ok(!/eqpool-chip" style="/.test(leer("public", "js", "ui", "asignador-seriales.js")), "chips del asignador con clase, no inline");
+});
+
+test("K10 · los overlays construidos a mano se fueron a Modal.sheet (salvo lightbox, galería, render de devolución y paleta)", () => {
+  const fs2 = require("node:fs"), path2 = require("node:path");
+  // Lo que se queda a mano, con motivo: lightbox de imagen (no es un
+  // diálogo), la galería de fotos, la pantalla completa de la devolución y
+  // la paleta de búsqueda. modal.js es el kit mismo.
+  const PERMITIDOS = {
+    "ui/modal.js": Infinity,
+    "pages/ordenes-fotos.js": Infinity,
+    "pages/ordenes-events.js": 1,      // _entregaLightbox
+    "pages/ordenes-devolucion.js": 1,  // OrdenesDevolucion.render (_overlay, pantalla completa)
+    "ui/search-palette.js": Infinity,
+  };
+  const js = [];
+  (function walk(d) { for (const e of fs2.readdirSync(d, { withFileTypes: true })) { const p = path2.join(d, e.name);
+    if (e.isDirectory()) { if (!/vendor|node_modules/.test(e.name)) walk(p); } else if (e.name.endsWith(".js")) js.push(p); } })(path2.join(RAIZ, "public", "js"));
+  for (const f of js) {
+    const rel = path2.relative(path2.join(RAIZ, "public", "js"), f).replace(/\\/g, "/");
+    const src = sinComentarios(fs2.readFileSync(f, "utf8"));
+    const aMano = (src.match(/\.className\s*=\s*['"](overlay|modal-backdrop)(\s+open)?['"]/g) || []).length;
+    const tope = PERMITIDOS[rel] ?? 0;
+    assert.ok(aMano <= tope, `${rel}: ${aMano} overlay(s) construidos a mano — usa Modal.sheet (footerHtml/closable si hace falta)`);
+  }
+  // El kit ofrece lo que las migraciones necesitan.
+  const modal = leer("public", "js", "ui", "modal.js");
+  assert.match(modal, /footerHtml = ''/, "Modal.sheet acepta footerHtml");
+  assert.match(modal, /typeof closable === 'function'/, "closable puede ser una función (asistentes ocupados)");
+  // formKit ya no tiene respaldo nativo y la única página que lo cargaba sin
+  // modal.js ahora lo carga.
+  assert.ok(!/window\.confirm/.test(sinComentarios(leer("public", "js", "ui", "formKit.js"))), "formKit sin window.confirm");
+  assert.match(leer("public", "ordenes", "editar-orden.html"), /ui\/modal\.js/, "editar-orden.html carga modal.js");
+  // La página pública de firma valida inline, sin alert().
+  const firmar = sinComentarios(leer("public", "firmar", "index.html"));
+  assert.ok(!/[^.\w]alert\(/.test(firmar), "firmar/index.html sin alert()");
+  assert.match(firmar, /id="fMsg"[^>]*role="alert"/, "firmar/index.html con el aviso inline #fMsg");
 });
 
 test("K5 · Modal.sheet resuelve con la acción del botón y respeta onAction=false", async () => {

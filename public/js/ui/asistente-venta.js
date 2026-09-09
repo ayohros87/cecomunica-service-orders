@@ -293,19 +293,14 @@ window.AsistenteVenta = {
   // ── Overlay propio (patrón equipo-ficha._render) ─────────────────────
   // El desplegable del cliente es .combo-list del kit (EntityCombo): sin CSS
   // propio.
+  // Hoja del kit (Modal.sheet, 2026-09-08); closable consulta _busy.
   _render() {
-    document.getElementById('asistenteVentaOverlay')?.remove();
-    const overlay = document.createElement('div');
-    overlay.id = 'asistenteVentaOverlay';
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:520px; width:min(520px, 94vw);">
-        <div class="sheet-header" style="display:flex; justify-content:space-between; align-items:center;">
-          <h3 class="sheet-title" style="margin:0;"><i data-lucide="banknote"></i> Registrar venta de equipos</h3>
-          <button class="btn btn-ghost btn-icon" data-action="cerrar" aria-label="Cerrar">✕</button>
-        </div>
-        <div class="sheet-body" style="padding:14px 8px;">
+    this._cerrarForzado();
+    let overlay = null;
+    Modal.sheet({
+      title: 'Registrar venta de equipos', icon: 'banknote', size: 'md',
+      closable: () => !this._busy,
+      html: `
           <p style="font-size:13px; color:var(--fg-2); margin:0 0 var(--sp-3);">
             Para equipos <strong>vendidos sin contrato de servicio</strong>: la factura ya se emitió en
             QuickBooks; aquí solo se descuentan de bodega. Solo se venden unidades
@@ -334,22 +329,16 @@ window.AsistenteVenta = {
             <label class="form-label" for="asvNotas">Notas <span class="optional">(opcional)</span></label>
             <input class="form-input" id="asvNotas" type="text">
           </div>
-        </div>
-        <div class="footer" style="display:flex; justify-content:flex-end; gap:8px;">
+`,
+      footerHtml: `
           <button class="btn btn-ghost" data-action="cerrar">Cancelar</button>
-          <button class="btn btn-primary" id="asvBtnGuardar"><i data-lucide="check"></i> Registrar venta</button>
-        </div>
-      </div>`;
-
-    const kb = (e) => { if (e.key === 'Escape') this._cerrar(); };
-    this._kb = kb;
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay || e.target.closest('[data-action="cerrar"]')) this._cerrar();
-    });
-    document.addEventListener('keydown', kb);
-    document.body.appendChild(overlay);
-    document.body.style.overflow = 'hidden';
-    this._el = overlay;
+          <button class="btn btn-primary" id="asvBtnGuardar"><i data-lucide="check"></i> Registrar venta</button>`,
+      onMount: (root, api) => {
+        overlay = root; root.id = 'asistenteVentaOverlay';
+        this._el = root; this._api = api;
+        root.addEventListener('click', (e) => { if (e.target.closest('[data-action="cerrar"]')) this._cerrar(); });
+      },
+    }).then(() => { if (this._el === overlay) { this._el = null; this._api = null; } });
 
     this._montarCombo();
     overlay.querySelector('#asvSeriales').addEventListener('input', () => this._actualizarContador());
@@ -381,11 +370,9 @@ window.AsistenteVenta = {
   },
 
   _cerrarForzado() {
-    if (!this._el) return;
     clearTimeout(this._cliTimer);
-    this._el.remove();
-    this._el = null;
-    document.body.style.overflow = '';
-    if (this._kb) { document.removeEventListener('keydown', this._kb); this._kb = null; }
+    const api = this._api;
+    this._el = null; this._api = null;
+    if (api) api.close(null);
   },
 };

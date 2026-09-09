@@ -294,45 +294,29 @@ function abrirModalFirmaPendiente(orden, contrato) {
     : `Desde la ficha del cliente se le puede <b>enviar el enlace de firma digital</b>
        (firma desde su celular, sin usuario, en minutos) o <b>subir el PDF firmado</b>
        si ya firmó en papel. Apenas quede firmado, esta entrega sale sin más trámite.`;
-
-  const overlay = document.createElement('div');
-  overlay.className = 'overlay';
-  overlay.style.display = 'flex';
-  overlay.style.zIndex = '9500';
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:520px;width:min(94vw,520px);">
-      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <h3 class="sheet-title" style="display:flex;align-items:center;gap:6px;"><i data-lucide="pen-line"></i> Falta la firma del contrato</h3>
-        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
-      </div>
-      <div class="sheet-body" style="padding:12px 14px;max-height:70vh;overflow:auto;">
-        <p style="margin:0 0 8px;font-size:13.5px;color:var(--fg-2,#374151);">
-          Esta orden entrega equipos bajo el contrato
-          <b>${escapeHtml(contrato.contrato_id || orden.contrato?.contrato_id || '—')}</b>,
-          que todavía <b>no está firmado</b> en la plataforma. Los radios no se
-          entregan sin la firma del cliente.
-        </p>
-        <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">${detalle}</p>
-      </div>
-      <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);flex-wrap:wrap;">
-        ${esAdmin ? `<button class="btn btn-secondary" id="firmaOverrideBtn" style="margin-right:auto;"
-          title="Solo administración — para casos excepcionales">Entregar sin firma (admin)</button>` : ''}
-        <button class="btn btn-secondary" data-close="1">Cerrar</button>
-        ${clienteId ? `<a class="btn btn-primary" href="../clientes/centro.html?id=${encodeURIComponent(clienteId)}">
-          <i data-lucide="pen-line"></i> Abrir la ficha y gestionar la firma</a>` : ''}
-      </div>
-    </div>`;
-
-  const cleanup = () => { overlay.remove(); document.removeEventListener('keydown', kb); };
-  const kb = e => { if (e.key === 'Escape') cleanup(); };
-  document.addEventListener('keydown', kb);
-  document.body.appendChild(overlay);
-  APP.utils.lucideRefresh(overlay);
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay || e.target.closest('[data-close]')) cleanup();
+  // Hoja del kit (Modal.sheet, 2026-09-08); el override de admin cierra y abre la entrega.
+  const url = `../clientes/centro.html?id=${encodeURIComponent(clienteId)}`;
+  Modal.sheet({
+    title: 'Falta la firma del contrato', icon: 'pen-line', size: 'md',
+    html: `
+      <p style="margin:0 0 8px;font-size:13.5px;color:var(--fg-2,#374151);">
+        Esta orden entrega equipos bajo el contrato
+        <b>${escapeHtml(contrato.contrato_id || orden.contrato?.contrato_id || '—')}</b>,
+        que todavía <b>no está firmado</b> en la plataforma. Los radios no se
+        entregan sin la firma del cliente.
+      </p>
+      <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">${detalle}</p>`,
+    buttons: [
+      ...(esAdmin ? [{ action: 'override', label: 'Entregar sin firma (admin)' }] : []),
+      { action: 'cerrar', label: 'Cerrar' },
+      ...(clienteId ? [{ action: 'ficha', label: 'Abrir la ficha y gestionar la firma', primary: true, icon: 'pen-line' }] : []),
+    ],
+    onAction: (a) => {
+      if (a === 'override') { setTimeout(() => abrirModalEntrega(orden.ordenId), 0); return 'override'; }
+      if (a === 'ficha') { location.href = url; return 'ficha'; }
+      return null;
+    },
   });
-  const ov = overlay.querySelector('#firmaOverrideBtn');
-  if (ov) ov.onclick = () => { cleanup(); abrirModalEntrega(orden.ordenId); };
 }
 
 // ── Candado de firma del ANEXO de aumento (2026-09-03, segunda vuelta) ────
@@ -368,49 +352,33 @@ async function anexoSinFirmarParaEntrega(orden) {
 function abrirModalFirmaAnexoPendiente(orden, gestion) {
   const esAdmin = (APP.state.userRole || '') === (typeof ROLES !== 'undefined' ? ROLES.ADMIN : 'administrador');
   const clienteId = orden.cliente_id || gestion.cliente_id || '';
-  const overlay = document.createElement('div');
-  overlay.className = 'overlay';
-  overlay.style.display = 'flex';
-  overlay.style.zIndex = '9500';
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:520px;width:min(94vw,520px);">
-      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <h3 class="sheet-title" style="display:flex;align-items:center;gap:6px;"><i data-lucide="pen-line"></i> Falta la firma del anexo</h3>
-        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
-      </div>
-      <div class="sheet-body" style="padding:12px 14px;max-height:70vh;overflow:auto;">
-        <p style="margin:0 0 8px;font-size:13.5px;color:var(--fg-2,#374151);">
-          Esta orden entrega los equipos del aumento
-          <b>${escapeHtml(gestion.id || '—')}</b> (contrato
-          <b>${escapeHtml(gestion.aumento?.contrato_id || orden.contrato?.contrato_id || '—')}</b>),
-          y el <b>anexo todavía no está firmado</b>. La programación corre en
-          paralelo, pero los radios no se entregan sin la firma del cliente.
-        </p>
-        <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">
-          Desde el expediente del cliente se le puede <b>reenviar el enlace de firma
-          digital</b> (firma desde su celular, en minutos) o <b>subir el anexo firmado</b>
-          si ya firmó en papel. Apenas quede firmado, esta entrega sale sin más trámite.
-        </p>
-      </div>
-      <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);flex-wrap:wrap;">
-        ${esAdmin ? `<button class="btn btn-secondary" id="firmaAnexoOverrideBtn" style="margin-right:auto;"
-          title="Solo administración — para casos excepcionales">Entregar sin firma (admin)</button>` : ''}
-        <button class="btn btn-secondary" data-close="1">Cerrar</button>
-        ${clienteId ? `<a class="btn btn-primary" href="../clientes/centro.html?id=${encodeURIComponent(clienteId)}&g=${encodeURIComponent(gestion.id || '')}">
-          <i data-lucide="pen-line"></i> Abrir el expediente y gestionar la firma</a>` : ''}
-      </div>
-    </div>`;
-
-  const cleanup = () => { overlay.remove(); document.removeEventListener('keydown', kb); };
-  const kb = e => { if (e.key === 'Escape') cleanup(); };
-  document.addEventListener('keydown', kb);
-  document.body.appendChild(overlay);
-  APP.utils.lucideRefresh(overlay);
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay || e.target.closest('[data-close]')) cleanup();
+  const url = `../clientes/centro.html?id=${encodeURIComponent(clienteId)}&g=${encodeURIComponent(gestion.id || '')}`;
+  Modal.sheet({
+    title: 'Falta la firma del anexo', icon: 'pen-line', size: 'md',
+    html: `
+      <p style="margin:0 0 8px;font-size:13.5px;color:var(--fg-2,#374151);">
+        Esta orden entrega los equipos del aumento
+        <b>${escapeHtml(gestion.id || '—')}</b> (contrato
+        <b>${escapeHtml(gestion.aumento?.contrato_id || orden.contrato?.contrato_id || '—')}</b>),
+        y el <b>anexo todavía no está firmado</b>. La programación corre en
+        paralelo, pero los radios no se entregan sin la firma del cliente.
+      </p>
+      <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">
+        Desde el expediente del cliente se le puede <b>reenviar el enlace de firma
+        digital</b> (firma desde su celular, en minutos) o <b>subir el anexo firmado</b>
+        si ya firmó en papel. Apenas quede firmado, esta entrega sale sin más trámite.
+      </p>`,
+    buttons: [
+      ...(esAdmin ? [{ action: 'override', label: 'Entregar sin firma (admin)' }] : []),
+      { action: 'cerrar', label: 'Cerrar' },
+      ...(clienteId ? [{ action: 'ficha', label: 'Abrir el expediente y gestionar la firma', primary: true, icon: 'pen-line' }] : []),
+    ],
+    onAction: (a) => {
+      if (a === 'override') { setTimeout(() => abrirModalEntrega(orden.ordenId), 0); return 'override'; }
+      if (a === 'ficha') { location.href = url; return 'ficha'; }
+      return null;
+    },
   });
-  const ov = overlay.querySelector('#firmaAnexoOverrideBtn');
-  if (ov) ov.onclick = () => { cleanup(); abrirModalEntrega(orden.ordenId); };
 }
 
 // ── Candado de factura de la venta (2026-09-03, decisión de Zuleika) ──────
@@ -461,45 +429,28 @@ function abrirModalFacturaPendiente(orden, contrato) {
        cada serial. Al volver, esta entrega sale sin más trámite.`
     : `Recepción o gerencia la registran en <b>Contratos → Equipos del contrato →
        "Registrar factura de venta"</b>. Apenas quede registrada, esta entrega sale.`;
-
-  const overlay = document.createElement('div');
-  overlay.className = 'overlay';
-  overlay.style.display = 'flex';
-  overlay.style.zIndex = '9500';
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:520px;width:min(94vw,520px);">
-      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <h3 class="sheet-title" style="display:flex;align-items:center;gap:6px;"><i data-lucide="receipt"></i> Falta la factura de la venta</h3>
-        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
-      </div>
-      <div class="sheet-body" style="padding:12px 14px;max-height:70vh;overflow:auto;">
-        <p style="margin:0 0 8px;font-size:13.5px;color:var(--fg-2,#374151);">
-          Esta orden entrega radios <b>vendidos</b> bajo el contrato
-          <b>${escapeHtml(contrato.contrato_id || orden.contrato?.contrato_id || '—')}</b>,
-          y la factura de la venta todavía <b>no está registrada</b> en la plataforma.
-          Los radios no se entregan sin facturar primero.
-        </p>
-        <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">${detalle}</p>
-      </div>
-      <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);flex-wrap:wrap;">
-        ${esAdmin ? `<button class="btn btn-secondary" id="factOverrideBtn" style="margin-right:auto;"
-          title="Solo administración — para casos excepcionales">Entregar sin factura (admin)</button>` : ''}
-        <button class="btn btn-secondary" data-close="1">Cerrar</button>
-        ${puedeRegistrar ? `<a class="btn btn-primary" href="../contratos/index.html?factura_venta=${encodeURIComponent(contrato.id)}">
-          <i data-lucide="receipt"></i> Registrar la factura</a>` : ''}
-      </div>
-    </div>`;
-
-  const cleanup = () => { overlay.remove(); document.removeEventListener('keydown', kb); };
-  const kb = e => { if (e.key === 'Escape') cleanup(); };
-  document.addEventListener('keydown', kb);
-  document.body.appendChild(overlay);
-  APP.utils.lucideRefresh(overlay);
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay || e.target.closest('[data-close]')) cleanup();
+  const url = `../contratos/index.html?factura_venta=${encodeURIComponent(contrato.id)}`;
+  Modal.sheet({
+    title: 'Falta la factura de la venta', icon: 'receipt', size: 'md',
+    html: `
+      <p style="margin:0 0 8px;font-size:13.5px;color:var(--fg-2,#374151);">
+        Esta orden entrega radios <b>vendidos</b> bajo el contrato
+        <b>${escapeHtml(contrato.contrato_id || orden.contrato?.contrato_id || '—')}</b>,
+        y la factura de la venta todavía <b>no está registrada</b> en la plataforma.
+        Los radios no se entregan sin facturar primero.
+      </p>
+      <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">${detalle}</p>`,
+    buttons: [
+      ...(esAdmin ? [{ action: 'override', label: 'Entregar sin factura (admin)' }] : []),
+      { action: 'cerrar', label: 'Cerrar' },
+      ...(puedeRegistrar ? [{ action: 'registrar', label: 'Registrar la factura', primary: true, icon: 'receipt' }] : []),
+    ],
+    onAction: (a) => {
+      if (a === 'override') { setTimeout(() => abrirModalEntrega(orden.ordenId), 0); return 'override'; }
+      if (a === 'registrar') { location.href = url; return 'registrar'; }
+      return null;
+    },
   });
-  const ov = overlay.querySelector('#factOverrideBtn');
-  if (ov) ov.onclick = () => { cleanup(); abrirModalEntrega(orden.ordenId); };
 }
 
 window.entregarOrden = async function (ordenId) {
@@ -576,17 +527,10 @@ window.cerrarEntrada = function (ordenId) {
     ? `<div style="border:1px solid #a7f3d0;background:#ecfdf5;color:#065f46;border-radius:8px;padding:8px 12px;font-size:13px;margin:10px 0;">✓ Cotización emitida para esta orden.</div>`
     : `<div style="border:1px solid #fde68a;background:#fffbeb;color:#92400e;border-radius:8px;padding:8px 12px;font-size:13px;margin:10px 0;">Si la revisión encontró <b>daños o faltantes cobrables</b>, emite la cotización antes de cerrar (menú ⋯ → Cotizar). Si no hay nada que cobrar, cierra sin más.</div>`;
 
-  const overlay = document.createElement('div');
-  overlay.className = 'overlay';
-  overlay.style.display = 'flex';
-  overlay.style.zIndex = '9500';
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:520px;width:min(94vw,520px);">
-      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <h3 class="sheet-title" style="display:flex;align-items:center;gap:6px;"><i data-lucide="package-check"></i> Cerrar entrada — Orden ${escapeHtml(ordenId)}</h3>
-        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
-      </div>
-      <div class="sheet-body" style="padding:12px 14px;max-height:70vh;overflow:auto;">
+  let overlay = null, sheetApi = null;
+  Modal.sheet({
+    title: `Cerrar entrada — Orden ${ordenId}`, icon: 'package-check', size: 'md',
+    html: `
         <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">
           La revisión de ${nEquipos || 'los'} equipo(s) terminó. Las unidades quedan bajo control de
           <b>inventario</b> — el destino final (bodega o baja) se decide por serial en
@@ -599,19 +543,17 @@ window.cerrarEntrada = function (ordenId) {
           <label class="form-label" for="cierreEntradaObs">Observaciones del cierre (opcional)</label>
           <textarea class="form-input form-textarea" id="cierreEntradaObs" rows="2"
             placeholder="Ej.: 2 unidades OK, 1 con antena quebrada — cotizado"></textarea>
-        </div>
-      </div>
-      <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);">
+        </div>`,
+    footerHtml: `
         <button class="btn btn-secondary" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" id="cierreEntradaBtn"><i data-lucide="check"></i> Cerrar entrada</button>
-      </div>
-    </div>`;
+        <button class="btn btn-primary" id="cierreEntradaBtn"><i data-lucide="check"></i> Cerrar entrada</button>`,
+    onMount: (root, api) => {
+      overlay = root; sheetApi = api;
+      root.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) api.close(null); });
+    },
+  });
 
-  const cleanup = () => { overlay.remove(); document.removeEventListener('keydown', kb); };
-  const kb = e => { if (e.key === 'Escape') cleanup(); };
-  document.addEventListener('keydown', kb);
-  document.body.appendChild(overlay);
-  APP.utils.lucideRefresh(overlay);
+  const cleanup = () => sheetApi.close(null);
 
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay || e.target.closest('[data-close]')) cleanup();

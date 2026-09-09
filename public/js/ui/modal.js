@@ -107,7 +107,11 @@ window.Modal = {
   //     html,                    // cuerpo (la página escapa lo suyo)
   //     buttons: [{ action, label, primary?, danger?, ghost?, icon? }],
   //     size: 'sm'|'md'|'lg'|'xl',   // 440 · 560 · 720 · 960
-  //     closable: true,          // X en el encabezado + Escape + clic fuera
+  //     footerHtml?,             // HTML propio en el pie, antes de `buttons`
+  //                              // (botones con id que la página cablea sola)
+  //     closable: true,          // X en el encabezado + Escape + clic fuera;
+  //                              // o una función () => bool evaluada al cerrar
+  //                              // (asistentes ocupados: () => !this._busy)
   //     onMount(root, api),      // cablear el cuerpo; api = { close(v), root }
   //     onAction(action, root),  // false → sigue abierta; otro valor → resuelve con él;
   //                              // undefined → resuelve con `action`
@@ -119,6 +123,7 @@ window.Modal = {
     buttons = [],
     size = 'md',
     closable = true,
+    footerHtml = '',
     onMount = null,
     onAction = null,
   } = {}) {
@@ -145,7 +150,7 @@ window.Modal = {
             ${closable ? '<button type="button" class="modal-close" data-sheet-action="__cerrar" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>' : ''}
           </div>` : ''}
           <div class="modal-body">${html}</div>
-          ${btnHtml ? `<div class="modal-footer">${btnHtml}</div>` : ''}
+          ${(footerHtml || btnHtml) ? `<div class="modal-footer">${footerHtml || ''}${btnHtml}</div>` : ''}
         </div>`;
 
       const previo = document.activeElement;
@@ -163,18 +168,21 @@ window.Modal = {
         resolve(result === undefined ? null : result);
       };
       const api = { root: overlay, close: (v) => cleanup(v) };
+      // `closable` puede ser una función: se consulta en cada intento de cierre
+      // (Escape, clic fuera, X). api.close() siempre cierra.
+      const puedeCerrar = () => (typeof closable === 'function' ? !!closable() : !!closable);
 
       const kb = (e) => {
-        if (e.key === 'Escape' && closable) { e.preventDefault(); cleanup(null); return; }
+        if (e.key === 'Escape' && puedeCerrar()) { e.preventDefault(); cleanup(null); return; }
         _trapTab(e, overlay);
       };
 
       overlay.addEventListener('click', async (e) => {
-        if (e.target === overlay) { if (closable) cleanup(null); return; }
+        if (e.target === overlay) { if (puedeCerrar()) cleanup(null); return; }
         const btn = e.target.closest('[data-sheet-action]');
         if (!btn) return;
         const action = btn.getAttribute('data-sheet-action');
-        if (action === '__cerrar') { cleanup(null); return; }
+        if (action === '__cerrar') { if (puedeCerrar()) cleanup(null); return; }
         if (typeof onAction === 'function') {
           let r;
           try { r = await onAction(action, overlay, api); } catch (err) { console.error('[Modal.sheet] onAction:', err); return; }

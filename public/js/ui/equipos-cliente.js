@@ -88,33 +88,13 @@ window.EquiposCliente = {
   },
 
   _render(clienteNombre, bodyHtml) {
-    document.getElementById('equiposClienteOverlay')?.remove();
-    const overlay = document.createElement('div');
-    overlay.id = 'equiposClienteOverlay';
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:680px; width:min(680px, 94vw);">
-        <div class="sheet-header" style="display:flex; justify-content:space-between; align-items:center;">
-          <h3 class="sheet-title" style="margin:0;">Equipos del cliente${clienteNombre ? ` — ${this._esc(clienteNombre)}` : ''}</h3>
-          <button class="btn btn-ghost btn-icon" data-action="cerrar" aria-label="Cerrar">✕</button>
-        </div>
-        <div class="sheet-body" style="padding:14px 12px; max-height:70vh; overflow-y:auto;">${bodyHtml}</div>
-        <div class="footer" style="display:flex; justify-content:flex-end; gap:8px;">
-          <button class="btn btn-primary" data-action="cerrar">Cerrar</button>
-        </div>
-      </div>`;
-    const cerrar = () => {
-      overlay.remove();
-      document.body.style.overflow = '';
-      document.removeEventListener('keydown', kb);
-    };
-    const kb = (e) => { if (e.key === 'Escape') cerrar(); };
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay || e.target.closest('[data-action="cerrar"]')) cerrar();
+    // Hoja del kit (Modal.sheet, 2026-09-08). El id se conserva para quien
+    // busque el overlay por nombre.
+    Modal.sheet({
+      title: `Equipos del cliente${clienteNombre ? ` — ${clienteNombre}` : ''}`, icon: 'radio', size: 'lg',
+      html: bodyHtml,
+      buttons: [{ action: 'cerrar', label: 'Cerrar', primary: true }],
+      onMount: (root) => { root.id = 'equiposClienteOverlay'; },
     });
-    document.addEventListener('keydown', kb);
-    document.body.appendChild(overlay);
-    document.body.style.overflow = 'hidden';
   },
 };

@@ -1909,14 +1909,10 @@
     const numero = a.numero || `${_ordenId}-A${idx + 1}`;
     const prellenado = a.envio?.to || _emailCopia() || '';
 
-    const overlay = document.createElement('div');
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.style.zIndex = '9500';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:430px;width:min(94vw,430px);">
-        <div class="sheet-header"><h3 class="sheet-title">Enviar acuse ${esc(numero)}</h3></div>
-        <div class="sheet-body" style="padding:12px 14px;">
+    let overlay = null, sheetApi = null;
+    Modal.sheet({
+      title: `Enviar acuse ${numero}`, size: 'sm',
+      html: `
           <p style="margin:0 0 10px;font-size:13px;color:var(--fg-2,#374151);">
             El cliente recibe el documento completo del acuse — unidades, accesorios registrados y firma —
             listo para archivar o imprimir.
@@ -1925,15 +1921,16 @@
             <label class="form-label" for="devEnvioEmail">Correo del cliente</label>
             <input class="form-input" id="devEnvioEmail" type="email" value="${esc(prellenado)}" style="height:34px;" autocomplete="off">
             <div style="font-size:11px;color:var(--fg-3,#6b7280);margin-top:3px;">Si lo corriges, queda guardado en la ficha para los próximos envíos.</div>
-          </div>
-        </div>
-        <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);">
+          </div>`,
+      footerHtml: `
           <button class="btn btn-secondary" data-close="1">Cancelar</button>
-          <button class="btn btn-primary" id="devEnvioConfirmar">Enviar copia</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-    const cerrar = () => overlay.remove();
+          <button class="btn btn-primary" id="devEnvioConfirmar">Enviar copia</button>`,
+      onMount: (root, api) => {
+        overlay = root; sheetApi = api;
+        root.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) api.close(null); });
+      },
+    });
+    const cerrar = () => sheetApi.close(null);
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-close]')) cerrar(); });
     overlay.querySelector('#devEnvioConfirmar').addEventListener('click', async () => {
       const email = (overlay.querySelector('#devEnvioEmail')?.value || '').trim().toLowerCase();
@@ -2032,9 +2029,7 @@
                       cantidad: faltan.papel, monto: precioDe(dom.modelo) });
       }
 
-      const overlay = document.createElement('div');
-      overlay.className = 'overlay';
-      overlay.style.display = 'flex';
+      let overlay = null, sheetApi = null;
 
       const filaHtml = (l, i) => `
         <tr data-i="${i}">
@@ -2066,10 +2061,9 @@
         overlay.querySelector('#flConfirmar').disabled = !ok;
       };
 
-      overlay.innerHTML = `
-        <div class="modal" style="max-width:620px;">
-          <div class="sheet-header"><h3 class="sheet-title">Equipos que el cliente no devolvió</h3></div>
-          <div class="sheet-body" style="padding:14px 10px;">
+      Modal.sheet({
+        title: `Equipos que el cliente no devolvió`, size: 'lg',
+        html: `
             <p style="margin:0 0 10px;font-size:13.5px;line-height:1.45;">
               Faltan <b>${faltan.total}</b> equipo(s). Antes de cerrar hay que decir <b>qué son</b> y
               <b>a cuánto se cobran</b>: así quedan como renglones que alguien puede perseguir, en vez de
@@ -2089,19 +2083,17 @@
               El monto sale del precio de venta del catálogo y se puede ajustar. Un descuento mayor al
               ${(window.CobrosEquiposService?.DESCUENTO_LIBRE_PCT) || 15}% pedirá aprobación antes de facturar,
               y condonar solo lo puede hacer un administrador.
-            </div>
-          </div>
-          <div class="footer">
+            </div>`,
+        footerHtml: `
             <button class="btn btn-ghost" id="flCancelar">Cancelar</button>
-            <button class="btn btn-primary" id="flConfirmar">Registrar y cerrar</button>
-          </div>
-        </div>`;
+            <button class="btn btn-primary" id="flConfirmar">Registrar y cerrar</button>`,
+        onMount: (root, api) => {
+          overlay = root; sheetApi = api;
+          root.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) api.close(null); });
+        },
+      });
 
-      const cerrar = (r) => {
-        overlay.remove();
-        document.body.style.overflow = '';
-        resolve(r);
-      };
+      const cerrar = (r) => { sheetApi.close(null); resolve(r); };
 
       overlay.addEventListener('input', e => {
         const tr = e.target.closest('tr[data-i]');
@@ -2156,8 +2148,6 @@
         }
       });
 
-      document.body.appendChild(overlay);
-      document.body.style.overflow = 'hidden';
       pintar();
     });
   }
@@ -2295,17 +2285,10 @@
       .map(c => (c.nombre || '').trim()).filter(Boolean)
       .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
 
-    const overlay = document.createElement('div');
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.style.zIndex = '9400';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:520px;width:min(94vw,520px);">
-        <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <h3 class="sheet-title" style="display:flex;align-items:center;gap:6px;"><i data-lucide="package-open"></i> Devolución sin contrato</h3>
-          <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
-        </div>
-        <div class="sheet-body" style="padding:12px 14px;">
+    let overlay = null, sheetApi = null;
+    Modal.sheet({
+      title: `Devolución sin contrato`, icon: 'package-open', size: 'md',
+      html: `
           <p style="margin:0 0 10px;font-size:13px;color:var(--fg-2,#374151);">
             Para equipos alquilados con <b>contrato de papel</b> (fuera del sistema). Se crea el
             tiquete de devolución y los seriales se registran al recibirlos, con checklist de
@@ -2334,16 +2317,16 @@
           <div class="form-field">
             <label class="form-label" for="devNuevaObs">Observaciones (opcional)</label>
             <textarea class="form-input form-textarea" id="devNuevaObs" rows="2" placeholder="Ej.: cliente pasa a dejar 4 radios por fin de alquiler"></textarea>
-          </div>
-        </div>
-        <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);">
+          </div>`,
+      footerHtml: `
           <button class="btn btn-secondary" data-close="1">Cancelar</button>
-          <button class="btn btn-primary" id="devNuevaCrearBtn"><i data-lucide="plus"></i> Crear devolución</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-    if (window.APP?.utils?.lucideRefresh) APP.utils.lucideRefresh(overlay);
-    const cleanup = () => overlay.remove();
+          <button class="btn btn-primary" id="devNuevaCrearBtn"><i data-lucide="plus"></i> Crear devolución</button>`,
+      onMount: (root, api) => {
+        overlay = root; sheetApi = api;
+        root.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) api.close(null); });
+      },
+    });
+    const cleanup = () => sheetApi.close(null);
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay || e.target.closest('[data-close]')) cleanup();
     });

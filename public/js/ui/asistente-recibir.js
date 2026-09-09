@@ -303,20 +303,15 @@ window.AsistenteRecibir = {
       + ` en Seriales del contrato.`;
   },
 
-  // ── Overlay propio (patrón equipo-ficha._render) ─────────────────────
+  // ── Hoja del kit (Modal.sheet, 2026-09-08). Mientras la recepción corre,
+  // Escape / clic fuera / X no cierran (closable consulta _busy).
   _render() {
-    document.getElementById('asistenteRecibirOverlay')?.remove();
-    const overlay = document.createElement('div');
-    overlay.id = 'asistenteRecibirOverlay';
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:520px; width:min(520px, 94vw);">
-        <div class="sheet-header" style="display:flex; justify-content:space-between; align-items:center;">
-          <h3 class="sheet-title" style="margin:0;"><i data-lucide="package-plus"></i> Recibir equipos en bodega</h3>
-          <button class="btn btn-ghost btn-icon" data-action="cerrar" aria-label="Cerrar">✕</button>
-        </div>
-        <div class="sheet-body" style="padding:14px 8px;">
+    this._cerrarForzado();
+    let overlay = null;
+    Modal.sheet({
+      title: 'Recibir equipos en bodega', icon: 'package-plus', size: 'md',
+      closable: () => !this._busy,
+      html: `
           <div class="form-field">
             <label class="form-label" for="asrModelo">Modelo</label>
             <input class="form-input" id="asrModeloFiltro" type="search"
@@ -355,22 +350,16 @@ window.AsistenteRecibir = {
           <label class="toggle-pill" style="margin-top:var(--sp-1);">
             <input type="checkbox" id="asrTomaFisica"> Toma física inicial (migración del stock existente)
           </label>
-        </div>
-        <div class="footer" style="display:flex; justify-content:flex-end; gap:8px;">
+`,
+      footerHtml: `
           <button class="btn btn-ghost" data-action="cerrar">Cancelar</button>
-          <button class="btn btn-primary" id="asrBtnGuardar"><i data-lucide="check"></i> Recibir</button>
-        </div>
-      </div>`;
-
-    const kb = (e) => { if (e.key === 'Escape') this._cerrar(); };
-    this._kb = kb;
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay || e.target.closest('[data-action="cerrar"]')) this._cerrar();
-    });
-    document.addEventListener('keydown', kb);
-    document.body.appendChild(overlay);
-    document.body.style.overflow = 'hidden';
-    this._el = overlay;
+          <button class="btn btn-primary" id="asrBtnGuardar"><i data-lucide="check"></i> Recibir</button>`,
+      onMount: (root, api) => {
+        overlay = root; root.id = 'asistenteRecibirOverlay';
+        this._el = root; this._api = api;
+        root.addEventListener('click', (e) => { if (e.target.closest('[data-action="cerrar"]')) this._cerrar(); });
+      },
+    }).then(() => { if (this._el === overlay) { this._el = null; this._api = null; } });
     this._modeloFS = null;
 
     overlay.querySelector('#asrModelo').addEventListener('change', () => this._sincronizarCondicion());
@@ -402,9 +391,12 @@ window.AsistenteRecibir = {
   // fases viven encima; un Escape ahí no debe tumbar el formulario a medias).
   _cerrar() {
     if (this._busy || !this._el) return;
-    this._el.remove();
-    this._el = null;
-    document.body.style.overflow = '';
-    if (this._kb) { document.removeEventListener('keydown', this._kb); this._kb = null; }
+    this._cerrarForzado();
+  },
+
+  _cerrarForzado() {
+    const api = this._api;
+    this._el = null; this._api = null;
+    if (api) api.close(null);
   },
 };

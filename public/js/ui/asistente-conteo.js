@@ -133,41 +133,31 @@ window.AsistenteConteo = (() => {
     }
   }
 
-  // ── Overlay propio (mismo patrón que EquipoFicha) ───────────────────────
+  // ── Hoja del kit (Modal.sheet, 2026-09-08): una sola hoja que se repinta
+  // en cada paso, en vez de un overlay nuevo por pantalla.
+  let hoja = null;   // { root, api }
   function render(bodyHtml, footerHtml = '') {
-    document.getElementById('asistenteConteoOverlay')?.remove();
-    const overlay = document.createElement('div');
-    overlay.id = 'asistenteConteoOverlay';
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:640px; width:min(640px, 94vw);">
-        <div class="sheet-header" style="display:flex; justify-content:space-between; align-items:center;">
-          <h3 class="sheet-title" style="margin:0;"><i data-lucide="clipboard-list"></i> Conteo físico de radios</h3>
-          <button class="btn btn-ghost btn-icon" data-action="cerrar" aria-label="Cerrar">✕</button>
-        </div>
-        <div class="sheet-body" style="padding:14px 10px;">${bodyHtml}</div>
-        <div class="footer" style="display:flex; justify-content:flex-end; gap:8px;">
-          ${footerHtml}
-          <button class="btn btn-ghost" data-action="cerrar">Cancelar</button>
-        </div>
-      </div>`;
-    overlay.addEventListener('click', (e) => {
-      if (e.target.closest('[data-action="cerrar"]')) cerrar();
-    });
-    document.addEventListener('keydown', escHandler);
-    document.body.appendChild(overlay);
-    document.body.style.overflow = 'hidden';
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    const pie = `${footerHtml}<button class="btn btn-ghost" data-action="cerrar">Cancelar</button>`;
+    if (hoja && hoja.root.isConnected) {
+      hoja.root.querySelector('.modal-body').innerHTML = bodyHtml;
+      hoja.root.querySelector('.modal-footer').innerHTML = pie;
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+      return;
+    }
+    let propia = null;
+    Modal.sheet({
+      title: 'Conteo físico de radios', icon: 'clipboard-list', size: 'lg',
+      html: bodyHtml,
+      footerHtml: pie,
+      onMount: (root, api) => {
+        propia = hoja = { root, api };
+        root.id = 'asistenteConteoOverlay';
+        root.addEventListener('click', (e) => { if (e.target.closest('[data-action="cerrar"]')) api.close(null); });
+      },
+    }).then(() => { if (hoja === propia) hoja = null; });
   }
 
-  function escHandler(e) { if (e.key === 'Escape') cerrar(); }
-
-  function cerrar() {
-    document.getElementById('asistenteConteoOverlay')?.remove();
-    document.body.style.overflow = '';
-    document.removeEventListener('keydown', escHandler);
-  }
+  function cerrar() { if (hoja) hoja.api.close(null); }
 
   return { abrir, _setCantidad, _filtrar, _revisar, _volverPaso1, _guardar };
 })();

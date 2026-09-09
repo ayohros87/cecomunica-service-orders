@@ -252,8 +252,7 @@ window.EquipoFicha = {
         await EquiposPoolService.verificar(eq.id, user);
         aviso(`${serial} marcado como verificado.`);
       } else if (accion === 'vender') {
-        document.getElementById('equipoFichaOverlay')?.remove();
-        document.body.style.overflow = '';
+        this._cerrar();
         if (window.AsistenteVenta) {
           AsistenteVenta.abrir({ user, serialesPrefill: [serial], onDone: () => { if (typeof this.onCambio === 'function') this.onCambio(); } });
         }
@@ -380,35 +379,27 @@ window.EquipoFicha = {
     }
   },
 
+  // Hoja del kit (Modal.sheet, 2026-09-08). Una ficha a la vez: abrir otra
+  // cierra la anterior. El id se conserva para quien busque el overlay.
   _render(bodyHtml, footerExtra = '') {
-    document.getElementById('equipoFichaOverlay')?.remove();
-    const overlay = document.createElement('div');
-    overlay.id = 'equipoFichaOverlay';
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:560px; width:min(560px, 94vw);">
-        <div class="sheet-header" style="display:flex; justify-content:space-between; align-items:center;">
-          <h3 class="sheet-title" style="margin:0;">Ficha del equipo</h3>
-          <button class="btn btn-ghost btn-icon" data-action="cerrar" aria-label="Cerrar">✕</button>
-        </div>
-        <div class="sheet-body" style="padding:14px 8px;">${bodyHtml}</div>
-        <div class="footer" style="display:flex; justify-content:flex-end; gap:8px;">
-          ${footerExtra}
-          <button class="btn btn-primary" data-action="cerrar">Cerrar</button>
-        </div>
-      </div>`;
-    const cerrar = () => {
-      overlay.remove();
-      document.body.style.overflow = '';
-      document.removeEventListener('keydown', kb);
-    };
-    const kb = (e) => { if (e.key === 'Escape') cerrar(); };
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay || e.target.closest('[data-action="cerrar"]')) cerrar();
-    });
-    document.addEventListener('keydown', kb);
-    document.body.appendChild(overlay);
-    document.body.style.overflow = 'hidden';
+    this._cerrar();
+    let api = null;
+    Modal.sheet({
+      title: 'Ficha del equipo', icon: 'radio', size: 'md',
+      html: bodyHtml,
+      footerHtml: footerExtra,
+      buttons: [{ action: 'cerrar', label: 'Cerrar', primary: true }],
+      onMount: (root, a) => {
+        api = a; this._api = a;
+        root.id = 'equipoFichaOverlay';
+        root.addEventListener('click', (e) => { if (e.target.closest('[data-action="cerrar"]')) a.close(null); });
+      },
+    }).then(() => { if (this._api === api) this._api = null; });
+  },
+
+  _cerrar() {
+    const api = this._api;
+    this._api = null;
+    if (api) api.close(null);
   },
 };

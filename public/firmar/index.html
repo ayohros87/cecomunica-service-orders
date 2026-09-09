@@ -35,6 +35,8 @@
     input[type=text] { width: 100%; padding: 10px 12px; border: 1px solid #c8d4de; border-radius: 8px; font-size: 15px; }
     .nota { font-size: 12.5px; color: #5a6b7b; margin-top: 6px; }
     .aviso { background: #FBF3E0; border: 1px solid #E0A93A; color: #8A6415; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; margin-top: 10px; }
+    /* Validación inline (nada de alert() frente al cliente). */
+    .aviso-error { background: #FBE9E9; border-color: #D24545; color: #8A1F1F; font-weight: 600; outline: none; }
     .chk { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; font-size: 13.5px; }
     .chk input { width: 20px; height: 20px; margin-top: 1px; flex: none; }
     #firmaCanvas { width: 100%; height: 180px; border: 2px dashed #c8d4de; border-radius: 10px; background: #fff; touch-action: none; display: block; }
@@ -172,6 +174,7 @@
           <b>«Leer el contrato completo»</b> más arriba.</p>
         <div class="aviso">Su firma, nombre, cédula, fecha y dispositivo quedan registrados como
           constancia de aceptación (firma electrónica, Ley 51 de 2008).</div>
+        <div id="fMsg" class="aviso aviso-error" role="alert" tabindex="-1" hidden></div>
         <button type="button" class="btn-p" id="btnFirmar" onclick="Firma.enviar()">Firmar el contrato</button>
       </div>
     </div>
@@ -377,7 +380,7 @@
             btn.firstChild.textContent = `✓ ${listo} — tocar para repetir `;
           } catch (err) {
             console.error(err);
-            alert('No se pudo procesar la foto. Intente de nuevo.');
+            Firma.aviso('No se pudo procesar la foto. Intente de nuevo.');
           }
         });
       };
@@ -403,18 +406,28 @@
       });
     },
 
+    // Mensaje de validación inline: visible, con foco y a la vista — sin alert().
+    aviso(msg) {
+      const el = document.getElementById('fMsg');
+      if (!el) return;
+      el.textContent = msg;
+      el.hidden = !msg;
+      if (msg) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus({ preventScroll: true }); }
+    },
+
     async enviar() {
+      this.aviso('');
       const nombre = document.getElementById('fNombre').value.trim();
       const cedula = document.getElementById('fCedula').value.trim();
       const cargo  = document.getElementById('fCargo').value.trim();
-      if (nombre.length < 3) { alert('Escriba el nombre completo de quien firma.'); return; }
-      if (!cedula) { alert('Escriba la cédula o pasaporte de quien firma.'); return; }
-      if (!this._fotos.cedula) { alert('Tome la foto de su cédula (paso 1 de Identidad).'); return; }
-      if (!this._fotos.selfie) { alert('Tome su selfie (paso 2 de Identidad).'); return; }
-      if (!document.getElementById('fConsentBio').checked) { alert('Debe autorizar el uso de sus fotos para verificar su identidad.'); return; }
-      if (this.trazos < 8) { alert('Dibuje su firma en el recuadro.'); return; }
-      if (!this._docVisto) { alert('Abra y lea el documento completo ("Leer el contrato completo") antes de firmar.'); return; }
-      if (!document.getElementById('fAcepta').checked) { alert('Debe aceptar los términos del contrato.'); return; }
+      if (nombre.length < 3) { this.aviso('Escriba el nombre completo de quien firma.'); return; }
+      if (!cedula) { this.aviso('Escriba la cédula o pasaporte de quien firma.'); return; }
+      if (!this._fotos.cedula) { this.aviso('Tome la foto de su cédula (paso 1 de Identidad).'); return; }
+      if (!this._fotos.selfie) { this.aviso('Tome su selfie (paso 2 de Identidad).'); return; }
+      if (!document.getElementById('fConsentBio').checked) { this.aviso('Debe autorizar el uso de sus fotos para verificar su identidad.'); return; }
+      if (this.trazos < 8) { this.aviso('Dibuje su firma en el recuadro.'); return; }
+      if (!this._docVisto) { this.aviso('Abra y lea el documento completo ("Leer el contrato completo") antes de firmar.'); return; }
+      if (!document.getElementById('fAcepta').checked) { this.aviso('Debe aceptar los términos del contrato.'); return; }
       const btn = document.getElementById('btnFirmar');
       btn.disabled = true; btn.textContent = 'Subiendo evidencia…';
       try {
@@ -451,7 +464,7 @@
       } catch (e) {
         console.error(e);
         btn.disabled = false; btn.textContent = 'Firmar el contrato';
-        alert('No se pudo registrar la firma. Intente de nuevo o contacte a su asesor.');
+        this.aviso('No se pudo registrar la firma. Intente de nuevo o contacte a su asesor.');
       }
     },
   };

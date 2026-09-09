@@ -73,17 +73,10 @@
     const inf = datos.informe_visita || {};
     const sitio = datos.visita?.sitio || '';
 
-    const overlay = document.createElement('div');
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.style.zIndex = '9500';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:640px;width:min(94vw,640px);">
-        <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <h3 class="sheet-title" style="display:flex;align-items:center;gap:6px;"><i data-lucide="clipboard-list"></i> Informe de visita — Orden ${esc(ordenId)}</h3>
-          <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
-        </div>
-        <div class="sheet-body" style="padding:12px 10px;max-height:72vh;overflow:auto;">
+    let overlay = null, sheetApi = null;
+    Modal.sheet({
+      title: `Informe de visita — Orden ${ordenId}`, icon: 'clipboard-list', size: 'lg',
+      html: `
           ${sitio ? `<div class="muted" style="margin-bottom:10px;display:flex;align-items:center;gap:6px;"><i data-lucide="map-pin"></i> ${esc(sitio)}</div>` : ''}
 
           <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
@@ -127,19 +120,19 @@
             <i data-lucide="camera"></i>
             <!-- Galería modal (§5.23) — la página fotos-taller.html se retiró. -->
             <span>¿Fotos del sitio? <button type="button" class="btn btn-ghost" style="padding:2px 8px;font-size:12px;" data-action="go-fotos-taller" data-orden-id="${ordenId}">Abrir fotos de la visita</button></span>
-          </div>
-        </div>
-        <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);">
+          </div>`,
+      footerHtml: `
           <button class="btn btn-secondary" data-close="1">Cancelar</button>
-          <button class="btn btn-primary" id="informeGuardarBtn"><i data-lucide="save"></i> Guardar informe</button>
-        </div>
-      </div>`;
+          <button class="btn btn-primary" id="informeGuardarBtn"><i data-lucide="save"></i> Guardar informe</button>`,
+      onMount: (root, api) => {
+        overlay = root; sheetApi = api;
+        root.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) api.close(null); });
+      },
+    });
 
     let motivoSel = inf.motivo || '';
 
-    const cleanup = () => { overlay.remove(); document.removeEventListener('keydown', kb); };
-    const kb = e => { if (e.key === 'Escape') cleanup(); };
-    document.addEventListener('keydown', kb);
+    const cleanup = () => sheetApi.close(null);
 
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay || e.target.closest('[data-close]')) { cleanup(); return; }
@@ -203,8 +196,6 @@
       }
     };
 
-    document.body.appendChild(overlay);
-    APP.utils.lucideRefresh(overlay);
     setTimeout(() => overlay.querySelector('#informeTrabajo')?.focus(), 100);
   };
 
@@ -309,17 +300,10 @@
             <span class="form-check-label">Al cerrar, <b>preparar la cotización</b> de esta visita${hayPiezas ? ' (ya hay piezas registradas)' : ''}</span>
           </label>` : '';
 
-    const overlay = document.createElement('div');
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.style.zIndex = '9500';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:560px;width:min(94vw,560px);">
-        <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <h3 class="sheet-title" style="display:flex;align-items:center;gap:6px;"><i data-lucide="pen-line"></i> Cerrar visita — Orden ${esc(ordenId)}</h3>
-          <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
-        </div>
-        <div class="sheet-body" style="padding:12px 10px;max-height:72vh;overflow:auto;">
+    let overlay = null, sheetApi = null;
+    Modal.sheet({
+      title: `Cerrar visita — Orden ${ordenId}`, icon: 'pen-line', size: 'md',
+      html: `
 
           <div style="border:1px solid var(--line,#e5e7eb);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;">
             <div style="display:flex;gap:8px;padding:2px 0;"><span class="muted" style="min-width:110px;">Cliente</span><strong>${esc(nombreClienteDe(orden))}</strong></div>
@@ -353,20 +337,18 @@
             <textarea class="form-input form-textarea" id="cierreSinFirmaMotivo" rows="2"
               placeholder="Ej.: no había personal de la empresa en el sitio al finalizar"></textarea>
           </div>
-          ${cotizarHtml}
-        </div>
-        <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);">
+          ${cotizarHtml}`,
+      footerHtml: `
           <button class="btn btn-secondary" data-close="1">Cancelar</button>
-          <button class="btn btn-primary" id="cierreConfirmarBtn"><i data-lucide="check"></i> Cerrar visita</button>
-        </div>
-      </div>`;
+          <button class="btn btn-primary" id="cierreConfirmarBtn"><i data-lucide="check"></i> Cerrar visita</button>`,
+      onMount: (root, api) => {
+        overlay = root; sheetApi = api;
+        root.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) api.close(null); });
+      },
+    });
 
-    const cleanup = () => { overlay.remove(); document.removeEventListener('keydown', kb); };
-    const kb = e => { if (e.key === 'Escape') cleanup(); };
-    document.addEventListener('keydown', kb);
+    const cleanup = () => sheetApi.close(null);
 
-    document.body.appendChild(overlay);
-    APP.utils.lucideRefresh(overlay);
 
     // El canvas necesita clientWidth real → esperar al layout.
     let firma = null;

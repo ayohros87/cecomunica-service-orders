@@ -171,88 +171,65 @@
   }
 
   async function showResetLinkModal(email, link) {
-    // Show link in a confirm dialog with copy button (simulate via prompt).
-    const overlay = document.createElement('div');
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:600px;">
-        <div class="sheet-header"><h3 class="sheet-title">Link de reset</h3></div>
-        <div class="sheet-body" style="padding:16px;">
-          <p style="margin:0 0 12px;">Envía este link a <strong>${escapeHtml(email)}</strong>:</p>
-          <textarea readonly style="width:100%;height:90px;font-family:monospace;font-size:11px;padding:8px;border:1px solid var(--border-default);border-radius:6px;">${escapeHtml(link)}</textarea>
-        </div>
-        <div class="footer">
-          <button class="btn btn-ghost" id="rl-close">Cerrar</button>
-          <button class="btn btn-primary" id="rl-copy"><i data-lucide="copy"></i> Copiar al portapapeles</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-    if (window.lucide) lucide.createIcons();
-    overlay.querySelector('#rl-close').onclick = () => overlay.remove();
-    overlay.querySelector('#rl-copy').onclick = async () => {
-      try {
-        await navigator.clipboard.writeText(link);
-        Toast.show('Link copiado.', 'ok');
-      } catch {
-        Toast.show('No se pudo copiar — selecciona y copia manualmente.', 'warn');
-      }
-    };
+    await Modal.sheet({
+      title: 'Link de reset', icon: 'key', size: 'md',
+      html: `
+        <p style="margin:0 0 12px;">Envía este link a <strong>${escapeHtml(email)}</strong>:</p>
+        <textarea readonly style="width:100%;height:90px;font-family:monospace;font-size:11px;padding:8px;border:1px solid var(--border-default);border-radius:6px;">${escapeHtml(link)}</textarea>`,
+      buttons: [{ action: 'cerrar', label: 'Cerrar' }, { action: 'copiar', label: 'Copiar al portapapeles', primary: true, icon: 'copy' }],
+      onAction: async (a) => {
+        if (a !== 'copiar') return null;
+        try { await navigator.clipboard.writeText(link); Toast.show('Link copiado.', 'ok'); }
+        catch { Toast.show('No se pudo copiar — selecciona y copia manualmente.', 'warn'); }
+        return false;
+      },
+    });
   }
 
   async function openCreateModal() {
-    const overlay = document.createElement('div');
-    overlay.className = 'overlay';
-    overlay.style.display = 'flex';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:480px;">
-        <div class="sheet-header"><h3 class="sheet-title">Nuevo usuario</h3></div>
-        <div class="sheet-body" style="padding:16px;">
-          <div class="form-field" style="margin-bottom:12px;">
-            <label class="form-label">Nombre</label>
-            <input id="nu-nombre" class="form-input" type="text" autocomplete="off" required>
-          </div>
-          <div class="form-field" style="margin-bottom:12px;">
-            <label class="form-label">Email</label>
-            <input id="nu-email" class="form-input" type="email" autocomplete="off" required>
-          </div>
-          <div class="form-field">
-            <label class="form-label">Rol</label>
-            <select id="nu-rol" class="form-input">
-              ${ROL_OPTIONS.map(r => `<option value="${r}"${r === ROLES.VENDEDOR ? ' selected' : ''}>${r}</option>`).join('')}
-            </select>
-          </div>
-          <div id="nu-err" style="color:#b91c1c;font-size:13px;margin-top:8px;display:none;"></div>
+    const r = await Modal.sheet({
+      title: 'Nuevo usuario', icon: 'user-plus', size: 'sm',
+      html: `
+        <div class="form-field" style="margin-bottom:12px;">
+          <label class="form-label">Nombre</label>
+          <input id="nu-nombre" class="form-input" type="text" autocomplete="off" required>
         </div>
-        <div class="footer">
-          <button class="btn btn-ghost" id="nu-cancel">Cancelar</button>
-          <button class="btn btn-primary" id="nu-create"><i data-lucide="user-plus"></i> Crear</button>
+        <div class="form-field" style="margin-bottom:12px;">
+          <label class="form-label">Email</label>
+          <input id="nu-email" class="form-input" type="email" autocomplete="off" required>
         </div>
-      </div>`;
-    document.body.appendChild(overlay);
-    if (window.lucide) lucide.createIcons();
-
-    const close = () => overlay.remove();
-    overlay.querySelector('#nu-cancel').onclick = close;
-    overlay.querySelector('#nu-create').onclick = async () => {
-      const nombre = overlay.querySelector('#nu-nombre').value.trim();
-      const email  = overlay.querySelector('#nu-email').value.trim();
-      const rol    = overlay.querySelector('#nu-rol').value;
-      const errEl  = overlay.querySelector('#nu-err');
-      errEl.style.display = 'none';
-      if (!nombre || !email)        { errEl.textContent = 'Nombre y email son requeridos.'; errEl.style.display = ''; return; }
-      if (!email.includes('@'))     { errEl.textContent = 'Email inválido.';                errEl.style.display = ''; return; }
-      try {
-        const res = await UsuariosAdminService.create({ email, nombre, rol });
-        close();
-        Toast.show('Usuario creado.', 'ok');
-        if (res.resetLink) await showResetLinkModal(email, res.resetLink);
-        await load();
-      } catch (err) {
-        errEl.textContent = err.message || err.code || String(err);
-        errEl.style.display = '';
-      }
-    };
+        <div class="form-field">
+          <label class="form-label">Rol</label>
+          <select id="nu-rol" class="form-input">
+            ${ROL_OPTIONS.map(r => `<option value="${r}"${r === ROLES.VENDEDOR ? ' selected' : ''}>${r}</option>`).join('')}
+          </select>
+        </div>
+        <div id="nu-err" style="color:#b91c1c;font-size:13px;margin-top:8px;display:none;"></div>`,
+      buttons: [{ action: 'cancel', label: 'Cancelar' }, { action: 'crear', label: 'Crear', primary: true, icon: 'user-plus' }],
+      onMount: (root) => root.querySelector('#nu-nombre')?.focus(),
+      onAction: async (a, root) => {
+        if (a !== 'crear') return null;
+        const nombre = root.querySelector('#nu-nombre').value.trim();
+        const email  = root.querySelector('#nu-email').value.trim();
+        const rol    = root.querySelector('#nu-rol').value;
+        const errEl  = root.querySelector('#nu-err');
+        errEl.style.display = 'none';
+        if (!nombre || !email)    { errEl.textContent = 'Nombre y email son requeridos.'; errEl.style.display = ''; return false; }
+        if (!email.includes('@')) { errEl.textContent = 'Email inválido.';                errEl.style.display = ''; return false; }
+        try {
+          const res = await UsuariosAdminService.create({ email, nombre, rol });
+          return { email, resetLink: res.resetLink || null };
+        } catch (err) {
+          errEl.textContent = err.message || err.code || String(err);
+          errEl.style.display = '';
+          return false;
+        }
+      },
+    });
+    if (!r || typeof r !== 'object') return;
+    Toast.show('Usuario creado.', 'ok');
+    if (r.resetLink) await showResetLinkModal(r.email, r.resetLink);
+    await load();
   }
 
   async function load() {
