@@ -97,6 +97,9 @@ exports.onGestionWrite                = require("./src/triggers/gestiones/onGest
 // Avance seamless desde las órdenes: PROG entregada → devolución + linaje;
 // devolución sin pendientes → entrada completada
 exports.onOrdenWriteGestion           = require("./src/triggers/gestiones/onOrdenWriteGestion");
+// Índice del archivo (2026-09-09): denormaliza los seriales del expediente en
+// `seriales_norm` para poder buscarlos con array-contains desde /contratos/.
+exports.onGestionArchivo              = require("./src/triggers/gestiones/onGestionArchivo");
 // Bandeja "Facturación pendiente" (2026-09-04): reenvío del correo + estado derivado.
 exports.onFacturacionAvisoWrite       = require("./src/triggers/facturacion/onFacturacionAvisoWrite");
 // Historial de la ficha del cliente: quién cambió qué (representante, RUC,

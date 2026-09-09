@@ -20,7 +20,13 @@ const _PERMISOS = {
   'crear-contrato':    ['administrador', 'vendedor'],
   'editar-contrato':   ['administrador', 'vendedor'],
   'subir-firmado':     ['administrador', 'vendedor'],
-  'ver-contratos':     ['administrador', 'vendedor', 'recepcion', 'gerente'],
+  // El archivo de contratos y gestiones es de CONSULTA (2026-09-09): también
+  // lo necesita contabilidad, que antes no podía ni abrirlo.
+  'ver-contratos':     ['administrador', 'vendedor', 'recepcion', 'gerente', 'contabilidad'],
+  // El total del contrato es información financiera (need-to-know): recepción
+  // y vendedores consultan el archivo SIN la columna de montos. No agregar
+  // roles aquí sin preguntar.
+  'ver-montos-contrato': ['administrador', 'contabilidad', 'gerente'],
   'crear-orden':       ['administrador', 'vendedor', 'recepcion', 'tecnico', 'tecnico_operativo', 'jefe_taller'],
   'asignar-tecnico':   ['administrador', 'jefe_taller', 'recepcion'],
   // Cambiar el técnico de una orden YA asignada (reasignación esporádica que NO

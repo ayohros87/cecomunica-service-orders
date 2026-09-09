@@ -20,7 +20,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8" />
-  <title>Contratos – Cecomunica</title>
+  <title>Archivo de contratos y gestiones – Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0B2A47">
 
@@ -69,9 +69,14 @@
        15px and using a slightly darker tint (#f1f5f9 vs #f8fafc) gives
        the same "agrupado" feel as ordenes. */
     table.app-table tbody td { font-size: 15px; padding-top: 12px; padding-bottom: 12px; }
-    table.app-table tbody tr:nth-child(even) { background: #f1f5f9; }
-    table.app-table tbody tr:hover,
-    table.app-table tbody tr:nth-child(even):hover { background: var(--accent-soft, #E6F4FA); }
+    /* La cebra NO puede salir de :nth-child: entre fila y fila va la del
+       expediente (oculta, pero el selector la cuenta igual). La marca la pone
+       crearFila con .fila-par. */
+    table.app-table tbody tr.fila-par { background: #f1f5f9; }
+    table.app-table tbody tr[data-contrato-doc-id]:hover,
+    table.app-table tbody tr[data-gestion-id]:hover { background: var(--accent-soft, #E6F4FA); }
+    /* La fila del expediente no lleva zebra ni hover: es un panel, no una fila. */
+    table.app-table tbody tr[id^="exp-"] > td { padding: 0; }
     /* Reskin F4 familia 3 (propuesta .tbl .id): número de contrato mono-azul,
        misma receta que órdenes (.orden-id) y cotizaciones (.cc-cell-num). */
     .contrato-id {
@@ -97,8 +102,7 @@
 
     /* Toggle pill: definida en app-kit-extras.css del kit. */
 
-    /* Upload status: alias del .alert-banner del kit por compatibilidad JS. */
-    #uploadStatus { display: none; }
+
   </style>
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -114,11 +118,8 @@
   <script src="../js/core/serial.js?v=1"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
   <script defer src="../js/services/contratosService.js?v=num4"></script>
   <script defer src="../js/domain/documentoContrato.js?v=corte1"></script>
-  <script defer src="../js/services/cancelacionesService.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/services/mailService.js"></script>
   <script defer src="../js/services/ordenesService.js"></script>
-  <script defer src="../js/services/pocService.js"></script>
   <script defer src="../js/services/equiposPoolService.js?v=prop1"></script>
   <script defer src="../js/ui/equipo-ficha.js?v=prop1"></script>
   <script defer src="../js/domain/totales.js"></script>
@@ -136,26 +137,28 @@
   <div class="cc-work">
   <div id="topbar-mount"></div>
   <script>
+    // Archivo (2026-09-09): ya no se crea ni se gestiona aquí. La única acción
+    // de la barra es la salida hacia donde SÍ se trabaja.
     Layout.renderTopbar({
-      title: '<i data-lucide="file-text"></i> Contratos',
-      actions: [{ label: '<i data-lucide="plus"></i> Nuevo Contrato', href: 'nuevo-contrato.html', cls: 'primary', id: 'btnNuevoContrato' }],
-      showHome: true, homeHref: '../index.html', showLogout: true,
-      menu: [{ href: 'cancelaciones.html', label: '<i data-lucide="package-minus"></i> Cancelaciones de equipos', id: 'menuItemCancelaciones' }]
+      title: '<i data-lucide="archive"></i> Archivo de contratos y gestiones',
+      actions: [{ label: '<i data-lucide="users"></i> Ir al Centro de gestión', href: '../clientes/centro.html', cls: 'primary' }],
+      showHome: true, homeHref: '../index.html', showLogout: true
     });
   </script>
 
   <div class="app-wrap app-wrap--full">
 
-    <!-- Aviso de descontinuación (2026-09-04): el módulo viejo se retira en
-         favor del Centro de gestión de clientes. Nuevo contrato solo deja
-         alquiler nuevo; el resto de gestiones ya no se hacen aquí. -->
-    <div class="alert" role="status" id="avisoDescontinuado"
+    <!-- Este módulo es de CONSULTA (2026-09-09). Antes decía "se está
+         descontinuando", que es una promesa; ahora dice lo que es y a dónde
+         se va a trabajar. -->
+    <div class="alert" role="status" id="avisoArchivo"
          style="display:flex;align-items:center;gap:12px;margin:0 0 var(--sp-3);">
-      <i data-lucide="alert-triangle" style="width:20px;height:20px;flex-shrink:0;"></i>
+      <i data-lucide="search" style="width:20px;height:20px;flex-shrink:0;"></i>
       <div style="flex:1;">
-        <strong>Este módulo se está descontinuando.</strong>
-        Los contratos nuevos, renovaciones, aumentos, reemplazos, demos y propios se hacen ahora desde el
-        <strong>Centro de gestión de clientes</strong>. Empieza a usar el módulo nuevo; aquí solo queda el alquiler nuevo mientras termina la transición.
+        <strong>Este módulo es de consulta.</strong>
+        Busca aquí un contrato o una gestión por número, cliente o fecha. Para crear, aprobar,
+        renovar, dar de baja o cualquier otra gestión, entra a la ficha del cliente en el
+        <strong>Centro de gestión</strong>.
       </div>
       <a class="btn btn-primary btn-sm" href="../clientes/centro.html" style="white-space:nowrap;">
         <i data-lucide="users"></i> Ir al Centro de gestión
@@ -164,28 +167,23 @@
 
     <p id="mensaje" class="resumen" style="min-height:20px; margin-bottom:var(--sp-2);"></p>
 
-    <!-- Upload status banner (shown when uploading a signed PDF) -->
-    <!-- Solo PDF: storage.rules exige application/pdf en contratos_firmados/,
-         así que ofrecer imágenes solo producía un fallo de reglas tras subir. -->
-    <!-- Acepta el PDF firmado O las FOTOS del contrato firmado (2026-08-28:
-         la mayoría de los clientes devuelven fotos por WhatsApp — se arma un
-         solo PDF automáticamente con jsPDF). -->
-    <input type="file" id="fileFirmado" accept="application/pdf,image/*" multiple style="display:none">
-    <div id="uploadStatus" class="alert-banner">
-      <span class="alert-banner-icon"><i data-lucide="upload"></i></span>
-      <div class="alert-banner-body">
-        Subiendo contrato firmado <strong id="uploadPct">0%</strong>
-      </div>
-    </div>
-
     <!-- Card containing filter bar + table + footer (kit data-table pattern) -->
     <div class="ds-card">
+
+      <!-- Pestañas del archivo: Contratos | Gestiones. La caja de búsqueda es
+           la misma para las dos (uno busca por lo que tiene a mano, no por
+           saber en qué colección vive la respuesta). -->
+      <div class="filter-chips" id="archivoTabs" role="tablist" aria-label="Qué buscar"
+           style="padding:var(--sp-3) var(--sp-3) 0; gap:var(--sp-1);">
+        <button type="button" class="filter-chip active" data-tab="contratos" role="tab"><i data-lucide="file-text" style="width:14px;height:14px;"></i> Contratos</button>
+        <button type="button" class="filter-chip" data-tab="gestiones" role="tab"><i data-lucide="folder-open" style="width:14px;height:14px;"></i> Gestiones</button>
+      </div>
 
       <!-- Filter bar -->
       <div class="filter-bar">
         <div class="filter-search">
           <span class="search-icon"><i data-lucide="search"></i></span>
-          <input type="search" id="filtroCliente" placeholder="Buscar por cliente o ID…" aria-label="Buscar por cliente o ID de contrato" style="border:none;">
+          <input type="search" id="filtroCliente" placeholder="Buscar por cliente, número de contrato o de gestión…" aria-label="Buscar en el archivo" style="border:none;">
         </div>
 
         <!-- Hidden select preserves JS contract; chips below drive its value -->
@@ -199,53 +197,86 @@
           <option value="inactivo">Inactivo</option>
         </select>
 
-        <div class="filter-chips" id="filtroEstadoChips" role="tablist" aria-label="Filtrar por estado">
-          <button type="button" class="filter-chip active" data-estado="">Todos</button>
-          <button type="button" class="filter-chip" data-estado="pendiente_aprobacion">Pendiente</button>
-          <button type="button" class="filter-chip" data-estado="aprobado">Aprobado</button>
-          <button type="button" class="filter-chip" data-estado="activo">Activo</button>
-          <button type="button" class="filter-chip" data-estado="vencido">Vencido</button>
-          <button type="button" class="filter-chip" data-estado="anulado">Anulado</button>
+        <div id="filtrosContratos" style="display:contents;">
+          <div class="filter-chips" id="filtroEstadoChips" role="tablist" aria-label="Filtrar por estado">
+            <button type="button" class="filter-chip active" data-estado="">Todos</button>
+            <button type="button" class="filter-chip" data-estado="pendiente_aprobacion">Pendiente</button>
+            <button type="button" class="filter-chip" data-estado="aprobado">Aprobado</button>
+            <button type="button" class="filter-chip" data-estado="activo">Activo</button>
+            <button type="button" class="filter-chip" data-estado="vencido">Vencido</button>
+            <button type="button" class="filter-chip" data-estado="anulado">Anulado</button>
+          </div>
+
+          <div style="flex:1;"></div>
+
+          <label class="toggle-pill" title="Contratos con equipos que el cliente todavía no devuelve, o sin registro de devolución. Incluye anulados aunque «Mostrar inactivos» esté apagado."><input type="checkbox" id="chkSoloDevolucion"> <i data-lucide="package-minus" style="width:14px;height:14px;"></i> Devolución pendiente</label>
+          <label class="toggle-pill"><input type="checkbox" id="chkMostrarInactivos"> <i data-lucide="archive" style="width:14px;height:14px;"></i> Mostrar inactivos</label>
+          <!-- Sigue existiendo porque el deep-link ?estado= y los chips lo
+               sincronizan; ya no se ofrece como filtro visible (el archivo no
+               es una cola de trabajo). -->
+          <input type="checkbox" id="chkSoloPendientes" hidden>
         </div>
 
-        <div style="flex:1;"></div>
+        <div id="filtrosGestiones" hidden style="display:contents;">
+          <div class="filter-chips" id="filtroTipoGestionChips" role="tablist" aria-label="Filtrar por tipo de gestión">
+            <button type="button" class="filter-chip active" data-tipo="">Todas</button>
+            <button type="button" class="filter-chip" data-tipo="reemplazo">Reemplazo</button>
+            <button type="button" class="filter-chip" data-tipo="baja">Baja</button>
+            <button type="button" class="filter-chip" data-tipo="aumento">Aumento</button>
+            <button type="button" class="filter-chip" data-tipo="devolucion">Devolución</button>
+            <button type="button" class="filter-chip" data-tipo="demo">Demo</button>
+            <button type="button" class="filter-chip" data-tipo="cambio_serial">Cambio de serial</button>
+          </div>
+          <div style="flex:1;"></div>
+          <label class="toggle-pill"><input type="checkbox" id="chkGestionesAbiertas"> <i data-lucide="clock" style="width:14px;height:14px;"></i> Solo abiertas</label>
+        </div>
 
-        <label class="toggle-pill"><input type="checkbox" id="chkSoloPendientes"> <i data-lucide="clock" style="width:14px;height:14px;"></i> Solo pendientes</label>
-        <label class="toggle-pill" title="Contratos con equipos que el cliente todavía no devuelve, o sin registro de devolución. Incluye anulados aunque «Mostrar inactivos» esté apagado."><input type="checkbox" id="chkSoloDevolucion"> <i data-lucide="package-minus" style="width:14px;height:14px;"></i> Devolución pendiente</label>
-        <label class="toggle-pill"><input type="checkbox" id="chkMostrarInactivos"> <i data-lucide="archive" style="width:14px;height:14px;"></i> Mostrar inactivos</label>
+        <!-- Rango de fechas: el filtro que convierte una lista en un archivo
+             ("dame las bajas de agosto"). Vacío = sin límite de fecha. -->
+        <label class="toggle-pill" style="gap:6px;" title="Desde qué fecha">
+          <i data-lucide="calendar" style="width:14px;height:14px;"></i>
+          <input type="date" id="filtroDesde" aria-label="Desde" style="border:none;background:none;font:inherit;color:inherit;">
+        </label>
+        <label class="toggle-pill" style="gap:6px;" title="Hasta qué fecha">
+          <span style="opacity:.6;">→</span>
+          <input type="date" id="filtroHasta" aria-label="Hasta" style="border:none;background:none;font:inherit;color:inherit;">
+        </label>
 
+        <button id="btnExportarCsv" class="btn btn-ghost btn-sm" title="Baja lo que estás viendo, con los filtros aplicados"><i data-lucide="download"></i> Exportar CSV</button>
         <button id="btnLimpiarBusqueda" class="btn btn-ghost btn-sm" aria-label="Limpiar búsqueda"><i data-lucide="rotate-ccw"></i> Limpiar</button>
-        <button id="btnBackfillEquipos" class="btn btn-ghost btn-sm" style="display:none;" onclick="ContratosEquipos.backfillTodos()" title="Solo para debugging - Cloud Functions sincronizan automáticamente"><i data-lucide="refresh-cw"></i> Re-sincronizar</button>
-        <button class="btn btn-ghost btn-icon btn-sm" style="display:none;" onclick="ContratosEquipos.limpiarCache()" title="Solo para debugging - Limpiar caché del navegador" aria-label="Limpiar caché"><i data-lucide="trash-2"></i></button>
       </div>
 
       <!-- Table -->
-      <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
-        <table class="app-table" aria-label="Lista de contratos">
+      <div class="app-table-wrap" id="panelContratos" style="border:none; box-shadow:none; border-radius:0;">
+        <table class="app-table" aria-label="Archivo de contratos">
           <thead>
             <tr id="encabezadoContratos">
+              <th style="width:34px;" aria-label="Abrir el expediente"></th>
               <th class="sortable" onclick="ContratosLista.ordenarPor('contrato_id')" style="width:120px;">ID</th>
               <th class="sortable" onclick="ContratosLista.ordenarPor('cliente_nombre')">Cliente</th>
               <th>Tipo</th>
               <th>Acción</th>
               <th style="width:72px; text-align:center;">Equipos</th>
-              <th class="sortable" onclick="ContratosLista.ordenarPor('estado')" style="width:140px;">Estado</th>
+              <th class="sortable" onclick="ContratosLista.ordenarPor('estado')" style="width:170px;">Estado</th>
+              <th style="width:72px;" title="Qué documento le toca a este contrato: el v2 (Anexo A por serial, firma digital) o el formato anterior, que es el que el cliente tiene firmado.">Papel</th>
               <th class="sortable" onclick="ContratosLista.ordenarPor('devolucion_pendientes')" style="width:150px;">Devolución</th>
               <th class="sortable" onclick="ContratosLista.ordenarPor('fecha_creacion')" style="width:110px;">Fecha</th>
               <th>Creado por</th>
-              <th class="sortable" onclick="ContratosLista.ordenarPor('total')" style="width:110px; text-align:right;">Total</th>
-              <th class="acciones" style="width:230px; text-align:right;">Acciones</th>
+              <th class="sortable" id="thTotal" onclick="ContratosLista.ordenarPor('total')" style="width:110px; text-align:right;">Total</th>
+              <th class="acciones" style="width:170px; text-align:right;"></th>
             </tr>
           </thead>
           <tbody id="tablaContratos">
             <!-- Skeleton rows (replaced when data loads) -->
             <tr class="skeleton-row" aria-hidden="true">
+              <td></td>
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:160px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:32px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:100px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:34px; border-radius:999px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:110px; border-radius:999px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
@@ -253,12 +284,14 @@
               <td></td>
             </tr>
             <tr class="skeleton-row" aria-hidden="true">
+              <td></td>
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:140px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:32px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:100px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:34px; border-radius:999px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:110px; border-radius:999px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
@@ -266,12 +299,14 @@
               <td></td>
             </tr>
             <tr class="skeleton-row" aria-hidden="true">
+              <td></td>
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:180px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:32px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:100px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:34px; border-radius:999px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:110px; border-radius:999px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
@@ -285,10 +320,37 @@
       <!-- Mobile cards list (toggled by JS) -->
       <div id="listaContratosMovil" class="cards-list" style="display:none"></div>
 
+      <!-- ── Pestaña Gestiones ──────────────────────────────────────────
+           El expediente por serial que hasta ahora solo se podía ver cliente
+           por cliente en el Centro. La fila se expande con la bitácora y los
+           seriales (ArchivoGestiones). -->
+      <div class="app-table-wrap" id="panelGestiones" hidden style="border:none; box-shadow:none; border-radius:0;">
+        <table class="app-table" aria-label="Archivo de gestiones">
+          <thead>
+            <tr>
+              <th style="width:34px;"></th>
+              <th style="width:150px;">Gestión</th>
+              <th>Cliente</th>
+              <th style="width:150px;">Tipo</th>
+              <th style="width:64px; text-align:center;">Ser.</th>
+              <th style="width:180px;">Estado</th>
+              <th style="width:160px;">Contrato</th>
+              <th>Responsable</th>
+              <th style="width:110px;">Solicitud</th>
+              <th class="acciones" style="width:130px; text-align:right;"></th>
+            </tr>
+          </thead>
+          <tbody id="tablaGestiones"></tbody>
+        </table>
+      </div>
+
       <!-- Table footer: count summary + load more -->
-      <div class="app-table-footer">
+      <div class="app-table-footer" id="pieContratos">
         <div id="resumenContratos"></div>
         <button class="btn btn-ghost btn-sm" id="btnCargarMas"><i data-lucide="chevron-down"></i> Cargar más contratos</button>
+      </div>
+      <div class="app-table-footer" id="pieGestiones" hidden>
+        <div id="resumenGestiones"></div>
       </div>
 
     </div><!-- /.ds-card -->
@@ -336,96 +398,16 @@
     })();
   </script>
 
-  <!-- fo2: el predicado ahora respeta el descarte de la bandeja del home (el
-       CTA "Crear orden" se apaga para las órdenes que no se van a crear). -->
-  <script defer src="../js/domain/ordenProgPendiente.js?v=fo2"></script>
-  <script defer src="../js/domain/transicionPendiente.js?v=reemp1"></script>
   <script defer src="../js/domain/devolucionContrato.js?v=dev3"></script>
-  <script defer src="../js/domain/contratoAnulacion.js?v=an2"></script>
   <script defer src="../js/pages/contratos-state.js?v=ses1"></script>
-  <script defer src="../js/domain/transicionPlan.js?v=tp2"></script>
-  <script defer src="../js/pages/contratos-approval.js?v=cc3"></script>
-  <!-- firm2: reemplazo del PDF firmado sobre contratos ya activos. -->
-  <script defer src="../js/pages/contratos-upload.js?v=firm2"></script>
   <script defer src="../js/pages/contratos-equipos.js?v=dev5"></script>
-  <script defer src="../js/ui/entity-picker.js?v=ep1"></script>
-  <script defer src="../js/pages/contratos-seriales-cambio.js?v=ep1"></script>
-  <script defer src="../js/pages/contratos-list.js?v=sh1"></script>
-  <script src="../js/pages/contratos-index.js?v=ses4" defer></script>
+  <script defer src="../js/services/gestionesService.js?v=arch1"></script>
+  <script defer src="../js/pages/archivo-expediente.js?v=arch1"></script>
+  <script defer src="../js/pages/archivo-gestiones.js?v=arch1"></script>
+  <script defer src="../js/pages/contratos-list.js?v=arch1"></script>
+  <script src="../js/pages/contratos-index.js?v=arch1" defer></script>
 
-  <!-- Aprobación overlay -->
-  <div id="overlayAprobacion" class="modal-backdrop"
-       role="dialog" aria-modal="true" aria-labelledby="aprobacionTitulo">
-    <div class="modal modal-lg" id="sheetAprobacion">
-      <div class="modal-header">
-        <h3 id="aprobacionTitulo" class="modal-title"><i data-lucide="check-circle"></i> Aprobación de contrato</h3>
-        <button class="modal-close" onclick="ContratosAprobacion.cerrarOverlay()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
-      </div>
-      <div class="modal-body">
-        <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-4); margin-bottom:var(--sp-3);">
-          <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="file-text"></i> Detalles del Contrato</legend>
-          <div id="detallesContrato" style="font-size:14px;"></div>
-        </fieldset>
-        <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-3);">
-          <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="package"></i> Equipos Asociados</legend>
-          <div class="table-scroll">
-            <table class="app-table" style="font-size:13px; min-width:520px;">
-              <thead>
-                <tr>
-                  <th>Modelo</th>
-                  <th>Cantidad</th>
-                  <th>Precio</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody id="tablaEquiposAprobacion"></tbody>
-            </table>
-          </div>
-        </fieldset>
-        <fieldset id="fieldsetCargosAprobacion" style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-3); margin-top:var(--sp-3); display:none;">
-          <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="receipt"></i> Servicios y otros cargos</legend>
-          <div class="table-scroll">
-            <table class="app-table" style="font-size:13px; min-width:520px;">
-              <thead>
-                <tr>
-                  <th>Concepto</th>
-                  <th>Cantidad</th>
-                  <th>Monto</th>
-                  <th>Tipo</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody id="tablaCargosAprobacion"></tbody>
-            </table>
-          </div>
-        </fieldset>
-        <fieldset id="fieldsetTransicionAprobacion" style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-3); margin-top:var(--sp-3); display:none;">
-          <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="repeat"></i> Transición de equipos</legend>
-          <div id="transicionAprobacion" style="font-size:13px;"></div>
-        </fieldset>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="ContratosAprobacion.cancelar()"><i data-lucide="x-circle"></i> Cancelar</button>
-        <button class="btn btn-primary" onclick="ContratosAprobacion.confirmar()"><i data-lucide="check-circle"></i> Aprobar Contrato</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Panel de trabajo overlay -->
-  <div id="overlayPanelTrabajo" class="modal-backdrop" role="dialog" aria-modal="true">
-    <div class="modal modal-lg">
-      <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="layout-dashboard"></i> Panel de trabajo</h3>
-        <button class="modal-close" onclick="ContratosEquipos.cerrarPanel()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
-      </div>
-      <div class="modal-body" id="panelTrabajoBody"></div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="ContratosEquipos.cerrarPanel()">Cerrar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Equipos asociados overlay -->
+  <!-- Equipos del contrato (solo lectura) -->
   <div id="overlayEquiposContrato" class="modal-backdrop" role="dialog" aria-modal="true">
     <div class="modal modal-lg">
       <div class="modal-header">

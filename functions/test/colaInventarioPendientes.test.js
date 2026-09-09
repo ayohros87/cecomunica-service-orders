@@ -207,15 +207,17 @@ test("el predicado de transición es el compartido de js/domain", () => {
   assert.equal(TP.contratoNecesitaTransicion({ estado: "activo", codigo_tipo: "REEMP" }), true);
   assert.equal(TP.contratoNecesitaTransicion({ estado: "activo", accion: "Nuevo" }), false);
 
-  // La lista de contratos ya no puede tener su propia copia del criterio.
+  // Nadie puede tener su propia copia del criterio. Desde el 2026-09-09
+  // /contratos/ es un ARCHIVO de consulta y ya no ofrece el CTA de transición
+  // (vive en el Centro y en la bandeja de inventario), así que la guarda dejó
+  // de exigir que lo USE — pero sigue prohibiendo que lo REIMPLEMENTE.
   const lista = leer("public", "js", "pages", "contratos-list.js");
-  assert.ok(lista.includes("TransicionPendiente.contratoNecesitaTransicion"),
-    "contratos-list.js dejó de usar el predicado compartido");
   assert.ok(!/transicion_mapeos_count/.test(lista.replace(/\/\/.*$/gm, "")),
     "contratos-list.js volvió a inlinear el criterio de transición");
-  // Y la página tiene que cargarlo, o el CTA truena en runtime.
-  assert.ok(leer("public", "contratos", "index.html").includes("domain/transicionPendiente.js"),
-    "contratos/index.html no carga js/domain/transicionPendiente.js");
+  // Y quien sí lo usa tiene que cargarlo, o el CTA truena en runtime.
+  // Quien lo usa hoy es la bandeja "Pendientes de inventario" del almacén.
+  assert.ok(leer("public", "almacen", "index.html").includes("domain/transicionPendiente.js"),
+    "almacen/index.html no carga js/domain/transicionPendiente.js");
 });
 
 // ── P2: visibilidad de módulos ─────────────────────────────────────────────

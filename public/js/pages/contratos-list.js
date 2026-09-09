@@ -19,41 +19,35 @@ window.ContratosLista = {
     else if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
-  // Botón de seriales con estado: pendiente (resaltado) / parcial / completo (verde).
-  // Se muestra en contratos activos/aprobados con unidades activas.
-  serialesBtn(id, data, { movil = false } = {}) {
+  // Chip de seriales — INFORMATIVO (archivo, 2026-09-09). Antes era un botón
+  // que llevaba a completar seriales; asignar seriales es trabajo y el trabajo
+  // vive en el Centro. Aquí solo dice cuántos quedaron registrados. La única
+  // excepción clickeable son los contratos 'legacy' (corte histórico, fuera del
+  // flujo automático), que sí se pueden completar para referencia — y ese
+  // enlace vive en el menú ⋯, no como CTA.
+  serialesChip(data) {
     if (!['activo', 'aprobado'].includes(data.estado)) return '';
-    // Contratos históricos (corte legacy): fuera del flujo automático. Chip GRIS
-    // (no es un CTA pendiente como el ámbar) pero SÍ clickeable: abre la página de
-    // seriales en modo "registro histórico" por si más adelante se quieren
-    // registrar los seriales en el contrato. Eso NO reenvía a activaciones (la
-    // página oculta "Confirmar" y el trigger backstop bloquea el correo).
-    // Ver backfill `marcarSerialesLegacy`.
     if (data.seriales_estado === 'legacy') {
-      return `<button class="btn btn-sm" style="background:#F3F4F6;color:#6B7280;border:1px solid #E5E7EB;" onclick="location.href='seriales.html?id=${id}'" title="Contrato histórico — registrar seriales para referencia (no se envía a activaciones)"><i data-lucide="archive" style="width:14px;height:14px;"></i> Seriales · histórico</button>`;
+      return `<span class="chip-estado" style="background:#F3F4F6;color:#6B7280;border:1px solid #E5E7EB;" title="Contrato histórico — fuera del flujo automático de seriales"><i data-lucide="archive" style="width:12px;height:12px;"></i> Histórico</span>`;
     }
-    // Renovación sin equipo: los renglones de equipos son solo de alquiler
-    // (no se entrega equipo físico) — no hay seriales que asignar.
     if (data.accion === 'Renovación' && data.renovacion_sin_equipo) return '';
     const total = (data.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
     const activos = Math.max(0, total - Number(data.baja_cancelado_total || 0));
     if (activos === 0) return '';
-    // Unidades resueltas = seriales reales + unidades marcadas "sin serial" (omitidas).
     const count = Number(data.seriales_count || 0) + Number(data.seriales_omitidos_count || 0);
 
     let css, icon, label, title;
     if (count === 0) {
       css = 'background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;';
-      icon = 'scan-barcode'; label = 'Seriales pendientes'; title = `Faltan seriales (0 de ${activos})`;
+      icon = 'scan-barcode'; label = 'Sin seriales'; title = `El contrato no tiene seriales registrados (0 de ${activos})`;
     } else if (count >= activos) {
       css = 'background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0;';
-      icon = 'check'; label = 'Seriales'; title = `Seriales completos (${count} de ${activos})`;
+      icon = 'check'; label = `${count} seriales`; title = `Seriales completos (${count} de ${activos})`;
     } else {
-      css = 'background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;';
-      icon = 'scan-barcode'; label = `Seriales ${count}/${activos}`; title = `Seriales incompletos (${count} de ${activos})`;
+      css = 'background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;';
+      icon = 'scan-barcode'; label = `${count}/${activos}`; title = `Seriales parciales (${count} de ${activos})`;
     }
-    const cls = movil ? 'btn btn-sm' : 'btn btn-sm';
-    return `<button class="${cls}" style="${css}" onclick="location.href='seriales.html?id=${id}'" title="${title}"><i data-lucide="${icon}" style="width:14px;height:14px;"></i> ${label}</button>`;
+    return `<span class="chip-estado" style="${css}" title="${title}"><i data-lucide="${icon}" style="width:12px;height:12px;"></i> ${label}</span>`;
   },
 
   // Indicador de enmienda sobre el contrato (derivado por el trigger onCancelacionWrite).
@@ -156,167 +150,117 @@ window.ContratosLista = {
     return `<span class="chip-estado" style="background:#EFF6FF;color:#1E3A8A;border:1px solid #93C5FD;" title="Solicitud de cambio de serial pendiente de reemplazo por inventario"><i data-lucide="replace" style="width:12px;height:12px;"></i> Cambio de serial</span>`;
   },
 
-  // ── Acciones (CTA inline + menú ⋯) ───────────────────────────────
-  // Construye el área de acciones de una fila/card: el pill de Seriales
-  // (indicador de estado) + una sola CTA contextual + un menú overflow
-  // con el resto. Comparte la lógica entre tabla y cards móviles.
+  // ¿Este usuario ve los montos? El archivo lo consultan también recepción y
+  // vendedores, y el total del contrato es información financiera
+  // (need-to-know). La columna se OMITE, no se tacha: una columna vacía
+  // invita a preguntar quién sí la ve.
+  verMontos() {
+    return canRole(AUTH.rol, 'ver-montos-contrato');
+  },
+
+  // Columna "Papel": qué documento le toca a este contrato. Es la misma regla
+  // que usa el trigger para decidir qué PDF adjunta el correo a activaciones
+  // (js/domain/documentoContrato.js, espejo de functions/src/lib/). Verla en
+  // la lista es lo que hace obvio, de un vistazo, que un contrato viejo
+  // imprime el formato anterior a propósito y no por un error.
+  papelChip(data) {
+    const v2 = DocumentoContrato.esV2(data);
+    const css = v2
+      ? 'background:#E6F4FB;color:#00648F;border:1px solid #9BD2EE;'
+      : 'background:#F3F4F6;color:#6B7280;border:1px solid #E5E7EB;';
+    const title = v2
+      ? 'Documento v2 — secciones numeradas, Anexo A por serial y firma digital'
+      : 'Formato anterior — es el papel que el cliente tiene firmado (contrato previo al corte del 2026-09-09)';
+    return `<span class="chip-estado" style="${css}" title="${title}">${v2 ? 'v2' : 'clásico'}</span>`;
+  },
+
+  // ── Acciones del ARCHIVO (2026-09-09) ────────────────────────────
+  // Este módulo dejó de ser una herramienta de trabajo: las 14 acciones que
+  // vivían aquí (aprobar, subir firmado, seriales, panel de trabajo,
+  // transición, baja, cambio de serial, orden de programación, renovar,
+  // duplicar, comisión, anular, eliminar) ya existen en el Centro de gestión,
+  // que es donde viven el plan por serial y el expediente de la gestión. Dos
+  // puertas para lo mismo es una puerta que se queda desactualizada.
+  //
+  // Lo que queda es de LECTURA: ver el documento que corresponde (el corte
+  // decide si v2 o clásico — DocumentoContrato), abrir la ficha del cliente y
+  // bajar el PDF firmado.
   buildAcciones(id, data, { movil = false } = {}) {
-    const esAdmin     = AUTH.is(ROLES.ADMIN);
-    const esGerente   = AUTH.is(ROLES.GERENTE);
-    const esRecepcion = AUTH.is(ROLES.RECEPCION);
-    const esVendedor  = AUTH.is(ROLES.VENDEDOR);
-    const puedeEditar = esAdmin || esVendedor;
-    const puedePanelTrabajo = esAdmin || esRecepcion;
-    const editable    = puedeEditar && !['activo','aprobado','anulado'].includes(data.estado);
-    const yaFirmado   = !!data.firmado_url;
-    // Subir el firmado ACTIVA el contrato ('aprobado' → 'activo', contratos-upload.js),
-    // así que gatear el reemplazo también en 'aprobado' lo volvía inalcanzable: para
-    // cuando había algo que reemplazar el contrato ya estaba 'activo'. Quien subió el
-    // archivo equivocado (p.ej. el contrato sin firmar) se quedaba sin salida en la
-    // app. El reemplazo sobre contrato vivo repunta el archivo sin tocar el estado.
-    const puedeSubirFirmado      = data.estado === 'aprobado' && puedeEditar;
-    const puedeReemplazarFirmado = data.estado === 'activo'   && puedeEditar;
-    const esActivoOAprobado = ['activo','aprobado'].includes(data.estado);
-
-    const bajaPendiente   = data.baja_estado === 'pendiente' && esActivoOAprobado && !data.terminacion_total;
-    const esAprobadorBaja = esAdmin || esGerente;
-    // roles.js 'aprobar-contrato'/'anular-contrato' incluyen al gerente (y las
-    // rules le permiten el salto a 'activo' y el delete); antes solo esAdmin.
-    const puedeAprobarContrato = esAdmin || esGerente;
-    const puedeSolicitarBaja = esActivoOAprobado && (esAdmin || esVendedor || esRecepcion || esGerente);
-
-    // Guía del ciclo de equipos (PLAN_CICLO_VIDA_EQUIPOS.md): los "siguientes
-    // pasos" salen del menú ⋯ y se vuelven CTA visible cuando tocan.
-    //   · Transición pendiente: renovación/adición/reemplazo CON equipo, vigente,
-    //     sin ningún mapeo registrado (transicion_mapeos_count lo estampa el
-    //     trigger onMapeoWrite).
-    //   · Crear orden de programación: seriales completos, sin entrega
-    //     confirmada y sin órdenes vinculadas todavía.
-    // Ambos predicados son compartidos (js/domain/): el de transición lo usa
-    // además la bandeja "Pendientes de inventario", y el de la orden el feed
-    // "Órdenes por crear" del home. Un solo criterio para cada uno.
-    const esTransicionable = TransicionPendiente.esTransicionable(data);
-    const transicionPendiente = TransicionPendiente.contratoNecesitaTransicion(data);
-    // Predicado compartido con el feed "Órdenes por crear" del home
-    // (js/domain/ordenProgPendiente.js) — un solo criterio para ambos.
-    const puedeCrearOrdenProg = OrdenProgPendiente.contratoNecesitaOrden(data);
-    const urlOrdenProg = `../ordenes/nueva-orden.html?cliente_id=${encodeURIComponent(data.cliente_id || '')}&contrato_doc_id=${id}&tipo=PROGRAMACION`;
-
     const ctaCls = 'btn btn-sm';
-    const amber = 'background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;text-decoration:none;';
+    const urlFicha = `../clientes/centro.html?id=${encodeURIComponent(data.cliente_id || '')}&contrato=${encodeURIComponent(id)}`;
 
-    // ── CTA primaria (precedencia) ──────────────────────────────────
-    // 1) baja pendiente (lo más urgente) → 2) aprobar contrato →
-    // 3) subir firmado → 4) transición de equipos pendiente →
-    // 5) crear orden de programación → 6) ver/imprimir.
-    let primaryHtml = '';
-    let primaryKind = '';
-    if (bajaPendiente) {
-      primaryKind = 'baja';
-      // Ambos van a la cola (default: filtro 'pendiente'); el aprobador ve los
-      // botones Aprobar/Rechazar, el solicitante solo el estado. No usamos
-      // ?contrato= porque eso abre el formulario de nueva solicitud, no la cola.
-      primaryHtml = esAprobadorBaja
-        ? `<a class="${ctaCls}" style="${amber}" href="cancelaciones.html" title="Aprobar baja pendiente"><i data-lucide="clock" style="width:14px;height:14px;"></i> Aprobar baja</a>`
-        : `<a class="${ctaCls}" style="${amber}" href="cancelaciones.html" title="Baja en revisión por administración"><i data-lucide="clock" style="width:14px;height:14px;"></i> Baja en revisión</a>`;
-    } else if (puedeAprobarContrato && data.estado === 'pendiente_aprobacion') {
-      primaryKind = 'aprobar';
-      primaryHtml = `<button class="${ctaCls} btn-accent" onclick="ContratosAprobacion.abrir('${id}')" title="Aprobar contrato"><i data-lucide="check-circle" style="width:14px;height:14px;"></i> Aprobar</button>`;
-    } else if (puedeSubirFirmado && !yaFirmado) {
-      primaryKind = 'subir-firmado';
-      primaryHtml = `<button class="${ctaCls}" onclick="ContratosFirmado.subir('${id}')" title="Subir contrato firmado"><i data-lucide="upload" style="width:14px;height:14px;"></i> Subir firmado</button>`;
-    } else if (transicionPendiente) {
-      primaryKind = 'transicion';
-      primaryHtml = `<a class="${ctaCls}" style="${amber}" href="transicion.html?id=${id}" title="Renovación/reemplazo sin transición registrada: mapea qué equipos salen y cuáles los sustituyen"><i data-lucide="arrow-left-right" style="width:14px;height:14px;"></i> Transición de equipos</a>`;
-    } else if (puedeCrearOrdenProg) {
-      primaryKind = 'orden-prog';
-      primaryHtml = `<a class="${ctaCls}" style="${amber}" href="${urlOrdenProg}" title="Seriales listos y sin orden vinculada: crea la orden de programación para la entrega (formulario precargado)"><i data-lucide="calendar-plus" style="width:14px;height:14px;"></i> Crear orden</a>`;
-    } else if (data.contrato_id) {
-      primaryKind = 'ver';
-      primaryHtml = `<button class="${ctaCls}" onclick="ContratosLista.ver('${id}')" title="Ver / Imprimir"><i data-lucide="printer" style="width:14px;height:14px;"></i> Ver</button>`;
-    }
+    // CTA primaria: el documento. Sin contrato_id (borrador sin numerar) no
+    // hay papel que ver todavía.
+    const primaryHtml = data.contrato_id
+      ? `<button class="${ctaCls} btn-accent" onclick="ContratosLista.ver('${id}')" title="Ver el documento del contrato"><i data-lucide="file-text" style="width:14px;height:14px;"></i> Documento</button>`
+      : '';
 
-    // ── Pill de Seriales (indicador de estado, queda inline) ─────────
-    const serialesHtml = ContratosLista.serialesBtn(id, data, { movil });
-
-    // ── Menú overflow: todo lo demás, con texto + icono ──────────────
     const items = [];
     const I = (icon, label, onclick, cls = '') =>
       `<button class="overflow-menu-item ${cls}" onclick="${onclick}"><i data-lucide="${icon}"></i> ${label}</button>`;
     const A = (icon, label, href, cls = '') =>
       `<a class="overflow-menu-item ${cls}" href="${href}" target="_blank" rel="noopener"><i data-lucide="${icon}"></i> ${label}</a>`;
 
-    if (primaryKind !== 'ver' && data.contrato_id)
-      items.push(I('printer', 'Ver / Imprimir', `ContratosLista.ver('${id}')`));
-    if (puedePanelTrabajo)
-      items.push(I('folder-open', 'Panel de trabajo', `ContratosEquipos.abrirPanel('${id}')`));
-    if (editable)
-      items.push(I('pencil', 'Editar', `ContratosLista.editar('${id}')`));
-    // Aprobar contrato — en el menú solo si NO es ya la CTA primaria (p.ej.
-    // cuando una baja pendiente desplazó la CTA).
-    if (primaryKind !== 'aprobar' && puedeAprobarContrato && data.estado === 'pendiente_aprobacion')
-      items.push(I('check-circle', 'Aprobar contrato', `ContratosAprobacion.abrir('${id}')`, 'highlighted'));
-    // Solicitar baja — solo cuando no hay una baja pendiente (si la hay, vive en la CTA).
-    if (puedeSolicitarBaja && !bajaPendiente)
-      items.push(I('package-minus', 'Solicitar baja', `window.location.href='cancelaciones.html?contrato=${id}'`));
-    // Solicitar cambio/corrección de serial — recepción/admin, SOLO mientras el
-    // contrato está 'aprobado' (antes de activarse) y ya tiene seriales asignados.
-    if ((esAdmin || esRecepcion) && data.estado === 'aprobado'
-        && data.seriales_estado !== 'legacy' && Number(data.seriales_count || 0) > 0)
-      items.push(I('scan-barcode', 'Solicitar cambio de serial', `ContratosSerialCambio.abrir('${id}')`));
-    // Transición de equipos (renovación/adición/reemplazo) — en el menú solo si
-    // NO es ya la CTA primaria (queda accesible aun con mapeos registrados,
-    // para agregar más o revisar).
-    if (esTransicionable && primaryKind !== 'transicion')
-      items.push(I('arrow-left-right', 'Transición de equipos', `window.location.href='transicion.html?id=${id}'`));
-    // Crear orden de programación precargada — en el menú cuando no es la CTA
-    // (p.ej. ya hay una orden vinculada pero se necesita otra).
-    if (esActivoOAprobado && data.seriales_estado !== 'legacy'
-        && Number(data.seriales_count || 0) > 0 && !data.entrega_confirmada
-        && primaryKind !== 'orden-prog')
-      items.push(I('calendar-plus', 'Crear orden de programación', `window.location.href='${urlOrdenProg}'`));
-    // Firmado
-    if (yaFirmado) {
-      items.push(A('file-text', 'Ver firmado', data.firmado_url));
-      if (puedeSubirFirmado || puedeReemplazarFirmado)
-        items.push(I('refresh-cw', 'Reemplazar firmado', `ContratosFirmado.subir('${id}')`));
-    } else if ((puedeSubirFirmado || puedeReemplazarFirmado) && primaryKind !== 'subir-firmado') {
-      items.push(I('upload', 'Subir firmado', `ContratosFirmado.subir('${id}')`));
-    }
-    // Comisión (admin)
-    if (esAdmin && !data.listo_para_comision)
-      items.push(I('dollar-sign', 'Marcar comisión', `ContratosLista.marcarComision('${id}')`));
-    if (esAdmin && data.listo_para_comision)
-      items.push(I('x-circle', 'Quitar comisión', `ContratosLista.quitarComision('${id}')`));
-    // Renovar con prefill (auditoría P1): renovar se rehacía DESDE CERO
-    // (~22 interacciones) eligiendo a mano cliente, equipos, plan y el
-    // contrato de origen — con riesgo real de vincular el origen equivocado.
-    // 2026-09-04: la renovación ya no se arma en nuevo-contrato (solo queda
-    // alquiler nuevo); el CTA lleva a la ficha del cliente en el Centro.
-    if (data.estado === 'activo' && (esAdmin || esVendedor))
-      items.push(I('refresh-ccw', 'Renovar (Centro de gestión)', `ContratosLista.renovar('${id}')`, 'highlighted'));
-    // Duplicar
-    if (puedeEditar && ['anulado','inactivo'].includes(data.estado))
-      items.push(I('copy', 'Duplicar', `ContratosLista.duplicar('${id}')`));
-    // Destructivas (al final, separadas, en rojo)
-    const danger = [];
-    if (esActivoOAprobado && (esAdmin || esGerente))
-      danger.push(I('ban', 'Anular contrato', `ContratosLista.anular('${id}')`, 'danger'));
-    if (!['activo','aprobado','anulado'].includes(data.estado) && (esAdmin || esVendedor))
-      danger.push(I('trash-2', 'Eliminar', `ContratosLista.borrar('${id}')`, 'danger'));
-    if (danger.length) {
-      items.push('<div class="overflow-menu-divider"></div>');
-      items.push(...danger);
-    }
+    items.push(A('user', 'Ficha del cliente', urlFicha));
+    if (data.firmado_url) items.push(A('file-check', 'Ver el firmado (PDF)', data.firmado_url));
+    if ((data.equipos || []).length) items.push(I('package', 'Equipos del contrato', `ContratosEquipos.abrirModal('${id}')`));
+    // Contratos del corte histórico ('legacy'): fuera del flujo automático.
+    // Registrar sus seriales para referencia sigue siendo válido y NO reenvía
+    // a activaciones (la página oculta "Confirmar").
+    if (data.seriales_estado === 'legacy')
+      items.push(I('archive', 'Registrar seriales (histórico)', `location.href='seriales.html?id=${id}'`));
+    items.push(I('link', 'Copiar el enlace', `ContratosLista.copiarEnlace('${id}')`));
 
-    const menuHtml = items.length
-      ? `<div class="overflow-menu">
-           <button class="overflow-menu-btn" onclick="ContratosLista.toggleMenu('${id}')" title="Más acciones" aria-label="Más acciones" aria-haspopup="true">⋯</button>
+    const menuHtml = `<div class="overflow-menu">
+           <button class="overflow-menu-btn" onclick="ContratosLista.toggleMenu('${id}')" title="Más" aria-label="Más" aria-haspopup="true">⋯</button>
            <div class="overflow-menu-dropdown" id="acc-menu-${id}">${items.join('')}</div>
-         </div>`
-      : '';
+         </div>`;
 
-    return `${serialesHtml}${primaryHtml}${menuHtml}`;
+    return `${primaryHtml}${menuHtml}`;
+  },
+
+  // CSV de lo que está en pantalla, con los filtros puestos. Los montos solo
+  // salen si el rol los puede ver: exportar no es una puerta trasera.
+  exportarCsv() {
+    const filas = this.ordenar(this.filtrarLocal([...CS.contratos]));
+    if (!filas.length) { Toast.show('No hay nada que exportar.', 'warn'); return; }
+    const montos = this.verMontos();
+    const cab = ['Contrato', 'Cliente', 'RUC', 'Tipo', 'Accion', 'Equipos', 'Estado', 'Papel',
+      'Seriales', 'Fecha', 'Creado por', ...(montos ? ['Total'] : [])];
+    const cuerpo = filas.map((d) => {
+      const tot = ContractTotals.fromDoc(d);
+      return [
+        d.contrato_id || d.id,
+        d.cliente_nombre || '',
+        d.cliente_rucdv || d.cliente_ruc || '',
+        d.tipo_contrato || '',
+        d.accion || '',
+        (d.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0),
+        d.estado || '',
+        DocumentoContrato.papel(d),
+        Number(d.seriales_count || 0),
+        d.fecha_creacion?.toDate ? d.fecha_creacion.toDate().toLocaleDateString() : '',
+        CS.mapaUsuarios[d.creado_por_uid] || '',
+        ...(montos ? [FMT.round2(tot.totalConITBMS)] : []),
+      ];
+    });
+    Archivo.bajarCsv('contratos', cab, cuerpo);
+  },
+
+  // Enlace directo a la fila del archivo — el pedido real es pegarlo en un
+  // correo o un chat, así que se copia el enlace del DOCUMENTO, no el de la
+  // lista filtrada.
+  async copiarEnlace(id) {
+    const data = CS.contratos.find((c) => c.id === id) || {};
+    const url = new URL(DocumentoContrato.urlDocumento(id, data), window.location.href).href;
+    try {
+      await navigator.clipboard.writeText(url);
+      Toast.show('Enlace copiado.', 'ok');
+    } catch {
+      // Sin permiso de portapapeles (http, o el usuario lo negó): mostrarlo
+      // para que se pueda copiar a mano en vez de fallar en silencio.
+      Toast.show(url, 'info');
+    }
   },
 
   // Abre/cierra el menú overflow de una fila (cierra los demás primero).
@@ -334,7 +278,7 @@ window.ContratosLista = {
   },
 
   // ── Row / card builders ──────────────────────────────────────────
-  crearFila(id, data) {
+  crearFila(id, data, indice = 0) {
     const esc = CS.esc.bind(CS);
 
     const estadoClase =
@@ -361,7 +305,11 @@ window.ContratosLista = {
 
     const fila = document.createElement('tr');
     fila.setAttribute('data-contrato-doc-id', id);
+    // La cebra ya no puede salir de :nth-child: entre fila y fila va la del
+    // expediente (oculta, pero cuenta para el selector). Se marca a mano.
+    if (indice % 2 === 1) fila.classList.add('fila-par');
     fila.innerHTML = `
+      <td style="width:34px;">${ArchivoExpediente.botonHtml('contrato', id)}</td>
       <td class="td-primary"><span class="contrato-id">${data.contrato_id || '-'}</span> ${iconoComision}</td>
       <td><strong style="color:var(--fg-1); font-weight:600;">${esc(data.cliente_nombre || '-')}</strong></td>
       <td>${esc(data.tipo_contrato || '-')}</td>
@@ -370,18 +318,30 @@ window.ContratosLista = {
       <td class="estado-cell">
         <div style="display:inline-flex; flex-direction:column; align-items:flex-start; gap:4px;">
           <span class="chip-estado ${estadoClase}">${estadoTexto}</span>
+          ${ContratosLista.serialesChip(data)}
           ${ContratosLista.bajaPill(data)}
           ${ContratosLista.cambioSerialPill(data)}
           ${ContratosLista.sustitucionPill(data)}
         </div>
       </td>
+      <td>${ContratosLista.papelChip(data)}</td>
       <td>${ContratosLista.devolucionPill(data, id)}</td>
       <td class="td-muted">${data.fecha_creacion?.toDate ? data.fecha_creacion.toDate().toLocaleDateString() : '-'}</td>
       <td class="td-muted" data-creador-uid="${esc(data.creado_por_uid || '')}">${esc(CS.mapaUsuarios[data.creado_por_uid] || (data.creado_por_uid ? '…' : '-'))}</td>
-      <td class="td-mono" style="text-align:right; color:var(--fg-1); font-weight:600;">${FMT.money(tot.totalConITBMS)}</td>
+      ${ContratosLista.verMontos()
+        ? `<td class="td-mono" style="text-align:right; color:var(--fg-1); font-weight:600;">${FMT.money(tot.totalConITBMS)}</td>`
+        : ''}
       <td class="acciones">${accionesHtml}</td>
     `;
-    return fila;
+    // La fila del expediente viaja pegada a la suya: se devuelven las dos en un
+    // fragmento para que el caller siga haciendo un solo appendChild.
+    const frag = document.createDocumentFragment();
+    frag.appendChild(fila);
+    const cols = ContratosLista.verMontos() ? 13 : 12;
+    const tmp = document.createElement('tbody');
+    tmp.innerHTML = ArchivoExpediente.filaHtml(id, cols);
+    frag.appendChild(tmp.firstElementChild);
+    return frag;
   },
 
   crearCard(data) {
@@ -419,6 +379,8 @@ window.ContratosLista = {
         </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
           <div class="chip-estado ${estadoClase}">${estadoTexto}</div>
+          ${ContratosLista.papelChip(data)}
+          ${ContratosLista.serialesChip(data)}
           ${ContratosLista.bajaPill(data)}
           ${ContratosLista.cambioSerialPill(data)}
           ${ContratosLista.sustitucionPill(data)}
@@ -427,7 +389,7 @@ window.ContratosLista = {
       </div>
       <div class="row">
         <div class="t2">${esc(data.tipo_contrato || '-')} · ${esc(data.accion || '-')}</div>
-        <div class="t1">${totalStr}</div>
+        ${ContratosLista.verMontos() ? `<div class="t1">${totalStr}</div>` : ''}
       </div>
       <div class="acciones">${accionesMovilHtml}</div>
     `;
@@ -674,11 +636,11 @@ window.ContratosLista = {
         const wrap = document.querySelector('.app-table-wrap');
         if (wrap) wrap.style.display = '';
         if (listaMovil) listaMovil.style.display = 'none';
-        filtrados.forEach(data => {
+        filtrados.forEach((data, i) => {
           if (data.estado === 'pendiente_aprobacion') pendientes++;
           if (data.estado === 'aprobado') aprobados++;
           if (data.estado === 'activo')   activos++;
-          if (tabla) tabla.appendChild(this.crearFila(data.id, data));
+          if (tabla) tabla.appendChild(this.crearFila(data.id, data, i));
         });
         this.actualizarFlechitas();
       }
@@ -742,11 +704,11 @@ window.ContratosLista = {
       const wrap = document.querySelector('.app-table-wrap');
       if (wrap) wrap.style.display = '';
       if (listaMovil) listaMovil.style.display = 'none';
-      filtrados.forEach(data => {
+      filtrados.forEach((data, i) => {
         if (data.estado === 'pendiente_aprobacion') pendientes++;
         if (data.estado === 'aprobado') aprobados++;
         if (data.estado === 'activo')   activos++;
-        tabla.appendChild(this.crearFila(data.id, data));
+        tabla.appendChild(this.crearFila(data.id, data, i));
       });
       this.actualizarFlechitas();
     }
@@ -798,269 +760,6 @@ window.ContratosLista = {
     this.cargar(true);
   },
 
-  // ── CRUD actions ─────────────────────────────────────────────────
-  // Diálogo de anulación. La pregunta que importa no es el motivo (texto libre
-  // que nadie vuelve a leer) sino QUÉ PASA CON LOS EQUIPOS, porque de eso
-  // depende que el sistema abra o no una orden para ir a recuperarlos.
-  //
-  // Antes se asumía siempre "el cliente devuelve", y en este negocio casi nunca
-  // es así: anular es rehacer el papel. Medido sobre los 84 contratos anulados,
-  // una anulación nunca produjo un radio devuelto — pero sí produjo tiquetes
-  // pidiendo perseguir equipo que el cliente tenía con todo derecho
-  // (ALQ20260715-01: 32 radios, 2026-08-06).
-  //
-  // Devuelve null si se cancela, o { motivo, tipo, sustitutoId }.
-  _dialogoAnulacion(c, candidatos) {
-    const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({
-      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;'
-    }[m]));
-    const opciones = candidatos.map(x =>
-      `<option value="${esc(x.id)}">${esc(x.contrato_id || x.id)}${x.total_mensual ? ` — $${Number(x.total_mensual).toFixed(2)}/mes` : ''}</option>`
-    ).join('');
-    return Modal.sheet({
-      title: `Anular ${c.contrato_id || ''}`, icon: 'file-x', size: 'md',
-      html: `
-        <div style="display:flex;flex-direction:column;gap:14px">
-          <div>
-            <label style="display:block;font-weight:600;margin-bottom:6px">¿Qué pasa con los equipos?</label>
-            <label style="display:flex;gap:8px;align-items:flex-start;padding:10px;border:1px solid var(--border,#ddd);border-radius:8px;cursor:pointer;margin-bottom:6px">
-              <input type="radio" name="anulTipo" value="sustitucion" checked style="margin-top:3px">
-              <span>
-                <b>Se rehace el contrato</b> — el cliente conserva los equipos.<br>
-                <small style="color:var(--muted,#666)">Error de precio, de representante legal, de modelo… El equipo no se mueve.</small>
-              </span>
-            </label>
-            <label style="display:flex;gap:8px;align-items:flex-start;padding:10px;border:1px solid var(--border,#ddd);border-radius:8px;cursor:pointer">
-              <input type="radio" name="anulTipo" value="terminacion" style="margin-top:3px">
-              <span>
-                <b>Termina el acuerdo</b> — el cliente devuelve los equipos.<br>
-                <small style="color:var(--muted,#666)">Se abrirá una orden de DEVOLUCIÓN para recuperarlos.</small>
-              </span>
-            </label>
-          </div>
-          <div data-role="bloque-sustituto">
-            <label style="display:block;font-weight:600;margin-bottom:6px">Contrato que lo sustituye <small style="font-weight:400;color:var(--muted,#666)">(opcional)</small></label>
-            <select class="input" data-role="sustituto" style="width:100%">
-              <option value="">Todavía no lo he creado</option>
-              ${opciones}
-            </select>
-            <small style="color:var(--muted,#666)">Si lo indicas, los equipos pasan solos al contrato nuevo.</small>
-          </div>
-          <div>
-            <label style="display:block;font-weight:600;margin-bottom:6px">Motivo</label>
-            <textarea class="input" data-role="motivo" rows="3" style="width:100%;resize:vertical"
-              placeholder="Ej: el precio no incluyó el ajuste del micrófono"></textarea>
-          </div>
-        </div>`,
-      buttons: [{ action: 'cancel', label: 'Cancelar' }, { action: 'confirm', label: 'Anular contrato', danger: true }],
-      onMount: (root) => {
-        const bloque = root.querySelector('[data-role="bloque-sustituto"]');
-        // El selector de sustituto solo tiene sentido en una sustitución.
-        const sync = () => {
-          const tipo = root.querySelector('input[name="anulTipo"]:checked')?.value;
-          bloque.style.display = tipo === 'sustitucion' ? '' : 'none';
-        };
-        root.querySelectorAll('input[name="anulTipo"]').forEach(r => r.addEventListener('change', sync));
-        sync();
-        root.querySelector('[data-role="motivo"]')?.focus();
-      },
-      onAction: (a, root) => {
-        if (a !== 'confirm') return null;
-        const motivoEl = root.querySelector('[data-role="motivo"]');
-        const motivo = (motivoEl.value || '').trim();
-        if (!motivo) { motivoEl.focus(); Toast.show('Debes indicar un motivo.', 'bad'); return false; }
-        const tipo = root.querySelector('input[name="anulTipo"]:checked')?.value || 'terminacion';
-        const sustEl = root.querySelector('[data-role="sustituto"]');
-        return { motivo, tipo, sustitutoId: tipo === 'sustitucion' ? (sustEl.value || null) : null };
-      },
-    });
-  },
-
-  async anular(id) {
-    try {
-      const c = await ContratosService.getContrato(id);
-      if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
-      if (!AUTH.is(ROLES.ADMIN) && !AUTH.is(ROLES.GERENTE)) { Toast.show('Solo administración o gerencia puede anular contratos.', 'bad'); return; }
-      if (!['activo','aprobado'].includes(c.estado)) {
-        Toast.show('Solo se puede anular un contrato ACTIVO o APROBADO.', 'bad'); return;
-      }
-
-      // Candidatos a sustituto: contratos vivos del MISMO cliente. Se filtra
-      // `deleted` en el cliente para no exigir un índice compuesto (misma razón
-      // que getContratosActivosAprobados). Si la consulta falla, el diálogo
-      // sigue funcionando con la opción "todavía no lo he creado".
-      let candidatos = [];
-      try {
-        const snap = await firebase.firestore().collection('contratos')
-          .where('cliente_id', '==', c.cliente_id || '__none__').get();
-        candidatos = snap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .filter(x => x.id !== id && x.deleted !== true
-                    && ['aprobado', 'activo'].includes(x.estado))
-          .sort((a, b) => (b.fecha_creacion?.seconds || 0) - (a.fecha_creacion?.seconds || 0));
-      } catch (e) {
-        console.warn('No se pudieron cargar los contratos del cliente', e);
-      }
-
-      const res = await this._dialogoAnulacion(c, candidatos);
-      if (!res) return;
-
-      // La escritura vive en js/domain/contratoAnulacion.js (compartida con el
-      // Centro de gestión): anulacion_tipo va en el MISMO update que `estado`
-      // porque onAnnulment dispara con ese snapshot.
-      const sustituto = res.sustitutoId ? candidatos.find(x => x.id === res.sustitutoId) : null;
-      const update = ContratoAnulacion.buildUpdate(c, { motivo: res.motivo, tipo: res.tipo, sustituto }, id);
-
-      await ContratosService.updateContrato(id, update);
-      // El mensaje dice qué va a pasar con los equipos, no solo que se anuló:
-      // es la consecuencia que la persona necesita confirmar de un vistazo.
-      Toast.show(ContratoAnulacion.mensaje(update), 'ok');
-      setTimeout(() => location.reload(), 1800);
-    } catch (e) {
-      console.error(e);
-      Toast.show('No se pudo anular el contrato.', 'bad');
-    }
-  },
-
-  async duplicar(id) {
-    try {
-      const c = await ContratosService.getContrato(id);
-      if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
-
-      // 2026-09-04: nuevo-contrato solo crea ALQUILER NUEVO. Duplicar un
-      // contrato de otro tipo o acción se hace desde el Centro de gestión.
-      const tipoDup   = c.codigo_tipo || '';
-      const accionDup = c.accion || '';
-      if ((tipoDup && tipoDup !== 'ALQ') || (accionDup && accionDup !== 'Nuevo')) {
-        Toast.show('Este módulo solo duplica contratos de Alquiler nuevos. Abre la ficha del cliente en el Centro de gestión para rehacerlo.', 'warn');
-        this._irAlCentro(c.cliente_id);
-        return;
-      }
-
-      const draft = {
-        cliente_id:                      c.cliente_id || '',
-        codigo_tipo:                     c.codigo_tipo || '',
-        accion:                          c.accion || '',
-        renovacion_sin_equipo:           !!c.renovacion_sin_equipo,
-        renovacion_refurbished_componentes: !!c.renovacion_refurbished_componentes,
-        duracion:                        c.duracion || '',
-        observaciones:                   c.observaciones || '',
-        equipos: (c.equipos || []).map(e => ({
-          modelo_id:   e.modelo_id || null,
-          modelo:      e.modelo || '',
-          descripcion: e.descripcion || 'Equipos de Comunicación',
-          cantidad:    Number(e.cantidad || 0),
-          precio:      Number(e.precio || 0)
-        }))
-      };
-
-      sessionStorage.setItem('contrato_prefill', JSON.stringify(draft));
-      delete draft.estado;
-      const q = draft.cliente_id ? `?prefill=1&cliente_id=${encodeURIComponent(draft.cliente_id)}` : '?prefill=1';
-      window.location.href = `nuevo-contrato.html${q}`;
-    } catch (e) {
-      console.error(e);
-      Toast.show('No se pudo preparar el borrador para duplicar.', 'bad');
-    }
-  },
-
-  // Ficha del cliente en el Centro de gestión (sin cliente: el directorio).
-  _irAlCentro(clienteId) {
-    const base = '../clientes/centro.html';
-    window.location.href = clienteId ? `${base}?id=${encodeURIComponent(clienteId)}` : base;
-  },
-
-  // CTA "Renovar" (2026-09-04): la renovación se hace desde la CUENTA en el
-  // Centro de gestión ("Renovar cuenta", plan por serial). Antes precargaba
-  // nuevo-contrato con accion=Renovación, que ya no existe en ese módulo.
-  async renovar(id) {
-    try {
-      const c = await ContratosService.getContrato(id);
-      if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
-      if (c.estado !== 'activo') {
-        Toast.show('Solo se renueva un contrato ACTIVO.', 'bad'); return;
-      }
-      sessionStorage.removeItem('contrato_prefill');
-      this._irAlCentro(c.cliente_id);
-    } catch (e) {
-      console.error(e);
-      Toast.show('No se pudo abrir el Centro de gestión.', 'bad');
-    }
-  },
-
-  async editar(id) {
-    try {
-      const c = await ContratosService.getContrato(id);
-      if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
-      if (c.estado === 'activo' || c.estado === 'aprobado') {
-        Toast.show('Este contrato ya fue aprobado y no se puede editar.', 'bad'); return;
-      }
-      if (c.estado === 'anulado') {
-        Toast.show("Este contrato fue ANULADO y no se puede editar. Usa 'Duplicar' para rehacerlo.", 'bad'); return;
-      }
-      window.location.href = `editar-contrato.html?id=${id}`;
-    } catch (e) {
-      console.error(e);
-      Toast.show('No se pudo validar el estado del contrato.', 'bad');
-    }
-  },
-
-  async borrar(id) {
-    try {
-      const c = await ContratosService.getContrato(id);
-      if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
-      if (['activo','aprobado','anulado'].includes(c.estado)) {
-        Toast.show('Un contrato APROBADO/ACTIVO/ANULADO no se puede eliminar. Use ANULAR si corresponde.', 'bad'); return;
-      }
-      if (AUTH.is(ROLES.VENDEDOR) && c.creado_por_uid && c.creado_por_uid !== (firebase.auth().currentUser?.uid || '')) {
-        Toast.show('Solo el creador o un administrador pueden eliminar este contrato.', 'bad'); return;
-      }
-      if (!await Modal.confirm({ message: '¿Seguro que deseas eliminar este contrato?', danger: true })) return;
-
-      await ContratosService.updateContrato(id, { deleted: true, fecha_modificacion: new Date() });
-      Toast.show('Contrato eliminado', 'ok');
-      setTimeout(() => location.reload(), 1500);
-    } catch (e) {
-      console.error(e);
-      Toast.show('No se pudo eliminar el contrato.', 'bad');
-    }
-  },
-
-  async marcarComision(id) {
-    try {
-      if (!AUTH.is(ROLES.ADMIN)) { Toast.show('Solo el administrador puede cambiar este estado.', 'bad'); return; }
-      if (!await Modal.confirm({ message: "¿Marcar este contrato como 'Listo para Comisión'?" })) return;
-      await ContratosService.updateContrato(id, {
-        listo_para_comision:  true,
-        fecha_envio_comision: firebase.firestore.Timestamp.now(),
-        enviado_por_uid:      firebase.auth().currentUser?.uid || null,
-        fecha_modificacion:   new Date()
-      });
-      Toast.show('Marcado como listo para comisión.', 'ok');
-      setTimeout(() => location.reload(), 600);
-    } catch (e) {
-      console.error(e);
-      Toast.show('No se pudo marcar como listo para comisión.', 'bad');
-    }
-  },
-
-  async quitarComision(id) {
-    try {
-      if (!AUTH.is(ROLES.ADMIN)) { Toast.show('Solo el administrador puede cambiar este estado.', 'bad'); return; }
-      if (!await Modal.confirm({ message: "¿Quitar la marca de 'Listo para Comisión'?" })) return;
-      await ContratosService.updateContrato(id, {
-        listo_para_comision:  false,
-        fecha_envio_comision: null,
-        enviado_por_uid:      null,
-        fecha_modificacion:   new Date()
-      });
-      Toast.show('Etiqueta de comisión retirada.', 'ok');
-      setTimeout(() => location.reload(), 600);
-    } catch (e) {
-      console.error(e);
-      Toast.show('No se pudo quitar la marca de comisión.', 'bad');
-    }
-  },
 
   // ── Event wiring ─────────────────────────────────────────────────
   init() {

@@ -189,6 +189,80 @@ const GestionesService = {
     return out;
   },
 
+  // ── ARCHIVO (2026-09-09) ───────────────────────────────────────────────
+  // Buscar en TODO el histórico, no solo en lo abierto ni solo dentro de un
+  // cliente. Era el hueco real del sistema: nadie podía contestar "¿en qué
+  // gestión salió el serial 8J4K02245?" ni "dame las bajas de agosto" sin
+  // abrir cliente por cliente en el Centro.
+  //
+  // Reparto de trabajo, igual que la lista de contratos: el SERVIDOR filtra lo
+  // que tiene índice (tipo, estado, rango de fechas) y el navegador filtra por
+  // texto sobre lo que ya bajó. Las dos excepciones que sí van al servidor son
+  // las que un archivo tiene que resolver exacto:
+  //   · un correlativo (GR20260909-02) → lectura directa del documento;
+  //   · un serial → array-contains sobre `seriales_norm`, que denormaliza el
+  //     backfill (scripts/backfill-gestiones-archivo.js) y mantiene el trigger.
+  //
+  // `desde`/`hasta` son Date (o null). `hasta` se estira al final del día: el
+  // usuario que escribe 30-sep quiere el 30 de septiembre incluido.
+  async buscar({ texto = '', tipo = null, soloAbiertas = false, desde = null, hasta = null, limit = 200 } = {}) {
+    const db = firebase.firestore();
+    const txt = (texto || '').trim();
+
+    // 1) ¿Es un correlativo? El doc-ID ES el número — una sola lectura.
+    if (/^G[RDBAVC]\d{8}-\d+$/i.test(txt)) {
+      const g = await this.get(txt.toUpperCase());
+      return g && !g.deleted ? [g] : [];
+    }
+
+    let q = db.collection(this.COL).where('deleted', '==', false);
+
+    // 2) ¿Es un serial? El pool ya normaliza igual (Serial.norm).
+    const serial = window.Serial ? Serial.norm(txt) : txt.toUpperCase();
+    const pareceSerial = txt.length >= 5 && !txt.includes(' ') && /\d/.test(txt) && /^[A-Za-z0-9-]+$/.test(txt);
+    if (pareceSerial) q = q.where('seriales_norm', 'array-contains', serial);
+
+    if (tipo) q = q.where('tipo', '==', tipo);
+    else if (soloAbiertas) q = q.where('estado', 'in', this.ABIERTAS);
+
+    if (desde) q = q.where('fecha_solicitud', '>=', desde);
+    if (hasta) {
+      const fin = new Date(hasta);
+      fin.setHours(23, 59, 59, 999);
+      q = q.where('fecha_solicitud', '<=', fin);
+    }
+
+    const snap = await q.orderBy('fecha_solicitud', 'desc').limit(limit).get();
+    let out = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // 3) Filtro local por texto (cliente, responsable, notas). No sustituye a
+    // las dos búsquedas exactas de arriba: acota lo que ya está en pantalla.
+    if (txt && !pareceSerial) {
+      const t = txt.toLowerCase();
+      out = out.filter(g =>
+        (g.cliente_nombre || '').toLowerCase().includes(t)
+        || (g.id || '').toLowerCase().includes(t)
+        || (g.responsable_email || '').toLowerCase().includes(t)
+        || (g.contratos_afectados || []).some(c => String(c).toLowerCase().includes(t)));
+    }
+    // `tipo` y `soloAbiertas` juntos: el índice solo puede con uno de los dos
+    // (el otro es una igualdad más sobre el mismo rango), así que el segundo
+    // se aplica aquí.
+    if (tipo && soloAbiertas) out = out.filter(g => this.ABIERTAS.includes(g.estado));
+    return out;
+  },
+
+  // Bitácora del expediente para el archivo (subcolección append-only que
+  // escribe registrarEvento). Orden cronológico: el archivo se lee como una
+  // historia, de arriba hacia abajo.
+  async eventos(gestionId, { limit = 50 } = {}) {
+    const snap = await firebase.firestore().collection(this.COL).doc(gestionId)
+      .collection('eventos').limit(limit).get();
+    const out = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    out.sort((a, b) => (a.at?.toMillis?.() || 0) - (b.at?.toMillis?.() || 0));
+    return out;
+  },
+
   // Aprobación de la excepción por servicio al cliente (propio sin garantía,
   // decisión 2026-08-26 §8.1). Solo administrador — la regla de UI la valida
   // la página; el trigger onGestionWrite manda el correo a bodega al aprobar.
