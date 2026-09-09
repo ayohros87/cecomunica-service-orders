@@ -137,8 +137,15 @@ module.exports = onDocumentWritten(
           // EN_CLIENTE también se protege (2026-09-01, SERV mixto): una fila
           // de un equipo que YA está con el cliente (línea "propio" jalada de
           // la custodia) solo gana el vínculo al contrato — no se "des-entrega"
-          // a asignado. La propiedad existente nunca se pisa (upsertContacto).
+          // a asignado.
           noTocarDesde: [pool.ESTADOS.EN_TALLER, pool.ESTADOS.EN_CLIENTE],
+          // La propiedad que sale de la LÍNEA sí pisa la de la ficha
+          // (2026-09-09, Alberto): es lo que el vendedor declaró y firma el
+          // cliente, no una inferencia. Corrige de una vez las fichas que
+          // backfill-propiedad marcó "del cliente" por haber pasado solo por
+          // una orden (819 fichas, 82 cuentas — caso FORTUNATO MANGRAVITA).
+          // Con propiedad ambigua o derivada del tipo de contrato, no.
+          propiedadDeclarada: origenProp === "linea",
           tipo: "asignacion_contrato",
           refMov: { tipo: "contrato", id: cid, label: after.contrato_id || "" },
           origen: "migracion_contrato",

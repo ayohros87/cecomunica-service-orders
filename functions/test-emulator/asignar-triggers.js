@@ -91,6 +91,27 @@ async function escribirSerial(cid, sid, data) {
   assert.equal(c.seriales_count, 2);
   ok("Propio: la propiedad existente se respeta; la indefinida pasa al cliente; seriales_count = 2");
 
+  // 4) La MODALIDAD de la línea sí corrige la ficha (2026-09-09, Alberto,
+  //    caso FORTUNATO MANGRAVITA): backfill-propiedad marcó "del cliente" a
+  //    819 fichas que solo habían pasado por una orden. Eso es una inferencia
+  //    vieja; la línea del contrato es una declaración y manda — con rastro
+  //    en el kardex.
+  const SERIAL3 = "23905A0403";
+  await db.doc("contratos/cs").set({ contrato_id: "SERV-1", cliente_id: "cli-3", cliente_nombre: "FORTUNATO MANGRAVITA",
+    estado: "aprobado", tipo_contrato: "Servicio", codigo_tipo: "SERV", seriales_estado: "legacy",
+    equipos: [{ modelo_id: "m1", modelo: "PNC360S", cantidad: 1, precio: 25, modalidad: "alquiler" }] });
+  await db.doc(`equipos_pool/${SERIAL3}`).set({ serial: SERIAL3, serial_norm: SERIAL3, modelo_id: "m1", modelo_label: "PNC360S",
+    estado: "en_cliente", condicion: "reuso", propiedad: "cliente", verificado: false, origen: "migracion_orden" });
+  await escribirSerial("cs", "s1", { serial: SERIAL3, modelo: "PNC360S", modelo_id: "m1", contrato_doc_id: "cs", contrato_id: "SERV-1",
+    cliente_id: "cli-3", cliente_nombre: "FORTUNATO MANGRAVITA", source: "plan_renovacion", ya_en_cliente: true });
+  const u3 = (await db.doc(`equipos_pool/${SERIAL3}`).get()).data();
+  assert.equal(u3.propiedad, "cecomunica", "la línea de alquiler corrige la marca falsa de la migración");
+  assert.equal(u3.estado, "en_cliente", "sigue con el cliente: no se des-entrega");
+  const mov3 = await db.collection(`equipos_pool/${SERIAL3}/movimientos`).get();
+  assert.ok(mov3.docs.some(d => /Propiedad corregida por la línea/.test(d.data().notas || "")),
+    "la corrección queda en el kardex");
+  ok("línea de alquiler: 'del cliente' (migración) → 'cecomunica', con rastro en el kardex");
+
   console.log(`\nOK — ${n} comprobaciones de onSerialWrite contra el emulador`);
   process.exit(0);
 })().catch((e) => { console.error("FALLO:", e.stack || e); process.exit(1); });

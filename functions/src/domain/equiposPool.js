@@ -214,6 +214,9 @@ async function resolver(serial, modeloId, modeloLabel, opts = {}) {
 //   origen,                 // migracion_contrato | migracion_orden | migracion_poc
 //   extra,                  // campos a fusionar (asignacion, poc_device_id, ...)
 //   adoptarSiExiste,        // true: un modelo distinto NO parte la ficha (POC)
+//   propiedadDeclarada,     // true: extra.propiedad viene de la MODALIDAD de la
+//                           //   línea del contrato (declaración, no inferencia)
+//                           //   y sí pisa la propiedad que tenga la ficha.
 // }
 // Retorna 'creado' | 'transicion' | 'actualizado' | 'sin-cambio' | 'ignorado'.
 async function upsertContacto(opts) {
@@ -261,11 +264,22 @@ async function upsertContacto(opts) {
     if (!(actual.modelo_label || "").trim() && (opts.modelo_label || "").trim()) {
       update.modelo_label = opts.modelo_label.trim();
     }
-    // La propiedad inferida solo se estampa si el doc no la tiene definida —
+    // La propiedad INFERIDA solo se estampa si el doc no la tiene definida —
     // nunca pisa una clasificación existente (pudo ponerla un humano).
-    if (update.propiedad && actual.propiedad && actual.propiedad !== "desconocida") {
+    // `propiedadDeclarada` es la excepción (2026-09-09, Alberto): cuando sale
+    // de la MODALIDAD DE LA LÍNEA del contrato no es una inferencia, es una
+    // declaración del vendedor, y esa manda. Nació de la cuenta FORTUNATO
+    // MANGRAVITA: backfill-propiedad marcó "del cliente" a todo serial que
+    // solo había pasado por una orden y no estaba en POC (819 fichas, 82
+    // cuentas) — radios de la flota entre ellos, porque su contrato es legacy
+    // y no tenía filas de seriales. Sin esto la marca falsa era para siempre.
+    const declarada = opts.propiedadDeclarada === true && !!update.propiedad;
+    if (update.propiedad && actual.propiedad && actual.propiedad !== "desconocida" && !declarada) {
       delete update.propiedad;
     }
+    // Corregir la propiedad NO puede ser silencioso: queda en el kardex.
+    const cambioPropiedad = declarada && actual.propiedad && actual.propiedad !== update.propiedad
+      ? `Propiedad corregida por la línea del contrato: ${actual.propiedad} → ${update.propiedad}` : "";
     // asignacionSiFalta: custodia (cliente sin contrato) que solo aplica si el
     // doc no tiene ya una asignación — nunca pisa la de un contrato.
     if (update.asignacionSiFalta) {
@@ -298,10 +312,11 @@ async function upsertContacto(opts) {
       tx.set(ref, update, { merge: true });
       // Sin transición de estado no habría movimiento: la reasignación silenciosa
       // dejaría al cliente anterior sin rastro. Se registra aparte.
-      if (reasignado) {
+      if (reasignado || cambioPropiedad) {
         tx.set(ref.collection("movimientos").doc(), _movimiento({
-          tipo: "reasignacion", de_estado: de, a_estado: de,
-          ref: opts.refMov || null, notas: notaReasignacion,
+          tipo: reasignado ? "reasignacion" : "correccion", de_estado: de, a_estado: de,
+          ref: opts.refMov || null,
+          notas: [notaReasignacion, cambioPropiedad].filter(Boolean).join(" — "),
         }));
       }
       return de === opts.estado ? "sin-cambio" : "actualizado";
@@ -317,7 +332,7 @@ async function upsertContacto(opts) {
     tx.set(ref.collection("movimientos").doc(), _movimiento({
       tipo: opts.tipo || "cambio_estado", de_estado: de, a_estado: opts.estado,
       ref: opts.refMov || null,
-      notas: [opts.notas || "", notaReasignacion].filter(Boolean).join(" — "),
+      notas: [opts.notas || "", notaReasignacion, cambioPropiedad].filter(Boolean).join(" — "),
     }));
     return "transicion";
   });
