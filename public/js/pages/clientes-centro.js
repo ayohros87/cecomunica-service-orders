@@ -296,12 +296,12 @@ window.Centro = {
     const puede = this.puedeCrearGestion();
     const regularizarBtn = !puede ? '' : tram
       ? `<button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal(); Centro.abrirGestion('ct-${this.esc(tram.id)}')">Ver la renovación en trámite</button>`
-      : `<button class="btn btn-primary cg-act" onclick="Centro._cerrarModal(); Centro.wizContrato({renovarCuenta:true})">${est.tipo === 'sin_contrato' || est.tipo === 'nueva' ? 'Regularizar: contrato nuevo' : 'Regularizar cuenta'}</button>`;
+      : `<button class="btn btn-primary cg-act" onclick="Centro._cerrarModal(); Centro.wizContrato({renovarCuenta:true})">${est.tipo === 'sin_contrato' || est.tipo === 'nueva' ? 'Regularizar: contrato nuevo' : 'Regularizar con contrato nuevo'}</button>`;
     const accion = (f) => {
       // D1: la renovación consolidadora los cubre; con un contrato vigente
       // también sirve el anexo de regularización (sin bodega, sin OS).
       if (f.codigo === 'd1') return regularizarBtn + (puede && !tram && est.renovables.length
-        ? ` <button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal(); Centro.wizAumento(null,{regularizarD1:true})">Anexo de regularización</button>` : '');
+        ? ` <button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal(); Centro.wizRegularizarCuenta()">Poner la cuenta al día</button>` : '');
       if (f.codigo === 'd2') return f.ids.map(id => {
         const c = this.contratos.find(x => (x.contrato_id || x.id) === id);
         return c && this.puedeAsignar()
@@ -326,8 +326,10 @@ window.Centro = {
         <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:72ch;">
           <b>${this.esc(Regularizacion.NIVEL_LABEL[r.nivel] || r.nivel)} · ${r.puntos} punto${r.puntos === 1 ? '' : 's'}</b>
           ${r.etiqueta === 'migracion' ? ' · deuda de migración (contratos anteriores al sistema)' : ''}.
-          Ninguna gestión se frena por esto: cada gestión que declare seriales baja la deuda, y
-          <b>Regularizar cuenta</b> abre la renovación con el plan por serial ya precargado.
+          Ninguna gestión se frena por esto: cada gestión que declare seriales baja la deuda.
+          <b>Poner la cuenta al día</b> (también en el menú) amarra por anexo lo que el cliente ya tiene, sin
+          renovar y sin firma obligatoria; <b>Regularizar con contrato nuevo</b> abre la renovación con el
+          plan por serial ya precargado.
           ${puntuales ? `<br>Gestiones puntuales hechas sobre esta deuda: <b>${puntuales}</b>${r.excede_margen ? ' — <span style="color:var(--cg-bad-deep, #991B1B);">excede el margen sin regularizar</span>' : ''}.` : ''}
         </p>
         <div class="cg-twrap"><table class="cg-table">
@@ -779,7 +781,10 @@ window.Centro = {
     if (tram) return { onclick: `Centro.abrirGestion('ct-${this.esc(tram.id)}')`, label: `Ver renovación en trámite`, hint: `${this.esc(tram.contrato_id || '')} — abre el expediente para ver en qué paso va` };
     if (est.tipo === 'nueva') return { onclick: 'Centro.wizContrato()', label: 'Nuevo contrato', hint: '' };
     if (est.tipo === 'sin_contrato') return { onclick: 'Centro.wizContrato({renovarCuenta:true})', label: 'Regularizar: contrato nuevo', hint: `cubre los ${est.custodia} radio${est.custodia === 1 ? '' : 's'} que el cliente aún tiene` };
-    if (deuda) return { onclick: 'Centro.wizContrato({renovarCuenta:true})', label: 'Regularizar cuenta', hint: `${reg.puntos} punto${reg.puntos === 1 ? '' : 's'} — renovación con el plan por serial precargado` };
+    // Ojo con el nombre: "Regularizar cuenta" a secas se confundía con el
+    // anexo del menú ("Regularizar lo que el cliente tiene"). Este camino
+    // hace un CONTRATO NUEVO; el otro cuelga un anexo del contrato vigente.
+    if (deuda) return { onclick: 'Centro.wizContrato({renovarCuenta:true})', label: 'Regularizar con contrato nuevo', hint: `${reg.puntos} punto${reg.puntos === 1 ? '' : 's'} — renovación consolidadora con el plan por serial` };
     if (est.tipo === 'fragmentada') return { onclick: 'Centro.wizContrato({renovarCuenta:true})', label: 'Renovar cuenta', hint: `consolida ${est.renovables.length} contratos en uno` };
     if (est.tipo === 'consolidada' && this._wcEnVentana(est.maestro)) return { onclick: `Centro.wizContrato('${this.esc(est.maestro.id)}')`, label: 'Renovar cuenta', hint: 'entra en ventana de renovación' };
     return null;
@@ -2995,6 +3000,16 @@ window.Centro = {
     const renovar = '';
     void deuda; void reg;
 
+    // "Poner la cuenta al día" (Alberto 2026-09-09): estaba escondido dentro
+    // de "Qué falta" y entraba por un contrato elegido a dedo. Es una gestión
+    // de CUENTA —abarca todo lo que el cliente tiene, venga del contrato que
+    // venga— y por eso vive en el menú, como las demás.
+    const d1Menu = this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id && !e.pendiente_devolucion);
+    const alDia = grupo('Poner al día', [
+      hayContrato && !tram && d1Menu.length
+        ? item('Centro.wizRegularizarCuenta()', 'Regularizar lo que el cliente tiene',
+          `${d1Menu.length} radio(s) en campo sin contrato — anexo a la cuenta, sin bodega ni entrega`) : '',
+    ]);
     const dar = grupo('Dar equipos', [
       hayContrato && !tram ? item('Centro.wizAgregarEquipos()', 'Agregar equipos', 'anexo al contrato de la cuenta') : '',
       // TEMP (evento) y DEMO son independientes de la cuenta: no cuentan para
@@ -3022,7 +3037,7 @@ window.Centro = {
       this._puedeMasiva() ? `<a class="pie" href="./index.html">Edición masiva de clientes</a>` : '',
     ].filter(Boolean).join('');
 
-    document.getElementById('cgMenu').innerHTML = `${top}${dar}${cambiar}${retirar}${pie}`;
+    document.getElementById('cgMenu').innerHTML = `${top}${alDia}${dar}${cambiar}${retirar}${pie}`;
   },
 
   // Menú "⋯" de la cabecera: Cotizar, Datos del cliente, Historial (2026-09-08).
@@ -3095,6 +3110,25 @@ window.Centro = {
     const ancla = this._cuentaAncla();
     if (ancla) this.wizAumento(ancla.id, { ancla: true });
     else this.wizContrato({ renovarCuenta: true, agregar: true });
+  },
+
+  // "Poner la cuenta al día": la regularización por ANEXO, entrando por la
+  // CUENTA (Alberto 2026-09-09: "debe ser un botón del menú que abarque todo
+  // lo que el cliente tiene, no por contrato"). Los seriales SIEMPRE fueron
+  // los de toda la cuenta —vengan del contrato que vengan o de ninguno—; lo
+  // que se elegía a dedo era el contrato donde colgar el anexo: salía
+  // `activos[0]`, el primero de la lista. Ahora es el ANCLA de la cuenta (la
+  // de mayor facturación, la misma que usa "Agregar equipos"), dicha de frente
+  // y cambiable si hay varios.
+  wizRegularizarCuenta() {
+    const est = this._cuentaEstado();
+    const ancla = est.tipo === 'consolidada' ? est.maestro : this._cuentaAncla();
+    if (!ancla) {
+      Toast.show('La cuenta no tiene contrato vigente donde colgar el anexo — regularízala con un contrato nuevo', 'warn');
+      this.wizContrato({ renovarCuenta: true });
+      return;
+    }
+    this.wizAumento(ancla.id, { regularizarD1: true });
   },
 
   /* ═════════ Wizards: reemplazo y demo ═════════ */
@@ -3569,7 +3603,7 @@ window.Centro = {
             (<span class="cg-mono">${d1.slice(0, 6).map(e => this.esc(e.serial || e.id)).join(', ')}${d1.length > 6 ? '…' : ''}</span>).
             Aquí van <b>solo los radios nuevos</b>; esos se regularizan con un anexo aparte, sin bodega.</span>
           <button class="btn btn-ghost" style="margin-left:auto; flex:none; padding:3px 11px; font-size:12px;"
-            onclick="Centro.wizAumento(${preselId ? `'${this.esc(preselId)}'` : 'null'},{regularizarD1:true})">Regularizar esos radios</button></div>`
+            onclick="Centro.wizRegularizarCuenta()">Regularizar esos radios</button></div>`
       : '';
     const nudgeConsol = this._aumRegulariza ? '' : est.tipo === 'fragmentada' && !this._renovacionEnTramite()
       && (est.custodia || est.renovables.some(c => this._wcEnVentana(c)))
@@ -3591,10 +3625,20 @@ window.Centro = {
           <select id="waContrato" class="hidden"><option value="" selected></option></select></div>`
       : this._aumRegulariza
       ? `<div class="form-field" style="margin-bottom:10px;">
-          <label class="form-label">Anexo de regularización al contrato</label>
-          <p style="margin:0; font-size:13px;"><span class="cg-mono">${this.esc(cBase.contrato_id || cBase.id)}</span>
-            <span style="color:var(--fg-4);">(fijo — los equipos quedan amarrados a este contrato al firmarse)</span></p>
-          <select id="waContrato" class="hidden"><option value="${this.esc(cBase.id)}" selected></option></select></div>`
+          <label class="form-label">Regularización de la CUENTA</label>
+          <p style="margin:0 0 6px; font-size:13px;">Cubre <b>${this._aumRegulariza.length} radio(s)</b> que el cliente
+            tiene en campo sin contrato — <b>toda la cuenta</b>, no un contrato en particular.</p>
+          ${activos.length > 1
+            ? `<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <span style="font-size:12.5px; color:var(--fg-3);">El anexo se cuelga de:</span>
+                <select class="form-select" id="waContrato" style="max-width:300px;">
+                  ${activos.map(c => `<option value="${this.esc(c.id)}" ${c.id === cBase.id ? 'selected' : ''}>${this.esc(c.contrato_id || c.id)} · ${this.esc(c.tipo_contrato || '')}</option>`).join('')}
+                </select>
+                <span style="font-size:12px; color:var(--fg-4);">sale el de mayor facturación; cámbialo si prefieres otro</span>
+              </div>`
+            : `<p style="margin:0; font-size:13px;"><span style="color:var(--fg-3); font-size:12.5px;">El anexo se cuelga del contrato</span>
+                <span class="cg-mono">${this.esc(cBase.contrato_id || cBase.id)}</span></p>
+               <select id="waContrato" class="hidden"><option value="${this.esc(cBase.id)}" selected></option></select>`}</div>`
       : opts.ancla
       ? `<div class="form-field" style="margin-bottom:10px;">
           <label class="form-label">Anexo a la cuenta</label>
@@ -3643,7 +3687,7 @@ window.Centro = {
           <b>custodia con su tramo propio</b> y la cuenta sigue marcada <b>sin contrato formal</b>: hay que
           regularizarla con un contrato nuevo cuando se pueda.</span></div>` : '';
     this._abrirModalA({
-      titulo: `${this._aumRegulariza ? 'Regularización por anexo' : esPapel ? 'Adenda a contrato en papel' : 'Aumento de equipos (enmienda)'} — ${this.esc(this.cliente.nombre)}`,
+      titulo: `${this._aumRegulariza ? 'Poner la cuenta al día (regularización)' : esPapel ? 'Adenda a contrato en papel' : 'Aumento de equipos (enmienda)'} — ${this.esc(this.cliente.nombre)}`,
       cuerpo: `
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
         ${this._aumRegulariza
