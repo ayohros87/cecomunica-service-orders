@@ -950,6 +950,19 @@ service cloud.firestore {
           && request.resource.data.estado == "pendiente_bodega"
           && soloTocaG(["estado","cierre","anexo_firmado_path","anexo_firmado_at","anexo_firmado_por"]);
       }
+      // Aprobar la ACTUALIZACIÓN DE SERIALES = aplicarla (2026-09-09, Alberto:
+      // "ese camino vamos a hacerlo sin firma solamente, ya que si vamos a
+      // firmar será un contrato"). Salta 'pendiente_firma' y va directo al
+      // estado que dispara B3. Aprobar sigue siendo de administración/gerencia,
+      // como cualquier aprobación de gestión.
+      function esAprobacionActualizacionSeriales() {
+        return userRole() in ["administrador","gerente"]
+          && resource.data.estado == "pendiente_aprobacion"
+          && request.resource.data.estado == "pendiente_bodega"
+          && resource.data.get("aumento", {}).get("es_regularizacion", false) == true
+          && request.resource.data.get("sin_firma", {}).get("por_uid", "") == request.auth.uid
+          && soloTocaG(["estado","aprobacion","cierre","sin_firma"]);
+      }
       // Cerrar un anexo de REGULARIZACIÓN sin mandarlo a firmar (2026-09-09,
       // Alberto): el anexo solo pone al día el sistema con radios que el
       // cliente ya tiene desde hace años — no hay nada nuevo que el cliente
@@ -1003,6 +1016,7 @@ service cloud.firestore {
       allow update: if isSignedIn() && (
                       esAprobacionGestion() || esAnulacionGestion() || esCartaGestion()
                       || esFirmaAnexoGestion() || esRegularizacionSinFirmaGestion()
+                      || esAprobacionActualizacionSeriales()
                       || esEnlaceFirmaGestion() || esAsignacionGestion()
                       || esEdicionGestion());
       allow delete: if false;

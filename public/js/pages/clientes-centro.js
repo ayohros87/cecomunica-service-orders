@@ -301,7 +301,7 @@ window.Centro = {
       // D1: la renovación consolidadora los cubre; con un contrato vigente
       // también sirve el anexo de regularización (sin bodega, sin OS).
       if (f.codigo === 'd1') return regularizarBtn + (puede && !tram && est.renovables.length
-        ? ` <button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal(); Centro.wizRegularizarCuenta()">Regularizar por anexo</button>` : '');
+        ? ` <button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal(); Centro.wizRegularizarCuenta()">Actualizar seriales del cliente</button>` : '');
       if (f.codigo === 'd2') return f.ids.map(id => {
         const c = this.contratos.find(x => (x.contrato_id || x.id) === id);
         return c && this.puedeAsignar()
@@ -327,9 +327,9 @@ window.Centro = {
           <b>${this.esc(Regularizacion.NIVEL_LABEL[r.nivel] || r.nivel)} · ${r.puntos} punto${r.puntos === 1 ? '' : 's'}</b>
           ${r.etiqueta === 'migracion' ? ' · deuda de migración (contratos anteriores al sistema)' : ''}.
           Ninguna gestión se frena por esto: cada gestión que declare seriales baja la deuda.
-          <b>Regularizar por anexo</b> (también en el menú) amarra al contrato lo que el cliente ya tiene, sin
-          renovar y sin firma obligatoria; <b>Regularizar con contrato nuevo</b> abre la renovación con el
-          plan por serial ya precargado.
+          <b>Actualizar seriales del cliente</b> (también en el menú) amarra al contrato lo que el cliente ya
+          tiene: sin renovar, sin bodega y <b>sin mandarle nada a firmar</b>. Si hay que firmar algo, el camino
+          es <b>Regularizar con contrato nuevo</b>, que abre la renovación con el plan por serial precargado.
           ${puntuales ? `<br>Gestiones puntuales hechas sobre esta deuda: <b>${puntuales}</b>${r.excede_margen ? ' — <span style="color:var(--cg-bad-deep, #991B1B);">excede el margen sin regularizar</span>' : ''}.` : ''}
         </p>
         <div class="cg-twrap"><table class="cg-table">
@@ -597,7 +597,7 @@ window.Centro = {
         if (reg?.motivo === 'sobrantes' && this.puedeCrearGestion()) {
           it('warn', `Resolver la regularización parcial de ${id}`,
             `${reg.sob} equipo(s) en custodia quedaron sin línea en el contrato (${reg.seriales.slice(0, 4).join(', ')}${reg.seriales.length > 4 ? '…' : ''}) — agrégalos por anexo o libéralos de la cuenta`,
-            B('Ver expediente', `Centro.abrirGestion('ct-${this.esc(c.id)}')`) + B('Regularizar por anexo', `Centro.wizAumento('${this.esc(c.id)}',{regularizar:true})`, true));
+            B('Ver expediente', `Centro.abrirGestion('ct-${this.esc(c.id)}')`) + B('Actualizar seriales', `Centro.wizAumento('${this.esc(c.id)}',{regularizar:true})`, true));
         }
       }
     }
@@ -2141,7 +2141,7 @@ window.Centro = {
       ${esRenov && c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
         ? `<button class="btn btn-ghost cg-act" onclick="Centro.wizSerialesRenovacion('${this.esc(c.id)}')" title="Qué seriales siguen con el cliente, cuáles no tiene y cuáles faltan — antes de la firma">Seriales de la cuenta</button>` : ''}
       ${reg?.motivo === 'sobrantes' && this.puedeCrearGestion()
-        ? `<button class="btn btn-primary cg-act" onclick="Centro.wizAumento('${this.esc(c.id)}',{regularizar:true})">Regularizar por anexo</button>` : ''}
+        ? `<button class="btn btn-primary cg-act" onclick="Centro.wizAumento('${this.esc(c.id)}',{regularizar:true})">Actualizar seriales</button>` : ''}
       <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver contrato</button>`;
     // Pie del expediente, abajo a la derecha — MISMO sitio y MISMO botón que
     // "Anular gestión" en _detalleGestion (Alberto 2026-09-04: dos lugares
@@ -2417,15 +2417,19 @@ window.Centro = {
           <b>sin firma del cliente</b> por ${this.esc(g.sin_firma.por_email || '—')}${g.sin_firma.motivo ? ` — ${this.esc(g.sin_firma.motivo)}` : ''}</p>` : ''}
         ${g.estado === 'pendiente_firma' && this.puedeCrearGestion() ? `
           <div style="margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <button class="btn btn-primary cg-act"
-              onclick="Centro.enviarFirmaAnexo('${this.esc(g.id)}')">${g.firma_solicitud_estado === 'pendiente'
-                ? 'Ver o reenviar el enlace' : 'Enviar anexo para firma digital'}</button>
+            ${a.es_regularizacion
+              // Actualización de seriales: NO se firma (2026-09-09). Las que
+              // quedaron esperando firma de antes se cierran y se aplican con
+              // este botón; no se les vuelve a ofrecer el enlace.
+              ? `<button class="btn btn-primary cg-act"
+                  title="Solo pone el sistema al día con equipos que el cliente ya tiene"
+                  onclick="Centro.cerrarRegSinFirma('${this.esc(g.id)}')">Aplicar sin firma</button>`
+              : `<button class="btn btn-primary cg-act"
+                  onclick="Centro.enviarFirmaAnexo('${this.esc(g.id)}')">${g.firma_solicitud_estado === 'pendiente'
+                    ? 'Ver o reenviar el enlace' : 'Enviar anexo para firma digital'}</button>`}
             ${g.firma_solicitud_estado === 'pendiente' ? `<button class="btn btn-ghost cg-act"
               title="El enlace que se le envió al cliente deja de servir y el anexo vuelve a poder corregirse"
               onclick="Centro.retirarFirmaAnexo('${this.esc(g.id)}')">Retirar enlace de firma…</button>` : ''}
-            ${a.es_regularizacion ? `<button class="btn btn-ghost cg-act"
-              title="Los equipos ya están con el cliente desde antes: el anexo solo pone al día el sistema"
-              onclick="Centro.cerrarRegSinFirma('${this.esc(g.id)}')">Cerrar sin firma (solo actualizar el sistema)</button>` : ''}
             ${g.firma_solicitud_estado === 'pendiente' ? '<span style="font-size:12px; color:var(--fg-3);">enlace enviado — esperando la firma del cliente</span>' : ''}
           </div>` : ''}
         ${g.firma_pendiente_validacion && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol) ? `
@@ -2527,13 +2531,22 @@ window.Centro = {
     if (g.estado === 'pendiente_aprobacion') {
       const esBaja = g.tipo === 'baja';
       const esAumento = g.tipo === 'aumento';
+      // Actualización de seriales (antes "anexo de regularización"): NO pasa
+      // por firma — Alberto 2026-09-09: "ese camino vamos a hacerlo sin firma
+      // solamente, ya que si vamos a firmar será un contrato". Se aplica al
+      // aprobarse: el contrato gana las líneas y los seriales se amarran.
+      const esActSeriales = esAumento && g.aumento?.es_regularizacion === true;
       const puede = (esBaja || esAumento) ? this.puedeAprobarBaja() : this.puedeAprobar();
-      const fnAprobar = esBaja ? 'aprobarBajaGestion' : esAumento ? 'aprobarAumentoGestion' : 'aprobarGestion';
+      const fnAprobar = esBaja ? 'aprobarBajaGestion'
+        : esActSeriales ? 'aprobarActualizacionSeriales'
+        : esAumento ? 'aprobarAumentoGestion' : 'aprobarGestion';
       // La baja no se aprueba sin la carta del cliente (pedido 2026-08-27).
       const sinCarta = esBaja && !g.carta_path;
       aprobacion = `<div class="cg-senal warn" style="margin:10px 0 0;">
            <span>${esBaja
              ? 'Baja esperando aprobación (una sola, con el desglose por contrato a la izquierda).'
+             : esActSeriales
+               ? 'Actualización de seriales esperando aprobación — al aprobar se aplica de una vez: el contrato gana las líneas, los seriales se amarran y no se le envía nada al cliente.'
              : esAumento
                ? 'Aumento esperando aprobación comercial — al aprobar, se imprime el anexo para la firma del cliente.'
                : g.origen?.tipo === 'taller'
@@ -2542,9 +2555,13 @@ window.Centro = {
            ${puede ? `<span style="margin-left:auto; display:flex; gap:8px;">
              <button class="btn btn-primary cg-act" style="${sinCarta ? 'opacity:.5; cursor:not-allowed;' : ''}"
                ${sinCarta ? 'disabled title="Falta la carta de solicitud del cliente"' : ''}
-               onclick="Centro.${fnAprobar}('${this.esc(g.id)}')">Aprobar</button>
+               onclick="Centro.${fnAprobar}('${this.esc(g.id)}')">${esActSeriales ? 'Aprobar y aplicar' : 'Aprobar'}</button>
              <button class="btn-danger cg-act" onclick="Centro.anularGestion('${this.esc(g.id)}')">Rechazar</button>
            </span>` : ''}</div>`;
+    } else if (g.estado === 'pendiente_firma' && g.tipo === 'aumento' && g.aumento?.es_regularizacion === true) {
+      aprobacion = `<div class="cg-senal warn" style="margin:10px 0 0;">
+           <span><b>Quedó esperando firma de antes.</b> Las actualizaciones de seriales ya no se firman
+             (2026-09-09): dale <b>Aplicar sin firma</b> y el contrato gana las líneas de una vez.</span></div>`;
     } else if (g.estado === 'pendiente_firma' && g.tipo === 'aumento') {
       aprobacion = `<div class="cg-senal info" style="margin:10px 0 0;">
            <span><b>Esperando la firma del cliente.</b> Imprime el anexo (deja explícito el período propio
@@ -2615,6 +2632,29 @@ window.Centro = {
       Toast.show('Carta adjuntada', 'ok');
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo subir la carta', 'bad'); }
+  },
+
+  // Aprobar la ACTUALIZACIÓN DE SERIALES = aplicarla. No hay paso de firma
+  // (2026-09-09): se dice qué va a pasar y se hace.
+  async aprobarActualizacionSeriales(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    const a = g?.aumento || {};
+    if (!g || a.es_regularizacion !== true) { Toast.show('Esta gestión no es una actualización de seriales', 'warn'); return; }
+    const nEntran = (a.regulariza_seriales || []).length;
+    const nFuera = (a.regulariza_no_tiene || []).length;
+    const ok = await Modal.confirm({
+      title: 'Aprobar y aplicar', confirmLabel: 'Aprobar y aplicar',
+      message: `Al contrato <b class="cg-mono">${this.esc(a.contrato_id || '')}</b> se le agregan las líneas del
+        expediente y <b>${nEntran} serial(es)</b> quedan amarrados${nFuera ? `; <b>${nFuera}</b> que el cliente no tiene salen de la cuenta` : ''}.
+        <br><br><b>Al cliente no se le envía nada</b>: esto solo pone el sistema al día. Si hiciera falta que
+        el cliente firme, el camino es un contrato.`,
+    });
+    if (!ok) { this.abrirGestion(gid); return; }
+    try {
+      await GestionesService.aprobarActualizacionSeriales(gid);
+      Toast.show('Aprobada y aplicada — el sistema amarra los seriales al contrato', 'ok');
+      await this.recargarGestiones();   // el avance del trigger llega por la escucha en vivo
+    } catch (e) { console.error(e); Toast.show('No se pudo aprobar: ' + (e.message || e), 'bad'); }
   },
 
   async aprobarAumentoGestion(gid) {
@@ -3030,10 +3070,10 @@ window.Centro = {
     // de CUENTA —abarca todo lo que el cliente tiene, venga del contrato que
     // venga— y por eso vive en el menú, como las demás.
     const d1Menu = this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id && !e.pendiente_devolucion);
-    const alDia = grupo('Regularizar', [
+    const alDia = grupo('Actualizar', [
       hayContrato && !tram && d1Menu.length
-        ? item('Centro.wizRegularizarCuenta()', 'Regularizar por anexo',
-          `amarra al contrato los ${d1Menu.length} radio(s) que el cliente ya tiene — sin bodega ni entrega`) : '',
+        ? item('Centro.wizRegularizarCuenta()', 'Actualizar seriales del cliente',
+          `amarra al contrato los ${d1Menu.length} radio(s) que ya tiene — sin firma, sin bodega y sin entrega`) : '',
     ]);
     const dar = grupo('Dar equipos', [
       hayContrato && !tram ? item('Centro.wizAgregarEquipos()', 'Agregar equipos', 'anexo al contrato de la cuenta') : '',
@@ -3738,18 +3778,18 @@ window.Centro = {
           <select id="waContrato" class="hidden"><option value="" selected></option></select></div>`
       : this._aumRegulariza
       ? `<div class="form-field" style="margin-bottom:10px;">
-          <label class="form-label">Regularización de la CUENTA</label>
+          <label class="form-label">Seriales de la CUENTA</label>
           <p style="margin:0 0 6px; font-size:13px;">Cubre <b>${this._aumRegulariza.length} radio(s)</b> que el cliente
             tiene en campo sin contrato — <b>toda la cuenta</b>, no un contrato en particular.</p>
           ${activos.length > 1
             ? `<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <span style="font-size:12.5px; color:var(--fg-3);">El anexo se cuelga de:</span>
+                <span style="font-size:12.5px; color:var(--fg-3);">Las líneas entran en el contrato:</span>
                 <select class="form-select" id="waContrato" style="max-width:300px;">
                   ${activos.map(c => `<option value="${this.esc(c.id)}" ${c.id === cBase.id ? 'selected' : ''}>${this.esc(c.contrato_id || c.id)} · ${this.esc(c.tipo_contrato || '')}</option>`).join('')}
                 </select>
                 <span style="font-size:12px; color:var(--fg-4);">sale el de mayor facturación; cámbialo si prefieres otro</span>
               </div>`
-            : `<p style="margin:0; font-size:13px;"><span style="color:var(--fg-3); font-size:12.5px;">El anexo se cuelga del contrato</span>
+            : `<p style="margin:0; font-size:13px;"><span style="color:var(--fg-3); font-size:12.5px;">Las líneas entran en el contrato</span>
                 <span class="cg-mono">${this.esc(cBase.contrato_id || cBase.id)}</span></p>
                <select id="waContrato" class="hidden"><option value="${this.esc(cBase.id)}" selected></option></select>`}</div>`
       : opts.ancla
@@ -3780,9 +3820,9 @@ window.Centro = {
     // cuenta. Ahora: destino por serial y "+ Agregar serial" (con o sin ficha
     // en el sistema). La cuenta que motivó todo esto: FORTUNATO MANGRAVITA.
     const regSenal = this._aumRegulariza ? `<div class="cg-senal warn" style="margin-bottom:10px; display:block;">
-          <div>Anexo de <b>regularización</b>: pone al día lo que el cliente <b>YA tiene</b>. Al aplicarse, los que
-            entran quedan amarrados al contrato con el tramo desde <b>hoy</b> — <b>sin bodega, sin orden de servicio
-            y sin entrega</b> — y los marcados <b>“no lo tiene”</b> salen de la cuenta (quedan por clasificar).</div>
+          <div>Declara la cuenta COMPLETA: lo que el cliente <b>YA tiene</b> queda amarrado al contrato con el
+            tramo desde <b>hoy</b> —<b>sin firma, sin bodega, sin orden de servicio y sin entrega</b>— y lo marcado
+            <b>“no lo tiene”</b> sale de la cuenta (queda por clasificar).</div>
           <div id="waRegSeriales" style="margin-top:8px;">${this._aumRegSerialesHtml()}</div>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
             <input class="form-input" id="waRegSerialNuevo" placeholder="Serial que el cliente tiene y no aparece…"
@@ -3792,7 +3832,7 @@ window.Centro = {
             <button type="button" class="btn btn-ghost cg-act" onclick="Centro._aumRegAgregarSerial()">+ Agregar serial</button>
           </div>
           <div style="margin-top:6px; font-size:12px; color:var(--fg-3);"><span id="waRegN">${this._aumRegulariza.length}</span>
-            de ${this._aumRegularizaTodos.length} entran al anexo. El modelo solo hace falta si el serial no está en el sistema.</div></div>` : '';
+            de ${this._aumRegularizaTodos.length} entran al contrato. El modelo solo hace falta si el serial no está en el sistema.</div></div>` : '';
     const papelSenal = esPapel
       ? `<div class="cg-senal warn" style="margin-bottom:10px;">
           <span><b>Salida para seguir sin regularizar hoy.</b> La adenda agrega equipos al contrato viejo
@@ -3800,13 +3840,13 @@ window.Centro = {
           <b>custodia con su tramo propio</b> y la cuenta sigue marcada <b>sin contrato formal</b>: hay que
           regularizarla con un contrato nuevo cuando se pueda.</span></div>` : '';
     this._abrirModalA({
-      titulo: `${this._aumRegulariza ? 'Regularizar por anexo' : esPapel ? 'Adenda a contrato en papel' : 'Aumento de equipos (enmienda)'} — ${this.esc(this.cliente.nombre)}`,
+      titulo: `${this._aumRegulariza ? 'Actualizar seriales del cliente' : esPapel ? 'Adenda a contrato en papel' : 'Aumento de equipos (enmienda)'} — ${this.esc(this.cliente.nombre)}`,
       cuerpo: `
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
         ${this._aumRegulariza
-          ? `El anexo formaliza equipos <b>ya en poder del cliente</b> que la renovación dejó sin línea.
-             Se aplica al firmarse; y si es solo poner al día el sistema —radios que el cliente tiene desde hace
-             años—, se puede <b>cerrar sin enviarlo a firma</b> desde el expediente, dejando el motivo.`
+          ? `Pone el sistema al día con los equipos que el cliente <b>ya tiene</b>: al aprobarse se amarran al
+             contrato y las líneas entran con tarifa desde hoy. <b>Al cliente no se le envía nada a firmar</b> —
+             si hiciera falta su firma, el camino es un contrato.`
           : esPapel
           ? `La adenda agrega equipos <b>con vigencia propia</b> a un contrato que solo existe <b>en papel</b>:
              el período corre desde la entrega, el documento cita el número del contrato viejo y
@@ -3826,7 +3866,7 @@ window.Centro = {
           <label class="form-label">Equipos (modelo · cantidad · precio mensual)</label>
           <div id="waLineas">${lineasIni}</div>
           ${this._aumRegulariza
-            ? `<p style="margin:4px 0 0; font-size:12px; color:var(--fg-3);">Solo los ${this._aumRegulariza.length} equipo(s) que ya están con el cliente. ¿Radios nuevos? Van en un <b>aumento aparte</b>, que sí pasa por bodega y entrega.</p>`
+            ? `<p style="margin:4px 0 0; font-size:12px; color:var(--fg-3);">Solo los ${this._aumRegulariza.length} equipo(s) que ya están con el cliente. ¿Radios nuevos? Van en <b>Agregar equipos</b>, que sí pasa por bodega y entrega.</p>`
             : `<button class="btn btn-ghost cg-act"
             onclick="Centro._addLineaModelo('waLineas','wau',true); Centro._aumPreview()">+ Agregar otro modelo</button>`}</div>
         <div class="form-field" style="margin-bottom:4px;">
@@ -3951,7 +3991,7 @@ window.Centro = {
       this.gSel = gid;
       const nNoTiene = this._aumRegulariza ? this._aumRegNoTiene().length : 0;
       Toast.show(this._aumRegulariza
-        ? `Regularización ${gid} enviada a aprobación — al aplicarse amarra ${this._aumRegulariza.length} equipo(s)${nNoTiene ? ` y suelta ${nNoTiene} de la cuenta` : ''}`
+        ? `Actualización de seriales ${gid} enviada a aprobación — al aprobarse amarra ${this._aumRegulariza.length} equipo(s)${nNoTiene ? ` y suelta ${nNoTiene} de la cuenta` : ''}, sin firma del cliente`
         : esPapel
         ? `Adenda ${gid} al contrato en papel ${refPapel} enviada a aprobación comercial — la cuenta sigue pendiente de regularizar`
         : `Aumento ${gid} enviado a aprobación comercial`, 'ok');
@@ -4241,7 +4281,7 @@ window.Centro = {
   // 'pendiente' es el viejo "desmarcado": ni entra ni se suelta — sigue como
   // deuda de la cuenta, que a veces es lo honesto ("no sé si lo tiene").
   AUM_REG_DESTINOS: [
-    ['entra', 'Lo tiene — entra al anexo'],
+    ['entra', 'Lo tiene — entra al contrato'],
     ['no_tiene', 'El cliente NO lo tiene — sale de la cuenta'],
     ['pendiente', 'Dejarlo pendiente — sigue como deuda'],
   ],
@@ -4250,7 +4290,7 @@ window.Centro = {
       const d = this._aumRegDestino[u.serial] || 'entra';
       return `<tr>
         <td class="cg-mono">${this.esc(u.serial)}${u.nuevo ? ' <span style="color:var(--ok-deep, #065F46); font-size:11px;">agregado</span>' : ''}</td>
-        <td style="font-size:12.5px;">${this.esc(u.modelo || '—')}${u.sinFicha ? ' <span style="color:var(--fg-4); font-size:11px;">sin ficha — nace con el anexo</span>' : ''}</td>
+        <td style="font-size:12.5px;">${this.esc(u.modelo || '—')}${u.sinFicha ? ' <span style="color:var(--fg-4); font-size:11px;">sin ficha — se da de alta al aprobar</span>' : ''}</td>
         <td><select class="form-select" style="min-width:250px;" aria-label="Destino de ${this.esc(u.serial)}"
               onchange="Centro._aumRegDestinoSet('${this.esc(u.serial)}', this.value)">
           ${this.AUM_REG_DESTINOS.map(([v, l]) => `<option value="${v}" ${v === d ? 'selected' : ''}>${l}</option>`).join('')}

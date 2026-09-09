@@ -63,9 +63,11 @@ const gestion = (estado, cierre) => ({
   await db.doc(`equipos_pool/${VIEJO}`).set(enCliente(VIEJO, "cliente"));
   await db.doc(`equipos_pool/${FUERA}`).set(enCliente(FUERA, "cliente"));
 
-  // El vendedor cierra el anexo (con firma o sin ella: el efecto es el mismo).
+  // Gerencia aprueba: pendiente_aprobacion → pendiente_bodega + cierre.firma,
+  // sin pasar por firma del cliente (2026-09-09). Es el mismo flanco que B3
+  // esperaba de la firma, así que el efecto es idéntico.
   const ref = db.doc(`gestiones/${GID}`);
-  await ref.set(gestion("pendiente_firma", { aprobacion: true }));
+  await ref.set(gestion("pendiente_aprobacion", {}));
   const before = await ref.get();
   await ref.set(gestion("pendiente_bodega", { aprobacion: true, firma: true }));
   const after = await ref.get();

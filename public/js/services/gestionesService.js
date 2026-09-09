@@ -421,6 +421,36 @@ const GestionesService = {
       'Anexo firmado por el cliente registrado — el sistema aplica las líneas al contrato y avisa a Bodega.');
   },
 
+  // Aprueba una ACTUALIZACIÓN DE SERIALES y la aplica de una vez (2026-09-09,
+  // Alberto: "ese camino vamos a hacerlo sin firma solamente, ya que si vamos
+  // a firmar será un contrato"). Salta el paso 'pendiente_firma': va directo
+  // al estado que dispara B3 en onGestionWrite (pendiente_bodega +
+  // cierre.firma), con `sin_firma` diciendo que nunca hubo firma y quién lo
+  // aprobó. Solo para gestiones con `aumento.es_regularizacion`.
+  async aprobarActualizacionSeriales(gestionId) {
+    const user = firebase.auth().currentUser;
+    const sello = {
+      motivo: 'Actualización de seriales: se aplica sin firma del cliente (política 2026-09-09)',
+      por_uid: user?.uid || null,
+      por_email: user?.email || null,
+      at: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      estado: 'pendiente_bodega',
+      'cierre.aprobacion': true,
+      'cierre.firma': true,
+      aprobacion: {
+        requiere: true,
+        aprobado_por_uid: user?.uid || null,
+        aprobado_por_email: user?.email || null,
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      sin_firma: sello,
+    });
+    await this.registrarEvento(gestionId, 'aprobar',
+      'Actualización de seriales aprobada y aplicada — el contrato gana las líneas y los seriales se amarran. Sin firma del cliente: si hubiera que firmar, sería un contrato.');
+  },
+
   // Cierra un anexo de REGULARIZACIÓN sin mandarlo a firmar (2026-09-09,
   // Alberto): "solo quiere dejar el sistema actualizado, sin enviar a firma".
   // Son radios que el cliente tiene desde hace años; el anexo no le pide nada

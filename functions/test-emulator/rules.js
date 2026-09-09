@@ -355,6 +355,27 @@ async function main() {
     ...cerrarSinFirma("vendedor"), "aumento.lineas": [{ modelo: "X", cantidad: 99, precio: 1 }] }));
   ok("sin firma: no se cuelan cambios a las líneas en la misma escritura");
 
+  // ── Aprobar la ACTUALIZACIÓN DE SERIALES = aplicarla (2026-09-09) ────────
+  // Salta 'pendiente_firma': pendiente_aprobacion → pendiente_bodega directo.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const base = { tipo: "aumento", estado: "pendiente_aprobacion", cliente_id: "x", deleted: false, cierre: {} };
+    for (const id of ["gApA", "gApB", "gApC"]) {
+      await db.doc(`gestiones/${id}`).set({ ...base, aumento: { es_regularizacion: true, contrato_doc_id: "c1" } });
+    }
+    await db.doc("gestiones/gApNormal").set({ ...base, aumento: { contrato_doc_id: "c1" } });
+  });
+  const aprobarYAplicar = (uid) => ({ estado: "pendiente_bodega",
+    "cierre.aprobacion": true, "cierre.firma": true,
+    aprobacion: { requiere: true, aprobado_por_uid: uid, aprobado_por_email: uid + "@c.com" },
+    sin_firma: { motivo: "sin firma por política", por_uid: uid, por_email: uid + "@c.com" } });
+  await assertSucceeds(as("gerente").doc("gestiones/gApA").update(aprobarYAplicar("gerente")));
+  ok("actualizar seriales: gerencia aprueba y aplica de una vez (sin pasar por firma)");
+  await assertFails(as("vendedor").doc("gestiones/gApB").update(aprobarYAplicar("vendedor")));
+  ok("actualizar seriales: el vendedor NO se auto-aprueba");
+  await assertFails(as("administrador").doc("gestiones/gApNormal").update(aprobarYAplicar("administrador")));
+  ok("actualizar seriales: un aumento normal no salta la firma por esta puerta");
+
   // ── Editar / anular una gestión que todavía no surtió efecto (2026-09-09) ─
   // Se corrige en el sitio mientras nadie actuó: sin derivación, sin
   // asignación y sin OS. Y quien la creó puede anular LA SUYA en esa misma
