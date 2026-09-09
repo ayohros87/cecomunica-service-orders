@@ -40,6 +40,12 @@ window.CargaDiferida = (() => {
     notas:      "/js/pages/ordenes-notas.js?v=1",
     // Dividir una ENTRADA grande entre varias órdenes (Brenda, 2026-09-08).
     dividir:    "/js/pages/ordenes-dividir.js?v=1",
+    // Propuesta de reemplazo desde el taller: el módulo + lo que necesita
+    // (expedientes de gestión y la garantía de la unidad), que no se cargan
+    // en /ordenes/ para nada más.
+    reemplazo:  "/js/pages/ordenes-reemplazo.js?v=1",
+    gestiones:  "/js/services/gestionesService.js?v=cg13",
+    garantia:   "/js/domain/garantiaEquipo.js?v=1",
   };
 
   return {
@@ -73,6 +79,11 @@ window.CargaDiferida = (() => {
     },
     dividir() {
       return window.abrirDividirOrden ? Promise.resolve() : script(MODULOS.dividir);
+    },
+    reemplazo() {
+      return window.OrdenesReemplazo ? Promise.resolve()
+        : Promise.all([script(MODULOS.gestiones), script(MODULOS.garantia)])
+            .then(() => script(MODULOS.reemplazo));
     },
   };
 })();

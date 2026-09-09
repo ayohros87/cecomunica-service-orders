@@ -1215,6 +1215,26 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   }
 
 
+  // Proponer el reemplazo de un radio desde el taller (2026-09-09): quien ve
+  // que el equipo no tiene arreglo es el técnico, y hasta hoy tenía que
+  // contárselo a alguien con acceso al Centro para que abriera la solicitud.
+  // La propuesta va a ventas@cecomunica.com para aprobación. Hace falta
+  // cliente (la gestión es POR CLIENTE), equipos con serial y una orden viva.
+  const esTerminalOrden = estadoUpper.includes("ENTREGAD") || estadoUpper.startsWith("CERRADA");
+  const puedeProponerReemplazo = [ROLES.TECNICO, ROLES.TECNICO_OPERATIVO, ROLES.JEFE_TALLER, ROLES.ADMIN].includes(rol)
+    && !!o.cliente_id && !esTerminalOrden
+    && (o.equipos || []).some(e => e && !e.eliminado && (e.numero_de_serie || e.serial));
+  if (puedeProponerReemplazo) {
+    const yaPropuesto = o.reemplazo_propuesto?.gestion_id;
+    menuItems.push({
+      icon: '<i data-lucide="shield-check"></i>',
+      label: yaPropuesto ? `Reemplazo propuesto (${yaPropuesto})` : "Proponer reemplazo por garantía",
+      action: "proponer-reemplazo",
+      dataAttributes: `data-orden-id="${ordenId}"`,
+      class: yaPropuesto ? 'highlighted' : ''
+    });
+  }
+
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     // Editar: SOLO cuando aplica (POR ASIGNAR). El item gris permanente era
     // ruido — en la mayoría de las filas no se podía usar (auditoría P2).

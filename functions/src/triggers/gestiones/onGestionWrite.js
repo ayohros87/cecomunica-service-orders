@@ -60,6 +60,107 @@ function asignacionCompleta(g) {
   return false;
 }
 
+// ¿La gestión nació de una propuesta del taller? (2026-09-09)
+const esPropuestaTaller = (g) => g?.origen?.tipo === "taller";
+
+// Copia de los correos de una propuesta del taller: el vendedor del cliente
+// —informado, NO aprueba: la aprobación es del buzón de ventas— y el técnico
+// que la propuso, para que sepa en qué quedó lo que pidió.
+async function ccTaller(g) {
+  if (!esPropuestaTaller(g)) return null;
+  const set = new Set();
+  const vend = await G.vendedorEmailDeCliente(g.cliente_id);
+  if (vend) set.add(vend);
+  const tec = String(g.origen?.tecnico_email || g.responsable_email || "").trim().toLowerCase();
+  if (tec) set.add(tec);
+  return set.size ? [...set].join(",") : null;
+}
+
+// Situación de garantía de un ítem, tal como la vio el taller al proponer.
+function garantiaTexto(it) {
+  if (it.elegibilidad === "alquiler") return "Alquiler";
+  const gar = it.garantia;
+  if (!gar) return it.elegibilidad === "propio_garantia" ? "Del cliente · en garantía" : "Del cliente · sin garantía";
+  const f = gar.vence ? new Date(gar.vence).toLocaleDateString("es-PA", { month: "short", year: "numeric" }) : null;
+  const suf = gar.derivada ? " (estimada: 12 meses desde la factura)" : "";
+  return gar.vigente
+    ? `Del cliente · en garantía${f ? ` hasta ${f}` : ""}${suf}`
+    : `Del cliente · garantía vencida${f ? ` en ${f}` : ""}${suf}`;
+}
+
+// Propuesta del TALLER (2026-09-09): la abre el técnico desde su orden y la
+// aprueba ventas. Lleva el diagnóstico por delante — es lo que se lee para
+// decidir — y la orden de servicio de donde salió.
+async function correoPropuestaTaller(gid, g) {
+  const o = g.origen || {};
+  const enCasa = (g.items || []).every(it => it.saliente_en_casa);
+  await G.encolarCorreo({
+    to: await G.aprobacionesTo(),
+    cc: await ccTaller(g),
+    subject: `Aprobación requerida: reemplazo propuesto por el taller ${gid} — ${g.cliente_nombre || "Cliente"}`,
+    preheader: `El taller propone reemplazar ${(g.items || []).length} radio(s) de ${g.cliente_nombre || "un cliente"}`,
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">El taller propone un reemplazo</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        <b>${G.escapeHtml(o.tecnico_email || g.responsable_email || "El taller")}</b> revisó
+        ${(g.items || []).length === 1 ? "un radio" : `${(g.items || []).length} radios`} de
+        <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> en la orden
+        <b>${G.escapeHtml(o.orden_id || "—")}</b> y propone reemplazarlo${(g.items || []).length === 1 ? "" : "s"}.
+        <b>Nada se mueve hasta que ventas apruebe</b>: al aprobar, Bodega recibe el aviso para asignar
+        el equipo que sustituye a cada radio (mismo modelo).
+      </p>
+      <div style="margin:0 0 14px;padding:10px 12px;background:#F1F5F9;border-radius:6px;">
+        <p style="margin:0 0 4px;font:700 13px Arial,sans-serif;color:#334155;">Diagnóstico del taller</p>
+        <p style="margin:0;font:14px/1.5 Arial,sans-serif;">${G.escapeHtml(o.diagnostico || "—")}</p>
+      </div>
+      ${G.tablaHtml(["Radio", "Modelo", "Contrato", "Situación"], (g.items || []).map(it => [
+        `<code>${G.escapeHtml(it.serial_saliente || "—")}</code>`,
+        G.escapeHtml(it.modelo || "—"),
+        `<code>${G.escapeHtml(it.contrato_id || "custodia")}</code>`,
+        G.escapeHtml(garantiaTexto(it)),
+      ]))}
+      <p style="margin:12px 0 0;font:13px/1.5 Arial,sans-serif;color:#475569;">
+        ${enCasa
+          ? "El/los radio(s) ya están en CECOMUNICA (entraron con esa orden): no hace falta ir a buscarlos, y el sistema no abrirá una orden de devolución por ellos."
+          : "El/los radio(s) siguen donde el cliente: al entregarse el reemplazo, el sistema abre sola la orden de devolución para recuperarlos."}
+      </p>`,
+    ctaUrl: G.urlGestion(g, gid),
+    ctaLabel: "Revisar y aprobar",
+    meta: { gestion_id: gid, paso: "aprobacion", origen: "taller", orden: o.orden_id || "" },
+  });
+}
+
+// Propuesta del taller RECHAZADA: sin esto el técnico nunca se entera de qué
+// pasó con el radio que dejó apartado (la aprobación sí se sabe — el aviso a
+// bodega le llega en copia).
+async function correoRechazoTaller(gid, g) {
+  const para = String(g.origen?.tecnico_email || g.responsable_email || "").trim().toLowerCase();
+  if (!para) return;
+  const vend = await G.vendedorEmailDeCliente(g.cliente_id);
+  await G.encolarCorreo({
+    to: para,
+    cc: vend || null,
+    subject: `Propuesta de reemplazo ${gid} rechazada — ${g.cliente_nombre || "Cliente"}`,
+    preheader: "Ventas no aprobó el reemplazo propuesto desde el taller",
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#991B1B;">Propuesta rechazada</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        La propuesta de reemplazo <b>${G.escapeHtml(gid)}</b> de
+        <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> (orden
+        <b>${G.escapeHtml(g.origen?.orden_id || "—")}</b>) <b>no fue aprobada</b>.
+        ${g.anulada_motivo ? `Motivo: <b>${G.escapeHtml(g.anulada_motivo)}</b>.` : ""}
+        No habrá equipo de reposición: el radio sigue su curso normal en la orden.
+      </p>
+      ${G.tablaHtml(["Radio", "Modelo"], (g.items || []).map(it => [
+        `<code>${G.escapeHtml(it.serial_saliente || "—")}</code>`,
+        G.escapeHtml(it.modelo || "—"),
+      ]))}`,
+    ctaUrl: `${APP_BASE_URL}/ordenes/index.html?ids=${encodeURIComponent(g.origen?.orden_id || "")}`,
+    ctaLabel: "Ver la orden",
+    meta: { gestion_id: gid, paso: "rechazo_taller", orden: g.origen?.orden_id || "" },
+  });
+}
+
 async function correoAdmins(gid, g) {
   // Regla 2026-08-28: TODA solicitud de aprobación va SOLO a
   // ventas@cecomunica.com — ese buzón ES el de los aprobadores (sin copias
@@ -209,6 +310,9 @@ async function correoBodega(gid, g, { anticipo = false } = {}) {
       : "los seriales del demo (stock nuevo o refurbished)";
   await G.encolarCorreo({
     to,
+    // Propuesta del taller: el vendedor y el técnico siguen el hilo en copia
+    // (el vendedor no aprueba, pero es su cliente; el técnico pidió el radio).
+    cc: await ccTaller(g),
     subject: `${G.TIPO_LABEL[g.tipo] || g.tipo} ${gid}: asignar serial(es)${anticipo ? " (firma del anexo en paralelo)" : ""} — ${g.cliente_nombre || "Cliente"}`,
     preheader: g.tipo === "reemplazo"
       ? `Asignar ${(g.items || []).length} equipo(s) de reemplazo`
@@ -325,6 +429,14 @@ module.exports = onDocumentWritten(
       } catch (e) {
         logger.error("[onGestionWrite] limpieza de anulación falló", { gid, message: e.message });
       }
+      if (esPropuestaTaller(after)) {
+        try {
+          await correoRechazoTaller(gid, after);
+          await G.registrarEvento(gid, "rechazo_taller", "Rechazo avisado al técnico que propuso el reemplazo (vendedor en copia).");
+        } catch (e) {
+          logger.error("[onGestionWrite] aviso de rechazo al taller falló", { gid, message: e.message });
+        }
+      }
       return null;
     }
 
@@ -337,6 +449,10 @@ module.exports = onDocumentWritten(
         } else if (after.tipo === "aumento") {
           await correoAprobadoresAumento(gid, after);
           await G.registrarEvento(gid, "correo_aprobacion", "Correo de aprobación comercial enviado a administración y gerencia (aumento por enmienda).");
+        } else if (esPropuestaTaller(after)) {
+          await correoPropuestaTaller(gid, after);
+          await G.registrarEvento(gid, "correo_aprobacion",
+            `Propuesta del taller (orden ${after.origen?.orden_id || "—"}) enviada a ventas para aprobación, con el vendedor del cliente y el técnico en copia.`);
         } else {
           await correoAdmins(gid, after);
           await G.registrarEvento(gid, "correo_aprobacion", "Correo de aprobación enviado a administradores (excepción propio sin garantía).");

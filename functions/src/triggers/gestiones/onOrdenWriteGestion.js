@@ -57,11 +57,19 @@ async function estamparLinaje(gid, g) {
     try {
       const rSal = await pool.resolver(saliente, it.modelo_id || null, it.modelo || "");
       if (rSal.data) {
-        await rSal.ref.set({
-          pendiente_devolucion: true,
-          updated_at: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
-        await rSal.ref.collection("movimientos").add(movimiento(`Reemplazada por ${entrante} — pendiente de devolución (gestión ${gid})`));
+        // Propuesta del taller con el radio YA en casa: no hay devolución que
+        // esperar, así que no se marca `pendiente_devolucion` — esa marca es
+        // el hilo de una recuperación pendiente y aquí sería una deuda falsa
+        // (el cron de devoluciones pendientes la cobraría a diario).
+        if (!it.saliente_en_casa) {
+          await rSal.ref.set({
+            pendiente_devolucion: true,
+            updated_at: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
+        await rSal.ref.collection("movimientos").add(movimiento(it.saliente_en_casa
+          ? `Reemplazada por ${entrante} — el radio ya estaba en CECOMUNICA (gestión ${gid})`
+          : `Reemplazada por ${entrante} — pendiente de devolución (gestión ${gid})`));
       }
     } catch (e) {
       logger.warn("[onOrdenWriteGestion] marca del saliente falló", { gid, saliente, message: e.message });
@@ -111,7 +119,13 @@ module.exports = onDocumentWritten(
         };
 
         if (g.tipo === "reemplazo" && !g.ordenes?.devolucion_id) {
+          // Salientes que hay que IR A BUSCAR. En una propuesta del taller el
+          // radio suele estar ya en el mostrador (entró con su orden): pedir
+          // una devolución por él es mandar a recepción a recuperar algo que
+          // tiene en la mano, y de paso deja la cuenta con una devolución
+          // abierta para siempre. Esos ítems vienen con `saliente_en_casa`.
           const salientes = (g.items || [])
+            .filter(it => !it.saliente_en_casa)
             .map(it => ({
               serial: it.serial_saliente,
               modelo: it.modelo || "",
@@ -120,6 +134,21 @@ module.exports = onDocumentWritten(
             }))
             .filter(u => String(u.serial || "").trim());
           const contratos = Array.isArray(g.contratos_afectados) ? g.contratos_afectados : [];
+          // Todos los salientes ya están en casa → no hay recuperación que
+          // hacer: el paso "entrada" queda cumplido y la gestión puede cerrar.
+          // Se exige que TODOS los ítems lo declaren (y traigan serial): una
+          // lista vacía por datos incompletos sigue el camino de siempre.
+          const todosEnCasa = (g.items || []).length > 0
+            && (g.items || []).every(it => it.saliente_en_casa && String(it.serial_saliente || "").trim());
+          if (todosEnCasa) {
+            patch.cierre = { ...patch.cierre, entrada: true };
+            await estamparLinaje(gid, g);
+            await G.registrarEvento(gid, "entrega",
+              `Entrega registrada desde la OS ${ordenId}. El/los radio(s) sustituido(s) ya estaban en CECOMUNICA (propuesta del taller): no se abre orden de devolución y el paso de entrada queda cumplido. Su disposición sigue en la orden de taller que los trajo.`);
+            await gRef.set(patch, { merge: true });
+            logger.info("[onOrdenWriteGestion] reemplazo del taller sin devolución (saliente en casa)", { gid, ordenId });
+            return null;
+          }
           const devId = await crearOrdenDevolucion({
             clienteId: g.cliente_id,
             clienteNombre: g.cliente_nombre || "",

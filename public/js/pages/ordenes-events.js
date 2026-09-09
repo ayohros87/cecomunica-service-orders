@@ -159,6 +159,15 @@
       CargaDiferida.dividir().then(() => abrirDividirOrden(ordenId))
         .catch(() => Toast.show('Sin conexión — no se pudo abrir el reparto.', 'bad'));
     },
+    // El taller propone reemplazar un radio (ordenes-reemplazo.js, diferido):
+    // nace la gestión GR en pendiente_aprobacion y ventas la decide.
+    'proponer-reemplazo': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (!ordenId) return;
+      closeAllMenus();
+      CargaDiferida.reemplazo().then(() => abrirProponerReemplazo(ordenId))
+        .catch(() => Toast.show('Sin conexión — no se pudo abrir la propuesta.', 'bad'));
+    },
     'editar-orden': (el) => {
       const ordenId = el.dataset.ordenId;
       if (ordenId) window.location.href = `editar-orden.html?id=${ordenId}`;

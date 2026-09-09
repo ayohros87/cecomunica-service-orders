@@ -922,8 +922,22 @@ service cloud.firestore {
         return userRole() in ["administrador","inventario"]
           && (soloTocaG(["items"]) || soloTocaG(["demo"]) || soloTocaG(["aumento"]));
       }
-      allow read:   if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion","inventario","tecnico","jefe_taller","contabilidad"];
-      allow create: if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion"]
+      // El TALLER propone un reemplazo (2026-09-09): el técnico ve el radio
+      // dañado y abre la solicitud desde su orden, sin pasar por el Centro
+      // (al que no entra). Es una PROPUESTA, no una decisión: nace siempre en
+      // pendiente_aprobacion — ventas@cecomunica.com aprueba — y solo de
+      // reemplazo. Aprobar sigue siendo de administración/gerencia
+      // (esAprobacionGestion), así que el técnico no puede darse curso solo.
+      function esPropuestaTaller() {
+        return userRole() in ["tecnico","tecnico_operativo","jefe_taller"]
+          && request.resource.data.tipo == "reemplazo"
+          && request.resource.data.estado == "pendiente_aprobacion"
+          && request.resource.data.get("origen", {}).get("tipo", "") == "taller"
+          && request.resource.data.responsable_uid == request.auth.uid;
+      }
+      allow read:   if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion","inventario","tecnico","tecnico_operativo","jefe_taller","contabilidad"];
+      allow create: if isSignedIn()
+                    && (userRole() in ["administrador","gerente","vendedor","recepcion"] || esPropuestaTaller())
                     && request.resource.data.cliente_id is string
                     && request.resource.data.tipo in ["reemplazo","demo","baja","aumento","devolucion","cambio_serial"]
                     && request.resource.data.deleted == false;
@@ -943,7 +957,7 @@ service cloud.firestore {
       // Bitácora del expediente: quién hizo qué. Append-only.
       match /eventos/{eventoId} {
         allow read:   if isSignedIn();
-        allow create: if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion","inventario","tecnico","jefe_taller"];
+        allow create: if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion","inventario","tecnico","tecnico_operativo","jefe_taller"];
         allow update, delete: if false;
       }
     }

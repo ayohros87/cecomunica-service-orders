@@ -618,8 +618,10 @@ window.Centro = {
         const carta = esBaja && g.carta_path ? B('Ver carta', `Centro.verAnexo('${this.esc(g.carta_path)}')`) : '';
         if (puede) {
           const sinCarta = esBaja && !g.carta_path;
-          it('warn', `Aprobar ${esBaja ? (g.terminacion_total_de?.length ? 'la TERMINACIÓN de la cuenta' : 'la baja de equipos') : esAum ? 'el aumento (enmienda)' : 'la excepción de garantía'} ${gid}`,
+          const esTaller = g.origen?.tipo === 'taller';
+          it('warn', `Aprobar ${esBaja ? (g.terminacion_total_de?.length ? 'la TERMINACIÓN de la cuenta' : 'la baja de equipos') : esAum ? 'el aumento (enmienda)' : esTaller ? 'el reemplazo que propuso el taller' : 'la excepción de garantía'} ${gid}`,
             sinCarta ? 'FALTA la carta del cliente — la aprobación está bloqueada hasta adjuntarla'
+              : esTaller ? `Diagnóstico del taller (orden ${this.esc(g.origen?.orden_id || '—')}): ${this.esc(g.origen?.diagnostico || '—')}`
               : `${(g.items || []).length || (g.aumento?.lineas || []).length} renglón(es) — revisa la evidencia antes de aprobar`,
             carta + ver + (sinCarta ? '' : B('Revisar y aprobar', `Centro.abrirGestion('${this.esc(g.id)}')`, true)));
         } else if (esBaja && !g.carta_path && this.puedeCrearGestion()) {
@@ -2439,7 +2441,20 @@ window.Centro = {
             <b>Total estimado</b><b style="margin-left:auto;" class="num">$${Number(pen.total || 0).toFixed(2)}</b></div>` : ''}`;
     } else if (g.tipo === 'reemplazo') {
       const asignando = this.puedeAsignar() && g.estado === 'pendiente_bodega';
-      cuerpo = `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
+      // Propuesta del TALLER (2026-09-09): el diagnóstico va PRIMERO — es lo
+      // que se lee para decidir. Sin esto, ventas aprobaría a ciegas.
+      const taller = g.origen?.tipo === 'taller' ? `
+        <div class="cg-senal info" style="margin:0 0 10px; display:block;">
+          <div style="font-size:12.5px; color:var(--fg-3);">Propuesta del taller ·
+            ${this.esc(g.origen.tecnico_email || g.responsable_email || '—')} ·
+            orden <span class="cg-mono">${this.esc(g.origen.orden_id || '—')}</span></div>
+          <div style="font-size:13.5px; margin-top:4px;">${this.esc(g.origen.diagnostico || '—')}</div>
+          <div style="font-size:12.5px; color:var(--fg-3); margin-top:4px;">
+            ${(g.items || []).every(it => it.saliente_en_casa)
+              ? 'Los radios ya están en CECOMUNICA — no se abrirá orden de devolución.'
+              : 'Los radios siguen donde el cliente — al entregar el reemplazo se abre sola la devolución.'}</div>
+        </div>` : '';
+      cuerpo = taller + `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
         <th>Sale</th><th>Modelo</th><th>Entra</th><th>Modelo solicitado</th><th>Motivo</th><th>Contrato</th>
         </tr></thead><tbody>
         ${(g.items || []).map((it, ix) => `<tr>
@@ -2487,7 +2502,9 @@ window.Centro = {
              ? 'Baja esperando aprobación (una sola, con el desglose por contrato a la izquierda).'
              : esAumento
                ? 'Aumento esperando aprobación comercial — al aprobar, se imprime el anexo para la firma del cliente.'
-               : 'Excepción por servicio al cliente (propio sin garantía) — requiere aprobación de administración.'}</span>
+               : g.origen?.tipo === 'taller'
+                 ? 'El taller propone este reemplazo y espera la decisión de ventas. Al aprobar, Bodega recibe el aviso para asignar el equipo que sustituye a cada radio (mismo modelo).'
+                 : 'Excepción por servicio al cliente (propio sin garantía) — requiere aprobación de administración.'}</span>
            ${puede ? `<span style="margin-left:auto; display:flex; gap:8px;">
              <button class="btn btn-primary cg-act" style="${sinCarta ? 'opacity:.5; cursor:not-allowed;' : ''}"
                ${sinCarta ? 'disabled title="Falta la carta de solicitud del cliente"' : ''}
@@ -3141,12 +3158,16 @@ window.Centro = {
     }
     if (e.propiedad === 'cliente') {
       if (!e.venta) return { ok: false, label: 'No adquirido en CECOMUNICA', why: 'Equipo del cliente comprado fuera — no aplica reemplazo.' };
-      const v = e.venta.garantia_vence;
-      const d = v?.toDate ? v.toDate() : (v ? new Date(v) : null);
-      if (d && !isNaN(d) && d > new Date()) {
-        return { ok: true, code: 'propio_garantia', label: `Propio · garantía hasta ${d.toLocaleDateString('es-PA', { month: 'short', year: 'numeric' })}` };
+      // Una sola definición de garantía, compartida con la propuesta del
+      // taller (domain/garantiaEquipo.js): la fecha declarada manda y, si no
+      // la hay, se muestra la derivada de la factura (12 meses, cláusula 8)
+      // marcada como estimada. Quién aprueba no cambia por la estimada.
+      const g = GarantiaEquipo.garantia(e);
+      const txt = GarantiaEquipo.textoGarantia(g);
+      if (!GarantiaEquipo.requiereExcepcion(g)) {
+        return { ok: true, code: 'propio_garantia', label: `Propio · ${txt}` };
       }
-      return { ok: true, code: 'propio_excepcion', label: 'Propio · sin garantía',
+      return { ok: true, code: 'propio_excepcion', label: `Propio · ${txt || 'sin garantía'}`,
                why: 'Se permite por servicio al cliente — requiere aprobación de administración.' };
     }
     return { ok: true, code: 'alquiler', label: e.propiedad === 'desconocida' ? 'Alquiler (propiedad por confirmar)' : 'Alquiler' };

@@ -880,6 +880,52 @@ async function main() {
   }, { merge: true }));
   ok("ordenes: marcar envio 'solicitado' en un acuse existente pasa (append-only intacto)");
 
+  // ── gestiones: el TALLER propone un reemplazo (2026-09-09) ──────────────
+  // El técnico abre la solicitud desde su orden, pero solo puede PROPONER:
+  // nace en pendiente_aprobacion, de tipo reemplazo y con origen taller.
+  // Aprobarla —darle curso a bodega— sigue siendo de administración/gerencia.
+  const propuesta = (uid, extra = {}) => ({
+    tipo: "reemplazo", estado: "pendiente_aprobacion",
+    cliente_id: "cli1", cliente_nombre: "GAMBOA", deleted: false,
+    origen: { tipo: "taller", orden_id: "2026090901" },
+    responsable_uid: uid, items: [{ serial_saliente: "B3400055" }],
+    ...extra,
+  });
+  for (const r of ["tecnico", "tecnico_operativo", "jefe_taller"]) {
+    await assertSucceeds(as(r).doc(`gestiones/gT_${r}`).set(propuesta(r)));
+  }
+  ok("gestiones: el taller PROPONE un reemplazo desde su orden");
+
+  // Lo que el taller NO puede: saltarse la aprobación, cambiar de tipo,
+  // disfrazar el origen o abrirla a nombre de otro.
+  await assertFails(as("tecnico").doc("gestiones/gT_x1")
+    .set(propuesta("tecnico", { estado: "pendiente_bodega" })));
+  await assertFails(as("tecnico").doc("gestiones/gT_x2")
+    .set(propuesta("tecnico", { tipo: "baja" })));
+  await assertFails(as("tecnico").doc("gestiones/gT_x3")
+    .set(propuesta("tecnico", { origen: { tipo: "vendedor" } })));
+  await assertFails(as("tecnico").doc("gestiones/gT_x4").set(propuesta("otro-uid")));
+  ok("gestiones: el taller no se salta la aprobación, ni cambia el tipo, el origen o el dueño");
+
+  // Y no puede aprobar la suya (ni ninguna): eso es de admin/gerencia.
+  await assertFails(as("tecnico").doc("gestiones/gT_tecnico")
+    .update({ estado: "pendiente_bodega", aprobacion: { requiere: true, por: "tecnico" }, cierre: {} }));
+  await assertSucceeds(as("administrador").doc("gestiones/gT_tecnico")
+    .update({ estado: "pendiente_bodega", aprobacion: { requiere: true, por: "admin" }, cierre: {} }));
+  ok("gestiones: aprobar la propuesta del taller sigue siendo de administración");
+
+  // Roles sin nada que hacer aquí siguen fuera.
+  for (const r of ["inventario", "contabilidad", "vista"]) {
+    await assertFails(as(r).doc(`gestiones/gT_no_${r}`).set(propuesta(r)));
+  }
+  ok("gestiones: inventario, contabilidad y vista no crean gestiones");
+
+  // La bitácora del expediente acepta al taller (registrarEvento corre al crear).
+  await assertSucceeds(as("tecnico").doc("gestiones/gT_tecnico").collection("eventos").add({
+    accion: "crear", detalle: "Gestión creada (Reemplazo)", por_uid: "tecnico",
+  }));
+  ok("gestiones/eventos: el taller deja su traza en la bitácora");
+
   await testEnv.cleanup();
   console.log(`\nTODOS LOS TESTS DE REGLAS PASARON (${n} grupos)`);
 }
