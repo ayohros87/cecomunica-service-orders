@@ -159,3 +159,27 @@ test("P6 las pantallas del Centro muestran de quién es cada equipo", () => {
   assert.doesNotMatch(leer("public", "js", "pages", "inventario-equipos.js"), /PROP_LABELS/,
     "el vocabulario viejo de inventario ya no existe");
 });
+
+test("P7 los documentos y correos también dicen de quién es cada equipo", () => {
+  // Correo a activaciones: la tabla de seriales gana la columna, derivada de
+  // la línea con el mismo helper del pool.
+  const aprob = leer("functions", "src", "triggers", "contratos", "onApproval.js");
+  assert.match(aprob, /propiedadDeUnidad/, "el correo deriva la propiedad de la línea");
+  assert.match(aprob, /De quién es<\/th>/, "la tabla de seriales declara la columna");
+
+  // Anexo de aumento impreso: la línea dice si el equipo es del cliente.
+  assert.match(leer("public", "clientes", "anexo-aumento.html"),
+    /modalidad === 'propio' \? ' — equipo del cliente' : ''/);
+
+  // Página de firma: la tabla de seriales de una regularización lleva
+  // Propiedad, y el congelado de la solicitud la guarda.
+  const firmar = leer("public", "firmar", "index.html");
+  assert.match(firmar, /<th>Propiedad<\/th>/);
+  assert.match(leer("public", "js", "pages", "clientes-centro.js"),
+    /s\.modalidad \? \{ modalidad: s\.modalidad \} : \{\}/,
+    "la modalidad viaja en el congelado de la firma");
+
+  // Orden de devolución: dice por qué no están los equipos del cliente.
+  assert.match(leer("functions", "src", "lib", "ordenDevolucion.js"),
+    /solo los equipos de la flota/);
+});

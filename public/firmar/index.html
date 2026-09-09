@@ -264,8 +264,12 @@
         const sum = document.querySelector(`#${detId} summary`);
         if (sum && detId === 'fDocDet') sum.textContent = '📄 Leer el anexo completo';
         const regu = s.es_regularizacion === true;
+        // De quién es cada radio (2026-09-09): el cliente firma que estos
+        // equipos están en su poder — tiene que ver cuáles son suyos y cuáles
+        // son de alquiler, igual que en el Anexo A del contrato.
         const serialesRegu = (s.regulariza_seriales || []).map(u =>
-          `<tr><td class="mono">${this.esc(u.serial)}</td><td>${this.esc(u.modelo)}</td></tr>`).join('');
+          `<tr><td class="mono">${this.esc(u.serial)}</td><td>${this.esc(u.modelo)}</td>
+           <td>${u.modalidad === 'propio' ? 'Del cliente' : u.modalidad === 'alquiler' ? 'Alquiler' : '—'}</td></tr>`).join('');
         // Texto congelado en la solicitud (misma regla que el contrato); los
         // enlaces anteriores al congelado usan el texto desplegado como
         // respaldo.
@@ -281,7 +285,7 @@
         cont.innerHTML = `
           <p>${s.contrato_papel ? 'Adenda' : 'Anexo'} de ${ajuste ? 'ajuste de tarifa' : regu ? 'regularización' : 'aumento'} al contrato <b>${this.esc(s.contrato_id || '—')}</b>${s.contrato_papel ? ' (contrato marco suscrito en documento físico, que ambas partes reconocen como vigente)' : ''} entre
             <b>C COMUNICA, S.A.</b> y <b>${this.esc(s.cliente_nombre || 'EL CLIENTE')}</b>. ${intro}</p>
-          ${regu && serialesRegu ? `<table><thead><tr><th>Serial</th><th>Modelo</th></tr></thead><tbody>${serialesRegu}</tbody></table>` : ''}
+          ${regu && serialesRegu ? `<table><thead><tr><th>Serial</th><th>Modelo</th><th>Propiedad</th></tr></thead><tbody>${serialesRegu}</tbody></table>` : ''}
           ${ajuste && (s.ajustes_precio || []).length ? `
             <h3>Tarifas renegociadas</h3>
             <table><thead><tr><th>Línea</th><th class="num">Cant.</th><th class="num">Precio anterior</th><th class="num">Precio nuevo</th></tr></thead><tbody>

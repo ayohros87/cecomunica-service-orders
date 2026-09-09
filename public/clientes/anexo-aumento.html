@@ -91,7 +91,10 @@
               <thead><tr><th>Cantidad</th><th>Concepto</th><th>Tipo</th><th>Precio (unidad)</th><th>Subtotal</th></tr></thead>
               <tbody>${(a.lineas || []).map(l => `<tr>
                 <td>${Number(l.cantidad || 0)}</td>
-                <td>${esc(l.modelo || '—')}</td>
+                <!-- De quién es el equipo (2026-09-09): el anexo lo callaba
+                     aunque la línea ya trae la modalidad, igual que el
+                     documento del contrato. -->
+                <td>${esc(l.modelo || '—')}${l.modalidad === 'propio' ? ' — equipo del cliente' : ''}</td>
                 <td>Mensual</td>
                 <td>$${Number(l.precio || 0).toFixed(2)}</td>
                 <td>$${(Number(l.cantidad || 0) * Number(l.precio || 0)).toFixed(2)}</td></tr>`).join('')}

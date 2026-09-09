@@ -341,7 +341,11 @@ async function crearOrdenDevolucion({ clienteId, clienteNombre, contratoDocId, c
               <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Modelo</th>
             </tr></thead>
             <tbody>${filas}</tbody>
-          </table>`,
+          </table>
+          <p style="margin:10px 0 0;font:12.5px/1.5 Arial,sans-serif;color:#6b7280;">
+            Esta lista trae <b>solo los equipos de la flota</b>. Los que son <b>propiedad del cliente</b>
+            no se recuperan y por eso no aparecen, aunque estén en el mismo contrato: de quién es cada
+            radio se ve en la ficha del cliente, columna “De quién es”.</p>`,
         ctaUrl: `${APP_BASE_URL}/ordenes/index.html`,
         ctaLabel: "Abrir órdenes de servicio",
         meta: {

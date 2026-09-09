@@ -11,6 +11,7 @@ const { activacionesEmailTo, ccContratoAprobado } = require("../../lib/mailRecip
 const vigencia = require("../../lib/vigencia");
 const { planAmarre } = require("../../lib/regularizacion");
 const { catalogo } = require("../../domain/modeloCatalogo");
+const { propiedadDeUnidad } = require("../../domain/propiedadUnidad");
 const { aplicarPlanRenovacion, serialesExcluidosPorPlan, reemplazosPorModelo } = require("../../lib/planRenovacion");
 const { esDocumentoV2 } = require("../../lib/documentoContrato");
 const poolDom = require("../../domain/equiposPool");
@@ -648,6 +649,9 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
       // Seriales asignados (subcolección) agrupados por modelo.
       const serialesSnap = await contratoRef.collection("seriales").get();
       const serialesPorModelo = {};
+      // modelo_id por grupo: para saber de quién es cada modelo hay que parear
+      // con SU línea, y la fila exacta del catálogo gana sobre la familia.
+      const modeloIdPorModelo = {};
       const vistos = new Set();
       serialesSnap.forEach(d => {
         const s = d.data() || {};
@@ -656,6 +660,7 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
         vistos.add(poolDom.normSerial(serial));
         const m = s.modelo || "—";
         (serialesPorModelo[m] = serialesPorModelo[m] || []).push(serial + (s.refurbished === true ? " · refurbished" : ""));
+        if (!modeloIdPorModelo[m] && s.modelo_id) modeloIdPorModelo[m] = s.modelo_id;
       });
       // Renovación con plan por serial: los 'continúa' declarados en la venta
       // van en el correo aunque la fila del plan aún no exista (el plan se
@@ -671,6 +676,7 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
           vistos.add(poolDom.normSerial(serial));
           const m = u.modelo || "—";
           (serialesPorModelo[m] = serialesPorModelo[m] || []).push(serial + (u.refurbished === true ? " · refurbished" : ""));
+          if (!modeloIdPorModelo[m] && u.modelo_id) modeloIdPorModelo[m] = u.modelo_id;
         }
         const reempl = planV.unidades.filter(u => u.destino === "reemplaza");
         if (reempl.length) {
@@ -678,10 +684,21 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
             `${escapeHtml(u.serial || u.serial_norm || "")} → ${escapeHtml(u.reemplazo_modelo || u.modelo || "mismo modelo")}${u.reemplazo_modelo ? " (otro modelo)" : " (uno nuevo igual)"}`);
         }
       }
+      // De quién es cada modelo (2026-09-09): sale de la línea del contrato,
+      // igual que la propiedad que se estampa en el pool. Sin esto la tabla de
+      // seriales no decía si el radio es de alquiler o del cliente.
+      await catalogo().catch(() => null);   // familia por catálogo, no por texto
+      const duenoDe = (m) => {
+        const { propiedad } = propiedadDeUnidad(
+          { modelo_id: modeloIdPorModelo[m] || null, modelo: m }, contrato.equipos, contrato);
+        if (propiedad === "cliente") return `<span style="color:#6b21a8;font-weight:600;">Del cliente</span>`;
+        if (propiedad === "cecomunica") return `<span style="color:#075985;font-weight:600;">Alquiler</span>`;
+        return `<span style="color:#92400e;font-weight:600;">Por definir</span>`;
+      };
       const serialesRows = Object.keys(serialesPorModelo).sort().map(m =>
         m === "__reemplazos__"
-          ? `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;color:#1e3a8a;"><b>Se reemplazan</b><br><span style="font-size:11px;">(bodega asigna el entrante)</span></td><td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;">${serialesPorModelo[m].join("<br>")}</td></tr>`
-          : `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">${escapeHtml(m)}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;">${serialesPorModelo[m].map(escapeHtml).join("<br>")}</td></tr>`
+          ? `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;color:#1e3a8a;"><b>Se reemplazan</b><br><span style="font-size:11px;">(bodega asigna el entrante)</span></td><td style="padding:6px 8px;border-bottom:1px solid #eee;"></td><td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;">${serialesPorModelo[m].join("<br>")}</td></tr>`
+          : `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">${escapeHtml(m)}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:13px;">${duenoDe(m)}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;">${serialesPorModelo[m].map(escapeHtml).join("<br>")}</td></tr>`
       ).join("");
       const noTieneHtml = planNoTiene.length
         ? `<p style="margin:8px 0 0;font:13px/1.5 Arial,sans-serif;color:#92400e;"><b>${planNoTiene.length} equipo(s) que el cliente declaró NO tener</b> se soltaron de la cuenta y quedaron por clasificar: <span style="font-family:monospace;font-size:12px;">${planNoTiene.map(escapeHtml).join(", ")}</span></p>`
@@ -689,7 +706,7 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
       const serialesTable = serialesRows
         ? `<h4 style="margin:16px 0 8px;font:600 16px Arial,sans-serif;">${contrato.accion === "Renovación" && contrato.renovacion_sin_equipo ? "Seriales que continúan con el cliente" : "Seriales asignados"}</h4>
            <table role="presentation" width="100%" style="border-collapse:collapse;font:14px Arial,sans-serif;margin:0 0 16px;">
-             <thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Modelo</th><th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Serial</th></tr></thead>
+             <thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Modelo</th><th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">De quién es</th><th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Serial</th></tr></thead>
              <tbody>${serialesRows}</tbody></table>${noTieneHtml}`
         : noTieneHtml;
 
