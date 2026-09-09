@@ -604,7 +604,7 @@ function renderRow(id, c){
     </td>
     <td style="text-align:center">
       <label class="input-row fit" style="justify-content:center">
-        <input type="checkbox" data-field="activo" ${c.activo?'checked':''} ${ro?'disabled':''}>
+        <input type="checkbox" data-field="activo" ${c.activo!==false?'checked':''} ${ro?'disabled':''}>
       </label>
     </td>
 
@@ -676,7 +676,7 @@ if (selectVend) {
   // Checkbox ACTIVO
   const chk = tr.querySelector('input[type="checkbox"][data-field="activo"]');
   chk && chk.addEventListener('change', ()=>{
-    if(asReadonly()){ chk.checked = !!c.activo; return; }
+    if(asReadonly()){ chk.checked = c.activo!==false; return; }
     setRowStatus(id, 'saving');
     onInlineUpdate(id, {activo: !!chk.checked});
   });
