@@ -3811,7 +3811,13 @@ tr.activo:hover { background: #f0f9ff !important; }
 .int-ro-chip--info { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }
 .int-ro-chip--gris { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
 
+/* El título es un único hijo del flex `.modal-title` para que envuelva como
+   texto normal; el serial y el sello no se parten. */
+.int-ro-titulo { min-width: 0; }
+.int-ro-serial { font-family: var(--font-mono); white-space: nowrap; }
+
 .int-ro-solo-lectura {
+  white-space: nowrap;
   display: inline-block;
   background: #f1f5f9;
   color: #475569;

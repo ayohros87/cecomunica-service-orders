@@ -1203,8 +1203,11 @@ window.verIntervencionEquipo = async function(ordenId, idx) {
   let materiales = [];
 
   await Modal.sheet({
-    titleHtml: `<i data-lucide="eye"></i> Intervención · <span style="font-family:var(--font-mono);">${escapeHtml(serial)}</span>`
-      + ` <span class="int-ro-solo-lectura">solo lectura</span>`,
+    // Todo el título va en UN solo span: `.modal-title` es flex y con nodos
+    // sueltos el teléfono partía "Intervención" del "·" y del serial.
+    titleHtml: `<i data-lucide="eye"></i><span class="int-ro-titulo">Intervención · `
+      + `<span class="int-ro-serial">${escapeHtml(serial)}</span> `
+      + `<span class="int-ro-solo-lectura">solo lectura</span></span>`,
     html,
     size: "lg",
     footerHtml: navHtml,
