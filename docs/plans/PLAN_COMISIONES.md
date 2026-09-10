@@ -1,8 +1,8 @@
 # Comisiones — del check manual al expediente que se libera solo
 
-**Estado:** **F0 hecha** el 2026-09-10 (§9). F1–F5 pendientes. Las cinco
-decisiones abiertas quedaron resueltas por Alberto el 2026-09-10 (§11).
-Fecha del plan: 2026-09-10.
+**Estado:** **F0 y F1 hechas y desplegadas** el 2026-09-10 (§9). F2–F5
+pendientes. Las cinco decisiones abiertas quedaron resueltas por Alberto el
+2026-09-10 (§11). Fecha del plan: 2026-09-10.
 
 **Origen:** correo de Zuleika del 2026-09-10 con dos reclamos que resultaron
 ser el mismo: (a) contratos firmados cuyo PDF **no aparece** en la gestión del
@@ -442,20 +442,48 @@ Todo en `public/js/pages/clientes-centro.js`. No toca datos ni rules.
 Verificado con los cinco casos reales (los cuatro del correo de Zuleika + un
 contrato con firma digital) contra los helpers puros.
 
-### F1 — Cerrar el hueco de `esperando` (arregla facturación, habilita comisiones)
+### F1 — Cerrar el hueco de `esperando` · **HECHA y DESPLEGADA 2026-09-10**
 
-Trigger nuevo en `contratos` (`onEntregaFacturacion`): al pasar
-`entrega_confirmada` de falso a `true`, **promover** el aviso
-`contrato_activo__{contratoId}` que esté en `esperando` — `fecha_efectiva`,
-`estado: 'pendiente'`, entrada en `historial[]`. Si no existe, crear
-`contrato_entregado` con id determinista. Idempotente.
+`onEntregaFacturacion` (trigger nuevo en `contratos`): al pasar
+`entrega_confirmada` de falso a `true`, **promueve** el aviso que esté en
+`esperando` — `fecha_efectiva`, `estado: 'pendiente'`, entrada en
+`historial[]` — y encola el correo prometido con CTA a la fila de la bandeja.
+Si el contrato no tiene ningún aviso (anterior al 2026-09-04), crea
+`contrato_entregado` con id determinista. Una RENOVACIÓN no genera nada.
 
-Emitir `venta_propio` cuando se registra `factura_venta.numero`
-(`contratosService.js:58`).
+**La trampa que apareció al implementarlo.** Cloud Functions reentrega
+eventos, y en un reintento el `before` sigue siendo el de antes de la entrega:
+el guard de transición **no** frena la segunda pasada. Si
+`promoverPorEntrega()` devolviera `null` tanto para "no hay aviso" como para
+"ya lo promoví", ese reintento crearía un `contrato_entregado` encima del
+aviso ya promovido — dos documentos para un solo hecho, o sea la comisión
+pagada dos veces, que es exactamente lo que §6.1 promete evitar. Por eso el
+valor de retorno distingue las dos situaciones (`promovido: true|false` vs.
+`null`), y el harness lo congela.
 
-**Esto se despliega aunque el resto del plan se posponga:** hoy hay contratos
-entregados que Recepción nunca ve como pendientes de facturar, y un correo que
-prometió avisar cuando se entregaran y nunca avisó (§2.4).
+`test-emulator/entrega-facturacion.js` — 6 comprobaciones contra el emulador
+de Firestore a secas: promoción sin duplicado, correo con CTA a la fila,
+reintento del mismo evento, contrato viejo, renovación y el guard.
+
+`scripts/promueve-avisos-entregados.js` — el trigger cubre de aquí en
+adelante; el script cubre lo que ya pasó. De los 3 avisos atascados, solo uno
+tenía el contrato ya entregado: **GRUPO INDECSA, PROP20260818-01, entregado el
+4-sep**, promovido y avisado el 2026-09-10 (correo `rZKBhXom842UYYedjwFL`,
+`status: sent`). Los otros dos (Cristian Cerdas, MINSA) siguen esperando
+entrega de verdad y el trigger los agarra.
+
+**Nota que sale de correrlo:** el correo de GRUPO INDECSA salió **sin copia al
+vendedor** porque la ficha no tiene `vendedor_asignado`. Para facturación es un
+detalle; para comisiones es un bloqueo — una cuenta sin vendedor no tiene a
+quién comisionar. Hay 57 cuentas así (censo de regularización, 2026-09-08).
+
+**`venta_propio` se mueve a la F2.** Estaba aquí y no le corresponde: el aviso
+se dispararía al registrarse `factura_venta.numero`, y ese número se registra
+**después** de haber facturado en QuickBooks. O sea que su único paso (`qbo`)
+ya está hecho el día que nace — un aviso de facturación que no pide nada. Como
+hecho **comisionable** sí importa, así que nace con el bloque `comision`, en la
+F2. (Ojo: la base de una venta Propio es el monto de la factura, y nosotros
+solo guardamos el número — el monto sale de QBO en la F4.)
 
 ### F2 — El expediente de comisión (manual, sin QBO)
 
@@ -467,9 +495,16 @@ prometió avisar cuando se entregaran y nunca avisó (§2.4).
    `creado_por_uid` (del contrato o de la gestión) — **no** desde el
    `vendedor_email` del aviso, que es el asignado del cliente (§11, decisión
    5). Backfill de los avisos existentes (§10).
-3. Pestaña **Comisiones** en `/facturacion/`, con el paso `pago` marcable a
+3. Emitir `venta_propio` al registrarse `factura_venta.numero`
+   (`contratosService.js:58`) — como hecho comisionable, no como pendiente de
+   facturación: nace con `pasos.qbo.hecho = true` (la factura ya existe, por
+   eso hay número) y con el bloque `comision`.
+4. Pestaña **Comisiones** en `/facturacion/`, con el paso `pago` marcable a
    mano (fecha + número de factura + monto), cierre de período y CSV.
-4. Chip en la fila del contrato en el Centro.
+5. Chip en la fila del contrato en el Centro.
+6. **Cuentas sin `vendedor_asignado` no tienen a quién comisionar** (57 según
+   el censo del 2026-09-08). La bandeja las muestra aparte con esa razón
+   escrita, en vez de dejarlas caer en un grupo vacío.
 
 Con esto Zuleika ya trabaja en **una** pantalla, con rastro de quién liberó
 qué. Lo único manual que le queda es mirar el pago en QuickBooks — lo mismo
