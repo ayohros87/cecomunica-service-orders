@@ -1,7 +1,10 @@
 # Comisiones — del check manual al expediente que se libera solo
 
-**Estado:** **F0 y F1 hechas y desplegadas** el 2026-09-10 (§9). F2–F5
-pendientes. Las cinco decisiones abiertas quedaron resueltas por Alberto el
+**Estado:** **F0, F1 y F2 hechas y desplegadas** el 2026-09-10 (§9), con dos
+puntos de la F2 movidos a la F4 (`venta_propio`) y a mejora aparte (el chip en
+el Centro). **Pendientes: F3** (los dos amarres con QuickBooks — es trabajo de
+contabilidad, no de código), **F4** (verificación automática del pago) y **F5**
+(webhook). Las cinco decisiones abiertas quedaron resueltas por Alberto el
 2026-09-10 (§11). Fecha del plan: 2026-09-10.
 
 **Origen:** correo de Zuleika del 2026-09-10 con dos reclamos que resultaron
@@ -485,26 +488,56 @@ hecho **comisionable** sí importa, así que nace con el bloque `comision`, en l
 F2. (Ojo: la base de una venta Propio es el monto de la factura, y nosotros
 solo guardamos el número — el monto sale de QBO en la F4.)
 
-### F2 — El expediente de comisión (manual, sin QBO)
+### F2 — El expediente de comisión · **HECHA y DESPLEGADA 2026-09-10**
 
-1. `COMISIONABLE` y `entregaAplica()` en `lib/facturacionAvisos.js` — y
-   `_entregaAplica()` del Centro (F0) pasa a leer de ahí: hoy son dos copias
-   conscientes del predicado `esperando` de `onApproval.js:287`.
-2. El bloque `comision` se crea en `crearAviso()` y lo mantienen los triggers
-   de firma y entrega. `comision.vendedor_email` se resuelve desde
-   `creado_por_uid` (del contrato o de la gestión) — **no** desde el
-   `vendedor_email` del aviso, que es el asignado del cliente (§11, decisión
-   5). Backfill de los avisos existentes (§10).
-3. Emitir `venta_propio` al registrarse `factura_venta.numero`
-   (`contratosService.js:58`) — como hecho comisionable, no como pendiente de
-   facturación: nace con `pasos.qbo.hecho = true` (la factura ya existe, por
-   eso hay número) y con el bloque `comision`.
-4. Pestaña **Comisiones** en `/facturacion/`, con el paso `pago` marcable a
-   mano (fecha + número de factura + monto), cierre de período y CSV.
-5. Chip en la fila del contrato en el Centro.
-6. **Cuentas sin `vendedor_asignado` no tienen a quién comisionar** (57 según
-   el censo del 2026-09-08). La bandeja las muestra aparte con esa razón
-   escrita, en vez de dejarlas caer en un grupo vacío.
+1. **`COMISIONABLE`, `entregaAplica()` y el bloque `comision`** en
+   `lib/facturacionAvisos.js`. `crearAviso()` lee el contrato y la gestión para
+   derivar los tres requisitos al nacer el aviso. `comision.vendedor_email`
+   sale de `gestion.responsable_email` (23/23 lo tienen) o del
+   `creado_por_uid` del contrato — **no** del `vendedor_email` del aviso, que
+   es el asignado del cliente y sirve para el CC del correo (§11, decisión 5).
+2. **`triggers/comisiones/onRequisitos.js`** (dos triggers). Firma y entrega se
+   re-derivan cuando el hecho se mueve. Hace falta porque el aviso no siempre
+   nace con el hecho escrito: `onOrdenWriteGestion` crea el aviso de
+   `aumento_entregado` **antes** de escribir `cierre.entrega` (su
+   `gRef.set(patch)` está al final de la función), y un contrato puede nacer
+   con `firmado_pendiente_validacion`. Una comisión ya `pagada` **no se
+   reabre** porque un dato del contrato cambió después.
+3. **Rules**: `comision` entra a la allowlist, pero solo admin/contabilidad la
+   mueven, el estado tiene catálogo, y base / vendedor / aplica / requisitos
+   derivados son **intocables** desde el navegador. 7 comprobaciones nuevas —
+   incluida la forma exacta que manda el servicio (`update()` con rutas
+   punteadas, no `set()+merge`).
+4. **Pestaña Comisiones** en `/facturacion/`, agrupada por vendedor, con el
+   grupo **sin vendedor primero** y el aviso arriba con el conteo. El paso
+   `pago` se marca a mano (factura + fecha + monto + saldo), "Cerrar el
+   período" está deshabilitado mientras falte algo, y el detalle dice **qué**
+   falta y **por qué**. Deshacer / reabrir no borran nada. CSV con BOM.
+5. **Backfill corrido**: 43 avisos, todos con bloque. 33 esperando · 9 pagadas
+   (por la marca vieja) · 1 no_aplica. Abiertas por vendedor: Elvia 14,
+   Alondra 7, Zuleika 6, Salomón 4, Alberto 2.
+6. **`venta_propio` sigue pendiente** — es el único punto de la F2 que no
+   entró. Ver la nota al final de la F1: el número de factura se registra
+   después de facturar, así que su valor está en el lado de comisiones, no en
+   el de facturación, y la base (el monto de la venta) solo la puede dar QBO
+   en la F4. Entra con la F4, no antes.
+7. **El chip en la fila del contrato del Centro tampoco entró** (punto 5 del
+   plan original). La pantalla de comisiones ya resuelve el reclamo de Zuleika;
+   el chip es para que el vendedor vea su comisión sin preguntar, y eso es una
+   mejora aparte que además hay que pensar con el need-to-know de montos.
+
+**Verificado.** `test-emulator/comision-requisitos.js` (8 comprobaciones sobre
+la lógica del bloque), `test-emulator/rules.js` (+7) y
+`test-browser/revisar-comisiones.js` (20 sobre la **página real** en Chrome:
+intercepta Firebase e inyecta un Firestore de mentira, en vez de copiar el HTML
+como `harness-pendientes.html` — el CSS de esta página vive inline y copiarlo
+sería probar una copia). Ese último encontró dos defectos antes de desplegar:
+el correo del vendedor se encimaba con el monto en el detalle y el encabezado
+de grupo gritaba el correo completo en mayúsculas.
+
+**Cero comisiones en `listo` hoy, y está bien:** el pago es el único requisito
+que el sistema todavía no puede derivar. Zuleika pasa una vez por las 33 y de
+ahí en adelante es incremental — o automático cuando entre la F4.
 
 Con esto Zuleika ya trabaja en **una** pantalla, con rastro de quién liberó
 qué. Lo único manual que le queda es mirar el pago en QuickBooks — lo mismo
