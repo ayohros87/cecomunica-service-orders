@@ -3375,7 +3375,82 @@ window.Centro = {
     el.innerHTML = `
       ${this._puedeCotizar() ? `<a href="../cotizaciones/nueva-cotizacion.html?cliente_id=${id}&from=centro">Nueva cotización<span class="cg-menu-hint">abre el editor con este cliente ya elegido</span></a>` : ''}
       <a href="./ficha.html?id=${id}&from=centro">${this._puedeEditarCliente() ? 'Editar datos del cliente' : 'Ver datos del cliente'}<span class="cg-menu-hint">${this._puedeEditarCliente() ? 'RUC, representante, contacto, vendedor' : 'solo lectura — los cambios los hace cobros'}</span></a>
+      ${this._puedeVerDocs() ? `<button type="button" onclick="Centro.verDocumentos()">Documentos del cliente<span class="cg-menu-hint">registro público, cédula del representante, poderes…</span></button>` : ''}
       <button type="button" onclick="Centro.abrirBloque('blkActividad')">Historial de la ficha<span class="cg-menu-hint">quién cambió qué y cuándo</span></button>`;
+  },
+
+  // Documentos legales del cliente (PII). Hasta 2026-09-10 solo se veían desde
+  // el form de cliente del módulo de contratos; el Centro es la ficha 360, así
+  // que el expediente digital se abre AQUÍ. Espejo exacto de ALLOWED_ROLES de
+  // la callable getClienteDocUrl (functions/src/callable/getClienteDocUrl.js):
+  // admin + recepción. A los demás ni se les ofrece — la lista de metadata sí
+  // la dejan leer las rules, pero los bytes los negaría la callable.
+  _puedeVerDocs() { return [ROLES.ADMIN, 'admin', ROLES.RECEPCION].includes(this.rol); },
+
+  async verDocumentos() {
+    if (!this.cliente || !this._puedeVerDocs()) return;
+    this._cerrarAcciones();
+    const id = this.cliente.id;
+    // Subir sigue viviendo en el form de cliente: aquí solo se consulta.
+    const urlSubir = `../contratos/nuevo-cliente.html?id=${encodeURIComponent(id)}&from=centro#docsSection`;
+    this._abrirModalA({
+      titulo: 'Documentos del cliente',
+      banda: false,
+      cuerpo: `<p style="margin:0 0 12px; font-size:13px; color:var(--fg-3);">
+          Expediente legal de <b>${this.esc(this.cliente.nombre || '')}</b>. Cada archivo se abre con un
+          enlace que vence a los 5 minutos y queda registrado en la auditoría de PII.</p>
+        <div id="cgDocsList"><p style="color:var(--fg-3); font-size:13px;">Cargando documentos…</p></div>`,
+      footer: `<a href="${urlSubir}" style="font-size:12.5px;">Cargar un documento ›</a>
+        <span class="sep"></span>
+        <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cerrar</button>`,
+    });
+    try {
+      const docs = await ClienteDocumentosService.list(id);
+      const cont = document.getElementById('cgDocsList');
+      if (!cont) return;
+      if (!docs.length) {
+        cont.innerHTML = `<p style="color:var(--fg-3); font-size:13px;">No hay documentos cargados para este cliente.</p>`;
+        return;
+      }
+      cont.innerHTML = docs.map(d => this._docFilaHtml(d)).join('');
+      if (window.lucide?.createIcons) lucide.createIcons();
+    } catch (err) {
+      const cont = document.getElementById('cgDocsList');
+      if (cont) cont.innerHTML = `<p style="color:#b91c1c; font-size:13px;">No se pudieron cargar los documentos: ${this.esc(err?.message || err)}</p>`;
+    }
+  },
+  _docFilaHtml(d) {
+    const kb = Number(d.size) || 0;
+    const tam = !kb ? '' : kb < 1024 * 1024 ? `${Math.round(kb / 1024)} KB` : `${(kb / 1024 / 1024).toFixed(1)} MB`;
+    const f = d.subido_en?.toDate ? (window.FMT?.datetime ? FMT.datetime(d.subido_en.toDate()) : d.subido_en.toDate().toLocaleString('es-PA', { hour12: false })) : '';
+    const meta = [this.esc(d.nombre_archivo || ''), tam, this.esc(f)].filter(Boolean).join(' · ');
+    return `<div style="display:flex; gap:10px; align-items:center; padding:9px 2px; border-bottom:1px solid var(--border-subtle);">
+      <i data-lucide="${(d.content_type || '').includes('pdf') ? 'file-text' : 'image'}" style="width:18px; height:18px; color:var(--fg-3); flex:none;"></i>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:13px; font-weight:600;">${this.esc(ClienteDocumentosService.labelFor(d.tipo))}</div>
+        <div style="font-size:12px; color:var(--fg-4); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${meta}</div>
+      </div>
+      <button type="button" class="btn btn-ghost cg-act" onclick="Centro.verDocumento('${this.esc(d.id)}', this)">Ver</button>
+    </div>`;
+  },
+  // La pestaña se abre ANTES del await: si se abriera con la URL ya firmada, el
+  // navegador la trataría como popup (el gesto del clic ya se perdió) y la
+  // bloquearía. Se abre vacía con el clic y luego se le pone el destino. Sin
+  // 'noopener' en las features (Chrome devuelve null y no habría a quién
+  // ponerle el destino): el enlace se corta anulando `opener` a mano.
+  async verDocumento(docId, btn) {
+    const tab = window.open('about:blank', '_blank');
+    if (tab) { try { tab.opener = null; } catch (_) {} }
+    if (btn) btn.disabled = true;
+    try {
+      const url = await ClienteDocumentosService.getViewUrl(this.cliente.id, docId);
+      if (tab) tab.location.href = url; else window.open(url, '_blank', 'noopener');
+    } catch (err) {
+      if (tab) tab.close();
+      Toast.show(err?.message || 'No se pudo abrir el documento.', 'bad');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   },
 
   // El grid de edición masiva salió del home/rail (2026-09-03): se entra SOLO
