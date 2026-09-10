@@ -11,10 +11,16 @@
  * ======================================== */
 
 (function () {
-  const esc = (s) => escapeHtml(String(s ?? ''));
+  // Helpers transversales: esta página NO carga ordenes-state.js, así que
+  // `escapeHtml` y `APP.utils.lucideRefresh` NO existen aquí. Usar los
+  // canónicos que sí están en el HTML: FMT.esc (core/formatting.js) e
+  // Icons.pintar (core/icons.js). Antes reventaba en el primer render.
+  const esc = (s) => FMT.esc(s);
+  const _pintarIconos = (scope) => { if (window.Icons) Icons.pintar(scope); };
 
   let _filas = [];
   let _verRevocados = false;
+  let _rol = '';
 
   function _fecha(ts, iso) {
     const d = ts?.toDate ? ts.toDate() : (iso ? new Date(iso) : null);
@@ -23,8 +29,7 @@
 
   // Solo admin puede borrar de verdad; revocar lo puede hacer quien firma QC.
   function _puedeRevocar() {
-    const rol = APP.state.userRole || '';
-    return rol === ROLES.ADMIN || rol === ROLES.JEFE_TALLER;
+    return _rol === ROLES.ADMIN || _rol === ROLES.JEFE_TALLER;
   }
 
   function _filtrar() {
@@ -54,7 +59,7 @@
       vacio.querySelector('p').textContent = _filas.length
         ? 'Ningún equipo coincide con la búsqueda.'
         : 'Ningún equipo descartado. Nada que vigilar.';
-      APP.utils.lucideRefresh(vacio);
+      _pintarIconos(vacio);
       return;
     }
     vacio.style.display = 'none';
@@ -148,7 +153,8 @@
         // Lectura directa: esta página no carga ordenesService y el rol solo
         // gobierna si aparece el botón "Revocar" (las reglas mandan de verdad).
         const snap = await firebase.firestore().collection('usuarios').doc(user.uid).get();
-        APP.state.userRole = snap.exists ? (snap.data().rol || '') : '';
+        _rol = snap.exists ? (snap.data().rol || '') : '';
+        window.userRole = _rol;   // la ficha del equipo lee este
       } catch (e) { console.warn('[Descartados] no se pudo leer el rol:', e); }
       await cargar();
     });

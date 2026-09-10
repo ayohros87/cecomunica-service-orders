@@ -13,10 +13,16 @@
  * ======================================== */
 
 (function () {
-  const esc = (s) => escapeHtml(String(s ?? ''));
+  // Helpers transversales: esta página NO carga ordenes-state.js, así que
+  // `escapeHtml` y `APP.utils.lucideRefresh` NO existen aquí. Usar los
+  // canónicos que sí están en el HTML: FMT.esc (core/formatting.js) e
+  // Icons.pintar (core/icons.js). Antes reventaba en el primer render.
+  const esc = (s) => FMT.esc(s);
+  const _pintarIconos = (scope) => { if (window.Icons) Icons.pintar(scope); };
 
   let _filas = [];
   let _verLevantadas = false;
+  let _rol = '';
 
   function _fecha(ts, iso) {
     const d = ts?.toDate ? ts.toDate() : (iso ? new Date(iso) : null);
@@ -26,8 +32,7 @@
   // Levantar = afirmar que el radio ya no tiene la limitación: quien firma QC,
   // inventario y admin (las reglas mandan; esto solo pinta el botón).
   function _puedeLevantar() {
-    const rol = APP.state.userRole || '';
-    return rol === ROLES.ADMIN || rol === ROLES.JEFE_TALLER || rol === 'inventario';
+    return _rol === ROLES.ADMIN || _rol === ROLES.JEFE_TALLER || _rol === ROLES.INVENTARIO;
   }
 
   function _filtrar() {
@@ -56,7 +61,7 @@
       vacio.querySelector('p').textContent = _filas.length
         ? 'Ningún equipo coincide con la búsqueda.'
         : 'Ningún equipo con condición particular.';
-      APP.utils.lucideRefresh(vacio);
+      _pintarIconos(vacio);
       return;
     }
     vacio.style.display = 'none';
@@ -146,8 +151,8 @@
       if (!user) { window.location.href = '../login.html'; return; }
       try {
         const snap = await firebase.firestore().collection('usuarios').doc(user.uid).get();
-        APP.state.userRole = snap.exists ? (snap.data().rol || '') : '';
-        window.userRole = APP.state.userRole;   // la ficha del equipo lee este
+        _rol = snap.exists ? (snap.data().rol || '') : '';
+        window.userRole = _rol;   // la ficha del equipo lee este
       } catch (e) { console.warn('[Condiciones] no se pudo leer el rol:', e); }
       // La ficha re-pinta el listado cuando registra o levanta desde ahí.
       if (window.EquipoFicha) EquipoFicha.onCambio = cargar;

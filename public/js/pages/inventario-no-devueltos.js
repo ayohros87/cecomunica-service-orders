@@ -15,7 +15,9 @@
  * ======================================== */
 
 (function () {
-  const esc = (s) => escapeHtml(String(s ?? ''));
+  // Esta página NO carga ordenes-state.js: `escapeHtml` no existe aquí. El
+  // helper canónico es FMT.esc (core/formatting.js), que sí está en el HTML.
+  const esc = (s) => FMT.esc(s);
 
   let _filas = [];
   let _verCerrados = false;
@@ -91,7 +93,7 @@
       vacio.querySelector('p').textContent = _filas.length
         ? 'Ningún renglón coincide con la búsqueda.'
         : 'Ningún equipo pendiente de cobro. Todo lo que salió, volvió.';
-      if (window.APP?.utils?.lucideRefresh) APP.utils.lucideRefresh(vacio);
+      if (window.Icons) Icons.pintar(vacio);   // APP no existe en esta página
       return;
     }
     vacio.style.display = 'none';
@@ -160,7 +162,7 @@
       </tr>`;
     }).join('');
 
-    if (window.APP?.utils?.lucideRefresh) APP.utils.lucideRefresh(tbody);
+    if (window.Icons) Icons.pintar(tbody);   // APP no existe en esta página
   }
 
   // ── Acciones ─────────────────────────────────────────────────────────
