@@ -330,6 +330,26 @@ test("K11 · ninguna página se declara su propio backdrop ni arma diálogos a m
   const cotHtml = leer("public", "ordenes", "cotizar-orden.html");
   assert.ok(!/\.co-preview-ov|\.co-preview-card/.test(cotHtml), "cotizar-orden sin su overlay propio");
   assert.match(cotHtml, /body\.co-previewing > \*:not\(\.modal-backdrop\)/, "la impresión de la vista previa apunta al kit");
+
+  // Todo fondo estático se anuncia como diálogo. Modal.open da Escape, trampa
+  // de foco y bloqueo de scroll, pero el rol hay que declararlo en el HTML: sin
+  // él un lector de pantalla no dice que se abrió un diálogo (2026-09-10).
+  for (const f of htmls) {
+    const rel = path2.relative(path2.join(RAIZ, "public"), f).replace(/\\/g, "/");
+    for (const tag of (fs2.readFileSync(f, "utf8").match(/<div[^>]*class="[^"]*modal-backdrop[^"]*"[^>]*>/g) || [])) {
+      assert.ok(/role="dialog"/.test(tag),
+        `${rel}: fondo sin role="dialog" → ${tag.replace(/\s+/g, " ").slice(0, 80)}`);
+    }
+  }
+
+  // Sin <meta viewport> el teléfono maqueta a 980px y las @media de la página
+  // nunca aplican: le pasaba al cajón de POC. tools/ son scripts internos.
+  for (const f of htmls) {
+    const rel = path2.relative(path2.join(RAIZ, "public"), f).replace(/\\/g, "/");
+    if (rel.startsWith("tools/")) continue;
+    assert.match(fs2.readFileSync(f, "utf8"), /name="viewport"/,
+      `${rel}: sin <meta name="viewport"> — el teléfono la maqueta a 980px`);
+  }
 });
 
 test("K5 · Modal.sheet resuelve con la acción del botón y respeta onAction=false", async () => {

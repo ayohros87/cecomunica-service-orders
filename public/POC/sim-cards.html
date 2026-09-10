@@ -149,10 +149,10 @@
   </div><!-- /.app-wrap -->
 
   <!-- Modal: alta manual -->
-  <div id="simAltaModal" class="modal-backdrop">
+  <div id="simAltaModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="simAltaModalTitle">
     <div class="modal" style="max-width:420px;">
       <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="plus"></i> Agregar SIM al pool</h3>
+        <h3 class="modal-title" id="simAltaModalTitle"><i data-lucide="plus"></i> Agregar SIM al pool</h3>
         <button class="modal-close" onclick="Modal.close('simAltaModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
       </div>
       <div class="modal-body">
@@ -177,10 +177,10 @@
   </div>
 
   <!-- Modal: editar teléfono/operador -->
-  <div id="simEditModal" class="modal-backdrop">
+  <div id="simEditModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="simEditModalTitle">
     <div class="modal" style="max-width:420px;">
       <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="pencil"></i> Editar SIM <span id="editSimLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
+        <h3 class="modal-title" id="simEditModalTitle"><i data-lucide="pencil"></i> Editar SIM <span id="editSimLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
         <button class="modal-close" onclick="Modal.close('simEditModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
       </div>
       <div class="modal-body">
@@ -201,10 +201,10 @@
   </div>
 
   <!-- Modal: importar Excel -->
-  <div id="simImportModal" class="modal-backdrop">
+  <div id="simImportModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="simImportModalTitle">
     <div class="modal" style="max-width:640px;">
       <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="upload"></i> Importar SIMs desde Excel</h3>
+        <h3 class="modal-title" id="simImportModalTitle"><i data-lucide="upload"></i> Importar SIMs desde Excel</h3>
         <button class="modal-close" onclick="SimCards.cerrarImport()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
       </div>
       <div class="modal-body">

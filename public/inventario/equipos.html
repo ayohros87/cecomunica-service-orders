@@ -375,10 +375,10 @@
   </div><!-- /.app-wrap -->
 
   <!-- Modal: confirmar acción en lote (+ progreso en el mismo sitio) -->
-  <div id="eqLoteModal" class="modal-backdrop">
+  <div id="eqLoteModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="eqLoteModalTitle">
     <div class="modal" style="max-width:540px;">
       <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="layers"></i> <span id="loteTitulo">Acción en lote</span></h3>
+        <h3 class="modal-title" id="eqLoteModalTitle"><i data-lucide="layers"></i> <span id="loteTitulo">Acción en lote</span></h3>
       </div>
       <div class="modal-body">
         <div id="loteCuerpo"></div>
@@ -405,10 +405,10 @@
   </div>
 
   <!-- Modal: reporte del lote (sólo si hubo fallos o cancelación) -->
-  <div id="eqLoteReporteModal" class="modal-backdrop">
+  <div id="eqLoteReporteModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="eqLoteReporteModalTitle">
     <div class="modal" style="max-width:560px;">
       <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="clipboard-list"></i> Resultado del lote</h3>
+        <h3 class="modal-title" id="eqLoteReporteModalTitle"><i data-lucide="clipboard-list"></i> Resultado del lote</h3>
         <button class="modal-close" onclick="Modal.close('eqLoteReporteModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
       </div>
       <div class="modal-body"><div id="loteRepCuerpo"></div></div>
@@ -424,10 +424,10 @@
        js/ui/asistente-venta.js), compartidos con el espacio Almacén. -->
 
   <!-- Modal: editar equipo -->
-  <div id="eqEditModal" class="modal-backdrop">
+  <div id="eqEditModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="eqEditModalTitle">
     <div class="modal" style="max-width:460px;">
       <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="pencil"></i> Editar <span id="editSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
+        <h3 class="modal-title" id="eqEditModalTitle"><i data-lucide="pencil"></i> Editar <span id="editSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
         <button class="modal-close" onclick="Modal.close('eqEditModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
       </div>
       <div class="modal-body">
@@ -473,10 +473,10 @@
 
   <!-- Modal: corregir estado → bodega (migración con estado errado, o unidad
        "Por clasificar" que apareció físicamente). Único destino: bodega. -->
-  <div id="eqCorregirModal" class="modal-backdrop">
+  <div id="eqCorregirModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="eqCorregirModalTitle">
     <div class="modal" style="max-width:500px;">
       <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="pencil-ruler"></i> Corregir estado <span id="corrSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
+        <h3 class="modal-title" id="eqCorregirModalTitle"><i data-lucide="pencil-ruler"></i> Corregir estado <span id="corrSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
         <button class="modal-close" onclick="Modal.close('eqCorregirModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
       </div>
       <div class="modal-body">
@@ -513,10 +513,10 @@
   </div>
 
   <!-- Modal: historia (kardex del serial) -->
-  <div id="eqHistoriaModal" class="modal-backdrop">
+  <div id="eqHistoriaModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="eqHistoriaModalTitle">
     <div class="modal" style="max-width:560px;">
       <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="history"></i> Historia <span id="histSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
+        <h3 class="modal-title" id="eqHistoriaModalTitle"><i data-lucide="history"></i> Historia <span id="histSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
         <button class="modal-close" onclick="Modal.close('eqHistoriaModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
       </div>
       <div class="modal-body">
@@ -530,10 +530,10 @@
   </div>
 
   <!-- Modal: conciliación pool vs conteo manual -->
-  <div id="eqConcilModal" class="modal-backdrop">
+  <div id="eqConcilModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="eqConcilModalTitle">
     <div class="modal" style="max-width:640px;">
       <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="scale"></i> Conciliación: pool vs conteo manual</h3>
+        <h3 class="modal-title" id="eqConcilModalTitle"><i data-lucide="scale"></i> Conciliación: pool vs conteo manual</h3>
         <button class="modal-close" onclick="Modal.close('eqConcilModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
       </div>
       <div class="modal-body">
@@ -552,10 +552,10 @@
   </div>
 
   <!-- Modal: importar Excel -->
-  <div id="eqImportModal" class="modal-backdrop">
+  <div id="eqImportModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="eqImportModalTitle">
     <div class="modal" style="max-width:640px;">
       <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="upload"></i> Importar seriales desde Excel</h3>
+        <h3 class="modal-title" id="eqImportModalTitle"><i data-lucide="upload"></i> Importar seriales desde Excel</h3>
         <button class="modal-close" onclick="EquiposPool.cerrarImport()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
       </div>
       <div class="modal-body">

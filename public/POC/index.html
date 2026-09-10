@@ -408,10 +408,10 @@
     </div><!-- /.ds-card -->
 
     <!-- SIM/Teléfono modal -->
-    <div id="simModal" class="modal-backdrop">
+    <div id="simModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="simModalTitle">
       <div class="modal">
         <div class="modal-header">
-          <h3 class="modal-title"><i data-lucide="smartphone"></i> Actualizar SIM/Teléfono en Lote</h3>
+          <h3 class="modal-title" id="simModalTitle"><i data-lucide="smartphone"></i> Actualizar SIM/Teléfono en Lote</h3>
           <button class="modal-close" onclick="PocSim.cerrar()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
         </div>
         <div class="modal-body">
@@ -441,10 +441,10 @@
     </div>
 
     <!-- Asignar SIMs del pool -->
-    <div id="simPoolModal" class="modal-backdrop">
+    <div id="simPoolModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="simPoolModalTitle">
       <div class="modal" style="max-width:620px;">
         <div class="modal-header">
-          <h3 class="modal-title"><i data-lucide="credit-card"></i> Asignar SIMs del pool</h3>
+          <h3 class="modal-title" id="simPoolModalTitle"><i data-lucide="credit-card"></i> Asignar SIMs del pool</h3>
           <button class="modal-close" onclick="PocSimPool.cerrar()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
         </div>
         <div class="modal-body">
