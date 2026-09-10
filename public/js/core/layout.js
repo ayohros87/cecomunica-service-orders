@@ -215,7 +215,6 @@ const Layout = (() => {
     ]},
     { grupo: 'Almacén · finanzas', items: [
       { id: 'almacen',     label: 'Almacén',     icon: 'warehouse',    href: '/almacen/index.html' },
-      { id: 'piezas',      label: 'Piezas',      icon: 'puzzle',       href: '/inventario/piezas.html' },
       { id: 'facturacion', label: 'Finanzas',    icon: 'calculator',   href: '/inventario/modelos.html' },
     ]},
   ];

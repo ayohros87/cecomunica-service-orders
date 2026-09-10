@@ -22,9 +22,9 @@
   <meta charset="UTF-8">
   <title>Almacén - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=sh4">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=sh5">
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
-  <link rel="stylesheet" href="../css/ws-tabs.css?v=f2">
+  <link rel="stylesheet" href="../css/ws-tabs.css?v=f3">
   <link rel="stylesheet" href="../css/bandeja.css?v=bj2">
 
   <style>
@@ -124,8 +124,8 @@
   <!-- functions-compat: fusionar fichas en conflicto (callable fusionarPoolFicha) -->
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
   <script defer src="../js/firebase-init.js?v=ses2"></script>
-  <script src="../js/core/modulos.js?v=cc15"></script>
-  <script src="../js/core/layout.js?v=cc13"></script>
+  <script src="../js/core/modulos.js?v=cc16"></script>
+  <script src="../js/core/layout.js?v=cc14"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script> <!-- FMT: lo usan los asistentes -->
   <script defer src="../js/ui/modal.js?v=f7"></script> <!-- confirmaciones de los asistentes + Modal.sheet -->
@@ -143,7 +143,8 @@
   <script defer src="../js/ui/toast.js"></script>
   <!-- Síncrono a propósito: las pestañas se pintan en el parse (ver abajo)
        para que no aparezcan tarde empujando el contenido. -->
-  <script src="../js/ui/workspace-tabs.js?v=f2"></script>
+  <script src="../js/ui/workspace-tabs.js?v=f3"></script>
+  <script src="../js/ui/almacen-nav.js?v=alm1"></script>
   <script defer src="../js/ui/equipo-ficha.js?v=prop1"></script>
   <script defer src="../js/ui/asistente-conteo.js?v=sh1"></script>
   <script defer src="../js/ui/filtered-select.js?v=fs1"></script>
@@ -206,28 +207,10 @@
       // Pintado EN EL PARSE (no en DOMContentLoaded ni tras auth): la barra
       // sale en el primer frame y el contenido no brinca. Los onclick se
       // evalúan al hacer clic, cuando almacen-hoy.js (defer) ya cargó.
-      WorkspaceTabs.render('wsTabs-mount', {
-        active: 'hoy',
-        tabs: [
-          { id: 'hoy', label: 'Hoy', icon: 'inbox', onclick: "AlmacenPage.setTab('hoy')" },
-          // Asignar seriales a contratos y gestiones — la herramienta de
-          // bodega (propuesta 2026-09-03). Antes se hacía en /contratos/ y
-          // en la ficha del cliente.
-          { id: 'asignar', label: 'Asignar', icon: 'scan-barcode', onclick: "AlmacenPage.setTab('asignar')" },
-          { id: 'existencias', label: 'Existencias', icon: 'package', onclick: "AlmacenPage.setTab('existencias')" },
-          { id: 'piezas', label: 'Piezas', icon: 'puzzle', href: '../inventario/piezas.html' },
-          // Radios que control de calidad declaró inservibles. Vive aquí porque
-          // quien tiene que consultarlo antes de recibir un equipo es bodega.
-          { id: 'descartados', label: 'Descartados', icon: 'ban', href: '../inventario/descartados.html' },
-          // Radios que funcionan pero arrastran una condición particular
-          // (petición Solangel 2026-09-04). Bodega la ve antes de asignar.
-          { id: 'condiciones', label: 'Con condición', icon: 'alert-triangle', href: '../inventario/condiciones.html' },
-          // Equipos que el cliente no devolvió y hay que cobrarle. Vive aquí
-          // porque nace de una devolución y termina saliendo del inventario;
-          // sin una pestaña visible el dato se escribía y nadie lo leía.
-          { id: 'no-devueltos', label: 'No devueltos', icon: 'hand-coins', href: '../inventario/no-devueltos.html' },
-        ],
-      });
+      // Definición única en js/ui/almacen-nav.js (la comparten Piezas,
+      // Descartados, Con condición y No devueltos). Aquí `enPagina` convierte
+      // Hoy/Asignar/Existencias en cambios de sección, sin recargar.
+      AlmacenNav.render('hoy', { enPagina: true });
     </script>
 
     <!-- ============ HOY — bandeja unificada de trabajo ============ -->

@@ -34,6 +34,7 @@ window.WorkspaceTabs = {
         ${t.onclick ? `onclick="${t.onclick}"` : ''}>${inner}</button>`;
     }).join('') + `</nav>`;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+    this._centrar();
   },
 
   setActive(tabId) {
@@ -41,6 +42,21 @@ window.WorkspaceTabs = {
       const is = el.getAttribute('data-ws-tab') === tabId;
       el.classList.toggle('is-active', is);
       el.setAttribute('aria-selected', is ? 'true' : 'false');
+    });
+    this._centrar();
+  },
+
+  // En móvil la tira es una sola fila que se arrastra (ws-tabs.css): si la
+  // pestaña activa cae fuera, la pantalla abre "en la nada". Se mueve SOLO el
+  // scroll de la tira — nada de scrollIntoView, que arrastraría la página
+  // entera al cargar. En rAF porque render() corre en el parse.
+  _centrar() {
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.ws-tabs').forEach(nav => {
+        const a = nav.querySelector('.ws-tab.is-active');
+        if (!a || nav.scrollWidth <= nav.clientWidth + 1) return;
+        nav.scrollLeft = a.offsetLeft - (nav.clientWidth - a.offsetWidth) / 2;
+      });
     });
   },
 

@@ -1035,6 +1035,14 @@ input[readonly]#numero_de_serie,
    the button is icon-only and leaves room for the page title. */
 @media (max-width: 640px) {
   .topbar-menu-label { display: none; }
+  /* En teléfono el título toma su propia fila y las acciones bajan enteras.
+     Antes `.topbar-left` era `flex:1; min-width:0` y el título con `nowrap`
+     se DESBORDABA de su caja: "Equipos no devueltos" quedaba pintado encima
+     de "Menú principal" (medido a 390 px, 2026-09-10). */
+  .topbar-left, .app-topbar-logo { flex: 1 1 100%; }
+  .topbar-title, .topbar h1 { white-space: normal; }
+  .topbar-actions, .topbar-right { margin-left: 0; }
+  .app-topbar-spacer { display: none; }
   .btn-topbar-menu { padding-left: 8px; padding-right: 8px; gap: 0; }
 }
 

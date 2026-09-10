@@ -16,8 +16,12 @@
   <meta charset="UTF-8">
   <title>Equipos descartados - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=sh4">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=sh5">
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
+  <link rel="stylesheet" href="../css/ws-tabs.css?v=f3">
+  <!-- Síncronos a propósito: la barra del espacio se pinta en el parse. -->
+  <script src="../js/ui/workspace-tabs.js?v=f3"></script>
+  <script src="../js/ui/almacen-nav.js?v=alm1"></script>
 
   <style>
     /* Page-local — listado de equipos descartados en control de calidad. */
@@ -42,8 +46,8 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="../js/firebase-init.js?v=ses2"></script>
-  <script src="../js/core/modulos.js?v=cc15"></script>
-  <script src="../js/core/layout.js?v=cc13"></script>
+  <script src="../js/core/modulos.js?v=cc16"></script>
+  <script src="../js/core/layout.js?v=cc14"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script defer src="../js/ui/modal.js?v=f7"></script>
@@ -77,6 +81,10 @@
   </div>
 
   <div class="app-wrap app-wrap--full">
+
+  <!-- Pestañas del espacio Almacén — definición única en js/ui/almacen-nav.js -->
+  <div id="wsTabs-mount"></div>
+  <script>AlmacenNav.render('descartados');</script> <!-- en el parse: sin brinco -->
 
     <div class="dsc-aviso">
       <i data-lucide="alert-triangle"></i>

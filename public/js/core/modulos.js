@@ -71,7 +71,10 @@ window.MODULOS = (() => {
     ]},
     { grupo: 'Almacén · finanzas', items: [
       { id: 'almacen',     label: 'Almacén',  icon: 'warehouse',  href: '/almacen/index.html' },
-      { id: 'piezas',      label: 'Piezas',   icon: 'puzzle',     href: '/inventario/piezas.html' },
+      // "piezas" NO es un módulo del rail (Alberto 2026-09-10): el repuesto se
+      // trabaja DENTRO del espacio Almacén, en su pestaña (js/ui/almacen-nav.js).
+      // El id sigue vivo en visiblesPorRol porque gatea la señal S9 del home
+      // ("Piezas sin stock"), que aterriza directo en la página.
       { id: 'facturacion_bandeja', label: 'Facturación pendiente', icon: 'inbox', href: '/facturacion/bandeja.html' },
       { id: 'facturacion', label: 'Finanzas', icon: 'calculator', href: '/inventario/modelos.html' },
     ]},

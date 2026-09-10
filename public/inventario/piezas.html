@@ -21,11 +21,12 @@
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8" />
   <title>Inventario de Piezas - Cecomunica</title>
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=sh4">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=sh5">
   <!-- Rediseño Command Center F4: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
-  <link rel="stylesheet" href="../css/ws-tabs.css?v=f2">
-  <script src="../js/ui/workspace-tabs.js?v=f2"></script>
+  <link rel="stylesheet" href="../css/ws-tabs.css?v=f3">
+  <script src="../js/ui/workspace-tabs.js?v=f3"></script>
+  <script src="../js/ui/almacen-nav.js?v=alm1"></script>
   <link rel="stylesheet" href="../css/app-kit-extras.css">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 
@@ -62,8 +63,8 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="../js/firebase-init.js?v=ses2"></script>
-  <script src="../js/core/modulos.js?v=cc15"></script>
-  <script src="../js/core/layout.js?v=cc13"></script>
+  <script src="../js/core/modulos.js?v=cc16"></script>
+  <script src="../js/core/layout.js?v=cc14"></script>
   <script src="../js/core/roles.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
   <script defer src="../js/services/piezasService.js"></script>
@@ -100,16 +101,9 @@
 
 <div class="app-wrap app-wrap--full">
 
-  <!-- Pestañas del espacio Almacén (propuesta 2026-08, E3) -->
+  <!-- Pestañas del espacio Almacén — definición única en js/ui/almacen-nav.js -->
   <div id="wsTabs-mount"></div>
-  <script>WorkspaceTabs.render('wsTabs-mount', { // en el parse: sin brinco
-    active: 'piezas',
-    tabs: [
-      { id: 'hoy', label: 'Hoy', icon: 'inbox', href: '../almacen/index.html' },
-      { id: 'existencias', label: 'Existencias', icon: 'package', href: '../almacen/index.html?tab=existencias' },
-      { id: 'piezas', label: 'Piezas', icon: 'puzzle' },
-    ],
-  });</script>
+  <script>AlmacenNav.render('piezas');</script> <!-- en el parse: sin brinco -->
   <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 var(--sp-3); display:flex; align-items:center; gap:6px;">
     <i data-lucide="info" style="width:14px;height:14px;"></i>
     El <b>precio de venta, costo y mapeo QuickBooks</b> también se administran en
@@ -339,7 +333,7 @@ Genérico,,Cable coaxial RG58 por metro,1.2,0.6,100,10,metro,Bodega 1,Camion-5|S
   </div> <!-- /cc-app -->
   <script>
     // Rail Command Center (F4) — espera auth (scripts defer) y pinta el rail del rol efectivo.
-    document.addEventListener('DOMContentLoaded', () => Layout.initRail('piezas'));
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('almacen'));
   </script>
 </body>
 </html>

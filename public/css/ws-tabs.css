@@ -18,6 +18,24 @@
 .ws-tab:hover { color: var(--fg-2); background: var(--surface-sunken); }
 .ws-tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
 .ws-tab svg { width: 15px; height: 15px; }
+/* Pantalla angosta: la tira NO se apila. Con 7 pestañas el wrap daba TRES
+   filas — 114 px de muro antes del contenido (medido a 390 px, 2026-09-10).
+   Aquí es una sola fila que se arrastra con el dedo; workspace-tabs.js
+   centra la activa al pintar. La línea base pasa a ser un inset shadow: con
+   overflow-x el margen negativo de -2px quedaría recortado. */
+@media (max-width: 860px) {
+  .ws-tabs {
+    flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+    border-bottom: none; box-shadow: inset 0 -2px 0 var(--border-default);
+    scrollbar-width: none; -ms-overflow-style: none;
+    overscroll-behavior-x: contain;
+  }
+  .ws-tabs::-webkit-scrollbar { display: none; }
+  .ws-tab { flex: 0 0 auto; margin-bottom: 0; }
+  /* La sub-navegación en píldoras se arrastra igual, pero sin línea base. */
+  .ws-tabs--sub { box-shadow: none; }
+}
+
 .ws-tab-badge {
   background: #B45309; color: #fff; border-radius: 999px;
   font-size: 10.5px; font-weight: 700; padding: 0 7px; line-height: 16px;
