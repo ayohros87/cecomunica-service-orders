@@ -19,16 +19,26 @@ module.exports = onSchedule(
     memory: "512MiB",
   },
   async () => {
-    const R = await AG.recalcular(getFirestore());
+    const db = getFirestore();
+    const R = await AG.recalcular(db);
     // La deriva se reporta SIEMPRE, aunque ya esté corregida: si aparece cada
     // día hay un camino de escritura que no pasa por el trigger, y eso es un
     // defecto que hay que buscar, no un número que basta con reescribir.
-    if (R.ok) {
-      logger.info("[agregadoPool] reconciliado sin deriva", { fichas: R.fichas, modelos: R.modelos });
+    // El log es para enterarse; el registro que aguanta vive en
+    // admin_reportes/agregado_pool (lo escribe recalcular), porque los logs
+    // caducan y nadie los mira por su cuenta.
+    const rep = (await db.collection(AG.REPORTE).doc(AG.REPORTE_DOC).get()).data() || {};
+    if (R.ok && !rep.venia_marcado) {
+      logger.info("[agregadoPool] reconciliado sin deriva", {
+        fichas: R.fichas, modelos: R.modelos,
+        limpias_seguidas: rep.corridas_limpias_seguidas,
+      });
     } else {
-      logger.warn("[agregadoPool] habia deriva — corregida", {
+      logger.warn("[agregadoPool] habia deriva — corregida y registrada", {
         fichas: R.fichas, modelos: R.modelos,
         difs: R.difs.length, sobrantes: R.sobrantes.length,
+        venia_marcado: rep.venia_marcado, motivo_previo: rep.motivo_previo,
+        derivas_registradas: rep.derivas_registradas,
         muestra: R.difs.slice(0, 20),
       });
     }

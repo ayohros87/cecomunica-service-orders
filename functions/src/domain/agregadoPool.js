@@ -31,6 +31,15 @@ const { modeloKey } = require("./equiposPool");
 const COL = "agregados_pool";
 const META = "agregados_meta";
 const META_DOC = "pool";
+// El reporte vive donde el resto de la salud del sistema (Admin · Salud):
+// admin_reportes es legible por admin y no escribible desde el navegador.
+const REPORTE = "admin_reportes";
+const REPORTE_DOC = "agregado_pool";
+// Cuántas corridas se recuerdan. La pregunta que contesta el historial no es
+// "cuánto se corrió una vez" sino "¿esto se repite?" — un mes de corridas
+// diarias basta para verlo, y cabe de sobra en un documento.
+const HISTORIAL_MAX = 30;
+const MUESTRA_MAX = 50;
 
 // Estado con el que se contabiliza una ficha sin `estado` — no debería pasar,
 // pero un doc a medio escribir no puede tumbar el conteo ni perderse en
@@ -96,6 +105,49 @@ async function marcarDeriva(db, motivo) {
   }, { merge: true });
 }
 
+// Arma el reporte de una corrida. Puro a propósito: es la parte que contesta
+// "¿esto se repite?" y merece prueba propia.
+//
+// `veniaMarcado` es la marca que dejó el trigger al fallar un delta. Importa
+// registrarla ANTES de limpiarla: si la reconciliación se limitara a poner
+// deriva:false, un trigger que falla todos los días se vería igual de sano que
+// uno que nunca falló.
+function armarReporte({ fichas, modelos, difs, sobrantes, veniaMarcado, motivoPrevio, historialPrevio, en }) {
+  const hubo = difs.length > 0 || sobrantes.length > 0 || !!veniaMarcado;
+  const entrada = {
+    en: en || null,
+    difs: difs.length,
+    sobrantes: sobrantes.length,
+    venia_marcado: !!veniaMarcado,
+    motivo_previo: motivoPrevio || null,
+    // En el historial cabe poco: lo que importa de una corrida vieja es QUÉ
+    // modelo se corrió, para poder ver si es siempre el mismo.
+    muestra: difs.slice(0, 10),
+  };
+  // Solo las corridas CON deriva entran al historial; las sanas ya se ven en
+  // `corridas_limpias_seguidas` y llenarían el documento de ruido.
+  const historial = hubo
+    ? [entrada, ...(historialPrevio || [])].slice(0, HISTORIAL_MAX)
+    : (historialPrevio || []).slice(0, HISTORIAL_MAX);
+
+  return {
+    hubo,
+    doc: {
+      corrida_en: en || null,
+      fichas, modelos,
+      ok: !hubo,
+      difs: difs.length,
+      sobrantes: sobrantes.length,
+      venia_marcado: !!veniaMarcado,
+      motivo_previo: motivoPrevio || null,
+      muestra: difs.slice(0, MUESTRA_MAX),
+      sobrantes_lista: sobrantes.slice(0, MUESTRA_MAX),
+      historial,
+      derivas_registradas: historial.length,
+    },
+  };
+}
+
 // Recalcula TODO desde el pool. Una lectura por ficha — se corre a diario, no
 // por escritura. Devuelve el reporte de deriva para poder auditarla.
 async function recalcular(db, { aplicar = true } = {}) {
@@ -155,6 +207,29 @@ async function recalcular(db, { aplicar = true } = {}) {
       if (++n >= 400) await flush();
     }
     await flush();
+
+    // Lo que el trigger haya marcado se LEE antes de limpiarlo, y queda en el
+    // reporte. Limpiar sin registrar haría invisible justo lo que se vigila.
+    const metaPrevia = (await db.collection(META).doc(META_DOC).get()).data() || {};
+    const repRef = db.collection(REPORTE).doc(REPORTE_DOC);
+    const repPrevio = (await repRef.get()).data() || {};
+    const { hubo, doc } = armarReporte({
+      fichas: snap.size,
+      modelos: real.size,
+      difs, sobrantes,
+      veniaMarcado: metaPrevia.deriva === true,
+      motivoPrevio: metaPrevia.deriva_motivo || null,
+      historialPrevio: Array.isArray(repPrevio.historial) ? repPrevio.historial : [],
+      en: new Date().toISOString(),
+    });
+    await repRef.set({
+      ...doc,
+      // Racha de corridas limpias: la señal de un vistazo en Admin · Salud.
+      corridas_limpias_seguidas: hubo ? 0 : Number(repPrevio.corridas_limpias_seguidas || 0) + 1,
+      ultima_deriva_en: hubo ? doc.corrida_en : (repPrevio.ultima_deriva_en || null),
+      actualizado_en: FieldValue.serverTimestamp(),
+    });
+
     await db.collection(META).doc(META_DOC).set({
       deriva: false,
       deriva_motivo: null,
@@ -173,4 +248,7 @@ async function recalcular(db, { aplicar = true } = {}) {
   };
 }
 
-module.exports = { COL, META, META_DOC, claveDe, afecta, aplicarDelta, marcarDeriva, recalcular };
+module.exports = {
+  COL, META, META_DOC, REPORTE, REPORTE_DOC, HISTORIAL_MAX,
+  claveDe, afecta, aplicarDelta, marcarDeriva, armarReporte, recalcular,
+};

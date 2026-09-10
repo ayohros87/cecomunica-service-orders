@@ -142,6 +142,61 @@ test("A5 · una ficha sin estado cae en su propia casilla, no se pierde", async 
   assert.equal(delta(db.escrituras, "m1", "sin_estado"), 1);
 });
 
+// ── El registro de deriva ────────────────────────────────────────────────
+// Un resumen que se corre y se arregla solo, en silencio, esconde el defecto
+// que lo corrió. Estos guardias son sobre la CONSTANCIA, no sobre el conteo.
+
+test("A7 · una corrida con deriva queda registrada en el historial", () => {
+  const { hubo, doc } = AG.armarReporte({
+    fichas: 10, modelos: 2, sobrantes: [],
+    difs: [{ key: "m1", estado: "en_bodega", tenia: 3, real: 4 }],
+    veniaMarcado: false, historialPrevio: [], en: "2026-09-11T05:30:00Z",
+  });
+  assert.equal(hubo, true);
+  assert.equal(doc.ok, false);
+  assert.equal(doc.historial.length, 1);
+  assert.equal(doc.historial[0].difs, 1);
+  assert.equal(doc.corridas_limpias_seguidas, undefined, "la racha la lleva recalcular, no el armado");
+  assert.deepEqual(doc.muestra[0], { key: "m1", estado: "en_bodega", tenia: 3, real: 4 });
+});
+
+test("A8 · limpiar la marca del trigger NO la hace desaparecer del registro", () => {
+  // El caso que importa: el trigger falló, la reconciliación cuadró los
+  // números (difs vacío) y podría dar la corrida por sana. No puede.
+  const { hubo, doc } = AG.armarReporte({
+    fichas: 10, modelos: 2, difs: [], sobrantes: [],
+    veniaMarcado: true, motivoPrevio: "delta ABC123: DEADLINE_EXCEEDED",
+    historialPrevio: [], en: "2026-09-11T05:30:00Z",
+  });
+  assert.equal(hubo, true, "un trigger que falló no es una corrida limpia aunque los números cuadren");
+  assert.equal(doc.ok, false);
+  assert.equal(doc.venia_marcado, true);
+  assert.equal(doc.motivo_previo, "delta ABC123: DEADLINE_EXCEEDED");
+  assert.equal(doc.historial.length, 1);
+});
+
+test("A9 · las corridas limpias no ensucian el historial, y este no crece sin fin", () => {
+  // Sana: el historial queda como estaba.
+  const previo = [{ en: "ayer", difs: 2, sobrantes: 0, venia_marcado: false, muestra: [] }];
+  const limpia = AG.armarReporte({
+    fichas: 10, modelos: 2, difs: [], sobrantes: [],
+    veniaMarcado: false, historialPrevio: previo, en: "hoy",
+  });
+  assert.equal(limpia.hubo, false);
+  assert.equal(limpia.doc.ok, true);
+  assert.deepEqual(limpia.doc.historial, previo, "una corrida sana no debe añadir ruido");
+
+  // Con tope: nunca pasa de HISTORIAL_MAX, y lo nuevo va primero.
+  const lleno = Array.from({ length: AG.HISTORIAL_MAX + 5 },
+    (_, i) => ({ en: `vieja-${i}`, difs: 1, sobrantes: 0, venia_marcado: false, muestra: [] }));
+  const r = AG.armarReporte({
+    fichas: 10, modelos: 2, difs: [{ key: "m9", estado: "en_taller", tenia: 0, real: 1 }],
+    sobrantes: [], veniaMarcado: false, historialPrevio: lleno, en: "nueva",
+  });
+  assert.equal(r.doc.historial.length, AG.HISTORIAL_MAX);
+  assert.equal(r.doc.historial[0].en, "nueva", "lo más reciente va primero");
+});
+
 test("A6 · el resumen se escribe en su propia colección, nunca en el pool", async () => {
   const db = dbFalso();
   await AG.aplicarDelta(db, {

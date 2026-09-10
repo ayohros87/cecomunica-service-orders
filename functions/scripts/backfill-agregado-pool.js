@@ -48,6 +48,28 @@ const APLICAR = process.argv.includes("--aplicar");
     console.log(APLICAR ? "\nYa quedaron corregidas." : "\nCorre con --aplicar para escribirlas.");
   }
 
+  // El registro que aguanta: qué se ha corrido antes y cuántas corridas
+  // limpias llevamos. Es lo que contesta "¿esto se repite?".
+  const rep = (await db.collection(AG.REPORTE).doc(AG.REPORTE_DOC).get()).data();
+  const meta = (await db.collection(AG.META).doc(AG.META_DOC).get()).data();
+  console.log("\n── Registro de deriva (admin_reportes/agregado_pool) ──");
+  if (!rep) {
+    console.log("  todavía no hay ninguna corrida registrada");
+  } else {
+    console.log(`  última corrida       : ${rep.corrida_en || "—"}`);
+    console.log(`  corridas limpias seg.: ${rep.corridas_limpias_seguidas ?? 0}`);
+    console.log(`  última deriva        : ${rep.ultima_deriva_en || "nunca"}`);
+    console.log(`  derivas registradas  : ${rep.derivas_registradas ?? 0}`);
+    for (const h of (rep.historial || []).slice(0, 8)) {
+      const q = (h.muestra || []).slice(0, 3).map(m => `${m.key}/${m.estado}`).join(", ");
+      console.log(`    · ${h.en}  difs=${h.difs} sobrantes=${h.sobrantes}` +
+        `${h.venia_marcado ? " [el trigger habia fallado]" : ""}${q ? "  → " + q : ""}`);
+    }
+  }
+  if (meta && meta.deriva === true) {
+    console.log(`  ¡MARCA VIVA! el trigger falló y aún no se reconcilia: ${meta.deriva_motivo || ""}`);
+  }
+
   // El total por estado, para poder cotejarlo de un vistazo contra Existencias.
   const snap = await db.collection(AG.COL).get();
   const tot = {};
