@@ -49,7 +49,9 @@
   function rowHtml(d) {
     return `
       <div class="doc-row" data-id="${d.id}" style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) 0;border-bottom:1px solid var(--border-1);">
-        <i data-lucide="${(d.content_type || '').includes('pdf') ? 'file-text' : 'image'}" style="width:18px;height:18px;color:var(--fg-3);"></i>
+        <!-- 'image' NO está en el vendor a medida de lucide (198 iconos): el
+             <i> se quedaba sin convertir y la fila salía sin icono. -->
+        <i data-lucide="${(d.content_type || '').includes('pdf') ? 'file-text' : 'camera'}" style="width:18px;height:18px;color:var(--fg-3);"></i>
         <div style="flex:1;min-width:0;">
           <div style="font-weight:600;">${escapeHtml(ClienteDocumentosService.labelFor(d.tipo))}</div>
           <div style="font-size:12px;color:var(--fg-3);">${escapeHtml(d.nombre_archivo || "")} · ${fmtSize(d.size)} · ${fmtDate(d.subido_en)}</div>
