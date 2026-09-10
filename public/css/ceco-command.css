@@ -231,18 +231,43 @@ h1,h2,h3,h4{margin:0;font-family:var(--font-display);color:var(--fg-1);font-weig
 .card__head{display:flex;align-items:center;gap:12px;padding:15px 20px;border-bottom:1px solid var(--line-soft)}
 .card__head h3{font:600 15px/1 var(--font-body)}
 
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:15px 18px;position:relative;overflow:hidden;text-decoration:none;display:block;color:inherit;transition:border-color .15s,box-shadow .15s}
+/* La fila de señales es una FRANJA, no un tablero: una línea para el rótulo
+   y otra para el número junto a su contexto, y NADA envuelve (lo que no cabe
+   se recorta, y el texto completo queda en title=). Antes el subtítulo
+   envolvía a 2-3 líneas y la franja medía 126 px en escritorio y 477 px en
+   móvil — más de media pantalla de teléfono antes del primer módulo.
+   El número de columnas lo declara HomeSignals en data-n: con repeat(4,1fr)
+   fijo, los roles de 5 señales (admin y gerencia, desde que entró REGG el
+   2026-09-08) dejaban una tarjeta HUÉRFANA sola en una segunda fila. */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpis[data-n="1"]{grid-template-columns:minmax(0,260px)}
+.kpis[data-n="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+.kpis[data-n="3"]{grid-template-columns:repeat(3,minmax(0,1fr))}
+.kpis[data-n="5"]{grid-template-columns:repeat(5,minmax(0,1fr))}
+/* columna con el número pegado ABAJO: así los números quedan alineados entre
+   sí aunque un rótulo ocupe dos líneas y otro una. */
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 14px;position:relative;overflow:hidden;text-decoration:none;display:flex;flex-direction:column;justify-content:space-between;gap:7px;color:inherit;transition:border-color .15s,box-shadow .15s}
 a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
-.kpi__label{font-size:12px;color:var(--fg-3);font-weight:500;display:flex;align-items:center;gap:7px}
-.kpi__label i{width:15px;height:15px;color:var(--fg-4);flex:none}
-.kpi__val{font:700 29px/1.05 var(--font-display);letter-spacing:-.02em;margin-top:9px;color:var(--fg-1)}
-.kpi__delta{font:600 12px/1 var(--font-mono);margin-top:7px;display:inline-flex;gap:4px;align-items:center;color:var(--fg-3)}
+.kpi__label{font-size:12px;color:var(--fg-3);font-weight:500;display:flex;align-items:flex-start;gap:7px;min-width:0}
+.kpi__label i{width:15px;height:15px;color:var(--fg-4);flex:none;margin-top:1px}
+/* el rótulo es la identidad de la señal: se le dan hasta DOS líneas antes de
+   recortar. Lo que cede espacio es el subtítulo, no el rótulo. */
+.kpi__t{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;min-width:0}
+/* número y contexto en la MISMA línea; el contexto es el que cede espacio */
+.kpi__row{display:flex;align-items:baseline;gap:8px;min-width:0}
+.kpi__val{font:700 23px/1.1 var(--font-display);letter-spacing:-.02em;color:var(--fg-1);flex:none}
+.kpi__delta{font:600 11.5px/1.25 var(--font-mono);color:var(--fg-3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kpi__delta.up,.kpi__delta .up{color:var(--ok)} .kpi__delta.down,.kpi__delta .down{color:var(--bad)}
 .kpi--alert{border-left:3px solid var(--bad)}
 .kpi--alert .kpi__val{color:var(--bad)}
+/* Cero = nada que hacer, así que la tarjeta se calla. Antes un día al día
+   pintaba cinco ceros gigantes y el de "por asignar" en ROJO con borde rojo:
+   lo más gritón de la página significaba justo lo contrario. */
+.kpi.is-cero .kpi__val{color:var(--fg-4)}
+.kpi.is-cero.kpi--alert{border-left-color:var(--line)}
+.kpi.is-cero .kpi__label i{opacity:.55}
 /* mientras carga el conteo */
-.kpi.is-loading .kpi__val{color:transparent;background:linear-gradient(90deg,var(--gray-100) 25%,var(--gray-150) 50%,var(--gray-100) 75%);background-size:200% 100%;animation:kpishimmer 1.2s infinite;border-radius:6px;min-width:56px}
+.kpi.is-loading .kpi__val{color:transparent;background:linear-gradient(90deg,var(--gray-100) 25%,var(--gray-150) 50%,var(--gray-100) 75%);background-size:200% 100%;animation:kpishimmer 1.2s infinite;border-radius:6px;min-width:44px}
 @keyframes kpishimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
 /* Señal que se ABRE en filas (panel de pendientes, js/ui/bandeja.js pinta
@@ -418,10 +443,25 @@ a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
 .mobile-only{display:none}
 .rail__toggle{display:none}
 @media (max-width:1024px){
-  .kpis{grid-template-columns:repeat(2,1fr)}
   .mgrid{grid-template-columns:repeat(2,1fr)}
 }
+/* Pantalla angosta: la señal se vuelve HORIZONTAL (rótulo a la izquierda,
+   número a la derecha) y el contexto se retira. Así el rótulo nunca se
+   parte ni se recorta, que era lo que hacía crecer la franja a 3 filas de
+   tarjetas altas en un teléfono. Los selectores repiten [data-n] porque
+   esas reglas base pesan más que un `.kpis` a secas. */
 @media (max-width:860px){
+  .kpis,.kpis[data-n="1"],.kpis[data-n="2"],.kpis[data-n="3"],.kpis[data-n="5"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kpi{flex-direction:row;align-items:center;gap:10px;padding:10px 12px}
+  .kpi__label{flex:1;align-items:center}
+  .kpi__label i{margin-top:0}
+  .kpi__row{flex:none}
+  .kpi__val{font-size:19px}
+  .kpi__delta{display:none}
+  /* el solape sobre la franja navy es ~media tarjeta: con la tarjeta
+     horizontal (46 px de alto) el -44 px de escritorio la metía entera. */
+  .launch__signals{margin-top:-22px}
+
   .app{grid-template-columns:1fr}
   .rail{position:fixed;left:0;top:0;width:84vw;max-width:300px;transform:translateX(-100%);transition:transform .25s var(--ease)}
   .rail.is-open{transform:none;box-shadow:var(--shadow-lg)}
@@ -440,8 +480,12 @@ a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
 }
 @media (max-width:640px){
   .mgrid{grid-template-columns:1fr}
-  .kpis{grid-template-columns:1fr 1fr}
   .launch__hi .who{display:none}
+}
+/* Teléfono: una sola columna. En dos columnas, rótulos como "Esperando
+   control de calidad" no caben junto a su número y se recortaban. */
+@media (max-width:560px){
+  .kpis,.kpis[data-n="1"],.kpis[data-n="2"],.kpis[data-n="3"],.kpis[data-n="5"]{grid-template-columns:minmax(0,1fr)}
 }
 
 

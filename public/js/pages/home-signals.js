@@ -350,12 +350,17 @@ window.HomeSignals = (() => {
     // Con `items` la tarjeta se ABRE aquí mismo en filas (bandeja de
     // pendientes) en vez de navegar; el chevron lo anuncia. El href se
     // conserva como "Abrir en su módulo" dentro del panel.
+    // Rótulo y (número + contexto) van cada uno en UNA línea que no envuelve
+    // — lo que no cabe se recorta por CSS, así que el subtítulo completo va
+    // en el title= de la tarjeta y no como tercera línea de texto.
     const abre = typeof sig.items === 'function';
     return `
-<a class="kpi${sig.alert ? ' kpi--alert' : ''}${abre ? ' kpi--abre' : ''} is-loading" href="${sig.href}" data-signal="${id}"${abre ? ' aria-expanded="false" role="button"' : ''}>
-  <div class="kpi__label"><i data-lucide="${sig.icon}"></i> ${sig.label}${abre ? ' <span class="kpi__chev" aria-hidden="true">▾</span>' : ''}</div>
-  <div class="kpi__val num" data-signal-val="${id}">—</div>
-  <div class="kpi__delta">${sig.sub}</div>
+<a class="kpi${sig.alert ? ' kpi--alert' : ''}${abre ? ' kpi--abre' : ''} is-loading" href="${sig.href}" data-signal="${id}" title="${sig.label} — ${sig.sub}"${abre ? ' aria-expanded="false" role="button"' : ''}>
+  <div class="kpi__label"><i data-lucide="${sig.icon}"></i> <span class="kpi__t">${sig.label}</span>${abre ? '<span class="kpi__chev" aria-hidden="true">▾</span>' : ''}</div>
+  <div class="kpi__row">
+    <div class="kpi__val num" data-signal-val="${id}">—</div>
+    <div class="kpi__delta">${sig.sub}</div>
+  </div>
 </a>`;
   }
 
@@ -379,6 +384,27 @@ window.HomeSignals = (() => {
 
   const MAX_FILAS_PANEL = 40;
   let _panelAbierto = null;   // id de la señal abierta
+
+  /* Pinta el conteo de una señal. `is-cero` apaga la tarjeta cuando no hay
+     nada que hacer (número en gris, sin la barra roja de alerta): un cero
+     en rojo era la cosa más ruidosa del home y significaba lo contrario.
+     El conteo puede llegar como "50+" (scan topado), de ahí el === 0. */
+  function _pintaVal(mount, id, n) {
+    const tile = mount.querySelector(`[data-signal="${id}"]`);
+    const val = mount.querySelector(`[data-signal-val="${id}"]`);
+    if (!tile || !val) return;
+    tile.classList.remove('is-loading');
+    tile.classList.toggle('is-cero', n === 0 || n === '0');
+    val.textContent = String(n);
+  }
+
+  /* El ancho de la fila lo decide cuántas señales quedaron EN PIE: una señal
+     que se cae por permisos (dropTile) tiene que devolver su columna, o el
+     resto queda estirado y con un hueco al final. */
+  function _sincronizarN(mount) {
+    const grid = mount.querySelector('.kpis');
+    if (grid) grid.setAttribute('data-n', String(grid.querySelectorAll('.kpi').length));
+  }
 
   const _esc = (v) => Bandeja.esc(v);
 
@@ -500,8 +526,7 @@ window.HomeSignals = (() => {
   async function _refrescarSenal(mount, id, sig) {
     try {
       const n = await sig.count({});
-      const val = mount?.querySelector(`[data-signal-val="${id}"]`);
-      if (val) val.textContent = String(n);
+      if (mount) _pintaVal(mount, id, n);
     } catch (e) { /* el conteo viejo se queda; la caché igual se invalida */ }
     try {
       Object.keys(sessionStorage)
@@ -572,21 +597,19 @@ window.HomeSignals = (() => {
       return;
     }
 
-    mount.innerHTML = `<div class="kpis">${ids.map(id => _tileHtml(id, SIGNALS[id])).join('')}</div>`;
+    // data-n = cuántas señales trae el rol: la rejilla se ajusta a ese número
+    // en vez de asumir 4 fijas, que dejaba huérfana la quinta de admin y
+    // gerencia en una segunda fila (ver .kpis en ceco-command.css).
+    mount.innerHTML = `<div class="kpis" data-n="${ids.length}">${ids.map(id => _tileHtml(id, SIGNALS[id])).join('')}</div>`;
     if (typeof lucide !== 'undefined') lucide.createIcons();
     // La expansión se cablea ANTES de resolver los conteos: el camino de la
     // caché hace `return` temprano y sin esto las señales cacheadas no abrían.
     _wireExpansion(mount, ids);
 
-    const setVal = (id, n) => {
-      const tile = mount.querySelector(`[data-signal="${id}"]`);
-      const val = mount.querySelector(`[data-signal-val="${id}"]`);
-      if (!tile || !val) return;
-      tile.classList.remove('is-loading');
-      val.textContent = String(n);
-    };
+    const setVal = (id, n) => _pintaVal(mount, id, n);
     const dropTile = (id) => {
       mount.querySelector(`[data-signal="${id}"]`)?.remove();
+      _sincronizarN(mount);
     };
 
     const cached = _readCache(uid, rolEfectivo);
