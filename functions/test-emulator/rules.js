@@ -827,6 +827,42 @@ async function main() {
   }, { merge: true }));
   ok("comision: un estado fuera del catálogo rebota");
 
+  // La forma EXACTA que manda facturacionAvisosService: update() con rutas
+  // punteadas, no set()+merge. affectedKeys() devuelve la clave de primer
+  // nivel ('comision'), así que la allowlist y el guard aplican igual — pero
+  // eso hay que verificarlo, no suponerlo.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("facturacion_avisos/avd").set({
+      tipo: "contrato_activo", estado: "hecho", cliente_nombre: "Y",
+      pasos: { qbo: { aplica: true, hecho: true }, poc: { aplica: true, hecho: true } },
+      historial: [{ accion: "creado" }],
+      comision: {
+        aplica: true, estado: "esperando", vendedor_email: "elvia@x", base: 162, base_de: "mensual",
+        porcentaje: null, monto: null, regla_id: null,
+        requisitos: { firma: FIRMA, entrega: ENTREGA, pago: { aplica: true, hecho: false, factura: null } },
+        periodo: null, liberada_por: null, liberada_at: null, nota: null,
+      },
+    });
+  });
+  await assertSucceeds(as("contabilidad").doc("facturacion_avisos/avd").update({
+    "comision.requisitos.pago": { aplica: true, hecho: true, factura: "1189", monto: 162, saldo: 0, fuente: "manual" },
+    "comision.estado": "listo",
+    historial: [{ accion: "creado" }, { accion: "comision_pago" }],
+    updated_at: 1, por_uid: "u1", por_email: "c@x",
+  }));
+  await assertSucceeds(as("administrador").doc("facturacion_avisos/avd").update({
+    "comision.estado": "pagada", "comision.periodo": "2026-09",
+    "comision.liberada_por": "zuleika@x", "comision.liberada_at": 2,
+    historial: [{ accion: "creado" }, { accion: "comision_pago" }, { accion: "comision_liberada" }],
+    updated_at: 2,
+  }));
+  ok("comision: update() con rutas punteadas (la forma real del servicio) pasa");
+  await assertFails(as("administrador").doc("facturacion_avisos/avd").update({ "comision.base": 1 }));
+  await assertFails(as("administrador").doc("facturacion_avisos/avd").update({
+    "comision.requisitos.entrega": { aplica: true, hecho: true, motivo: null },
+  }));
+  ok("comision: por rutas punteadas TAMPOCO se cuela la base ni un requisito derivado");
+
   // contratos: descarte de la orden de programación ("no se va a crear"). Lo
   // escribe quien ve la bandeja del home — recepción/admin. Es el campo que
   // apaga el CTA "Crear orden" de la lista de contratos, así que no puede

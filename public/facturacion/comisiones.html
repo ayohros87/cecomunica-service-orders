@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
+  <link rel="preload" href="/brand/fonts/ibm-plex-sans-400-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/brand/fonts/barlow-700-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <title>Comisiones - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=sh3">
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
+  <link rel="stylesheet" href="../css/ws-tabs.css?v=f2">
+
+  <style>
+    /* Page-local — Comisiones (docs/plans/PLAN_COMISIONES.md F2).
+       Mismas convenciones que la Bandeja: sin tarjetas KPI, chips con conteo,
+       UNA voz de color por fila (aquí es el estado de la comisión), botones
+       quietos. El chip verde NO lo prende nadie: se deriva de los tres
+       requisitos. Tokens de ceco-ui.css. */
+    .cm-intro { color: var(--fg-3); font-size: 13px; margin: 0 0 var(--sp-3); max-width: 90ch; }
+
+    .cm-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border-subtle); }
+    .cm-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px;
+      border-radius: var(--radius-pill, 999px); border: 1px solid var(--border-default);
+      background: var(--surface-card, #fff); color: var(--fg-2); font: 500 13px/1 var(--font-body);
+      cursor: pointer; user-select: none; white-space: nowrap; }
+    .cm-chip:hover { background: var(--accent-soft); border-color: var(--accent); }
+    .cm-chip:focus-visible { outline: none; box-shadow: var(--ring-focus, 0 0 0 3px rgba(0,145,215,.30)); }
+    .cm-chip .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .cm-chip .cnt { margin-left: 2px; padding: 0 6px; height: 18px; min-width: 22px; display: inline-flex;
+      align-items: center; justify-content: center; font-size: 11px; font-weight: 600;
+      border-radius: 999px; background: rgba(0,0,0,.06); font-variant-numeric: tabular-nums; }
+    .cm-chip.active { font-weight: 600; border-width: 1.5px; color: var(--fg-1); }
+    .cm-chip--listo .dot     { background: #166534; }
+    .cm-chip--esperando .dot { background: transparent; border: 2px solid var(--gray-400, #9AA7B4); width: 6px; height: 6px; }
+    .cm-chip--pagada .dot    { background: var(--gray-400, #9AA7B4); }
+    .cm-chip--sinvend .dot   { background: #991B1B; }
+    .cm-chip--listo.active     { background: #F0FDF4; border-color: #166534; color: #166534; }
+    .cm-chip--esperando.active { background: var(--surface-sunken); border-color: var(--gray-400, #9AA7B4); color: var(--fg-2); }
+    .cm-chip--pagada.active    { background: var(--surface-sunken); border-color: var(--gray-400, #9AA7B4); color: var(--fg-3); }
+    .cm-chip--sinvend.active   { background: #FEF2F2; border-color: #991B1B; color: #991B1B; }
+    .cm-chip--all.active { background: var(--fg-1); color: #fff; border-color: var(--fg-1); }
+    .cm-chips .push { flex: 1; }
+    .cm-chips .form-input, .cm-chips .form-select { height: 30px; font-size: 13px; }
+
+    /* Grupo por vendedor */
+    .cm-grupo { margin-bottom: var(--sp-4); }
+    .cm-gh { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+      padding: 0 2px 6px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 8px; }
+    .cm-gh .who { font: 700 13px/1.2 var(--font-display, var(--font-body)); letter-spacing: .04em;
+      text-transform: uppercase; color: var(--navy, #0B2A47); }
+    .cm-gh .who.sin { color: #991B1B; }
+    .cm-gh .meta { font-size: 12.5px; color: var(--fg-3); }
+    .cm-gh .tot { margin-left: auto; font-family: var(--font-mono, monospace); font-size: 13px;
+      color: var(--fg-2); font-variant-numeric: tabular-nums; }
+
+    .cm-rows { display: flex; flex-direction: column; gap: 6px; }
+    .cm-row { background: var(--surface-card, #fff); border: 1px solid var(--border-default); border-radius: var(--radius-md); }
+    .cm-main { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto auto; align-items: center;
+      gap: 12px; padding: 9px 12px; cursor: pointer; }
+    .cm-main:hover { background: #FAFCFE; }
+    .cm-row.is-open { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,145,215,.12); }
+    .cm-row.is-open .cm-main { background: #FAFCFE; }
+    .cm-row.is-pagada .cm-main { opacity: .66; }
+
+    .cm-est { display: inline-flex; align-items: center; justify-content: center; height: 22px; padding: 0 9px;
+      border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+      border: 1px solid transparent; white-space: nowrap; }
+    .cm-est--listo     { background: #F0FDF4; color: #166534; border-color: #BBF7D0; }
+    .cm-est--esperando { background: transparent; color: var(--fg-3); border-color: var(--border-default); border-style: dashed; }
+    .cm-est--pagada    { background: var(--surface-sunken); color: var(--fg-3); border-color: transparent; }
+    .cm-est--no_aplica { background: var(--surface-sunken); color: var(--fg-4); border-color: transparent; }
+
+    .cm-txt { min-width: 0; }
+    .cm-t1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; font-size: 13.5px; }
+    .cm-t1 b { font-weight: 600; color: var(--fg-1); }
+    .cm-t1 .id { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--fg-3); }
+    .cm-t1 .que { color: var(--fg-2); }
+    .cm-t2 { font-size: 12.5px; color: var(--fg-3); margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .cm-req { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .cm-req .g { color: #166534; font-weight: 700; }
+    .cm-req .w { color: #8A6415; font-weight: 700; }
+    .cm-req .n { color: var(--fg-4); }
+    .cm-req em { font-style: normal; color: var(--fg-4); }
+    .cm-base { font-family: var(--font-mono, monospace); font-size: 13px; color: var(--fg-2);
+      text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .cm-base small { display: block; font-family: var(--font-body); font-size: 10.5px; color: var(--fg-4);
+      letter-spacing: .03em; text-transform: uppercase; }
+    .cm-caret { color: var(--fg-4); font-size: 12px; }
+
+    .cm-det { border-top: 1px solid var(--border-subtle); padding: 12px; display: none; }
+    .cm-row.is-open .cm-det { display: block; }
+    .cm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 4px 20px; margin-bottom: 10px; }
+    /* min-width:0 + overflow-wrap: sin esto un correo largo se sale de su celda
+       y se encima con el valor de la siguiente columna (visto en la revisión
+       con Chrome: "salomon.arauz@cecomunica.com" encima del monto). */
+    .cm-d { display: flex; gap: 8px; font-size: 13px; padding: 2px 0; min-width: 0; }
+    .cm-d span:first-child { color: var(--fg-3); min-width: 116px; flex: none; }
+    .cm-d span:last-child { min-width: 0; overflow-wrap: anywhere; }
+    .cm-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+      border-top: 1px solid var(--border-subtle); padding-top: 10px; margin-top: 4px; }
+    .cm-acts .sep { flex: 1; }
+    .cm-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;
+      background: var(--surface-sunken, #F4F7FA); border-radius: var(--radius-md); padding: 10px 12px; margin-top: 10px; }
+    .cm-form label { display: block; font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
+      color: var(--fg-3); font-weight: 600; margin-bottom: 3px; }
+    .cm-form .form-input, .cm-form .form-select { height: 32px; font-size: 13px; }
+    .cm-form .ayuda { flex-basis: 100%; font-size: 12px; color: var(--fg-3); margin: 0; }
+
+    .cm-hist { margin-top: 10px; border-top: 1px solid var(--border-subtle); padding-top: 8px; }
+    .cm-hist h5 { margin: 0 0 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); }
+    .cm-hist li { font-size: 12.5px; color: var(--fg-2); list-style: none; padding: 2px 0; }
+    .cm-hist li span { color: var(--fg-4); }
+
+    .cm-vacio { text-align: center; color: var(--fg-3); font-size: 13.5px; padding: 28px 10px; }
+    .cm-aviso { background: var(--soft-warn, #FBF3E0); color: #8A6415; border-radius: var(--radius-md);
+      padding: 10px 14px; font-size: 13px; margin-bottom: 12px; }
+
+    @media (max-width: 720px) {
+      .cm-main { grid-template-columns: 78px minmax(0, 1fr) auto; }
+      .cm-caret { display: none; }
+    }
+  </style>
+
+  <!-- workspace-tabs + finanzas-nav SIN defer: el inline de más abajo pinta la
+       barra en DOMContentLoaded con la sesión cacheada (mismo orden exacto que
+       bandeja.html — si se difieren, la barra salta). -->
+  <script src="../js/ui/workspace-tabs.js?v=f2"></script>
+  <script src="../js/ui/finanzas-nav.js?v=cm1"></script>
+
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="../js/firebase-init.js?v=ses2"></script>
+  <script src="../js/core/modulos.js?v=cc15"></script>
+  <script src="../js/core/layout.js?v=cc13"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script defer src="../js/services/usuariosService.js"></script>
+  <script defer src="../js/services/facturacionAvisosService.js?v=cm1"></script>
+  <script defer src="../js/ui/toast.js"></script>
+  <script defer src="../js/ui/modal.js?v=f7"></script>
+  <script defer src="../js/pages/facturacion-comisiones.js?v=cm1"></script>
+  <script defer src="/js/vendor/lucide.min.js?v=3"></script>
+  <script defer src="/js/core/icons.js?v=1"></script>
+</head>
+<body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
+
+<div id="topbar-mount"></div>
+<script>
+  Layout.renderTopbarFor('index', {
+    back: { href: '../index.html', label: '<i data-lucide="arrow-left"></i> Inicio' },
+    title: '<i data-lucide="badge-dollar-sign"></i> Comisiones',
+  });
+</script>
+
+<div class="app-wrap app-wrap--full">
+
+  <!-- Espacio Finanzas: SOLO admin/contabilidad. A diferencia de la Bandeja,
+       esta página no tiene puerta para recepción — liberar una comisión es otra
+       decisión y otra plata (rules solo dejan tocar `comision` a esos dos). -->
+  <div id="wsTabs-mount"></div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const c = window.Sesion && Sesion.cacheAnonima ? Sesion.cacheAnonima() : null;
+      if (c && ['administrador', 'contabilidad'].includes(c.rol)) FinanzasNav.render('comisiones');
+    });
+  </script>
+
+  <p class="cm-intro">
+    Un renglón por hecho comisionable: contrato nuevo, adición, renovación, aumento entregado o venta con contrato Propio.
+    El chip verde <b>no lo prende nadie</b> — se pone solo cuando los tres requisitos ya están escritos:
+    <b>firma del cliente</b>, <b>entrega de los equipos</b> (cuando aplica) y <b>primer pago</b> (factura en cero).
+    Lo único que se decide aquí es <b>cerrar el período</b>.
+  </p>
+
+  <div id="cmAviso" class="cm-aviso" hidden></div>
+
+  <div class="cm-chips" id="cmChips" role="tablist" aria-label="Filtrar comisiones">
+    <button type="button" class="cm-chip cm-chip--all active" data-f="abiertas" role="tab">Abiertas <span class="cnt" data-cnt="abiertas">0</span></button>
+    <button type="button" class="cm-chip cm-chip--listo" data-f="listo" role="tab"><span class="dot"></span>Listas para pago <span class="cnt" data-cnt="listo">0</span></button>
+    <button type="button" class="cm-chip cm-chip--esperando" data-f="esperando" role="tab"><span class="dot"></span>Esperando <span class="cnt" data-cnt="esperando">0</span></button>
+    <button type="button" class="cm-chip cm-chip--pagada" data-f="pagada" role="tab"><span class="dot"></span>Pagadas <span class="cnt" data-cnt="pagada">0</span></button>
+    <button type="button" class="cm-chip cm-chip--sinvend" data-f="sinvend" role="tab"><span class="dot"></span>Sin vendedor <span class="cnt" data-cnt="sinvend">0</span></button>
+    <span class="push"></span>
+    <select id="cmPeriodo" class="form-select" style="max-width:170px;" aria-label="Período"></select>
+    <input type="search" id="cmBuscar" class="form-input" placeholder="Cliente, contrato o vendedor…" style="max-width:220px;" autocomplete="off">
+    <button type="button" class="btn btn-ghost btn-sm" id="cmCsv"><i data-lucide="download"></i> CSV</button>
+  </div>
+
+  <div id="cmRows"><div class="cm-vacio">Cargando…</div></div>
+</div>
+
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('facturacion'));
+  </script>
+</body>
+</html>

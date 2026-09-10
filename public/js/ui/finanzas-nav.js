@@ -14,6 +14,10 @@ window.FinanzasNav = {
   // (facturacion_bandeja) y esa página no le pinta esta barra.
   TABS: [
     { id: 'bandeja',    label: 'Bandeja',             icon: 'inbox',        href: '/facturacion/bandeja.html' },
+    // Comisiones va junto a la Bandeja porque come del mismo dato
+    // (facturacion_avisos): el aviso es el hecho comisionable
+    // (docs/plans/PLAN_COMISIONES.md). Recepción NO la ve.
+    { id: 'comisiones', label: 'Comisiones',          icon: 'badge-dollar-sign', href: '/facturacion/comisiones.html' },
     { id: 'catalogo',   label: 'Catálogo',            icon: 'book-open',    href: '/inventario/modelos.html' },
     { id: 'quickbooks', label: 'QuickBooks',          icon: 'link-2',       href: '/facturacion/clientes-qbo.html' },
     { id: 'activacion', label: 'Facturará la app',    icon: 'zap',          href: '/facturacion/activacion.html' },

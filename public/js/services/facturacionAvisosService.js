@@ -48,6 +48,139 @@ window.FacturacionAvisosService = {
     const snap = await this._col().where('estado', 'in', ['hecho', 'descartado']).limit(limite).get();
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
+
+  // ── Comisiones (docs/plans/PLAN_COMISIONES.md F2) ─────────────────────────
+  // Liberar una comisión es otra decisión (y otra plata) que marcar un paso de
+  // facturación: rules solo dejan tocar `comision` a admin/contabilidad.
+  ROLES_COMISION: ['administrador', 'contabilidad'],
+  puedeComisionar(rol) { return this.ROLES_COMISION.includes(rol); },
+
+  // La bandeja de comisiones lee la colección ENTERA (43 documentos hoy,
+  // ~15 nuevos al mes). Un `where` sobre comision.estado pediría índice y no
+  // ahorraría nada a esta escala; agrupar y filtrar se hace en el navegador.
+  async listComisiones() {
+    const snap = await this._col().get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(a => a.comision);
+  },
+
+  // Estado derivado — MISMO criterio que lib/facturacionAvisos.estadoComision.
+  // Si cambias uno, cambia el otro.
+  estadoComision(com = {}) {
+    if (com.aplica === false) return 'no_aplica';
+    if (com.liberada_at || com.periodo) return 'pagada';
+    const req = Object.values(com.requisitos || {}).filter(x => x && x.aplica);
+    return req.length && req.every(x => x.hecho) ? 'listo' : 'esperando';
+  },
+
+  // Requisitos que faltan, en texto, para que la fila diga POR QUÉ está
+  // trancada en vez de mostrar un chip ámbar sin explicación.
+  faltantes(com = {}) {
+    return Object.entries(com.requisitos || {})
+      .filter(([, r]) => r && r.aplica && !r.hecho)
+      .map(([k, r]) => ({ paso: k, motivo: r.motivo || 'pendiente' }));
+  },
+
+  /**
+   * Confirma el primer pago. `factura` es el DocNumber de QuickBooks y NO es
+   * opcional a propósito: sin él, la verificación automática (F4) no tiene con
+   * qué buscar y habría que adivinar cuál pago corresponde a cuál contrato.
+   * El pago cuenta solo con la factura en CERO (decisión de Alberto
+   * 2026-09-10): un abono parcial se guarda como saldo y no libera nada.
+   */
+  async marcarPago(aviso, { factura, fecha, monto = null, saldo = null } = {}) {
+    const com = aviso?.comision;
+    if (!com || com.aplica === false) throw new Error('Este evento no paga comisión.');
+    if (com.estado === 'pagada') throw new Error('Esta comisión ya se cerró.');
+    const num = (factura || '').toString().trim();
+    if (!num) throw new Error('Escribe el número de la factura de QuickBooks.');
+    const f = (fecha || '').toString().trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) throw new Error('Escribe la fecha del pago.');
+    const pendiente = Number(saldo || 0) > 0;
+    const pago = {
+      ...(com.requisitos?.pago || {}), aplica: true,
+      hecho: !pendiente, at: firebase.firestore.Timestamp.fromDate(new Date(`${f}T12:00:00`)),
+      factura: num, monto: monto == null ? null : Number(monto),
+      saldo: pendiente ? Number(saldo) : 0,
+      fuente: 'manual',
+      motivo: pendiente ? `factura ${num}: quedan $${Number(saldo).toFixed(2)} por pagar` : null,
+    };
+    const estado = this.estadoComision({ ...com, requisitos: { ...(com.requisitos || {}), pago } });
+    await this._col().doc(aviso.id).update({
+      'comision.requisitos.pago': pago,
+      'comision.estado': estado,
+      historial: firebase.firestore.FieldValue.arrayUnion(this._traza('comision_pago',
+        pendiente ? `Factura ${num} con saldo de $${Number(saldo).toFixed(2)} — la comisión NO se libera`
+          : `Primer pago confirmado · factura ${num} · ${f}`)),
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      ...this._autoria(),
+    });
+    return estado;
+  },
+
+  // Deshacer no borra: el historial dice quién marcó y quién deshizo.
+  async deshacerPago(aviso, motivo = '') {
+    const com = aviso?.comision;
+    if (!com?.requisitos?.pago?.factura) throw new Error('Este pago no está marcado.');
+    if (com.estado === 'pagada') throw new Error('Primero hay que reabrir el período.');
+    const pago = { ...com.requisitos.pago, hecho: false, at: null, factura: null, monto: null,
+      saldo: null, fuente: null, motivo: 'falta confirmar el primer pago (factura en cero)' };
+    const estado = this.estadoComision({ ...com, requisitos: { ...com.requisitos, pago } });
+    await this._col().doc(aviso.id).update({
+      'comision.requisitos.pago': pago,
+      'comision.estado': estado,
+      historial: firebase.firestore.FieldValue.arrayUnion(
+        this._traza('comision_pago_deshecho', motivo || 'Pago deshecho')),
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      ...this._autoria(),
+    });
+    return estado;
+  },
+
+  /**
+   * Cierra el período de una comisión LISTA. Esto es lo único que una persona
+   * decide: el "listo" se prende solo cuando los tres hechos están escritos.
+   * @param {string} periodo 'YYYY-MM'
+   */
+  async cerrarPeriodo(aviso, periodo, nota = '') {
+    const com = aviso?.comision;
+    if (!com || com.aplica === false) throw new Error('Este evento no paga comisión.');
+    if (com.estado === 'pagada') throw new Error('Esta comisión ya se cerró.');
+    if (this.estadoComision(com) !== 'listo') {
+      const f = this.faltantes(com).map(x => x.paso).join(', ');
+      throw new Error(`Todavía falta: ${f || 'algún requisito'}.`);
+    }
+    if (!/^\d{4}-\d{2}$/.test((periodo || '').toString().trim())) throw new Error('Elige el período (YYYY-MM).');
+    const a = this._autoria();
+    await this._col().doc(aviso.id).update({
+      'comision.estado': 'pagada',
+      'comision.periodo': periodo,
+      'comision.liberada_por': a.por_email || null,
+      'comision.liberada_at': firebase.firestore.FieldValue.serverTimestamp(),
+      ...(nota ? { 'comision.nota': nota.toString().slice(0, 300) } : {}),
+      historial: firebase.firestore.FieldValue.arrayUnion(
+        this._traza('comision_liberada', `Comisión liberada en el período ${periodo}${nota ? ` · ${nota}` : ''}`)),
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      ...a,
+    });
+  },
+
+  // Reabrir: un cierre equivocado se corrige, y queda dicho quién lo reabrió.
+  async reabrirPeriodo(aviso, motivo = '') {
+    const com = aviso?.comision;
+    if (!com || com.estado !== 'pagada') throw new Error('Esta comisión no está cerrada.');
+    const estado = this.estadoComision({ ...com, periodo: null, liberada_at: null });
+    await this._col().doc(aviso.id).update({
+      'comision.estado': estado,
+      'comision.periodo': null,
+      'comision.liberada_por': null,
+      'comision.liberada_at': null,
+      historial: firebase.firestore.FieldValue.arrayUnion(
+        this._traza('comision_reabierta', motivo || 'Período reabierto')),
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      ...this._autoria(),
+    });
+    return estado;
+  },
   async get(id) {
     const d = await this._col().doc(id).get();
     return d.exists ? { id: d.id, ...d.data() } : null;
