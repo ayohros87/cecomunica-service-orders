@@ -15,7 +15,10 @@ async function main() {
   const testEnv = await initializeTestEnvironment({
     projectId: "demo-rules-test",
     firestore: {
-      rules: fs.readFileSync(path.join(__dirname, "../../firestore.rules"), "utf8"),
+      // RULES_FILE permite correr la MISMA suite contra otra versión del
+      // archivo (p. ej. `git show HEAD:firestore.rules`) para saber si un fallo
+      // es nuevo o venía de antes.
+      rules: fs.readFileSync(process.env.RULES_FILE || path.join(__dirname, "../../firestore.rules"), "utf8"),
       host: "127.0.0.1", port: 8080,
     },
   });
@@ -760,6 +763,69 @@ async function main() {
   await assertFails(as("administrador").doc("facturacion_avisos/nuevo").set({ tipo: "x", estado: "pendiente" }));
   await assertFails(as("administrador").doc("facturacion_avisos/av1").delete());
   ok("facturacion_avisos: ni admin crea ni borra desde el navegador");
+
+  // ── Bloque `comision` (PLAN_COMISIONES.md F2) ─────────────────────────────
+  // Liberar una comisión es otra decisión (y otra plata) que marcar un paso de
+  // facturación: es de administración y contabilidad, no de recepción. Y lo
+  // que los triggers derivan —firma, entrega, base, vendedor— no se edita a
+  // mano: si se pudiera, "listo para pago" volvería a ser un palomeo.
+  const FIRMA = { aplica: true, hecho: true, motivo: null };
+  const ENTREGA = { aplica: false, hecho: false, motivo: "renovación: los equipos ya están en el cliente" };
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("facturacion_avisos/avc").set({
+      tipo: "renovacion_activa", estado: "pendiente", cliente_nombre: "X",
+      pasos: { qbo: { aplica: true, hecho: true }, poc: { aplica: true, hecho: true } },
+      historial: [{ accion: "creado" }],
+      comision: {
+        aplica: true, estado: "esperando", vendedor_email: "karla@x", base: 75, base_de: "mensual",
+        porcentaje: null, monto: null, regla_id: null,
+        requisitos: { firma: FIRMA, entrega: ENTREGA, pago: { aplica: true, hecho: false, factura: null } },
+        periodo: null, liberada_por: null, liberada_at: null, nota: null,
+      },
+    });
+  });
+  const pagoHecho = { aplica: true, hecho: true, factura: "1234" };
+  for (const r of ["administrador", "contabilidad"]) {
+    await assertSucceeds(as(r).doc("facturacion_avisos/avc").set({
+      comision: { requisitos: { firma: FIRMA, entrega: ENTREGA, pago: pagoHecho }, estado: "listo" },
+      historial: [{ accion: "creado" }, { accion: "pago_" + r }],
+    }, { merge: true }));
+  }
+  ok("comision: administración y contabilidad marcan el pago y la dejan 'listo'");
+  // Con un valor DISTINTO: un write idéntico no aparece en affectedKeys()
+  // (diff() compara valores), así que repetir lo mismo no probaría nada.
+  await assertFails(as("recepcion").doc("facturacion_avisos/avc").set({
+    comision: {
+      requisitos: { firma: FIRMA, entrega: ENTREGA, pago: { aplica: true, hecho: true, factura: "9999" } },
+      estado: "listo",
+    },
+  }, { merge: true }));
+  ok("comision: recepción NO la toca (marca facturación, no libera comisiones)");
+  await assertSucceeds(as("administrador").doc("facturacion_avisos/avc").set({
+    comision: {
+      requisitos: { firma: FIRMA, entrega: ENTREGA, pago: pagoHecho },
+      estado: "pagada", periodo: "2026-09", liberada_por: "zuleika@x", liberada_at: 1,
+    },
+  }, { merge: true }));
+  ok("comision: cerrar el período deja quién y cuándo");
+  // Lo derivado, intocable.
+  await assertFails(as("administrador").doc("facturacion_avisos/avc").set({
+    comision: { base: 9999 },
+  }, { merge: true }));
+  await assertFails(as("administrador").doc("facturacion_avisos/avc").set({
+    comision: { vendedor_email: "yo@x" },
+  }, { merge: true }));
+  await assertFails(as("administrador").doc("facturacion_avisos/avc").set({
+    comision: { requisitos: { firma: { aplica: true, hecho: true, motivo: null }, entrega: { aplica: true, hecho: true, motivo: null }, pago: pagoHecho } },
+  }, { merge: true }));
+  await assertFails(as("contabilidad").doc("facturacion_avisos/avc").set({
+    comision: { aplica: false },
+  }, { merge: true }));
+  ok("comision: base, vendedor, aplica y los requisitos derivados NO se editan a mano");
+  await assertFails(as("administrador").doc("facturacion_avisos/avc").set({
+    comision: { estado: "inventado" },
+  }, { merge: true }));
+  ok("comision: un estado fuera del catálogo rebota");
 
   // contratos: descarte de la orden de programación ("no se va a crear"). Lo
   // escribe quien ve la bandeja del home — recepción/admin. Es el campo que

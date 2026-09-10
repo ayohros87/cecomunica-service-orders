@@ -845,14 +845,39 @@ service cloud.firestore {
         return resource.data.get("historial", []).size()
             <= request.resource.data.get("historial", []).size();
       }
+      // ── Comisiones (PLAN_COMISIONES.md F2) ─────────────────────────────────
+      // El bloque `comision` es de administración y contabilidad. Recepción
+      // marca pasos de FACTURACIÓN; liberar una comisión es otra decisión y
+      // otra plata.
+      function tocaComision() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasAny(["comision"]);
+      }
+      // Firma, entrega, base y vendedor los DERIVAN los triggers desde el
+      // contrato o la gestión (lib/facturacionAvisos). Desde el navegador solo
+      // se mueve el pago, el período, el cierre y la nota: si la base o los
+      // requisitos derivados fueran editables, "listo para pago" volvería a ser
+      // un palomeo manual — exactamente el mecanismo que este plan retira.
+      function comisionDerivadaIntacta() {
+        let antes = resource.data.get("comision", {});
+        let ahora = request.resource.data.get("comision", {});
+        return ahora.get("base", null) == antes.get("base", null)
+            && ahora.get("aplica", null) == antes.get("aplica", null)
+            && ahora.get("vendedor_email", null) == antes.get("vendedor_email", null)
+            && ahora.get("requisitos", {}).get("firma", {}) == antes.get("requisitos", {}).get("firma", {})
+            && ahora.get("requisitos", {}).get("entrega", {}) == antes.get("requisitos", {}).get("entrega", {});
+      }
       allow read:   if rolBandejaFact();
       allow create: if false;
       allow update: if rolBandejaFact()
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(["pasos", "estado", "descarte", "historial", "reenvio_solicitado",
-                       "updated_at", "por_uid", "por_email"])
+                       "comision", "updated_at", "por_uid", "por_email"])
         && request.resource.data.estado in ["esperando", "pendiente", "hecho", "descartado"]
-        && avisoHistorialSoloCrece();
+        && avisoHistorialSoloCrece()
+        && (!tocaComision() || (
+              userRole() in ["administrador", "contabilidad"]
+              && request.resource.data.comision.estado in ["esperando", "listo", "pagada", "no_aplica"]
+              && comisionDerivadaIntacta()));
       allow delete: if false;
     }
 

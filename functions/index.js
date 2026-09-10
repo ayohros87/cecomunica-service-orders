@@ -37,6 +37,11 @@ exports.onEntregaPool                 = require("./src/triggers/contratos/onEntr
 // La ENTREGA le avisa a facturación: promueve el aviso que quedó "esperando la
 // entrega" y manda el correo que el de activación prometió (PLAN_COMISIONES F1)
 exports.onEntregaFacturacion          = require("./src/triggers/contratos/onEntregaFacturacion");
+// Comisiones: firma y entrega son hechos del contrato / de la gestión y se
+// re-derivan solos cuando se mueven (PLAN_COMISIONES F2)
+const comReq = require("./src/triggers/comisiones/onRequisitos");
+exports.onComisionRequisitosContrato  = comReq.onComisionRequisitosContrato;
+exports.onComisionRequisitosGestion   = comReq.onComisionRequisitosGestion;
 // Ola 7: al activarse una RENOVACIÓN, la custodia del cliente se amarra sola
 // al contrato nuevo (regularización automática de la cuenta)
 exports.onRenovacionActivada          = require("./src/triggers/contratos/onRenovacionActivada");
