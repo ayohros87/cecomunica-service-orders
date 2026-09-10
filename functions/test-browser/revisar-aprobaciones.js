@@ -90,6 +90,67 @@ async function main() {
     const destino = await page.$eval('[data-signal="SAG"]', el => el.getAttribute('href'));
     assert.equal(destino, 'clientes/centro.html?aprobaciones=gestiones');
 
+    // Dos ceros: salen de la rejilla, conservan su destino y ocupan menos.
+    await page.setViewport({ width: 1280, height: 950 });
+    await page.evaluate(async () => {
+      window.registros.gestiones = [];
+      window.registros.contratos = [];
+      await HomeSignals.render({ rolEfectivo: 'administrador', uid: 'test' });
+    });
+    assert.equal(await page.$$eval('.kpis > .kpi', els => els.length), 5);
+    assert.equal(await page.$$eval('.kpis-zero .kpi', els => els.length), 2);
+    assert.equal(await page.$eval('.kpis', el => el.dataset.n), '5');
+    assert.ok(await page.evaluate(() => document.querySelector('.kpis-zero .kpi').getBoundingClientRect().height
+      < document.querySelector('.kpis > .kpi').getBoundingClientRect().height));
+    await (await page.$('#signalsRow')).screenshot({ path: path.join(OUT, 'ceros-mixtos-desktop.png') });
+    await page.setViewport({ width: 390, height: 844 });
+    assert.ok(await page.$eval('.kpis-zero .kpi', el => el.getBoundingClientRect().height >= 44));
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    await (await page.$('#signalsRow')).screenshot({ path: path.join(OUT, 'ceros-mixtos-mobile.png') });
+
+    // Regresa un pendiente sin reconstruir el home: se conserva orden y foco.
+    await page.focus('[data-signal="SAG"]');
+    await page.evaluate(() => {
+      window.registros.gestiones = [{ id: 'g1', estado: 'pendiente_aprobacion' }];
+      window.dispatchEvent(new window.PageTransitionEvent('pageshow', { persisted: true }));
+    });
+    await page.waitForFunction(() => document.querySelector('.kpis > [data-signal="SAG"]'));
+    assert.equal(await page.$eval('.kpis > .kpi', el => el.dataset.signal), 'SAG');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.signal), 'SAG');
+    assert.equal(await page.$eval('[data-signal-val="SAG"]', el => el.textContent), '1');
+
+    // Todos en cero: solo la franja compacta; los paneles siguen abriendo.
+    await script('ui/bandeja.js');
+    await page.evaluate(async () => {
+      sessionStorage.clear();
+      Object.values(HomeSignals.SIGNALS).forEach(sig => { sig.count = async () => 0; });
+      HomeSignals.SIGNALS.EST.items = async () => [];
+      await HomeSignals.render({ rolEfectivo: 'administrador', uid: 'test' });
+    });
+    assert.equal(await page.$eval('.kpis', el => window.getComputedStyle(el).display), 'none');
+    assert.equal(await page.$$eval('.kpis-zero .kpi', els => els.length), 7);
+    assert.equal(await page.$eval('.kpis-zero__label', el => el.textContent), 'Sin pendientes');
+    await (await page.$('#signalsRow')).screenshot({ path: path.join(OUT, 'todos-cero-mobile.png') });
+    await page.click('.kpis-zero [data-signal="EST"]');
+    await page.waitForFunction(() => document.querySelector('.bj-panel')?.textContent.includes('Ninguna orden parada'));
+    await page.click('.kpis-zero [data-signal="EST"]');
+    assert.equal(await page.$('.bj-panel'), null);
+    // Volver a pintar con un panel abierto tampoco deja una referencia vieja.
+    await page.click('.kpis-zero [data-signal="EST"]');
+    await page.evaluate(() => HomeSignals.render({ rolEfectivo: 'administrador', uid: 'test' }));
+    await page.click('.kpis-zero [data-signal="EST"]');
+    await page.waitForFunction(() => document.querySelector('.bj-panel')?.textContent.includes('Ninguna orden parada'));
+    await page.setViewport({ width: 1280, height: 950 });
+    await page.click('.kpis-zero [data-signal="EST"]');
+    await (await page.$('#signalsRow')).screenshot({ path: path.join(OUT, 'todos-cero-desktop.png') });
+    // Sin red no es cero: la señal queda visible como dato no disponible.
+    await page.evaluate(async () => {
+      HomeSignals.SIGNALS.SAG.count = async () => { throw new Error('offline'); };
+      await HomeSignals.render({ rolEfectivo: 'administrador', uid: 'test' });
+    });
+    assert.equal(await page.$eval('.kpis > [data-signal="SAG"] .kpi__val', el => el.textContent), '—');
+    assert.equal(await page.$eval('.kpis', el => el.hidden), false);
+
     await page.setViewport({ width: 1280, height: 950 });
     await page.goto(base + '/' + destino);
     await fixtures();

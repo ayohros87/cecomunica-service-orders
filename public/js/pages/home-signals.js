@@ -402,14 +402,33 @@ window.HomeSignals = (() => {
     tile.classList.remove('is-loading');
     tile.classList.toggle('is-cero', n === 0 || n === '0');
     val.textContent = String(n);
+    _sincronizarN(mount);
   }
 
-  /* El ancho de la fila lo decide cuántas señales quedaron EN PIE: una señal
-     que se cae por permisos (dropTile) tiene que devolver su columna, o el
-     resto queda estirado y con un hueco al final. */
+  // Los ceros comparten una franja compacta. Mover el mismo enlace conserva
+  // su panel, destino y eventos; el orden no depende de qué consulta terminó
+  // primero. Un error o un conteo todavía cargando sigue en la fila principal.
   function _sincronizarN(mount) {
     const grid = mount.querySelector('.kpis');
-    if (grid) grid.setAttribute('data-n', String(grid.querySelectorAll('.kpi').length));
+    const cero = mount.querySelector('.kpis-zero');
+    const items = mount.querySelector('.kpis-zero__items');
+    if (!grid || !cero || !items) return;
+    const orden = mount._signalOrder || [];
+    for (const id of orden) {
+      const tile = mount.querySelector(`[data-signal="${id}"]`);
+      if (!tile) continue;
+      const destino = tile.classList.contains('is-cero') ? items : grid;
+      if (tile.parentElement === destino) continue;
+      const foco = tile.contains(document.activeElement) ? document.activeElement : null;
+      const siguiente = Array.from(destino.children).find(el => orden.indexOf(el.dataset.signal) > orden.indexOf(id));
+      destino.insertBefore(tile, siguiente || null);
+      if (foco) foco.focus({ preventScroll: true });
+    }
+    const n = grid.querySelectorAll('.kpi').length;
+    grid.setAttribute('data-n', String(n));
+    grid.hidden = n === 0;
+    cero.hidden = items.children.length === 0;
+    mount.classList.toggle('signals-all-zero', n === 0 && items.children.length > 0);
   }
 
   const _esc = (v) => Bandeja.esc(v);
@@ -556,6 +575,7 @@ window.HomeSignals = (() => {
       const id = tile.dataset.signal;
       const sig = SIGNALS[id];
       if (!sig || typeof sig.items !== 'function') return;   // tile normal: navega
+      if (panel && !mount.contains(panel)) panel = null;
       ev.preventDefault();
       if (_panelAbierto === id) {                            // segundo clic: cierra
         panel?.remove(); panel = null; _panelAbierto = null;
@@ -606,7 +626,12 @@ window.HomeSignals = (() => {
     // data-n = cuántas señales trae el rol: la rejilla se ajusta a ese número
     // en vez de asumir 4 fijas, que dejaba huérfana la quinta de admin y
     // gerencia en una segunda fila (ver .kpis en ceco-command.css).
-    mount.innerHTML = `<div class="kpis" data-n="${ids.length}">${ids.map(id => _tileHtml(id, SIGNALS[id])).join('')}</div>`;
+    mount.style.display = '';
+    mount._signalOrder = ids;
+    mount.classList.remove('signals-all-zero');
+    mount.innerHTML = `<div class="kpis" data-n="${ids.length}">${ids.map(id => _tileHtml(id, SIGNALS[id])).join('')}</div>
+      <div class="kpis-zero" hidden><span class="kpis-zero__label">Sin pendientes</span>
+        <div class="kpis-zero__items" role="group" aria-label="Accesos sin pendientes"></div></div>`;
     if (typeof lucide !== 'undefined') lucide.createIcons();
     // La expansión se cablea ANTES de resolver los conteos: el camino de la
     // caché hace `return` temprano y sin esto las señales cacheadas no abrían.
