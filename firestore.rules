@@ -863,6 +863,17 @@ service cloud.firestore {
       allow read:  if isSignedIn();
       allow write: if isSignedIn() && userRole() in ["administrador", "contabilidad"];
     }
+    // Resumen del pool por modelo — lo mantiene el trigger onPoolAgregado con
+    // el Admin SDK (que ignora estas reglas). Nadie lo escribe desde el
+    // navegador: un conteo editable a mano deja de ser un espejo del pool.
+    match /agregados_pool/{docId} {
+      allow read:  if isSignedIn();
+      allow write: if false;
+    }
+    match /agregados_meta/{docId} {
+      allow read:  if isSignedIn();
+      allow write: if false;
+    }
     // Cargos de facturación (activación, etc.) — info sensible, mismo criterio que modelos.
     match /cargos/{docId} {
       allow read:  if isSignedIn();

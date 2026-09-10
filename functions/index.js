@@ -91,6 +91,12 @@ exports.migrarIdentificacionPII       = require("./src/callable/migrarIdentifica
 exports.fusionarPoolFicha             = require("./src/callable/fusionarPoolFicha");
 // Semanal: drift pool ↔ contratos/órdenes/POC → admin_reportes/conciliacion_pool
 exports.conciliacionPool              = require("./src/triggers/scheduled/conciliacionPool");
+// Resumen del pool por modelo (auditoría de consumo 2026-09-10): Existencias
+// leía las 7,592 fichas en cada apertura (~197k lecturas/día, el mayor
+// consumidor del proyecto). El trigger aplica deltas sin leer el pool; el job
+// de las 05:30 recalcula desde cero y corrige la deriva.
+exports.onPoolAgregado                = require("./src/triggers/pool/onPoolAgregado");
+exports.agregadoPoolDiario            = require("./src/triggers/scheduled/agregadoPoolDiario");
 // Gestiones por cliente (Ola 2 — reemplazo/demo): máquina de estados del
 // expediente (correos bodega/recepción/admin, OS de programación, cierre 4/4)
 exports.onGestionWrite                = require("./src/triggers/gestiones/onGestionWrite");
