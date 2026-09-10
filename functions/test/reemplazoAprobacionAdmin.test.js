@@ -6,8 +6,14 @@
 // correo al estante de una vez. Ventas se enteraba del reemplazo cuando el
 // radio ya estaba asignado y la devolución del saliente ya estaba en marcha.
 // Un reemplazo saca un radio del inventario y manda a buscar otro: eso se
-// decide. El único camino que sí pasaba por ventas era la propuesta del
-// taller (ordenes-reemplazo.js), que nace aprobándose desde 2026-09-09.
+// decide. El único camino que sí pasaba por administración era la propuesta
+// del taller (ordenes-reemplazo.js), que nace aprobándose desde 2026-09-09.
+//
+// Quien aprueba es ADMINISTRACIÓN, no "ventas" (Alberto 2026-09-10: *"ventas
+// no es el vendedor... el correo ventas le llega a los admin de la empresa,
+// solo tiene el nombre ventas"*). `ventas@cecomunica.com` es la dirección del
+// buzón; los rótulos que ve el usuario dicen administración, porque a un
+// vendedor "aprobación de ventas" le suena a que se la aprueba él mismo.
 //
 // Y al revés: el reemplazo NO lleva firma del cliente. No hay anexo que
 // firmar —el contrato no cambia, se sustituye una unidad por otra—, así que
@@ -70,7 +76,7 @@ const reemplazo = (extra = {}) => ({
 // reference-equal con los de aquí, así que se comparan por texto.
 const claves = (C, g) => C._defsGestion(g).map(([k]) => k).join(" › ");
 
-test("R1 · el reemplazo lleva aprobación de ventas y NO lleva firma del cliente", () => {
+test("R1 · el reemplazo lleva aprobación de administración y NO lleva firma del cliente", () => {
   const C = montar();
   const ks = claves(C, reemplazo());
   assert.ok(ks.startsWith("aprobacion"), "la aprobación va delante: es la compuerta antes de bodega");
@@ -135,7 +141,9 @@ test("R4b · gerencia también aprueba — es lo que dicen las reglas y el motiv
 test("R5 · el expediente distingue la excepción del reemplazo normal", () => {
   const C = montar();
   const normal = C._detalleGestion(reemplazo());
-  assert.match(normal, /aprobación de ventas/i);
+  assert.match(normal, /aprobación de administración/i);
+  assert.ok(!/de ventas/i.test(normal),
+    'a un vendedor "aprobación de ventas" le suena a que se la aprueba él mismo');
   assert.ok(!/excepción/i.test(normal), "un reemplazo de alquiler no es una excepción");
 
   const excepcion = C._detalleGestion(reemplazo({

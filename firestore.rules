@@ -1043,7 +1043,8 @@ service cloud.firestore {
           && request.resource.data.items.size() == 1
           && request.resource.data.responsable_uid == request.auth.uid;
       }
-      // TODO reemplazo nace esperando la decisión de ventas (2026-09-10). El
+      // TODO reemplazo nace esperando la decisión de administración: el buzón
+      // ventas@cecomunica.com le llega a los admin de la empresa (2026-09-10). El
       // candado vivía solo en el wizard, y el wizard solo frenaba la excepción
       // (equipo propio sin garantía): un reemplazo de alquiler —la mayoría—
       // nacía en 'pendiente_bodega' y el correo salía derecho al estante.

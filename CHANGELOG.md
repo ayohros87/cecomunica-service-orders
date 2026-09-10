@@ -38,16 +38,24 @@
 >   *inline* y le ganaba a la media query. `max-width: 100% !important` a ≤768px
 >   (aplica a TODAS las hojas del kit, no solo a esta).
 
-## [El reemplazo lo aprueba ventas — y sigue sin firma del cliente] — 2026-09-10
+## [El reemplazo lo aprueba administración — y sigue sin firma del cliente] — 2026-09-10
 
 > Alberto: *"la gestión de reemplazo no debe llevar firma de cliente y sí debe
 > llevar aprobación de ventas, parece que ese paso se está saltando"*. Se
 > estaba saltando: el wizard del Centro solo mandaba a aprobación la
 > **excepción** (equipo propio del cliente y sin garantía vigente). Todo lo
 > demás —que es la mayoría, alquiler— nacía en `pendiente_bodega` y el trigger
-> le escribía al estante de una vez, así que ventas se enteraba del reemplazo
+> le escribía al estante de una vez, así que administración se enteraba del reemplazo
 > con el radio ya asignado y la devolución del saliente en marcha. El único
-> camino que sí pasaba por ventas era la propuesta del taller.
+> camino que sí pasaba por administración era la propuesta del taller.
+>
+> **Cómo se llama en pantalla** (Alberto, mismo día): *"ventas no es el vendedor,
+> ventas es admin realmente... el correo ventas le llega a los admin de la
+> empresa, solo tiene el nombre ventas"*. `ventas@cecomunica.com` es la
+> dirección del buzón; los rótulos dicen **administración**, porque a un
+> vendedor "aprobación de ventas" le suena a que se la aprueba él mismo. Se
+> corrigieron también los textos del camino del taller, que arrastraban el
+> mismo nombre desde el 2026-09-09.
 >
 > - **Todo reemplazo nace en `pendiente_aprobacion`**, con `aprobacion.motivo`
 >   diciendo si es un reemplazo normal o la excepción. El candado ya no vive
@@ -59,12 +67,12 @@
 >   los tres sitios que mandan —`CIERRE_POR_TIPO`, `CIERRE_DEFS` y el menú de
 >   acciones—; ahora hay guardias que lo congelan para que la aprobación nueva
 >   no arrastre la firma con ella.
-> - **El correo a ventas dice qué se está aprobando**: quién lo pidió, cuántos
+> - **El correo dice qué se está aprobando**: quién lo pidió, cuántos
 >   radios y una columna *"Sale por"* (Alquiler · Propio en garantía · Propio
 >   SIN garantía) por serial. El párrafo de excepción sale solo cuando la hay,
 >   y el vendedor va en copia. Antes el correo afirmaba "propios sin garantía"
 >   sin mirar el dato — mismo vicio del caso GA20260909-03.
-> - **La aprobación se ve en el expediente**: paso "Aprobación de ventas" al
+> - **La aprobación se ve en el expediente**: paso "Aprobación" (Administración) al
 >   frente del checklist y `cierre.aprobacion` estampado al aprobar. Los
 >   reemplazos viejos no estrenan un paso pendiente para siempre: sin
 >   `aprobacion.requiere` no se pinta, y si el flag no está pero la gestión ya
@@ -74,7 +82,8 @@
 >   administración o gerencia aprueba"* —que él sí cumplía—; y la cola de
 >   aprobaciones le escondía los reemplazos a gerencia. Las reglas
 >   (`esAprobacionGestion`) siempre admitieron a los dos.
-> - Guardias: `functions/test/reemplazoAprobacionVentas.test.js` (8) y cinco
+> - Guardias: `functions/test/reemplazoAprobacionAdmin.test.js` (8, uno de ellos
+>   exige que el expediente NO diga "de ventas") y cinco
 >   assertions nuevas en `functions/test-emulator/rules.js`.
 
 ## [Dividir una orden de ENTRADA entre varios técnicos] — 2026-09-08

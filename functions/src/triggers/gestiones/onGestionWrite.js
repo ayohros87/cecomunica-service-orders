@@ -81,7 +81,8 @@ function soloCambiaron(a, b, campos) {
 }
 
 // Copia de los correos de una propuesta del taller: el vendedor del cliente
-// —informado, NO aprueba: la aprobación es del buzón de ventas— y el técnico
+// —informado, NO aprueba: la aprobación es del buzón ventas@, que le llega a
+// administración (Alberto 2026-09-10)— y el técnico
 // que la propuso, para que sepa en qué quedó lo que pidió.
 async function ccTaller(g) {
   if (!esPropuestaTaller(g)) return null;
@@ -106,12 +107,12 @@ function garantiaTexto(it) {
 }
 
 // Propuesta del TALLER (2026-09-09): la abre el técnico desde su orden y la
-// aprueba ventas. Lleva el diagnóstico por delante — es lo que se lee para
-// decidir — y la orden de servicio de donde salió.
+// aprueba administración. Lleva el diagnóstico por delante — es lo que se lee
+// para decidir — y la orden de servicio de donde salió.
 async function correoPropuestaTaller(gid, g) {
   const o = g.origen || {};
   // Una propuesta = UN radio (decisión 2026-09-09): el asunto lo nombra, que
-  // es lo que ventas necesita para decidir sin abrir nada.
+  // es lo que administración necesita para decidir sin abrir nada.
   const it = (g.items || [])[0] || {};
   const serial = it.serial_saliente || o.serial || "—";
   await G.encolarCorreo({
@@ -126,7 +127,7 @@ async function correoPropuestaTaller(gid, g) {
         <b><code>${G.escapeHtml(serial)}</code></b> (${G.escapeHtml(it.modelo || "—")}) de
         <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> en la orden
         <b>${G.escapeHtml(o.orden_id || "—")}</b> y propone reemplazarlo.
-        <b>Nada se mueve hasta que ventas apruebe</b>: al aprobar, Bodega recibe el aviso para asignar
+        <b>Nada se mueve hasta que administración apruebe</b>: al aprobar, Bodega recibe el aviso para asignar
         el equipo que lo sustituye (mismo modelo).
       </p>
       <div style="margin:0 0 14px;padding:10px 12px;background:#F1F5F9;border-radius:6px;">
@@ -183,8 +184,8 @@ async function correoRechazoTaller(gid, g) {
 
 // Reemplazo pedido por el vendedor desde el Centro. Desde 2026-09-10 TODO
 // reemplazo pasa por aquí, no solo la excepción: antes, un reemplazo de
-// alquiler salía derecho a Bodega y ventas se enteraba con el radio ya
-// asignado. El correo se escribe distinto según lo que se esté aprobando —
+// alquiler salía derecho a Bodega y administración se enteraba con el radio
+// ya asignado. El correo se escribe distinto según lo que se esté aprobando —
 // una excepción (cortesía sobre un equipo del CLIENTE, sin garantía) no es lo
 // mismo que un reemplazo de alquiler, y quien aprueba necesita ver cuál es.
 async function correoAdmins(gid, g) {
@@ -201,7 +202,7 @@ async function correoAdmins(gid, g) {
     subject: `Aprobación requerida: ${G.TIPO_LABEL[g.tipo] || g.tipo} ${gid} — ${g.cliente_nombre || "Cliente"}`,
     preheader: hayExcepcion
       ? "Incluye equipo propio sin garantía vigente (excepción por servicio al cliente)"
-      : `${todos.length} radio(s) a reemplazar — Bodega no asigna hasta que ventas apruebe`,
+      : `${todos.length} radio(s) a reemplazar — Bodega no asigna hasta que administración apruebe`,
     bodyContent: `
       <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">${hayExcepcion
         ? "Reemplazo con excepción, esperando aprobación" : "Reemplazo esperando aprobación"}</h2>
@@ -555,13 +556,13 @@ module.exports = onDocumentWritten(
         } else if (esPropuestaTaller(after)) {
           await correoPropuestaTaller(gid, after);
           await G.registrarEvento(gid, "correo_aprobacion",
-            `Propuesta del taller (orden ${after.origen?.orden_id || "—"}) enviada a ventas para aprobación, con el vendedor del cliente y el técnico en copia.`);
+            `Propuesta del taller (orden ${after.origen?.orden_id || "—"}) enviada a administración para aprobación, con el vendedor del cliente y el técnico en copia.`);
         } else {
           await correoAdmins(gid, after);
           const conExcepcion = (after.items || []).some(it => it.elegibilidad === "propio_excepcion");
           await G.registrarEvento(gid, "correo_aprobacion", conExcepcion
-            ? "Solicitud de aprobación enviada a ventas — incluye equipo propio sin garantía (excepción por servicio al cliente)."
-            : "Solicitud de aprobación enviada a ventas, con el vendedor en copia. Bodega no recibe el aviso hasta que se apruebe.");
+            ? "Solicitud de aprobación enviada a administración — incluye equipo propio sin garantía (excepción por servicio al cliente)."
+            : "Solicitud de aprobación enviada a administración, con el vendedor en copia. Bodega no recibe el aviso hasta que se apruebe.");
         }
       }
       // Aumento APROBADO comercialmente → aviso ANTICIPADO a bodega

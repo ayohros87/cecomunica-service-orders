@@ -379,7 +379,7 @@ async function main() {
   await assertFails(as("administrador").doc("gestiones/gApNormal").update(aprobarYAplicar("administrador")));
   ok("actualizar seriales: un aumento normal no salta la firma por esta puerta");
 
-  // ── TODO reemplazo nace esperando la decisión de ventas (2026-09-10) ─────
+  // ── TODO reemplazo nace esperando la decisión de administración ─────────
   // El candado vivía solo en el wizard, y el wizard solo frenaba la excepción
   // (equipo propio sin garantía): un reemplazo de alquiler —la mayoría— nacía
   // en 'pendiente_bodega' y el correo salía derecho al estante. Sacar un radio
@@ -387,7 +387,7 @@ async function main() {
   const solicitud = (estado) => ({ tipo: "reemplazo", estado, cliente_id: "cli1", deleted: false,
     responsable_uid: "vendedor", items: [{ serial_saliente: "8J4K02245", elegibilidad: "alquiler" }] });
   await assertSucceeds(as("vendedor").doc("gestiones/gRe1").set(solicitud("pendiente_aprobacion")));
-  ok("reemplazo: el vendedor abre la solicitud y queda esperando a ventas");
+  ok("reemplazo: el vendedor abre la solicitud y queda esperando a administración");
   await assertFails(as("vendedor").doc("gestiones/gRe2").set(solicitud("pendiente_bodega")));
   ok("reemplazo: nadie lo manda derecho a bodega saltándose la aprobación");
   await assertFails(as("administrador").doc("gestiones/gRe3").set(solicitud("en_proceso")));

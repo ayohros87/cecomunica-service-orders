@@ -2448,9 +2448,16 @@ window.Centro = {
     // Reemplazo / demo: la aprobación va DELANTE de todo. Sus CIERRE_DEFS no
     // la traen porque no es condición de cierre — es la compuerta antes de
     // bodega —, pero el vendedor tiene que ver que existe y dónde está parada.
+    //
+    // Dice ADMINISTRACIÓN, no "ventas" (Alberto 2026-09-10: *"ventas no es el
+    // vendedor... el correo ventas le llega a los admin de la empresa, solo
+    // tiene el nombre ventas"*). `ventas@cecomunica.com` es la dirección del
+    // buzón; quien aprueba es administración. Un vendedor que lea "aprobación
+    // de ventas" entiende que se la aprueba otro vendedor — que es él mismo.
     if (!defs.some(([k]) => k === 'aprobacion') && g.aprobacion?.requiere === true) {
-      defs = [['aprobacion', 'Aprobación de ventas',
-        g.origen?.tipo === 'taller' ? 'El taller propone; ventas decide' : 'Antes de que Bodega asigne'], ...defs];
+      defs = [['aprobacion', 'Aprobación',
+        g.origen?.tipo === 'taller' ? 'El taller propone; administración decide'
+          : 'Administración — antes de que Bodega asigne'], ...defs];
     }
     return defs;
   },
@@ -2669,10 +2676,10 @@ window.Centro = {
              : esAumento
                ? 'Aumento esperando aprobación comercial — al aprobar, se imprime el anexo para la firma del cliente.'
                : g.origen?.tipo === 'taller'
-                 ? 'El taller propone este reemplazo y espera la decisión de ventas. Al aprobar, Bodega recibe el aviso para asignar el equipo que sustituye a cada radio (mismo modelo).'
+                 ? 'El taller propone este reemplazo y espera la decisión de administración. Al aprobar, Bodega recibe el aviso para asignar el equipo que sustituye a cada radio (mismo modelo).'
                  : g.aprobacion?.motivo === 'propio_excepcion' || (g.items || []).some(it => it.elegibilidad === 'propio_excepcion')
-                   ? 'Excepción por servicio al cliente (equipo propio sin garantía) — la decide ventas antes de que Bodega asigne.'
-                   : 'Reemplazo esperando la aprobación de ventas. Al aprobar, Bodega recibe el aviso para asignar el equipo que sustituye a cada radio.'}</span>
+                   ? 'Excepción por servicio al cliente (equipo propio sin garantía) — la decide administración antes de que Bodega asigne.'
+                   : 'Reemplazo esperando la aprobación de administración. Al aprobar, Bodega recibe el aviso para asignar el equipo que sustituye a cada radio.'}</span>
            </div>`;
       void puede; void fnAprobar; void sinCarta;
     } else if (g.estado === 'pendiente_firma' && g.tipo === 'aumento' && g.aumento?.es_regularizacion === true) {
@@ -3968,10 +3975,12 @@ window.Centro = {
         serial_nuevo: null, pool_doc_id_nuevo: null,
       });
     }
-    // TODO reemplazo pasa por ventas (Alberto 2026-09-10). Antes solo se
-    // frenaba la excepción (equipo propio sin garantía) y el resto —que es la
-    // mayoría: alquiler— salía derecho a Bodega: ventas se enteraba del
-    // reemplazo cuando el radio ya estaba asignado. Un reemplazo es un equipo
+    // TODO reemplazo pasa por administración (Alberto 2026-09-10) — el buzón
+    // se llama ventas@cecomunica.com pero le llega a los admin de la empresa.
+    // Antes solo se frenaba la excepción (equipo propio sin garantía) y el
+    // resto —que es la mayoría: alquiler— salía derecho a Bodega:
+    // administración se enteraba del reemplazo cuando el radio ya estaba
+    // asignado. Un reemplazo es un equipo
     // que sale del estante y una devolución que hay que ir a buscar; eso se
     // decide, no se avisa. La excepción sigue distinguida en el correo porque
     // lo que se aprueba ahí es otra cosa (cortesía sobre un equipo del cliente).
@@ -3989,8 +3998,8 @@ window.Centro = {
       this._cerrarModal();
       this.gSel = gid;
       Toast.show(excepcion
-        ? `Solicitud ${gid} creada — excepción: espera la aprobación de ventas`
-        : `Solicitud ${gid} creada — ventas la aprueba y ahí Bodega recibe el aviso`, 'ok');
+        ? `Solicitud ${gid} creada — excepción: espera la aprobación de administración`
+        : `Solicitud ${gid} creada — administración la aprueba y ahí Bodega recibe el aviso`, 'ok');
       await this.recargarGestiones();
       // El JSON para recepción se ofrece AQUÍ, que es cuando el vendedor tiene
       // el caso fresco y sabe a quién se lo va a mandar. Después queda siempre
