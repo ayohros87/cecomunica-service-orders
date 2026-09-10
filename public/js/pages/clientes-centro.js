@@ -2340,9 +2340,9 @@ window.Centro = {
       const fecha = g.fecha_solicitud?.toDate ? g.fecha_solicitud.toDate().toLocaleDateString('es-PA') : '—';
       const abierta = this.gSel === g.id;
       return `
-      <div class="cg-row" id="grow-${this.esc(g.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('${this.esc(g.id)}')"
+      <div class="cg-row${atenuada && !abierta ? ' cg-tenue' : ''}" id="grow-${this.esc(g.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('${this.esc(g.id)}')"
            onkeydown="if(event.key==='Enter')this.click()"
-           style="${abierta ? 'border-color:var(--accent);' : ''}${atenuada && !abierta ? ' opacity:.62;' : ''}">
+           style="${abierta ? 'border-color:var(--accent);' : ''}">
         <div style="min-width:0; flex:1;"><div class="n cg-mono" style="font-size:13px;${g.estado === 'anulada' ? ' text-decoration:line-through; color:var(--fg-3);' : ''}">${this.esc(g.id)}</div>
           <div class="s">${g.tipo === 'aumento' && g.aumento?.es_regularizacion ? 'Regularización por anexo'
             : g.tipo === 'aumento' && g.aumento?.es_ajuste ? 'Ajuste de tarifa / servicios'

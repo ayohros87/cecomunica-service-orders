@@ -109,9 +109,12 @@
                border-radius:10px; box-shadow:0 10px 30px -12px rgba(11,42,71,.25); min-width:250px; z-index:50;
                max-height:70vh; overflow:auto; }
     .cg-menu .hd { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; font-weight:700; color:var(--fg-4); padding:8px 14px 3px; }
-    .cg-menu a, .cg-menu button { display:block; width:100%; text-align:left; background:none; border:0; border-bottom:1px solid var(--border-subtle);
-               padding:9px 14px; font-size:13.5px; color:var(--fg-1); text-decoration:none; cursor:pointer; }
-    .cg-menu a:hover, .cg-menu button:hover { background:var(--accent-soft, #E6F4FB); }
+    /* `label` va en la lista: las acciones que suben un archivo (carta, anexo,
+       contrato firmado) son <label> con un input file adentro, y sin esta
+       regla salían con la letra del body, sin padding y sin separador. */
+    .cg-menu a, .cg-menu button, .cg-menu label { display:block; width:100%; text-align:left; background:none; border:0; border-bottom:1px solid var(--border-subtle);
+               padding:9px 14px; font-size:13.5px; font-family:inherit; line-height:1.35; color:var(--fg-1); text-decoration:none; cursor:pointer; }
+    .cg-menu a:hover, .cg-menu button:hover, .cg-menu label:hover { background:var(--accent-soft, #E6F4FB); }
     .cg-menu .off { color:var(--fg-4); cursor:not-allowed; }
     /* Menú por intención (plan 2026-09-08 §4.2): un destacado arriba, grupos
        Dar equipos / Cambiar / Retirar, pistas de UNA línea, pie discreto. */
@@ -122,6 +125,13 @@
     /* Acciones del expediente (2026-09-09): UN menú por gestión o contrato,
        siempre en el mismo sitio — el "⋯" de la fila y el pie del detalle.
        Lo que no se puede sale en gris CON el motivo, nunca escondido. */
+    /* Historial atenuado: la opacidad va en el CONTENIDO, nunca en la fila
+       entera. Puesta en la fila, el menú "⋯" (que cuelga de ella) heredaba el
+       .62 — se veía traslúcido — y la opacidad abría un contexto de
+       apilamiento que lo dejaba DEBAJO de las filas siguientes. */
+    .cg-row.cg-tenue > *:not(.cg-rowacts) { opacity:.62; }
+    .cg-row.cg-tenue .cg-masbtn { opacity:.62; }
+    .cg-row.cg-tenue .cg-masbtn:hover { opacity:1; }
     .cg-rowacts { position:relative; flex:none; display:inline-flex; gap:8px; align-items:center; }
     .cg-masbtn { background:none; border:1px solid var(--border-subtle); border-radius:8px; width:32px; height:28px;
                  line-height:1; font-size:17px; color:var(--fg-3); cursor:pointer; padding:0; }
@@ -330,7 +340,7 @@
      radio saliente (PocService.configDelSaliente), la misma fuente que usa el
      lote de POC. -->
 <script defer src="../js/services/pocService.js?v=cc11"></script>
-<script src="../js/pages/clientes-centro.js?v=cg102" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg103" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
