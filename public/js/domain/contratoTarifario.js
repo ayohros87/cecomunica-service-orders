@@ -58,9 +58,35 @@ window.ContratoTarifario = {
   requiereReaprobacion(antes, despues) {
     const a = antes || {}, b = despues || {};
     const norm = (s) => String(s || '').trim().toUpperCase();
-    const lin = (ls) => (ls || []).map(l => [l.modelo_id || norm(l.modelo), Number(l.cantidad) || 0, Number(l.precio) || 0, l.modalidad || 'alquiler'].join('|')).sort().join(';');
+    // Modalidad ausente: se deriva del TIPO del contrato, no se asume alquiler.
+    // Los contratos anteriores al 2026-09-09 no la traen por línea, y el editor
+    // la rellena al abrirlos (un ALQ entero era alquiler; un PROP, equipo del
+    // cliente). Con el default fijo en 'alquiler', rellenar un PROP con lo que
+    // el propio contrato ya decía salía como "cambiaron los equipos" y lo
+    // mandaba de vuelta a aprobación sin que nadie hubiera cambiado nada.
+    const modDefecto = (a.codigo_tipo === 'PROP' || a.tipo_contrato === 'Propio') ? 'propio' : 'alquiler';
+    const lin = (ls) => (ls || []).map(l => [l.modelo_id || norm(l.modelo), Number(l.cantidad) || 0, Number(l.precio) || 0, l.modalidad || modDefecto].join('|')).sort().join(';');
     const car = (cs) => (cs || []).map(c => [c.cargo_id || norm(c.concepto), Number(c.cantidad) || 1, Number(c.monto) || 0, c.recurrente ? 1 : 0].join('|')).sort().join(';');
-    const dur = (c) => `${norm(c.duracion)}|${Number(c.duracion_meses) || 0}|${Number(c.duracion_dias) || 0}`;
+    // Duración NORMALIZADA a una sola clave ('M18', 'D7'), no el triple crudo.
+    //
+    // Por qué (2026-09-10): el string es lo que el cliente firma;
+    // `duracion_meses`/`duracion_dias` son derivados que los contratos viejos
+    // no traen — 184 de los 220 aprobados en producción no tienen
+    // `duracion_meses`. Comparando el triple, uno de esos SIEMPRE salía
+    // "cambió la duración" al guardarlo desde el editor (que sí escribe el
+    // derivado), así que corregir una observación devolvía el contrato a
+    // pendiente de aprobación y le mandaba correo a ventas. Normalizando, "18
+    // meses" sin derivado y "18 meses" con `duracion_meses: 18` son lo mismo.
+    const dur = (c) => {
+      if (Number(c.duracion_dias) > 0) return `D${Number(c.duracion_dias)}`;
+      if (Number(c.duracion_meses) > 0) return `M${Number(c.duracion_meses)}`;
+      const s = String(c.duracion || '').trim().toLowerCase();
+      const n = parseInt(s.replace(/\D/g, ''), 10);
+      // Sin número que sacar ("Otro", vacío): se compara el texto tal cual —
+      // no se puede inventar una equivalencia que no está.
+      if (!(n > 0)) return `S${norm(c.duracion)}`;
+      return /d[ií]a/.test(s) ? `D${n}` : `M${n}`;
+    };
     const cambios = [];
     if (lin(a.equipos) !== lin(b.equipos)) cambios.push('equipos');
     if (car(a.cargos) !== car(b.cargos)) cambios.push('cargos');

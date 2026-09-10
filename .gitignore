@@ -110,3 +110,4 @@ local-data/
 # abrirlas con el hosting emulado, pero no son parte del producto. Ya están en
 # hosting.ignore de firebase.json — nunca se despliegan.
 public/dev-diag-*.html
+firebase.emu-test.json

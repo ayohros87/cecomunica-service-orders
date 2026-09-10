@@ -154,7 +154,12 @@ window.ContratosLista = {
   // (need-to-know). La columna se OMITE, no se tacha: una columna vacía
   // invita a preguntar quién sí la ve.
   verMontos() {
-    return canRole(AUTH.rol, 'ver-montos-contrato');
+    // `window.userRole` y no `AUTH.rol`: AUTH no tiene esa propiedad — expone
+    // is()/isAny() que leen window.userRole. Con `AUTH.rol` (undefined) la
+    // columna se apagaba para TODOS, admin incluido, mientras el encabezado
+    // seguía puesto: la tabla salía con 13 encabezados y 12 celdas. Mismo
+    // criterio que usa contratos-equipos.js.
+    return canRole(window.userRole, 'ver-montos-contrato');
   },
 
   // Columna "Papel": qué documento le toca a este contrato. Es la misma regla
