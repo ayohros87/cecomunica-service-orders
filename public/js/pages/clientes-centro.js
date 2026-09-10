@@ -1027,7 +1027,8 @@ window.Centro = {
         ${dato('Origen', (c.contrato_origen_refs || []).map(r => `<span class="cg-mono">${this.esc(r)}</span>`).join(', ')
           || (c.origen_legacy_ref ? `papel: ${this.esc(c.origen_legacy_ref)}` : ''))}
         ${dato('Renovado por', renovador ? `<span class="cg-mono">${this.esc(renovador.contrato_id || renovador.id)}</span>` : '')}
-        ${dato('Firmado', c.firmado ? (c.firmado_tipo === 'digital' ? 'sí ✓ (firma digital)' : 'sí ✓') : '')}
+        ${dato('Firmado', this._firmadoTxt(c))}
+        ${dato('Entregado', this._entregaTxt(c))}
         ${dato('Firma digital', c.firmado_pendiente_validacion
           ? '<span class="cg-venc por_vencer">recibida — validar firmante</span>'
           : (!c.firmado && c.firma_solicitud_estado === 'pendiente' ? 'enlace enviado — esperando firma' : ''))}
@@ -1156,8 +1157,70 @@ window.Centro = {
   // (rules::esActivacionPorFirmado, admin/vendedor); sobre un contrato ACTIVO
   // repunta el archivo y archiva el anterior en firmado_historial[].
   _puedeSubirFirmado() { return [ROLES.ADMIN, 'admin', ROLES.VENDEDOR].includes(this.rol); },
+  // Un contrato ACTIVO firmado DIGITALMENTE no tiene `firmado_url` y no le
+  // falta nada: la firma vive dentro del documento. Sin esta excepción, al
+  // volverse alcanzable esa rama (2026-09-10) le ofrecíamos "adjuntar el
+  // firmado" a contratos que ya están completos.
   _aceptaFirmado(c) {
-    return (c?.estado === 'aprobado' && !c.firmado) || (c?.estado === 'activo' && !c.firmado_url);
+    return (c?.estado === 'aprobado' && !c.firmado)
+      || (c?.estado === 'activo' && !c.firmado_url && c.firmado_tipo !== 'digital');
+  },
+
+  // ── El firmado, visible desde el Centro (2026-09-10) ──────────────────────
+  // Un contrato firmado tiene el papel en Storage (`firmado_url`) o la firma
+  // digital dentro del propio documento (`firmado_tipo === 'digital'`, sin
+  // PDF: /firmar/ congela la copia y documento.html la reconstruye). Las dos
+  // formas se abren igual de fácil o no se abre ninguna.
+  _accFirmado(c) {
+    if (!c?.firmado) return null;
+    const cuando = c.firmado_fecha ? `firmado ${this._fmtFecha(c.firmado_fecha)}` : '';
+    if (c.firmado_url) {
+      // _menuAccionesHtml mete `href` crudo en el atributo: se escapa aquí.
+      return this._acc({ id: 'firmado', grupo: 'Documentos', label: 'Ver el firmado (PDF)',
+        blank: true, hint: cuando, href: this.esc(c.firmado_url) });
+    }
+    if (c.firmado_tipo === 'digital') {
+      return this._acc({ id: 'firmado', grupo: 'Documentos', label: 'Ver el firmado (firma digital)',
+        blank: true, hint: cuando ? `${cuando} — no hay PDF: el documento trae la firma` : 'no hay PDF: el documento trae la firma',
+        href: `../contratos/documento.html?id=${encodeURIComponent(c.id)}` });
+    }
+    return null;
+  },
+  // Fila "Firmado" de la vista previa. Antes decía "sí ✓" y ahí se acababa.
+  _firmadoTxt(c) {
+    if (!c?.firmado) return '';
+    const cuando = c.firmado_fecha ? ` · ${this._fmtFecha(c.firmado_fecha)}` : '';
+    if (c.firmado_url) {
+      return `<a href="${this.esc(c.firmado_url)}" target="_blank" rel="noopener">Ver el PDF firmado</a>${cuando}`;
+    }
+    if (c.firmado_tipo === 'digital') {
+      return `<a href="../contratos/documento.html?id=${encodeURIComponent(c.id)}" target="_blank" rel="noopener">Ver el documento firmado</a>${cuando} (firma digital)`;
+    }
+    return `sí ✓${cuando}`;
+  },
+  // Fila "Entregado" de la vista previa: dos de los tres requisitos de comisión
+  // (firma y entrega) quedan a la vista donde Zuleika ya está parada.
+  // Un "—" a secas se lee como "falta", y una RENOVACIÓN no entrega nada nunca
+  // — por eso el motivo va escrito (caso R. Smith Coronado, ALQ20260601-02).
+  _entregaTxt(c) {
+    if (!c || c.estado !== 'activo') return '';
+    if (c.entrega_confirmada === true) {
+      return `sí ✓${c.fecha_entrega_ultima ? ` · ${this._fmtFecha(c.fecha_entrega_ultima)}` : ''}`;
+    }
+    if (!this._entregaAplica(c)) {
+      return '<span style="color:var(--fg-3);">no aplica — los equipos ya están en el cliente</span>';
+    }
+    return '<span class="cg-venc por_vencer">pendiente</span>';
+  },
+  // Copia en el navegador del predicado `esperando` de
+  // functions/src/triggers/contratos/onApproval.js:287. Consciente: hoy no hay
+  // dónde compartirla entre front y back. La F2 de docs/plans/PLAN_COMISIONES.md
+  // la unifica en lib/facturacionAvisos.entregaAplica() — si cambias una,
+  // cambia la otra.
+  _entregaAplica(c) {
+    if (!c) return false;
+    if (c.accion === 'Renovación' || c.renovacion_sin_equipo) return false;
+    return (c.equipos || []).some(e => Number(e.cantidad || 0) > 0);
   },
   // "Editar" del expediente: el editor rechaza un contrato ACTIVO y uno con
   // enlace de firma abierto (rebotaba al Centro sin decir por qué — Cerdas,
@@ -3146,10 +3209,18 @@ window.Centro = {
       A.push(this._acc({ id: 'firma', label: conEnlace ? 'Ver o reenviar el enlace de firma' : 'Enviar para firma',
         primaria: !conEnlace, hint: conEnlace ? 'el cliente ya lo tiene — se puede reenviar' : 'el cliente firma con el dedo, desde el celular',
         onclick: `Centro.enviarFirma('${id}')`, ok: puedeG, motivo: 'tu rol no mueve contratos' }));
-      A.push(this._acc({ id: 'subir_firmado', label: 'Subir el contrato firmado', hint: 'PDF, o fotos que se arman en un solo PDF',
+    }
+    // "Subir el contrato firmado" ya NO cuelga de esperaFirma (2026-09-10): la
+    // rama `activo && !firmado_url` de _aceptaFirmado() era inalcanzable, así
+    // que a un contrato ya activo al que le falta el papel no había forma de
+    // completarle el expediente desde ninguna pantalla.
+    if (this._aceptaFirmado(c)) {
+      const yaActivo = c.estado === 'activo';
+      A.push(this._acc({ id: 'subir_firmado',
+        label: yaActivo ? 'Adjuntar el contrato firmado' : 'Subir el contrato firmado',
+        hint: yaActivo ? 'el contrato ya está activo; falta el papel en el expediente' : 'PDF, o fotos que se arman en un solo PDF',
         file: `Centro.subirFirmadoContrato('${id}', this.files)`, accept: 'application/pdf,image/*', multiple: true,
-        ok: this._aceptaFirmado(c) && this._puedeSubirFirmado(),
-        motivo: !this._puedeSubirFirmado() ? 'lo sube administración o el vendedor' : 'este contrato no está esperando un firmado' }));
+        ok: this._puedeSubirFirmado(), motivo: 'lo sube administración o el vendedor' }));
     }
     if (c.firmado_pendiente_validacion) {
       A.push(this._acc({ id: 'firmante', label: 'Aceptar al firmante…', primaria: true,
@@ -3172,6 +3243,13 @@ window.Centro = {
     A.push(this._acc({ id: 'documento', grupo: 'Documentos', label: 'Documento completo', blank: true,
       hint: esperaFirma ? 'para imprimirlo y recoger la firma en papel' : '',
       href: `../contratos/documento.html?id=${encodeURIComponent(c.id)}` }));
+    // El firmado. El enlace vivía SOLO en el archivo /contratos/ y por eso
+    // "dentro de la gestión del cliente no aparece el contrato firmado"
+    // (Zuleika, 2026-09-10): el PDF estaba en Storage desde siempre, lo que
+    // faltaba era la puerta. Papel → el archivo; firma digital → el documento
+    // reconstruido, que es donde vive esa firma (no hay PDF que abrir).
+    const firmadoAcc = this._accFirmado(c);
+    if (firmadoAcc) A.push(firmadoAcc);
 
     // Corregir. El criterio de si el contrato admite cambios vive en
     // js/domain/contratoEdicion.js — el mismo que aplica el editor al abrirse.
