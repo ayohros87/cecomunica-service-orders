@@ -3160,15 +3160,16 @@ window.Centro = {
       hint: esperaFirma ? 'para imprimirlo y recoger la firma en papel' : '',
       href: `../contratos/documento.html?id=${encodeURIComponent(c.id)}` }));
 
-    // Corregir: mismas dos de siempre, con el porqué.
-    const edOk = c.estado !== 'activo' && !conEnlace;
+    // Corregir. El criterio de si el contrato admite cambios vive en
+    // js/domain/contratoEdicion.js — el mismo que aplica el editor al abrirse.
+    // Antes cada uno tenía el suyo: el Centro ofrecía "Editar…" y la página
+    // devolvía al usuario con un aviso, o al revés.
+    const ed = ContratoEdicion.puedeEditarse(c);
     A.push(this._acc({ id: 'editar', grupo: 'Corregir', label: 'Editar…',
       hint: 'abre el editor del contrato',
       href: `../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}&volver=centro`,
-      ok: edOk && puedeG,
-      motivo: !puedeG ? 'tu rol no edita contratos'
-        : c.estado === 'activo' ? 'un contrato activo ya no se edita: los cambios van por anexo, ajuste o renovación'
-        : 'el cliente tiene un enlace de firma abierto sobre una copia congelada: retíralo primero' }));
+      ok: ed.ok && puedeG,
+      motivo: !puedeG ? 'tu rol no edita contratos' : ed.texto }));
     if (conEnlace) {
       A.push(this._acc({ id: 'retirar_firma', grupo: 'Corregir', label: 'Retirar el enlace de firma…',
         hint: 'el enlace del cliente deja de servir y el contrato vuelve a poder editarse',

@@ -52,18 +52,16 @@ async function cargarContrato() {
     if (window.lucide?.createIcons) lucide.createIcons();
   }
 
-  // 3) Bloquear edición si ya fue aprobado
-  if (c.estado === "activo") {
-    Toast.show('Este contrato ya fue aprobado y no se puede editar.', 'bad');
-    window.location.href = volverCentro ? destinoVolver("activo")
-      : DocumentoContrato.urlDocumento(contratoDocId, c);
-    return;
-  }
-  // 3b) Con un enlace de firma pendiente el cliente está leyendo una copia
-  // congelada: editar por debajo la dejaría firmando otra cosa (2026-09-04).
-  if (c.estado === "aprobado" && c.firma_solicitud_estado === "pendiente") {
-    Toast.show('Este contrato tiene un enlace de firma pendiente: no se edita hasta que el cliente firme o se anule la solicitud.', 'bad');
-    window.location.href = volverCentro ? destinoVolver("firma_pendiente") : `../clientes/centro.html?id=${encodeURIComponent(c.cliente_id || "")}&aviso=firma_pendiente`;
+  // 3) ¿Admite cambios? El criterio vive en js/domain/contratoEdicion.js —
+  // el mismo que usa el Centro para decidir si ofrece "Editar…". Antes cada
+  // uno tenía el suyo y no coincidían.
+  const ed = ContratoEdicion.puedeEditarse(c);
+  if (!ed.ok) {
+    Toast.show(ed.texto, 'bad');
+    window.location.href = volverCentro ? destinoVolver(ed.motivo)
+      : (ed.motivo === 'activo'
+        ? DocumentoContrato.urlDocumento(contratoDocId, c)
+        : `../clientes/centro.html?id=${encodeURIComponent(c.cliente_id || "")}&aviso=${encodeURIComponent(ed.motivo)}`);
     return;
   }
   // Plan por serial del Centro: la modalidad (sin equipo / refurbished) se
@@ -344,7 +342,7 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
   // vuelve a PENDIENTE DE APROBACIÓN con rastro de la aprobación anterior y
   // aviso a ventas. Los triggers de aprobación son idempotentes (seriales,
   // plan, verificación), así que re-aprobar no duplica nada.
-  const re = (contratoActual?.estado === "aprobado" && window.ContratoTarifario?.requiereReaprobacion)
+  const re = (ContratoEdicion.aplicaReaprobacion(contratoActual) && window.ContratoTarifario?.requiereReaprobacion)
     ? ContratoTarifario.requiereReaprobacion(contratoActual, { equipos, cargos: t.cargos, duracion: duracionFinal, itbms_aplica: t.itbmsAplica })
     : { requiere: false, cambios: [] };
   const reaprobacion = re.requiere ? {

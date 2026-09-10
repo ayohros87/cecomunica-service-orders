@@ -37,12 +37,12 @@ function montar(rol = "administrador", uid = "adm") {
   };
   vm.createContext(ctx);
   for (const f of [["core", "formatting.js"], ["domain", "totales.js"], ["domain", "contratoTarifario.js"],
-    ["domain", "contratoAnulacion.js"], ["services", "gestionesService.js"]]) {
+    ["domain", "contratoAnulacion.js"], ["domain", "contratoEdicion.js"], ["services", "gestionesService.js"]]) {
     vm.runInContext(leer("public", "js", ...f), ctx);
   }
   Object.assign(ctx, { FMT: ctx.window.FMT, ContractTotals: ctx.window.ContractTotals,
     ContratoTarifario: ctx.window.ContratoTarifario, ContratoAnulacion: ctx.window.ContratoAnulacion,
-    GestionesService: ctx.window.GestionesService });
+    ContratoEdicion: ctx.window.ContratoEdicion, GestionesService: ctx.window.GestionesService });
   vm.runInContext(leer("public", "js", "pages", "clientes-centro.js"), ctx);
   const C = ctx.window.Centro;
   C.rol = rol; C.uid = uid;
