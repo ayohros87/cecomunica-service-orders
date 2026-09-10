@@ -696,10 +696,47 @@ function regularizacionConsistente(aumento) {
   return { ok: true, aplica: true, total, seriales };
 }
 
+// Cómo quedó AUTORIZADA una gestión de aumento/regularización (2026-09-10,
+// caso GA20260909-03): los correos de facturación afirmaban "El cliente firmó
+// el anexo" sin mirar el expediente. Desde 2026-09-09 la actualización de
+// seriales se aplica al APROBARSE, sin firma (`sin_firma`) — y el vendedor
+// recibió un correo que le atribuía al cliente una firma que nunca dio. El
+// texto sale del dato, no del camino:
+//   anexo_firma_digital → el cliente firmó digitalmente (con el firmante)
+//   anexo_firmado_path  → el cliente firmó en papel y el documento está subido
+//   sin_firma           → se aplicó sin firma, diciendo quién lo autorizó
+function autorizacionTexto(g = {}) {
+  const d = g.anexo_firma_digital;
+  if (d) {
+    return {
+      corto: `Firmado digitalmente${d.firmante_nombre ? ` por ${d.firmante_nombre}` : ""}`,
+      html: `El cliente lo <b>firmó digitalmente</b>${d.firmante_nombre ? ` — <b>${escapeHtml(d.firmante_nombre)}</b>${d.firmante_cedula ? ` (cédula ${escapeHtml(d.firmante_cedula)})` : ""}` : ""}.`,
+    };
+  }
+  if (g.anexo_firmado_path) {
+    return {
+      corto: "Firmado por el cliente (documento en el expediente)",
+      html: `El cliente lo <b>firmó</b> y el documento quedó en el expediente${g.anexo_firmado_por ? ` — lo registró ${escapeHtml(g.anexo_firmado_por)}` : ""}.`,
+    };
+  }
+  if (g.sin_firma) {
+    const quien = g.sin_firma.por_email || g.aprobacion?.aprobado_por_email || "";
+    return {
+      corto: `Aplicado SIN firma del cliente${quien ? ` (${quien})` : ""}`,
+      html: `Se aplicó <b>sin firma del cliente</b>${quien ? `, autorizado por <b>${escapeHtml(quien)}</b>` : ""}: al cliente no se le envió nada a firmar.`,
+    };
+  }
+  const quien = g.aprobacion?.aprobado_por_email || "";
+  return {
+    corto: `Aplicado${quien ? ` (${quien})` : ""}`,
+    html: `Quedó aplicado${quien ? ` tras la aprobación de <b>${escapeHtml(quien)}</b>` : ""}.`,
+  };
+}
+
 module.exports = {
   regularizacionConsistente,
   limpiarAnulacion,
-  avisoFacturacion, detalleAumentoHtml, tramiteResumen, tipoContratoDeNumero,
+  avisoFacturacion, detalleAumentoHtml, tramiteResumen, tipoContratoDeNumero, autorizacionTexto,
   TIPO_LABEL, escapeHtml, isEmail, urlGestion, urlBodegaGestion, tablaHtml,
   destinatariosRecepcionVendedor, vendedorEmailDeCliente, adminEmails, aprobadoresEmails, aprobacionesTo, encolarCorreo,
   configEmailTo,

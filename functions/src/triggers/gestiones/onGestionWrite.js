@@ -268,7 +268,10 @@ async function correoAprobadoresAumento(gid, g) {
         ${esAjuste
           ? `Al aprobar, el cliente firma el anexo y el ajuste <b>se aplica solo</b> — no pasa por bodega ni genera entrega.`
           : esReg
-          ? `Los equipos <b>ya están en poder del cliente</b>: al firmarse, quedan amarrados al contrato de una vez, sin bodega ni entrega.`
+          // Actualización de seriales (2026-09-09): se aplica al APROBAR, sin
+          // firma — al cliente no se le manda nada.
+          ? `Los equipos <b>ya están en poder del cliente</b>: al aprobar, quedan amarrados al contrato de una vez.
+             <b>No se le envía nada al cliente para firmar</b>, ni pasa por bodega ni genera entrega.`
           : `Vigencia propia de <b>${G.escapeHtml(String(a.duracion_meses || "?"))} meses</b> desde la entrega.
              Al aprobar, el cliente firma el anexo y recién entonces el sistema aplica las líneas y
              pide los seriales a Bodega.`}
@@ -777,6 +780,11 @@ module.exports = onDocumentWritten(
       }
       if (gA) {
         const a = gA.aumento || {};
+        // Cómo quedó autorizada, del expediente y no del camino (2026-09-10,
+        // caso GA20260909-03): la actualización de seriales se aplica SIN
+        // firma desde 2026-09-09 y los avisos seguían diciendo "el cliente
+        // firmó el anexo" al vendedor en copia.
+        const aut = G.autorizacionTexto(gA);
         // Ajuste de tarifa (2026-09-02, caso FORTALEZA/GPS): anexo SOLO-CARGOS
         // — sin líneas de equipo es válido; los cargos se aplican, el servicio
         // se estampa por serial y la gestión cierra sin bodega ni entrega.
@@ -832,7 +840,7 @@ module.exports = onDocumentWritten(
                 modelo_id: l.modelo_id || null,
                 modelo: l.modelo || "",
                 descripcion: esReg
-                  ? `Regularización por enmienda ${gid} (anexo firmado — equipos ya en campo)`
+                  ? `Actualización de seriales ${gid} — equipos ya en campo`
                   : `Aumento por enmienda ${gid} (anexo firmado)`,
                 cantidad: Number(l.cantidad || 0),
                 precio: Number(l.precio || 0),
@@ -1068,10 +1076,11 @@ module.exports = onDocumentWritten(
               subject: `FACTURACIÓN: regularización EFECTIVA — ${gA.cliente_nombre || "Cliente"} (${a.contrato_id || ""})`,
               titulo: "Regularización aplicada — el tramo arranca hoy",
               cuerpo: `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-                El cliente firmó el anexo <b>${G.escapeHtml(gid)}</b>: ${amarrados} equipo(s) que ya
-                estaban en su poder (${(a.regulariza_seriales || []).map(s => `<code>${G.escapeHtml(s.serial || "")}</code>`).join(", ")})
+                La actualización de seriales <b>${G.escapeHtml(gid)}</b> quedó aplicada: ${amarrados} equipo(s) que ya
+                estaban en poder del cliente (${(a.regulariza_seriales || []).map(s => `<code>${G.escapeHtml(s.serial || "")}</code>`).join(", ")})
                 quedaron amarrados al contrato <b>${G.escapeHtml(a.contrato_id || "")}</b> con tarifa
                 desde <b>hoy</b> — sin bodega ni entrega.</p>
+                <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;color:#4b5563;">${aut.html}</p>
                 ${G.detalleAumentoHtml(a)}`,
               cliente_id: gA.cliente_id, cliente_nombre: gA.cliente_nombre || "",
               responsable_uid: gA.responsable_uid || null, responsable_email: gA.responsable_email || null,
@@ -1081,7 +1090,7 @@ module.exports = onDocumentWritten(
                 tipo: "regularizacion", origen_col: "gestiones", origen_id: gid, gestion_id: gid,
                 contrato_id: a.contrato_id || null, contrato_doc_id: a.contrato_doc_id || null,
                 fecha_efectiva: new Date(),
-                contexto: { duracion_meses: a.duracion_meses || null, origen_texto: "Regularización firmada" },
+                contexto: { duracion_meses: a.duracion_meses || null, origen_texto: `Actualización de seriales — ${aut.corto}` },
                 resumen: { equipos: require("../../lib/facturacionAvisos").equiposTexto(a.lineas),
                   equipos_n: amarrados, mensual: a.totales?.total_mensual ?? null, delta_mensual: a.totales?.total_mensual ?? null,
                   seriales: (a.regulariza_seriales || []).map(s => s.serial).filter(Boolean) },
@@ -1124,9 +1133,10 @@ module.exports = onDocumentWritten(
               subject: `FACTURACIÓN: ajuste de tarifa EFECTIVO — ${gA.cliente_nombre || "Cliente"} (${a.contrato_id || ""})`,
               titulo: "Ajuste de tarifa / servicios aplicado",
               cuerpo: `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-                El cliente firmó el anexo <b>${G.escapeHtml(gid)}</b> y el ajuste al contrato
+                El ajuste <b>${G.escapeHtml(gid)}</b> al contrato
                 <b>${G.escapeHtml(a.contrato_id || "")}</b> de <b>${G.escapeHtml(gA.cliente_nombre || "—")}</b>
                 quedó <b>efectivo desde hoy</b> — el mensual del contrato ya está recalculado.</p>
+                <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;color:#4b5563;">${aut.html}</p>
                 ${G.detalleAumentoHtml(a)}`,
               cliente_id: gA.cliente_id, cliente_nombre: gA.cliente_nombre || "",
               responsable_uid: gA.responsable_uid || null, responsable_email: gA.responsable_email || null,
@@ -1136,7 +1146,7 @@ module.exports = onDocumentWritten(
                 tipo: "ajuste_tarifa", origen_col: "gestiones", origen_id: gid, gestion_id: gid,
                 contrato_id: a.contrato_id || null, contrato_doc_id: a.contrato_doc_id || null,
                 fecha_efectiva: new Date(),
-                contexto: { origen_texto: "Ajuste de tarifa / servicios firmado", servicios_estampados: estampados },
+                contexto: { origen_texto: `Ajuste de tarifa / servicios — ${aut.corto}`, servicios_estampados: estampados },
                 resumen: { equipos: (a.ajustes_precio || []).map(x => x.modelo).filter(Boolean).join(", "),
                   mensual: a.totales?.total_mensual ?? null, delta_mensual: a.totales?.total_mensual ?? null,
                   seriales: [...new Set((a.cargos || []).flatMap(cg => cg.seriales || []))] },
