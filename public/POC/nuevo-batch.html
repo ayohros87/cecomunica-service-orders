@@ -95,6 +95,8 @@
     #previewVendedor .nb-gps { width: 15px; height: 15px; cursor: pointer; }
     #previewVendedor .origen-cell { white-space: nowrap; }
     #previewVendedor .origen-sub { font-size: 10.5px; color: var(--fg-4); white-space: normal; max-width: 170px; }
+    #previewVendedor td.modelo-cell { white-space: nowrap; }
+    #previewVendedor .pv-scroll { overflow-x: auto; }
 
     /* Reemplazos: jalar la configuración del radio saliente en vez de un JSON */
     .nb-saliente { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin-top: var(--sp-3);
@@ -190,7 +192,8 @@
 
       <!-- PASO 1: Cargar el archivo del vendedor (dispara todo) -->
       <section class="nb-step">
-        <header class="nb-step-head"><span class="nb-step-num">1</span><h3 class="nb-step-title">Cargar el archivo del vendedor</h3></header>
+        <header class="nb-step-head"><span class="nb-step-num">1</span><h3 class="nb-step-title">Cargar el archivo del vendedor</h3>
+          <span class="nb-step-note" id="nbPaso1Nota"></span></header>
         <div class="nb-step-body">
           <label class="form-file-zone" tabindex="0" role="button" aria-label="Subir archivo JSON" style="padding:var(--sp-4); min-height:auto;">
             <input type="file" id="vendorJson" accept=".json" onchange="cargarDesdeJSON(this)">
@@ -307,7 +310,7 @@
 
   </div><!-- /.app-wrap -->
 
-  <script src="../js/pages/nuevo-batch.js?v=sal1" defer></script>
+  <script src="../js/pages/nuevo-batch.js?v=sal2" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

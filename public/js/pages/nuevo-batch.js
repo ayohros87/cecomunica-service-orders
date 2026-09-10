@@ -439,9 +439,10 @@
           if (cfg) { con++; if (cfg.cerrada) cerradas++; if (cfg.ambigua) ambiguas++; } else sin++;
         }
         detalleFuente = document.getElementById('contratoJalar')?.value || '';
-        realinearDetallesPorSerial();
-        renderPreviewCombinado();
-        actualizarBotonSaliente();
+        // refrescarPreviews y no renderPreviewCombinado a secas: además de
+        // realinear y pintar, RETIRA el preview simple del contrato — si no,
+        // quedan las dos tablas una encima de la otra (visto en el emulador).
+        refrescarPreviews();
 
         const partes = [`${con} radio(s) con la configuración de su saliente`];
         if (cerradas) partes.push(`${cerradas} de ficha ya cerrada`);
@@ -465,6 +466,10 @@
       if (!caja) return;
       const pares = paresReemplazo();
       caja.hidden = !pares.length;
+      // El paso 1 se llama "Cargar el archivo del vendedor" y en un reemplazo
+      // no hay archivo — decirlo en el encabezado evita que recepción lo busque.
+      const nota = document.getElementById('nbPaso1Nota');
+      if (nota) nota.textContent = pares.length ? '— un reemplazo no necesita archivo' : '';
       const btn = document.getElementById('btnJalarSaliente');
       if (btn) {
         btn.innerHTML = detallePorSerial.size
@@ -583,7 +588,7 @@
           ${origenCell}
           <td><input class="nb-nombre" type="text" value="${escAttr(d.radio_name || '')}" placeholder="nombre del radio"
                 aria-label="Nombre del radio ${i + 1}" oninput="nombreEditar(${i}, this)"></td>
-          <td title="${escAttr(modeloLabel)}">${esc(modeloLabel)}</td>
+          <td class="modelo-cell" title="${escAttr(modeloLabel)}">${esc(modeloLabel)}</td>
           <td><input class="nb-gps" type="checkbox" ${d.gps ? 'checked' : ''}
                 aria-label="GPS del radio ${i + 1}" onchange="gpsEditar(${i}, this)"></td>
           <td class="grupos-cell">${gruposCell}</td>
@@ -605,9 +610,11 @@
       const aviso = problemas.length
         ? `<div class="preview-aviso">⚠ ${problemas.join(' · ')}. Corrige abajo antes de guardar — edita los grupos o usa "a todo el modelo" para copiarlos.</div>`
         : `<div class="preview-ok">✅ ${detallesBatch.length} equipos · ${conOrigen ? 'configuración jalada de los salientes' : 'seriales alineados'} y grupos completos</div>`;
-      preview.innerHTML = `${datalist}${aviso}<div id="previewPoolAviso"></div><table>
+      // La tabla scrollea DENTRO de su caja: con la columna de origen y el
+      // modelo sin partir, en pantalla angosta no debe empujar la página.
+      preview.innerHTML = `${datalist}${aviso}<div id="previewPoolAviso"></div><div class="pv-scroll"><table>
         <thead><tr><th>#</th><th>Serial</th>${conOrigen ? '<th>Reemplaza a</th>' : ''}<th>Nombre</th><th>Modelo</th><th>GPS</th><th>Grupos (editables)</th></tr></thead>
-        <tbody>${filas}</tbody></table>`;
+        <tbody>${filas}</tbody></table></div>`;
       avisarSerialesAjenos(seriales);
     }
 
