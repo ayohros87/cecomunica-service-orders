@@ -81,7 +81,11 @@ window.FacturacionBandeja = (() => {
         break;
       case 'ajuste_tarifa':
       case 'regularizacion':
-        partes.push(`Anexo firmado <b>${fCorta(a.fecha_efectiva)}</b> · efectivo desde ese día`);
+        // El "cómo" lo escribe el trigger en contexto.origen_texto con
+        // domain/gestionAutorizacion (2026-09-10): la actualización de
+        // seriales se aplica SIN firma y esta fila decía "Anexo firmado".
+        // Los avisos anteriores al cambio no lo traen — ahí solo la fecha.
+        partes.push(`${c.origen_texto ? `${esc(c.origen_texto)} ` : ''}<b>${fCorta(a.fecha_efectiva)}</b> · efectivo desde ese día`);
         break;
       case 'baja_aprobada':
         partes.push(`Fin de facturación <b>${c.fecha_fin_texto ? esc(c.fecha_fin_texto) : fCorta(a.fecha_efectiva)}</b>`);

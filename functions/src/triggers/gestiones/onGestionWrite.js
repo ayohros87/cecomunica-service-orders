@@ -803,10 +803,10 @@ module.exports = onDocumentWritten(
             ...(osYaSalio ? { estado: "en_proceso" } : {}),
           }, { merge: true });
           await G.registrarEvento(gid, "derivacion",
-            `Adenda firmada al contrato EN PAPEL ${a.contrato_id || "—"}: ${(a.lineas || []).length} línea(s) con vigencia propia (${a.duracion_meses || "?"} meses desde la entrega). El contrato marco no está en el sistema, así que no hay líneas que aplicar: el tramo se estampará en cada equipo al entregarse y la cuenta sigue pendiente de regularizar.${osYaSalio ? ` La OS ${gA.ordenes.programacion_id} ya estaba en curso — la entrega queda libre.` : ""}`);
-          logger.info("[onGestionWrite] adenda a contrato en papel firmada", { gid, contrato_papel: a.contrato_id || "", osYaSalio });
+            `Adenda al contrato EN PAPEL ${a.contrato_id || "—"} (${aut.corto}): ${(a.lineas || []).length} línea(s) con vigencia propia (${a.duracion_meses || "?"} meses desde la entrega). El contrato marco no está en el sistema, así que no hay líneas que aplicar: el tramo se estampará en cada equipo al entregarse y la cuenta sigue pendiente de regularizar.${osYaSalio ? ` La OS ${gA.ordenes.programacion_id} ya estaba en curso — la entrega queda libre.` : ""}`);
+          logger.info("[onGestionWrite] adenda a contrato en papel aplicada", { gid, contrato_papel: a.contrato_id || "", firmado: aut.firmado, osYaSalio });
         } else if (!a.contrato_doc_id || (!(a.lineas || []).length && !esAjuste)) {
-          logger.error("[onGestionWrite] aumento firmado sin contrato destino o sin líneas", { gid });
+          logger.error("[onGestionWrite] aumento aplicado sin contrato destino o sin líneas", { gid });
         } else if (a.es_regularizacion === true && !G.regularizacionConsistente(a).ok) {
           // Candado server-side (verificación 2026-09-08): un anexo de
           // regularización con más cantidades que seriales llevaría radios
@@ -841,7 +841,7 @@ module.exports = onDocumentWritten(
                 modelo: l.modelo || "",
                 descripcion: esReg
                   ? `Actualización de seriales ${gid} — equipos ya en campo`
-                  : `Aumento por enmienda ${gid} (anexo firmado)`,
+                  : `Aumento por enmienda ${gid} (${aut.corto})`,
                 cantidad: Number(l.cantidad || 0),
                 precio: Number(l.precio || 0),
                 ...(l.modalidad ? { modalidad: l.modalidad } : {}),
@@ -1061,7 +1061,7 @@ module.exports = onDocumentWritten(
               cierre: { ...(gA.cierre || {}), derivacion: true, asignacion: true, programacion: true, entrega: true },
             }, { merge: true });
             await G.registrarEvento(gid, "entrega",
-              `Anexo de REGULARIZACIÓN aplicado: ${amarrados} equipo(s) ya en campo amarrados al contrato ${a.contrato_id || a.contrato_doc_id} (${a.regulariza_seriales.map(s => s.serial).join(", ")})`
+              `Actualización de seriales aplicada (${aut.corto}): ${amarrados} equipo(s) ya en campo amarrados al contrato ${a.contrato_id || a.contrato_doc_id} (${a.regulariza_seriales.map(s => s.serial).join(", ")})`
               + `${nacidos ? `, ${nacidos} de ellos dados de alta con este anexo` : ""}`
               + `${soltados ? `; ${soltados} serial(es) que el cliente NO tiene salieron de la cuenta (${(a.regulariza_no_tiene || []).map(s => s.serial).join(", ")})` : ""}`
               + `; el tramo de ${a.duracion_meses || "?"} meses arranca hoy. Sin bodega ni entrega — la gestión cierra.`);
@@ -1124,7 +1124,7 @@ module.exports = onDocumentWritten(
               cierre: { ...(gA.cierre || {}), derivacion: true, asignacion: true, programacion: true, entrega: true },
             }, { merge: true });
             await G.registrarEvento(gid, "entrega",
-              `Anexo de AJUSTE aplicado al contrato ${a.contrato_id || a.contrato_doc_id}: ${[
+              `Ajuste de tarifa aplicado (${aut.corto}) al contrato ${a.contrato_id || a.contrato_doc_id}: ${[
                 (a.cargos || []).length ? (a.cargos || []).map(cg => `${cg.concepto} $${Number(cg.monto || 0).toFixed(2)}${cg.recurrente ? "/mes" : ""} × ${cg.cantidad}${(cg.seriales || []).length ? ` (${cg.seriales.join(", ")})` : ""}`).join("; ") : "",
                 (a.ajustes_precio || []).length ? `tarifas renegociadas: ${(a.ajustes_precio || []).map(x => `${x.modelo} $${Number(x.precio_anterior).toFixed(2)}→$${Number(x.precio_nuevo).toFixed(2)}`).join(", ")}` : "",
               ].filter(Boolean).join("; ")}${estampados ? `; servicio estampado en ${estampados} equipo(s) del pool` : ""}; totales del contrato recalculados. Sin bodega ni entrega — la gestión cierra.`);
@@ -1164,7 +1164,7 @@ module.exports = onDocumentWritten(
               ...(osYaSalio ? { estado: "en_proceso" } : {}),
             }, { merge: true });
             await G.registrarEvento(gid, "derivacion",
-              `Anexo firmado: ${(a.lineas || []).length} línea(s) agregada(s) al contrato ${a.contrato_id || a.contrato_doc_id} con vigencia propia (${a.duracion_meses || "?"} meses desde la entrega).${osYaSalio ? ` La OS ${gA.ordenes.programacion_id} ya estaba en curso — la entrega queda libre.` : ""}`);
+              `Anexo aplicado (${aut.corto}): ${(a.lineas || []).length} línea(s) agregada(s) al contrato ${a.contrato_id || a.contrato_doc_id} con vigencia propia (${a.duracion_meses || "?"} meses desde la entrega).${osYaSalio ? ` La OS ${gA.ordenes.programacion_id} ya estaba en curso — la entrega queda libre.` : ""}`);
             logger.info("[onGestionWrite] aumento aplicado al contrato", { gid, contrato: a.contrato_doc_id, osYaSalio });
           }
         }

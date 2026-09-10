@@ -2345,8 +2345,8 @@ window.Centro = {
     ];
     else if (g.tipo === 'aumento' && g.aumento?.es_regularizacion) defs = [
       ['aprobacion', 'Aprobación comercial', 'Administración / gerencia'],
-      ['firma', 'Anexo firmado por el cliente', 'Declara que los equipos ya están en su poder'],
-      ['derivacion', 'Líneas aplicadas al contrato', 'El tramo corre desde la firma'],
+      ['firma', 'Aplicada sin firma del cliente', 'Los equipos ya estaban en su poder — no se le envía nada a firmar'],
+      ['derivacion', 'Líneas aplicadas al contrato', 'El tramo corre desde que se aplica'],
       ['asignacion', 'Seriales amarrados al contrato', 'Ya estaban en campo — sin pasar por bodega'],
       ['programacion', 'Sin orden de servicio', 'No aplica: nada que programar'],
       ['entrega', 'Regularización completa', 'Los sobrantes de la conciliación bajan a cero'],
@@ -2364,9 +2364,17 @@ window.Centro = {
     const check = `<div class="cg-tl">` + defs.map(([k, t, s], i) => {
       const done = g.cierre?.[k] === true;
       const next = !done && defs.slice(0, i).every(([kk]) => g.cierre?.[kk] === true);
+      // El paso de la firma se rotula con el expediente, no con la plantilla
+      // (2026-09-10, caso GA20260909-03): una actualización de seriales se
+      // aplica SIN firma y el checklist la daba por "Anexo firmado".
+      const titulo = k === 'firma' && typeof GestionAutorizacion !== 'undefined'
+        ? GestionAutorizacion.pasoFirma(g, !done) : t;
+      const sub = k === 'firma' && done && typeof GestionAutorizacion !== 'undefined'
+        && !GestionAutorizacion.texto(g).firmado
+        ? 'Al cliente no se le envió nada a firmar' : s;
       return `<div class="cg-tl-item${done ? ' done' : next ? ' next' : ''}">
         <span class="cg-tl-dot">${done ? '✓' : ''}</span>
-        <span class="cg-tl-t"><b>${t}</b><span class="s">${s}</span></span>
+        <span class="cg-tl-t"><b>${titulo}</b><span class="s">${sub}</span></span>
       </div>`;
     }).join('') + `</div>`;
 

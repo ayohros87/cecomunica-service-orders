@@ -35,9 +35,9 @@ const NUEVO = "20222A0128";     // el cliente lo tiene y el sistema no lo sabe
 const FUERA = "20313C1252";     // el cliente dice que NO lo tiene
 let n = 0; const ok = (m) => { n++; console.log("  PASS", m); };
 
-const gestion = (estado, cierre) => ({
+const gestion = (estado, cierre, extra = {}) => ({
   tipo: "aumento", estado, cliente_id: CLIENTE, cliente_nombre: "FORTUNATO MANGRAVITA",
-  deleted: false, cierre, contratos_afectados: [CID], ordenes: {},
+  deleted: false, cierre, contratos_afectados: [CID], ordenes: {}, ...extra,
   aumento: {
     contrato_doc_id: CID, contrato_id: "ALQ20251006-02", duracion_meses: 18,
     es_regularizacion: true,
@@ -69,7 +69,12 @@ const gestion = (estado, cierre) => ({
   const ref = db.doc(`gestiones/${GID}`);
   await ref.set(gestion("pendiente_aprobacion", {}));
   const before = await ref.get();
-  await ref.set(gestion("pendiente_bodega", { aprobacion: true, firma: true }));
+  // El rastro real de "Aplicar sin firma" (así quedó GA20260909-03 en prod).
+  await ref.set(gestion("pendiente_bodega", { aprobacion: true, firma: true }, {
+    sin_firma: { motivo: "regularizacion sin firma, para actualizar la cuenta",
+      por_uid: "u-alberto", por_email: "alberto.yohros@cecomunica.com" },
+    aprobacion: { requiere: true, aprobado_por_uid: "u-alberto", aprobado_por_email: "alberto.yohros@cecomunica.com" },
+  }));
   const after = await ref.get();
   await trigger.run({ data: { before, after }, params: { gid: GID } });
 
@@ -103,6 +108,47 @@ const gestion = (estado, cierre) => ({
   const g = (await ref.get()).data();
   assert.equal(g.estado, "cerrada", "sin bodega ni entrega, la gestión cierra sola");
   ok("el contrato gana la línea y la gestión cierra");
+
+  // 4-bis) NINGÚN correo ni evento le atribuye al cliente una firma que no
+  //   dio (2026-09-10, caso GA20260909-03: a la vendedora le llegó "El cliente
+  //   firmó el anexo GA20260909-03" por una gestión aplicada SIN firma).
+  const MIENTE = /(el cliente|cliente) firm|firmad[oa] por el cliente|anexo firmado/i;
+  const correos = await db.collection("mail_queue").get();
+  const dReg = correos.docs.filter(d => d.data().meta?.gestion_id === GID);
+  assert.ok(dReg.length, "la regularización aplicada encola su aviso de facturación");
+  // NINGUNO miente (aquí van el aviso de facturación y, como la ficha de
+  // prueba no tiene vendedor, la alerta a recepción).
+  for (const d of dReg) {
+    const m = d.data();
+    const texto = `${m.subject || ""} ${m.bodyContent || ""}`;
+    assert.ok(!MIENTE.test(texto),
+      `el correo «${m.subject}» afirma una firma que no existe: ${(texto.match(MIENTE) || [])[0]}`);
+  }
+  // Y el aviso de facturación —el que llegó en copia a la vendedora— además lo
+  // DICE: callarlo dejaría al lector suponiendo lo mismo de antes.
+  const avisoMail = dReg.map(d => d.data()).find(m => m.meta?.paso === "facturacion_regularizacion");
+  assert.ok(avisoMail, "sale el aviso de facturación de la regularización");
+  assert.match(avisoMail.bodyContent, /sin firma del cliente/,
+    "el aviso debe DECIR que se aplicó sin firma, no callarlo");
+  assert.match(avisoMail.bodyContent, /alberto\.yohros@cecomunica\.com/,
+    "y decir quién lo autorizó");
+  const evReg = await db.collection(`gestiones/${GID}/eventos`).get();
+  for (const d of evReg.docs) {
+    const det = d.data().detalle || "";
+    assert.ok(!MIENTE.test(det), `el evento «${d.data().accion}» afirma una firma que no existe: ${det}`);
+  }
+  assert.ok(evReg.docs.some(d => /Aplicado SIN firma del cliente/.test(d.data().detalle || "")),
+    "la bitácora deja dicho que se aplicó sin firma");
+  const linea = (c.equipos || []).find(l => l.enmienda_id === GID);
+  assert.ok(!MIENTE.test(linea.descripcion || ""),
+    `la línea del contrato afirma una firma que no existe: ${linea.descripcion}`);
+  const avisos = await db.collection("facturacion_avisos").get();
+  const av = avisos.docs.find(d => d.data().gestion_id === GID);
+  assert.ok(av, "se crea el aviso de facturación");
+  assert.ok(!MIENTE.test(av.data().contexto?.origen_texto || ""),
+    `el aviso afirma una firma que no existe: ${av.data().contexto?.origen_texto}`);
+  assert.match(av.data().contexto.origen_texto, /Aplicado SIN firma del cliente/);
+  ok("aplicada sin firma: ni el correo, ni la bitácora, ni el contrato, ni el aviso dicen que el cliente firmó");
 
   // 5) REEMPLAZO de un radio que el sistema no conocía (2026-09-09): el
   //    vendedor lo declara en el wizard y la ficha nace con la solicitud, en

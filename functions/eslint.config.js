@@ -54,4 +54,12 @@ module.exports = [
       "valid-typeof": "error",
     },
   },
+  // Módulos de dominio compartidos byte a byte con el navegador
+  // (public/js/domain/*): su envoltorio UMD nombra `self` para resolver el
+  // objeto global del navegador. No es un `no-undef` real — en Node entra por
+  // la rama `module.exports` y `self` solo se evalúa con `typeof`.
+  {
+    files: ["src/domain/**/*.js"],
+    languageOptions: { globals: { self: "readonly" } },
+  },
 ];
