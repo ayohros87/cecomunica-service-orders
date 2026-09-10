@@ -64,6 +64,22 @@ function asignacionCompleta(g) {
 // ¿La gestión nació de una propuesta del taller? (2026-09-09)
 const esPropuestaTaller = (g) => g?.origen?.tipo === "taller";
 
+// ¿La escritura tocó SOLO estos campos (y al menos uno de ellos)? Sirve para
+// ignorar los ecos de los triggers que denormalizan sobre el mismo documento.
+// Una escritura que no cambió nada devuelve false a propósito: no se le quita
+// el camino normal a un reintento.
+function soloCambiaron(a, b, campos) {
+  if (!a || !b) return false;
+  const cambio = (k) => JSON.stringify(a[k] ?? null) !== JSON.stringify(b[k] ?? null);
+  if (!campos.some(cambio)) return false;
+  const claves = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of claves) {
+    if (campos.includes(k)) continue;
+    if (cambio(k)) return false;
+  }
+  return true;
+}
+
 // Copia de los correos de una propuesta del taller: el vendedor del cliente
 // —informado, NO aprueba: la aprobación es del buzón de ventas— y el técnico
 // que la propuso, para que sepa en qué quedó lo que pidió.
@@ -425,6 +441,15 @@ module.exports = onDocumentWritten(
 
     const creada = !before;
     const ref = event.data.after.ref;
+
+    // El indexador del archivo (onGestionArchivo) vive sobre ESTE mismo
+    // documento y le escribe `seriales_norm` de vuelta. Ese eco llegaba aquí
+    // como una escritura más y volvía a correr la máquina de estados entera:
+    // el 2026-09-10 (GR20260910-01, Silverking) la asignación de bodega y su
+    // eco entraron a la sección C a 300 ms uno del otro y salieron DOS OS de
+    // programación (2026091003 y 2026091004), dos correos a Recepción y una
+    // "incidencia de pool" falsa en el expediente. El eco no decide nada.
+    if (soloCambiaron(before, after, ["seriales_norm"])) return null;
 
     // ── A0) ANULADA → revertir los efectos regados (caso P223344) ────────
     // Órdenes creadas sin trabajar se eliminan; flags del pool se limpian;
@@ -1185,16 +1210,26 @@ module.exports = onDocumentWritten(
       const lista = !after.ordenes?.programacion_id
         && estadoListo(after)
         && asignacionCompleta(after);
-      // Lectura fresca (2026-08-31): una re-entrega del evento traería un
-      // snapshot viejo sin programacion_id y duplicaría la(s) OS y los
-      // movimientos del pool.
+      // Puerta TRANSACCIONAL (2026-09-10, caso GR20260910-01). La lectura
+      // fresca de 2026-08-31 solo tapaba la re-entrega TARDÍA de un evento:
+      // dos escrituras casi simultáneas al expediente leían fresco las dos
+      // antes de que la primera estampara `programacion_id` —la marca se
+      // ponía DESPUÉS de crear las órdenes, así que la ventana era de unos
+      // 600 ms— y salían dos OS idénticas. Ahora la marca se RESERVA antes de
+      // crear nada, dentro de una transacción: la segunda invocación la ve y
+      // se va. `programacion_en_curso` se limpia al estampar el resultado (y
+      // también si no se pudo crear ninguna, más abajo: si esto falla, el
+      // próximo evento tiene que poder reintentar).
       let gC = null;
       if (lista) {
-        const fresco = await ref.get();
-        const d = fresco.exists ? fresco.data() : null;
-        if (d && !d.ordenes?.programacion_id
-            && estadoListo(d)
-            && asignacionCompleta(d)) gC = d;
+        gC = await db.runTransaction(async (tx) => {
+          const s = await tx.get(ref);
+          const d = s.exists ? s.data() : null;
+          if (!d || d.ordenes?.programacion_id || d.ordenes?.programacion_en_curso
+              || !estadoListo(d) || !asignacionCompleta(d)) return null;
+          tx.set(ref, { ordenes: { ...(d.ordenes || {}), programacion_en_curso: true } }, { merge: true });
+          return d;
+        });
       }
       if (gC) {
         // Entrantes al pool: asignados a la gestión. El de reemplazo HEREDA el
@@ -1264,7 +1299,18 @@ module.exports = onDocumentWritten(
           }
         }
 
-        const ordenIds = await G.crearOrdenesProgramacion(gid, gC);
+        let ordenIds = [];
+        try {
+          ordenIds = await G.crearOrdenesProgramacion(gid, gC);
+        } finally {
+          // Sin órdenes (o con excepción) la puerta se vuelve a abrir: si se
+          // quedara reservada, la gestión no volvería a intentar la OS nunca.
+          if (!ordenIds.length) {
+            await ref.set({
+              ordenes: { ...(gC.ordenes || {}), programacion_en_curso: admin.firestore.FieldValue.delete() },
+            }, { merge: true }).catch(() => {});
+          }
+        }
         if (ordenIds.length) {
           // Pre-firma la gestión se QUEDA en pendiente_firma: la máquina de la
           // firma (rules esFirmaAnexoGestion, aplicarAnexo de onFirmaContrato)
@@ -1277,6 +1323,7 @@ module.exports = onDocumentWritten(
               ...(gC.ordenes || {}),
               programacion_id: ordenIds[0],
               programacion_ids: ordenIds,
+              programacion_en_curso: admin.firestore.FieldValue.delete(),
             },
             cierre: { ...(gC.cierre || {}), asignacion: true },
           }, { merge: true });
