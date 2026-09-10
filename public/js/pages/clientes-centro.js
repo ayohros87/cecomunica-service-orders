@@ -2583,6 +2583,13 @@ window.Centro = {
             ${it.elegibilidad === 'propio_excepcion' ? '<br><span class="cg-venc por_vencer">excepción serv. cliente</span>' : ''}</td>
           <td class="cg-mono" style="font-size:12px;">${this.esc(it.contrato_id || '—')}</td>
         </tr>`).join('')}</tbody></table></div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:10px 0 0;">
+          <button class="btn btn-ghost cg-act" onclick="Centro.jsonReemplazoRecepcion('${this.esc(g.id)}')"
+            title="Descarga el nombre, los grupos y el GPS de cada radio que sale, en el formato que carga el lote de POC">
+            <i data-lucide="download"></i> JSON para recepción</button>
+          <span style="font-size:12px; color:var(--fg-3);">Lo que cada radio nuevo debe heredar del que sustituye.
+            Recepción también puede jalarlo sola desde el lote de POC — esto es para mandárselo por adelantado.</span>
+        </div>
         ${asignando ? `<p style="font-size:12.5px; color:var(--fg-3); margin:10px 0 0;">Bodega elige en
           <b>Almacén · Asignar</b> (Acciones ›) la unidad que sustituye a cada radio.
           Al completar todos, el sistema crea la OS de programación y avisa a Recepción.</p>` : ''}`;
@@ -3941,7 +3948,80 @@ window.Centro = {
         ? `Solicitud ${gid} creada — espera aprobación de administración`
         : `Solicitud ${gid} enviada — Bodega recibirá el aviso`, 'ok');
       await this.recargarGestiones();
+      // El JSON para recepción se ofrece AQUÍ, que es cuando el vendedor tiene
+      // el caso fresco y sabe a quién se lo va a mandar. Después queda siempre
+      // a mano en el expediente ("JSON para recepción").
+      if (await Modal.confirm({
+        title: 'JSON para recepción',
+        confirmLabel: 'Descargar', cancelLabel: 'Ahora no',
+        message: `¿Descargar el <b>nombre, los grupos y el GPS</b> de ${items.length === 1 ? 'el radio que sale' : `los ${items.length} radios que salen`}, `
+          + `para mandárselo a recepción?<br><br>Es lo que cada radio nuevo tiene que heredar. `
+          + `Recepción también puede jalarlo sola desde el lote de POC — queda en el expediente por si lo necesitas después.`,
+      })) await this.jsonReemplazoRecepcion(gid);
     } catch (e) { console.error(e); Toast.show('No se pudo crear la solicitud', 'bad'); }
+  },
+
+  // ── JSON del reemplazo para recepción (vendedores, 2026-09-10) ───────────
+  // Lo que el radio nuevo tiene que heredar del que sustituye —nombre, grupos
+  // y GPS—, en el mismo formato que el lote de POC ya sabe leer. Sale de la
+  // ficha POC del saliente: la misma fuente que ese lote jala solo, pero
+  // descargable, para que el vendedor se lo pueda mandar a recepción por
+  // adelantado o por fuera del sistema.
+  //
+  // No lleva seriales ni Unit ID a propósito: el serial del que entra lo pone
+  // bodega al asignar, y el Unit ID lo asigna el lote (consecutivo propio). El
+  // orden de las filas es el de los ítems de la gestión.
+  async jsonReemplazoRecepcion(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    if (!g || g.tipo !== 'reemplazo') { Toast.show('No se encontró la gestión.', 'bad'); return; }
+    const items = (g.items || []).filter(it => String(it.serial_saliente || '').trim());
+    if (!items.length) { Toast.show('Esta gestión no tiene seriales salientes declarados.', 'warn'); return; }
+    if (typeof PocService === 'undefined') { Toast.show('No se pudo consultar POC desde esta pantalla.', 'bad'); return; }
+
+    try {
+      const cfgs = await PocService.configDelSaliente({
+        clienteId: g.cliente_id || this.cliente?.id || null,
+        clienteNombre: g.cliente_nombre || this.cliente?.nombre || '',
+        salientes: items.map(it => it.serial_saliente),
+        fresh: true,
+      });
+
+      const filas = items.map(it => {
+        const cfg = cfgs.get(Serial.clave(it.serial_saliente)) || null;
+        return {
+          // cliente_id/cliente_nombre los usa el lote para auto-elegir cliente.
+          cliente_id: g.cliente_id || '',
+          cliente_nombre: g.cliente_nombre || '',
+          radio_name: cfg?.radio_name || '',
+          gps: cfg?.gps || false,
+          grupos: cfg ? cfg.grupos : [],
+          // El modelo que ENTRA (el solicitado), no el del saliente.
+          modelo_id: it.modelo_solicitado_id || it.modelo_id || '',
+          modelo_label: it.modelo_solicitado || it.modelo || '',
+          // Referencia para quien lo lea; el lote de POC ignora estos dos.
+          serial_saliente: it.serial_saliente,
+          ficha_saliente: cfg ? (cfg.cerrada ? 'cerrada' : 'viva') : 'sin ficha en POC',
+        };
+      });
+
+      const sin = filas.filter(f => !f.radio_name && !(f.grupos || []).length).length;
+      if (sin && !await Modal.confirm({
+        title: 'Salientes sin ficha en POC',
+        confirmLabel: 'Descargar de todos modos',
+        message: `${sin} de ${filas.length} radio(s) que salen no tienen ficha en POC con este cliente: van sin nombre ni grupos y recepción tendrá que llenarlos a mano.`,
+      })) return;
+
+      const blob = new Blob([JSON.stringify(filas, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `reemplazo-${gid}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      Toast.show(`JSON de ${filas.length} radio(s) descargado${sin ? ` — ${sin} sin datos del saliente` : ''}.`, sin ? 'warn' : 'ok');
+    } catch (e) {
+      console.error('[centro] JSON de reemplazo para recepción:', e);
+      Toast.show('No se pudo leer la configuración de los radios salientes.', 'bad');
+    }
   },
 
   // Modalidad de la línea: de quién es el equipo. Antes era un ganchito
