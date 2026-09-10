@@ -9,6 +9,19 @@
     let modeloById = new Map();              // modelo_id → { modelo, label }
     let modeloContratoPorSerial = new Map(); // serialNorm → { serial, modelo, modelo_id }
 
+    // ── Detalle POR SERIAL (reemplazos, 2026-09-10) ────────────────────────
+    // El archivo del vendedor casa POR POSICIÓN: detallesBatch[i] con la línea
+    // i del pegado. Eso ya obliga a `alinearSerialesConJson`, y para un
+    // reemplazo sería peor todavía —el nombre y los grupos de un radio caerían
+    // sobre otro solo con reordenar el textarea, y aquí no hay archivo que
+    // delate el cruce—. Cuando el detalle sale de la ficha del saliente, el
+    // dueño del dato es ESTE mapa, indexado por el serial que ENTRA;
+    // `detallesBatch` pasa a ser la vista posicional que se re-arma sola desde
+    // aquí en cada render. Los objetos son los MISMOS (misma referencia), así
+    // que editar los grupos en el preview escribe en los dos.
+    let detallePorSerial = new Map();        // Serial.clave(entrante) → detalle
+    let detalleFuente = '';                  // valor del select que llenó el mapa
+
     async function cargarModelosCatalogo() {
       try {
         const raw = await ModelosService.getModelos();
@@ -68,14 +81,26 @@
     const esValorGestion = (v) => typeof v === 'string' && v.startsWith('g:');
     const gestionDe = (v) => esValorGestion(v) ? gestionesPorId.get(v.slice(2)) : null;
 
+    // `saliente` solo lo trae el reemplazo, y es la llave de todo lo de abajo:
+    // el par entrante↔saliente ya está escrito en la gestión, así que el nombre,
+    // los grupos y el GPS del radio nuevo se pueden jalar de la ficha POC del
+    // radio al que sustituye, sin que nadie arme otro archivo.
     function serialesDeGestion(g) {
       if (!g) return [];
       const lista = g.tipo === 'reemplazo'
-        ? (g.items || []).map(it => ({ serial: it.serial_nuevo, modelo: it.modelo_solicitado || it.modelo, modelo_id: it.modelo_solicitado_id || it.modelo_id }))
+        ? (g.items || []).map(it => ({ serial: it.serial_nuevo, modelo: it.modelo_solicitado || it.modelo, modelo_id: it.modelo_solicitado_id || it.modelo_id, saliente: it.serial_saliente }))
         : ((g.tipo === 'aumento' ? g.aumento?.seriales_asignados : g.demo?.seriales_asignados) || []);
       return lista
-        .map(s => ({ serial: String(s.serial || '').trim(), modelo: s.modelo || '', modelo_id: s.modelo_id || '' }))
+        .map(s => ({ serial: String(s.serial || '').trim(), modelo: s.modelo || '', modelo_id: s.modelo_id || '', saliente: String(s.saliente || '').trim() }))
         .filter(s => s.serial);
+    }
+
+    // Pares entrante→saliente del reemplazo elegido (los que bodega ya asignó).
+    // Vacío si la fuente no es una gestión de reemplazo.
+    function paresReemplazo() {
+      const g = gestionDe(document.getElementById('contratoJalar')?.value || '');
+      if (!g || g.tipo !== 'reemplazo') return [];
+      return serialesDeGestion(g).filter(s => s.saliente);
     }
 
     // Mapa serialNorm → { serial, modelo, modelo_id } de la fuente elegida:
@@ -92,6 +117,10 @@
 
     async function cargarModeloContrato(contratoDocId) {
       renderAvisoConsolas();
+      // Cambió la fuente: lo jalado del saliente anterior ya no aplica. (Se
+      // compara contra la fuente que lo llenó para no soltarlo en la recarga
+      // perezosa que hace el guardado con la MISMA fuente.)
+      if (detalleFuente && detalleFuente !== (contratoDocId || '')) olvidarDetalleSaliente();
       modeloContratoPorSerial = await mapaSerialesDe(contratoDocId);
       // Al (re)vincular un contrato se recalcula qué modelos entran al lote:
       // manda el archivo del vendedor si ya está cargado.
@@ -314,6 +343,137 @@
       }
     }
 
+    // ── Jalar la configuración del radio SALIENTE ──────────────────────────
+    // Un reemplazo no tiene archivo del vendedor: el radio nuevo hereda el
+    // nombre, los grupos y el GPS del que sustituye, y ese dato ya está en POC
+    // —en la ficha del saliente—. Antes había que armar un JSON a mano solo
+    // para volver a teclear lo que el sistema ya sabía.
+    //
+    // Lo que NO se hereda (Alberto, 2026-09-10): el Unit ID (el lote sigue
+    // asignando su propio consecutivo) y el SIM (puede cambiar; el SIM del
+    // saliente se libera aparte, como en cualquier ficha que se cierra).
+
+    // El detalle del serial que entra, creándolo vacío si no lo hay. Vacío es
+    // una fila legítima: el saliente puede no tener ficha en POC, y recepción
+    // la completa a mano en el preview. Se guarda en el mapa para que esas
+    // ediciones sobrevivan al re-render.
+    function detalleDeEntrante(serial) {
+      const k = ContratosService._serialKey(serial);
+      if (!k) return normalizarDetalleBatch({});
+      let d = detallePorSerial.get(k);
+      if (!d) {
+        d = normalizarDetalleBatch({});
+        d._sinSaliente = true;
+        detallePorSerial.set(k, d);
+      }
+      // El modelo del radio que ENTRA lo manda el contrato o la gestión, nunca
+      // la ficha del saliente (un reemplazo puede cambiar de modelo).
+      const c = modeloContratoPorSerial.get(k);
+      if (c) {
+        const label = labelModelo(c.modelo_id, c.modelo);
+        d.modelo_id = c.modelo_id || '';
+        d.modelo_label = label;
+        d.modelo = label;
+      }
+      return d;
+    }
+
+    // Re-arma la vista posicional desde el mapa, en el orden del textarea. Es
+    // la contraparte de alinearSerialesConJson: allá se mueven los seriales
+    // para alcanzar al archivo; aquí se mueve el detalle para alcanzar a los
+    // seriales, que es lo correcto cuando cada detalle sabe a qué serial va.
+    function realinearDetallesPorSerial() {
+      if (!detallePorSerial.size) return;
+      const seriales = document.getElementById('seriales').value.split('\n').map(s => s.trim()).filter(Boolean);
+      detallesBatch = seriales.map(detalleDeEntrante);
+    }
+
+    // Suelta el detalle jalado cuando cambia la fuente (otro cliente, otro
+    // contrato, otra gestión): el nombre de un radio de OTRO reemplazo no tiene
+    // nada que hacer en este lote.
+    function olvidarDetalleSaliente() {
+      if (!detallePorSerial.size) return;
+      detallePorSerial = new Map();
+      detalleFuente = '';
+      detallesBatch = [];
+    }
+
+    async function jalarConfigSalientes({ auto = false } = {}) {
+      const pares = paresReemplazo();
+      if (!pares.length) {
+        if (!auto) Toast.show('Elige primero una gestión de REEMPLAZO con seriales asignados por bodega.', 'warn');
+        return 0;
+      }
+      // En automático no se pisa un archivo del vendedor ya cargado.
+      if (auto && detallesBatch?.length && !detallePorSerial.size) return 0;
+
+      const selCliente = document.getElementById('cliente');
+      const clienteId = selCliente?.value || '';
+      const clienteNombre = (selCliente?.selectedOptions[0]?.textContent || '').trim();
+      if (!clienteId && !clienteNombre) {
+        if (!auto) Toast.show('Elige primero el cliente.', 'warn');
+        return 0;
+      }
+
+      const btn = document.getElementById('btnJalarSaliente');
+      if (btn) btn.disabled = true;
+      try {
+        const mapa = await PocService.configDelSaliente({
+          clienteId, clienteNombre, salientes: pares.map(p => p.saliente), fresh: true,
+        });
+
+        let con = 0, sin = 0, cerradas = 0, ambiguas = 0;
+        for (const p of pares) {
+          const k = ContratosService._serialKey(p.serial);
+          if (!k) continue;
+          const cfg = mapa.get(Serial.clave(p.saliente)) || null;
+          const d = normalizarDetalleBatch({
+            radio_name: cfg?.radio_name || '',
+            gps: cfg?.gps || false,
+            grupos: cfg ? cfg.grupos.slice() : [],
+          });
+          d._saliente = p.saliente;
+          d._salienteCfg = cfg;
+          d._sinSaliente = !cfg;
+          detallePorSerial.set(k, d);
+          if (cfg) { con++; if (cfg.cerrada) cerradas++; if (cfg.ambigua) ambiguas++; } else sin++;
+        }
+        detalleFuente = document.getElementById('contratoJalar')?.value || '';
+        realinearDetallesPorSerial();
+        renderPreviewCombinado();
+        actualizarBotonSaliente();
+
+        const partes = [`${con} radio(s) con la configuración de su saliente`];
+        if (cerradas) partes.push(`${cerradas} de ficha ya cerrada`);
+        if (ambiguas) partes.push(`${ambiguas} con más de una ficha viva (se tomó la más reciente)`);
+        if (sin) partes.push(`${sin} sin ficha en POC — complétalos abajo`);
+        Toast.show(partes.join(' · ') + '.', sin ? 'warn' : 'ok');
+        return con;
+      } catch (e) {
+        console.error('[nuevo-batch] no se pudo jalar la configuración del saliente:', e);
+        Toast.show('No se pudo leer la configuración de los radios salientes. Revisa tu conexión.', 'bad');
+        return 0;
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    // El botón solo existe para los reemplazos — en un contrato normal no hay
+    // saliente del que copiar.
+    function actualizarBotonSaliente() {
+      const caja = document.getElementById('nbSalienteBox');
+      if (!caja) return;
+      const pares = paresReemplazo();
+      caja.hidden = !pares.length;
+      const btn = document.getElementById('btnJalarSaliente');
+      if (btn) {
+        btn.innerHTML = detallePorSerial.size
+          ? '<i data-lucide="refresh-cw"></i> Volver a jalar del saliente'
+          : `<i data-lucide="copy"></i> Jalar nombre, grupos y GPS de ${pares.length} radio(s) saliente(s)`;
+        if (window.lucide?.createIcons) { try { lucide.createIcons(); } catch (_) {} }
+      }
+    }
+
     // Catálogo de grupos del cliente (para sugerir al agregar y validar). Se carga
     // al elegir/auto-seleccionar el cliente. Puede quedar vacío (cliente sin
     // catálogo) — en ese caso las sugerencias salen solo de los grupos del lote.
@@ -348,7 +508,11 @@
       // Cuántos equipos comparten cada modelo (para el botón "copiar a los N …").
       const conteoModelo = {};
       detallesBatch.forEach(d => { const k = _modeloKeyDe(d); conteoModelo[k] = (conteoModelo[k] || 0) + 1; });
-      let malCount = 0, faltan = 0, sinGrupos = 0;
+      // Con detalle jalado del saliente se agrega la columna "Origen": de qué
+      // radio salió el nombre y los grupos de cada fila. Sin ella, recepción
+      // estaría revisando datos que aparecieron solos.
+      const conOrigen = detallePorSerial.size > 0;
+      let malCount = 0, faltan = 0, sinGrupos = 0, sinNombre = 0, sinFicha = 0;
       const filas = detallesBatch.map((d, i) => {
         const serial = seriales[i] || '';
         if (!serial) faltan++;
@@ -386,12 +550,42 @@
             `<div class="gchips-row">${chips || '<span class="falta">— sin grupos —</span>'}</div>` +
             `<div class="gctrl-row">${addCtrl}${aplicarBtn}</div>` +
           `</div>`;
+
+        if (!String(d.radio_name || '').trim()) sinNombre++;
+
+        // De dónde salió lo de esta fila. `_saliente` sin `_salienteCfg` es el
+        // caso a mirar: el radio que sale no tiene ficha en POC (nunca se
+        // registró, o está con otro cliente) y no hay nada que copiar.
+        let origenCell = '';
+        if (conOrigen) {
+          const sal = d._saliente || '';
+          const cfg = d._salienteCfg || null;
+          if (sal && cfg) {
+            const f = cfg.fecha ? cfg.fecha.toLocaleDateString('es-PA', { day: '2-digit', month: 'short' }) : '';
+            const notas = [];
+            if (cfg.cerrada) notas.push('ficha ya cerrada');
+            if (cfg.ambigua) notas.push('tenía varias fichas vivas — se tomó la última');
+            if (!notas.length && f) notas.push(`ficha del ${f}`);
+            origenCell = `<td class="origen-cell"><span class="mono" title="Nombre, grupos y GPS copiados de la ficha POC de ${escAttr(sal)}">← ${esc(sal)}</span>` +
+              (notas.length ? `<div class="origen-sub">${esc(notas.join(' · '))}</div>` : '') + `</td>`;
+          } else if (sal) {
+            sinFicha++;
+            origenCell = `<td class="origen-cell"><span class="mono">← ${esc(sal)}</span>` +
+              `<div class="origen-sub falta">sin ficha en POC — llénalo a mano</div></td>`;
+          } else {
+            origenCell = `<td class="origen-cell"><span class="falta">—</span></td>`;
+          }
+        }
+
         return `<tr class="${mal ? 'fila-mal' : ''}${vacio ? ' fila-sin-grupos' : ''}">
           <td>${i + 1}</td>
           <td class="mono" title="${escAttr(serial)}">${serial ? esc(serial) : '<span class="falta">— falta —</span>'}</td>
-          <td title="${escAttr(d.radio_name || '')}">${esc(d.radio_name || '—')}</td>
+          ${origenCell}
+          <td><input class="nb-nombre" type="text" value="${escAttr(d.radio_name || '')}" placeholder="nombre del radio"
+                aria-label="Nombre del radio ${i + 1}" oninput="nombreEditar(${i}, this)"></td>
           <td title="${escAttr(modeloLabel)}">${esc(modeloLabel)}</td>
-          <td>${d.gps ? '✅' : '—'}</td>
+          <td><input class="nb-gps" type="checkbox" ${d.gps ? 'checked' : ''}
+                aria-label="GPS del radio ${i + 1}" onchange="gpsEditar(${i}, this)"></td>
           <td class="grupos-cell">${gruposCell}</td>
         </tr>`;
       }).join('');
@@ -405,12 +599,14 @@
       const problemas = [];
       if (malCount) problemas.push(`${malCount} sin cuadrar por modelo`);
       if (faltan)   problemas.push(`${faltan} sin serial`);
+      if (sinFicha) problemas.push(`${sinFicha} sin ficha del saliente`);
+      if (sinNombre) problemas.push(`${sinNombre} sin nombre`);
       if (sinGrupos) problemas.push(`${sinGrupos} sin grupos`);
       const aviso = problemas.length
         ? `<div class="preview-aviso">⚠ ${problemas.join(' · ')}. Corrige abajo antes de guardar — edita los grupos o usa "a todo el modelo" para copiarlos.</div>`
-        : `<div class="preview-ok">✅ ${detallesBatch.length} equipos · seriales alineados y grupos completos</div>`;
+        : `<div class="preview-ok">✅ ${detallesBatch.length} equipos · ${conOrigen ? 'configuración jalada de los salientes' : 'seriales alineados'} y grupos completos</div>`;
       preview.innerHTML = `${datalist}${aviso}<div id="previewPoolAviso"></div><table>
-        <thead><tr><th>#</th><th>Serial</th><th>Nombre</th><th>Modelo</th><th>GPS</th><th>Grupos (editables)</th></tr></thead>
+        <thead><tr><th>#</th><th>Serial</th>${conOrigen ? '<th>Reemplaza a</th>' : ''}<th>Nombre</th><th>Modelo</th><th>GPS</th><th>Grupos (editables)</th></tr></thead>
         <tbody>${filas}</tbody></table>`;
       avisarSerialesAjenos(seriales);
     }
@@ -468,6 +664,21 @@
       };
     }
 
+    // ── Edición de nombre y GPS en el preview ────────────────────────────────
+    // Antes solo los grupos se podían corregir aquí: el nombre y el GPS venían
+    // del archivo del vendedor y se arreglaban en el archivo. En un reemplazo
+    // no hay archivo —el dato sale de la ficha del saliente, y a veces no hay
+    // ficha— así que tiene que poderse escribir en la tabla.
+    // Sin re-render: un re-render en cada tecla se come el foco.
+    function nombreEditar(i, el) {
+      if (!detallesBatch[i]) return;
+      detallesBatch[i].radio_name = el.value;
+    }
+    function gpsEditar(i, el) {
+      if (!detallesBatch[i]) return;
+      detallesBatch[i].gps = !!el.checked;
+    }
+
     // ── Edición de grupos en el preview (global para los onclick inline) ──────
     function grupoQuitar(i, gi) {
       const arr = detallesBatch[i] && detallesBatch[i].grupos;
@@ -508,8 +719,12 @@
       if (!modeloContratoPorSerial.size) modelosSeleccionados = null;
       renderFiltroModelos();
       renderAvisoConsolas();   // el contrato pudo cambiar (o restaurarse) sin pasar por cargarModeloContrato
+      actualizarBotonSaliente();
+      // Con detalle por serial no se reordena nada: cada fila sabe a qué serial
+      // va, así que se re-arma la vista en el orden que tenga el pegado.
+      if (detallePorSerial.size) realinearDetallesPorSerial();
       if (detallesBatch?.length) {
-        alinearSerialesConJson();
+        if (!detallePorSerial.size) alinearSerialesConJson();
         renderPreviewCombinado();
         if (pc) pc.innerHTML = '';
       } else {
@@ -681,7 +896,7 @@ async function cargarContratosDelCliente() {
   const contratoPrevio = sel.value || "";
   const clienteId = document.getElementById("cliente")?.value || "";
   const mismoCliente = !!clienteId && clienteId === sel.dataset.clienteId;
-  if (!mismoCliente) { modeloContratoPorSerial = new Map(); refrescarPreviews(); }
+  if (!mismoCliente) { modeloContratoPorSerial = new Map(); olvidarDetalleSaliente(); refrescarPreviews(); }
   if (!clienteId) {
     sel.dataset.clienteId = "";
     sel.innerHTML = '<option value="">Selecciona el cliente primero…</option>';
@@ -726,7 +941,7 @@ async function cargarContratosDelCliente() {
     if (restaurado) sel.value = contratoPrevio;
     // Mismo cliente pero el contrato elegido ya no está en la lista: el binding
     // serial→modelo quedó huérfano, hay que soltarlo.
-    else if (mismoCliente) modeloContratoPorSerial = new Map();
+    else if (mismoCliente) { modeloContratoPorSerial = new Map(); olvidarDetalleSaliente(); }
     refrescarPreviews();
   } catch (e) {
     console.warn("No se pudieron cargar los contratos del cliente", e);
@@ -770,6 +985,11 @@ async function jalarSerialesDesdeContrato() {
         ? `${r.agregados} serial(es) jalados del contrato con su modelo.${yaEstaban > 0 ? ` ${yaEstaban} ya estaban.` : ''}`
         : 'Todos los seriales del contrato ya estaban en la lista.', r.agregados ? 'ok' : 'warn');
     }
+
+    // Reemplazo: el nombre, los grupos y el GPS salen de la ficha del radio que
+    // sustituye cada uno. Va solo —sin archivo del vendedor no hay nada que
+    // pisar— para que un reemplazo se registre sin cargar ningún JSON.
+    await jalarConfigSalientes({ auto: true });
   } catch (e) {
     console.error("Error jalando seriales del contrato:", e);
     Toast.show('No se pudieron traer los seriales del contrato.', 'bad');
@@ -895,6 +1115,12 @@ async function autoJalarContrato(cantidadEsperada) {
         });
         // Pegar seriales a mano también debe encender/apagar el aviso sin-contrato.
         document.getElementById("seriales")?.addEventListener("input", actualizarAvisoSinContrato);
+        // Reemplazo: jalar la configuración de los salientes. Si todavía no hay
+        // seriales, "Jalar" del contrato ya la trae de una vez.
+        document.getElementById("btnJalarSaliente")?.addEventListener("click", async () => {
+          if (!modeloContratoPorSerial.size) { await jalarSerialesDesdeContrato(); return; }
+          await jalarConfigSalientes();
+        });
 document.getElementById("addCliente").onclick = async () => {
   const nombre = await Modal.prompt({ title: 'Nuevo cliente', confirmLabel: 'Crear', message: 'Nombre del nuevo cliente:' });
   if (!nombre) return;
@@ -964,6 +1190,10 @@ document.getElementById("addCliente").onclick = async () => {
         const bloquear = (v) => { _guardando = v; if (btnSubmit) btnSubmit.disabled = v; };
 
         let seriales = document.getElementById("seriales").value.trim().split('\n').map(s => s.trim()).filter(s => s);
+        // El pegado se puede editar a mano sin pasar por el preview: con detalle
+        // por serial se re-arma aquí, contra la lista que de verdad se va a
+        // guardar (así el conteo cuadra y cada nombre va con SU serial).
+        realinearDetallesPorSerial();
         const unitIdInicial = parseInt(document.getElementById("unit_id_inicial").value.trim(), 10);
 
         if (isNaN(unitIdInicial)) {
@@ -1184,7 +1414,10 @@ document.getElementById("addCliente").onclick = async () => {
         // Garantía final: alinear los seriales al orden del archivo del vendedor
         // (por modelo) para que nombre/GPS/grupos casen por posición; luego re-leer
         // el textarea ya ordenado y usar ESE orden para crear.
-        if (contratoDocId && detallesBatch?.length && modeloContratoPorSerial.size) {
+        if (detallePorSerial.size) {
+          realinearDetallesPorSerial();
+          renderPreviewCombinado();
+        } else if (contratoDocId && detallesBatch?.length && modeloContratoPorSerial.size) {
           alinearSerialesConJson();
           renderPreviewCombinado();
         }
@@ -1406,6 +1639,9 @@ function procesarArchivoJSON(file) {
       const dataRaw = JSON.parse(e.target.result);
       if (!Array.isArray(dataRaw)) throw "Formato inválido";
       const data = dataRaw.map(normalizarDetalleBatch);
+      // El archivo manda sobre lo jalado del saliente: si recepción sube un
+      // JSON, ese es el detalle del lote (y vuelve a casar por posición).
+      olvidarDetalleSaliente();
       detallesBatch = data;
 
       // El JSON del vendedor manda: dispara toda la cascada para que recepción

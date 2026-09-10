@@ -141,6 +141,73 @@ const PocService = {
     return Array.from(found.values());
   },
 
+  // ── Configuración del radio que SALE (reemplazos) ───────────────────────
+  // De dónde saca el lote el nombre, los grupos y el GPS de un reemplazo sin
+  // que nadie tenga que armar otro JSON: de la ficha POC del radio que se está
+  // sustituyendo. El dato ya está escrito —el saliente lleva meses trabajando
+  // con ese nombre y esos grupos— y es exactamente lo que hay que copiar en el
+  // radio nuevo: la OS de programación se lo pide al técnico con esas palabras
+  // ("REEMPLAZA al serial X: copiar su configuración").
+  //
+  // Se busca EN MEMORIA sobre las fichas del cliente, no con
+  // where('serial','==',…): `poc_devices` no tiene `serial_norm`, así que esa
+  // query es exacta y un guión o una minúscula la deja en cero (el mismo hueco
+  // que pocCierre tapa siguiendo `poc_device_id`). Una sola lectura del cliente
+  // —la que el lote ya hace para validar Unit IDs— resuelve todos los
+  // salientes del lote de un golpe.
+  //
+  // Ficha VIVA primero. Si el saliente ya se devolvió, su ficha está cerrada
+  // (la devolución la cierra sola) y sirve igual —el nombre y los grupos siguen
+  // ahí—, pero se marca `cerrada` para que la pantalla lo diga en vez de
+  // presentarlo como dato fresco.
+  //
+  // Devuelve Map Serial.clave(saliente) → { radio_name, grupos, gps, unit_id,
+  //   sim_number, serial, ficha_id, cerrada, ambigua, fecha }.
+  // NO devuelve modelo: el modelo del radio que ENTRA lo manda el contrato o la
+  // gestión, y un reemplazo bien puede traer otro modelo.
+  // Tampoco es fuente de Unit ID ni de SIM (Alberto, 2026-09-10): el lote nuevo
+  // asigna su propio Unit ID consecutivo y el SIM puede cambiar. Van en el
+  // resultado solo como referencia para mostrar, nunca para copiar.
+  async configDelSaliente({ clienteId = null, clienteNombre = null, salientes = [], fresh = false } = {}) {
+    const claves = new Set((salientes || []).map(s => Serial.clave(s)).filter(Boolean));
+    if (!claves.size) return new Map();
+
+    const fichas = await this.getByCliente({ clienteId, clienteNombre, fresh });
+    const porClave = new Map();
+    for (const f of fichas) {
+      const k = Serial.clave(f.serial);
+      if (k && claves.has(k)) {
+        if (!porClave.has(k)) porClave.set(k, []);
+        porClave.get(k).push(f);
+      }
+    }
+
+    const ms = (f) => f.created_at?.toMillis?.() ?? 0;
+    const salida = new Map();
+    for (const [k, lista] of porClave) {
+      // Vivas de la más nueva a la más vieja; si no queda ninguna viva, se cae
+      // a las cerradas con el mismo criterio (la última que trabajó).
+      const vivas = lista.filter(f => f.deleted !== true).sort((a, b) => ms(b) - ms(a));
+      const f = (vivas.length ? vivas : lista.slice().sort((a, b) => ms(b) - ms(a)))[0];
+      if (!f) continue;
+      salida.set(k, {
+        radio_name: (f.radio_name || '').toString().trim(),
+        grupos: Array.isArray(f.grupos) ? f.grupos.slice() : [],
+        gps: f.gps === true,
+        unit_id: (f.unit_id ?? '').toString().trim(),
+        sim_number: (f.sim_number || '').toString().trim(),
+        serial: (f.serial || '').toString().trim(),
+        ficha_id: f.id,
+        cerrada: !vivas.length,
+        // Dato sucio anterior al candado (817 seriales con más de una ficha
+        // viva al 2026-09-09): se toma la más reciente y la pantalla avisa.
+        ambigua: vivas.length > 1,
+        fecha: f.created_at?.toDate?.() || null,
+      });
+    }
+    return salida;
+  },
+
   // Returns identifiers de clientes que tienen al menos un device no eliminado
   // con al menos un grupo + (opcional) los grupos crudos agrupados por cliente
   // para análisis de duplicados desde la página. Una sola lectura cache-first

@@ -90,6 +90,16 @@
     #previewVendedor .gadd-btn:hover { filter: brightness(0.97); }
     #previewVendedor .gaplicar { font-size: 11px; font-weight: 600; padding: 3px 9px; border: 1px solid #bfdbfe; background: #eff6ff; color: #1d4ed8; border-radius: 6px; cursor: pointer; white-space: nowrap; }
     #previewVendedor .gaplicar:hover { background: #dbeafe; }
+    /* Nombre y GPS editables + columna de origen (reemplazos) */
+    #previewVendedor .nb-nombre { width: 100%; min-width: 130px; font-size: 12px; padding: 3px 8px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--surface-card); color: inherit; }
+    #previewVendedor .nb-gps { width: 15px; height: 15px; cursor: pointer; }
+    #previewVendedor .origen-cell { white-space: nowrap; }
+    #previewVendedor .origen-sub { font-size: 10.5px; color: var(--fg-4); white-space: normal; max-width: 170px; }
+
+    /* Reemplazos: jalar la configuración del radio saliente en vez de un JSON */
+    .nb-saliente { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin-top: var(--sp-3);
+      padding: var(--sp-3); border: 1px dashed var(--accent-line); border-radius: var(--radius-md); background: var(--accent-soft); }
+    .nb-saliente .form-hint { flex: 1 1 320px; }
 
     /* Filtro "Modelos a cargar": qué modelos del contrato entran al lote. Solo
        se pinta cuando el contrato tiene más de un modelo. */
@@ -124,7 +134,7 @@
   <script src="../js/core/modulos.js?v=cc15"></script>
   <script src="../js/core/layout.js?v=cc13"></script>
   <script src="../js/core/formatting.js"></script>
-  <script defer src="../js/services/pocService.js?v=cc10"></script>
+  <script defer src="../js/services/pocService.js?v=cc11"></script>
   <script defer src="../js/services/modelosService.js?v=mf1"></script>
   <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/empresaService.js"></script>
@@ -188,6 +198,17 @@
             <p style="margin:0; font-size:14px;"><strong>Arrastra el JSON del vendedor</strong> o haz clic</p>
           </label>
           <span class="form-hint">Es el primer paso: autocompleta cliente, IP, contrato y Unit ID, y jala los seriales del contrato. Todo lo de abajo se llena solo — solo revisa y guarda.</span>
+
+          <!-- Reemplazos: no hay archivo del vendedor. El nombre, los grupos y
+               el GPS del radio nuevo son los del radio que sustituye, y eso ya
+               está en POC — se jala de la ficha del saliente. -->
+          <div id="nbSalienteBox" class="nb-saliente" hidden>
+            <button type="button" id="btnJalarSaliente" class="btn btn-secondary">
+              <i data-lucide="copy"></i> Jalar del radio saliente</button>
+            <span class="form-hint" style="margin:0;">Un <strong>reemplazo</strong> no necesita archivo: cada radio nuevo hereda el
+              nombre, los grupos y el GPS del radio al que sustituye. El Unit ID y el SIM NO se heredan — el lote
+              asigna su propio consecutivo y el SIM se define aparte.</span>
+          </div>
         </div>
       </section>
 
@@ -286,7 +307,7 @@
 
   </div><!-- /.app-wrap -->
 
-  <script src="../js/pages/nuevo-batch.js?v=rereg1" defer></script>
+  <script src="../js/pages/nuevo-batch.js?v=sal1" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
