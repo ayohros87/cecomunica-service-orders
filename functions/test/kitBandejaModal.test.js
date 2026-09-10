@@ -246,6 +246,60 @@ test("K10 · los overlays construidos a mano se fueron a Modal.sheet (salvo ligh
   assert.match(firmar, /id="fMsg"[^>]*role="alert"/, "firmar/index.html con el aviso inline #fMsg");
 });
 
+test("K11 · ninguna página se declara su propio backdrop ni arma diálogos a mano", () => {
+  const fs2 = require("node:fs"), path2 = require("node:path");
+  // Por qué existe esta guardia: el fondo, el centrado y el z-index del modal
+  // son del kit (.modal-backdrop en ceco-ui.css, con pruebas). Cuando una
+  // página se declara el suyo en un <style> propio nadie lo prueba — en el
+  // Centro un resto de declaración huérfano invalidó esa regla entre el
+  // 26-ago y el 9-sep-2026 y los modales salieron al PIE de la página, sin
+  // fondo ni centrado: había que hacer scroll para verlos. K10 no lo vio
+  // porque ese overlay nunca asignaba className: se escribía con innerHTML
+  // dentro de un div ya presente en el HTML.
+  const CSS_PERMITIDO = {
+    "admin/grupos.html": ".gp-modal-overlay",    // pendiente de migrar a Modal.sheet
+    "POC/index.html": "#editDrawerOverlay",      // cajón lateral, no un modal centrado
+  };
+  const htmls = [];
+  (function walk(d) { for (const e of fs2.readdirSync(d, { withFileTypes: true })) { const p = path2.join(d, e.name);
+    if (e.isDirectory()) { if (!/vendor|node_modules/.test(e.name)) walk(p); } else if (e.name.endsWith(".html")) htmls.push(p); } })(path2.join(RAIZ, "public"));
+  for (const f of htmls) {
+    const rel = path2.relative(path2.join(RAIZ, "public"), f).replace(/\\/g, "/");
+    const src = fs2.readFileSync(f, "utf8");
+    for (const bloque of src.match(/<style[\s\S]*?<\/style>/g) || []) {
+      for (const regla of bloque.replace(/\/\*[\s\S]*?\*\//g, "").match(/[^{}]+\{[^{}]*\}/g) || []) {
+        const sel = regla.slice(0, regla.indexOf("{")).trim();
+        const cuerpo = regla.slice(regla.indexOf("{"));
+        if (!/modal|overlay|backdrop/i.test(sel)) continue;
+        if (!/position\s*:\s*fixed/.test(cuerpo) || !/(inset\s*:\s*0|top\s*:\s*0)/.test(cuerpo)) continue;
+        assert.equal(CSS_PERMITIDO[rel], sel,
+          `${rel}: la regla ${sel} es un backdrop propio — el fondo y el centrado los pone .modal-backdrop del kit`);
+      }
+    }
+  }
+  // Diálogos armados a mano: la firma es un innerHTML con role="dialog".
+  const JS_PERMITIDO = new Set(["ui/modal.js", "pages/cotizar-orden.js"]);
+  const js = [];
+  (function walk(d) { for (const e of fs2.readdirSync(d, { withFileTypes: true })) { const p = path2.join(d, e.name);
+    if (e.isDirectory()) { if (!/vendor|node_modules/.test(e.name)) walk(p); } else if (e.name.endsWith(".js")) js.push(p); } })(path2.join(RAIZ, "public", "js"));
+  for (const f of js) {
+    const rel = path2.relative(path2.join(RAIZ, "public", "js"), f).replace(/\\/g, "/");
+    if (JS_PERMITIDO.has(rel)) continue;
+    const src = sinComentarios(fs2.readFileSync(f, "utf8"));
+    assert.ok(!/role="dialog"/.test(src),
+      `${rel}: arma un diálogo a mano (role="dialog") — usa Modal.sheet, que ya trae la anatomía`);
+  }
+  // El Centro quedó sobre el kit: sus dos helpers son hojas y el div estático
+  // con su CSS suelto ya no existe.
+  const centro = leer("public", "js", "pages", "clientes-centro.js");
+  assert.match(centro, /Modal\.sheet\(\{/, "clientes-centro.js debe abrir sus modales con Modal.sheet");
+  assert.ok(!/cg-modal|cg-overlay/.test(sinComentarios(centro)), "clientes-centro.js sin la familia .cg-modal");
+  assert.ok(!/cg-overlay/.test(leer("public", "clientes", "centro.html")), "centro.html sin el overlay propio");
+  assert.ok(!/\.cg-modal/.test(sinComentarios(leer("public", "css", "ceco-gestion.css"))), "ceco-gestion.css sin CSS de modal");
+  assert.match(leer("public", "css", "ceco-ui.css"), /\.modal-footer \.sep \{ margin-left: auto; \}/, "el pie del kit conserva el separador .sep");
+  assert.match(leer("public", "js", "ui", "modal.js"), /titleHtml = ''/, "Modal.sheet acepta titleHtml");
+});
+
 test("K5 · Modal.sheet resuelve con la acción del botón y respeta onAction=false", async () => {
   // DOM mínimo para modal.js: createElement con innerHTML, querySelector
   // sobre botones marcados con data-sheet-action.

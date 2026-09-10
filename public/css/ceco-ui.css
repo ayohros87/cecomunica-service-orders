@@ -1988,6 +1988,10 @@ i[data-lucide]                              { display: inline-block; }
   flex: none;
   flex-wrap: wrap;
 }
+/* Separador del pie: lo que va DESPUÉS se pega a la derecha y lo anterior
+   queda a la izquierda (típico "Volver … Guardar"). Un margen auto absorbe
+   todo el espacio libre, así que manda sobre justify-content. */
+.modal-footer .sep { margin-left: auto; }
 /* Móvil: hoja pegada abajo, ancho completo, pie fijo al alcance del pulgar. */
 @media (max-width: 768px) {
   .modal-backdrop { align-items: flex-end; padding: 0; }

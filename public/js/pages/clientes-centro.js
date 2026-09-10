@@ -388,7 +388,7 @@ window.Centro = {
         .collection('historial').orderBy('at', 'desc').limit(50).get();
       filas = snap.docs.map(d => d.data());
     } catch (e) { console.warn('[centro] historial no disponible:', e?.message || e); }
-    const bd = document.querySelector('#cgModal .cg-modal-bd');
+    const bd = document.querySelector('#cgModal .modal-body');
     if (!bd) return;
     if (!filas.length) {
       bd.innerHTML = `<div class="cg-vacio">Sin cambios registrados. El historial arrancó el
@@ -3419,13 +3419,16 @@ window.Centro = {
       if (cont) cont.innerHTML = `<p style="color:#b91c1c; font-size:13px;">No se pudieron cargar los documentos: ${this.esc(err?.message || err)}</p>`;
     }
   },
+  // OJO con el ícono: el vendor de lucide es A MEDIDA (198 nombres) y `image`
+  // NO está — verificado en el emulador, el <i> se quedaba sin convertir y la
+  // fila salía sin ícono. `camera` sí está en el censo.
   _docFilaHtml(d) {
     const kb = Number(d.size) || 0;
     const tam = !kb ? '' : kb < 1024 * 1024 ? `${Math.round(kb / 1024)} KB` : `${(kb / 1024 / 1024).toFixed(1)} MB`;
     const f = d.subido_en?.toDate ? (window.FMT?.datetime ? FMT.datetime(d.subido_en.toDate()) : d.subido_en.toDate().toLocaleString('es-PA', { hour12: false })) : '';
     const meta = [this.esc(d.nombre_archivo || ''), tam, this.esc(f)].filter(Boolean).join(' · ');
     return `<div style="display:flex; gap:10px; align-items:center; padding:9px 2px; border-bottom:1px solid var(--border-subtle);">
-      <i data-lucide="${(d.content_type || '').includes('pdf') ? 'file-text' : 'image'}" style="width:18px; height:18px; color:var(--fg-3); flex:none;"></i>
+      <i data-lucide="${(d.content_type || '').includes('pdf') ? 'file-text' : 'camera'}" style="width:18px; height:18px; color:var(--fg-3); flex:none;"></i>
       <div style="flex:1; min-width:0;">
         <div style="font-size:13px; font-weight:600;">${this.esc(ClienteDocumentosService.labelFor(d.tipo))}</div>
         <div style="font-size:12px; color:var(--fg-4); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${meta}</div>
@@ -3579,13 +3582,20 @@ window.Centro = {
     ['otro', 'Otro'],
   ],
 
-  _abrirModal(html) {
-    const m = document.getElementById('cgModal');
-    m.innerHTML = `<div class="cg-modal" role="dialog" aria-modal="true">${html}</div>`;
-    m.classList.remove('hidden');
-    m.onclick = (e) => { if (e.target === m) this._cerrarModal(); };
-    document.addEventListener('keydown', this._escModal);
-    setTimeout(() => m.querySelector('input:not([type=hidden]), select, textarea, button')?.focus(), 60);
+  // ── Modales del Centro: hojas del kit (Modal.sheet, 2026-09-10) ────────
+  // Antes esto pintaba a mano dentro de un <div id="cgModal"> con CSS suelto
+  // en la propia página (.cg-overlay/.cg-modal). Un resto de declaración
+  // huérfano invalidó esa regla entre el 26-ago y el 9-sep-2026 y los modales
+  // salieron al PIE de la página, sin fondo ni centrado: había que scrollear
+  // para verlos. Ahora el centrado, el z-index y la anatomía los pone
+  // ceco-ui.css, que tiene guardias (K3, K9, K10).
+  //
+  // Las firmas no cambian: `_abrirModal(html)` para el modal simple (el
+  // contenido trae su propio título y sus botones) y `_abrirModalA({...})`
+  // para la anatomía. El nodo raíz conserva el id `cgModal`, así que los
+  // `document.querySelector('#cgModal …')` de la página siguen sirviendo.
+  _abrirModal(html, size = 'lg') {
+    this._montarHoja({ html, size, focoEn: '.modal-body' });
   },
 
   // Anatomía del kit (header fijo + cuerpo scrolleable + footer fijo) para los
@@ -3605,24 +3615,43 @@ window.Centro = {
     </div>`;
   },
 
-  _abrirModalA({ titulo, cuerpo, footer, banda = true }) {
-    const m = document.getElementById('cgModal');
-    m.innerHTML = `<div class="cg-modal cg-modal--anatomia" role="dialog" aria-modal="true" aria-labelledby="cgModalT">
-      <div class="cg-modal-hd"><h3 id="cgModalT">${titulo}</h3>
-        <button type="button" class="cg-x" aria-label="Cerrar" onclick="Centro._cerrarModal()">✕</button></div>
-      <div class="cg-modal-bd">${banda ? this._bandaReg() : ''}${cuerpo}</div>
-      ${footer ? `<div class="cg-modal-ft">${footer}</div>` : ''}
-    </div>`;
-    m.classList.remove('hidden');
-    m.onclick = (e) => { if (e.target === m) this._cerrarModal(); };
-    document.addEventListener('keydown', this._escModal);
-    setTimeout(() => m.querySelector('.cg-modal-bd input:not([type=hidden]), .cg-modal-bd select, .cg-modal-bd textarea, .cg-modal-bd button')?.focus(), 60);
+  _abrirModalA({ titulo, cuerpo, footer, banda = true, size = 'lg' }) {
+    this._montarHoja({
+      titleHtml: titulo,
+      html: (banda ? this._bandaReg() : '') + cuerpo,
+      footerHtml: footer || '',
+      size,
+      focoEn: '.modal-body',
+    });
   },
+
+  // Una hoja a la vez: abrir otra cierra la anterior, igual que cuando todas
+  // compartían el mismo div. El foco va al primer campo del CUERPO (no al
+  // botón del pie, que es lo que enfoca el kit por defecto): estos modales
+  // son formularios y wizards, y ahí se empieza escribiendo.
+  _montarHoja({ titleHtml = '', html = '', footerHtml = '', size = 'lg', focoEn = '' }) {
+    this._cerrarModal();
+    let propia = null;
+    Modal.sheet({
+      titleHtml, html, footerHtml, size,
+      onMount: (root, api) => {
+        propia = api;
+        this._hojaApi = api;
+        root.id = 'cgModal';
+        if (focoEn) {
+          setTimeout(() => root.querySelector(
+            `${focoEn} input:not([type=hidden]), ${focoEn} select, ${focoEn} textarea, ${focoEn} button`
+          )?.focus(), 60);
+        }
+      },
+    }).then(() => { if (this._hojaApi === propia) this._hojaApi = null; });
+  },
+
   _cerrarModal() {
-    document.getElementById('cgModal')?.classList.add('hidden');
-    document.removeEventListener('keydown', Centro._escModal);
+    const api = Centro._hojaApi;
+    Centro._hojaApi = null;
+    if (api) api.close(null);
   },
-  _escModal(e) { if (e.key === 'Escape') Centro._cerrarModal(); },
 
   // Elegibilidad de un equipo del pool para reemplazo (decisiones §8):
   // alquiler siempre; propio adquirido en CECOMUNICA siempre (sin garantía →
@@ -5759,9 +5788,19 @@ window.Centro = {
       : (Number(c.duracion_meses) > 0 ? Number(c.duracion_meses)
         : (parseInt(String(c.duracion || '').replace(/\D/g, ''), 10) || 12));
 
+    // Modalidad por línea: los contratos anteriores al 2026-09-09 no la traen,
+    // y como es obligatoria para guardar, editar un ALQ viejo para corregir una
+    // observación obligaba a declararla en cada línea a mano — invitando a
+    // marcar cualquier cosa con tal de pasar. Se DERIVA del tipo del contrato,
+    // la misma inferencia que ya hace el wizard al copiar líneas de un origen:
+    // un contrato entero ALQ era alquiler y uno PROP, equipo del cliente. Un
+    // SERV (mixto por línea) sin modalidad sí se queda en blanco: ahí no hay
+    // nada que inferir y el vendedor tiene que decirlo.
+    const tipoC = this._codigoTipo(c);
+    const modPorTipo = tipoC === 'PROP' ? 'propio' : tipoC === 'ALQ' ? 'alquiler' : null;
     const lineas = (c.equipos || []).map(l => ({
       modelo_id: l.modelo_id, modelo: l.modelo,
-      cantidad: l.cantidad, precio: l.precio, modalidad: l.modalidad || null,
+      cantidad: l.cantidad, precio: l.precio, modalidad: l.modalidad || modPorTipo,
     }));
     if (!lineas.length) lineas.push(null);
 

@@ -60,31 +60,12 @@
 .cg-chip--estado-cerrada            { background: var(--cg-ok-soft);   color: var(--cg-ok-deep); }
 .cg-chip--estado-anulada            { background: var(--surface-sunken, #EEF2F6); color: var(--fg-4); text-decoration: line-through; }
 
-/* ── Modal: UNA anatomía ──────────────────────────────────────
-   header fijo (título + cerrar), body scrolleable, footer fijo.
-   Los wizards largos dejan de scrollear el título y los botones.
-   Opt-in con el modificador --anatomia: los modales chicos siguen
-   con el .cg-modal simple de centro.html. */
-.cg-modal--anatomia { display: flex; flex-direction: column; max-height: 88vh;
-  padding: 0 !important; overflow: hidden !important; }
-.cg-modal-hd {
-  display: flex; align-items: center; gap: 10px;
-  padding: 14px 18px 10px; border-bottom: 1px solid var(--border-subtle);
-  flex: none;
-}
-.cg-modal-hd h3 { margin: 0; font-size: 16.5px; min-width: 0; }
-.cg-modal-hd .cg-x {
-  margin-left: auto; border: 0; background: none; cursor: pointer;
-  font-size: 18px; color: var(--fg-4); padding: 4px 8px; border-radius: 8px;
-}
-.cg-modal-hd .cg-x:hover { background: var(--surface-sunken, #EEF2F6); }
-.cg-modal-bd { padding: 14px 18px; overflow-y: auto; flex: 1; min-height: 0; }
-.cg-modal-ft {
-  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-  padding: 10px 18px 14px; border-top: 1px solid var(--border-subtle);
-  flex: none;
-}
-.cg-modal-ft .sep { margin-left: auto; }
+/* ── Modal: UNA anatomía, la del kit ──────────────────────────
+   Los modales del Centro son hojas de Modal.sheet (2026-09-10): la
+   anatomía (header fijo, cuerpo scrolleable, footer fijo), el centrado
+   y el z-index viven en ceco-ui.css, y `.modal-footer .sep` empuja a la
+   derecha igual que lo hacía `.cg-modal-ft .sep`. Aquí ya no queda CSS
+   de modal: el que había duplicaba el del kit. */
 
 /* ── Secciones numeradas del wizard ───────────────────────────
    El formulario largo gana estructura sin partirse en pantallas:

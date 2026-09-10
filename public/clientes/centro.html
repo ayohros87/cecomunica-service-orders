@@ -11,11 +11,11 @@
   <meta charset="UTF-8" />
   <title>Centro de gestión de clientes - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=sh1">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=sh2">
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
   <!-- UI kit del módulo (2026-08-28): chips unificados, anatomía de modal,
        pasos de wizard, expediente responsivo, jerarquía de botones. -->
-  <link rel="stylesheet" href="../css/ceco-gestion.css?v=kit1">
+  <link rel="stylesheet" href="../css/ceco-gestion.css?v=kit2">
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -191,13 +191,11 @@
       .cg-head { flex-wrap:nowrap; }
       .cg-acts { margin-left:0; }
     }
-    /* OJO: nada suelto antes de esta regla — un resto de declaración huérfano
-       (2026-08-26 → 2026-09-09) la invalidaba y los modales salían al pie de
-       la página, sin fondo ni centrado. */
-    .cg-overlay { position:fixed; inset:0; background:rgba(11,42,71,.45); display:grid; place-items:center;
-                  padding:20px; z-index:80; }
-    .cg-modal { background:var(--surface-card); border-radius:14px; box-shadow:0 20px 50px -20px rgba(11,42,71,.4);
-                width:min(760px,100%); max-height:88vh; overflow:auto; padding:20px 22px; }
+    /* Los modales del Centro son hojas del kit (Modal.sheet → .modal-backdrop
+       de ceco-ui.css, 2026-09-10). El overlay propio que vivía aquí quedó
+       fuera: era CSS suelto en la página, y un resto de declaración huérfano
+       lo invalidó entre el 26-ago y el 9-sep-2026 dejando los modales al pie
+       de la página. El del kit está en la hoja compartida y con guardias. */
     .hidden { display:none !important; }
   </style>
 </head>
@@ -315,16 +313,17 @@
 
 </div>
 
-<div id="cgModal" class="cg-overlay hidden"></div>
-
 <script defer src="../js/ui/toast.js"></script>
-<!-- Kit de modales: Modal.prompt/confirm (anular gestión, retirar enlace de firma). -->
-<script defer src="../js/ui/modal.js?v=f5"></script>
+<!-- Kit de modales: TODO el diálogo del Centro (Modal.sheet en _abrirModal/
+     _abrirModalA, más Modal.prompt/confirm para anular gestión y retirar el
+     enlace de firma). Sin él la página no abre modales: va antes que
+     clientes-centro.js y ambos son defer. -->
+<script defer src="../js/ui/modal.js?v=f6"></script>
 <!-- Conversor fotos→PDF del contrato firmado (ContratosFirmado._fotosAPdf); su init no encuentra #fileFirmado aquí y no hace nada más. -->
 <script defer src="../js/pages/contratos-upload.js?v=firm2"></script>
 <!-- Garantía de la unidad (cláusula 8): una sola definición, compartida con la propuesta de reemplazo del taller. -->
 <script defer src="../js/domain/garantiaEquipo.js?v=1"></script>
-<script src="../js/pages/clientes-centro.js?v=cg96" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg97" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

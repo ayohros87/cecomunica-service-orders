@@ -47,6 +47,16 @@ function _trapTab(e, el) {
 const _SHEET_Z_BASE = 10000;
 let _sheetsAbiertas = 0;
 
+// Pila de diálogos abiertos. Los cuatro caminos (open, sheet, confirm, prompt)
+// escuchan `keydown` en `document`, así que con dos diálogos encimados un solo
+// Escape los cerraba todos: en el Centro, confirmar "anular" y darle Escape se
+// llevaba también el modal de la gestión (2026-09-10). Ahora solo responde el
+// de encima, y la trampa de foco tampoco pelea con el de abajo.
+const _pila = [];
+function _apilar(el) { _pila.push(el); }
+function _desapilar(el) { const i = _pila.lastIndexOf(el); if (i >= 0) _pila.splice(i, 1); }
+function _esTope(el) { return !_pila.length || _pila[_pila.length - 1] === el; }
+
 window.Modal = {
   open(id, { onEscape = true } = {}) {
     const el = document.getElementById(id);
@@ -72,6 +82,7 @@ window.Modal = {
     // inside the modal so keyboard users can't tab out into the page
     // behind. ORDENES_INDEX_IMPROVEMENTS.md QW5 a11y compliance.
     const handler = (e) => {
+      if (!_esTope(el)) return;          // hay otro diálogo encima
       if (onEscape && e.key === 'Escape') {
         this.close(id);
         return;
@@ -79,6 +90,7 @@ window.Modal = {
       _trapTab(e, el);
     };
     el._modalKeyHandler = handler;
+    _apilar(el);
     document.addEventListener('keydown', handler);
   },
 
@@ -88,6 +100,7 @@ window.Modal = {
     el.style.display = 'none';
     el.classList.remove('open');
     document.body.style.overflow = '';
+    _desapilar(el);
     if (el._modalKeyHandler) {
       document.removeEventListener('keydown', el._modalKeyHandler);
       delete el._modalKeyHandler;
@@ -104,11 +117,15 @@ window.Modal = {
   //
   //   Modal.sheet({
   //     title, icon?,            // icono lucide junto al título
+  //     titleHtml?,              // título con marcado (la página escapa lo
+  //                              // suyo); gana sobre `title`
   //     html,                    // cuerpo (la página escapa lo suyo)
   //     buttons: [{ action, label, primary?, danger?, ghost?, icon? }],
   //     size: 'sm'|'md'|'lg'|'xl',   // 440 · 560 · 720 · 960
   //     footerHtml?,             // HTML propio en el pie, antes de `buttons`
-  //                              // (botones con id que la página cablea sola)
+  //                              // (botones con id que la página cablea sola;
+  //                              // un <span class="sep"> empuja lo que sigue
+  //                              // a la derecha)
   //     closable: true,          // X en el encabezado + Escape + clic fuera;
   //                              // o una función () => bool evaluada al cerrar
   //                              // (asistentes ocupados: () => !this._busy)
@@ -118,6 +135,7 @@ window.Modal = {
   //   }) → Promise<valor | null>   (null = cerrada sin elegir)
   sheet({
     title = '',
+    titleHtml = '',
     icon = null,
     html = '',
     buttons = [],
@@ -136,7 +154,9 @@ window.Modal = {
       overlay.className = 'modal-backdrop open';
       overlay.setAttribute('role', 'dialog');
       overlay.setAttribute('aria-modal', 'true');
-      if (title) overlay.setAttribute('aria-label', title);
+      // El título accesible sale del texto plano, venga escapado o con marcado.
+      const tituloTxt = title || String(titleHtml).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (tituloTxt) overlay.setAttribute('aria-label', tituloTxt);
       overlay.style.zIndex = String(_SHEET_Z_BASE + _sheetsAbiertas * 10);
       const btnHtml = (buttons || []).map(b => {
         const cls = b.danger ? 'btn-danger' : b.primary ? 'btn-primary' : b.ghost !== false ? 'btn-ghost' : 'btn';
@@ -145,8 +165,8 @@ window.Modal = {
       }).join('');
       overlay.innerHTML = `
         <div class="modal" style="max-width:${ANCHO[size] || ANCHO.md}px; width:100%;">
-          ${title || closable ? `<div class="modal-header">
-            <h3 class="modal-title">${icon ? `<i data-lucide="${esc(icon)}"></i> ` : ''}${esc(title)}</h3>
+          ${title || titleHtml || closable ? `<div class="modal-header">
+            <h3 class="modal-title">${icon ? `<i data-lucide="${esc(icon)}"></i> ` : ''}${titleHtml || esc(title)}</h3>
             ${closable ? '<button type="button" class="modal-close" data-sheet-action="__cerrar" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>' : ''}
           </div>` : ''}
           <div class="modal-body">${html}</div>
@@ -159,6 +179,7 @@ window.Modal = {
         if (cerrado) return;
         cerrado = true;
         overlay.remove();
+        _desapilar(overlay);
         _sheetsAbiertas = Math.max(0, _sheetsAbiertas - 1);
         if (_sheetsAbiertas === 0 && !document.querySelector('.overlay[style*="flex"], .modal-backdrop')) {
           document.body.style.overflow = '';
@@ -173,6 +194,7 @@ window.Modal = {
       const puedeCerrar = () => (typeof closable === 'function' ? !!closable() : !!closable);
 
       const kb = (e) => {
+        if (!_esTope(overlay)) return;     // hay otro diálogo encima
         if (e.key === 'Escape' && puedeCerrar()) { e.preventDefault(); cleanup(null); return; }
         _trapTab(e, overlay);
       };
@@ -195,6 +217,7 @@ window.Modal = {
 
       document.addEventListener('keydown', kb);
       document.body.appendChild(overlay);
+      _apilar(overlay);
       _sheetsAbiertas++;
       document.body.style.overflow = 'hidden';
       if (typeof onMount === 'function') {
@@ -247,12 +270,16 @@ window.Modal = {
 
       const cleanup = result => {
         overlay.remove();
-        document.body.style.overflow = '';
+        _desapilar(overlay);
+        // Solo se devuelve el scroll si no queda ningún diálogo debajo: este
+        // confirm suele abrirse ENCIMA de una hoja (Centro → anular gestión).
+        if (!_pila.length) document.body.style.overflow = '';
         document.removeEventListener('keydown', kbHandler);
         resolve(result);
       };
 
       const kbHandler = e => {
+        if (!_esTope(overlay)) return;
         if (e.key === 'Escape') cleanup(false);
         if (e.key === 'Enter')  cleanup(true);
       };
@@ -265,6 +292,7 @@ window.Modal = {
 
       document.addEventListener('keydown', kbHandler);
       document.body.appendChild(overlay);
+      _apilar(overlay);
       document.body.style.overflow = 'hidden';
       overlay.querySelector('[data-action="confirm"]').focus();
     });
@@ -313,12 +341,14 @@ window.Modal = {
 
       const cleanup = result => {
         overlay.remove();
-        document.body.style.overflow = '';
+        _desapilar(overlay);
+        if (!_pila.length) document.body.style.overflow = '';
         document.removeEventListener('keydown', kbHandler);
         resolve(result);
       };
 
       const kbHandler = e => {
+        if (!_esTope(overlay)) return;
         if (e.key === 'Escape') { e.preventDefault(); cleanup(null); }
         // Enter confirms only on single-line; multiline lets Enter insert a newline.
         if (!multiline && e.key === 'Enter' && document.activeElement === input) {
@@ -335,6 +365,7 @@ window.Modal = {
 
       document.addEventListener('keydown', kbHandler);
       document.body.appendChild(overlay);
+      _apilar(overlay);
       document.body.style.overflow = 'hidden';
       if (typeof onMount === 'function') {
         try { onMount(input); } catch (e) { /* decorar nunca rompe el prompt */ }
