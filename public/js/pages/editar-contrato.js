@@ -1,4 +1,9 @@
 // @ts-nocheck
+// RETIRADO 2026-09-10 — este módulo ya NO se carga: contratos/editar-contrato.html
+// es ahora un reenvío al Centro y el editor vive en clientes-centro.js
+// (Centro.editarContrato / guardarContratoEditado). Se conserva por si hubiera
+// que revivir la página, igual que los nc-*.js del formulario clásico.
+// NO lo edites esperando que cambie algo en la app.
 const params = new URLSearchParams(location.search);
 const contratoDocId = params.get("id");
 // ¿A dónde volver al guardar/cancelar? El Centro de gestión llega con

@@ -1,303 +1,70 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <!-- Preconnect: abre TCP+TLS a los orígenes del arranque antes de que el
-       parser llegue a los <script> del SDK / primeras llamadas de auth.
-       gstatic SIN crossorigin (scripts clásicos no-CORS); identitytoolkit y
-       firestore CON (fetch CORS); securetoken solo DNS (se usa al expirar token). -->
-  <link rel="preconnect" href="https://www.gstatic.com">
-  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
-  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
-  <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
-  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Editar Contrato - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>El contrato se edita en el Centro – Cecomunica</title>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <meta name="theme-color" content="#0B2A47">
   <link rel="stylesheet" href="../css/ceco-ui.css?v=sh1">
-  <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
-  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
-  <!-- Kit de formularios (formato único 2026-09-03): encabezado de contexto -->
-  <link rel="stylesheet" href="../css/form-kit.css?v=fk3">
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="../js/firebase-init.js?v=ses2"></script>
-  <script src="../js/core/modulos.js?v=cc15"></script>
-  <script src="../js/core/layout.js?v=cc13"></script>
-  <script src="../js/core/roles.js"></script>
-  <script src="../js/core/formatting.js"></script>
-  <script defer src="../js/domain/totales.js"></script>
-  <script defer src="../js/domain/contratoTarifario.js?v=ct5"></script>
-  <script defer src="../js/domain/transicionPlan.js?v=tp2"></script>
-  <script src="../js/core/auth.js"></script>
-  <script src="../js/core/serial.js?v=1"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
-  <script defer src="../js/services/contratosService.js?v=num1"></script>
-  <script defer src="../js/domain/documentoContrato.js?v=corte1"></script>
-  <!-- Criterio ÚNICO de si un contrato admite cambios (antes escrito 3 veces). -->
-  <script defer src="../js/domain/contratoEdicion.js?v=ed1"></script>
-  <script defer src="../js/services/modelosService.js?v=mf1"></script>
-  <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/ui/modal.js?v=f5"></script>
-  <script defer src="../js/ui/formKit.js?v=sh1"></script>
-  <script defer src="/js/vendor/lucide.min.js?v=3"></script>
-  <script defer src="/js/core/icons.js?v=1"></script>
-
   <style>
-    /* Page-local — kit classes hacen el trabajo pesado */
-    /* Reservar espacio para el footer-strip sticky */
-    .app-body { padding-bottom: 84px; }
-    /* Renovación badge color sigue el accent (matches kit example) */
-    #renovacionBadge.chip-prioridad { background: var(--accent-soft); color: var(--navy); border-color: var(--accent-line); }
-    /* Prefijo "$" en campos de dinero */
-    .minput { position: relative; display: block; }
-    .minput::before { content: "$"; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--fg-4); font-size: 12px; pointer-events: none; z-index: 1; }
-    .minput input { padding-left: 18px !important; }
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; background:var(--bg-page); }
+    .aviso { max-width:520px; padding:32px; background:var(--surface-card); border:1px solid var(--border-default);
+             border-radius:8px; box-shadow:0 1px 2px rgba(11,42,71,.05), 0 8px 24px -12px rgba(11,42,71,.18); }
+    .aviso h1 { font:700 22px/1.25 var(--font-display); color:var(--navy); margin:0 0 12px; }
+    .aviso p  { font-size:15px; color:var(--fg-2); margin:0 0 14px; }
+    .aviso .nota { font-size:13.5px; color:var(--fg-3); }
   </style>
 </head>
 <body>
-  <div class="cc-app">
-  <div id="rail-mount"></div>
-  <div class="cc-work">
-  <div id="topbar-mount"></div>
-  <script>
-    Layout.renderTopbar({
-      title: '<i data-lucide="file-text"></i> Editar Contrato',
-      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' },
-      showHome: true,
-      homeHref: '../index.html',
-      showLogout: true
-    });
-  </script>
-
-  <div class="app-wrap app-wrap--wide app-body">
-
-    <nav class="app-breadcrumbs" aria-label="Breadcrumb">
-      <a href="../index.html">Inicio</a>
-      <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
-      <a href="index.html">Contratos</a>
-      <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
-      <span class="app-breadcrumbs-current" id="bc-contrato-id">—</span>
-    </nav>
-
-    <!-- Encabezado de contexto (formato único): qué contrato edito y en qué
-         estado está; los enlaces del ciclo viven aquí. -->
-    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
-      <div class="fk-contexto" style="margin-bottom:0;">
-        <div class="fk-avatar" style="font-size:12px;">CT</div>
-        <div class="fk-quien">
-          <h2 style="margin:0; font-size:18px;">Editar contrato</h2>
-          <p class="fk-meta" id="ph-subtitle">Cargando…</p>
-          <div class="fk-chips">
-            <span id="ph-estado-chip" class="chip-estado chip-cotizada">Pendiente Aprobación</span>
-          </div>
-        </div>
-        <div class="fk-acciones">
-          <!-- Enlaces del ciclo del equipo (P5): antes había que volver a la
-               lista y saberse el mapa de memoria para llegar a estas páginas. -->
-          <a class="btn btn-ghost btn-sm" id="lnkSeriales" href="#" style="display:none;"><i data-lucide="scan-barcode"></i> Seriales</a>
-          <a class="btn btn-ghost btn-sm" id="lnkTransicion" href="#" style="display:none;"><i data-lucide="repeat"></i> Transición</a>
-        </div>
-      </div>
-    </div>
-    <script>
-      // Los enlaces solo necesitan el ?id= de esta misma página.
-      (function () {
-        const id = new URLSearchParams(location.search).get('id');
-        if (!id) return;
-        document.addEventListener('DOMContentLoaded', () => {
-          const s = document.getElementById('lnkSeriales');
-          const t = document.getElementById('lnkTransicion');
-          if (s) { s.href = `seriales.html?id=${encodeURIComponent(id)}`; s.style.display = ''; }
-          if (t) { t.href = `transicion.html?id=${encodeURIComponent(id)}`; t.style.display = ''; }
-        });
-      })();
-    </script>
-
-    <form id="formEditar" onsubmit="return false;" novalidate>
-
-      <!-- Sección 1: Cliente -->
-      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
-        <div class="form-section" style="border:none; padding:0; margin:0;">
-          <div>
-            <p class="form-section-title"><i data-lucide="building-2" style="width:16px;height:16px;"></i> Cliente</p>
-            <p class="form-section-desc">Cliente vinculado al contrato. Para cambiarlo, edite la ficha del cliente.</p>
-          </div>
-          <div class="form-grid-2">
-            <div class="form-field">
-              <label class="form-label" for="cliente_nombre">Cliente</label>
-              <input class="form-input" type="text" id="cliente_nombre" disabled>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Sección 2: Detalles del contrato -->
-      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
-        <div class="form-section" style="border:none; padding:0; margin:0;">
-          <div>
-            <p class="form-section-title"><i data-lucide="file-text" style="width:16px;height:16px;"></i> Detalles del contrato</p>
-            <p class="form-section-desc">Tipo, acción, duración y estado del contrato.</p>
-          </div>
-          <div class="form-grid-3">
-            <div class="form-field">
-              <label class="form-label" for="tipo_contrato">Tipo de contrato <span class="req"></span></label>
-              <!-- 2026-09-09 (Alberto): solo Servicio — alquiler o propio se dice
-                   POR LÍNEA en la columna Modalidad. Si el contrato abierto es de
-                   un tipo viejo (Alquiler, Propio, Temporal…), el JS lo agrega como
-                   opción actual para no cambiarlo sin querer. -->
-              <select class="form-select" id="tipo_contrato" required>
-                <option value="SERV">Servicio</option>
-              </select>
-            </div>
-
-            <div class="form-field">
-              <label class="form-label" for="accion">Tipo de acción <span class="req"></span></label>
-              <select class="form-select" id="accion" required>
-                <option value="Nuevo">Nuevo</option>
-                <option value="Renovación">Renovación</option>
-                <option value="Adición">Adición</option>
-                <option value="No Aplica">No Aplica</option>
-              </select>
-            </div>
-
-            <div class="form-field">
-              <label class="form-label" for="duracion">Duración del contrato <span class="req"></span></label>
-              <select class="form-select" id="duracion" required onchange="toggleOtraDuracion(this.value)">
-                <option value="">Seleccione…</option>
-                <option value="12 meses">12 meses</option>
-                <option value="18 meses">18 meses</option>
-                <option value="Otro">Otro (especificar)</option>
-              </select>
-            </div>
-
-            <div class="form-field" id="otraDuracionLabel" style="display:none;">
-              <label class="form-label" for="otra_duracion">Especificar duración (meses)</label>
-              <input class="form-input" type="number" id="otra_duracion" min="1" placeholder="24" style="font-family:var(--font-mono);">
-              <span class="form-error-msg">Elegiste duración "Otro": indica el número de meses.</span>
-            </div>
-
-            <div class="form-field">
-              <label class="form-label" for="estado">Estado</label>
-              <select class="form-select" id="estado" disabled>
-                <option value="activo">Activo</option>
-                <option value="pendiente_aprobacion">Pendiente Aprobación</option>
-                <option value="vencido">Vencido</option>
-              </select>
-              <span class="form-hint">El estado se gestiona desde la aprobación.</span>
-            </div>
-          </div>
-
-          <!-- Disclosure: Renovación -->
-          <div class="disclosure-panel" id="renovacionBox" style="margin-top:var(--sp-4);">
-            <div class="disclosure-panel-title">
-              <span><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Modalidad de renovación</span>
-              <span id="renovacionBadge" class="chip-prioridad media">Renovación con equipo</span>
-            </div>
-            <!-- Plan por serial (Centro): la modalidad se deriva; las casillas se ocultan. -->
-            <p id="renovacionDerivada" class="form-hint hidden" style="margin-top:var(--sp-2);"></p>
-            <label class="form-check" style="margin-top:var(--sp-2);">
-              <input type="checkbox" id="renovacion_sin_equipo">
-              <span>
-                <span class="form-check-label">Marcar si es renovación sin equipo</span>
-                <span class="form-check-desc form-hint">El cliente conserva los equipos del contrato anterior.</span>
-              </span>
-            </label>
-            <div class="disclosure-sub" id="renovacionRefurbishedWrap">
-              <label class="form-check" style="margin-top:var(--sp-2);">
-                <input type="checkbox" id="renovacion_refurbished_componentes">
-                <span>
-                  <span class="form-check-label">¿El contrato lleva refurbished de batería, antena, clip y piezas?</span>
-                </span>
-              </label>
-            </div>
-          </div>
-
-          <div class="form-field" style="margin-top:var(--sp-4);">
-            <label class="form-label" for="observaciones">Observaciones</label>
-            <textarea class="form-input form-textarea" id="observaciones" rows="3"
-              placeholder="Notas internas, requisitos especiales, fechas críticas…"></textarea>
-          </div>
-        </div>
-      </div>
-
-      <!-- Sección 3: Equipos -->
-      <div class="ds-card" style="margin-bottom:var(--sp-4);">
-        <div style="padding:var(--sp-5) var(--sp-5) var(--sp-3);">
-          <p class="form-section-title" style="margin-bottom:2px;"><i data-lucide="package" style="width:16px;height:16px;"></i> Equipos contratados</p>
-          <p class="form-section-desc" style="margin-bottom:0;">Modelos incluidos en el contrato, con cantidad y precio unitario.</p>
-        </div>
-        <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0; overflow:visible;">
-          <table class="app-table editable" aria-label="Equipos del contrato">
-            <thead>
-              <tr>
-                <th style="width:22%;">Modelo</th>
-                <th>Descripción</th>
-                <th style="width:80px;">Cant.</th>
-                <th style="width:140px;" title="Alquiler = equipo de CECOMUNICA · Del cliente = equipo propiedad del cliente">Modalidad</th>
-                <th style="width:120px;">P. Unit.</th>
-                <th style="width:120px; text-align:right;">Total</th>
-                <th style="width:48px;"></th>
-              </tr>
-            </thead>
-            <tbody id="tablaEquipos"></tbody>
-          </table>
-        </div>
-        <div class="table-add-row">
-          <button type="button" class="btn btn-ghost btn-sm" onclick="agregarEquipo()"><i data-lucide="plus"></i> Agregar equipo</button>
-        </div>
-      </div>
-
-      <!-- Sección 4: Servicios y otros -->
-      <div class="ds-card" style="margin-bottom:var(--sp-4);">
-        <div style="padding:var(--sp-5) var(--sp-5) var(--sp-3);">
-          <p class="form-section-title" style="margin-bottom:2px;"><i data-lucide="receipt" style="width:16px;height:16px;"></i> Servicios y otros</p>
-          <p class="form-section-desc" style="margin-bottom:0;">Activación u otros conceptos (del catálogo de Facturación). Mensuales → total mensual; únicos → primer pago.</p>
-        </div>
-        <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0; overflow:visible;">
-          <table id="tablaCargos" class="app-table editable">
-            <thead><tr><th>Concepto</th><th style="width:80px;">Cantidad</th><th style="width:130px;">Precio unit.</th><th style="width:130px;">Tipo</th><th style="width:110px; text-align:right;">Total</th><th style="width:48px;"></th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <div class="table-add-row">
-          <button type="button" class="btn btn-ghost btn-sm" onclick="NCCargos.agregarFila()"><i data-lucide="plus"></i> Agregar concepto</button>
-        </div>
-      </div>
-
-      <p id="mensaje" role="status" aria-live="polite" style="font-weight:600; margin: var(--sp-2) 0;"></p>
-
-    </form>
+  <!-- Retirada 2026-09-10: el editor vive dentro del Centro
+       (Centro.editarContrato). La página se queda como REENVÍO porque cinco
+       sitios la enlazan —admin·integridad, admin·operación y tres alertas de
+       auditoría— y porque hay correos viejos con este enlace. Resuelve el
+       cliente del contrato y abre su ficha con el contrato ya seleccionado;
+       si no puede resolverlo, deja al usuario en el Centro en vez de en un 404. -->
+  <div class="aviso">
+    <h1>El contrato se edita en el Centro</h1>
+    <p>
+      El editor se mudó a la ficha del cliente, donde vive el resto de la cuenta: los seriales,
+      las gestiones y el historial.
+    </p>
+    <p class="nota" id="estado">Buscando el contrato…</p>
+    <a class="btn btn-primary" id="ir" href="../clientes/centro.html">Ir al Centro de gestión</a>
   </div>
-
-  <!-- Sticky footer strip: total + actions -->
-  <div class="app-footer-strip">
-    <div class="app-footer-strip-stat">
-      <span class="app-footer-strip-stat-label">Total mensual</span>
-      <span class="app-footer-strip-stat-value value-highlight">$<span id="total">0.00</span></span>
-    </div>
-    <div class="app-footer-strip-stat" id="stat-primer-pago" style="display:none;">
-      <span class="app-footer-strip-stat-label">Primer pago</span>
-      <span class="app-footer-strip-stat-value">$<span id="primer_pago">0.00</span></span>
-    </div>
-    <div class="app-footer-strip-actions" style="margin-left:auto;">
-      <button type="button" class="btn btn-ghost" id="btnCancelarEdicion" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
-      <button type="submit" form="formEditar" class="btn btn-primary"><i data-lucide="save"></i> Guardar cambios</button>
-    </div>
-  </div>
-
-  <script src="../js/services/cargosService.js" defer></script>
-  <script src="../js/pages/nc-cargos.js" defer></script>
-  <script src="../js/pages/editar-contrato.js?v=fk9" defer></script>
-  </div> <!-- /cc-work -->
-  </div> <!-- /cc-app -->
   <script>
-    // Rail Command Center (F5) — espera auth (scripts defer) y pinta el rail del rol efectivo.
-    document.addEventListener('DOMContentLoaded', () => Layout.initRail('contratos'));
+    (function () {
+      const id = new URLSearchParams(location.search).get('id');
+      const estado = document.getElementById('estado');
+      const ir = document.getElementById('ir');
+      const alCentro = (url, texto) => {
+        ir.href = url;
+        estado.textContent = texto;
+        setTimeout(() => location.replace(url), 1500);
+      };
+      if (!id) { alCentro('../clientes/centro.html', 'Te llevo al Centro…'); return; }
+      // Esperar a que el SDK (defer) esté listo y haya sesión: sin auth las
+      // rules rechazan la lectura y el usuario vería "no se pudo".
+      const arrancar = () => firebase.auth().onAuthStateChanged(async (u) => {
+        if (!u) { location.href = '/login.html'; return; }
+        try {
+          const snap = await firebase.firestore().collection('contratos').doc(id).get();
+          const cli = snap.exists ? (snap.data().cliente_id || '') : '';
+          if (cli) {
+            alCentro(`../clientes/centro.html?id=${encodeURIComponent(cli)}&contrato=${encodeURIComponent(id)}`,
+              'Abriendo la ficha del cliente…');
+            return;
+          }
+        } catch (e) { console.warn('No se pudo resolver el contrato:', e); }
+        alCentro('../clientes/centro.html', 'No se pudo resolver ese contrato — te llevo al Centro.');
+      });
+      if (window.firebase?.auth) arrancar();
+      else window.addEventListener('DOMContentLoaded', arrancar);
+    })();
   </script>
 </body>
 </html>

@@ -77,8 +77,9 @@ test("nadie vuelve a tener su propia copia del criterio", () => {
     // editar-contrato.js: if (c.estado === "aprobado" && c.firma_solicitud_estado === "pendiente")
     /c\.estado\s*===?\s*['"]aprobado['"]\s*&&\s*c\.firma_solicitud_estado/,
   ];
+  // editar-contrato.js quedó RETIRADO (su HTML es un reenvío): el único dueño
+  // vivo del criterio es el Centro.
   for (const f of [
-    ["public", "js", "pages", "editar-contrato.js"],
     ["public", "js", "pages", "clientes-centro.js"],
   ]) {
     const src = leer(...f).replace(/\/\/.*$/gm, "");   // sin comentarios
@@ -88,9 +89,7 @@ test("nadie vuelve a tener su propia copia del criterio", () => {
       assert.ok(!re.test(src), `${f.at(-1)} volvió a inlinear el criterio de edición (${re})`);
     }
   }
-  // Y las páginas tienen que cargarlo, o truena en runtime.
-  for (const [dir, html] of [["clientes", "centro.html"], ["contratos", "editar-contrato.html"]]) {
-    assert.ok(leer("public", dir, html).includes("domain/contratoEdicion.js"),
-      `${dir}/${html} no carga js/domain/contratoEdicion.js`);
-  }
+  // Y la página tiene que cargarlo, o truena en runtime.
+  assert.ok(leer("public", "clientes", "centro.html").includes("domain/contratoEdicion.js"),
+    "clientes/centro.html no carga js/domain/contratoEdicion.js");
 });
