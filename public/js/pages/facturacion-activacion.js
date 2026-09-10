@@ -285,7 +285,7 @@ const MESES=['','enero','febrero','marzo','abril','mayo','junio','julio','agosto
 async function vistaPrevia(id){
   const ov=document.getElementById('overlayFactura');
   document.getElementById('facturaBody').innerHTML='<p style="color:var(--fg-3);">Calculando…</p>';
-  ov.classList.add('show'); ov.style.display='flex';
+  Modal.open('overlayFactura');
   if(window.lucide) lucide.createIcons();
   try{
     const res = await firebase.functions().httpsCallable('calcularFacturaContrato')({ contratoId:id });
@@ -320,5 +320,5 @@ function renderFactura(f){
   if(window.lucide) lucide.createIcons();
 }
 
-function cerrarFactura(){ const ov=document.getElementById('overlayFactura'); ov.classList.remove('show'); ov.style.display='none'; }
+function cerrarFactura(){ Modal.close('overlayFactura'); }
 window.vistaPrevia=vistaPrevia; window.cerrarFactura=cerrarFactura;

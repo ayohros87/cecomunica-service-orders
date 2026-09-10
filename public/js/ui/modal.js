@@ -99,8 +99,12 @@ window.Modal = {
     if (!el) return;
     el.style.display = 'none';
     el.classList.remove('open');
-    document.body.style.overflow = '';
     _desapilar(el);
+    // Solo se devuelve el scroll si no queda ningún diálogo abierto: cerrar
+    // uno no puede desbloquear la página por debajo de otro que sigue arriba,
+    // ni un cierre tardío de algo ya olvidado (visto con el emulador en
+    // inventario/modelos, 2026-09-10).
+    if (!_pila.length) document.body.style.overflow = '';
     if (el._modalKeyHandler) {
       document.removeEventListener('keydown', el._modalKeyHandler);
       delete el._modalKeyHandler;

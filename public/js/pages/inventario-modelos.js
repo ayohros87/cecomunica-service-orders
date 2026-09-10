@@ -371,11 +371,10 @@ function abrirModal(id=null){
   poblarVarianteDe(mEdit ? (mEdit.variante_de||'') : '', document.getElementById('f-tipo').value || '');
   onEstadoChange();
 
-  const ov = document.getElementById('overlay');
-  ov.classList.add('show'); ov.style.display = 'flex';
+  Modal.open('overlay');
   if (window.lucide) lucide.createIcons();
 }
-function cerrarModal(){ const ov=document.getElementById('overlay'); ov.classList.remove('show'); ov.style.display='none'; modeloEditId=null; }
+function cerrarModal(){ Modal.close('overlay'); modeloEditId=null; }
 
 // Alta desde el estado vacío: arranca con lo que se estaba buscando ya escrito
 // en Modelo y el foco en Marca, que es lo único que falta por decidir.
@@ -535,10 +534,9 @@ async function exportarExcel(){
 let qboCandidatos = [];
 
 async function importarDeQBO(){
-  const ov = document.getElementById('overlayQbo');
   document.getElementById('btnImportarQbo').disabled = true;
   document.getElementById('qboBody').innerHTML = '<p style="color:var(--fg-3);">Consultando QuickBooks…</p>';
-  ov.classList.add('show'); ov.style.display = 'flex';
+  Modal.open('overlayQbo');
   if (window.lucide) lucide.createIcons();
   try{
     const res = await firebase.functions().httpsCallable('listQBOEquipos')();
@@ -632,16 +630,15 @@ async function confirmarImportQbo(){
   }catch(e){ console.error(e); Toast.show('Error al importar: '+e.message,'bad'); btn.disabled = false; }
 }
 
-function cerrarQbo(){ const ov=document.getElementById('overlayQbo'); ov.classList.remove('show'); ov.style.display='none'; }
+function cerrarQbo(){ Modal.close('overlayQbo'); }
 
 /* ===== Proponer mapeo QBO a modelos existentes (verificar → aprobar) ===== */
 let mapeoPropuestas = [];
 
 async function proponerMapeoQBO(){
-  const ov = document.getElementById('overlayMapeo');
   document.getElementById('btnAplicarMapeo').disabled = true;
   document.getElementById('mapeoBody').innerHTML = '<p style="color:var(--fg-3);">Consultando QuickBooks…</p>';
-  ov.classList.add('show'); ov.style.display = 'flex';
+  Modal.open('overlayMapeo');
   if (window.lucide) lucide.createIcons();
   try{
     const res = await firebase.functions().httpsCallable('listQBOEquipos')();
@@ -726,7 +723,7 @@ async function confirmarMapeo(){
   }catch(e){ console.error(e); Toast.show('Error al aplicar: '+e.message,'bad'); btn.disabled = false; }
 }
 
-function cerrarMapeo(){ const ov=document.getElementById('overlayMapeo'); ov.classList.remove('show'); ov.style.display='none'; }
+function cerrarMapeo(){ Modal.close('overlayMapeo'); }
 
 /* ===== Exponer ===== */
 // Se llama desde el interruptor y también desde el estado vacío ("Ver todos los

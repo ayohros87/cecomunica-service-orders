@@ -301,10 +301,9 @@ async function exportarExcel(){
 let qboCandidatos = [];
 
 async function importarDeQBO(){
-  const ov = document.getElementById('overlayQbo');
   document.getElementById('btnImportarQbo').disabled = true;
   document.getElementById('qboBody').innerHTML = '<p style="color:var(--fg-3);">Consultando QuickBooks…</p>';
-  ov.classList.add('show'); ov.style.display = 'flex';
+  Modal.open('overlayQbo');
   if (window.lucide) lucide.createIcons();
   try{
     const res = await firebase.functions().httpsCallable('listQBOPiezas')();
@@ -437,7 +436,7 @@ async function resolverRevision(id, cual){
 }
 window.resolverRevision = resolverRevision;
 
-function cerrarQbo(){ const ov=document.getElementById('overlayQbo'); ov.classList.remove('show'); ov.style.display='none'; }
+function cerrarQbo(){ Modal.close('overlayQbo'); }
 
 /* ===== Exponer ===== */
 window.importarDeQBO = importarDeQBO;

@@ -72,7 +72,7 @@ function confirmDialog({ title = 'Confirmar', message = '', confirmText = 'Acept
     const $cancel = document.getElementById('btnCancel');
 
     function cleanup(result){
-      overlay.style.display = 'none';
+      Modal.close('overlay');
       $ok.onclick = $cancel.onclick = overlay.onclick = null;
       document.removeEventListener('keydown', onKey);
       resolve(result);
@@ -83,8 +83,11 @@ function confirmDialog({ title = 'Confirmar', message = '', confirmText = 'Acept
     $msg.innerHTML = message;          // message viene controlado por nosotros (escapeHtml)
     $ok.textContent = confirmText;
 
-    overlay.style.display = 'flex';
-    setTimeout(()=> $ok.focus(), 0);
+    // onEscape:false — el Escape lo maneja onKey, que además resuelve la
+    // promesa en false. El foco va al botón de confirmar, después del que
+    // pone el kit en el primer elemento enfocable.
+    Modal.open('overlay', { onEscape: false });
+    setTimeout(()=> $ok.focus(), 60);
 
     $ok.onclick = ()=> cleanup(true);
     $cancel.onclick = ()=> cleanup(false);

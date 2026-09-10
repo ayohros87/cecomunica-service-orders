@@ -309,8 +309,8 @@ test("K11 · ninguna página se declara su propio backdrop ni arma diálogos a m
   assert.match(modalJs, /function _esTope\(/, "modal.js lleva la pila de diálogos");
   assert.equal((modalJs.match(/_esTope\(/g) || []).length, 5,
     "los cuatro caminos (open, sheet, confirm, prompt) consultan la pila");
-  assert.equal((modalJs.match(/if \(!_pila\.length\) document\.body\.style\.overflow = '';/g) || []).length, 2,
-    "confirm y prompt solo devuelven el scroll si no queda nada debajo");
+  assert.equal((modalJs.match(/if \(!_pila\.length\) document\.body\.style\.overflow = '';/g) || []).length, 3,
+    "close, confirm y prompt solo devuelven el scroll si no queda nada debajo");
 
   // Cajón lateral: variante del kit, no una familia aparte.
   assert.match(ui, /\.modal-backdrop\.is-drawer \{/, "el kit define la variante de cajón lateral");
@@ -339,6 +339,31 @@ test("K11 · ninguna página se declara su propio backdrop ni arma diálogos a m
     for (const tag of (fs2.readFileSync(f, "utf8").match(/<div[^>]*class="[^"]*modal-backdrop[^"]*"[^>]*>/g) || [])) {
       assert.ok(/role="dialog"/.test(tag),
         `${rel}: fondo sin role="dialog" → ${tag.replace(/\s+/g, " ").slice(0, 80)}`);
+    }
+  }
+
+  // Todo fondo estático se abre y se cierra por el kit. Hacerlo a mano con
+  // style.display funciona a la vista (el inline gana sobre el CSS) pero deja
+  // fuera Escape, la trampa de foco y el bloqueo del scroll, y el kit no se
+  // entera de que hay un diálogo: la pila de Escape falla con dos encimados.
+  const fuentes = [];
+  (function walk(d) { for (const e of fs2.readdirSync(d, { withFileTypes: true })) { const p = path2.join(d, e.name);
+    if (e.isDirectory()) { if (!/vendor|node_modules/.test(e.name)) walk(p); }
+    else if (e.name.endsWith(".js") || e.name.endsWith(".html")) fuentes.push(fs2.readFileSync(p, "utf8")); } })(path2.join(RAIZ, "public"));
+  for (const f of htmls) {
+    const rel = path2.relative(path2.join(RAIZ, "public"), f).replace(/\\/g, "/");
+    const src = fs2.readFileSync(f, "utf8");
+    const fondos = (src.match(/<div[^>]*class="[^"]*modal-backdrop[^"]*"[^>]*>/g) || []);
+    if (!fondos.length) continue;
+    assert.match(src, /ui\/modal\.js/, `${rel}: tiene modales del kit pero no carga ui/modal.js`);
+    for (const tag of fondos) {
+      const id = (tag.match(/id="([^"]+)"/) || [])[1];
+      assert.ok(id, `${rel}: fondo sin id, no se puede abrir con Modal.open`);
+      for (const verbo of ["open", "close"]) {
+        const re = new RegExp(`Modal\\.${verbo}\\(\\s*['"]${id}['"]`);
+        assert.ok(fuentes.some(s => re.test(s)),
+          `${rel}#${id}: nadie lo ${verbo === "open" ? "abre" : "cierra"} con Modal.${verbo} — hacerlo a mano pierde Escape, foco y bloqueo de scroll`);
+      }
     }
   }
 

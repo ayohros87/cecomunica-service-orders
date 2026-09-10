@@ -241,7 +241,7 @@
       firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
     }
   </script>
-  <script defer src="../js/ui/modal.js?v=f6"></script> <!-- Modal.confirm/prompt en vez de los nativos -->
+  <script defer src="../js/ui/modal.js?v=f7"></script> <!-- Modal.confirm/prompt en vez de los nativos -->
 </head>
 <body>
   <div class="cc-app">
@@ -390,7 +390,7 @@
       </div>
       <div class="modal-footer">
         <span class="spacer" style="flex:1;"></span>
-        <button class="btn btn-ghost" id="gpGlobalClose2" onclick="document.getElementById('gpGlobalOverlay').style.display='none'">Cerrar</button>
+        <button class="btn btn-ghost" id="gpGlobalClose2" onclick="Modal.close('gpGlobalOverlay')">Cerrar</button>
         <button class="btn btn-primary" id="gpGlobalExport"><i data-lucide="download"></i> Exportar CSV</button>
       </div>
     </div>
@@ -412,7 +412,7 @@
       </div>
       <div class="modal-footer">
         <span class="spacer" style="flex:1;"></span>
-        <button class="btn btn-primary" onclick="document.getElementById('gpEquiposOverlay').style.display='none'">Cerrar</button>
+        <button class="btn btn-primary" onclick="Modal.close('gpEquiposOverlay')">Cerrar</button>
       </div>
     </div>
   </div>
