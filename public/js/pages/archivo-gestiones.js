@@ -31,10 +31,11 @@ window.ArchivoGestiones = {
     return `<span class="chip-estado" style="${css}">${this.esc(GestionesService.estadoLabel(e))}</span>`;
   },
 
-  fecha(ts) {
-    const d = ts?.toDate ? ts.toDate() : null;
-    return d ? d.toLocaleDateString() : '—';
-  },
+  // FMT.date fija 'es-PA' (DD/MM/YYYY). Sin locale, el mismo archivo salia
+  // 9/9/2026 en una maquina y 09/09/2026 en otra — y en el CSV, que es lo que
+  // se manda por correo, 3/12 se lee como marzo o como diciembre segun quien
+  // abra.
+  fecha(ts) { return ts?.toDate ? FMT.date(ts) : '—'; },
 
   fila(g) {
     const E = this.esc.bind(this);

@@ -55,8 +55,8 @@ window.ContratosLista = {
   // columna de acciones (ver buildAcciones). Aquí quedan solo los estados
   // informativos/históricos (terminado, baja aprobada).
   bajaPill(data) {
-    const finTerm = data.terminacion_fin?.toDate ? data.terminacion_fin.toDate().toLocaleDateString()
-      : (data.baja_fecha_fin?.toDate ? data.baja_fecha_fin.toDate().toLocaleDateString() : '');
+    const finTerm = data.terminacion_fin?.toDate ? FMT.date(data.terminacion_fin)
+      : (data.baja_fecha_fin?.toDate ? FMT.date(data.baja_fecha_fin) : '');
     if (data.terminacion_total) {
       return `<span class="chip-estado chip-cancelada" title="Terminación total${finTerm ? ' · factura hasta ' + finTerm : ''}"><i data-lucide="file-minus-2" style="width:12px;height:12px;"></i> Terminado</span>`;
     }
@@ -243,7 +243,7 @@ window.ContratosLista = {
         d.estado || '',
         DocumentoContrato.papel(d),
         Number(d.seriales_count || 0),
-        d.fecha_creacion?.toDate ? d.fecha_creacion.toDate().toLocaleDateString() : '',
+        d.fecha_creacion?.toDate ? FMT.date(d.fecha_creacion) : '',
         CS.mapaUsuarios[d.creado_por_uid] || '',
         ...(montos ? [FMT.round2(tot.totalConITBMS)] : []),
       ];
@@ -330,7 +330,7 @@ window.ContratosLista = {
       </td>
       <td>${ContratosLista.papelChip(data)}</td>
       <td>${ContratosLista.devolucionPill(data, id)}</td>
-      <td class="td-muted">${data.fecha_creacion?.toDate ? data.fecha_creacion.toDate().toLocaleDateString() : '-'}</td>
+      <td class="td-muted">${data.fecha_creacion?.toDate ? FMT.date(data.fecha_creacion) : '-'}</td>
       <td class="td-muted" data-creador-uid="${esc(data.creado_por_uid || '')}">${esc(CS.mapaUsuarios[data.creado_por_uid] || (data.creado_por_uid ? '…' : '-'))}</td>
       ${ContratosLista.verMontos()
         ? `<td class="td-mono" style="text-align:right; color:var(--fg-1); font-weight:600;">${FMT.money(tot.totalConITBMS)}</td>`

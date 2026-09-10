@@ -22,8 +22,10 @@ window.ArchivoExpediente = {
   fecha(ts, { hora = false } = {}) {
     const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
     if (!d || isNaN(d)) return '';
-    return hora ? `${d.toLocaleDateString()} · ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-      : d.toLocaleDateString();
+    // 'es-PA' explicito (FMT.date): sin locale la misma fecha se lee distinto
+    // segun la maquina que abra el archivo.
+    return hora ? `${FMT.date(d)} · ${d.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' })}`
+      : FMT.date(d);
   },
 
   // Un hito de la línea de tiempo. `estado`: 'hecho' | 'ahora' | 'pendiente'.
@@ -172,10 +174,16 @@ window.ArchivoExpediente = {
         : 'Sin índice de seriales todavía — corre scripts/backfill-gestiones-archivo.js.');
 
     const contratos = (g.contratos_afectados || []).filter(Boolean);
+    // "No afecta ningún contrato" a secas se lee como "es inofensiva", y en un
+    // reemplazo pendiente de bodega eso es engañoso: lo que pasa es que el
+    // serial todavía no está amarrado a ningún contrato. Se dice cuál de las
+    // dos cosas es.
     const cuerpoContratos = contratos.length
       ? `<div style="display:flex; flex-direction:column; gap:6px;">${contratos.map((c) =>
         `<a href="documento.html?id=${encodeURIComponent(c)}" style="font-family:var(--font-mono,monospace); font-size:12.4px;">${E(c)}</a>`).join('')}</div>`
-      : this.vacio('No afecta ningún contrato.');
+      : this.vacio((g.items || []).length
+        ? 'Ningún serial de esta gestión está amarrado a un contrato.'
+        : 'No afecta ningún contrato.');
 
     const notas = g.notas
       ? `<div style="margin-top:16px; font-size:13px; color:var(--fg-2); border-left:2px solid var(--border-default); padding-left:12px;">${E(g.notas)}</div>`
