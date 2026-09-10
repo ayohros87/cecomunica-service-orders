@@ -706,7 +706,7 @@
     el.hidden = true;
     el.innerHTML = `
       <div class="co-cat-overlay" data-close="1"></div>
-      <aside class="co-cat-panel" role="dialog" aria-label="Catálogo de piezas">
+      <aside class="co-cat-panel" aria-label="Catálogo de piezas">
         <header class="co-cat-head">
           <div>
             <strong>Catálogo de piezas</strong>
@@ -723,9 +723,17 @@
     document.body.appendChild(el);
     el.querySelectorAll('[data-close]').forEach(c => c.addEventListener('click', cerrarCatalogo));
     el.querySelector('.co-cat-search input').addEventListener('input', (e) => renderCatalogoList(e.target.value));
-    // El backdrop deja pasar el puntero (para arrastrar a los equipos), así que
-    // el cierre es por botón X o tecla Escape.
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !el.hidden) cerrarCatalogo(); });
+    // Este panel NO es un diálogo a propósito: el backdrop deja pasar el
+    // puntero para poder arrastrar piezas sobre los equipos de atrás, no
+    // atrapa el foco y no bloquea la página. Por eso no lleva role="dialog"
+    // ni usa Modal: cierra por el botón X o por Escape.
+    // Escape solo actúa si no hay un diálogo del kit encima, que tiene
+    // prioridad (2026-09-10).
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || el.hidden) return;
+      if (document.querySelector('.modal-backdrop.open, .overlay')) return;
+      cerrarCatalogo();
+    });
     catalogoEl = el;
     return el;
   }
@@ -886,18 +894,13 @@
         </section>`;
     }).join('');
 
-    const ov = document.createElement('div');
-    ov.className = 'co-preview-ov';
-    ov.innerHTML = `
-      <div class="co-preview-card" role="dialog" aria-label="Vista previa de cotización">
-        <header class="co-preview-head">
-          <strong><i data-lucide="eye"></i> Vista previa — no se ha guardado ni enviado</strong>
-          <div>
-            <button class="btn btn-ghost btn-sm" id="cvPrint"><i data-lucide="printer"></i> Imprimir</button>
-            <button class="btn btn-ghost btn-icon btn-sm" id="cvClose" title="Cerrar"><i data-lucide="x"></i></button>
-          </div>
-        </header>
-        <div class="co-preview-body" id="cvBody">
+    // Hoja del kit (Modal.sheet, 2026-09-10). El overlay propio que había
+    // aquí duplicaba .modal-backdrop. La impresión sigue saliendo por
+    // body.co-previewing, que ahora apunta al nodo del kit.
+    document.body.classList.add('co-previewing');
+    Modal.sheet({
+      title: 'Vista previa — no se ha guardado ni enviado', icon: 'eye', size: 'lg',
+      html: `
           <div class="cv-meta">
             <div><b>Cliente:</b> ${esc(cli.razon || '—')}${cli.ruc ? ' · RUC ' + esc(cli.ruc) : ''}</div>
             <div><b>Orden:</b> ${esc(ordenId)} · <b>Fecha:</b> ${esc(form.fecha)} · <b>Validez:</b> ${esc(form.validezDias)} días</div>
@@ -910,16 +913,13 @@
             ${form.descuentoPct > 0 ? `<div><span>Descuento (${form.descuentoPct}%)</span><span>−${FMT.money(t.descGlobal)}</span></div>` : ''}
             <div><span>${form.itbmsPct > 0 ? 'ITBMS (' + form.itbmsPct + '%)' : 'ITBMS exento'}</span><span>${FMT.money(t.itbms)}</span></div>
             <div class="cv-tot-total"><span>Total</span><span>${FMT.money(t.total)}</span></div>
-          </div>
-        </div>
-      </div>`;
-    document.body.appendChild(ov);
-    document.body.classList.add('co-previewing');
-    const close = () => { ov.remove(); document.body.classList.remove('co-previewing'); };
-    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
-    ov.querySelector('#cvClose').addEventListener('click', close);
-    ov.querySelector('#cvPrint').addEventListener('click', () => window.print());
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+          </div>`,
+      buttons: [
+        { action: 'imprimir', label: 'Imprimir', icon: 'printer' },
+        { action: 'cerrar', label: 'Cerrar', primary: true },
+      ],
+      onAction: (a) => { if (a === 'imprimir') { window.print(); return false; } return null; },
+    }).then(() => document.body.classList.remove('co-previewing'));
   }
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────

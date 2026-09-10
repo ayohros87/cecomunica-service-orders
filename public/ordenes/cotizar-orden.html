@@ -18,7 +18,7 @@
   <meta charset="UTF-8">
   <title>Cotizar Orden – Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=sh2">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=sh3">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
   <link rel="stylesheet" href="../css/cotizaciones-kit.css?v=va1">
@@ -104,11 +104,8 @@
     /* Autocompletar: que el nombre también corte en pantallas angostas */
     .co-pza-item span:first-child { overflow-wrap:anywhere; min-width:0; }
 
-    /* Vista previa */
-    .co-preview-ov { position:fixed; inset:0; z-index:1100; background:rgba(0,0,0,.45); display:flex; align-items:flex-start; justify-content:center; overflow:auto; padding:24px; }
-    .co-preview-card { background:#fff; border-radius:12px; width:min(760px,100%); box-shadow:0 16px 48px rgba(0,0,0,.25); }
-    .co-preview-head { position:sticky; top:0; background:#fff; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:14px 18px; border-bottom:1px solid var(--border-subtle,#e5e7eb); border-radius:12px 12px 0 0; }
-    .co-preview-body { padding:18px; }
+    /* Vista previa: la caja es una hoja del kit (.modal-backdrop de
+       ceco-ui.css, 2026-09-10). Aquí solo quedan los estilos del CONTENIDO. */
     .cv-meta { font-size:13px; line-height:1.6; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid #f1f3f5; }
     .cv-eq { margin:0 0 16px; }
     .cv-eq h4 { margin:0 0 4px; font-size:14px; }
@@ -124,10 +121,12 @@
     .cv-tot-total { border-top:1px solid var(--border-default,#d1d5db); margin-top:4px; padding-top:6px; font-weight:700; }
 
     @media print {
-      body.co-previewing > *:not(.co-preview-ov) { display:none !important; }
-      .co-preview-ov { position:static; background:#fff; padding:0; }
-      .co-preview-card { box-shadow:none; width:100%; }
-      .co-preview-head .btn { display:none; }
+      /* Solo se imprime la hoja de la vista previa, desplegada entera. */
+      body.co-previewing > *:not(.modal-backdrop) { display:none !important; }
+      .modal-backdrop.open { position:static; display:block; background:#fff; padding:0; backdrop-filter:none; }
+      .modal-backdrop > .modal { box-shadow:none; width:100%; max-width:100%; max-height:none; overflow:visible; }
+      .modal-body { overflow:visible; }
+      .modal-footer, .modal-close { display:none !important; }
     }
   </style>
 
@@ -177,7 +176,7 @@
     <div id="cotizarMount"></div>
   </div>
 
-  <script src="../js/pages/cotizar-orden.js?v=eq3" defer></script>
+  <script src="../js/pages/cotizar-orden.js?v=kit1" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

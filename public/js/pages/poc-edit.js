@@ -76,13 +76,11 @@ window.PocEdit = {
       sel.appendChild(opt);
     });
 
-    document.getElementById('editDrawerOverlay').classList.add('active');
-    document.getElementById('editDrawer').classList.add('active');
+    Modal.open('editDrawerOverlay');
   },
 
   cerrar() {
-    document.getElementById('editDrawerOverlay').classList.remove('active');
-    document.getElementById('editDrawer').classList.remove('active');
+    Modal.close('editDrawerOverlay');
     if (this._row) this._row.classList.remove('row-editing');
     this._docId = null;
     this._row   = null;
@@ -312,15 +310,10 @@ window.PocEdit = {
 
   init() {
     const overlay = document.getElementById('editDrawerOverlay');
-    if (overlay) overlay.addEventListener('click', () => this.cerrar());
+    if (overlay) overlay.addEventListener('click', (e) => { if (e.target === overlay) this.cerrar(); });
     // Escribir a mano en el input refleja en los chips (activa/atenúa).
     const gi = document.getElementById('drawer-grupos');
     if (gi) gi.addEventListener('input', () => this.renderGruposChips());
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && document.getElementById('editDrawer')?.classList.contains('active')) {
-        this.cerrar();
-      }
-    });
   }
 };
 

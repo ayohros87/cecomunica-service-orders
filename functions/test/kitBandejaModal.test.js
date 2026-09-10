@@ -256,10 +256,10 @@ test("K11 · ninguna página se declara su propio backdrop ni arma diálogos a m
   // fondo ni centrado: había que hacer scroll para verlos. K10 no lo vio
   // porque ese overlay nunca asignaba className: se escribía con innerHTML
   // dentro de un div ya presente en el HTML.
-  const CSS_PERMITIDO = {
-    "admin/grupos.html": ".gp-modal-overlay",    // pendiente de migrar a Modal.sheet
-    "POC/index.html": "#editDrawerOverlay",      // cajón lateral, no un modal centrado
-  };
+  // Vacío desde 2026-09-10: no queda ninguna página con backdrop propio.
+  // El cajón lateral tampoco es una excepción — es la variante `.is-drawer`
+  // del kit, con el mismo fondo y el mismo ciclo de vida.
+  const CSS_PERMITIDO = {};
   const htmls = [];
   (function walk(d) { for (const e of fs2.readdirSync(d, { withFileTypes: true })) { const p = path2.join(d, e.name);
     if (e.isDirectory()) { if (!/vendor|node_modules/.test(e.name)) walk(p); } else if (e.name.endsWith(".html")) htmls.push(p); } })(path2.join(RAIZ, "public"));
@@ -278,7 +278,10 @@ test("K11 · ninguna página se declara su propio backdrop ni arma diálogos a m
     }
   }
   // Diálogos armados a mano: la firma es un innerHTML con role="dialog".
-  const JS_PERMITIDO = new Set(["ui/modal.js", "pages/cotizar-orden.js"]);
+  // Solo el kit puede hacerlo. Ojo: un panel que deja pasar el puntero y no
+  // atrapa el foco NO es un diálogo — el catálogo de piezas del cotizador
+  // perdió ese role porque era incorrecto, no porque estorbara la guardia.
+  const JS_PERMITIDO = new Set(["ui/modal.js"]);
   const js = [];
   (function walk(d) { for (const e of fs2.readdirSync(d, { withFileTypes: true })) { const p = path2.join(d, e.name);
     if (e.isDirectory()) { if (!/vendor|node_modules/.test(e.name)) walk(p); } else if (e.name.endsWith(".js")) js.push(p); } })(path2.join(RAIZ, "public", "js"));
@@ -296,8 +299,37 @@ test("K11 · ninguna página se declara su propio backdrop ni arma diálogos a m
   assert.ok(!/cg-modal|cg-overlay/.test(sinComentarios(centro)), "clientes-centro.js sin la familia .cg-modal");
   assert.ok(!/cg-overlay/.test(leer("public", "clientes", "centro.html")), "centro.html sin el overlay propio");
   assert.ok(!/\.cg-modal/.test(sinComentarios(leer("public", "css", "ceco-gestion.css"))), "ceco-gestion.css sin CSS de modal");
-  assert.match(leer("public", "css", "ceco-ui.css"), /\.modal-footer \.sep \{ margin-left: auto; \}/, "el pie del kit conserva el separador .sep");
+  const ui = leer("public", "css", "ceco-ui.css");
+  assert.match(ui, /\.modal-footer \.sep \{ margin-left: auto; \}/, "el pie del kit conserva el separador .sep");
   assert.match(leer("public", "js", "ui", "modal.js"), /titleHtml = ''/, "Modal.sheet acepta titleHtml");
+
+  // Escape y bloqueo de scroll con diálogos encimados: solo responde el de
+  // encima y el scroll vuelve cuando la pila queda vacía.
+  const modalJs = leer("public", "js", "ui", "modal.js");
+  assert.match(modalJs, /function _esTope\(/, "modal.js lleva la pila de diálogos");
+  assert.equal((modalJs.match(/_esTope\(/g) || []).length, 5,
+    "los cuatro caminos (open, sheet, confirm, prompt) consultan la pila");
+  assert.equal((modalJs.match(/if \(!_pila\.length\) document\.body\.style\.overflow = '';/g) || []).length, 2,
+    "confirm y prompt solo devuelven el scroll si no queda nada debajo");
+
+  // Cajón lateral: variante del kit, no una familia aparte.
+  assert.match(ui, /\.modal-backdrop\.is-drawer \{/, "el kit define la variante de cajón lateral");
+  assert.match(leer("public", "POC", "index.html"), /id="editDrawerOverlay" class="modal-backdrop is-drawer"/,
+    "el cajón de POC usa la variante del kit");
+  assert.match(leer("public", "js", "pages", "poc-edit.js"), /Modal\.open\('editDrawerOverlay'\)/,
+    "poc-edit abre el cajón con el kit");
+
+  // admin/grupos: los 5 modales estáticos son del kit.
+  const grupos = leer("public", "admin", "grupos.html");
+  assert.equal((grupos.match(/class="modal-backdrop"/g) || []).length, 5, "los 5 modales de grupos son del kit");
+  assert.ok(!/gp-modal/.test(grupos), "grupos.html sin la familia .gp-modal");
+  const gruposJs = leer("public", "js", "pages", "admin-grupos.js");
+  assert.ok(!/Overlay'\)\.style\.display/.test(gruposJs), "admin-grupos abre y cierra con Modal.open/close");
+
+  // Cotizador: la vista previa es una hoja; la impresión apunta al nodo del kit.
+  const cotHtml = leer("public", "ordenes", "cotizar-orden.html");
+  assert.ok(!/\.co-preview-ov|\.co-preview-card/.test(cotHtml), "cotizar-orden sin su overlay propio");
+  assert.match(cotHtml, /body\.co-previewing > \*:not\(\.modal-backdrop\)/, "la impresión de la vista previa apunta al kit");
 });
 
 test("K5 · Modal.sheet resuelve con la acción del botón y respeta onAction=false", async () => {

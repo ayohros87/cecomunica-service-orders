@@ -472,11 +472,11 @@
   // ── Editor de la lista de grupos comunes (empresa/config) ───────────
   function abrirComunes() {
     $('gpComunesText').value = State.comunes.join('\n');
-    $('gpComunesOverlay').style.display = 'flex';
+    Modal.open('gpComunesOverlay');
     setTimeout(() => { const t = $('gpComunesText'); if (t) t.focus(); }, 50);
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
-  function cerrarComunes() { $('gpComunesOverlay').style.display = 'none'; }
+  function cerrarComunes() { Modal.close('gpComunesOverlay'); }
   async function guardarComunes() {
     const list = FMT.dedupGrupos(($('gpComunesText').value || '').split(/[\n,]+/));
     const btn = $('gpComunesGuardar');
@@ -564,11 +564,10 @@
   // Drill-down: equipos PoC del cliente que tienen el grupo `nombre`.
   async function verEquiposDeGrupo(nombre) {
     if (!State.clienteSel) return;
-    const ov = $('gpEquiposOverlay');
     $('gpEquiposTitle').innerHTML = `<i data-lucide="radio-tower"></i> Equipos en “${esc(nombre)}”`;
     $('gpEquiposResumen').textContent = '';
     $('gpEquiposList').innerHTML = '<div class="gp-mig-empty">Cargando…</div>';
-    ov.style.display = 'flex';
+    Modal.open('gpEquiposOverlay');
     if (typeof lucide !== 'undefined') lucide.createIcons();
     try {
       const devices = await PocService.getByCliente({
@@ -598,7 +597,7 @@
     }
   }
 
-  function cerrarEquipos() { $('gpEquiposOverlay').style.display = 'none'; }
+  function cerrarEquipos() { Modal.close('gpEquiposOverlay'); }
 
   function actualizarBotonMerge() {
     const btn = $('btnGpMerge');
@@ -713,12 +712,12 @@
     State.migFilas = filas.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
     $('gpMigStatus').textContent = '';
     renderMigList();
-    $('gpMigOverlay').style.display = 'flex';
+    Modal.open('gpMigOverlay');
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
   function cerrarMigracion() {
-    $('gpMigOverlay').style.display = 'none';
+    Modal.close('gpMigOverlay');
   }
 
   function ejemploFila(f) {
@@ -842,11 +841,11 @@
     // a abrir esta vista.
     const exp = $('gpGlobalExport');
     if (exp) exp.style.display = (State.rol === ROLES.ADMIN) ? '' : 'none';
-    $('gpGlobalOverlay').style.display = 'flex';
+    Modal.open('gpGlobalOverlay');
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
-  function cerrarGlobal() { $('gpGlobalOverlay').style.display = 'none'; }
+  function cerrarGlobal() { Modal.close('gpGlobalOverlay'); }
 
   function renderGlobal() {
     const filas = State.globalFilas;
@@ -947,14 +946,14 @@
     $('gpDelInputWrap').style.display = exige ? '' : 'none';
     $('gpDelInput').value = '';
     $('gpDelApply').disabled = exige;
-    $('gpDelOverlay').style.display = 'flex';
+    Modal.open('gpDelOverlay');
     if (typeof lucide !== 'undefined') lucide.createIcons();
     if (exige) $('gpDelInput').focus();
   }
 
   function cerrarDelModal() {
     delPendiente = null;
-    $('gpDelOverlay').style.display = 'none';
+    Modal.close('gpDelOverlay');
   }
 
   function validarDelInput() {
