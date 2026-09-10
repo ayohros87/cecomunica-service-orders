@@ -268,16 +268,24 @@ const GestionesService = {
   // la página; el trigger onGestionWrite manda el correo a bodega al aprobar.
   async aprobar(gestionId) {
     const user = firebase.auth().currentUser;
+    const g = await this.get(gestionId);
+    // `cierre.aprobacion` no es condición de cierre en reemplazo/demo (la
+    // compuerta va ANTES de bodega, no al final), pero sí deja el paso dado en
+    // el expediente: sin él, el checklist tenía que adivinarlo por el estado.
+    // El `motivo` con el que nació la gestión se conserva — dice QUÉ se
+    // aprobó, y el correo del trigger se escribe distinto según cuál sea.
     await firebase.firestore().collection(this.COL).doc(gestionId).update({
       estado: 'pendiente_bodega',
+      'cierre.aprobacion': true,
       aprobacion: {
         requiere: true,
+        ...(g?.aprobacion?.motivo ? { motivo: g.aprobacion.motivo } : {}),
         aprobado_por_uid: user?.uid || null,
         aprobado_por_email: user?.email || null,
         at: firebase.firestore.FieldValue.serverTimestamp(),
       },
     });
-    await this.registrarEvento(gestionId, 'aprobar', 'Excepción aprobada por administración — pasa a Bodega.');
+    await this.registrarEvento(gestionId, 'aprobar', 'Gestión aprobada — pasa a Bodega para asignar seriales.');
   },
 
   // Anular el expediente (nunca se borra). Vale para rechazar una excepción o

@@ -2053,7 +2053,11 @@ window.Centro = {
   },
 
   puedeAsignar() { return [ROLES.ADMIN, ROLES.INVENTARIO].includes(this.rol); },
-  puedeAprobar() { return this.rol === ROLES.ADMIN; },
+  // Aprobar una gestión es de administración o gerencia — es lo que dicen las
+  // reglas (esAprobacionGestion) y lo que dice el botón cuando está en gris.
+  // Aquí pedía ADMIN a secas: a un gerente se le apagaba el botón con el
+  // motivo "solo administración o gerencia aprueba", que él sí cumplía.
+  puedeAprobar() { return [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol); },
   puedeAprobarBaja() { return [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol); },
   puedeCrearGestion() { return [ROLES.ADMIN, ROLES.GERENTE, ROLES.VENDEDOR, ROLES.RECEPCION].includes(this.rol); },
 
@@ -2340,8 +2344,8 @@ window.Centro = {
     const filaG = (g, atenuada) => {
       // Progreso con LOS PASOS DEL TIPO (el 4 fijo de reemplazo/demo pintaba
       // "3/4" en un aumento cerrado con sus 6 pasos completos).
-      const defsG = this.CIERRE_DEFS[g.tipo] || this.CIERRE_DEFS.reemplazo;
-      const done = defsG.filter(([k]) => g.cierre?.[k] === true).length;
+      const defsG = this._defsGestion(g);
+      const done = defsG.filter(([k]) => this._pasoDone(g, k)).length;
       const fecha = g.fecha_solicitud?.toDate ? g.fecha_solicitud.toDate().toLocaleDateString('es-PA') : '—';
       const abierta = this.gSel === g.id;
       return `
@@ -2397,9 +2401,21 @@ window.Centro = {
   // El expediente solo la MUESTRA y, a quien puede asignar, le da el enlace
   // desde el menú de acciones (_accionesGestion → "Asignar seriales en Almacén").
 
-  _detalleGestion(g) {
-    // Checklist como timeline del kit: done = completado; next = el paso que
-    // sigue (todos los anteriores completos) — el ojo sabe dónde está parado.
+  // ¿Ese paso del checklist ya se cumplió? Normalmente lo dice `cierre`, pero
+  // la APROBACIÓN de reemplazo/demo no se estampaba ahí (no es condición de
+  // cierre: es la compuerta de entrada). Para las gestiones aprobadas antes de
+  // 2026-09-10 el flag no existe y el estado es la prueba: si salió de
+  // 'pendiente_aprobacion' sin anularse, alguien la aprobó.
+  _pasoDone(g, k) {
+    if (g.cierre?.[k] === true) return true;
+    return k === 'aprobacion' && !['pendiente_aprobacion', 'anulada'].includes(g.estado);
+  },
+
+  // Los pasos que le tocan a ESTA gestión. El tipo manda, con las variantes
+  // del aumento; y el paso de aprobación se pinta solo si la gestión lo lleva
+  // (`aprobacion.requiere`), para no dejar un paso eternamente pendiente en
+  // los reemplazos viejos que nacieron sin él.
+  _defsGestion(g) {
     let defs = this.CIERRE_DEFS[g.tipo] || this.CIERRE_DEFS.reemplazo;
     // La regularización comparte flags con el aumento pero su historia es
     // otra: sin bodega, sin OS, tramo desde la firma.
@@ -2429,9 +2445,23 @@ window.Centro = {
       ['programacion', 'Programación', 'OS de programación confirmada'],
       ['entrega', 'Entrega al cliente', 'El tramo se estampa en cada equipo (custodia con vigencia propia)'],
     ];
+    // Reemplazo / demo: la aprobación va DELANTE de todo. Sus CIERRE_DEFS no
+    // la traen porque no es condición de cierre — es la compuerta antes de
+    // bodega —, pero el vendedor tiene que ver que existe y dónde está parada.
+    if (!defs.some(([k]) => k === 'aprobacion') && g.aprobacion?.requiere === true) {
+      defs = [['aprobacion', 'Aprobación de ventas',
+        g.origen?.tipo === 'taller' ? 'El taller propone; ventas decide' : 'Antes de que Bodega asigne'], ...defs];
+    }
+    return defs;
+  },
+
+  _detalleGestion(g) {
+    // Checklist como timeline del kit: done = completado; next = el paso que
+    // sigue (todos los anteriores completos) — el ojo sabe dónde está parado.
+    const defs = this._defsGestion(g);
     const check = `<div class="cg-tl">` + defs.map(([k, t, s], i) => {
-      const done = g.cierre?.[k] === true;
-      const next = !done && defs.slice(0, i).every(([kk]) => g.cierre?.[kk] === true);
+      const done = this._pasoDone(g, k);
+      const next = !done && defs.slice(0, i).every(([kk]) => this._pasoDone(g, kk));
       // El paso de la firma se rotula con el expediente, no con la plantilla
       // (2026-09-10, caso GA20260909-03): una actualización de seriales se
       // aplica SIN firma y el checklist la daba por "Anexo firmado".
@@ -2640,7 +2670,9 @@ window.Centro = {
                ? 'Aumento esperando aprobación comercial — al aprobar, se imprime el anexo para la firma del cliente.'
                : g.origen?.tipo === 'taller'
                  ? 'El taller propone este reemplazo y espera la decisión de ventas. Al aprobar, Bodega recibe el aviso para asignar el equipo que sustituye a cada radio (mismo modelo).'
-                 : 'Excepción por servicio al cliente (propio sin garantía) — requiere aprobación de administración.'}</span>
+                 : g.aprobacion?.motivo === 'propio_excepcion' || (g.items || []).some(it => it.elegibilidad === 'propio_excepcion')
+                   ? 'Excepción por servicio al cliente (equipo propio sin garantía) — la decide ventas antes de que Bodega asigne.'
+                   : 'Reemplazo esperando la aprobación de ventas. Al aprobar, Bodega recibe el aviso para asignar el equipo que sustituye a cada radio.'}</span>
            </div>`;
       void puede; void fnAprobar; void sinCarta;
     } else if (g.estado === 'pendiente_firma' && g.tipo === 'aumento' && g.aumento?.es_regularizacion === true) {
@@ -2679,7 +2711,7 @@ window.Centro = {
   async aprobarGestion(gid) {
     try {
       await GestionesService.aprobar(gid);
-      Toast.show('Excepción aprobada — Bodega recibirá el aviso', 'ok');
+      Toast.show('Aprobada — Bodega recibirá el aviso para asignar', 'ok');
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo aprobar', 'bad'); }
   },
@@ -3936,22 +3968,29 @@ window.Centro = {
         serial_nuevo: null, pool_doc_id_nuevo: null,
       });
     }
-    const requiereAprobacion = items.some(it => it.elegibilidad === 'propio_excepcion');
+    // TODO reemplazo pasa por ventas (Alberto 2026-09-10). Antes solo se
+    // frenaba la excepción (equipo propio sin garantía) y el resto —que es la
+    // mayoría: alquiler— salía derecho a Bodega: ventas se enteraba del
+    // reemplazo cuando el radio ya estaba asignado. Un reemplazo es un equipo
+    // que sale del estante y una devolución que hay que ir a buscar; eso se
+    // decide, no se avisa. La excepción sigue distinguida en el correo porque
+    // lo que se aprueba ahí es otra cosa (cortesía sobre un equipo del cliente).
+    const excepcion = items.some(it => it.elegibilidad === 'propio_excepcion');
     try {
       const gid = await GestionesService.crear({ ...Centro._estampaReg(),
         tipo: 'reemplazo',
         cliente_id: this.cliente.id,
         cliente_nombre: this.cliente.nombre || '',
-        estado: requiereAprobacion ? 'pendiente_aprobacion' : 'pendiente_bodega',
+        estado: 'pendiente_aprobacion',
         origen: { tipo: 'vendedor' },
         items,
-        ...(requiereAprobacion ? { aprobacion: { requiere: true } } : {}),
+        aprobacion: { requiere: true, motivo: excepcion ? 'propio_excepcion' : 'reemplazo' },
       });
       this._cerrarModal();
       this.gSel = gid;
-      Toast.show(requiereAprobacion
-        ? `Solicitud ${gid} creada — espera aprobación de administración`
-        : `Solicitud ${gid} enviada — Bodega recibirá el aviso`, 'ok');
+      Toast.show(excepcion
+        ? `Solicitud ${gid} creada — excepción: espera la aprobación de ventas`
+        : `Solicitud ${gid} creada — ventas la aprueba y ahí Bodega recibe el aviso`, 'ok');
       await this.recargarGestiones();
       // El JSON para recepción se ofrece AQUÍ, que es cuando el vendedor tiene
       // el caso fresco y sabe a quién se lo va a mandar. Después queda siempre

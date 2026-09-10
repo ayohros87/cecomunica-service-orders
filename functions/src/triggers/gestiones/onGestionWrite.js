@@ -181,26 +181,46 @@ async function correoRechazoTaller(gid, g) {
   });
 }
 
+// Reemplazo pedido por el vendedor desde el Centro. Desde 2026-09-10 TODO
+// reemplazo pasa por aquí, no solo la excepción: antes, un reemplazo de
+// alquiler salía derecho a Bodega y ventas se enteraba con el radio ya
+// asignado. El correo se escribe distinto según lo que se esté aprobando —
+// una excepción (cortesía sobre un equipo del CLIENTE, sin garantía) no es lo
+// mismo que un reemplazo de alquiler, y quien aprueba necesita ver cuál es.
 async function correoAdmins(gid, g) {
   // Regla 2026-08-28: TODA solicitud de aprobación va SOLO a
   // ventas@cecomunica.com — ese buzón ES el de los aprobadores (sin copias
   // individuales: llegaría dos veces).
-  const items = (g.items || []).filter(it => it.elegibilidad === "propio_excepcion");
+  const excepciones = (g.items || []).filter(it => it.elegibilidad === "propio_excepcion");
+  const todos = g.items || [];
+  const hayExcepcion = excepciones.length > 0;
+  const vend = await G.vendedorEmailDeCliente(g.cliente_id);
   await G.encolarCorreo({
     to: await G.aprobacionesTo(),
-    cc: null,
+    cc: vend || null,
     subject: `Aprobación requerida: ${G.TIPO_LABEL[g.tipo] || g.tipo} ${gid} — ${g.cliente_nombre || "Cliente"}`,
-    preheader: "Reemplazo de equipo propio sin garantía vigente (excepción por servicio al cliente)",
+    preheader: hayExcepcion
+      ? "Incluye equipo propio sin garantía vigente (excepción por servicio al cliente)"
+      : `${todos.length} radio(s) a reemplazar — Bodega no asigna hasta que ventas apruebe`,
     bodyContent: `
-      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Gestión esperando aprobación</h2>
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">${hayExcepcion
+        ? "Reemplazo con excepción, esperando aprobación" : "Reemplazo esperando aprobación"}</h2>
       <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-        La gestión <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> incluye
-        equipo(s) <b>propios sin garantía vigente</b>: el reemplazo procede como excepción por servicio
-        al cliente y requiere aprobación de un administrador antes de que Bodega asigne.
+        ${G.escapeHtml(g.responsable_email || "Un vendedor")} pidió el reemplazo de
+        <b>${todos.length} radio(s)</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>
+        (gestión <b>${G.escapeHtml(gid)}</b>). Bodega <b>no recibe el aviso</b> hasta que esto se apruebe.
       </p>
-      ${G.tablaHtml(["Serial", "Modelo", "Motivo"], (items.length ? items : (g.items || [])).map(it => [
+      ${hayExcepcion ? `
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        ${excepciones.length === todos.length ? "Todos los equipos son" : `${excepciones.length} de los equipos son`}
+        <b>propios del cliente y sin garantía vigente</b> (marcados abajo): ese reemplazo procede
+        como <b>excepción por servicio al cliente</b> — no hay obligación contractual de reponerlo.
+      </p>` : ""}
+      ${G.tablaHtml(["Serial", "Modelo", "Sale por", "Motivo"], todos.map(it => [
         `<code>${G.escapeHtml(it.serial_saliente || "—")}</code>`,
         G.escapeHtml(it.modelo || "—"),
+        it.elegibilidad === "propio_excepcion" ? "<b>Propio SIN garantía</b>"
+          : it.elegibilidad === "propio_garantia" ? "Propio en garantía" : "Alquiler",
         G.escapeHtml(it.motivo_detalle || it.motivo_codigo || "—"),
       ]))}`,
     ctaUrl: G.urlGestion(g, gid),
@@ -538,7 +558,10 @@ module.exports = onDocumentWritten(
             `Propuesta del taller (orden ${after.origen?.orden_id || "—"}) enviada a ventas para aprobación, con el vendedor del cliente y el técnico en copia.`);
         } else {
           await correoAdmins(gid, after);
-          await G.registrarEvento(gid, "correo_aprobacion", "Correo de aprobación enviado a administradores (excepción propio sin garantía).");
+          const conExcepcion = (after.items || []).some(it => it.elegibilidad === "propio_excepcion");
+          await G.registrarEvento(gid, "correo_aprobacion", conExcepcion
+            ? "Solicitud de aprobación enviada a ventas — incluye equipo propio sin garantía (excepción por servicio al cliente)."
+            : "Solicitud de aprobación enviada a ventas, con el vendedor en copia. Bodega no recibe el aviso hasta que se apruebe.");
         }
       }
       // Aumento APROBADO comercialmente → aviso ANTICIPADO a bodega

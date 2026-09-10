@@ -1,5 +1,44 @@
 # Changelog
 
+## [El reemplazo lo aprueba ventas — y sigue sin firma del cliente] — 2026-09-10
+
+> Alberto: *"la gestión de reemplazo no debe llevar firma de cliente y sí debe
+> llevar aprobación de ventas, parece que ese paso se está saltando"*. Se
+> estaba saltando: el wizard del Centro solo mandaba a aprobación la
+> **excepción** (equipo propio del cliente y sin garantía vigente). Todo lo
+> demás —que es la mayoría, alquiler— nacía en `pendiente_bodega` y el trigger
+> le escribía al estante de una vez, así que ventas se enteraba del reemplazo
+> con el radio ya asignado y la devolución del saliente en marcha. El único
+> camino que sí pasaba por ventas era la propuesta del taller.
+>
+> - **Todo reemplazo nace en `pendiente_aprobacion`**, con `aprobacion.motivo`
+>   diciendo si es un reemplazo normal o la excepción. El candado ya no vive
+>   solo en el wizard: `reemplazoNaceEnAprobacion()` en las reglas rebota un
+>   reemplazo creado en cualquier otro estado, venga de quien venga. El demo
+>   sigue entrando derecho por bodega — no saca nada del contrato del cliente.
+> - **La firma no se toca: el reemplazo no la lleva.** No hay anexo que firmar
+>   (el contrato no cambia, se sustituye una unidad por otra). Ya era así en
+>   los tres sitios que mandan —`CIERRE_POR_TIPO`, `CIERRE_DEFS` y el menú de
+>   acciones—; ahora hay guardias que lo congelan para que la aprobación nueva
+>   no arrastre la firma con ella.
+> - **El correo a ventas dice qué se está aprobando**: quién lo pidió, cuántos
+>   radios y una columna *"Sale por"* (Alquiler · Propio en garantía · Propio
+>   SIN garantía) por serial. El párrafo de excepción sale solo cuando la hay,
+>   y el vendedor va en copia. Antes el correo afirmaba "propios sin garantía"
+>   sin mirar el dato — mismo vicio del caso GA20260909-03.
+> - **La aprobación se ve en el expediente**: paso "Aprobación de ventas" al
+>   frente del checklist y `cierre.aprobacion` estampado al aprobar. Los
+>   reemplazos viejos no estrenan un paso pendiente para siempre: sin
+>   `aprobacion.requiere` no se pinta, y si el flag no está pero la gestión ya
+>   salió de `pendiente_aprobacion`, el paso se da por dado.
+> - **Dos incoherencias que salieron de paso**: `puedeAprobar()` exigía ADMIN a
+>   secas y le apagaba el botón a un gerente con el motivo *"solo
+>   administración o gerencia aprueba"* —que él sí cumplía—; y la cola de
+>   aprobaciones le escondía los reemplazos a gerencia. Las reglas
+>   (`esAprobacionGestion`) siempre admitieron a los dos.
+> - Guardias: `functions/test/reemplazoAprobacionVentas.test.js` (8) y cinco
+>   assertions nuevas en `functions/test-emulator/rules.js`.
+
 ## [Dividir una orden de ENTRADA entre varios técnicos] — 2026-09-08
 
 > Petición de Brenda: la devolución de Tropical Resorts (Gamboa), 34 NX-420-R

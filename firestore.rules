@@ -1043,11 +1043,23 @@ service cloud.firestore {
           && request.resource.data.items.size() == 1
           && request.resource.data.responsable_uid == request.auth.uid;
       }
+      // TODO reemplazo nace esperando la decisión de ventas (2026-09-10). El
+      // candado vivía solo en el wizard, y el wizard solo frenaba la excepción
+      // (equipo propio sin garantía): un reemplazo de alquiler —la mayoría—
+      // nacía en 'pendiente_bodega' y el correo salía derecho al estante.
+      // Un reemplazo saca un radio del inventario y manda a buscar otro: eso
+      // se aprueba. Quien aprueba sigue siendo administración/gerencia
+      // (esAprobacionGestion), así que nadie se da curso solo.
+      function reemplazoNaceEnAprobacion() {
+        return request.resource.data.tipo != "reemplazo"
+          || request.resource.data.estado == "pendiente_aprobacion";
+      }
       allow read:   if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion","inventario","tecnico","tecnico_operativo","jefe_taller","contabilidad"];
       allow create: if isSignedIn()
                     && (userRole() in ["administrador","gerente","vendedor","recepcion"] || esPropuestaTaller())
                     && request.resource.data.cliente_id is string
                     && request.resource.data.tipo in ["reemplazo","demo","baja","aumento","devolucion","cambio_serial"]
+                    && reemplazoNaceEnAprobacion()
                     && request.resource.data.deleted == false;
       allow update: if isSignedIn() && (
                       esAprobacionGestion() || esAnulacionGestion() || esCartaGestion()

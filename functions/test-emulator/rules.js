@@ -379,6 +379,29 @@ async function main() {
   await assertFails(as("administrador").doc("gestiones/gApNormal").update(aprobarYAplicar("administrador")));
   ok("actualizar seriales: un aumento normal no salta la firma por esta puerta");
 
+  // ── TODO reemplazo nace esperando la decisión de ventas (2026-09-10) ─────
+  // El candado vivía solo en el wizard, y el wizard solo frenaba la excepción
+  // (equipo propio sin garantía): un reemplazo de alquiler —la mayoría— nacía
+  // en 'pendiente_bodega' y el correo salía derecho al estante. Sacar un radio
+  // del inventario y mandar a buscar otro se aprueba, no se avisa.
+  const solicitud = (estado) => ({ tipo: "reemplazo", estado, cliente_id: "cli1", deleted: false,
+    responsable_uid: "vendedor", items: [{ serial_saliente: "8J4K02245", elegibilidad: "alquiler" }] });
+  await assertSucceeds(as("vendedor").doc("gestiones/gRe1").set(solicitud("pendiente_aprobacion")));
+  ok("reemplazo: el vendedor abre la solicitud y queda esperando a ventas");
+  await assertFails(as("vendedor").doc("gestiones/gRe2").set(solicitud("pendiente_bodega")));
+  ok("reemplazo: nadie lo manda derecho a bodega saltándose la aprobación");
+  await assertFails(as("administrador").doc("gestiones/gRe3").set(solicitud("en_proceso")));
+  ok("reemplazo: ni siquiera un administrador lo crea ya empezado");
+  // Un demo sí puede nacer en bodega: no saca nada del contrato del cliente.
+  await assertSucceeds(as("vendedor").doc("gestiones/gDemo1").set({ tipo: "demo",
+    estado: "pendiente_bodega", cliente_id: "cli1", deleted: false, demo: { lineas: [] } }));
+  ok("reemplazo: el candado es del reemplazo — el demo sigue entrando por bodega");
+  // Y la aprobación estampa el paso dado, sin arrastrar la firma con ella.
+  await assertSucceeds(as("gerente").doc("gestiones/gRe1").update({ estado: "pendiente_bodega",
+    "cierre.aprobacion": true,
+    aprobacion: { requiere: true, motivo: "reemplazo", aprobado_por_uid: "gerente" } }));
+  ok("reemplazo: gerencia aprueba y ahí sí pasa a bodega");
+
   // ── Editar / anular una gestión que todavía no surtió efecto (2026-09-09) ─
   // Se corrige en el sitio mientras nadie actuó: sin derivación, sin
   // asignación y sin OS. Y quien la creó puede anular LA SUYA en esa misma

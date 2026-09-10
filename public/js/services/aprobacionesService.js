@@ -1,11 +1,14 @@
 // Fuente compartida del home y la bandeja. Solo aprobación comercial:
 // firma del cliente, validación del firmante y bodega tienen otras colas.
 window.AprobacionesService = {
-  _filtros(tipo, rol = 'administrador') {
+  _filtros(tipo) {
     if (!['gestiones', 'contratos'].includes(tipo)) throw new Error('Cola desconocida');
     const filtros = [['estado', '==', 'pendiente_aprobacion']];
-    // Gerencia aprueba bajas y aumentos; las excepciones de reemplazo son de admin.
-    if (tipo === 'gestiones' && rol === 'gerente') filtros.push(['tipo', 'in', ['baja', 'aumento']]);
+    // Administración y gerencia aprueban CUALQUIER gestión — es lo que dicen
+    // las reglas (esAprobacionGestion) y no había motivo para que la cola de
+    // gerencia escondiera los reemplazos. Desde 2026-09-10 además pasan por
+    // aquí TODOS, no solo la excepción de equipo propio sin garantía, así que
+    // esconderlos dejaba media cola invisible para media aprobación.
     return filtros;
   },
 
@@ -15,8 +18,8 @@ window.AprobacionesService = {
     return this._filtros(tipo).reduce((q, f) => q.where(...f), firebase.firestore().collection(tipo));
   },
 
-  async contar(tipo, rol) {
-    const filtros = this._filtros(tipo, rol);
+  async contar(tipo) {
+    const filtros = this._filtros(tipo);
     if (window.FbAgg?.disponible) {
       try {
         const [total, borrados] = await Promise.all([
@@ -30,21 +33,20 @@ window.AprobacionesService = {
     // el límite de una primera página como si fuera el total de aprobaciones.
     let total = 0, cursor = null;
     do {
-      const pagina = await this.listar(tipo, { rol, cursor });
+      const pagina = await this.listar(tipo, { cursor });
       total += pagina.docs.length;
       cursor = pagina.cursor;
     } while (cursor);
     return total;
   },
 
-  async listar(tipo, { rol, cursor = null, limit = 50 } = {}) {
+  async listar(tipo, { cursor = null, limit = 50 } = {}) {
     let q = this._query(tipo).orderBy(firebase.firestore.FieldPath.documentId());
     if (cursor) q = q.startAfter(cursor);
     // No confundir un resultado viejo de IndexedDB con una cola vacía/actual.
     const snap = await q.limit(limit).get({ source: 'server' });
     return {
-      docs: snap.docs.map(d => ({ ...d.data(), id: d.id })).filter(d => d.deleted !== true
-        && (tipo !== 'gestiones' || rol !== 'gerente' || ['baja', 'aumento'].includes(d.tipo))),
+      docs: snap.docs.map(d => ({ ...d.data(), id: d.id })).filter(d => d.deleted !== true),
       cursor: snap.size === limit ? snap.docs[snap.docs.length - 1] : null,
     };
   },

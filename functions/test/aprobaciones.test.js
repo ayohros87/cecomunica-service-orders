@@ -42,11 +42,18 @@ test('conteo completo, sin límite de 50, excluye eliminados y otros estados; in
   assert.ok(consultas.every(c => c.opts.source === 'server'));
 });
 
-test('gerencia cuenta solo bajas/aumentos; administrador también ve reemplazos', async () => {
+// 2026-09-10: la cola ya no se recorta por rol. Las reglas dejan aprobar
+// CUALQUIER gestión a administración y gerencia (esAprobacionGestion), y desde
+// que TODO reemplazo pasa por aprobación —no solo la excepción de equipo
+// propio sin garantía— esconderle los reemplazos a gerencia dejaba media cola
+// invisible para quien sí podía despacharla.
+test('la cola trae todas las gestiones pendientes, sea quien sea el que mira', async () => {
   const registros = ['baja', 'aumento', 'reemplazo'].map(tipo => ({ col: 'gestiones', id: tipo, tipo, estado: 'pendiente_aprobacion' }));
   const { S } = servicio(registros);
-  assert.equal(await S.contar('gestiones', 'gerente'), 2);
+  assert.equal(await S.contar('gestiones', 'gerente'), 3);
   assert.equal(await S.contar('gestiones', 'administrador'), 3);
+  assert.deepEqual((await S.listar('gestiones', { rol: 'gerente' })).docs.map(d => d.tipo),
+    ['aumento', 'baja', 'reemplazo']);
 });
 
 test('agregados restan deleted true y no descargan documentos', async () => {
