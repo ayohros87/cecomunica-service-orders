@@ -94,6 +94,12 @@
   <div class="toolbar">
     <button onclick="window.print()">Imprimir / PDF</button>
     <a class="sec" id="lnkFicha" href="#">Ficha del cliente ›</a>
+    <!-- Expediente legal del cliente (registro público, cédula del
+         representante, poderes). Esta página es "papel": no carga el kit de
+         UI, así que el visor no se pinta aquí — el enlace abre la ficha 360
+         en otra pestaña con el modal ya abierto (?docs=1) y el contrato queda
+         donde estaba. Solo se muestra a los roles que pueden verlos. -->
+    <a class="sec" id="lnkDocs" href="#" target="_blank" rel="noopener" hidden>Documentos del cliente ›</a>
     <a class="sec" id="lnkClasico" href="#">Formato anterior</a>
   </div>
   <div class="aviso-estado" id="avisoEstado"></div>
@@ -201,6 +207,6 @@
 
   </div>
 
-  <script src="../js/pages/contrato-documento.js?v=doc9" defer></script>
+  <script src="../js/pages/contrato-documento.js?v=doc10" defer></script>
 </body>
 </html>

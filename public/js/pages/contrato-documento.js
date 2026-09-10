@@ -22,6 +22,23 @@
     'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   const NUM_LETRAS = { 1: 'un', 2: 'dos', 3: 'tres', 6: 'seis', 12: 'doce', 18: 'dieciocho', 24: 'veinticuatro', 36: 'treinta y seis' };
 
+  // Enseña "Documentos del cliente ›" cuando el usuario puede verlos. Espera
+  // a que la sesión resuelva; si el rol no aplica, el enlace se queda oculto.
+  function mostrarEnlaceDocs(clienteId) {
+    const PERMITIDOS = ['administrador', 'recepcion'];
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (!user) return;
+      try {
+        const u = await UsuariosService.getUsuario(user.uid);
+        if (!u || !PERMITIDOS.includes(u.rol) || u.activo === false) return;
+        const a = $('lnkDocs');
+        if (!a) return;
+        a.href = `../clientes/centro.html?id=${encodeURIComponent(clienteId)}&docs=1`;
+        a.hidden = false;
+      } catch (e) { console.warn('[documento] rol no disponible:', e?.message || e); }
+    });
+  }
+
   async function cargar() {
     const c = await ContratosService.resolverContrato(idParam);
     if (!c) { Toast.show('Contrato no encontrado', 'bad'); return; }
@@ -29,6 +46,11 @@
 
     // ── Toolbar / aviso de estado ──
     $('lnkFicha').href = `../clientes/centro.html?id=${encodeURIComponent(c.cliente_id || '')}`;
+    // Documentos del cliente: se ofrecen solo a admin y recepción, espejo de
+    // ALLOWED_ROLES de la callable getClienteDocUrl (y del menú del Centro).
+    // El rol se pide dentro y no por `window.userRole`, que a esta altura del
+    // arranque puede no estar puesto todavía.
+    if (c.cliente_id) mostrarEnlaceDocs(c.cliente_id);
     // "Formato anterior" solo tiene sentido para lo de ANTES del corte
     // (2026-09-09): en un contrato nacido después, ese enlace ofrecía imprimir
     // un papel que el cliente nunca firmó. Se esconde, no se borra — los

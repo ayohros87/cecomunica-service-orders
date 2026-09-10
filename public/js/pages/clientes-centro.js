@@ -75,6 +75,11 @@ window.Centro = {
         if (aviso) setTimeout(() => Toast.show(aviso, 'warn'), 300);
         if (id) await this.abrir(id, { push: false });
         else await this.cargarLista(true);
+        // ?docs=1: el documento del contrato (contratos/documento.html) manda
+        // aquí a ver el expediente legal — esa página es "papel" y no carga el
+        // kit, así que el visor vive solo de este lado. Sin permiso no abre
+        // nada: ahí el enlace ni se ofrece.
+        if (id && params.get('docs') === '1' && this._puedeVerDocs()) this.verDocumentos();
       } catch (e) { console.error(e); Toast.show('Error al iniciar', 'bad'); }
     });
     window.addEventListener('popstate', () => {
