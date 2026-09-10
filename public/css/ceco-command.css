@@ -244,6 +244,12 @@ h1,h2,h3,h4{margin:0;font-family:var(--font-display);color:var(--fg-1);font-weig
 .kpis[data-n="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}
 .kpis[data-n="3"]{grid-template-columns:repeat(3,minmax(0,1fr))}
 .kpis[data-n="5"]{grid-template-columns:repeat(5,minmax(0,1fr))}
+/* Admin: siete señales, dos filas completas (4 + 3) sin comprimir rótulos. */
+@media (min-width:861px){
+  .kpis[data-n="7"]{grid-template-columns:repeat(12,minmax(0,1fr))}
+  .kpis[data-n="7"] > .kpi{grid-column:span 3}
+  .kpis[data-n="7"] > .kpi:nth-child(n+5){grid-column:span 4}
+}
 /* columna con el número pegado ABAJO: así los números quedan alineados entre
    sí aunque un rótulo ocupe dos líneas y otro una. */
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 14px;position:relative;overflow:hidden;text-decoration:none;display:flex;flex-direction:column;justify-content:space-between;gap:7px;color:inherit;transition:border-color .15s,box-shadow .15s}

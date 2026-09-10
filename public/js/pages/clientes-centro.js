@@ -59,6 +59,7 @@ window.Centro = {
           if (ex) ex.innerHTML = `<a class="btn btn-ghost" href="./regularizacion.html" style="font-size:13px;"><i data-lucide="clipboard-list"></i> Cuentas por regularizar</a>`;
         }
         this._wire();
+        window.CentroAprobaciones?.init(this.rol);
         const params = new URLSearchParams(location.search);
         const id = params.get('id');
         this.gSel = params.get('g') || null;   // deep-link al expediente (correos)
@@ -181,12 +182,15 @@ window.Centro = {
     this.cliente = null;
     document.getElementById('vistaFicha').classList.add('hidden');
     document.getElementById('vistaLista').classList.remove('hidden');
-    if (push) history.pushState({}, '', location.pathname);
+    const cola = window.CentroAprobaciones?.tipo;
+    if (push) history.pushState({}, '', location.pathname + (cola ? `?aprobaciones=${cola}` : ''));
+    window.CentroAprobaciones?.refrescar();
     if (!document.querySelector('#cgLista .cg-row')) this.cargarLista(true);
   },
 
   async abrir(clienteId, { push = true } = {}) {
     try {
+      window.AprobacionesService?.invalidarHome();
       const c = await ClientesService.getCliente(clienteId);
       if (!c || c.deleted) { Toast.show('Cliente no encontrado', 'bad'); return; }
       // Candado de cartera: un vendedor no abre clientes ajenos ni por deep-link.
@@ -217,7 +221,7 @@ window.Centro = {
       // tumban la ficha si fallan (p. ej. reglas aún sin desplegar en un
       // entorno): el cliente completo vale más que esa sección.
       const db = firebase.firestore();
-      const [conSnap, equipos, gestiones] = await Promise.all([
+      const [conSnap, equipos, , gestiones] = await Promise.all([
         db.collection('contratos').where('cliente_id', '==', clienteId).get(),
         EquiposPoolService.listarPorCliente(clienteId),
         // Catálogo → ModeloFamilia: el pareo equipo↔línea (tarifa, vencimiento,
@@ -2054,6 +2058,7 @@ window.Centro = {
   puedeCrearGestion() { return [ROLES.ADMIN, ROLES.GERENTE, ROLES.VENDEDOR, ROLES.RECEPCION].includes(this.rol); },
 
   async recargarGestiones() {
+    window.AprobacionesService?.invalidarHome();
     this.gestiones = await GestionesService.listarPorCliente(this.cliente.id).catch(() => this.gestiones || []);
     this.pintarAcciones();
     this.pintarKpis();

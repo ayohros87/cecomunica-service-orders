@@ -23,6 +23,9 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
   <script defer src="../js/firebase-init.js?v=ses2"></script>
+  <script type="module" src="../js/firebase-aggregates.js?v=agg1"></script>
+  <script defer src="../js/services/aprobacionesService.js?v=apr1"></script>
+  <script defer src="../js/pages/centro-aprobaciones.js?v=apr1"></script>
   <script src="../js/core/modulos.js?v=cc15"></script>
   <script src="../js/core/layout.js?v=cc13"></script>
   <script src="../js/core/roles.js"></script>
@@ -61,6 +64,17 @@
   <style>
     /* Centro de gestión (cg-*) — Ola 1 gestiones por cliente */
     .cg-tools { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:var(--sp-4); }
+    .cg-aprobaciones { border:1px solid var(--border-default); border-radius:10px; padding:14px; margin-bottom:var(--sp-4); background:var(--surface-card); }
+    .cg-aprobaciones-head { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+    .cg-aprobaciones-head h2 { font-size:15px; margin:0; margin-right:auto; }
+    .cg-aprobaciones-tabs { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .cg-aprobaciones-tabs .is-on { background:var(--accent-soft, #E6F4FB); border-color:var(--accent); }
+    .cg-aprobaciones-tabs b { border-radius:12px; padding:1px 8px; background:var(--soft-warn, #FBF3E0); color:#8A6415; font-variant-numeric:tabular-nums; }
+    .cg-aprobacion-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border-subtle); font-size:13px; }
+    .cg-aprobacion-row > div { flex:1; min-width:0; overflow-wrap:anywhere; }
+    .cg-aprobacion-row span { display:block; font-size:12px; color:var(--fg-3); margin-top:3px; }
+    .cg-aprobaciones-mensaje { font-size:13px; color:var(--fg-3); margin-top:10px; }
+    .cg-aprobaciones-mensaje:empty { display:none; }
     .cg-buscar { flex:1; min-width:240px; max-width:480px; }
     .seg { display:inline-flex; border:1px solid var(--border-default); border-radius:var(--radius-pill); overflow:hidden; }
     .seg-btn { border:0; background:var(--surface-card); color:var(--fg-2); padding:5px 14px; font-size:13px; font-weight:600; cursor:pointer; }
@@ -229,9 +243,8 @@
   <!-- ── Vista: directorio ─────────────────────────────────────────── -->
   <div id="vistaLista">
     <!-- El buscador va PRIMERO (pedido de Zuleika 2026-09-04): el objetivo de
-         esta pantalla es encontrar al cliente. La franja "Para hoy" se quitó el
-         2026-09-08 (Alberto): duplicaba el inicio y la cola Ahora de la ficha y
-         barría todo el pool. -->
+         esta pantalla es encontrar al cliente. Aprobaciones consulta solo
+         las dos colas pendientes; no barre el pool ni las fichas de clientes. -->
     <div class="cg-tools">
       <input class="form-input cg-buscar" id="cgBuscar" type="search"
              placeholder="Buscar cliente por nombre, RUC o representante…" autocomplete="off">
@@ -247,6 +260,19 @@
       <!-- Bandeja "Cuentas por regularizar" (admin/gerencia): la pinta init(). -->
       <span id="cgToolsExtra" style="margin-left:auto;"></span>
     </div>
+    <section id="cgAprobaciones" class="cg-aprobaciones hidden" aria-labelledby="cgAprobacionesTitulo">
+      <div class="cg-aprobaciones-head">
+        <h2 id="cgAprobacionesTitulo">Pendientes por aprobar</h2>
+        <button type="button" class="btn btn-ghost" data-aprobaciones-refresh>Actualizar</button>
+      </div>
+      <div class="cg-aprobaciones-tabs">
+        <button type="button" class="btn" data-aprobaciones="gestiones" aria-expanded="false" aria-controls="cgAprobacionesLista">Gestiones <b data-aprobaciones-count="gestiones">…</b></button>
+        <button type="button" class="btn" data-aprobaciones="contratos" aria-expanded="false" aria-controls="cgAprobacionesLista">Contratos <b data-aprobaciones-count="contratos">…</b></button>
+      </div>
+      <div id="cgAprobacionesLista" data-aprobaciones-lista></div>
+      <div class="cg-aprobaciones-mensaje" data-aprobaciones-mensaje role="status"></div>
+      <button type="button" class="btn btn-ghost hidden" data-aprobaciones-mas>Cargar más pendientes</button>
+    </section>
     <div id="cgLista"></div>
     <div style="text-align:center; margin-top:var(--sp-3);">
       <button class="btn btn-ghost hidden" id="btnMas">Cargar más</button>
@@ -340,7 +366,7 @@
      radio saliente (PocService.configDelSaliente), la misma fuente que usa el
      lote de POC. -->
 <script defer src="../js/services/pocService.js?v=cc11"></script>
-<script src="../js/pages/clientes-centro.js?v=cg103" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg104" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

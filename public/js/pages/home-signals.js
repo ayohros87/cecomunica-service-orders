@@ -19,7 +19,7 @@
 window.HomeSignals = (() => {
 
   const TTL_MS = 5 * 60 * 1000;
-  const CACHE_PREFIX = 'ccHomeSignals:v1';
+  const CACHE_PREFIX = 'ccHomeSignals:v2';
 
   // Estados canónicos de ordenes_de_servicio (ver APP.ESTADOS en
   // ordenes-state.js — no se carga en el home; literales a propósito).
@@ -146,10 +146,16 @@ window.HomeSignals = (() => {
       count: () => SenalesService.countContratosPorEstado('aprobado'),
     },
     S10: {
-      modulo: 'contratos', icon: 'stamp', moreIsBad: true,
+      modulo: 'centro', icon: 'stamp', moreIsBad: true, fresh: true,
       label: 'Contratos por aprobar', sub: 'esperando gerencia',
-      href: 'contratos/index.html?estado=pendiente_aprobacion',
-      count: () => SenalesService.countContratosPorEstado('pendiente_aprobacion'),
+      href: 'clientes/centro.html?aprobaciones=contratos',
+      count: () => window.AprobacionesService.contar('contratos'),
+    },
+    SAG: {
+      modulo: 'centro', icon: 'clipboard-check', moreIsBad: true, fresh: true,
+      label: 'Gestiones por aprobar', sub: 'esperando tu revisión',
+      href: 'clientes/centro.html?aprobaciones=gestiones',
+      count: () => window.AprobacionesService.contar('gestiones'),
     },
     // Pendiente del plan original ("no contable server-side"): contable desde
     // que la app estampa `requiere_aprobacion` al guardar (auditoría A10).
@@ -263,7 +269,7 @@ window.HomeSignals = (() => {
     // desde la lista de órdenes (chips por estado).
     // REGV/REGG (cuentas por regularizar, plan 2026-09-08): el vendedor ve su
     // cartera; admin y gerencia ven todas, con las sin vendedor primero.
-    administrador:     ['S1', 'EST', 'S4Q', 'SAP', 'REGG'],
+    administrador:     ['SAG', 'S10', 'S1', 'EST', 'S4Q', 'SAP', 'REGG'],
     gerente:           ['S1', 'S10', 'SAP', 'S8', 'REGG'],
     jefe_taller:       ['S1', 'EST', 'S4Q', 'SAP'],
     recepcion:         ['S1', 'S2', 'ENT', 'S8'],
@@ -605,6 +611,7 @@ window.HomeSignals = (() => {
     // La expansión se cablea ANTES de resolver los conteos: el camino de la
     // caché hace `return` temprano y sin esto las señales cacheadas no abrían.
     _wireExpansion(mount, ids);
+    _wireAprobaciones(mount, { rolEfectivo, uid });
 
     const setVal = (id, n) => _pintaVal(mount, id, n);
     const dropTile = (id) => {
@@ -615,11 +622,13 @@ window.HomeSignals = (() => {
     const cached = _readCache(uid, rolEfectivo);
     if (cached) {
       ids.forEach(id => {
+        if (SIGNALS[id].fresh) return;
         // number o string: el conteo por scan reporta "400+" cuando topa.
         if (typeof cached[id] === 'number' || typeof cached[id] === 'string') setVal(id, cached[id]);
         else dropTile(id);
       });
       _applyDeltas(mount, ids, cached, _rotateSnapshot(uid, rolEfectivo, cached));
+      await _refrescarAprobaciones(mount);
       return;
     }
 
@@ -631,11 +640,44 @@ window.HomeSignals = (() => {
       } catch (err) {
         // permiso denegado / índice faltante → fuera la tarjeta, el home sigue.
         console.warn(`[HomeSignals] señal ${id} no disponible:`, err?.code || err);
-        dropTile(id);
+        // Una aprobación no debe desaparecer ni parecer cero si falta red.
+        if (SIGNALS[id].fresh) setVal(id, '—');
+        else dropTile(id);
       }
     }));
     _writeCache(uid, rolEfectivo, counts);
     _applyDeltas(mount, ids, counts, _rotateSnapshot(uid, rolEfectivo, counts));
+  }
+
+  // Aprobar en otra página/pestaña y volver (incluido bfcache) debe cambiar
+  // el número, sin volver a ejecutar las consultas del resto del dashboard.
+  async function _refrescarAprobaciones(mount) {
+    const ctx = mount._aprobacionesCtx;
+    if (!ctx) return;
+    await Promise.all(Object.entries(SIGNALS).filter(([, sig]) => sig.fresh).map(async ([id, sig]) => {
+      if (!mount.querySelector(`[data-signal="${id}"]`)) return;
+      try {
+        const n = await sig.count(ctx);
+        if (mount._aprobacionesCtx === ctx) _pintaVal(mount, id, n);
+      } catch (e) {
+        if (mount._aprobacionesCtx !== ctx) return;
+        const tile = mount.querySelector(`[data-signal="${id}"]`);
+        if (tile) {
+          _pintaVal(mount, id, '—');
+          tile.title = 'No se pudo consultar. Abre el Centro de gestión para reintentar.';
+        }
+      }
+    }));
+  }
+
+  function _wireAprobaciones(mount, ctx) {
+    mount._aprobacionesCtx = ctx;
+    if (mount._aprobacionesWired) return;
+    mount._aprobacionesWired = true;
+    window.addEventListener('pageshow', e => { if (e.persisted) _refrescarAprobaciones(mount); });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) _refrescarAprobaciones(mount);
+    });
   }
 
   return { render, SIGNALS, POR_ROL };
