@@ -34,6 +34,9 @@ exports.onEntregaTransicion           = require("./src/triggers/contratos/onEntr
 exports.onLinajeWrite                 = require("./src/triggers/contratos/onLinajeWrite");
 // Pool de equipos por serial — migración por contacto (PLAN_POOL_EQUIPOS_SERIAL.md)
 exports.onEntregaPool                 = require("./src/triggers/contratos/onEntregaPool");
+// La ENTREGA le avisa a facturación: promueve el aviso que quedó "esperando la
+// entrega" y manda el correo que el de activación prometió (PLAN_COMISIONES F1)
+exports.onEntregaFacturacion          = require("./src/triggers/contratos/onEntregaFacturacion");
 // Ola 7: al activarse una RENOVACIÓN, la custodia del cliente se amarra sola
 // al contrato nuevo (regularización automática de la cuenta)
 exports.onRenovacionActivada          = require("./src/triggers/contratos/onRenovacionActivada");

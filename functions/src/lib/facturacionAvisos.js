@@ -154,6 +154,64 @@ async function crearAviso(a) {
   return { id, creado: true };
 }
 
+/**
+ * ENTREGA de un contrato que quedó activo "esperando la entrega": PROMUEVE el
+ * aviso que ya existe, no crea otro.
+ *
+ * El hueco que cierra (F1 de docs/plans/PLAN_COMISIONES.md): onApproval crea el
+ * aviso con `esperando: true` cuando el contrato lleva equipo por entregar, y
+ * al entregarse `onOrdenEntregada` estampaba `entrega_confirmada` en el
+ * contrato Y NADA MÁS. El aviso se quedaba en "Espera" para siempre: Recepción
+ * nunca se enteraba de que ya podía facturar, y el correo de activación —que
+ * promete literalmente "te avisaremos cuando se entregue"— no cumplía nunca.
+ *
+ * Un aviso NUEVO por la entrega sería contar dos veces el mismo hecho (el
+ * mismo contrato daría comisión dos veces). Por eso se mueve el que ya está.
+ *
+ * Idempotente. Y la diferencia entre "no hay aviso" y "ya lo promoví" IMPORTA:
+ * si las dos devolvieran null, una segunda entrega del mismo evento (Cloud
+ * Functions reintenta) crearía un `contrato_entregado` encima del aviso ya
+ * promovido — dos documentos para un solo hecho, o sea la comisión pagada dos
+ * veces. Por eso `null` significa SOLO "este contrato no tiene ningún aviso".
+ *
+ * @returns {Promise<{id, promovido, aviso}|null>}
+ *   null                        → el contrato no tiene aviso: hay que crearlo.
+ *   { promovido: true,  … }     → se movió ahora: toca mandar el correo.
+ *   { promovido: false, … }     → ya había aviso y no estaba esperando: nada
+ *                                 que hacer (reintento, o un contrato que
+ *                                 arrancó a facturar sin esperar la entrega).
+ */
+async function promoverPorEntrega(origenId, { fechaEntrega = null, detalle = "" } = {}) {
+  if (!origenId) return null;
+  // Una sola igualdad: sin índice compuesto y sin riesgo. Un contrato tiene a
+  // lo sumo un par de avisos, así que el filtro de estado va en memoria.
+  const snap = await db.collection(COL).where("origen.id", "==", origenId).get();
+  if (snap.empty) return null;
+
+  const doc = snap.docs.find((d) => (d.data() || {}).estado === "esperando");
+  if (!doc) return { id: snap.docs[0].id, promovido: false, aviso: snap.docs[0].data() || {} };
+
+  const cur = doc.data() || {};
+  const fechaEf = fechaEntrega instanceof Date
+    ? admin.firestore.Timestamp.fromDate(fechaEntrega)
+    : (fechaEntrega || admin.firestore.Timestamp.now());
+
+  await doc.ref.set({
+    estado: "pendiente",
+    fecha_efectiva: fechaEf,
+    contexto: { ...(cur.contexto || {}), entrega_pendiente: false },
+    historial: admin.firestore.FieldValue.arrayUnion({
+      accion: "entrega_confirmada",
+      detalle: detalle || "Equipos entregados — ya se puede facturar",
+      fecha_iso: new Date().toISOString(),
+      por_email: null,
+    }),
+    updated_at: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { id: doc.id, promovido: true, aviso: { ...cur, estado: "pendiente", fecha_efectiva: fechaEf } };
+}
+
 async function vincularCorreo(id, mailQueueId) {
   if (!id || !mailQueueId) return;
   await db.collection(COL).doc(id).set({
@@ -165,5 +223,5 @@ async function vincularCorreo(id, mailQueueId) {
 module.exports = {
   COL, TIPOS, ESTADOS, ITBMS,
   mensualDeContrato, equiposTexto, avisoId, pasosIniciales, estadoDerivado,
-  crearAviso, vincularCorreo,
+  crearAviso, promoverPorEntrega, vincularCorreo,
 };
