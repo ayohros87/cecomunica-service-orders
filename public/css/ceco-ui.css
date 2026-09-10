@@ -2018,7 +2018,11 @@ i[data-lucide]                              { display: inline-block; }
 @media (max-width: 768px) {
   .modal-backdrop { align-items: flex-end; padding: 0; }
   .modal-backdrop > .modal {
-    width: 100%; max-width: 100%;
+    /* !important porque Modal.sheet escribe el ancho (size: sm|md|lg|xl) como
+       estilo INLINE y el inline le gana a esta media query: en el teléfono la
+       hoja salía con su ancho de escritorio y se cortaba por la derecha
+       (visto con lg/720px en 390px de pantalla). */
+    width: 100%; max-width: 100% !important;
     border-radius: 16px 16px 0 0;
     max-height: 92vh;
   }

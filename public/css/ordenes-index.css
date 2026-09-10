@@ -3735,6 +3735,28 @@ tr.activo:hover { background: #f0f9ff !important; }
 
 .equipo-foto-viewer__delete.hidden { display: none; }
 
+.equipo-foto-viewer__acciones {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.equipo-foto-viewer__download {
+  background: rgba(255,255,255,0.94);
+  color: #0f172a;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.equipo-foto-viewer__download i { width: 16px; height: 16px; }
+
 /* Badge: count of fotos on equipo card (mobile) */
 .equipo-fotos-badge {
   display: inline-flex;
@@ -3750,6 +3772,90 @@ tr.activo:hover { background: #f0f9ff !important; }
 }
 
 .equipo-fotos-badge i { width: 12px; height: 12px; }
+
+/* El badge de la tabla de escritorio es un botón: abre la ficha de la
+   intervención en solo lectura. */
+.equipo-fotos-badge--btn {
+  font-family: inherit;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease;
+}
+.equipo-fotos-badge--btn:hover { background: #e0e7ff; border-color: #a5b4fc; }
+.equipo-fotos-badge--btn:focus-visible { outline: 2px solid #4f46e5; outline-offset: 1px; }
+
+/* ========================================
+   FICHA DE LA INTERVENCIÓN EN SOLO LECTURA
+   Modal.sheet que abre quien no puede editar (jefatura de taller): mismo
+   contenido que el modal del técnico, sin un control que escriba.
+   ======================================== */
+.int-ro { display: flex; flex-direction: column; gap: 14px; }
+
+.int-ro-sub { font-size: 13px; color: var(--muted); }
+.int-ro-sub b { color: #1e293b; }
+
+.int-ro-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.int-ro-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+.int-ro-chip--ok   { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.int-ro-chip--warn { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.int-ro-chip--mal  { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+.int-ro-chip--info { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }
+.int-ro-chip--gris { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+
+.int-ro-solo-lectura {
+  display: inline-block;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.int-ro-bloque { display: flex; flex-direction: column; gap: 6px; }
+
+.int-ro-h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+.int-ro-h4 i { width: 15px; height: 15px; }
+
+.int-ro-texto {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1e293b;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-left: 3px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.int-ro-texto--warn { border-left-color: #f59e0b; }
+.int-ro-texto--mal  { border-left-color: #dc2626; }
+
+.int-ro-firma { font-size: 12px; color: var(--muted); }
+
+.int-ro-nav { display: flex; align-items: center; gap: 6px; }
+.int-ro-nav .btn { padding: 4px 8px; }
+.int-ro-nav__pos { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 
 /* ========================================
    BUSCADOR DE SERIAL DENTRO DE LA ORDEN

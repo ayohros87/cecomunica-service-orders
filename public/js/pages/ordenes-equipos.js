@@ -443,15 +443,19 @@ window.abrirEquiposMobile = function(ordenId) {
           ${obsHtml}
           
           <div class="equipo-card-actions">
-            <button class="btn ${e.trabajo_tecnico ? 'ok' : 'secondary'} equipo-card-action"
-              data-action="abrir-trabajo-equipo" data-orden-id="${ordenId}" data-idx="${idx}">
-              <i data-lucide="${e.trabajo_tecnico ? 'check-circle' : 'pencil-line'}"></i> Intervención
-            </button>
-
-            <button class="btn btn-ghost equipo-card-view"
-              data-action="ver-trabajo-equipo" data-orden-id="${ordenId}" data-idx="${idx}" title="Ver comentario">
-              <i data-lucide="eye"></i>
-            </button>
+            ${_puedeEditarIntervencion()
+              ? `<button class="btn ${e.trabajo_tecnico ? 'ok' : 'secondary'} equipo-card-action"
+                   data-action="abrir-trabajo-equipo" data-orden-id="${ordenId}" data-idx="${idx}">
+                   <i data-lucide="${e.trabajo_tecnico ? 'check-circle' : 'pencil-line'}"></i> Intervención
+                 </button>
+                 <button class="btn btn-ghost equipo-card-view"
+                   data-action="ver-trabajo-equipo" data-orden-id="${ordenId}" data-idx="${idx}" title="Ver la intervención, los materiales y las fotos">
+                   <i data-lucide="eye"></i>
+                 </button>`
+              : `<button class="btn ${e.trabajo_tecnico ? 'ok' : 'secondary'} equipo-card-action"
+                   data-action="ver-trabajo-equipo" data-orden-id="${ordenId}" data-idx="${idx}">
+                   <i data-lucide="eye"></i> Ver intervención
+                 </button>`}
 
             <!-- Proponer el reemplazo de ESTE radio: misma acción que en la
                  fila de escritorio (ordenes-render.js la arma), aquí al lado
@@ -548,6 +552,10 @@ let _trabajoOrdenId = null;
 let _trabajoEquipoIdx = null;
 let _trabajoEquipoId = null;
 let _fotoViewerId = null;
+// Fotos que alimentan el visor cuando NO viene del modal de edición: la ficha
+// de solo lectura (verIntervencionEquipo) no toca _trabajoOrdenId/_Idx, así
+// que le pasa su propia lista y su nombre base para la descarga.
+let _fotoViewerCtx = null;   // { fotos:[], serial:'', soloLectura:true } | null
 
 function _activeFotosDe(equipo) {
   const fotos = Array.isArray(equipo?.fotos) ? equipo.fotos : [];
@@ -652,13 +660,18 @@ function _setFotoStatus(msg, isError = false) {
   el.classList.toggle("equipo-fotos-status--error", !!isError);
 }
 
-window.abrirTrabajoEquipoModal = function(ordenId, idx) {
-  // Check permissions
+// ¿El rol puede EDITAR la intervención de un equipo?
+function _puedeEditarIntervencion() {
   const rol = APP.state.userRole || "";
-  if (![ROLES.TECNICO, ROLES.TECNICO_OPERATIVO, ROLES.ADMIN, ROLES.RECEPCION].includes(rol)) {
-    Toast.show("Sin permisos para editar", "bad");
-    return;
-  }
+  return [ROLES.TECNICO, ROLES.TECNICO_OPERATIVO, ROLES.ADMIN, ROLES.RECEPCION].includes(rol);
+}
+
+window.abrirTrabajoEquipoModal = function(ordenId, idx) {
+  // Quien no puede editar YA NO se queda con un "Sin permisos para editar":
+  // abre la misma información en la ficha de solo lectura (petición de
+  // Solangel 2026-09-10 — jefatura de taller cotiza con esas fotos y ese
+  // texto, y el toast le tapaba todo).
+  if (!_puedeEditarIntervencion()) { verIntervencionEquipo(ordenId, idx); return; }
 
   const o = APP.state.orders.find(x => x.ordenId === ordenId);
   if (!o) return;
@@ -670,6 +683,7 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
   _trabajoOrdenId = ordenId;
   _trabajoEquipoIdx = idx;
   _trabajoEquipoId = e.id || null;
+  _fotoViewerCtx = null;   // el visor vuelve a leer del modal de edición
 
   const serial = (e.numero_de_serie || e.serial || e.SERIAL || "-").toString();
   const modelo = (e.modelo || e.MODEL || e.modelo_nombre || "-").toString();
@@ -935,9 +949,51 @@ window.onEquipoFotoInputChange = async function(ev) {
   }
 };
 
-window.verFotoEquipo = function(fotoId) {
+// Descarga una foto con nombre legible (serial_fecha.jpg). La URL de Storage
+// es cross-origin, así que `<a download>` a secas la abriría en una pestaña
+// sin renombrarla: se baja como blob y, si el fetch falla, se abre la imagen
+// como último recurso (mejor eso que un clic muerto).
+async function _descargarFotoEquipo(foto, nombreBase) {
+  if (!foto?.url) return false;
+  const nombre = `${_sanitizeFileName(nombreBase || "foto")}.jpg`;
+  try {
+    const res = await fetch(foto.url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = nombre;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 5000);
+    return true;
+  } catch (err) {
+    console.error("❌ No se pudo descargar la foto:", err);
+    window.open(foto.url, "_blank", "noopener");
+    return false;
+  }
+}
+
+// Nombre base de archivo para las fotos de un equipo: serial + fecha de la
+// foto (o su posición si no trae fecha).
+function _nombreFotoEquipo(serial, foto, i) {
+  const fecha = _formatFotoTimestamp(foto?.uploaded_at).replace(/[^0-9]/g, "").slice(0, 12);
+  return `${serial || "equipo"}_${fecha || String(i + 1).padStart(2, "0")}`;
+}
+
+// Fotos + serial del contexto activo del visor: la ficha de solo lectura pone
+// su propio contexto; el modal de edición se resuelve por _trabajoOrdenId/_Idx.
+function _fotoViewerFotos() {
+  if (_fotoViewerCtx) return { fotos: _fotoViewerCtx.fotos || [], serial: _fotoViewerCtx.serial || "", soloLectura: true };
   const equipo = _resolveEquipoActual();
-  const fotos = _activeFotosDe(equipo);
+  const serial = (equipo?.numero_de_serie || equipo?.serial || equipo?.SERIAL || "").toString();
+  return { fotos: _activeFotosDe(equipo), serial, soloLectura: false };
+}
+
+window.verFotoEquipo = function(fotoId) {
+  const { fotos, soloLectura } = _fotoViewerFotos();
   const foto = fotos.find(f => f.id === fotoId);
   if (!foto) return;
 
@@ -953,13 +1009,39 @@ window.verFotoEquipo = function(fotoId) {
     const by = foto.uploaded_by_email ? escapeHtml(foto.uploaded_by_email) : "";
     meta.innerHTML = [fecha, by].filter(Boolean).join(" · ");
   }
-  if (btnDel) btnDel.classList.toggle("hidden", !_puedeEliminarFotos());
+  // En solo lectura no hay borrado, aunque el rol pudiera: la ficha no está
+  // editando nada y _trabajoEquipoId no apunta a este equipo.
+  if (btnDel) btnDel.classList.toggle("hidden", soloLectura || !_puedeEliminarFotos());
 
   if (viewer) {
     viewer.classList.remove("hidden");
     viewer.classList.add("show");
+    // La ficha de solo lectura es una Modal.sheet (z 10000+): el visor (1600
+    // en CSS) quedaba debajo. Se sube por encima de las hojas abiertas y
+    // debajo de confirm/prompt (10100).
+    viewer.style.zIndex = soloLectura ? "10050" : "";
+    // Escape cierra el visor y NO la hoja de abajo (el keydown de Modal
+    // escucha en document; se ataja en captura).
+    if (!viewer._escHandler) {
+      viewer._escHandler = (ev) => {
+        if (ev.key !== "Escape" || !_fotoViewerId) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        cerrarFotoEquipoViewer();
+      };
+      document.addEventListener("keydown", viewer._escHandler, true);
+    }
   }
   APP.utils.lucideRefresh(viewer);
+};
+
+window.descargarFotoEquipoViewer = async function() {
+  if (!_fotoViewerId) return;
+  const { fotos, serial } = _fotoViewerFotos();
+  const i = fotos.findIndex(f => f.id === _fotoViewerId);
+  if (i === -1) return;
+  const ok = await _descargarFotoEquipo(fotos[i], _nombreFotoEquipo(serial, fotos[i], i));
+  if (!ok) Toast.show("Se abrió la foto en otra pestaña — guárdala desde ahí", "warn");
 };
 
 window.cerrarFotoEquipoViewer = function() {
@@ -969,6 +1051,11 @@ window.cerrarFotoEquipoViewer = function() {
   if (viewer) {
     viewer.classList.add("hidden");
     viewer.classList.remove("show");
+    viewer.style.zIndex = "";
+    if (viewer._escHandler) {
+      document.removeEventListener("keydown", viewer._escHandler, true);
+      delete viewer._escHandler;
+    }
   }
   _fotoViewerId = null;
 };
@@ -1023,22 +1110,203 @@ window.abrirIntervencionEquipoDesktop = function(ordenId, equipoId) {
   abrirTrabajoEquipoModal(ordenId, idx);
 };
 
-window.verTrabajoEquipo = function(ordenId, idx) {
+/* ========================================
+   Ficha de la intervención en SOLO LECTURA
+   Petición de Solangel (jefatura de taller, 2026-09-10): quien no puede
+   editar necesitaba igual leer la intervención completa, ver las fotos del
+   descarte (humedad, golpes) y bajarlas para la cotización del cliente.
+   Antes solo había un toast "Sin permisos para editar" y, en móvil, un modal
+   con el texto pelado — las fotos y los materiales no se veían por ningún
+   lado. Es la MISMA información del modal del técnico, sin un solo control
+   que escriba.
+   ======================================== */
+window.verIntervencionEquipo = async function(ordenId, idx) {
   const o = APP.state.orders.find(x => x.ordenId === ordenId);
   const equipos = (o?.equipos || []).filter(e => !e.eliminado);
   const e = equipos[idx];
   if (!e) return;
 
+  const serial = (e.numero_de_serie || e.serial || e.SERIAL || "-").toString();
+  const modelo = (e.modelo || e.MODEL || e.modelo_nombre || "-").toString();
   const texto = (e.trabajo_tecnico || "").toString().trim();
   const noDisponible = !!e.intervencion_no_disponible;
-  const motivo = (e.motivo_no_disponible || "").toString().trim();
-  const serial = (e.numero_de_serie || e.serial || e.SERIAL || "-").toString();
-  
-  showTextModal(
-    `Intervención Técnica · ${serial}`,
-    texto || (noDisponible ? `Equipo no disponible para intervención${motivo ? ` · ${motivo}` : ""}` : "Sin intervención registrada"),
-    !texto && !noDisponible
-  );
+  const motivoND = (e.motivo_no_disponible || "").toString().trim();
+  const descartado = !!e.descartado_revision;
+  const motivoDesc = (e.descarte_motivo || "").toString().trim();
+  const condicion = !!e.condicion_especial;
+  const textoCond = (e.condicion_texto || "").toString().trim();
+  const fotos = _activeFotosDe(e);
+  const quien = (e.trabajo_tecnico_nombre || "").toString();
+  const cuando = _formatFotoTimestamp(e.trabajo_tecnico_updated_at);
+
+  // El visor de fotos lee de aquí mientras la ficha esté abierta.
+  const ctx = { fotos, serial, soloLectura: true };
+  _fotoViewerCtx = ctx;
+
+  const chip = (txt, tono) => `<span class="int-ro-chip int-ro-chip--${tono}">${escapeHtml(txt)}</span>`;
+  const chips = [
+    noDisponible ? chip("No disponible", "gris")
+      : texto ? chip("Intervención registrada", "ok") : chip("Sin intervención", "warn"),
+    descartado ? chip("Descartado en revisión", "mal") : "",
+    condicion ? chip("Condición particular", "warn") : "",
+    fotos.length ? chip(`${fotos.length} foto${fotos.length === 1 ? "" : "s"}`, "info") : "",
+  ].filter(Boolean).join("");
+
+  const bloque = (titulo, icono, cuerpoHtml) => `
+    <section class="int-ro-bloque">
+      <h4 class="int-ro-h4"><i data-lucide="${icono}"></i> ${escapeHtml(titulo)}</h4>
+      ${cuerpoHtml}
+    </section>`;
+
+  const vacio = (msg) => `<div class="equipo-fotos-empty">${escapeHtml(msg)}</div>`;
+
+  const htmlTexto = noDisponible
+    ? vacio(`Equipo no disponible para intervención${motivoND ? ` · ${motivoND}` : ""}`)
+    : (texto
+      ? `<div class="int-ro-texto">${escapeHtml(texto)}</div>`
+        + (quien || cuando ? `<div class="int-ro-firma">${escapeHtml([quien, cuando].filter(Boolean).join(" · "))}</div>` : "")
+      : vacio("El técnico todavía no registró la intervención."));
+
+  const htmlFotos = fotos.length
+    ? `<div class="equipo-fotos-grid">${fotos.map(f => `
+        <div class="equipo-foto-thumb" data-action="ver-foto-equipo" data-foto-id="${escapeHtml(f.id)}" title="Ver en grande y descargar">
+          <img src="${escapeHtml(f.url)}" alt="Foto del equipo" loading="lazy">
+        </div>`).join("")}</div>`
+    : vacio("Sin fotos para este equipo.");
+
+  const html = `
+    <div class="int-ro">
+      <div class="int-ro-sub">Modelo <b>${escapeHtml(modelo)}</b> · Orden ${escapeHtml(String(ordenId))}</div>
+      <div class="int-ro-chips">${chips}</div>
+      ${bloque("Intervención del técnico", "clipboard-list", htmlTexto)}
+      ${descartado ? bloque("Descartado en revisión", "trash-2",
+        `<div class="int-ro-texto int-ro-texto--mal">${escapeHtml(motivoDesc || "Sin motivo escrito")}</div>`
+        + (e.descarte_email || e.descarte_updated_at
+          ? `<div class="int-ro-firma">${escapeHtml([String(e.descarte_email || ""), _formatFotoTimestamp(e.descarte_updated_at)].filter(Boolean).join(" · "))}</div>` : "")) : ""}
+      ${condicion ? bloque("Condición particular", "alert-triangle",
+        `<div class="int-ro-texto int-ro-texto--warn">${escapeHtml(textoCond || "Sin detalle escrito")}</div>`
+        + (e.condicion_email || e.condicion_updated_at
+          ? `<div class="int-ro-firma">${escapeHtml([String(e.condicion_email || ""), _formatFotoTimestamp(e.condicion_updated_at)].filter(Boolean).join(" · "))}</div>` : "")) : ""}
+      ${bloque("Materiales registrados", "package",
+        `<div id="intRoMateriales" class="equipo-materiales-list">${vacio("Cargando materiales…")}</div>`)}
+      ${bloque(`Fotos (${fotos.length})`, "camera", htmlFotos)}
+    </div>`;
+
+  const total = equipos.length;
+  const navHtml = total > 1 ? `
+    <div class="int-ro-nav">
+      <button type="button" class="btn btn-ghost" data-sheet-action="prev" ${idx === 0 ? "disabled" : ""} aria-label="Equipo anterior"><i data-lucide="chevron-left"></i></button>
+      <span class="int-ro-nav__pos">Equipo ${idx + 1} de ${total}</span>
+      <button type="button" class="btn btn-ghost" data-sheet-action="next" ${idx === total - 1 ? "disabled" : ""} aria-label="Equipo siguiente"><i data-lucide="chevron-right"></i></button>
+    </div><span class="sep"></span>` : "";
+
+  let materiales = [];
+
+  await Modal.sheet({
+    titleHtml: `<i data-lucide="eye"></i> Intervención · <span style="font-family:var(--font-mono);">${escapeHtml(serial)}</span>`
+      + ` <span class="int-ro-solo-lectura">solo lectura</span>`,
+    html,
+    size: "lg",
+    footerHtml: navHtml,
+    buttons: [
+      { action: "copiar", label: "Copiar la información", icon: "clipboard-copy" },
+      ...(fotos.length ? [{ action: "descargar", label: `Descargar ${fotos.length === 1 ? "la foto" : `las ${fotos.length} fotos`}`, icon: "download" }] : []),
+      { action: "cerrar", label: "Cerrar", primary: true },
+    ],
+    onMount: (root) => {
+      // Materiales: viven en la subcolección `consumos`, así que se piden
+      // después de pintar la ficha (no se traba la apertura si tardan).
+      const cont = root.querySelector("#intRoMateriales");
+      const key = OrdenesService.consumoKeyDe(e);
+      if (!cont) return;
+      if (!key) { cont.innerHTML = vacio("Sin materiales."); return; }
+      OrdenesService.getConsumos(ordenId, { equipoId: key })
+        .then(items => {
+          materiales = items || [];
+          if (!materiales.length) { cont.innerHTML = vacio("Sin materiales registrados."); return; }
+          cont.innerHTML = materiales.map(it => `
+            <div class="equipo-material-item">
+              <div class="equipo-material-main">
+                <span class="equipo-material-name">${escapeHtml(it.pieza_nombre || "Pieza")}</span>
+                <span class="equipo-material-meta">${it.sku ? escapeHtml(it.sku) + " · " : ""}${Number(it.qty || 0)} × ${FMT.money(it.precio_unit || 0)} · ${escapeHtml(it.tipo || "cobro")}${it.fuera_catalogo ? ' · <span class="equipo-material-fc" title="Escrita a mano: no está en el catálogo de piezas">fuera de catálogo</span>' : ""}</span>
+              </div>
+            </div>`).join("");
+          APP.utils.lucideRefresh(cont);
+        })
+        .catch(err => {
+          console.error("❌ Error cargando materiales del equipo:", err);
+          cont.innerHTML = vacio("No se pudieron cargar los materiales.");
+        });
+    },
+    onAction: async (action, _root, api) => {
+      if (action === "prev" || action === "next") {
+        const destino = idx + (action === "next" ? 1 : -1);
+        if (destino < 0 || destino >= total) return false;
+        api.close(null);
+        setTimeout(() => verIntervencionEquipo(ordenId, destino), 0);
+        return false;
+      }
+      if (action === "copiar") {
+        const lineas = [
+          `Intervención · ${serial} (${modelo})`,
+          `Orden ${ordenId}`,
+          noDisponible ? `Equipo no disponible${motivoND ? `: ${motivoND}` : ""}` : `Intervención: ${texto || "(sin registrar)"}`,
+          quien || cuando ? `Registrada por ${[quien, cuando].filter(Boolean).join(" · ")}` : "",
+          descartado ? `Descartado en revisión: ${motivoDesc || "(sin motivo)"}` : "",
+          condicion ? `Condición particular: ${textoCond || "(sin detalle)"}` : "",
+          materiales.length
+            ? "Materiales:\n" + materiales.map(it => `  - ${it.pieza_nombre || "Pieza"}${it.sku ? ` (${it.sku})` : ""} × ${Number(it.qty || 0)} · ${FMT.money(it.precio_unit || 0)} · ${it.tipo || "cobro"}`).join("\n")
+            : "Materiales: ninguno",
+          `Fotos: ${fotos.length}`,
+        ].filter(Boolean);
+        const txt = lineas.join("\n");
+        try {
+          await navigator.clipboard.writeText(txt);
+          Toast.show("✅ Información copiada", "ok");
+        } catch (_) {
+          const ta = document.createElement("textarea");
+          ta.value = txt;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          const ok = document.execCommand("copy");
+          ta.remove();
+          Toast.show(ok ? "✅ Información copiada" : "No se pudo copiar", ok ? "ok" : "bad");
+        }
+        return false;
+      }
+      if (action === "descargar") {
+        Toast.show(`Descargando ${fotos.length} foto(s)…`, "");
+        let fallos = 0;
+        for (let i = 0; i < fotos.length; i++) {
+          const ok = await _descargarFotoEquipo(fotos[i], _nombreFotoEquipo(serial, fotos[i], i));
+          if (!ok) fallos++;
+        }
+        if (fallos) Toast.show(`${fallos} foto(s) se abrieron en pestaña — guárdalas desde ahí`, "warn");
+        else Toast.show("✅ Fotos descargadas", "ok");
+        return false;
+      }
+      return undefined;
+    },
+  });
+
+  if (_fotoViewerCtx === ctx) _fotoViewerCtx = null;
+};
+
+// La lupa de la fila de escritorio y el badge de fotos entran por serial.
+window.verIntervencionEquipoDesktop = function(ordenId, equipoId) {
+  const o = APP.state.orders.find(x => x.ordenId === ordenId);
+  if (!o) return;
+  const equipos = (o.equipos || []).filter(e => !e.eliminado);
+  const idx = equipos.findIndex(e => e.id === equipoId);
+  if (idx === -1) return;
+  verIntervencionEquipo(ordenId, idx);
+};
+
+// Ojo de la tarjeta móvil: antes abría un modal con el texto pelado.
+window.verTrabajoEquipo = function(ordenId, idx) {
+  verIntervencionEquipo(ordenId, idx);
 };
 
 /* ========================================

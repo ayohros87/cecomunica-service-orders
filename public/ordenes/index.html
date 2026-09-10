@@ -937,9 +937,16 @@
   </button>
   <img id="equipoFotoViewerImg" class="equipo-foto-viewer__img" alt="Foto del equipo">
   <div id="equipoFotoViewerMeta" class="equipo-foto-viewer__meta"></div>
-  <button id="equipoFotoViewerDelete" class="equipo-foto-viewer__delete hidden" type="button" data-action="eliminar-foto-equipo-viewer">
-    <i data-lucide="trash-2"></i> Eliminar
-  </button>
+  <div class="equipo-foto-viewer__acciones">
+    <!-- Descargar: la foto del descarte (humedad, golpes) va adjunta a la
+         cotización del cliente (petición de Solangel 2026-09-10). -->
+    <button id="equipoFotoViewerDownload" class="equipo-foto-viewer__download" type="button" data-action="descargar-foto-equipo-viewer">
+      <i data-lucide="download"></i> Descargar
+    </button>
+    <button id="equipoFotoViewerDelete" class="equipo-foto-viewer__delete hidden" type="button" data-action="eliminar-foto-equipo-viewer">
+      <i data-lucide="trash-2"></i> Eliminar
+    </button>
+  </div>
 </div>
 
   </div> <!-- /cc-work -->

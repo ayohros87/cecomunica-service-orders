@@ -500,8 +500,14 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
             const motivoNoDisponible = (e.motivo_no_disponible || "").toString();
             const tieneIntervencion = !!(e.trabajo_tecnico || "").trim();
             const fotosActivas = (Array.isArray(e.fotos) ? e.fotos : []).filter(f => f && f.deleted !== true && !!f.url).length;
+            // El badge de fotos abre la ficha de SOLO LECTURA (fotos + texto +
+            // materiales): era el único indicio de que había fotos y no se
+            // podía hacer clic (Solangel 2026-09-10).
             const fotosBadgeDesktop = fotosActivas > 0
-              ? `<span class="equipo-fotos-badge" title="${fotosActivas} foto(s)"><i data-lucide="camera"></i> ${fotosActivas}</span>`
+              ? `<button type="button" class="equipo-fotos-badge equipo-fotos-badge--btn"
+                   data-action="ver-intervencion-equipo" data-stop-propagation="true"
+                   data-orden-id="${ordenId}" data-equipo-id="${e.id}"
+                   title="Ver ${fotosActivas} foto(s) y la intervención"><i data-lucide="camera"></i> ${fotosActivas}</button>`
               : '';
 
             return `

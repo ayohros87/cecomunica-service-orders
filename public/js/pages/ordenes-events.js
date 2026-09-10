@@ -262,6 +262,11 @@
       const { ordenId, equipoId } = el.dataset;
       if (ordenId && equipoId) abrirIntervencionEquipoDesktop(ordenId, equipoId);
     },
+    // Ficha de la intervención en SOLO LECTURA (badge de fotos de la fila).
+    'ver-intervencion-equipo': (el) => {
+      const { ordenId, equipoId } = el.dataset;
+      if (ordenId && equipoId) verIntervencionEquipoDesktop(ordenId, equipoId);
+    },
     'toggle-no-disponible': async (el) => {
       const { ordenId, equipoId } = el.dataset;
       const checked = !!el.checked;
@@ -329,6 +334,7 @@
       if (fotoId) verFotoEquipo(fotoId);
     },
     'cerrar-foto-equipo-viewer': () => cerrarFotoEquipoViewer(),
+    'descargar-foto-equipo-viewer': () => descargarFotoEquipoViewer(),
     'eliminar-foto-equipo-viewer': () => eliminarFotoEquipoViewer(),
 
     // Materiales / piezas del equipo (modal de intervención técnica)

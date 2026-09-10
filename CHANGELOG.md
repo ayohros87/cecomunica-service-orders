@@ -1,5 +1,43 @@
 # Changelog
 
+## [La intervención se puede LEER sin poder editarla] — 2026-09-10
+
+> Solangel (jefatura de taller): *"no tengo acceso para visualizar las fotos ni
+> una vista previa de la información que los muchachos cargan en el apartado de
+> Intervenciones… con contar con la opción de visualizar la información, ver las
+> fotografías y descargarlas, sería suficiente. No es necesario que tenga
+> permisos de edición"*. El modal de intervención estaba abierto solo a técnico,
+> técnico operativo, recepción y admin: su rol (`jefe_taller`) recibía un toast
+> **"Sin permisos para editar"** y ahí se acababa. Las fotos del descarte
+> (humedad, golpes) —justo lo que ella adjunta a la cotización del cliente— no
+> se veían por ningún lado, y en móvil el ojo de la tarjeta solo mostraba el
+> texto pelado.
+>
+> - **Ficha de la intervención en solo lectura** (`verIntervencionEquipo`): la
+>   misma información del modal del técnico —texto con su firma y fecha,
+>   descarte con motivo, condición particular, materiales registrados (incluidos
+>   los de fuera de catálogo) y las fotos— sin un solo control que escriba.
+>   Sello *"solo lectura"* en el encabezado y navegación **Equipo N de M** para
+>   recorrer la orden sin cerrar y volver a abrir.
+> - **Quien no puede editar entra donde antes rebotaba**: el botón de
+>   intervención de la fila (escritorio) y de la tarjeta (móvil) abren la ficha
+>   en vez de mostrar el toast. El badge de fotos de la columna SERIE, que era
+>   el único indicio de que había fotos, ahora es un botón que abre la misma
+>   ficha.
+> - **Descargar las fotos**: botón *Descargar* en el visor y *Descargar las N
+>   fotos* en la ficha. Se bajan como blob con nombre legible
+>   (`serial_fecha.jpg`) porque la URL de Storage es cross-origin y un
+>   `<a download>` a secas solo las abre en otra pestaña; si el fetch falla, se
+>   abre la imagen como último recurso. *Copiar la información* deja el texto,
+>   el motivo del descarte y los materiales listos para pegar en la cotización.
+> - El visor de fotos se sube por encima de la hoja (z 10050) y **Escape cierra
+>   el visor, no la ficha de abajo**. En solo lectura no aparece *Eliminar*
+>   aunque el rol pudiera borrar: la ficha no está editando nada.
+> - **Kit:** en el teléfono la hoja de `Modal.sheet` salía con su ancho de
+>   escritorio y se cortaba por la derecha — el ancho lo escribe como estilo
+>   *inline* y le ganaba a la media query. `max-width: 100% !important` a ≤768px
+>   (aplica a TODAS las hojas del kit, no solo a esta).
+
 ## [El reemplazo lo aprueba ventas — y sigue sin firma del cliente] — 2026-09-10
 
 > Alberto: *"la gestión de reemplazo no debe llevar firma de cliente y sí debe
