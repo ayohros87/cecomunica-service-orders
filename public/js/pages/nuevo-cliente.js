@@ -3,6 +3,33 @@
 
 const auth = firebase.auth();
 
+// Alta unificada (2026-09-11): el ALTA se hace en la ficha del cliente
+// (clientes/ficha.html?nuevo=1) — el mismo formulario que la edición, con
+// vendedor asignado, correo del representante, correo de acuses y bloque IP.
+// Este formulario nacía sin vendedor y el cliente quedaba fuera de la cartera
+// de quien lo creó. Aquí solo queda la edición (?id=) + documentos legales.
+(() => {
+  const p = new URLSearchParams(location.search);
+  if (p.get("id")) return;
+  p.set("nuevo", "1");
+  location.replace("../clientes/ficha.html?" + p.toString());
+})();
+
+// Editar la ficha de un cliente NO es para cualquiera (memoria
+// clientes-access-control): lo hace cobros (rol recepción), administración o
+// gerencia. Esta pantalla no tenía guard y el vendedor llegaba por deep-link.
+const ROLES_EDITAN_CLIENTE = ["administrador", "admin", "recepcion", "gerente"];
+async function _guardEdicion(user) {
+  if (!new URLSearchParams(location.search).get("id")) return true;
+  let rol = null;
+  try { rol = (await UsuariosService.getUsuario(user.uid))?.rol || null; } catch (e) { rol = null; }
+  if (ROLES_EDITAN_CLIENTE.includes(rol)) return true;
+  document.body.innerHTML =
+    "<h3 style='color:#A03030;text-align:center;margin-top:100px;'>Solo lectura: los datos del cliente los actualiza cobros" +
+    " (<a href='mailto:cobros@cecomunica.com'>cobros@cecomunica.com</a>).</h3>";
+  return false;
+}
+
 // Pobla el <select id="ip"> con los bloques IP de empresa/IPs. Conserva la opción
 // vacía ("Sin IP asignado") como primer ítem. Si se pasa un valor que no está en
 // la lista, lo agrega para no perderlo (p. ej. un IP legacy guardado en el cliente).
@@ -53,8 +80,9 @@ function mostrarMensaje(texto, color = "green") {
   Toast.show(texto, color === "green" ? "ok" : "bad");
 }
 
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async user => {
   if (!user) { window.location.href = "/login.html"; return; }
+  if (!(await _guardEdicion(user))) return;
 
   document.getElementById("formCliente").addEventListener("submit", async e => {
     e.preventDefault();

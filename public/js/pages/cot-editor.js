@@ -329,7 +329,7 @@
     `;
 
     $('btnNuevoCliente').addEventListener('click', () => {
-      location.href = '../contratos/nuevo-cliente.html?from=cotizacion';
+      location.href = '../clientes/ficha.html?nuevo=1&from=cotizacion';
     });
     CotState.mountClienteCombo('comboCliente', {
       clientes: catalogos.clientes,

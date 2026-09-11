@@ -115,7 +115,7 @@ window.NCCombo = {
       },
     });
     $list.addEventListener('mousedown', (e) => {
-      if (e.target.closest('[data-crear-cliente]')) { e.preventDefault(); window.open('../contratos/nuevo-cliente.html?redirect=true', '_blank'); }
+      if (e.target.closest('[data-crear-cliente]')) { e.preventDefault(); window.open('../clientes/ficha.html?nuevo=1', '_blank'); }
     });
 
     $btnClr.addEventListener('click', () => {

@@ -11,12 +11,22 @@ window.FichaCliente = {
   cliente: null,
   rol: null,
   uid: null,
+  email: null,
   fk: null,
   vendedores: [],
+  // Modo alta (?nuevo=1): el MISMO formulario crea el cliente. Antes el alta
+  // vivía en contratos/nuevo-cliente.html — otro formulario, sin vendedor
+  // asignado ni correo de acuses, y por eso el cliente nacía sin dueño.
+  esNuevo: false,
 
   // Solo estos roles editan; el resto (vendedor incluido) ve en solo lectura.
   // El piso real sigue en rules — esto es UI (ver memoria clientes-access-control).
   _puedeEditar() { return [ROLES.ADMIN, 'admin', ROLES.RECEPCION, ROLES.GERENTE].includes(this.rol); },
+  // Crear SÍ lo puede el vendedor: su cliente nuevo entra a su cartera. Lo que
+  // no puede es EDITAR fichas ajenas (eso lo hace cobros).
+  _puedeCrear() { return [ROLES.ADMIN, 'admin', ROLES.RECEPCION, ROLES.GERENTE, ROLES.VENDEDOR].includes(this.rol); },
+  // ¿El usuario actual puede figurar como vendedor de una cuenta?
+  _yoVendo() { return this.vendedores.some(v => v.id === this.uid); },
 
   esc(v) { return FMT.esc(v == null ? '' : String(v)); },
 
@@ -24,15 +34,39 @@ window.FichaCliente = {
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) { location.href = '../login.html'; return; }
       this.uid = user.uid;
+      this.email = user.email || null;
       try {
         const u = await UsuariosService.getUsuario(user.uid);
         this.rol = u && u.rol ? u.rol : ROLES.VISTA;
       } catch (e) { this.rol = ROLES.VISTA; }
 
-      const id = new URLSearchParams(location.search).get('id');
+      const p = new URLSearchParams(location.search);
+      const id = p.get('id');
+      if (!id && p.get('nuevo') === '1') { await this.cargarAlta(); return; }
       if (!id) { Toast.show('Falta el id del cliente.', 'bad'); return; }
       await this.cargar(id);
     });
+  },
+
+  // ── Alta ──────────────────────────────────────────────────────────────
+  async cargarAlta() {
+    if (!this._puedeCrear()) {
+      document.body.innerHTML = "<h3 style='color:#A03030;text-align:center;margin-top:100px;'>Tu rol no crea clientes.</h3>";
+      return;
+    }
+    this.esNuevo = true;
+    this.cliente = { id: null, activo: true };
+    await this.cargarVendedores();
+
+    document.title = 'Nuevo cliente - Cecomunica';
+    const t = document.querySelector('.topbar-title');
+    if (t) t.innerHTML = '<i data-lucide="user-plus"></i> Nuevo cliente';
+
+    this.pintar();
+    this.armarKit('Crear cliente');
+    await this.cargarIPs('');
+    if (window.lucide?.createIcons) lucide.createIcons();
+    document.getElementById('nombre')?.focus();
   },
 
   async cargar(id) {
@@ -50,7 +84,43 @@ window.FichaCliente = {
     this.pintar();
     this.armarKit();
     this.cargarChips();
+    await this.cargarIPs(this.cliente.ip || '');
     if (window.lucide?.createIcons) lucide.createIcons();
+  },
+
+  // ── Bloque IP (empresa/IPs) ───────────────────────────────────────────
+  // Vivía solo en contratos/nuevo-cliente.html; se trajo aquí para que esta
+  // ficha sea el formulario completo y no haya que saltar a otra pantalla.
+  async cargarIPs(valorActual = '') {
+    const sel = document.getElementById('ip');
+    if (!sel) return;
+    let lista = [];
+    try {
+      const snap = await EmpresaService.getDoc('IPs');
+      lista = (snap && Array.isArray(snap.list)) ? snap.list.slice() : [];
+    } catch (e) { console.warn('[ficha] empresa/IPs no disponible:', e?.code || e); }
+    lista.sort((a, b) => String(a).localeCompare(String(b), 'es', { sensitivity: 'base' }));
+    sel.innerHTML = '<option value="">Sin IP asignado</option>';
+    for (const ip of lista) sel.appendChild(new Option(ip, ip));
+    if (valorActual && !lista.includes(valorActual)) sel.appendChild(new Option(valorActual, valorActual));
+    sel.value = valorActual || '';
+    // El kit tomó la foto de originales antes de poblar el select: re-tomarla
+    // para que un IP ya guardado no cuente como "cambio sin guardar".
+    if (this.fk) this.fk.setLimpio();
+  },
+
+  async agregarIP() {
+    const nuevo = ((await Modal.prompt({ title: 'Nuevo bloque IP', confirmLabel: 'Agregar', message: 'Nuevo bloque IP (ej. cliente.cecomunica.net):' })) || '').trim();
+    if (!nuevo) return;
+    try {
+      const snap = await EmpresaService.getDoc('IPs');
+      const lista = snap && Array.isArray(snap.list) ? snap.list : [];
+      if (!lista.includes(nuevo)) { lista.push(nuevo); await EmpresaService.setDoc('IPs', { list: lista }); }
+    } catch (e) { Toast.show('No se pudo guardar el bloque IP: ' + (e?.message || e), 'bad'); return; }
+    const sel = document.getElementById('ip');
+    if (![...sel.options].some(o => o.value === nuevo)) sel.appendChild(new Option(nuevo, nuevo));
+    sel.value = nuevo;
+    sel.dispatchEvent(new Event('change'));
   },
 
   async cargarVendedores() {
@@ -63,15 +133,27 @@ window.FichaCliente = {
   pintar() {
     const c = this.cliente;
     const ini = (c.nombre || '?').trim().split(/\s+/).map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
-    document.getElementById('fkAvatar').textContent = ini || '?';
-    document.getElementById('fkNombre').textContent = c.nombre || '(sin nombre)';
-    document.getElementById('fkMeta').textContent = [
-      c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null,
-      c.vendedor_email ? `Vendedor: ${c.vendedor_email}` : null,
-    ].filter(Boolean).join(' · ') || '—';
+    document.getElementById('fkAvatar').textContent = this.esNuevo ? '+' : (ini || '?');
+    document.getElementById('fkNombre').textContent = this.esNuevo ? 'Nuevo cliente' : (c.nombre || '(sin nombre)');
+    document.getElementById('fkMeta').textContent = this.esNuevo
+      ? 'Al crearlo entra a la cartera del vendedor que elijas abajo'
+      : ([
+          c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null,
+          c.vendedor_email ? `Vendedor: ${c.vendedor_email}` : null,
+        ].filter(Boolean).join(' · ') || '—');
     document.getElementById('chipActivo').outerHTML = c.activo !== false
       ? '<span class="fk-chip ok" id="chipActivo">Activo</span>'
       : '<span class="fk-chip off" id="chipActivo">Inactivo</span>';
+
+    // En alta no hay expediente todavía: fuera historial, chips, evidencia y
+    // la tarjeta "Del expediente" (no existe id de cliente al que colgarlos).
+    if (this.esNuevo) {
+      for (const id of ['chipContratos', 'chipHistorial', 'seccionExpediente', 'zonaEvidencia']) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      }
+      document.querySelector('.fk-acciones')?.style.setProperty('display', 'none');
+    }
 
     // Campos (los ids calzan con los nombres de campo del doc).
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v == null ? '' : v; };
@@ -86,35 +168,36 @@ window.FichaCliente = {
     document.getElementById('activo').checked = c.activo !== false;
     this._syncMotivo();
 
-    // Vendedor asignado
+    // Vendedor asignado. En alta se preselecciona al usuario si él mismo
+    // vende: es el caso normal (el vendedor da de alta a su propio cliente) y
+    // sin dueño el cliente nace invisible para él.
     const sel = document.getElementById('vendedor');
+    const elegido = this.esNuevo
+      ? (this._yoVendo() ? this.uid : '')
+      : (c.vendedor_asignado || '');
     sel.innerHTML = '<option value="">— Sin asignar —</option>' + this.vendedores.map(v =>
-      `<option value="${this.esc(v.id)}" ${c.vendedor_asignado === v.id ? 'selected' : ''}>${this.esc(v.nombre ? `${v.nombre} (${v.email})` : v.email)}</option>`).join('');
+      `<option value="${this.esc(v.id)}" ${elegido === v.id ? 'selected' : ''}>${this.esc(v.nombre ? `${v.nombre} (${v.email})` : v.email)}</option>`).join('');
 
-    // IP (solo lectura aquí; se gestiona en el formulario completo)
-    const ipRow = document.getElementById('ipRow');
-    if (c.ip) {
-      ipRow.innerHTML = `Bloque IP: <span class="cg-mono">${this.esc(c.ip)}</span> — se cambia desde el
-        <a href="../contratos/nuevo-cliente.html?id=${encodeURIComponent(c.id)}&from=centro">formulario completo</a>.`;
-      ipRow.style.display = '';
-    }
-
-    // Solo lectura para roles sin edición.
-    if (!this._puedeEditar()) {
+    // Solo lectura para roles sin edición (no aplica al alta: quien llega aquí
+    // en modo alta ya pasó por _puedeCrear).
+    if (!this.esNuevo && !this._puedeEditar()) {
       document.getElementById('fkRoot').classList.add('fk-solo-lectura');
       document.querySelectorAll('#fkRoot input, #fkRoot select').forEach(el => { el.disabled = true; });
       document.getElementById('notaSoloLectura').style.display = '';
     }
   },
 
-  armarKit() {
+  armarKit(textoGuardar = 'Guardar cambios') {
     const root = document.getElementById('fkRoot');
-    this.fk = FormKit.crear({ root, onGuardar: (cambios) => this.guardar(cambios) });
+    this.fk = FormKit.crear({ root, textoGuardar, onGuardar: (cambios) => this.guardar(cambios) });
 
     document.getElementById('itbms_exento').addEventListener('change', () => this._syncMotivo());
     document.getElementById('itbms_exento').addEventListener('fk:restaurado', () => this._syncMotivo());
+    document.getElementById('addIP')?.addEventListener('click', () => this.agregarIP());
 
     // Evidencia del representante → documentos del cliente (PII, URL firmada).
+    // En alta no hay cliente al que colgarla: la zona está oculta.
+    if (this.esNuevo) return;
     const zona = document.getElementById('zonaEvidencia');
     const file = document.getElementById('fileEvidencia');
     zona.addEventListener('click', () => file.click());
@@ -150,6 +233,7 @@ window.FichaCliente = {
     const g = (id) => document.getElementById(id);
     const raw = {
       ...this.cliente,
+      ip: g('ip') ? g('ip').value : this.cliente.ip,
       nombre: g('nombre').value, ruc: g('ruc').value, dv: g('dv').value,
       representante: g('representante').value,
       representante_cedula: g('representante_cedula').value,
@@ -165,15 +249,21 @@ window.FichaCliente = {
     raw.vendedor_email = vend ? vend.email : null;
 
     const user = firebase.auth().currentUser;
-    const payload = ClientesService.buildClientePayload(raw, { user });
+    const payload = ClientesService.buildClientePayload(raw, { user, isCreate: this.esNuevo });
 
     // Reglas de negocio al guardar (banner arriba, con nombre del campo).
     const errores = [];
+    if (!payload.nombre) errores.push('El nombre no puede quedar vacío.');
+    if (payload.nombre.includes('/')) errores.push("El nombre no puede contener '/'.");
     if (payload.nombre_norm !== this.cliente.nombre_norm && await this._duplicado('nombre_norm', payload.nombre_norm)) {
       errores.push('Ya existe otro cliente con ese nombre.');
     }
     if (payload.ruc_norm && payload.ruc_norm !== this.cliente.ruc_norm && await this._duplicado('ruc_norm', payload.ruc_norm)) {
       errores.push('Ya existe otro cliente con ese RUC.');
+    }
+    if (payload.rucdv_norm && payload.dv_norm && payload.rucdv_norm !== this.cliente.rucdv_norm
+        && await this._duplicado('rucdv_norm', payload.rucdv_norm)) {
+      errores.push('Ya existe otro cliente con ese RUC + DV.');
     }
     const banner = document.getElementById('bannerErrores');
     if (errores.length) {
@@ -184,11 +274,28 @@ window.FichaCliente = {
     }
     banner.style.display = 'none';
 
+    if (this.esNuevo) {
+      const nuevoId = await ClientesService.createCliente(payload);
+      this.cliente = { id: nuevoId, ...payload };
+      Toast.show('Cliente creado.', 'ok');
+      if (this.fk) this.fk.soltarGuardia();
+      setTimeout(() => { location.href = this._destinoTrasAlta(nuevoId); }, 500);
+      return;
+    }
+
     await ClientesService.updateCliente(this.cliente.id, payload);
     this.cliente = { ...this.cliente, ...payload };
     this.pintar();
     const n = Object.keys(cambios).length;
     Toast.show(`Cambios guardados — ${n === 1 ? '1 campo' : n + ' campos'} al historial`, 'ok');
+  },
+
+  // A dónde sigue el alta (convención ?from= compartida con el form viejo).
+  _destinoTrasAlta(id) {
+    const from = new URLSearchParams(location.search).get('from');
+    if (from === 'clientes')   return './index.html';
+    if (from === 'cotizacion') return `../cotizaciones/nueva-cotizacion.html?cliente_id=${encodeURIComponent(id)}`;
+    return `./centro.html?id=${encodeURIComponent(id)}`;
   },
 
   async volver() {
@@ -197,6 +304,7 @@ window.FichaCliente = {
     const p = new URLSearchParams(location.search);
     const from = p.get('from');
     if (from === 'clientes') { location.href = './index.html'; return; }
+    if (from === 'cotizacion' && this.esNuevo) { location.href = '../cotizaciones/nueva-cotizacion.html'; return; }
     const id = this.cliente?.id || p.get('id') || '';
     location.href = id ? `./centro.html?id=${encodeURIComponent(id)}` : './centro.html';
   },

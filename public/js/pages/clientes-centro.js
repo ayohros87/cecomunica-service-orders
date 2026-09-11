@@ -54,10 +54,18 @@ window.Centro = {
         if (chk) chk.checked = this.soloActivos;
         // Bandeja "Cuentas por regularizar" (plan 2026-09-08 §4.6): admin y
         // gerencia. El vendedor ve las suyas en el inicio y en cada ficha.
+        const extras = [];
         if ([ROLES.ADMIN, ROLES.GERENTE, ROLES.RECEPCION].includes(this.rol)) {
-          const ex = document.getElementById('cgToolsExtra');
-          if (ex) ex.innerHTML = `<a class="btn btn-ghost" href="./regularizacion.html" style="font-size:13px;"><i data-lucide="clipboard-list"></i> Cuentas por regularizar</a>`;
+          extras.push(`<a class="btn btn-ghost" href="./regularizacion.html" style="font-size:13px;"><i data-lucide="clipboard-list"></i> Cuentas por regularizar</a>`);
         }
+        // Alta de cliente desde el Centro (2026-09-11): el vendedor no tiene
+        // el módulo Clientes en el rail, así que su única puerta al alta era
+        // el combo de una cotización. El formulario es la misma ficha.
+        if (this._puedeCrearCliente()) {
+          extras.push(`<a class="btn btn-primary" href="./ficha.html?nuevo=1&from=centro" style="font-size:13px;"><i data-lucide="user-plus"></i> Nuevo cliente</a>`);
+        }
+        const ex = document.getElementById('cgToolsExtra');
+        if (ex && extras.length) ex.innerHTML = extras.join(' ');
         this._wire();
         window.CentroAprobaciones?.init(this.rol);
         const params = new URLSearchParams(location.search);
@@ -3608,6 +3616,10 @@ window.Centro = {
   // (cobros@cecomunica.com); al vendedor se le muestra la ficha en solo lectura
   // y se le dirige a cobros.
   _puedeEditarCliente() { return [ROLES.ADMIN, 'admin', ROLES.RECEPCION, ROLES.GERENTE].includes(this.rol); },
+
+  // CREAR sí lo puede el vendedor, aunque no edite fichas ajenas: el cliente
+  // que da de alta nace en SU cartera. Espejo de FichaCliente._puedeCrear.
+  _puedeCrearCliente() { return [ROLES.ADMIN, 'admin', ROLES.RECEPCION, ROLES.GERENTE, ROLES.VENDEDOR].includes(this.rol); },
 
   // Espejo del guard del editor de cotizaciones (admin/vendedor/jefe_taller);
   // gerente y recepción ven este menú pero el editor los rebotaría al home,

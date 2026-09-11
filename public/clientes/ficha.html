@@ -27,8 +27,9 @@
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/services/clientesService.js?v=fk1"></script>
+  <script defer src="../js/services/clientesService.js?v=vend1"></script>
   <script defer src="../js/services/clienteDocumentosService.js"></script>
+  <script defer src="../js/services/empresaService.js"></script>
   <script defer src="../js/ui/modal.js?v=f7"></script>
   <script defer src="../js/ui/formKit.js?v=sh1"></script>
   <script defer src="/js/vendor/lucide.min.js?v=3"></script>
@@ -120,7 +121,7 @@
         <div class="form-field">
           <label class="form-label" for="representante_email">Correo del representante <span class="optional">opcional</span></label>
           <input class="form-input" id="representante_email" type="email" data-fk="Correo del representante" data-fk-valida="email">
-          <span class="form-hint">A este buzón llega el enlace de firma cuando difiere del contacto general.</span>
+          <span class="form-hint">A este buzón llega el enlace de firma cuando difiere del correo de facturación.</span>
           <span class="form-error-msg">Ese correo no parece válido.</span>
         </div>
         <div class="fk-evidencia" id="zonaEvidencia" role="button" tabindex="0">
@@ -159,8 +160,9 @@
             <span class="form-error-msg">Solo números, espacios, guiones y el prefijo +.</span>
           </div>
           <div class="form-field">
-            <label class="form-label" for="email">Correo general</label>
-            <input class="form-input" id="email" type="email" data-fk="Correo" data-fk-valida="email">
+            <label class="form-label" for="email">Correo de facturación</label>
+            <input class="form-input" id="email" type="email" data-fk="Correo de facturación" data-fk-valida="email">
+            <span class="form-hint">Buzón al que se mandan las facturas de este cliente.</span>
             <span class="form-error-msg">Ese correo no parece válido.</span>
           </div>
         </div>
@@ -196,11 +198,20 @@
             <span class="form-hint">Inactivo lo esconde de los listados por defecto; no borra nada.</span>
           </div>
         </div>
-        <p class="form-hint" id="ipRow" style="display:none; margin:6px 0 0;"></p>
+        <div class="form-field">
+          <label class="form-label" for="ip">Bloque IP <span class="optional">opcional</span></label>
+          <div style="display:flex; gap:var(--sp-2); align-items:stretch;">
+            <select class="form-select" id="ip" data-fk="Bloque IP" style="flex:1;">
+              <option value="">Sin IP asignado</option>
+            </select>
+            <button type="button" id="addIP" class="btn btn-secondary btn-icon" aria-label="Crear bloque IP"><i data-lucide="plus"></i></button>
+          </div>
+          <span class="form-hint">Sin IP, recepción ve "Sin información de IP" al cargar equipos y tiene que buscarla.</span>
+        </div>
       </div>
 
       <!-- Expediente (solo lectura) -->
-      <div class="fk-seccion">
+      <div class="fk-seccion" id="seccionExpediente">
         <div class="fk-cab"><h3>Del expediente</h3></div>
         <p class="fk-desc">Solo lectura — contratos, equipos y gestiones se manejan desde la ficha 360.</p>
         <div class="fk-enlaces">
@@ -228,7 +239,7 @@
   </div>
 
   <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/pages/clientes-ficha.js?v=fk2"></script>
+  <script defer src="../js/pages/clientes-ficha.js?v=alta1"></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

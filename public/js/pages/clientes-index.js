@@ -124,7 +124,7 @@ const $pageTotal = document.getElementById('pageTotal');
 const selectedIds = new Set();
 
 
-  $btnNuevo.onclick = ()=> location.href = '../contratos/nuevo-cliente.html?from=clientes';
+  $btnNuevo.onclick = ()=> location.href = '../clientes/ficha.html?nuevo=1&from=clientes';
 $btnBuscar.onclick = ()=> { resetPagination(); gotoPage(1); updateTotalPages();
 };
 $btnLimpiar.onclick = ()=>{

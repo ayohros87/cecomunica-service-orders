@@ -77,19 +77,35 @@ const ClientesService = {
       itbms_motivo_exencion: itbmsExento ? (raw.itbms_motivo_exencion || "").trim() : "",
       tags: Array.isArray(raw.tags) ? raw.tags : [],
       activo: raw.activo !== false,
-      vendedor_asignado: raw.vendedor_asignado || null,
-      vendedor_email: raw.vendedor_email || null,
       updated_at: ahora,
       updated_by: user?.uid || null,
     };
+
+    // El vendedor SOLO se toca si el formulario lo trae. Un form sin el campo
+    // (el alta/edición de contratos/nuevo-cliente.html) mandaba el payload
+    // canónico completo y BORRABA el vendedor_asignado de la ficha en cada
+    // guardado: el cliente desaparecía de "Mi cartera" y el vendedor ya no
+    // podía abrirlo (candado de cartera del Centro). Pasar la clave en null es
+    // un "sin asignar" explícito y sí limpia.
+    if ('vendedor_asignado' in raw) {
+      cliente.vendedor_asignado = raw.vendedor_asignado || null;
+      cliente.vendedor_email    = raw.vendedor_email || null;
+    }
+
     cliente.searchTokens = this.buildSearchTokens(cliente);
 
     if (isCreate){
       cliente.created_at = ahora;
       cliente.created_by = user?.uid || null;
       cliente.deleted = false;
-      if (!cliente.vendedor_asignado) cliente.vendedor_asignado = user?.uid || null;
-      if (!cliente.vendedor_email)    cliente.vendedor_email    = user?.email || null;
+      // Si el formulario NO trae el campo (altas rápidas), el dueño es quien
+      // crea: sin dueño el cliente nace invisible para su propio vendedor.
+      // Si SÍ lo trae, manda el formulario — incluido un "sin asignar"
+      // deliberado, que es más honesto que colgarle la cuenta a recepción.
+      if (!('vendedor_asignado' in raw)) {
+        cliente.vendedor_asignado = user?.uid || null;
+        cliente.vendedor_email    = user?.email || null;
+      }
     }
     return cliente;
   },
