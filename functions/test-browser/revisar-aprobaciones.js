@@ -65,19 +65,72 @@ async function main() {
         window.MODULOS = { puedeVer: () => true };
         window.SenalesService = new Proxy({}, { get: () => async () => 2 });
         window.GestionesService = { tipoLabel: t => ({ aumento: 'Aumento de equipos', baja: 'Baja de equipos' })[t] || t };
+        window.feedLlamadas = 0;
+        window.feedEscrituras = [];
+        window.FeedOrdenesService = {
+          ordenesPorCrear: async () => {
+            window.feedLlamadas++;
+            return {
+              contratos: [
+                { doc_id: 'fc1', contrato_id: 'ALQ-LISTO', cliente_id: 'cli1', cliente_nombre: 'Contrato listo', equipos: 3, estado: 'activo', at: Date.now() },
+                { doc_id: 'fc2', contrato_id: 'ALQ-DESCARTADO', cliente_id: 'cli1', cliente_nombre: 'Contrato descartado', equipos: 1, estado: 'activo', at: Date.now(), descartada: true },
+              ],
+              ventas: [{ ids: ['radio1', 'radio2'], cliente_id: 'cli2', cliente_nombre: 'Venta lista', seriales: ['S1', 'S2'], factura: 'F100', at: Date.now() }],
+            };
+          },
+          descartarContrato: async (...args) => { window.feedEscrituras.push(['contrato', ...args]); },
+          descartarVenta: async (...args) => { window.feedEscrituras.push(['venta', ...args]); },
+          reactivarContrato: async () => {},
+          reactivarVenta: async () => {},
+        };
       });
       await script('services/aprobacionesService.js');
     }
 
     await page.goto(base + '/index.html');
     await fixtures();
+    await script('ui/bandeja.js');
+    await script('domain/ordenProgPendiente.js');
+    await script('pages/home-feed-ordenes.js');
     await script('pages/home-signals.js');
     await page.evaluate(() => HomeSignals.render({ rolEfectivo: 'administrador', uid: 'test' }));
-    assert.equal(await page.$$eval('.kpi', els => els.length), 7);
+    assert.equal(await page.$$eval('.kpi', els => els.length), 8);
     assert.equal(await page.$eval('.kpis', el => window.getComputedStyle(el).display), 'grid');
     assert.equal(await page.$eval('[data-signal-val="SAG"]', el => el.textContent), '53');
     assert.equal(await page.$eval('[data-signal-val="S10"]', el => el.textContent), '1');
     await (await page.$('#signalsRow')).screenshot({ path: path.join(OUT, 'home-desktop.png') });
+    // Órdenes por crear comparte ficha/panel y no deja una barra aparte.
+    assert.equal(await page.$('#feedOrdenes'), null);
+    assert.equal(await page.$eval('[data-signal-val="OPC"]', el => el.textContent), '2');
+    await page.click('[data-signal="OPC"]');
+    await page.waitForSelector('[data-key="c:fc1"]');
+    assert.equal(await page.evaluate(() => window.feedLlamadas), 1);
+    assert.ok(await page.$eval('[data-key="c:fc1"] a', el => el.href.includes('contrato_doc_id=fc1')));
+    assert.ok(await page.$eval('[data-key="v:radio1,radio2"] a', el => el.href.includes('origen=venta')));
+    await (await page.$('#signalsRow')).screenshot({ path: path.join(OUT, 'ordenes-por-crear-desktop.png') });
+    await page.setViewport({ width: 390, height: 844 });
+    await (await page.$('#signalsRow')).screenshot({ path: path.join(OUT, 'ordenes-por-crear-mobile.png') });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    await page.setViewport({ width: 1280, height: 950 });
+    async function descartar(key) {
+      await page.click(`[data-key="${key}"] [data-act="descartar"]`);
+      const motivo = await page.$eval('[data-f="motivo"]', el => el.options[1].value);
+      await page.select('[data-f="motivo"]', motivo);
+      await page.click('[data-act="confirmar"]');
+      await page.waitForFunction(() => !document.querySelector('.fo-descarte'));
+    }
+    await descartar('c:fc1');
+    assert.equal(await page.$eval('[data-signal-val="OPC"]', el => el.textContent), '1');
+    await descartar('v:radio1,radio2');
+    assert.equal(await page.$eval('.kpis-zero [data-signal="OPC"] .kpi__val', el => el.textContent), '0');
+    assert.ok(await page.$eval('.bj-panel', el => el.textContent.includes('Nada por crear')));
+    await page.click('[data-act="toggle-descartadas"]');
+    await page.click('[data-key="c:fc1"] [data-act="reactivar"]');
+    await page.waitForFunction(() => document.querySelector('.kpis > [data-signal="OPC"] .kpi__val')?.textContent === '1');
+    await page.click('[data-key="v:radio1,radio2"] [data-act="reactivar"]');
+    await page.waitForFunction(() => document.querySelector('[data-signal-val="OPC"]').textContent === '2');
+    assert.equal(await page.evaluate(() => window.feedEscrituras[0][3].uid), 'test');
+    await page.click('[data-signal="OPC"]');
     // La caché conserva 53, pero el servidor ya tiene 52: el home debe releer.
     await page.evaluate(async () => {
       window.registros.gestiones[0].estado = 'pendiente_firma';
@@ -97,9 +150,9 @@ async function main() {
       window.registros.contratos = [];
       await HomeSignals.render({ rolEfectivo: 'administrador', uid: 'test' });
     });
-    assert.equal(await page.$$eval('.kpis > .kpi', els => els.length), 5);
+    assert.equal(await page.$$eval('.kpis > .kpi', els => els.length), 6);
     assert.equal(await page.$$eval('.kpis-zero .kpi', els => els.length), 2);
-    assert.equal(await page.$eval('.kpis', el => el.dataset.n), '5');
+    assert.equal(await page.$eval('.kpis', el => el.dataset.n), '6');
     assert.ok(await page.evaluate(() => document.querySelector('.kpis-zero .kpi').getBoundingClientRect().height
       < document.querySelector('.kpis > .kpi').getBoundingClientRect().height));
     await (await page.$('#signalsRow')).screenshot({ path: path.join(OUT, 'ceros-mixtos-desktop.png') });
@@ -120,7 +173,6 @@ async function main() {
     assert.equal(await page.$eval('[data-signal-val="SAG"]', el => el.textContent), '1');
 
     // Todos en cero: solo la franja compacta; los paneles siguen abriendo.
-    await script('ui/bandeja.js');
     await page.evaluate(async () => {
       sessionStorage.clear();
       Object.values(HomeSignals.SIGNALS).forEach(sig => { sig.count = async () => 0; });
@@ -128,7 +180,7 @@ async function main() {
       await HomeSignals.render({ rolEfectivo: 'administrador', uid: 'test' });
     });
     assert.equal(await page.$eval('.kpis', el => window.getComputedStyle(el).display), 'none');
-    assert.equal(await page.$$eval('.kpis-zero .kpi', els => els.length), 7);
+    assert.equal(await page.$$eval('.kpis-zero .kpi', els => els.length), 8);
     assert.equal(await page.$eval('.kpis-zero__label', el => el.textContent), 'Sin pendientes');
     await (await page.$('#signalsRow')).screenshot({ path: path.join(OUT, 'todos-cero-mobile.png') });
     await page.click('.kpis-zero [data-signal="EST"]');
@@ -150,6 +202,10 @@ async function main() {
     });
     assert.equal(await page.$eval('.kpis > [data-signal="SAG"] .kpi__val', el => el.textContent), '—');
     assert.equal(await page.$eval('.kpis', el => el.hidden), false);
+    await page.evaluate(() => HomeSignals.render({ rolEfectivo: 'recepcion', uid: 'test' }));
+    assert.ok(await page.$('[data-signal="OPC"]'));
+    await page.evaluate(() => HomeSignals.render({ rolEfectivo: 'gerente', uid: 'test' }));
+    assert.equal(await page.$('[data-signal="OPC"]'), null);
 
     await page.setViewport({ width: 1280, height: 950 });
     await page.goto(base + '/' + destino);

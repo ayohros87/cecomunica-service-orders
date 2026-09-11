@@ -21,10 +21,9 @@
    usa las tiene cualquier usuario autenticado; el descarte lo
    cierran las reglas.
 
-   No estorba: si no hay nada que crear no se muestra; con filas,
-   es una tarjeta compacta colapsable (estado persistido por
-   usuario en localStorage). Datos con cache sessionStorage TTL
-   5 min, mismo patrón que HomeSignals.
+   Integrada en HomeSignals: el contador usa el mismo feed que el panel.
+   Con cero se conserva como acceso compacto, incluso para consultar los
+   descartes. Datos con cache sessionStorage TTL 5 min.
    ============================================================= */
 
 window.HomeFeedOrdenes = (() => {
@@ -34,12 +33,13 @@ window.HomeFeedOrdenes = (() => {
   // v2: las filas ahora traen `ids`/`descartada` — un cache v1 rompería el
   // pintado, así que la versión de la clave lo invalida solo.
   const CACHE_KEY = (uid) => `ccHomeFeedOrdenes:v2:${uid}`;
-  const COLLAPSE_KEY = (uid) => `ccHomeFeedOrdenesCollapsed:v1:${uid}`;
   const MAX_FILAS = 5;
 
   // Estado vivo del panel: el feed cargado, el usuario que escribe y el mount.
   // El descarte re-pinta desde aquí (sin releer Firestore) y refresca el cache.
   let _st = { mount: null, uid: '', user: null, feed: null, verDescartadas: false };
+  const _cargas = new Map();
+  let _renderToken = 0;
 
   // Filas, esqueleto y antigüedad: kit de bandeja (js/ui/bandeja.js,
   // 2026-09-08). Semáforo de SEÑAL (10/30 días).
@@ -57,6 +57,24 @@ window.HomeFeedOrdenes = (() => {
   function _writeCache(uid, feed) {
     try { sessionStorage.setItem(CACHE_KEY(uid), JSON.stringify({ t: Date.now(), feed })); }
     catch { /* storage lleno/bloqueado: sin cache */ }
+  }
+
+  async function _cargar(uid) {
+    const cached = _readCache(uid);
+    if (cached) return cached;
+    if (!_cargas.has(uid)) {
+      _cargas.set(uid, FeedOrdenesService.ordenesPorCrear().then(feed => {
+        _writeCache(uid, feed);
+        return feed;
+      }).finally(() => _cargas.delete(uid)));
+    }
+    return _cargas.get(uid);
+  }
+
+  async function contar({ rolEfectivo, uid }) {
+    if (!ROLES_FEED.includes(rolEfectivo)) throw new Error('Cola no disponible para este rol');
+    const feed = await _cargar(uid);
+    return _filas(feed).filter(f => !f.descartada).length;
   }
 
   // Clave estable de una fila — la usa el DOM para saber a quién descartar.
@@ -161,18 +179,16 @@ window.HomeFeedOrdenes = (() => {
   }
 
   function _pintar() {
-    const { mount, uid, feed } = _st;
+    const { mount, feed } = _st;
     const todas = _filas(feed);
     const activas = todas.filter(f => !f.descartada);
     const descartadas = todas.filter(f => f.descartada);
 
-    // Sin nada que crear y sin descartes que revisar, la tarjeta no aparece.
-    if (!activas.length && !descartadas.length) { mount.style.display = 'none'; return; }
+    _st.onCount?.(activas.length);
+    if (!mount?.isConnected || mount.dataset.signalPanel !== 'OPC') return;
 
     const visibles = activas.slice(0, MAX_FILAS);
     const resto = activas.length - visibles.length;
-    let collapsed = false;
-    try { collapsed = localStorage.getItem(COLLAPSE_KEY(uid)) === '1'; } catch {}
 
     const pieLinks = resto > 0
       ? `+${resto} más — <a href="contratos/index.html">ver contratos</a> · <a href="inventario/equipos.html?tab=otros">ver ventas en el pool</a>`
@@ -182,30 +198,12 @@ window.HomeFeedOrdenes = (() => {
           _st.verDescartadas ? 'Ocultar' : 'Ver'} ${descartadas.length} descartada(s)</button>`
       : '';
 
-    mount.innerHTML = `
-<div class="fo-card${collapsed ? ' is-collapsed' : ''}">
-  <button class="fo-head" type="button" aria-expanded="${!collapsed}" title="Mostrar / ocultar">
-    <i data-lucide="clipboard-plus" class="fo-head__ico"></i>
-    <span class="fo-head__t">Órdenes por crear</span>
-    <span class="fo-count">${activas.length}</span>
-    <span class="fo-head__hint">contratos listos y ventas sin orden</span>
-    <i data-lucide="chevron-down" class="fo-chev"></i>
-  </button>
-  <div class="fo-body bj-panel" style="margin:0;border:0;border-radius:0;">
+    mount.innerHTML = Bandeja.panelHead({ titulo: 'Órdenes por crear', n: activas.length, href: 'ordenes/index.html' }) + `
     ${visibles.map(f => f.html()).join('')}
     ${activas.length ? '' : Bandeja.listaVacia('Nada por crear ahora mismo.')}
     ${_st.verDescartadas ? descartadas.map(_rowDescartada).join('') : ''}
     ${(pieLinks || pieDesc) ? `<div class="fo-foot">${pieLinks}${pieLinks && pieDesc ? ' · ' : ''}${pieDesc}</div>` : ''}
-  </div>
-</div>`;
-    mount.style.display = '';
-
-    mount.querySelector('.fo-head').addEventListener('click', () => {
-      const card = mount.querySelector('.fo-card');
-      const ahora = card.classList.toggle('is-collapsed');
-      mount.querySelector('.fo-head').setAttribute('aria-expanded', String(!ahora));
-      try { localStorage.setItem(COLLAPSE_KEY(uid), ahora ? '1' : '0'); } catch {}
-    });
+    `;
     // Delegación en el contenedor (sobrevive a los re-pintados) y una sola vez:
     // _pintar() se llama en cada descarte y los listeners se acumularían.
     if (!mount._foBound) { mount.addEventListener('click', _onClick); mount._foBound = true; }
@@ -213,6 +211,7 @@ window.HomeFeedOrdenes = (() => {
   }
 
   function _onClick(ev) {
+    if (ev.currentTarget !== _st.mount || _st.mount.dataset.signalPanel !== 'OPC') return;
     const btn = ev.target.closest('[data-act]');
     if (!btn) return;
     const act = btn.getAttribute('data-act');
@@ -243,6 +242,7 @@ window.HomeFeedOrdenes = (() => {
   }
 
   async function _confirmar(form, key, btn) {
+    const st = _st;
     const motivo = form.querySelector('[data-f="motivo"]').value;
     const nota   = form.querySelector('[data-f="nota"]').value.trim();
     const err    = form.querySelector('[data-f="err"]');
@@ -260,16 +260,16 @@ window.HomeFeedOrdenes = (() => {
           motivo, nota,
           equipos_activos: item.equipos,
           seriales_resueltos: item.seriales_resueltos,
-        }, _st.user);
+        }, st.user);
       } else {
-        await FeedOrdenesService.descartarVenta(item.ids, { motivo, nota }, _st.user);
+        await FeedOrdenesService.descartarVenta(item.ids, { motivo, nota }, st.user);
       }
       // Estado local + cache: el descarte se ve al instante y no reaparece al
       // volver al home dentro del TTL.
       item.descartada = true;
-      item.descarte = { motivo, nota, por_email: _st.user?.email || '' };
-      _writeCache(_st.uid, _st.feed);
-      _pintar();
+      item.descarte = { motivo, nota, por_email: st.user?.email || '' };
+      _writeCache(st.uid, st.feed);
+      if (_st === st) _pintar();
     } catch (e) {
       console.warn('[HomeFeedOrdenes] descarte falló:', e?.code || e);
       btn.disabled = false; btn.textContent = 'Descartar';
@@ -280,66 +280,42 @@ window.HomeFeedOrdenes = (() => {
   }
 
   async function _reactivar(key, btn) {
+    const st = _st;
     const hallado = _buscar(key);
     if (!hallado) return;
     btn.disabled = true;
     try {
       const { tipo, item } = hallado;
       if (tipo === 'contrato') await FeedOrdenesService.reactivarContrato(item.doc_id);
-      else await FeedOrdenesService.reactivarVenta(item.ids, _st.user);
+      else await FeedOrdenesService.reactivarVenta(item.ids, st.user);
       item.descartada = false;
       item.descarte = null;
-      _writeCache(_st.uid, _st.feed);
-      _pintar();
+      _writeCache(st.uid, st.feed);
+      if (_st === st) _pintar();
     } catch (e) {
       console.warn('[HomeFeedOrdenes] reactivar falló:', e?.code || e);
       btn.disabled = false;
     }
   }
 
-  // Shell de carga (2 filas shimmer del kit).
-  function _skeleton(mount) {
-    mount.innerHTML = `
-<div class="fo-card">
-  <div class="fo-head" style="cursor:default"><span class="bj-skel bj-skel--chip"></span><span class="bj-skel bj-skel--l2" style="width:180px;"></span></div>
-  <div class="fo-body bj-panel" style="margin:0;border:0;border-radius:0;">${Bandeja.esqueleto(2)}</div>
-</div>`;
-    mount.style.display = '';
-  }
-
-  /**
-   * @param {Object} opts
-   * @param {string} opts.rolEfectivo  rol tras "Ver como" (gating visual)
-   * @param {string} opts.uid          uid real (queries corren como el usuario real)
-   * @param {Object} [opts.user]       usuario de auth (autoría del descarte)
-   * @param {string} [opts.mountId]    contenedor; default 'feedOrdenes'
-   */
-  async function render({ rolEfectivo, uid, user = null, mountId = 'feedOrdenes' }) {
-    const mount = document.getElementById(mountId);
-    if (!mount) return;
-    if (!ROLES_FEED.includes(rolEfectivo)) { mount.style.display = 'none'; return; }
-
-    _st = { mount, uid, user: user || { uid }, feed: null, verDescartadas: false };
-
-    const cached = _readCache(uid);
-    if (cached) { _st.feed = cached; _pintar(); return; }
-
-    // Sin caché: shell con shimmer mientras corren las queries, en vez del
-    // hueco que aparecía de golpe al llegar los datos (salto de layout).
-    // Si el feed viene vacío, _pintar lo oculta y el shimmer desaparece.
-    _skeleton(mount);
-
+  // HomeSignals controla abrir/cerrar. Este módulo conserva las acciones del
+  // feed y avisa al contador después de descartar/reactivar una fila.
+  async function renderPanel(mount, { rolEfectivo, uid, user = null }, onCount) {
+    if (!ROLES_FEED.includes(rolEfectivo)) return;
+    const token = ++_renderToken;
+    mount.innerHTML = Bandeja.esqueleto(2);
     try {
-      const feed = await FeedOrdenesService.ordenesPorCrear();
-      _writeCache(uid, feed);
-      _st.feed = feed;
+      const feed = await _cargar(uid);
+      if (token !== _renderToken || !mount.isConnected || mount.dataset.signalPanel !== 'OPC') return;
+      _st = { mount, uid, user: user || { uid }, feed, verDescartadas: false, onCount };
       _pintar();
     } catch (e) {
-      // El home nunca se rompe por el feed.
       console.warn('[HomeFeedOrdenes] no disponible:', e?.code || e);
-      mount.style.display = 'none';
+      if (token === _renderToken && mount.isConnected && mount.dataset.signalPanel === 'OPC') {
+        mount.innerHTML = Bandeja.listaVacia('No se pudo cargar. Cierra y abre la ficha para reintentar.');
+      }
     }
   }
 
-  return { render };
+  return { contar, renderPanel };
 })();

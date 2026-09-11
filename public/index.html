@@ -44,16 +44,15 @@
   <script defer src="js/services/senalesService.js?v=pen11"></script>
   <script defer src="js/services/aprobacionesService.js?v=apr2"></script>
   <script defer src="js/ui/bandeja.js?v=bj2"></script> <!-- kit de bandeja (fila, panel, antigüedad); antes de señales y feeds -->
-  <script defer src="js/pages/home-signals.js?v=pen9"></script>
-  <!-- Feed "Órdenes por crear": los tres archivos cambian juntos (descarte de
-       filas), así que comparten token de versión. equiposPoolService es la
-       única ruta de escritura a equipos_pool — el descarte de una venta pasa
+  <script defer src="js/pages/home-signals.js?v=pen10"></script>
+  <!-- Datos y acciones de la ficha "Órdenes por crear". equiposPoolService
+       es la única ruta de escritura al pool: el descarte de una venta pasa
        por ahí para que quede en el kardex de cada unidad. -->
   <script defer src="js/domain/ordenProgPendiente.js?v=fo2"></script>
   <script src="js/core/serial.js?v=1"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
   <script defer src="js/services/equiposPoolService.js?v=prop1"></script>
-  <script defer src="js/services/feedOrdenesService.js?v=fo2"></script>
-  <script defer src="js/pages/home-feed-ordenes.js?v=fo4"></script>
+  <script defer src="js/services/feedOrdenesService.js?v=fo3"></script>
+  <script defer src="js/pages/home-feed-ordenes.js?v=fo5"></script>
   <script defer src="js/pages/home-feed-devoluciones.js?v=fo4"></script>
   <!-- Lucide en defer + icons.js (par adyacente, en este orden): icons.js hace
        el barrido inicial de <i data-lucide>; los guards inline viejos quedan
@@ -85,8 +84,7 @@
   <!-- ============ SEÑALES ACCIONABLES (solo lo que el rol puede ver) ============ -->
   <div class="launch__signals" id="signalsRow"></div>
 
-  <!-- ============ ÓRDENES POR CREAR (feed; solo recepción/admin) ============ -->
-  <div class="feed-ordenes" id="feedOrdenes" style="display:none"></div>
+  <!-- ============ DEVOLUCIONES ============ -->
   <div class="feed-ordenes" id="feedDevoluciones" style="display:none"></div>
 
   <!-- ============ BUSCADOR ============ -->
@@ -312,11 +310,8 @@
         if (window.Icons) Icons.pintar(document.getElementById('gridModulos'));
 
         // Señales accionables — mismas fuentes de gating (módulos + rules).
-        HomeSignals.render({ rolEfectivo: effectiveRol, uid: user.uid });
+        HomeSignals.render({ rolEfectivo: effectiveRol, uid: user.uid, user });
 
-        // Feed "Órdenes por crear" — solo recepción/admin (gate en el módulo).
-        // `user` va aparte del uid: el descarte de una fila firma quién fue.
-        if (window.HomeFeedOrdenes) HomeFeedOrdenes.render({ rolEfectivo: effectiveRol, uid: user.uid, user });
         if (window.HomeFeedDevoluciones) HomeFeedDevoluciones.render({ rolEfectivo: effectiveRol, uid: user.uid });
       });
     });

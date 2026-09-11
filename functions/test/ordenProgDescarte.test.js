@@ -33,6 +33,19 @@ const vm = require("node:vm");
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
 
+test("el contador no presenta una fuente caída como cero órdenes", async () => {
+  const ctx = vm.createContext({ window: {} });
+  vm.runInContext(leer("public", "js", "services", "feedOrdenesService.js"), ctx);
+  const service = ctx.window.FeedOrdenesService;
+  service.contratosSinOrden = async () => [];
+  service.ventasSinOrden = async () => { throw new Error("sin red"); };
+  await assert.rejects(service.ordenesPorCrear(), /sin red/);
+  service.ventasSinOrden = async () => [{ ids: ["radio1", "radio2"] }];
+  const feed = await service.ordenesPorCrear();
+  assert.equal(feed.ventas.length, 1);
+  assert.equal(feed.contratos.length, 0);
+});
+
 function cargarDominio() {
   const ctx = { console, window: {} };
   vm.createContext(ctx);

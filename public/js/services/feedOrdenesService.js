@@ -114,12 +114,12 @@ const FeedOrdenesService = {
       .sort((a, b) => b.at - a.at);
   },
 
-  // Ambas fuentes en paralelo; una fuente caída (permiso/índice) no tumba a
-  // la otra — el feed muestra lo que sí se pudo leer.
+  // Ambas fuentes en paralelo. El contador necesita ambas: una consulta
+  // fallida no puede presentarse como cero órdenes por crear.
   async ordenesPorCrear() {
     const [contratos, ventas] = await Promise.all([
-      this.contratosSinOrden().catch(e => { console.warn('[FeedOrdenes] contratos:', e?.code || e); return []; }),
-      this.ventasSinOrden().catch(e => { console.warn('[FeedOrdenes] ventas:', e?.code || e); return []; }),
+      this.contratosSinOrden(),
+      this.ventasSinOrden(),
     ]);
     return { contratos, ventas };
   },

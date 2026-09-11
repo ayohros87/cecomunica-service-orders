@@ -32,6 +32,13 @@ window.HomeSignals = (() => {
 
   // Catálogo. `modulo` = gate de visibilidad; `count(ctx)` → Promise<number>.
   const SIGNALS = {
+    OPC: {
+      modulo: 'ordenes', icon: 'clipboard-plus', moreIsBad: true, fresh: true,
+      label: 'Órdenes por crear', sub: 'contratos listos y ventas sin orden',
+      href: 'ordenes/index.html',
+      count: ctx => window.HomeFeedOrdenes.contar(ctx),
+      panel: (mount, ctx, onCount) => window.HomeFeedOrdenes.renderPanel(mount, ctx, onCount),
+    },
     S1: {
       modulo: 'ordenes', icon: 'alert-circle', alert: true, moreIsBad: true,
       label: 'Órdenes por asignar', sub: 'requieren asignar técnico',
@@ -269,10 +276,10 @@ window.HomeSignals = (() => {
     // desde la lista de órdenes (chips por estado).
     // REGV/REGG (cuentas por regularizar, plan 2026-09-08): el vendedor ve su
     // cartera; admin y gerencia ven todas, con las sin vendedor primero.
-    administrador:     ['SAG', 'S10', 'S1', 'EST', 'S4Q', 'SAP', 'REGG'],
+    administrador:     ['SAG', 'S10', 'OPC', 'S1', 'EST', 'S4Q', 'SAP', 'REGG'],
     gerente:           ['S1', 'S10', 'SAP', 'S8', 'REGG'],
     jefe_taller:       ['S1', 'EST', 'S4Q', 'SAP'],
-    recepcion:         ['S1', 'S2', 'ENT', 'S8'],
+    recepcion:         ['OPC', 'S1', 'S2', 'ENT', 'S8'],
     vendedor:          ['S7', 'S8', 'S1', 'REGV'],
     tecnico:           ['S5', 'S4P'],
     tecnico_operativo: ['S5', 'S4P'],
@@ -359,7 +366,7 @@ window.HomeSignals = (() => {
     // Rótulo y (número + contexto) van cada uno en UNA línea que no envuelve
     // — lo que no cabe se recorta por CSS, así que el subtítulo completo va
     // en el title= de la tarjeta y no como tercera línea de texto.
-    const abre = typeof sig.items === 'function';
+    const abre = typeof sig.items === 'function' || typeof sig.panel === 'function';
     return `
 <a class="kpi${sig.alert ? ' kpi--alert' : ''}${abre ? ' kpi--abre' : ''} is-loading" href="${sig.href}" data-signal="${id}" title="${sig.label} — ${sig.sub}"${abre ? ' aria-expanded="false" role="button"' : ''}>
   <div class="kpi__label"><i data-lucide="${sig.icon}"></i> <span class="kpi__t">${sig.label}</span>${abre ? '<span class="kpi__chev" aria-hidden="true">▾</span>' : ''}</div>
@@ -460,14 +467,26 @@ window.HomeSignals = (() => {
   }
 
   async function _renderPanel(panel, id, sig) {
+    panel.dataset.signalPanel = id;
+    if (typeof sig.panel === 'function') {
+      const mount = panel.closest('[data-pend-mount]');
+      const ctx = mount?._aprobacionesCtx;
+      if (!ctx) return;
+      await sig.panel(panel, ctx, n => {
+        if (mount._aprobacionesCtx === ctx) _pintaVal(mount, id, n);
+      });
+      return;
+    }
     panel.innerHTML = Bandeja.listaVacia('Cargando…');
     let rows;
     try { rows = await sig.items(); }
     catch (e) {
       console.warn('[HomeSignals] filas de', id, 'no disponibles:', e?.code || e);
+      if (!panel.isConnected || panel.dataset.signalPanel !== id) return;
       panel.innerHTML = `<p class="bj-lista-vacia">No se pudieron cargar las filas. <a href="${sig.href}">Abrir en su módulo</a></p>`;
       return;
     }
+    if (!panel.isConnected || panel.dataset.signalPanel !== id) return;
     const activas = rows.filter(r => !r.pospuesto);
     const pospuestas = rows.filter(r => r.pospuesto);
     const visibles = activas.slice(0, MAX_FILAS_PANEL);
@@ -574,7 +593,7 @@ window.HomeSignals = (() => {
       if (!tile || !mount.contains(tile)) return;
       const id = tile.dataset.signal;
       const sig = SIGNALS[id];
-      if (!sig || typeof sig.items !== 'function') return;   // tile normal: navega
+      if (!sig || (typeof sig.items !== 'function' && typeof sig.panel !== 'function')) return; // tile normal: navega
       if (panel && !mount.contains(panel)) panel = null;
       ev.preventDefault();
       if (_panelAbierto === id) {                            // segundo clic: cierra
@@ -602,7 +621,7 @@ window.HomeSignals = (() => {
    * @param {string} opts.uid          uid REAL (las queries corren como el usuario real)
    * @param {string} [opts.mountId]    contenedor; default 'signalsRow'
    */
-  async function render({ rolEfectivo, uid, mountId = 'signalsRow' }) {
+  async function render({ rolEfectivo, uid, user = null, mountId = 'signalsRow' }) {
     const mount = document.getElementById(mountId);
     if (!mount) return;
 
@@ -636,7 +655,7 @@ window.HomeSignals = (() => {
     // La expansión se cablea ANTES de resolver los conteos: el camino de la
     // caché hace `return` temprano y sin esto las señales cacheadas no abrían.
     _wireExpansion(mount, ids);
-    _wireAprobaciones(mount, { rolEfectivo, uid });
+    _wireAprobaciones(mount, { rolEfectivo, uid, user });
 
     const setVal = (id, n) => _pintaVal(mount, id, n);
     const dropTile = (id) => {
@@ -660,7 +679,7 @@ window.HomeSignals = (() => {
     const counts = {};
     await Promise.all(ids.map(async (id) => {
       try {
-        counts[id] = await SIGNALS[id].count({ uid });
+        counts[id] = await SIGNALS[id].count({ rolEfectivo, uid, user });
         setVal(id, counts[id]);
       } catch (err) {
         // permiso denegado / índice faltante → fuera la tarjeta, el home sigue.
