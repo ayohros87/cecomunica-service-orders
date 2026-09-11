@@ -51,13 +51,28 @@ window.WorkspaceTabs = {
   // scroll de la tira — nada de scrollIntoView, que arrastraría la página
   // entera al cargar. En rAF porque render() corre en el parse.
   _centrar() {
-    requestAnimationFrame(() => {
+    const aplicar = () => {
       document.querySelectorAll('.ws-tabs').forEach(nav => {
         const a = nav.querySelector('.ws-tab.is-active');
         if (!a || nav.scrollWidth <= nav.clientWidth + 1) return;
         nav.scrollLeft = a.offsetLeft - (nav.clientWidth - a.offsetWidth) / 2;
       });
-    });
+    };
+    requestAnimationFrame(aplicar);
+    // Los iconos se pintan en DOS tiempos: icons.js carga el vendor COMPLETO
+    // cuando un nombre cae fuera del censo a medida y repinta, así que las
+    // pestañas se ensanchan DESPUÉS del primer frame. Sin este segundo pase,
+    // en el teléfono "No devueltos" (la última) quedaba fuera de la vista —
+    // medido contra producción, 2026-09-11. El observer solo lee mutaciones y
+    // escribe scrollLeft, así que no se realimenta.
+    if (!this._obs && typeof MutationObserver === 'function') {
+      this._obs = new MutationObserver(() => requestAnimationFrame(aplicar));
+      window.addEventListener('resize', () => requestAnimationFrame(aplicar));
+    }
+    if (!this._obs) return;
+    this._obs.disconnect();
+    document.querySelectorAll('.ws-tabs')
+      .forEach(nav => this._obs.observe(nav, { childList: true, subtree: true }));
   },
 
   setBadge(tabId, n) {
