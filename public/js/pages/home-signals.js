@@ -46,6 +46,14 @@ window.HomeSignals = (() => {
       // soloTaller: la DEVOLUCION vive en "POR ASIGNAR" pero jamás se asigna
       // (2026-09-02) — sin esto la señal contaba trabajo que no existe.
       count: () => SenalesService.countOrdenesPorEstado(EST.POR_ASIGNAR, { soloTaller: true }),
+      items: () => SenalesService.listOrdenesPorAsignar(),
+      row: (r, esc) => ({
+        txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.id)}</span> · ${esc(r.tipo)}`,
+        dias: r.dias,
+        cta: { label: 'Abrir orden', href: `ordenes/editar-orden.html?id=${encodeURIComponent(r.id)}` },
+      }),
+      hrefLabel: 'Ver todas →',
+      vacio: 'No hay órdenes pendientes de asignar.',
     },
     S2: {
       modulo: 'ordenes', icon: 'inbox',
@@ -492,7 +500,7 @@ window.HomeSignals = (() => {
     const visibles = activas.slice(0, MAX_FILAS_PANEL);
     const resto = activas.length - visibles.length;
 
-    panel.innerHTML = Bandeja.panelHead({ titulo: sig.label, n: activas.length, href: sig.href })
+    panel.innerHTML = Bandeja.panelHead({ titulo: sig.label, n: activas.length, href: sig.href, hrefLabel: sig.hrefLabel })
       + (visibles.length
         ? visibles.map(r => _filaHtml(id, sig, r)).join('')
         : Bandeja.listaVacia(sig.vacio || 'Nada pendiente.'))

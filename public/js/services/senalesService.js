@@ -104,6 +104,34 @@ const SenalesService = {
     );
   },
 
+  // La lista comparte las exclusiones del contador. Paginar antes de filtrar
+  // evita que una página llena de eliminadas/devoluciones esconda las vivas.
+  async listOrdenesPorAsignar() {
+    const db = firebase.firestore();
+    const base = db.collection('ordenes_de_servicio')
+      .where('estado_reparacion', '==', 'POR ASIGNAR')
+      .orderBy(firebase.firestore.FieldPath.documentId());
+    const rows = [];
+    const now = new Date();
+    let cursor = null;
+    do {
+      const q = cursor ? base.startAfter(cursor) : base;
+      const snap = await q.limit(100).get({ source: 'server' });
+      for (const d of snap.docs) {
+        const o = d.data() || {};
+        if (!this._viva(o) || !PendientesDomain.esColaDeTaller(o)) continue;
+        rows.push({
+          id: d.id, col: 'ordenes_de_servicio',
+          cliente: o.cliente_nombre || o.cliente || '—',
+          tipo: o.tipo_de_servicio || '—',
+          dias: Math.max(0, Math.floor(PendientesDomain.edadDias(o.fecha_entrada || o.fecha_creacion, now) || 0)),
+        });
+      }
+      cursor = snap.size === 100 ? snap.docs[snap.docs.length - 1] : null;
+    } while (cursor);
+    return rows.sort((a, b) => b.dias - a.dias || a.id.localeCompare(b.id));
+  },
+
   /**
    * Órdenes completadas que el candado de QC no deja entregar (ordenes-qc.js).
    * NO usa count(): el criterio ("aprobado y además cubriendo los equipos

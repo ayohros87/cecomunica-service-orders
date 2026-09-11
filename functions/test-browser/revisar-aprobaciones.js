@@ -63,7 +63,12 @@ async function main() {
           return window.registros[col].filter(r => filtros.every(([f, op, v]) => op === 'in' ? v.includes(r[f]) : r[f] === v)).length;
         } };
         window.MODULOS = { puedeVer: () => true };
-        window.SenalesService = new Proxy({}, { get: () => async () => 2 });
+        window.SenalesService = new Proxy({
+          listOrdenesPorAsignar: async () => [
+            { id: 'OS-ANTIGUA', cliente: 'Cliente por asignar', tipo: 'REPARACION', dias: 15 },
+            { id: 'OS-NUEVA', cliente: 'Cliente reciente', tipo: 'PROGRAMACION', dias: 2 },
+          ],
+        }, { get: (target, key) => target[key] || (async () => 2) });
         window.GestionesService = { tipoLabel: t => ({ aumento: 'Aumento de equipos', baja: 'Baja de equipos' })[t] || t };
         window.feedLlamadas = 0;
         window.feedEscrituras = [];
@@ -99,6 +104,22 @@ async function main() {
     assert.equal(await page.$eval('[data-signal-val="SAG"]', el => el.textContent), '53');
     assert.equal(await page.$eval('[data-signal-val="S10"]', el => el.textContent), '1');
     await (await page.$('#signalsRow')).screenshot({ path: path.join(OUT, 'home-desktop.png') });
+    // Por asignar abre en el home, con enlace a la orden y a la lista completa.
+    const homeUrl = page.url();
+    await page.click('[data-signal="S1"]');
+    await page.waitForSelector('.bj-panel [data-row="OS-ANTIGUA"]');
+    assert.equal(page.url(), homeUrl);
+    assert.equal(await page.$eval('[data-signal="S1"]', el => el.getAttribute('aria-expanded')), 'true');
+    assert.ok(await page.$eval('.bj-panel [data-row="OS-ANTIGUA"]', el => el.textContent.includes('REPARACION')));
+    assert.ok(await page.$('.bj-panel a[href="ordenes/editar-orden.html?id=OS-ANTIGUA"]'));
+    assert.equal(await page.$eval('.bj-panel a[href="ordenes/index.html?estado=POR%20ASIGNAR"]', el => el.textContent), 'Ver todas →');
+    await (await page.$('#signalsRow')).screenshot({ path: path.join(OUT, 'por-asignar-desktop.png') });
+    await page.setViewport({ width: 390, height: 844 });
+    await (await page.$('#signalsRow')).screenshot({ path: path.join(OUT, 'por-asignar-mobile.png') });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    await page.setViewport({ width: 1280, height: 950 });
+    await page.click('[data-signal="S1"]');
+    assert.equal(await page.$('.bj-panel'), null);
     // Órdenes por crear comparte ficha/panel y no deja una barra aparte.
     assert.equal(await page.$('#feedOrdenes'), null);
     assert.equal(await page.$eval('[data-signal-val="OPC"]', el => el.textContent), '2');
@@ -182,6 +203,11 @@ async function main() {
     assert.equal(await page.$eval('.kpis', el => window.getComputedStyle(el).display), 'none');
     assert.equal(await page.$$eval('.kpis-zero .kpi', els => els.length), 8);
     assert.equal(await page.$eval('.kpis-zero__label', el => el.textContent), 'Sin pendientes');
+    await page.evaluate(() => { window.SenalesService.listOrdenesPorAsignar = async () => []; });
+    await page.click('.kpis-zero [data-signal="S1"]');
+    await page.waitForFunction(() => document.querySelector('.bj-panel')?.textContent.includes('No hay órdenes pendientes de asignar.'));
+    assert.equal(page.url(), homeUrl);
+    await page.click('.kpis-zero [data-signal="S1"]');
     await (await page.$('#signalsRow')).screenshot({ path: path.join(OUT, 'todos-cero-mobile.png') });
     await page.click('.kpis-zero [data-signal="EST"]');
     await page.waitForFunction(() => document.querySelector('.bj-panel')?.textContent.includes('Ninguna orden parada'));
