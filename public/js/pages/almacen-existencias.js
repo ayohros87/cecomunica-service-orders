@@ -42,9 +42,16 @@ window.AlmacenExistencias = (() => {
   // seguimiento vive en la bandeja de no devueltos, no en existencias.
   const OTROS = ['vendido', 'baja', 'por_clasificar', 'en_poc', 'pendiente_cobro'];
 
+  // Filas cuyas unidades se están trayendo — evita que dos clicks seguidos
+  // sobre la misma fila lancen dos consultas.
+  const _cargandoDocs = new Set();
+
   const ctx = {
     cargado: false, cargando: false,
-    filas: [],           // fila = { key, modelo_id, label, est:{}, docs:[], conteo, dif, seriales, data }
+    // fila = { key, modelo_id, label, est:{}, docs, conteo, dif, seriales, data }
+    // `docs`: null = sus unidades aún no se han traído (se piden al expandir);
+    // [] = no tiene unidades en el pool (fila que solo existe por el conteo).
+    filas: [],
     expandida: null,     // key de la fila expandida
     q: '', filtroEstado: '', soloDif: false,
   };
@@ -58,14 +65,29 @@ window.AlmacenExistencias = (() => {
     const loader = $('loader');
     if (loader) loader.style.display = '';
     try {
-      const [pool, modelos, conteos] = await Promise.all([
-        EquiposPoolService.listar(),
+      const [resumen, modelos, conteos] = await Promise.all([
+        EquiposPoolService.resumenPorModelo(),
         ModelosService.getModelos(),
         InventarioService.getInventarioActual(),
       ]);
-      ctx.filas = armarFilas({ pool, modelos, conteos });
+      // Red de seguridad: si el resumen no está (aún sin construir, rules,
+      // una reconciliación que lo dejó vacío), la pantalla NO se queda muda —
+      // cae al pool completo como antes. Se avisa porque volver a barrer
+      // 7,600 fichas en cada apertura es justo lo que se vino a quitar: que
+      // pase en silencio sería peor que el error.
+      if (!resumen.length) {
+        console.warn('[Existencias] agregados_pool vacío — leyendo el pool completo');
+        if (typeof Toast !== 'undefined') Toast.show('Resumen de inventario no disponible: se leyó el pool completo.', 'warn');
+        ctx.filas = armarFilas({ resumen: resumenDesdePool(await EquiposPoolService.listar()), modelos, conteos });
+      } else {
+        ctx.filas = armarFilas({ resumen, modelos, conteos });
+      }
       ctx.cargado = true;
       render();
+      // Una recarga (tras un lote, o desde un hook externo) rearma las filas
+      // con `docs: null`. Si había una fila abierta hay que volver a traer sus
+      // unidades, o se quedaría en "Cargando…" sin que nadie las pida.
+      if (ctx.expandida) cargarDocs(ctx.expandida);
     } catch (e) {
       console.error('[Existencias] no se pudo cargar:', e);
       if (typeof Toast !== 'undefined') Toast.show('No se pudieron cargar las existencias.', 'bad');
@@ -75,16 +97,38 @@ window.AlmacenExistencias = (() => {
     }
   }
 
-  function armarFilas({ pool, modelos, conteos }) {
-    // Grupos del pool por modelo (mismo criterio modeloKey de todo el sistema).
-    const grupos = new Map();
-    for (const eq of pool) {
+  // Deriva el mismo resumen a partir del pool en memoria — solo para la red
+  // de seguridad de arriba, que necesita alimentar a armarFilas con la forma
+  // que ahora viene de `agregados_pool`.
+  function resumenDesdePool(pool) {
+    const m = new Map();
+    for (const eq of (pool || [])) {
       const key = EquiposPoolService.modeloKey(eq.modelo_id, eq.modelo_label);
-      const g = grupos.get(key) || { key, modelo_id: eq.modelo_id || null, label: eq.modelo_label || '', docs: [], est: {} };
-      g.docs.push(eq);
+      const g = m.get(key) || { key, modelo_id: eq.modelo_id || null, modelo_label: eq.modelo_label || '', est: {}, docs: [] };
       g.est[eq.estado] = (g.est[eq.estado] || 0) + 1;
+      g.docs.push(eq);
       if (!g.modelo_id && eq.modelo_id) g.modelo_id = eq.modelo_id;
-      grupos.set(key, g);
+      if (!g.modelo_label && eq.modelo_label) g.modelo_label = eq.modelo_label;
+      m.set(key, g);
+    }
+    return [...m.values()];
+  }
+
+  function armarFilas({ resumen, modelos, conteos }) {
+    // Grupos por modelo. Los conteos vienen ya hechos del resumen; las
+    // unidades (`docs`) NO se cargan aquí: se traen al expandir la fila. Esa
+    // es toda la diferencia de consumo — la tabla necesita números, y los
+    // seriales solo hacen falta del modelo que el usuario abre.
+    const grupos = new Map();
+    for (const r of resumen) {
+      grupos.set(r.key, {
+        key: r.key,
+        modelo_id: r.modelo_id || null,
+        label: r.modelo_label || '',
+        est: r.est || {},
+        // `null` = sin cargar todavía (distinto de `[]` = cargado y vacío).
+        docs: Array.isArray(r.docs) ? r.docs : null,
+      });
     }
     const porId = new Map(), porTight = new Map();
     for (const g of grupos.values()) {
@@ -93,8 +137,16 @@ window.AlmacenExistencias = (() => {
       if (tl && !porTight.has(tl)) porTight.set(tl, g);
     }
 
-    // Join canónico conteo ↔ bodega (StockAgg) + conteos por estado del grupo.
-    const bodegaMap = StockAgg.agruparPool(pool.filter(e => e.estado === 'en_bodega'));
+    // Join canónico conteo ↔ bodega (StockAgg). `agruparPool` arma este mismo
+    // Map recorriendo docs; aquí el conteo de bodega ya viene hecho, así que
+    // se arma con la misma FORMA (modeloKey → {modelo_id, modelo_label, n})
+    // para que StockAgg reciba exactamente lo de siempre.
+    const bodegaMap = new Map();
+    for (const g of grupos.values()) {
+      const n = g.est['en_bodega'] || 0;
+      if (!n) continue;
+      bodegaMap.set(g.key, { modelo_id: g.modelo_id, modelo_label: g.label, n });
+    }
     const joinRows = StockAgg.build({ modelos, conteos, poolMap: bodegaMap });
 
     const usados = new Set();
@@ -108,7 +160,9 @@ window.AlmacenExistencias = (() => {
         label: f.modelo?.modelo || f.label,
         marca: f.modelo?.marca || '',
         modelo: f.modelo,
-        est: g?.est || {}, docs: g?.docs || [],
+        // Sin grupo en el pool = fila que solo existe por el conteo físico:
+        // `[]` (no hay unidades) y no `null`, que dispararía una carga inútil.
+        est: g?.est || {}, docs: g ? g.docs : [],
         seriales: f.seriales, conteo: f.conteo, dif: f.dif, data: f.data,
       };
     });
@@ -233,6 +287,13 @@ window.AlmacenExistencias = (() => {
   }
 
   function expansionHtml(f) {
+    // Las unidades se traen al abrir (ver cargarDocs). Mientras llegan, la
+    // fila dice que está cargando en vez de mentir con "sin unidades".
+    if (f.docs === null) {
+      return `<tr class="ex-expansion"><td colspan="10">
+        <span style="color:var(--fg-3); font-size:13px;">Cargando las unidades de ${esc(f.label)}…</span>
+      </td></tr>`;
+    }
     const porEstado = new Map();
     for (const eq of f.docs) {
       if (!porEstado.has(eq.estado)) porEstado.set(eq.estado, []);
@@ -290,6 +351,28 @@ window.AlmacenExistencias = (() => {
   function toggleFila(key) {
     ctx.expandida = ctx.expandida === key ? null : key;
     render();
+    if (ctx.expandida) cargarDocs(ctx.expandida);
+  }
+
+  // Trae las unidades del modelo expandido. Es el otro lado del trato: la
+  // tabla se pinta con el resumen (~111 lecturas) y solo el modelo que el
+  // usuario abre paga por sus seriales. Una vez cargadas se quedan en memoria
+  // mientras dure la página — reabrir la misma fila no vuelve a leer.
+  async function cargarDocs(key) {
+    const f = ctx.filas.find(x => x.key === key);
+    if (!f || f.docs !== null || _cargandoDocs.has(key)) return;
+    _cargandoDocs.add(key);
+    try {
+      f.docs = await EquiposPoolService.listarPorModeloKey(key, f.modelo_id);
+    } catch (e) {
+      console.error('[Existencias] no se pudieron cargar las unidades de', key, e);
+      // Se deja en null para que un segundo click reintente, en vez de
+      // quedarse mostrando "sin unidades" para siempre.
+      if (typeof Toast !== 'undefined') Toast.show('No se pudieron cargar las unidades de ' + (f.label || key) + '.', 'bad');
+    } finally {
+      _cargandoDocs.delete(key);
+    }
+    if (ctx.expandida === key) render();
   }
 
   // ── Export / reporte (mismo cálculo del join — StockAgg) ──────────────
@@ -378,6 +461,13 @@ window.AlmacenExistencias = (() => {
     if (_loteEnVuelo) return;
     const f = ctx.filas.find(x => x.key === key);
     if (!f) return;
+    // El botón de lote vive DENTRO de la expansión, así que las unidades ya
+    // están cargadas. Si aun así no lo estuvieran (una recarga a medias), se
+    // para: un lote sobre una lista vacía no haría nada y parecería que sí.
+    if (!Array.isArray(f.docs)) {
+      if (typeof Toast !== 'undefined') Toast.show('Las unidades aún se están cargando — inténtalo de nuevo.', 'warn');
+      return;
+    }
     const docs = f.docs.filter(eq => eq.estado === estado
       && (accion !== 'verificar' || eq.verificado === false));
     if (!docs.length) return;

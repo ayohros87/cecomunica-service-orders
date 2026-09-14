@@ -216,6 +216,49 @@ const EquiposPoolService = {
         || (a.serial || '').localeCompare(b.serial || ''));
   },
 
+  // ── Resumen precalculado por modelo ──────────────────────────────────
+  // `agregados_pool` lo mantiene el trigger onPoolAgregado (ver
+  // functions/src/domain/agregadoPool.js). Un doc por modeloKey con los
+  // conteos por estado ya hechos: ~111 lecturas en vez de las 7,600 del pool
+  // entero. Nació de la auditoría de consumo 2026-09-10, donde abrir
+  // Existencias costaba una barrida completa CADA vez.
+  //
+  // Sirve para PINTAR conteos. No para decidir una mutación: el trigger
+  // aplica deltas y la reconciliación de las 05:30 corrige la deriva, así que
+  // un número puede estar corrido por un rato. Lo que se toca se lee del pool.
+  async resumenPorModelo() {
+    const db = firebase.firestore();
+    const snap = await db.collection('agregados_pool').get();
+    return snap.docs.map(d => {
+      const v = d.data() || {};
+      return {
+        key: d.id,
+        modelo_id: v.modelo_id || null,
+        modelo_label: v.modelo_label || '',
+        est: v.est || {},
+      };
+    });
+  },
+
+  // Las unidades de UN grupo del resumen — lo que se carga al expandir una
+  // fila, en vez de traer el pool entero por si acaso.
+  //
+  // El grupo sin modelo (`sinmodelo`) son fichas con `modelo_id: null`, que
+  // Firestore SÍ sabe consultar porque el campo está escrito en null y no
+  // ausente. El filtro por modeloKey al final es el que garantiza que la fila
+  // pintada y las unidades traídas sean el mismo grupo, aunque mañana
+  // aparezcan fichas sin id pero con etiqueta.
+  async listarPorModeloKey(key, modeloId = null) {
+    if (!key) return [];
+    const db = firebase.firestore();
+    const snap = await db.collection('equipos_pool')
+      .where('modelo_id', '==', modeloId || null).get();
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(d => this.modeloKey(d.modelo_id, d.modelo_label) === key)
+      .sort((a, b) => (a.serial || a.id || '').localeCompare(b.serial || b.id || ''));
+  },
+
   // Disponibles de un modelo, para el picker "Tomar del pool".
   async disponiblesDeModelo(modeloId, modeloLabel) {
     const todos = await this.listar({ estado: this.ESTADOS.EN_BODEGA });
