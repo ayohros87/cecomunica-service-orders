@@ -1,11 +1,13 @@
 # Comisiones — del check manual al expediente que se libera solo
 
-**Estado:** **F0, F1 y F2 hechas y desplegadas** el 2026-09-10 (§9), con dos
-puntos de la F2 movidos a la F4 (`venta_propio`) y a mejora aparte (el chip en
-el Centro). **Pendientes: F3** (los dos amarres con QuickBooks — es trabajo de
-contabilidad, no de código), **F4** (verificación automática del pago) y **F5**
-(webhook). Las cinco decisiones abiertas quedaron resueltas por Alberto el
-2026-09-10 (§11). Fecha del plan: 2026-09-10.
+**Estado:** **F0, F1 y F2** hechas y desplegadas el 2026-09-10; **la mitad de
+código de la F3** (el número de factura) el 2026-09-14. **Pendiente lo que no
+es código: vincular los 76 clientes con contrato activo a QuickBooks — 0 de 76
+al 2026-09-14.** Después van la F4 (verificación automática del pago, que
+depende de ese vínculo) y la F5 (webhook). Dos puntos de la F2 se movieron a la
+F4 (`venta_propio`) y a mejora aparte (el chip en el Centro). Las cinco
+decisiones abiertas quedaron resueltas por Alberto el 2026-09-10 (§11).
+Fecha del plan: 2026-09-10.
 
 **Origen:** correo de Zuleika del 2026-09-10 con dos reclamos que resultaron
 ser el mismo: (a) contratos firmados cuyo PDF **no aparece** en la gestión del
@@ -545,12 +547,59 @@ que hace hoy, pero una vez y anotado.
 
 ### F3 — Los dos enlaces con QuickBooks
 
-1. **Vincular clientes.** Solo importan los ~100 con contrato activo, no los
-   447. La página ya sugiere por RUC y por nombre. Es trabajo de contabilidad,
-   no de código.
-2. **Número de factura obligatorio.** Rotular `pasos.qbo.ref` como *"Número de
-   factura (QBO)"*, validarlo y exigirlo al tildar el paso. Retro-llenar los
-   avisos ya marcados es opcional y a mano.
+**1. Vincular clientes — SIN EMPEZAR** (verificado el 2026-09-14). Hay **1 de
+410** clientes vivos con `qbo_customer_id`: ASAMBLEA NACIONAL → QBO 2,
+vinculado por Alberto el 11-sep como prueba. De los **76 clientes con contrato
+activo, cero** están vinculados (76, no los ~100 que estimaba este plan: son
+107 contratos repartidos entre 76 cuentas). La página ya sugiere por RUC y por
+nombre. **Es trabajo de contabilidad, no de código**, y es el requisito de todo
+lo automático.
+
+**2. Número de factura — HECHO y DESPLEGADO el 2026-09-14.**
+
+Resultó que Recepción **ya lo venía escribiendo por su cuenta desde agosto**,
+sin que nadie se lo pidiera. Lo que estaba mal no era su hábito: era el campo.
+Decía *"Referencia (opcional) — N.° de factura o nota"*, o sea pedía dos cosas
+a la vez, y salieron tres formatos en cuatro registros:
+
+```
+"Factura N° 10791"
+"Factura N° 10527"
+"FACTURA SIN FISCALIZAR CREADA EN QUICKBOOK BAJO EL N° 10429."
+```
+
+- **Dos campos separados**: *"N.° de factura"* y *"Nota (opcional)"*. La nota
+  ahora sugiere lo que de verdad va ahí (*"Sin fiscalizar, parcial, etc."*) —
+  ese matiz salió de un registro real y vale la pena conservarlo.
+- **`numeroFactura()`** en `lib/facturacionAvisos` (+ espejo en el servicio del
+  navegador): saca el DocNumber de lo que sea que escriban. Manda el **último**
+  marcador, no el primero, porque en *"FACTURA SIN FISCALIZAR … BAJO EL N°
+  10429"* la palabra abre la frase y el número cuelga del final. Sin marcador y
+  con varios números gana el más largo (un año de 4 dígitos no le gana a una
+  factura de 5). No adivina en silencio: devuelve los candidatos.
+- **NO se exige** (`feedback_no_trancar_recepcion`). Trancar a Recepción por un
+  dato que a veces no tiene a mano rompe la única bandeja que sí usan. Si
+  falta, el paso se marca igual, el rastro dice *"SIN número de factura"*, la
+  pastilla QBO lleva un **"?"** ámbar y al hacerle clic se anota después
+  (`anotarFactura`). Sin esa puerta, un paso marcado sin número se quedaba a
+  medias para siempre y la F4 lo saltaría.
+- **El "?" solo acusa lo que marcó una persona.** Los 38 pasos que dejó
+  `siembra-comisiones.js` son facturación histórica que nadie tecleó: señalarlos
+  sería reclamarle a Recepción una deuda que el sistema se inventó solo. Se
+  pueden anotar igual, pero no salen marcados.
+- **`scripts/rescata-numero-factura.js`** rescató los 4 que ya estaban escritos
+  → 10791, 10776, 10429, 10527. Los cuatro con marcador, ninguno ambiguo. El
+  texto original **no se toca**: si el parseo se equivoca, la fuente sigue ahí.
+  Los ambiguos se apartan en una lista de REVISAR y no se escriben.
+
+Verificado con 12 tests de `node --test` sobre el parser (con las cuatro
+cadenas reales) y 21 comprobaciones en Chrome sobre la página real
+(`test-browser/revisar-bandeja-factura.js`).
+
+**Ojo para la F4:** *"factura sin fiscalizar"* es un matiz de negocio que este
+plan no contemplaba. Si una factura sin fiscalizar todavía no es la definitiva,
+"factura en cero" puede significar otra cosa en ese caso. Hay que preguntárselo
+a Cheila **antes** de programar la verificación, no después.
 
 ### F4 — Verificación automática del pago
 
