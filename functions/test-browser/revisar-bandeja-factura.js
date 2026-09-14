@@ -53,6 +53,10 @@ const FAKE = `
     // 3) QBO hecho SIN número: tiene que verse a medias y dejar anotarlo.
     a_sinnum: base({ cliente_nombre: 'HOTELES DECAMERON, S.R.L.', contrato_id: 'ALQ20260304-02',
       pasos: { qbo: paso({ hecho: true, at: ts('2026-09-11T14:00:00Z'), por_email: 'cecrecep@cecomunica.com', facturar_desde: '2026-09-11' }), poc: paso() } }),
+    // 5) QBO que dejó la SIEMBRA sin número: es facturación histórica que nadie
+    //    tecleó — no debe salir acusada con el "?" (pero sí se puede anotar).
+    a_siembra: base({ cliente_nombre: 'CENTRAL DE PROCESAMIENTO S.A.', contrato_id: 'ALQ20260528-01',
+      pasos: { qbo: paso({ hecho: true, at: ts('2026-09-10T20:00:00Z'), fuente: 'siembra' }), poc: paso() } }),
     // 4) QBO hecho CON número: no debe volver a pedirlo.
     a_connum: base({ cliente_nombre: 'FALCON SERVICIOS INTEGRALES, S.A.', contrato_id: 'ALQ20230529-01',
       pasos: { qbo: paso({ hecho: true, at: ts('2026-09-11T14:00:00Z'), por_email: 'cecrecep@cecomunica.com',
@@ -237,6 +241,27 @@ const FAKE = `
   check(!conNum.sinNum, "un QBO con número NO se marca como incompleto");
   check(/factura 10791/i.test(conNum.title), "el tooltip muestra el número");
   check(!popTrasClic, "y al hacer clic abre el detalle, no el formulario de anotar");
+
+  // ── 6. Lo que dejó la siembra no sale acusado ───────────────────────────
+  const siembra = await page.evaluate(() => {
+    const fila = [...document.querySelectorAll(".fb-row")].find(r => r.textContent.includes("CENTRAL DE PROCESAMIENTO"));
+    const b = [...fila.querySelectorAll('[data-act="paso"]')].find(x => x.textContent.includes("QBO"));
+    return { sinNum: b.classList.contains("sin-num"), q: !!b.querySelector(".q"), title: b.title };
+  });
+  check(!siembra.sinNum && !siembra.q,
+    'un QBO que dejó la siembra NO se marca con "?" — esa deuda no es de Recepción');
+  check(/SIN número de factura/i.test(siembra.title),
+    "pero el tooltip sigue diciendo que se puede anotar");
+  await page.evaluate(() => {
+    const fila = [...document.querySelectorAll(".fb-row")].find(r => r.textContent.includes("CENTRAL DE PROCESAMIENTO"));
+    [...fila.querySelectorAll('[data-act="paso"]')].find(x => x.textContent.includes("QBO")).click();
+  });
+  await new Promise(r => setTimeout(r, 300));
+  const popSiembra = await page.evaluate(() => {
+    const p = document.querySelector(".fb-pop");
+    return p ? !!p.querySelector('[data-f="factura"]') : false;
+  });
+  check(popSiembra, "y al hacerle clic sí deja anotarlo");
 
   const reales = errores.filter(e => !/favicon|manifest|404|net::ERR|Failed to load resource/i.test(e));
   check(reales.length === 0, `sin errores de consola${reales.length ? ": " + reales.slice(0, 3).join(" | ") : ""}`);

@@ -130,16 +130,22 @@ window.FacturacionBandeja = (() => {
     if (a.estado === 'descartado') return `<span class="fb-paso na">${label}</span>`;
     const done = !!p.hecho;
     // Un paso QBO hecho SIN número de factura queda a medias: el sistema no
-    // puede confirmar el pago contra QuickBooks. Se marca con "?" y sigue
-    // abriendo su ficha para poder anotarlo (2026-09-14).
-    const faltaNum = done && key === 'qbo' && !p.factura;
+    // puede confirmar el pago contra QuickBooks. Se puede anotar después
+    // (2026-09-14).
+    //
+    // El "?" solo se pinta cuando lo marcó UNA PERSONA. Los 38 pasos que dejó
+    // la siembra (fuente: 'siembra') son facturación histórica que nadie
+    // tecleó: marcarlos como incompletos sería acusar a Recepción de una deuda
+    // que el sistema se inventó solo. Se pueden anotar igual si alguien quiere.
+    const puedeAnotar = done && key === 'qbo' && !p.factura;
+    const faltaNum = puedeAnotar && p.fuente !== 'siembra';
     const title = done
       ? `${p.por_email || '—'} · ${fHora(p.at)}`
         + (p.facturar_desde ? ` · desde ${fLarga(p.facturar_desde)}` : '')
-        + (p.factura ? ` · factura ${p.factura}` : (faltaNum ? ' · SIN número de factura (clic para anotarlo)' : ''))
+        + (p.factura ? ` · factura ${p.factura}` : (puedeAnotar ? ' · SIN número de factura (clic para anotarlo)' : ''))
         + (p.ref ? ` · ${p.ref}` : '')
       : `Marcar ${label} como hecho`;
-    const abrible = !done || faltaNum;
+    const abrible = !done || puedeAnotar;
     const pop = (abrible && popAbierto && popAbierto.id === a.id && popAbierto.paso === key) ? popHtml(a, key) : '';
     return `<span class="fb-popwrap"><button type="button" class="fb-paso${done ? ' done' : ''}${faltaNum ? ' sin-num' : ''}" data-act="paso" data-id="${esc(a.id)}" data-paso="${key}" title="${esc(title)}"><span class="o"></span>${label}${faltaNum ? '<b class="q">?</b>' : ''}</button>${pop}</span>`;
   }
@@ -402,8 +408,8 @@ window.FacturacionBandeja = (() => {
       // número de factura: ahí el clic abre la ficha para anotarlo, porque si
       // no ese paso se queda a medias para siempre (2026-09-14).
       const hecho = a.pasos?.[paso];
-      const faltaNum = hecho?.hecho && paso === 'qbo' && !hecho.factura;
-      if (hecho?.hecho && !faltaNum) { abierto = id; render(); return; }
+      const puedeAnotar = hecho?.hecho && paso === 'qbo' && !hecho.factura;
+      if (hecho?.hecho && !puedeAnotar) { abierto = id; render(); return; }
       popAbierto = (popAbierto && popAbierto.id === id && popAbierto.paso === paso) ? null : { id, paso };
       render();
       const inp = document.querySelector(`.fb-pop[data-pop="${CSS.escape(id)}"] .form-input`);
