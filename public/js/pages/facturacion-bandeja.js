@@ -93,7 +93,7 @@ window.FacturacionBandeja = (() => {
         partes.push('los equipos entran por devolución');
         break;
       case 'cotizacion_servicio':
-        partes.push(`Entregado <b>${fCorta(a.fecha_efectiva)}</b>${c.orden ? ` · orden ${esc(c.orden)}` : ''}`);
+        partes.push(`${c.es_visita ? 'Visita cerrada' : 'Entregado'} <b>${fCorta(a.fecha_efectiva)}</b>${c.orden ? ` · orden ${esc(c.orden)}` : ''}`);
         if (c.cotizacion_id) partes.push(`cotización ${esc(c.cotizacion_id)}`);
         if (a.pasos?.qbo?.hecho && a.pasos.qbo.factura) partes.push(`factura <b>${esc(a.pasos.qbo.factura)}</b>`);
         else if (!a.pasos?.qbo?.hecho) partes.push('cobro único, pendiente de facturar');

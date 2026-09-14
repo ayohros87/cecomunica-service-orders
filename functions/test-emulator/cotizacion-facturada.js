@@ -184,6 +184,59 @@ const porFuente = (ms, src) => ms.filter(m => m.meta?.source === src);
   assert.equal(tras.correo_facturada_at, undefined, "el candado se suelta para el próximo marcado");
   console.log("  PASS deshacer el paso revierte el chip y suelta el candado");
 
+  // ── 7) La VISITA TÉCNICA cierra en sitio, no se "entrega" ───────────────
+  // 3 de las 5 órdenes con cotización de taller que existen hoy son visitas, y
+  // una visita nunca pasa por ENTREGADO AL CLIENTE. Sin esta puerta, esas
+  // cotizaciones no llegarían nunca a facturarse.
+  const ORDEN_V = "2026090401";
+  const COT_V = "cotDeVisita1";
+  await db.doc(`cotizaciones/${COT_V}`).set({
+    cotizacion_id: "COT-2026-0083", origen: "orden", orden_id: ORDEN_V, estado: "enviada", deleted: false,
+    cliente_nombre: "SKY CHEFS DE PANAMA, S.A.", clienteId: CLIENTE,
+    creado_por_email: TALLER, creado_por_uid: "uTaller",
+    itbms_aplica: true, subtotal: 70.4, itbms_monto: 4.93, total: 75.33, total_con_itbms: 75.33,
+    items: [{ nombre: "Revisión en sitio", cant: 1, precio: 70.4, desc: 0 }],
+  });
+  await db.doc(`ordenes_de_servicio/${ORDEN_V}`).set({
+    tipo_de_servicio: "VISITA TECNICA", estado_reparacion: "ASIGNADO",
+    cliente_nombre: "SKY CHEFS DE PANAMA, S.A.", cliente_id: CLIENTE,
+  });
+  const refV = db.doc(`ordenes_de_servicio/${ORDEN_V}`);
+  const beforeV = await refV.get();
+  await refV.update({
+    estado_reparacion: "CERRADA (VISITA)",
+    fecha_cierre_visita: admin.firestore.Timestamp.now(),
+  });
+  await onEntregada.run({ data: { before: beforeV, after: await refV.get() }, params: { ordenId: ORDEN_V } });
+
+  const avisoV = (await db.doc(`facturacion_avisos/cotizacion_servicio__${COT_V}`).get()).data();
+  assert.ok(avisoV, "cerrar la visita en sitio también abre la fila");
+  assert.equal(avisoV.contexto.es_visita, true);
+  assert.equal(avisoV.resumen.total, 75.33);
+  const cotV = (await db.doc(`cotizaciones/${COT_V}`).get()).data();
+  assert.equal(cotV.facturacion.estado, "pendiente");
+  ms = await correos();
+  const mv = porFuente(ms, "onOrdenEntregada").find(m => /COT-2026-0083/.test(m.subject));
+  assert.ok(mv, "sale su correo de apertura");
+  assert.match(mv.subject, /visita cerrada/, "el correo lo dice como ocurrió: la visita cerró");
+  assert.match(mv.bodyContent, /la visita ya se cerró en sitio/);
+  console.log("  PASS la visita técnica cerrada en sitio también entra a facturarse");
+
+  // Una ENTRADA no es trabajo facturable: recibir equipo no abre fila.
+  const ORDEN_E = "2026090999";
+  await db.doc(`cotizaciones/cotDeEntrada1`).set({
+    cotizacion_id: "COT-2026-9999", origen: "orden", orden_id: ORDEN_E, estado: "enviada", deleted: false,
+    cliente_nombre: "X", clienteId: CLIENTE, total: 10, total_con_itbms: 10, items: [],
+  });
+  const refE = db.doc(`ordenes_de_servicio/${ORDEN_E}`);
+  await refE.set({ tipo_de_servicio: "ENTRADA", estado_reparacion: "ASIGNADO", cliente_id: CLIENTE });
+  const beforeE = await refE.get();
+  await refE.update({ estado_reparacion: "CERRADA (ENTRADA)" });
+  await onEntregada.run({ data: { before: beforeE, after: await refE.get() }, params: { ordenId: ORDEN_E } });
+  assert.equal((await db.doc("facturacion_avisos/cotizacion_servicio__cotDeEntrada1").get()).exists, false,
+    "cerrar una ENTRADA no abre fila de facturación");
+  console.log("  PASS cerrar una ENTRADA no abre fila (recibir equipo no se factura)");
+
   console.log("\nTODO OK — circuito cotización de taller → factura");
   process.exit(0);
 })().catch((e) => { console.error("FALLO:", e.message); process.exit(1); });

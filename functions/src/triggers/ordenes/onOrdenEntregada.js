@@ -19,6 +19,16 @@ const { APP_BASE_URL } = require("../../lib/inventario");
 //      "Facturación pendiente" para que Recepción emita la factura y el
 //      taller se entere cuando salga (2026-09-14, pedido de Solangel).
 const ENTREGADO = "ENTREGADO AL CLIENTE";
+// "El trabajo SALIÓ" — el momento en que una reparación cotizada se puede
+// facturar. No es un solo estado: una reparación de taller termina cuando el
+// radio se entrega, pero una VISITA TÉCNICA cierra EN SITIO y nunca pasa por
+// "ENTREGADO AL CLIENTE" (ver lib/visitas: el técnico cierra con el informe
+// delante del cliente). Sin esta segunda puerta, las cotizaciones de visita
+// —3 de las 5 que existen hoy— no llegarían nunca a facturarse.
+// ENTRADA y DEVOLUCIÓN quedan FUERA a propósito: recibir equipo no es trabajo
+// facturable; la reparación que salga de ahí abre su propia orden.
+const CERRADA_VISITA = "CERRADA (VISITA)";
+const TRABAJO_SALIO = [ENTREGADO, CERRADA_VISITA];
 const norm = (s) => String(s || "").trim().toUpperCase();
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
 const { emailNotaTanda, numeroDeTanda } = require("../../lib/notaTandaEntrega");
@@ -103,7 +113,19 @@ async function abrirFacturacionDeCotizaciones(ordenId, after) {
   const FA = require("../../lib/facturacionAvisos");
   const esc = G.escapeHtml;
   const money = (n) => `$${Number(n || 0).toFixed(2)}`;
-  const fechaEntrega = after.fecha_entrega?.toDate ? after.fecha_entrega.toDate() : new Date();
+  // El día en que salió el trabajo: la entrega en taller, o el cierre en sitio
+  // de una visita (`fecha_cierre_visita`). Es la fecha con la que la bandeja
+  // cuenta los días de antigüedad de la fila.
+  const salida = after.fecha_entrega || after.fecha_cierre_visita || after.fecha_completado || null;
+  const fechaEntrega = salida?.toDate ? salida.toDate() : new Date();
+  // Una visita cerró EN SITIO; una reparación se entregó en el taller. El
+  // correo lo dice como ocurrió: "ya se entregó" sobre una visita técnica
+  // suena a que alguien llevó algo, y Recepción pierde el hilo de qué cobrar.
+  const esVisita = norm(after.tipo_de_servicio) === "VISITA TECNICA"
+    || norm(after.estado_reparacion) === CERRADA_VISITA;
+  const salioTxt = esVisita ? "la visita ya se cerró en sitio" : "el equipo ya se entregó";
+  const tituloTxt = esVisita ? "Visita cerrada — hay que facturarla" : "Reparación entregada — hay que facturarla";
+  const asuntoTxt = esVisita ? "visita cerrada" : "reparación entregada";
 
   for (const d of cots) {
     const cot = d.data();
@@ -120,12 +142,12 @@ async function abrirFacturacionDeCotizaciones(ordenId, after) {
           <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right;">${money(x.importe)}</td></tr>`).join("");
 
     await G.avisoFacturacion({
-      subject: `FACTURAR: reparación entregada — ${cot.cliente_nombre || "Cliente"} (${legible})`,
-      titulo: "Reparación entregada — hay que facturarla",
+      subject: `FACTURAR: ${asuntoTxt} — ${cot.cliente_nombre || "Cliente"} (${legible})`,
+      titulo: tituloTxt,
       cuerpo: `
         <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-          El equipo de la orden <b>${esc(ordenId)}</b> de <b>${esc(cot.cliente_nombre || "—")}</b> ya se
-          entregó. La cotización <b>${esc(legible)}</b> que se le envió al cliente queda
+          En la orden <b>${esc(ordenId)}</b> de <b>${esc(cot.cliente_nombre || "—")}</b>, ${salioTxt}.
+          La cotización <b>${esc(legible)}</b> que se le envió al cliente queda
           <b>pendiente de facturar</b>.</p>
         ${filas ? `<table role="presentation" width="100%" style="border-collapse:collapse;font:13px Arial,sans-serif;margin:8px 0;">
           <thead><tr>
@@ -157,7 +179,8 @@ async function abrirFacturacionDeCotizaciones(ordenId, after) {
           cotizacion_doc_id: d.id,
           cotizado_por: cot.creado_por_email || null,
           orden: ordenId,
-          origen_texto: `Reparación entregada · cotización ${legible}`,
+          es_visita: esVisita,
+          origen_texto: `${esVisita ? "Visita cerrada" : "Reparación entregada"} · cotización ${legible}`,
         },
         resumen: r,
         detalle: { renglones: rs },
@@ -197,23 +220,30 @@ module.exports = onDocumentWritten(
       });
     }
 
-    // Solo en la TRANSICIÓN a ENTREGADO (no en cada escritura ya entregada).
-    if (norm(before?.estado_reparacion) === ENTREGADO || norm(after.estado_reparacion) !== ENTREGADO) {
-      return null;
+    const antes = norm(before?.estado_reparacion);
+    const ahora = norm(after.estado_reparacion);
+
+    // La facturación de una cotización de taller se abre cuando el trabajo
+    // SALIÓ, que es una puerta más ancha que la entrega: una visita técnica
+    // cierra en sitio. Va antes del corte de abajo y antes del corte por
+    // contrato — una reparación cotizada se factura exista o no un contrato de
+    // alquiler detrás (las de taller casi nunca lo tienen). Best-effort y en
+    // su propio try: el trabajo ya salió y no se puede deshacer; se registra
+    // fuerte porque un fallo implica una factura que nadie va a emitir.
+    if (!TRABAJO_SALIO.includes(antes) && TRABAJO_SALIO.includes(ahora)) {
+      try {
+        await abrirFacturacionDeCotizaciones(event.params.ordenId, after);
+      } catch (e) {
+        logger.error("[onOrdenEntregada] Cotización de taller NO enviada a facturar", {
+          ordenId: event.params.ordenId, error: e.message,
+        });
+      }
     }
 
-    // Va ANTES del corte por contrato: una reparación cotizada se factura
-    // exista o no un contrato de alquiler detrás (las de taller casi nunca lo
-    // tienen). Best-effort y en su propio try — la entrega ya ocurrió y no se
-    // puede deshacer; se registra fuerte porque implica una factura que nadie
-    // va a emitir.
-    try {
-      await abrirFacturacionDeCotizaciones(event.params.ordenId, after);
-    } catch (e) {
-      logger.error("[onOrdenEntregada] Cotización de taller NO enviada a facturar", {
-        ordenId: event.params.ordenId, error: e.message,
-      });
-    }
+    // De aquí abajo, solo la TRANSICIÓN a ENTREGADO (no en cada escritura ya
+    // entregada): la señal que el CONTRATO espera es la entrega de equipos,
+    // que una visita técnica no produce.
+    if (antes === ENTREGADO || ahora !== ENTREGADO) return null;
 
     const contrato = after.contrato || {};
     if (!contrato.aplica || !contrato.contrato_doc_id) return null; // orden sin contrato
