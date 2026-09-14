@@ -18,7 +18,15 @@
  * cambio de estado. El script los lista aparte para que alguien los persiga.
  *
  * USAGE (desde functions/):
- *   node scripts/cierra-contratos-clientes-inactivos.js [--write]
+ *   node scripts/cierra-contratos-clientes-inactivos.js [--write] [--solo-sin-equipo]
+ *
+ * --solo-sin-equipo cierra ÚNICAMENTE los contratos de clientes que ya no
+ * tienen un solo radio nuestro en campo. Es la mitad sin ambigüedad: un
+ * cliente inactivo CON equipo puede ser una cuenta terminada a la que le falta
+ * la devolución… o una desactivación equivocada (PANAMA PORT BALBOA: 27 radios
+ * y 4 contratos vigentes hasta 2027, desactivado el 2026-09-14). Esos se miran
+ * uno por uno antes de cerrarles nada.
+ *
  * Idempotente: un contrato ya cerrado no se vuelve a tocar.
  */
 const admin = require("firebase-admin");
@@ -28,6 +36,7 @@ const db = admin.firestore();
 const { VIGENTES, buildCierre } = require("../src/domain/cierreContrato");
 
 const dryRun = !process.argv.includes("--write");
+const soloSinEquipo = process.argv.includes("--solo-sin-equipo");
 const HOY = new Date().toISOString().slice(0, 10);
 
 (async () => {
@@ -62,15 +71,20 @@ const HOY = new Date().toISOString().slice(0, 10);
   });
 
   console.log(`Contratos vigentes de clientes inactivos: ${porCerrar.length}\n`);
+  const elegidos = [];
   for (const c of porCerrar) {
     const eq = (enCampo.get(c.doc.cliente_id) || []).length;
-    console.log(`  ${(c.doc.contrato_id || c.id).padEnd(20)} ${String(inactivos.get(c.doc.cliente_id)).slice(0, 34).padEnd(35)} ${
-      String(c.doc.estado).padEnd(9)} ${eq ? `⚠ ${eq} radio(s) en campo` : ""}`);
+    const fuera = soloSinEquipo && eq > 0;
+    if (!fuera) elegidos.push(c);
+    console.log(`  ${fuera ? "—" : "·"} ${(c.doc.contrato_id || c.id).padEnd(20)} ${
+      String(inactivos.get(c.doc.cliente_id)).slice(0, 34).padEnd(35)} ${
+      String(c.doc.estado).padEnd(9)} ${eq ? `⚠ ${eq} radio(s) en campo${fuera ? " — SE SALTA" : ""}` : ""}`);
   }
+  if (soloSinEquipo) console.log(`\n--solo-sin-equipo: se cerrarían ${elegidos.length} de ${porCerrar.length}.`);
 
-  if (!dryRun && porCerrar.length) {
+  if (!dryRun && elegidos.length) {
     let n = 0;
-    for (const c of porCerrar) {
+    for (const c of elegidos) {
       await c.ref.update({
         ...buildCierre(c.doc, {
           motivo: `Cliente desactivado (puesta al día ${HOY}): la cuenta terminó`,
