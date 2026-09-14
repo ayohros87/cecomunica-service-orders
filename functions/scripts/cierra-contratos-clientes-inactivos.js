@@ -1,0 +1,100 @@
+/**
+ * cierra-contratos-clientes-inactivos.js — pone al día los clientes que ya
+ * estaban desactivados antes de que existiera el trigger.
+ *
+ * Regla (Alberto, 2026-09-14): desactivar un cliente CIERRA sus contratos
+ * vigentes — la desactivación es el acto que declara terminada la cuenta. De
+ * ahora en adelante lo hace onClienteDesactivado en el mismo write; este
+ * script cubre lo que quedó atrás.
+ *
+ * Contexto: cobros (Andrea) arrancó el 2026-09-11 la limpieza que se le pidió
+ * por correo el 2026-08-27 y va en orden alfabético. Al 2026-09-14 llevaba 93
+ * clientes desactivados y 24 de ellos seguían con contrato vigente y/o radios
+ * nuestros en campo — invisibles en el Centro (el filtro "Solo activos" viene
+ * encendido) pero contando para vencimientos, comisiones y pendientes.
+ *
+ * Lo que NO hace: tocar equipos. Un cliente inactivo con radios en campo es una
+ * contradicción REAL que hay que resolver con una devolución física, no con un
+ * cambio de estado. El script los lista aparte para que alguien los persiga.
+ *
+ * USAGE (desde functions/):
+ *   node scripts/cierra-contratos-clientes-inactivos.js [--write]
+ * Idempotente: un contrato ya cerrado no se vuelve a tocar.
+ */
+const admin = require("firebase-admin");
+admin.initializeApp({ projectId: "cecomunica-service-orders" });
+const db = admin.firestore();
+
+const { VIGENTES, buildCierre } = require("../src/domain/cierreContrato");
+
+const dryRun = !process.argv.includes("--write");
+const HOY = new Date().toISOString().slice(0, 10);
+
+(async () => {
+  console.log(dryRun ? "*** DRY-RUN — no se escribe nada ***\n" : "*** ESCRIBIENDO ***\n");
+
+  const inactivos = new Map();   // id -> nombre
+  (await db.collection("clientes").get()).forEach((d) => {
+    const v = d.data();
+    if (v.deleted === true) return;
+    if (v.activo === false) inactivos.set(d.id, v.nombre || d.id);
+  });
+  console.log(`Clientes inactivos: ${inactivos.size}`);
+
+  // Equipos nuestros todavía en campo, por cliente (no se tocan: se reportan).
+  const enCampo = new Map();
+  (await db.collection("equipos_pool").get()).forEach((d) => {
+    const v = d.data();
+    if (!["en_cliente", "asignado_contrato"].includes(String(v.estado || ""))) return;
+    const cid = v.asignacion?.cliente_id;
+    if (!cid || !inactivos.has(cid)) return;
+    if (!enCampo.has(cid)) enCampo.set(cid, []);
+    enCampo.get(cid).push(d.id);
+  });
+
+  const porCerrar = [];
+  (await db.collection("contratos").get()).forEach((d) => {
+    const v = d.data();
+    if (v.deleted === true) return;
+    if (!inactivos.has(v.cliente_id)) return;
+    if (!VIGENTES.has(String(v.estado || "").toLowerCase())) return;
+    porCerrar.push({ ref: d.ref, id: d.id, doc: v });
+  });
+
+  console.log(`Contratos vigentes de clientes inactivos: ${porCerrar.length}\n`);
+  for (const c of porCerrar) {
+    const eq = (enCampo.get(c.doc.cliente_id) || []).length;
+    console.log(`  ${(c.doc.contrato_id || c.id).padEnd(20)} ${String(inactivos.get(c.doc.cliente_id)).slice(0, 34).padEnd(35)} ${
+      String(c.doc.estado).padEnd(9)} ${eq ? `⚠ ${eq} radio(s) en campo` : ""}`);
+  }
+
+  if (!dryRun && porCerrar.length) {
+    let n = 0;
+    for (const c of porCerrar) {
+      await c.ref.update({
+        ...buildCierre(c.doc, {
+          motivo: `Cliente desactivado (puesta al día ${HOY}): la cuenta terminó`,
+          FieldValue: admin.firestore.FieldValue,
+        }),
+        cierre_masivo: {
+          origen: "backfill_clientes_inactivos",
+          cliente_id: c.doc.cliente_id,
+          at: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      });
+      n++;
+    }
+    console.log(`\n✅ ${n} contrato(s) cerrados.`);
+  }
+
+  // Lo que el cierre NO resuelve: radios nuestros con clientes que ya no lo son.
+  const conEquipo = [...enCampo.entries()].sort((a, b) => b[1].length - a[1].length);
+  if (conEquipo.length) {
+    const total = conEquipo.reduce((s, [, xs]) => s + xs.length, 0);
+    console.log(`\n── PENDIENTE FÍSICO: ${total} radio(s) en campo con ${conEquipo.length} cliente(s) inactivo(s) ──`);
+    console.log("   Cerrar el contrato no los recupera. Cada uno necesita una devolución (o corregir el dato).");
+    for (const [cid, seriales] of conEquipo) {
+      console.log(`  ${String(inactivos.get(cid)).slice(0, 40).padEnd(41)} ${seriales.length} — ${seriales.slice(0, 6).join(", ")}${seriales.length > 6 ? ", …" : ""}`);
+    }
+  }
+})().catch((e) => { console.error(e); process.exit(1); });

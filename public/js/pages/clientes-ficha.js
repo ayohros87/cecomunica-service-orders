@@ -283,6 +283,24 @@ window.FichaCliente = {
       return;
     }
 
+    // Desactivar CIERRA los contratos vigentes de la cuenta (regla 2026-09-14,
+    // la aplica el trigger onClienteDesactivado). Se dice antes de guardar:
+    // hasta hoy el ganchito se quitaba a ciegas y 24 de los 96 clientes
+    // inactivos quedaron con contrato vigente y/o radios nuestros en campo.
+    if (this.cliente.activo !== false && payload.activo === false) {
+      let cons = { contratos: [], enCampo: 0 };
+      try { cons = await ClientesService.consecuenciasDesactivar(this.cliente.id); }
+      catch (e) { console.warn('[ficha] no se pudo calcular el efecto de desactivar', e); }
+      const ok = await Modal.confirm({
+        title: 'Desactivar el cliente',
+        message: ClientesService.avisoDesactivar(cons, this.esc(payload.nombre || this.cliente.nombre || '')),
+        confirmLabel: cons.contratos.length ? `Desactivar y cerrar ${cons.contratos.length} contrato(s)` : 'Desactivar',
+        danger: true,
+      });
+      // FormKit prefija "No se pudo guardar: " — el texto se redacta para eso.
+      if (!ok) throw new Error('cancelaste la desactivación del cliente');
+    }
+
     await ClientesService.updateCliente(this.cliente.id, payload);
     this.cliente = { ...this.cliente, ...payload };
     this.pintar();

@@ -436,6 +436,51 @@ const ClientesService = {
   },
 
   // Batch-update multiple clients (450 per batch to stay under Firestore limit).
+  // Qué se lleva por delante desactivar a un cliente (2026-09-14). Desactivar
+  // CIERRA sus contratos vigentes — lo hace el trigger onClienteDesactivado,
+  // server-side, porque `activo` se toca desde la ficha, desde la casilla en
+  // línea del grid y desde la desactivación masiva. Esto es solo para poder
+  // DECIRLO antes: nadie debería cerrar 12 contratos sin verlo venir.
+  //
+  // Los radios en campo NO se tocan: recuperarlos es una devolución física.
+  // Por eso se cuentan aparte y se avisan — un cliente "inactivo" con 6 radios
+  // nuestros es una contradicción que alguien tiene que resolver.
+  async consecuenciasDesactivar(clienteId) {
+    const db = firebase.firestore();
+    const out = { contratos: [], enCampo: 0 };
+    if (!clienteId) return out;
+    const [cs, eq] = await Promise.all([
+      db.collection('contratos').where('cliente_id', '==', clienteId).get(),
+      db.collection('equipos_pool').where('asignacion.cliente_id', '==', clienteId)
+        .where('estado', 'in', ['en_cliente', 'asignado_contrato']).get().catch(() => ({ size: 0 })),
+    ]);
+    cs.forEach(d => {
+      const v = d.data();
+      if (v.deleted === true) return;
+      if (!['activo', 'aprobado'].includes(String(v.estado || ''))) return;
+      out.contratos.push({ id: d.id, contrato_id: v.contrato_id || d.id, estado: v.estado });
+    });
+    out.enCampo = eq.size || 0;
+    return out;
+  },
+
+  // Texto del aviso, compartido por la ficha y la desactivación masiva del
+  // grid, para que la advertencia sea la MISMA en los dos caminos.
+  avisoDesactivar({ contratos = [], enCampo = 0 } = {}, nombre = '') {
+    if (!contratos.length && !enCampo) {
+      return `${nombre ? `<b>${nombre}</b> ` : 'El cliente '}queda inactivo y desaparece de las listas (el filtro "Solo activos" viene encendido). No tiene contratos vigentes ni equipos en campo.`;
+    }
+    const partes = [];
+    if (contratos.length) {
+      partes.push(`Se <b>cerrarán ${contratos.length} contrato(s) vigente(s)</b>: ${
+        contratos.slice(0, 6).map(c => c.contrato_id).join(', ')}${contratos.length > 6 ? `, +${contratos.length - 6} más` : ''}.`);
+    }
+    if (enCampo) {
+      partes.push(`Quedan <b>${enCampo} equipo(s) nuestros en campo</b> con este cliente: cerrar el contrato <b>no los recupera</b>. Si hay que traerlos, haz la baja antes.`);
+    }
+    return `${nombre ? `Al desactivar <b>${nombre}</b>: ` : ''}${partes.join(' ')}`;
+  },
+
   async batchUpdate(ids, fields) {
     const db = firebase.firestore();
     const CHUNK = 450;

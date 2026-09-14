@@ -287,9 +287,26 @@ $bulkActivar.onclick = async ()=>{
   Toast.show('Clientes activados', 'ok');
 };
 
+// Desactivar CIERRA los contratos vigentes de cada cuenta (regla 2026-09-14,
+// la aplica el trigger onClienteDesactivado). Antes de confirmar se cuenta lo
+// que se va a cerrar: aquí se desactiva de a decenas y a ciegas era demasiado.
 $bulkDesactivar.onclick = async ()=>{
   if(asReadonly() || selectedIds.size===0) return;
-  if(!await Modal.confirm({ message: `¿Desactivar ${selectedIds.size} cliente(s)?`, danger: true })) return;
+  const ids = Array.from(selectedIds);
+  let vig = 0, conVig = 0, campo = 0;
+  try {
+    for (const id of ids) {
+      const c = await ClientesService.consecuenciasDesactivar(id);
+      if (c.contratos.length) { conVig++; vig += c.contratos.length; }
+      campo += c.enCampo;
+    }
+  } catch (e) { console.warn('[clientes] no se pudo calcular el efecto de desactivar', e); }
+  const detalle = vig
+    ? `<br><br>Se <b>cerrarán ${vig} contrato(s) vigente(s)</b> de ${conVig} de ellos.`
+      + (campo ? ` Y quedan <b>${campo} equipo(s) nuestros en campo</b>: cerrar el contrato no los recupera.` : '')
+    : campo ? `<br><br>Quedan <b>${campo} equipo(s) nuestros en campo</b> con esos clientes.` : '';
+  if(!await Modal.confirm({ message: `¿Desactivar ${selectedIds.size} cliente(s)?${detalle}`,
+      confirmLabel: vig ? `Desactivar y cerrar ${vig} contrato(s)` : 'Desactivar', danger: true })) return;
   await ClientesService.batchUpdate(Array.from(selectedIds), { activo: false });
   selectedIds.forEach(id=>{
     const selEl = $tbody.querySelector(`.rowSel[data-id="${id}"]`);
@@ -678,8 +695,22 @@ if (selectVend) {
 
   // Checkbox ACTIVO
   const chk = tr.querySelector('input[type="checkbox"][data-field="activo"]');
-  chk && chk.addEventListener('change', ()=>{
+  chk && chk.addEventListener('change', async ()=>{
     if(asReadonly()){ chk.checked = c.activo!==false; return; }
+    // Quitar el ganchito CIERRA los contratos vigentes del cliente: se dice
+    // antes, también aquí (2026-09-14).
+    if (!chk.checked) {
+      let cons = { contratos: [], enCampo: 0 };
+      try { cons = await ClientesService.consecuenciasDesactivar(id); }
+      catch (e) { console.warn('[clientes] no se pudo calcular el efecto de desactivar', e); }
+      const ok = await Modal.confirm({
+        title: 'Desactivar el cliente',
+        message: ClientesService.avisoDesactivar(cons, escapeHtml(c.nombre || '')),
+        confirmLabel: cons.contratos.length ? `Desactivar y cerrar ${cons.contratos.length} contrato(s)` : 'Desactivar',
+        danger: true,
+      });
+      if (!ok) { chk.checked = true; return; }
+    }
     setRowStatus(id, 'saving');
     onInlineUpdate(id, {activo: !!chk.checked});
   });

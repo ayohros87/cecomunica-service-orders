@@ -62,6 +62,24 @@ function decidirCierreTrasEntrada({ contrato, unidadesEnCampo }) {
 }
 
 /**
+ * ¿Esta escritura sobre el cliente es la que TERMINA la cuenta?
+ *
+ * Solo el cruce activo true → false (Alberto, 2026-09-14: "asume que todos
+ * los clientes que desactivo tambien hay que cerrar sus contratos"). Un doc
+ * que ya estaba inactivo y se vuelve a guardar no re-dispara, y reactivar no
+ * resucita nada: si el cliente vuelve, se le hace contrato nuevo.
+ *
+ * El campo existe en los 410 clientes desde el backfill del 2026-09-09, así
+ * que `ausente` se trata como activo — un doc viejo sin el campo al que ahora
+ * se le pone false SÍ es una desactivación.
+ */
+function esDesactivacion(before, after) {
+  if (!before || !after) return false;
+  if (after.deleted === true) return false;
+  return before.activo !== false && after.activo === false;
+}
+
+/**
  * Payload del cierre. `FieldValue` se recibe para que esto siga siendo puro
  * (y probable sin emulador): el llamador pasa admin.firestore.FieldValue.
  *
@@ -90,5 +108,6 @@ module.exports = {
   esVigente,
   terminaPorDevolucion,
   decidirCierreTrasEntrada,
+  esDesactivacion,
   buildCierre,
 };

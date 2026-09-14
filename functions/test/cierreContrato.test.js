@@ -85,3 +85,24 @@ test("buildCierre: terminal 'vencido', retira la marca y guarda de dónde venía
   assert.equal(u.cancelacion_pendiente, "__del__");
   assert.equal(u.fecha_fin, "__ts__");
 });
+
+// ── Cliente desactivado → sus contratos vigentes se cierran ─────────────────
+// Regla de Alberto (2026-09-14): desactivar es el acto que declara terminada
+// la cuenta. Hasta hoy 24 de los 96 clientes inactivos tenían contrato vigente
+// y/o radios en campo, invisibles en el Centro (el toggle "Solo activos" viene
+// encendido) pero contando para vencimientos, comisiones y pendientes.
+const { esDesactivacion } = require("../src/domain/cierreContrato");
+
+test("desactivación: solo el cruce true → false", () => {
+  assert.equal(esDesactivacion({ activo: true }, { activo: false }), true);
+  // Sin el campo cuenta como activo (el backfill de 2026-09-09 los puso todos).
+  assert.equal(esDesactivacion({}, { activo: false }), true);
+  // Ya estaba inactivo y se vuelve a guardar: no re-dispara.
+  assert.equal(esDesactivacion({ activo: false }, { activo: false }), false);
+  // Reactivar no resucita nada.
+  assert.equal(esDesactivacion({ activo: false }, { activo: true }), false);
+  // Otros campos del cliente no disparan el cierre de contratos.
+  assert.equal(esDesactivacion({ activo: true, ruc: "1" }, { activo: true, ruc: "2" }), false);
+  // Un cliente borrado ya no cierra nada (el borrado tiene su propio camino).
+  assert.equal(esDesactivacion({ activo: true }, { activo: false, deleted: true }), false);
+});
