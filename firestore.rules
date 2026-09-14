@@ -322,7 +322,13 @@ service cloud.firestore {
                 && facturaVentaHistorialAppendOnly()))
         && (!(resource.data.estado != "activo" && request.resource.data.estado == "activo")
             || userRole() in ["administrador", "gerente"]
-            || esActivacionPorFirmado());
+            || esActivacionPorFirmado())
+        // CERRAR un contrato vivo corta facturación, vencimientos y comisiones:
+        // mismo piso de rol que activarlo (2026-09-14, Centro.cerrarContrato).
+        // El cierre automático —ENTRADA que devolvió todo un temporal, cliente
+        // desactivado— lo escriben Cloud Functions, que no pasan por rules.
+        && (!(resource.data.estado in ["activo", "aprobado"] && request.resource.data.estado == "vencido")
+            || userRole() in ["administrador", "gerente"]);
       allow delete: if isSignedIn() && (userRole() in ["administrador", "gerente"]);
 
       // Lectura de CUALQUIER subcolección de contrato para autenticados (ordenes,

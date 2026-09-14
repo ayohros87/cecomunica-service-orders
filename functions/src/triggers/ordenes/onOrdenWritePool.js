@@ -3,6 +3,7 @@ const logger = require("firebase-functions/logger");
 const pool = require("../../domain/equiposPool");
 const { catalogo } = require("../../domain/modeloCatalogo");
 const { decidirMarcaCancelacion } = require("../../domain/cancelacionEntrada");
+const { decidirCierreTrasEntrada, buildCierre } = require("../../domain/cierreContrato");
 const tandas = require("../../domain/entregaTandas");
 const { admin, db } = require("../../lib/admin");
 
@@ -284,7 +285,38 @@ module.exports = onDocumentWritten(
                   { ordenId, contrato: c.contrato_id || c.contrato_doc_id, err: String(e) });
               }
               const decision = decidirMarcaCancelacion({ devueltos: despues, propios });
+              // Antes de pedirle nada a nadie: un TEMPORAL o un DEMO sin una
+              // sola unidad ya en campo terminó — se cierra solo (2026-09-14,
+              // FANLYC/TEMP20260902-01). Ese era el "flujo propio" que
+              // lib/vigencia.js daba por hecho y nunca existió. La regla vive
+              // en domain/cierreContrato.js.
+              let cerrado = false;
               if (decision.marcar) {
+                const contrato = snap.data();
+                let enCampo = null;
+                try {
+                  const agg = await db.collection("equipos_pool")
+                    .where("asignacion.contrato_doc_id", "==", c.contrato_doc_id)
+                    .where("estado", "in", ["en_cliente", "asignado_contrato"])
+                    .count().get();
+                  enCampo = agg.data().count;
+                } catch (e) {
+                  logger.warn("[onOrdenWritePool] No se pudo contar el equipo en campo del contrato",
+                    { ordenId, contrato: c.contrato_id || c.contrato_doc_id, err: String(e) });
+                }
+                const fin = decidirCierreTrasEntrada({ contrato, unidadesEnCampo: enCampo });
+                if (fin.cerrar) {
+                  await ref.update(buildCierre(contrato, {
+                    motivo: `Equipo devuelto completo en la ENTRADA ${after.numero_orden || ordenId}: el ${
+                      contrato.tipo_contrato || "contrato temporal"} terminó`,
+                    FieldValue: admin.firestore.FieldValue,
+                  }));
+                  cerrado = true;
+                  logger.info("[onOrdenWritePool] Contrato temporal CERRADO tras la ENTRADA",
+                    { ordenId, contrato: c.contrato_id || c.contrato_doc_id, unidades: despues.length });
+                }
+              }
+              if (decision.marcar && !cerrado) {
                 await ref.set({
                   cancelacion_pendiente: {
                     motivo: "entrada",

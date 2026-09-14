@@ -1,12 +1,17 @@
 /* =============================================================
-   HomeFeedDevoluciones — panel "Contratos por cancelar" del home.
+   HomeFeedDevoluciones — panel "Contratos por cerrar" del home.
 
    Contratos que siguen VIGENTES aunque su equipo ya volvió: al
    cerrar una orden de ENTRADA con contrato ligado, el trigger
    onOrdenWritePool estampa `cancelacion_pendiente` en el contrato.
-   Esta bandeja los muestra hasta que alguien los cancela o anula
+   Esta bandeja los muestra hasta que alguien los cierra o anula
    — al cambiar de estado dejan de ser vigentes y salen solos, sin
    necesidad de marcarlos como resueltos.
+
+   El verbo es CERRAR, no cancelar (2026-09-14): la salida es
+   "Cerrar el contrato" en el Centro (js/domain/contratoCierre.js),
+   que lo vence sin mover un radio. Un TEMP/DEMO al que le volvió
+   TODO ya ni siquiera llega aquí: onOrdenWritePool lo cierra solo.
 
    Por qué existe: de 460 ENTRADAs históricas solo 3 llevaban
    contrato, así que la devolución nunca se amarraba y la
@@ -24,7 +29,7 @@ window.HomeFeedDevoluciones = (() => {
   const ROLES_FEED = ['administrador', 'gerente'];
   const VIGENTES = ['aprobado', 'activo'];
   const TTL_MS = 5 * 60 * 1000;
-  const CACHE_KEY = (uid) => `ccHomeFeedDevol:v1:${uid}`;
+  const CACHE_KEY = (uid) => `ccHomeFeedDevol:v2:${uid}`;   // v2: la fila lleva cliente_id
   const COLLAPSE_KEY = (uid) => `ccHomeFeedDevolCollapsed:v1:${uid}`;
   const MAX_FILAS = 5;
 
@@ -68,6 +73,7 @@ window.HomeFeedDevoluciones = (() => {
       filas.push({
         doc_id: d.id,
         contrato_id: v.contrato_id || d.id,
+        cliente_id: v.cliente_id || '',
         cliente_nombre: v.cliente_nombre || cp.cliente_nombre || '',
         estado: v.estado || '',
         orden: cp.orden_numero || cp.orden_entrada_id,
@@ -95,10 +101,17 @@ window.HomeFeedDevoluciones = (() => {
   function _row(c) {
     const detalle = (MOTIVO_TXT[c.motivo] || MOTIVO_TXT.conteo_bodega)(c);
     return Bandeja.fila({
-      chip: 'Por cancelar', tono: 'aviso', clase: 'senal', at: c.at || null,
+      chip: 'Por cerrar', tono: 'aviso', clase: 'senal', at: c.at || null,
       txt: `<b>${esc(c.cliente_nombre)}</b> · ${esc(c.contrato_id)} · ${detalle} · contrato ${esc(c.estado)}`,
-      ctaHtml: Bandeja.cta({ href: `contratos/index.html?buscar=${encodeURIComponent(c.contrato_id)}`, label: 'Ver contrato',
-        icono: 'file-x', plano: true, title: 'Abrir el contrato para cancelarlo o anularlo' }),
+      // Al CENTRO del cliente, no al archivo de contratos (2026-09-14): /contratos/
+      // es de CONSULTA desde la Ola 5 — cerrar, anular y dar de baja viven en el
+      // Centro. El botón llevaba a una pantalla donde no hay nada que apretar.
+      ctaHtml: Bandeja.cta({
+        href: c.cliente_id
+          ? `clientes/centro.html?id=${encodeURIComponent(c.cliente_id)}`
+          : `contratos/index.html?buscar=${encodeURIComponent(c.contrato_id)}`,
+        label: c.cliente_id ? 'Abrir la cuenta' : 'Ver contrato',
+        icono: 'file-x', plano: true, title: 'Abrir la cuenta para cerrar el contrato' }),
     });
   }
 
@@ -113,14 +126,14 @@ window.HomeFeedDevoluciones = (() => {
 <div class="fo-card${collapsed ? ' is-collapsed' : ''}">
   <button class="fo-head" type="button" aria-expanded="${!collapsed}" title="Mostrar / ocultar">
     <i data-lucide="file-x" class="fo-head__ico"></i>
-    <span class="fo-head__t">Contratos por cancelar</span>
+    <span class="fo-head__t">Contratos por cerrar</span>
     <span class="fo-count">${filas.length}</span>
     <span class="fo-head__hint">el equipo ya volvió, el contrato sigue vigente</span>
     <i data-lucide="chevron-down" class="fo-chev"></i>
   </button>
   <div class="fo-body bj-panel" style="margin:0;border:0;border-radius:0;">
     ${visibles.map(_row).join('')}
-    ${resto > 0 ? `<div class="fo-foot">+${resto} más — <a href="contratos/index.html">ver contratos</a></div>` : ''}
+    ${resto > 0 ? `<div class="fo-foot">+${resto} más — <a href="clientes/centro.html">ver el Centro de gestión</a></div>` : ''}
   </div>
 </div>`;
     mount.style.display = '';

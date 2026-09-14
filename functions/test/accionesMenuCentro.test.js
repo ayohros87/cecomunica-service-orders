@@ -37,12 +37,12 @@ function montar(rol = "administrador", uid = "adm") {
   };
   vm.createContext(ctx);
   for (const f of [["core", "formatting.js"], ["domain", "totales.js"], ["domain", "contratoTarifario.js"],
-    ["domain", "contratoAnulacion.js"], ["domain", "contratoEdicion.js"], ["services", "gestionesService.js"]]) {
+    ["domain", "contratoAnulacion.js"], ["domain", "contratoCierre.js"], ["domain", "contratoEdicion.js"], ["services", "gestionesService.js"]]) {
     vm.runInContext(leer("public", "js", ...f), ctx);
   }
   Object.assign(ctx, { FMT: ctx.window.FMT, ContractTotals: ctx.window.ContractTotals,
     ContratoTarifario: ctx.window.ContratoTarifario, ContratoAnulacion: ctx.window.ContratoAnulacion,
-    ContratoEdicion: ctx.window.ContratoEdicion, GestionesService: ctx.window.GestionesService });
+    ContratoCierre: ctx.window.ContratoCierre, ContratoEdicion: ctx.window.ContratoEdicion, GestionesService: ctx.window.GestionesService });
   vm.runInContext(leer("public", "js", "pages", "clientes-centro.js"), ctx);
   const C = ctx.window.Centro;
   C.rol = rol; C.uid = uid;
@@ -183,4 +183,51 @@ test("M5 · el expediente ya no pinta botoneras sueltas por estado", () => {
     assert.ok(!src.includes(muerto + " {") && !src.includes("this." + muerto),
       `quedó código muerto: ${muerto}`);
   }
+});
+
+// ── M6: cerrar el contrato (2026-09-14, FANLYC/TEMP20260902-01) ─────────────
+// Un TEMPORAL cuyo equipo ya volvió no tenía salida: "Terminar la cuenta" solo
+// alcanza a los renovables y el aviso del home mandaba al módulo viejo.
+test("M6 · el contrato que el sistema pide cerrar ofrece Cerrar como primaria", () => {
+  const C = montar();
+  const temp = {
+    id: "ct1", contrato_id: "TEMP20260902-01", estado: "activo", codigo_tipo: "TEMP",
+    cancelacion_pendiente: { motivo: "entrada", orden_numero: "2026090810", seriales: ["A", "B"] },
+  };
+  const a = porId(C._accionesContrato(temp));
+  assert.ok(a.cerrar, "falta la acción de cerrar");
+  assert.equal(a.cerrar.ok, true);
+  assert.equal(a.cerrar.primaria, true, "cuando el sistema lo pide, va destacada");
+  assert.match(a.cerrar.hint, /entrada 2026090810/);
+
+  // Un temporal SIN marca también se puede cerrar: es su única salida.
+  const a2 = porId(C._accionesContrato({ id: "ct2", contrato_id: "TEMP20260817-01", estado: "activo" }));
+  assert.equal(a2.cerrar.ok, true);
+  assert.equal(a2.cerrar.primaria, false);
+
+  // Un ALQ vivo CON equipos en campo no ofrece cerrar: eso es una baja.
+  C.equipos = [{ serial: "S1", estado: "en_cliente", asignacion: { contrato_doc_id: "c9" } }];
+  assert.equal(porId(C._accionesContrato({ id: "c9", contrato_id: "ALQ20260601-06", estado: "activo" })).cerrar, undefined);
+  C.equipos = [];
+
+  // Ya cerrado o anulado: no se vuelve a cerrar.
+  assert.equal(porId(C._accionesContrato({ id: "c8", contrato_id: "X", estado: "vencido" })).cerrar, undefined);
+  assert.equal(porId(C._accionesContrato({ id: "c7", contrato_id: "X", estado: "anulado" })).cerrar, undefined);
+
+  // Sin mando (recepción) sale en la lista pero deshabilitada y con motivo.
+  const R = montar("recepcion", "rec");
+  const ar = porId(R._accionesContrato(temp));
+  assert.equal(ar.cerrar.ok, false);
+  assert.match(ar.cerrar.motivo, /administración o gerencia/i);
+});
+
+test("M6b · la señal de la ficha ofrece cerrar, no manda al módulo viejo", () => {
+  const C = montar();
+  C.contratos = [{ id: "ct1", contrato_id: "TEMP20260902-01", estado: "activo", codigo_tipo: "TEMP",
+    cancelacion_pendiente: { motivo: "entrada", orden_numero: "2026090810", seriales: ["A"] } }];
+  const s = C._itemsSenal();
+  assert.ok(s.length, "la ficha no dice nada del contrato por cerrar");
+  assert.match(s[0].txt, /TEMP20260902-01/);
+  assert.match(s[0].extra, /Centro\.cerrarContrato/);
+  assert.doesNotMatch(s[0].extra, /contratos\/index\.html/);
 });

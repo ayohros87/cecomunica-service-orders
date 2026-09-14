@@ -899,6 +899,21 @@ window.Centro = {
 
   _itemsSenal() {
     const out = [];
+    // Contratos que el sistema pide cerrar: el equipo volvió y el papel sigue
+    // vivo (2026-09-14). Este aviso existía SOLO en el home, para admin y
+    // gerente, y su botón llevaba al módulo viejo de contratos, que ya no
+    // cancela nada. Aquí sale donde se trabaja la cuenta y con el botón que sí
+    // lo resuelve.
+    for (const c of this.contratos) {
+      if (!this._esVigente(c) || !c.cancelacion_pendiente) continue;
+      out.unshift({
+        tipo: 'warn',
+        txt: `El contrato ${c.contrato_id || c.id} sigue vigente aunque el equipo ya volvió — ${ContratoCierre.porQue(c)}`,
+        extra: [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
+          ? `<button class="btn btn-primary cg-act cg-senal-cta" onclick="Centro.cerrarContrato('${this.esc(c.id)}')">Cerrar el contrato</button>`
+          : `<button class="btn btn-ghost cg-act cg-senal-cta" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver contrato</button>`,
+      });
+    }
     for (const c of this.contratos) {
       if (!this._esVigente(c) || !this._aplicaVenc(c) || this._renovadoPor(c)) continue;
       const v = this._vencInfo(c);
@@ -974,7 +989,8 @@ window.Centro = {
     return `<tr>
       <td class="cg-mono"><a href="#" onclick="Centro.verContrato('${this.esc(c.id)}'); return false;">${this.esc(c.contrato_id || c.id)}</a></td>
       <td>${this.esc(c.tipo_contrato || c.codigo_tipo || '—')}</td>
-      <td>${this.esc(c.estado || '—')}</td>
+      <td>${this.esc(c.estado || '—')}${c.cancelacion_pendiente && this._esVigente(c)
+        ? ` <span class="cg-venc por_vencer" title="El equipo ya volvió y el contrato sigue vigente — hay que cerrarlo">por cerrar</span>` : ''}</td>
       <td style="text-align:right;">${this._unidadesActivas(c)}</td>
       <td>${this._vidaHtml(c)}</td>
       <td style="text-align:right; white-space:nowrap;">
@@ -1081,6 +1097,56 @@ window.Centro = {
         <button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal()">Cerrar</button>
         ${this._pieAcciones('vc-' + c.id, this._accionesContrato(c).filter(a => a.id !== 'ver'))}`,
     });
+  },
+
+  // Cierre del contrato (2026-09-14, caso FANLYC/TEMP20260902-01). CERRAR no
+  // es ANULAR: el acuerdo se cumplió y terminó, el equipo ya volvió y no se
+  // mueve ningún radio. Es la única salida de un TEMP o un DEMO —"Terminar la
+  // cuenta" solo alcanza a los renovables— y la respuesta a la bandeja
+  // "Contratos por cancelar" del home, que hasta hoy no tenía dónde aterrizar.
+  cerrarContrato(id) {
+    const c = this.contratos.find(x => x.id === id);
+    if (!c) return;
+    if (![ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)) { Toast.show('Solo administración o gerencia cierra contratos.', 'bad'); return; }
+    const enCampo = this.equipos.filter(e => e.asignacion?.contrato_doc_id === id).length;
+    const ev = ContratoCierre.evaluar(c, enCampo);
+    if (!ev.ok) { Toast.show(ev.motivo, 'bad'); return; }
+    const porQue = ContratoCierre.porQue(c);
+    this._cerrarModal();
+    this._abrirModalA({
+      titulo: `Cerrar <span class="cg-mono">${this.esc(c.contrato_id || id)}</span>`,
+      cuerpo: `
+        ${porQue ? `<p style="font-size:13px; margin:0 0 10px; padding:9px 11px; border-radius:8px;
+          background:var(--soft-warn); color:var(--warn-deep, #92400E); border:1px solid var(--warn);">
+          <b>El sistema lo está pidiendo:</b> ${porQue}</p>` : ''}
+        <p style="font-size:13px; color:var(--fg-3); margin:0 0 12px; max-width:70ch;">
+          El contrato queda <b>vencido</b>: deja de contar para vencimientos, renovaciones y facturación.
+          No se abre ninguna orden y <b>no se mueve ningún equipo</b> — si hace falta recuperar radios,
+          eso es una baja. Si lo que quieres es deshacer el papel porque estaba mal, usa <b>Anular</b>.</p>
+        ${ev.aviso ? `<p style="font-size:13px; margin:0 0 12px; padding:9px 11px; border-radius:8px;
+          background:var(--soft-bad); color:var(--bad); border:1px solid var(--bad);">${ev.aviso}</p>` : ''}
+        <label style="display:block; font-weight:600; font-size:13px; margin-bottom:4px;">Motivo</label>
+        <textarea class="form-input" id="cieMotivo" rows="3" style="width:100%; resize:vertical;"
+          placeholder="Ej: el evento terminó y los 12 radios volvieron en la entrada 2026090810">${
+            this.esc(porQue ? `El equipo ya volvió. ${porQue}` : '')}</textarea>`,
+      footer: `
+        <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(id)}')">Volver</button>
+        <span class="sep"></span>
+        <button class="btn btn-primary cg-act" onclick="Centro._cerrarContratoConfirmar('${this.esc(id)}')">Cerrar el contrato</button>`,
+    });
+  },
+
+  async _cerrarContratoConfirmar(id) {
+    const c = this.contratos.find(x => x.id === id);
+    if (!c) return;
+    const motivo = (document.getElementById('cieMotivo')?.value || '').trim();
+    if (!motivo) { document.getElementById('cieMotivo')?.focus(); Toast.show('Debes indicar un motivo.', 'bad'); return; }
+    try {
+      await ContratosService.updateContrato(id, ContratoCierre.buildUpdate(c, { motivo, uid: this.uid }));
+      this._cerrarModal();
+      Toast.show('✅ Contrato CERRADO — ningún equipo se movió.', 'ok');
+      if (this.cliente) this.abrir(this.cliente.id, { push: false });
+    } catch (e) { console.error(e); Toast.show('No se pudo cerrar el contrato.', 'bad'); }
   },
 
   // Anulación SIN salir del Centro (2026-09-04: Alberto y Zuleika buscaban
@@ -3258,6 +3324,26 @@ window.Centro = {
     const esperaFirma = c.estado === 'aprobado' && !c.firmado;
     const conEnlace = esperaFirma && c.firma_solicitud_estado === 'pendiente';
     const reg = this._regPendiente(c);
+
+    // Cerrar el contrato (2026-09-14): el acuerdo terminó y el equipo ya está
+    // en casa. Va PRIMERO y como primaria cuando el sistema lo está pidiendo
+    // (`cancelacion_pendiente`) — hasta hoy ese aviso solo salía en el home,
+    // apuntando al módulo viejo de contratos, que ya no cancela nada.
+    if (ContratoCierre.esCerrable(c)) {
+      const enCampo = this.equipos.filter(e => e.asignacion?.contrato_doc_id === c.id).length;
+      const pide = !!c.cancelacion_pendiente;
+      const temporal = ['TEMP', 'DEMO'].includes(this._codigoTipo(c));
+      // Se ofrece cuando el sistema lo pide, cuando es un temporal (no hay otra
+      // forma de cerrarlos: "Terminar la cuenta" solo alcanza a los renovables)
+      // o cuando no queda un solo radio en campo bajo este contrato.
+      if (pide || temporal || !enCampo) {
+        A.push(this._acc({ id: 'cerrar', label: 'Cerrar el contrato…', primaria: pide,
+          hint: pide ? ContratoCierre.porQue(c)
+            : enCampo ? `${enCampo} equipo(s) siguen en campo bajo este contrato`
+              : 'el acuerdo terminó y no queda equipo en campo — no mueve ningún radio',
+          onclick: `Centro.cerrarContrato('${id}')`, ok: mando, motivo: 'lo cierra administración o gerencia' }));
+      }
+    }
 
     if (c.estado === 'pendiente_aprobacion') {
       A.push(this._acc({ id: 'aprobar', label: 'Aprobar contrato', primaria: true,
