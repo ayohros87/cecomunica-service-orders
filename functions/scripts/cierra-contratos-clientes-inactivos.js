@@ -50,15 +50,24 @@ const HOY = new Date().toISOString().slice(0, 10);
   });
   console.log(`Clientes inactivos: ${inactivos.size}`);
 
-  // Equipos nuestros todavía en campo, por cliente (no se tocan: se reportan).
-  const enCampo = new Map();
+  // Equipos todavía en campo, por cliente (no se tocan: se reportan).
+  //
+  // La PROPIEDAD parte el reporte en dos, y la diferencia es todo (Alberto,
+  // 2026-09-14): un radio de CECOMUNICA con un cliente que ya no lo es hay que
+  // ir a buscarlo; uno que el cliente COMPRÓ se queda con él y no es pendiente
+  // de nadie. Sin separarlos, PANAMA PORT BALBOA inflaba la lista con 26
+  // Kenwood suyos —comprados en dos contratos Propio— y parecía un faltante
+  // de inventario que no existe.
+  const enCampo = new Map();      // solo lo NUESTRO: eso es el pendiente real
+  const delCliente = new Map();   // comprados por el cliente: se quedan con él
   (await db.collection("equipos_pool").get()).forEach((d) => {
     const v = d.data();
     if (!["en_cliente", "asignado_contrato"].includes(String(v.estado || ""))) return;
     const cid = v.asignacion?.cliente_id;
     if (!cid || !inactivos.has(cid)) return;
-    if (!enCampo.has(cid)) enCampo.set(cid, []);
-    enCampo.get(cid).push(d.id);
+    const mapa = v.propiedad === "cliente" ? delCliente : enCampo;
+    if (!mapa.has(cid)) mapa.set(cid, []);
+    mapa.get(cid).push(d.id);
   });
 
   const porCerrar = [];
@@ -101,14 +110,25 @@ const HOY = new Date().toISOString().slice(0, 10);
     console.log(`\n✅ ${n} contrato(s) cerrados.`);
   }
 
-  // Lo que el cierre NO resuelve: radios nuestros con clientes que ya no lo son.
+  // Lo que el cierre NO resuelve: radios NUESTROS con clientes que ya no lo son.
   const conEquipo = [...enCampo.entries()].sort((a, b) => b[1].length - a[1].length);
   if (conEquipo.length) {
     const total = conEquipo.reduce((s, [, xs]) => s + xs.length, 0);
-    console.log(`\n── PENDIENTE FÍSICO: ${total} radio(s) en campo con ${conEquipo.length} cliente(s) inactivo(s) ──`);
+    console.log(`\n── PENDIENTE FÍSICO: ${total} radio(s) de CECOMUNICA en campo con ${conEquipo.length} cliente(s) inactivo(s) ──`);
     console.log("   Cerrar el contrato no los recupera. Cada uno necesita una devolución (o corregir el dato).");
     for (const [cid, seriales] of conEquipo) {
       console.log(`  ${String(inactivos.get(cid)).slice(0, 40).padEnd(41)} ${seriales.length} — ${seriales.slice(0, 6).join(", ")}${seriales.length > 6 ? ", …" : ""}`);
+    }
+  }
+
+  // Los del cliente: NO son pendiente de nadie. Se listan aparte y solo como
+  // conteo, para que nadie los confunda con un faltante de inventario.
+  const conPropios = [...delCliente.entries()].sort((a, b) => b[1].length - a[1].length);
+  if (conPropios.length) {
+    const total = conPropios.reduce((s, [, xs]) => s + xs.length, 0);
+    console.log(`\n── ${total} equipo(s) PROPIOS DEL CLIENTE en ${conPropios.length} cuenta(s) inactiva(s) — se quedan con ellos, no hay nada que recuperar ──`);
+    for (const [cid, seriales] of conPropios) {
+      console.log(`  ${String(inactivos.get(cid)).slice(0, 40).padEnd(41)} ${seriales.length}`);
     }
   }
 })().catch((e) => { console.error(e); process.exit(1); });
