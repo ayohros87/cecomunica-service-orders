@@ -596,10 +596,17 @@ Verificado con 12 tests de `node --test` sobre el parser (con las cuatro
 cadenas reales) y 21 comprobaciones en Chrome sobre la página real
 (`test-browser/revisar-bandeja-factura.js`).
 
-**Ojo para la F4:** *"factura sin fiscalizar"* es un matiz de negocio que este
-plan no contemplaba. Si una factura sin fiscalizar todavía no es la definitiva,
-"factura en cero" puede significar otra cosa en ese caso. Hay que preguntárselo
-a Cheila **antes** de programar la verificación, no después.
+**Sobre *"factura sin fiscalizar"*, que aparece en uno de los cuatro
+registros:** al verlo se planteó si eso cambiaba el criterio del pago. **No lo
+cambia** (Alberto, 2026-09-14): *el pago no tiene nada que ver con la
+fiscalización de la factura — se puede recibir un pago y fiscalizar la factura
+después*. Esa salió sin fiscalizar por un problema técnico de la fiscalización
+que se está arreglando, no por nada del cobro.
+
+Para la F4 eso significa que **`Balance == 0` se lee tal cual**, sin mirar el
+estado de fiscalización. La nota sigue sirviendo para dejarlo dicho —es un dato
+real de la factura— pero el código no debe darle ningún peso en el cálculo del
+pago.
 
 ### F4 — Verificación automática del pago
 
@@ -657,7 +664,10 @@ cierran, no eliminan) y el ✓ del archivo se repunta al nuevo estado.
    renovación, y es ahí donde se paga. `ajuste_tarifa` queda con
    `comision.aplica: false` y motivo escrito, no oculto.
 3. **El primer pago es la factura en cero.** `Balance == 0` en la factura de
-   QuickBooks. Un abono parcial **no** libera la comisión.
+   QuickBooks. Un abono parcial **no** libera la comisión. Y el pago **no tiene
+   nada que ver con la fiscalización** (Alberto, 2026-09-14): se puede recibir
+   un pago y fiscalizar la factura después, así que el estado de fiscalización
+   no entra en el criterio.
 4. **La bandeja dice "listo" y muestra la base — por ahora.** No calcula el
    monto de la comisión todavía, pero el dato queda **preparado para que lo
    haga**: `base` es un número, no un texto, y el bloque `comision` reserva
