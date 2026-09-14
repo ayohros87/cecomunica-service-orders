@@ -45,6 +45,30 @@ const N = (s, n) => String(s || "—").slice(0, n);
 // Carga inicial masiva de poc_devices: una ficha con ESTA fecha no prueba nada.
 const CARGA_POC = Date.parse("2025-07-18T00:00:00Z");
 
+// El NÚMERO de orden codifica la fecha (AAAAMMDD + secuencia) y es más fiable
+// que fecha_salida: muchas órdenes viejas no la traen y quedaban con at=0, o
+// sea "sin fecha", lo que hundía cualquier comparación cronológica.
+const fechaDeNumero = (n) => {
+  const m = String(n || "").match(/^(20\d{2})(\d{2})(\d{2})/);
+  return m ? Date.parse(`${m[1]}-${m[2]}-${m[3]}T12:00:00Z`) : 0;
+};
+
+// Identidad del cliente de una orden. Las órdenes viejas no tienen cliente_id,
+// solo el nombre escrito a mano y a veces truncado ("EDWIN ZUÑIGA" por "EDWIN
+// ZUÑIGAFRESH FLORAL & FRUIT SERVICE_2359", "BALBOA LOGISTIC" por "BALBOA
+// LOGISTICS & AIRPORT SERVICES"). Comparar textos crudos daba falsos "se mudó"
+// contra el MISMO cliente, así que: id exacto → nombre exacto → contención.
+const nk = (s) => String(s || "").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Z0-9]/g, "");
+function mismoCliente(ordenCid, ordenNombre, cid, nombre) {
+  if (ordenCid) return ordenCid === cid;
+  const a = nk(ordenNombre), b = nk(nombre);
+  if (!a || !b) return null;                    // indeterminado: no se toca
+  if (a === b) return true;
+  if (a.startsWith(b) || b.startsWith(a)) return true;
+  if (a.includes(b) || b.includes(a)) return true;
+  return false;
+}
+
 (async () => {
   console.log(dryRun ? "*** DRY-RUN — no se escribe nada ***\n" : "*** ESCRIBIENDO ***\n");
 
@@ -95,6 +119,10 @@ const CARGA_POC = Date.parse("2025-07-18T00:00:00Z");
     const p = pocActiva.get(k);
     if (!p || cur.at > p.at) pocActiva.set(k, cur);
   });
+  // Índice de clientes por nombre, para resolver las órdenes sin cliente_id.
+  const cidPorNombre = new Map();
+  nom.forEach((n, id) => cidPorNombre.set(nk(n), id));
+
   const entrega = new Map();
   (await db.collection("ordenes_de_servicio").get()).forEach((d) => {
     const v = d.data();
@@ -103,8 +131,13 @@ const CARGA_POC = Date.parse("2025-07-18T00:00:00Z");
     for (const e of (v.equipos || [])) {
       const k = pool.normSerial(e.numero_de_serie || e.serial || "");
       if (!objetivo.has(k)) continue;
-      const at = ms(v.fecha_salida || v.fecha_entrada || v.fecha_creacion);
-      const cur = { id: d.id, numero: v.numero_orden || d.id, cid: v.cliente_id || "", cli: v.cliente || "", at, fecha: f(v.fecha_salida || v.fecha_entrada || v.fecha_creacion) };
+      const numero = v.numero_orden || d.id;
+      const at = fechaDeNumero(numero) || ms(v.fecha_salida || v.fecha_entrada || v.fecha_creacion);
+      const cid = v.cliente_id || cidPorNombre.get(nk(v.cliente)) || "";
+      const cur = {
+        id: d.id, numero, cid, cli: v.cliente || "", at,
+        fecha: at ? new Date(at).toISOString().slice(0, 10) : "—",
+      };
       const p = entrega.get(k);
       if (!p || at > p.at) entrega.set(k, cur);
     }
@@ -114,8 +147,11 @@ const CARGA_POC = Date.parse("2025-07-18T00:00:00Z");
   for (const [k, o] of objetivo) {
     const e = entrega.get(k), p = pocActiva.get(k);
     // Señal de destino: la ENTREGA manda; una ficha POC solo vale si es
-    // posterior a la carga inicial.
-    const sig = (e && e.cid && e.cid !== o.viejoCid) ? { tipo: `OS ${e.numero}`, ...e }
+    // posterior a la carga inicial. `mismoCliente` puede devolver null
+    // (indeterminado: la orden trae un nombre que no resuelve a ningún
+    // cliente) y en ese caso NO se afirma que se mudó.
+    const eOtro = e ? mismoCliente(e.cid, e.cli, o.viejoCid, o.viejo) === false : false;
+    const sig = eOtro ? { tipo: `OS ${e.numero}`, ...e }
       : (p && p.cid && p.cid !== o.viejoCid && p.at >= CARGA_POC) ? { tipo: "ficha POC", ...p } : null;
     if (!sig) continue;
 
