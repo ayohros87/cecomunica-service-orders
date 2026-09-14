@@ -1347,6 +1347,34 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "equipos_pool",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "asignacion.contrato_doc_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "equipos_pool",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "asignacion.cliente_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
