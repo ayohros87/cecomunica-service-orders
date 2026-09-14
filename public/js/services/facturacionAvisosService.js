@@ -63,6 +63,55 @@ window.FacturacionAvisosService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(a => a.comision);
   },
 
+  // ── El número de factura de QuickBooks ───────────────────────────────────
+  // Copia en el navegador de lib/facturacionAvisos.numeroFactura. Consciente:
+  // hoy no hay dónde compartir código entre front y back. Si cambias una,
+  // cambia la otra — los tests de la de allá (test/facturacionAvisos.test.js)
+  // llevan las cadenas reales de producción.
+  //
+  // El campo decía "N.° de factura o nota": pedía dos cosas a la vez y salieron
+  // tres formatos en cuatro registros. La raíz se arregla separando los campos;
+  // esto limpia lo que se escriba de más y rescata lo ya escrito.
+  RE_FACT_MARCADOR: /(?:factura|fact\.?|f\/|n[°ºo]\.?|nro\.?|num\.?|#)\s*[:\-]?\s*([0-9]{3,}(?:-[A-Za-z0-9]{1,6})?)/gi,
+  RE_FACT_NUMERO: /\b([0-9]{3,}(?:-[A-Za-z0-9]{1,6})?)\b/g,
+  numeroFactura(texto) {
+    const t = String(texto == null ? '' : texto).trim();
+    if (!t) return { numero: null, candidatos: [], fuente: 'ninguno' };
+    if (/^[0-9]{3,}(?:-[A-Za-z0-9]{1,6})?$/.test(t)) return { numero: t, candidatos: [t], fuente: 'limpio' };
+    const candidatos = [...new Set([...t.matchAll(new RegExp(this.RE_FACT_NUMERO))].map(m => m[1]))];
+    if (!candidatos.length) return { numero: null, candidatos: [], fuente: 'ninguno' };
+    // El ÚLTIMO marcador, no el primero: en "FACTURA SIN FISCALIZAR … BAJO EL
+    // N° 10429" la palabra abre la frase y el número cuelga del final.
+    const marcados = [...t.matchAll(new RegExp(this.RE_FACT_MARCADOR))].map(m => m[1]);
+    if (marcados.length) return { numero: marcados[marcados.length - 1], candidatos, fuente: 'marcador' };
+    if (candidatos.length === 1) return { numero: candidatos[0], candidatos, fuente: 'unico' };
+    const largo = (s) => s.replace(/[^0-9]/g, '').length;
+    let mejor = candidatos[0];
+    for (const c of candidatos) if (largo(c) >= largo(mejor)) mejor = c;
+    return { numero: mejor, candidatos, fuente: 'mas_largo' };
+  },
+
+  /**
+   * Anota (o corrige) el número de factura de un paso QBO YA marcado.
+   * Sin esto, un paso marcado sin número no se podía completar nunca y la
+   * verificación automática del pago lo saltaría para siempre.
+   */
+  async anotarFactura(aviso, texto) {
+    const q = aviso?.pasos?.qbo;
+    if (!q?.hecho) throw new Error('El paso de QuickBooks todavía no está marcado.');
+    const f = this.numeroFactura(texto);
+    if (!f.numero) throw new Error('Escribe el número de la factura de QuickBooks.');
+    await this._col().doc(aviso.id).update({
+      'pasos.qbo.factura': f.numero,
+      'pasos.qbo.factura_fuente': f.fuente,
+      historial: firebase.firestore.FieldValue.arrayUnion(
+        this._traza('qbo_factura', `Número de factura anotado: ${f.numero}`)),
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      ...this._autoria(),
+    });
+    return f.numero;
+  },
+
   // Estado derivado — MISMO criterio que lib/facturacionAvisos.estadoComision.
   // Si cambias uno, cambia el otro.
   estadoComision(com = {}) {
@@ -213,8 +262,21 @@ window.FacturacionAvisosService = {
       const desde = (datos.facturar_desde || '').toString().trim();
       if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) throw new Error('Escribe desde qué fecha se factura.');
       nuevo.facturar_desde = desde;
+      // Dos cosas distintas, dos campos distintos (2026-09-14): el NÚMERO, que
+      // es con lo que la verificación automática del pago consulta a
+      // QuickBooks, y la nota libre. Antes era un solo campo que pedía ambas y
+      // salieron tres formatos en cuatro registros.
+      //
+      // El número NO se exige: trancar a Recepción por un dato que a veces no
+      // tiene a mano rompe la bandeja que sí usan. Si falta, la fila lo dice y
+      // se puede anotar después con anotarFactura().
+      const f = this.numeroFactura(datos.factura);
+      nuevo.factura = f.numero;
+      nuevo.factura_fuente = f.numero ? f.fuente : null;
       nuevo.ref = (datos.ref || '').toString().trim() || null;
-      detalle = `QuickBooks hecho · facturar desde ${desde}${nuevo.ref ? ` · ref. ${nuevo.ref}` : ''}`;
+      detalle = `QuickBooks hecho · facturar desde ${desde}`
+        + (f.numero ? ` · factura ${f.numero}` : ' · SIN número de factura')
+        + (nuevo.ref ? ` · ${nuevo.ref}` : '');
     } else {
       nuevo.nota = (datos.nota || '').toString().trim() || null;
       detalle = `POC hecho${nuevo.nota ? ` · ${nuevo.nota}` : ''}`;
@@ -235,7 +297,8 @@ window.FacturacionAvisosService = {
     const actual = aviso.pasos?.[paso];
     if (!actual || !actual.hecho) throw new Error('Ese paso no está marcado.');
     const a = this._autoria();
-    const nuevo = { ...actual, hecho: false, at: null, por_email: null, facturar_desde: null, ref: null, nota: null };
+    const nuevo = { ...actual, hecho: false, at: null, por_email: null,
+      facturar_desde: null, ref: null, nota: null, factura: null, factura_fuente: null };
     const estado = this._estadoDe(aviso, { [paso]: nuevo });
     await this._col().doc(aviso.id).update({
       [`pasos.${paso}`]: nuevo,

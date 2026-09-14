@@ -199,6 +199,64 @@ async function crearAviso(a) {
   return { id, creado: true };
 }
 
+// ── El número de factura de QuickBooks ─────────────────────────────────────
+//
+// POR QUÉ EXISTE ESTO
+//   El paso `qbo` tenía un campo "Referencia (opcional)" con el placeholder
+//   "N.° de factura o nota": pedía dos cosas a la vez, y Recepción —que SÍ lo
+//   viene llenando por su cuenta desde agosto— escribió tres formatos en
+//   cuatro registros:
+//     "Factura N° 10791"
+//     "Factura N° 10527"
+//     "FACTURA SIN FISCALIZAR CREADA EN QUICKBOOK BAJO EL N° 10429."
+//   La verificación automática del pago (F4) consulta
+//   `select * from Invoice where DocNumber = '10791'`: necesita el número
+//   solo. La raíz se arregla separando los dos campos en la UI; esto rescata
+//   lo que ya está escrito y limpia lo que se escriba de más.
+//
+// NO adivina en silencio: devuelve también los candidatos, para que la
+// pantalla pregunte cuando haya más de uno en vez de elegir por su cuenta.
+
+// Marcadores que en la práctica preceden al número.
+const RE_MARCADOR = /(?:factura|fact\.?|f\/|n[°ºo]\.?|nro\.?|num\.?|#)\s*[:-]?\s*([0-9]{3,}(?:-[A-Za-z0-9]{1,6})?)/gi;
+const RE_NUMERO   = /\b([0-9]{3,}(?:-[A-Za-z0-9]{1,6})?)\b/g;
+
+/**
+ * Saca el DocNumber de lo que haya escrito una persona.
+ * @returns {{numero: string|null, candidatos: string[], fuente: string}}
+ *   fuente: 'limpio' | 'marcador' | 'unico' | 'mas_largo' | 'ninguno'
+ */
+function numeroFactura(texto) {
+  const t = String(texto == null ? "" : texto).trim();
+  if (!t) return { numero: null, candidatos: [], fuente: "ninguno" };
+
+  // Ya viene limpio (lo que escribirá el campo nuevo).
+  if (/^[0-9]{3,}(?:-[A-Za-z0-9]{1,6})?$/.test(t)) {
+    return { numero: t, candidatos: [t], fuente: "limpio" };
+  }
+
+  const todos = [...t.matchAll(RE_NUMERO)].map((m) => m[1]);
+  const candidatos = [...new Set(todos)];
+  if (!candidatos.length) return { numero: null, candidatos: [], fuente: "ninguno" };
+
+  // Un marcador es la señal más fuerte. El ÚLTIMO, no el primero: en "FACTURA
+  // SIN FISCALIZAR … BAJO EL N° 10429" la palabra "FACTURA" abre la frase y el
+  // número real cuelga del "N°" del final.
+  const marcados = [...t.matchAll(RE_MARCADOR)].map((m) => m[1]);
+  if (marcados.length) {
+    return { numero: marcados[marcados.length - 1], candidatos, fuente: "marcador" };
+  }
+
+  if (candidatos.length === 1) return { numero: candidatos[0], candidatos, fuente: "unico" };
+
+  // Sin marcador y con varios: el más largo gana (un número de factura de 5
+  // dígitos le gana a un año de 4). Empate → el último.
+  const largo = (s) => s.replace(/[^0-9]/g, "").length;
+  let mejor = candidatos[0];
+  for (const c of candidatos) if (largo(c) >= largo(mejor)) mejor = c;
+  return { numero: mejor, candidatos, fuente: "mas_largo" };
+}
+
 // ── Los tres requisitos de comisión, derivados de los HECHOS ────────────────
 // Nadie los teclea: firma y entrega salen del contrato o de la gestión, y el
 // pago es el único que una persona (o QuickBooks, en la F4) marca.
@@ -477,6 +535,7 @@ module.exports = {
   crearAviso, promoverPorEntrega, vincularCorreo,
   // Comisiones (PLAN_COMISIONES.md F2)
   COMISIONABLE, ESTADOS_COMISION,
+  numeroFactura,
   entregaAplica, requisitoFirma, requisitoEntrega, requisitoPagoVacio,
   estadoComision, bloqueComision, vendedorDeComision, refrescarRequisitosComision,
 };

@@ -83,3 +83,56 @@ test("TIPOS: cada tipo tiene efecto válido", () => {
     assert.ok(v.titulo, k);
   }
 });
+
+// ── numeroFactura: rescatar el DocNumber de lo que escribe una persona ──────
+// El campo decía "N.° de factura o nota" —pedía dos cosas— y Recepción escribió
+// tres formatos en cuatro registros. Estas cuatro cadenas son las REALES de
+// producción al 2026-09-14.
+test("numeroFactura: saca el DocNumber de las cuatro cadenas reales", () => {
+  const n = (s) => FA.numeroFactura(s).numero;
+  assert.equal(n("Factura N° 10791"), "10791");
+  assert.equal(n("Factura N° 10776"), "10776");
+  assert.equal(n("Factura N° 10527"), "10527");
+  // La palabra FACTURA abre la frase y el número real cuelga del N° del final:
+  // por eso manda el ÚLTIMO marcador, no el primero.
+  assert.equal(n("FACTURA SIN FISCALIZAR CREADA EN QUICKBOOK BAJO EL N° 10429."), "10429");
+});
+
+test("numeroFactura: el campo nuevo escribe limpio y eso no se toca", () => {
+  const r = FA.numeroFactura("10791");
+  assert.equal(r.numero, "10791");
+  assert.equal(r.fuente, "limpio");
+  // QuickBooks acepta letras en DocNumber: no se fuerza solo-dígitos.
+  assert.equal(FA.numeroFactura("10791-A").numero, "10791-A");
+});
+
+test("numeroFactura: variantes que van a aparecer tarde o temprano", () => {
+  const n = (s) => FA.numeroFactura(s).numero;
+  assert.equal(n("#10791"), "10791");
+  assert.equal(n("Fact. 10791"), "10791");
+  assert.equal(n("NRO 10791"), "10791");
+  assert.equal(n("  10791  "), "10791");
+  // Un año suelto no le gana a un número de factura de 5 dígitos.
+  assert.equal(n("factura del 2026 por 10791"), "10791");
+  assert.equal(n("emitida 2026, documento 10791"), "10791");
+});
+
+test("numeroFactura: sin número no inventa nada", () => {
+  for (const s of ["", null, undefined, "pendiente", "se factura en octubre", "N/A"]) {
+    const r = FA.numeroFactura(s);
+    assert.equal(r.numero, null, `"${s}" no debería dar número`);
+    assert.equal(r.fuente, "ninguno");
+  }
+});
+
+test("numeroFactura: expone los candidatos para que la pantalla pregunte", () => {
+  // Dos números sin marcador: elige, pero DICE que había más de uno — quien
+  // mira puede corregir en vez de tragarse una adivinanza silenciosa.
+  const r = FA.numeroFactura("consolidada 10791 y 10792");
+  assert.ok(r.candidatos.includes("10791") && r.candidatos.includes("10792"));
+  assert.equal(r.candidatos.length, 2);
+  // Con marcador hay una sola respuesta correcta y la fuente lo dice.
+  const m = FA.numeroFactura("Factura N° 10791 del 2026");
+  assert.equal(m.numero, "10791");
+  assert.equal(m.fuente, "marcador");
+});

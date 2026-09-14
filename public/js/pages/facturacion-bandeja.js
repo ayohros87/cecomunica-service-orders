@@ -129,24 +129,58 @@ window.FacturacionBandeja = (() => {
     if (a.estado === 'esperando') return `<span class="fb-paso na" title="Esperando la entrega">${label}</span>`;
     if (a.estado === 'descartado') return `<span class="fb-paso na">${label}</span>`;
     const done = !!p.hecho;
-    const title = done ? `${p.por_email || '—'} · ${fHora(p.at)}${p.facturar_desde ? ` · desde ${fLarga(p.facturar_desde)}` : ''}${p.ref ? ` · ${p.ref}` : ''}` : `Marcar ${label} como hecho`;
-    const pop = (!done && popAbierto && popAbierto.id === a.id && popAbierto.paso === key) ? popHtml(a, key) : '';
-    return `<span class="fb-popwrap"><button type="button" class="fb-paso${done ? ' done' : ''}" data-act="paso" data-id="${esc(a.id)}" data-paso="${key}" title="${esc(title)}"><span class="o"></span>${label}</button>${pop}</span>`;
+    // Un paso QBO hecho SIN número de factura queda a medias: el sistema no
+    // puede confirmar el pago contra QuickBooks. Se marca con "?" y sigue
+    // abriendo su ficha para poder anotarlo (2026-09-14).
+    const faltaNum = done && key === 'qbo' && !p.factura;
+    const title = done
+      ? `${p.por_email || '—'} · ${fHora(p.at)}`
+        + (p.facturar_desde ? ` · desde ${fLarga(p.facturar_desde)}` : '')
+        + (p.factura ? ` · factura ${p.factura}` : (faltaNum ? ' · SIN número de factura (clic para anotarlo)' : ''))
+        + (p.ref ? ` · ${p.ref}` : '')
+      : `Marcar ${label} como hecho`;
+    const abrible = !done || faltaNum;
+    const pop = (abrible && popAbierto && popAbierto.id === a.id && popAbierto.paso === key) ? popHtml(a, key) : '';
+    return `<span class="fb-popwrap"><button type="button" class="fb-paso${done ? ' done' : ''}${faltaNum ? ' sin-num' : ''}" data-act="paso" data-id="${esc(a.id)}" data-paso="${key}" title="${esc(title)}"><span class="o"></span>${label}${faltaNum ? '<b class="q">?</b>' : ''}</button>${pop}</span>`;
   }
 
   function popHtml(a, key) {
     const u = firebase.auth().currentUser;
     const quien = u?.email ? u.email.split('@')[0] : '—';
     if (key === 'qbo') {
+      const q = a.pasos?.qbo || {};
+      // Paso YA marcado al que le falta el número: solo se pide eso. Sin esta
+      // puerta, un paso marcado sin número no se podía completar nunca y la
+      // verificación automática del pago lo saltaría para siempre.
+      if (q.hecho) {
+        return `<div class="fb-pop show" data-pop="${esc(a.id)}">
+          <h6>Número de la factura</h6>
+          <div class="hint">Este paso ya está marcado, pero sin el número no se puede
+            verificar el pago contra QuickBooks.</div>
+          <label>N.° de factura</label>
+          <input type="text" class="form-input" data-f="factura" maxlength="40" placeholder="10791">
+          <div class="err" data-f="err"></div>
+          <div class="act"><button type="button" class="btn btn-sm btn-ghost" data-act="pop-cancel">Cancelar</button>
+            <button type="button" class="btn btn-sm btn-primary" data-act="pop-factura" data-id="${esc(a.id)}">Anotar</button></div>
+        </div>`;
+      }
       const def = fIso(a.fecha_efectiva) || fIso(new Date());
       const c = a.contexto || {};
+      // Dos campos, no uno (2026-09-14). "Referencia — N.° de factura o nota"
+      // pedía las dos cosas a la vez y salieron tres formatos en cuatro
+      // registros: "Factura N° 10791", "FACTURA SIN FISCALIZAR … BAJO EL N°
+      // 10429.". El número es el dato que consulta la verificación del pago.
       return `<div class="fb-pop show" data-pop="${esc(a.id)}">
         <h6>Hecho en QuickBooks</h6>
         <label>Facturar desde</label>
         <input type="date" class="form-input" data-f="desde" value="${esc(def)}">
         <div class="hint">${a.efecto === 'termina' ? 'Fecha en que deja de cobrarse.' : `Prellenada con la fecha efectiva.${c.contrato_fecha ? ` Cámbiala si acordaron otra (por ejemplo, la del contrato: ${fLarga(c.contrato_fecha)}).` : ''}`}</div>
-        <label>Referencia (opcional)</label>
-        <input type="text" class="form-input" data-f="ref" maxlength="80" placeholder="N.° de factura o nota">
+        <label>N.° de factura</label>
+        <input type="text" class="form-input" data-f="factura" maxlength="40" placeholder="10791">
+        <div class="hint">Solo el número. Es con lo que el sistema va a poder confirmar
+          el pago solo; si ahora no lo tienes, se puede anotar después.</div>
+        <label>Nota (opcional)</label>
+        <input type="text" class="form-input" data-f="ref" maxlength="80" placeholder="Sin fiscalizar, parcial, etc.">
         <div class="err" data-f="err"></div>
         <div class="act"><button type="button" class="btn btn-sm btn-ghost" data-act="pop-cancel">Cancelar</button>
           <button type="button" class="btn btn-sm btn-primary" data-act="pop-ok" data-id="${esc(a.id)}" data-paso="qbo">Marcar hecho</button></div>
@@ -364,7 +398,12 @@ window.FacturacionBandeja = (() => {
       ev.stopPropagation();
       const paso = t.getAttribute('data-paso');
       if (!a) return;
-      if (a.pasos?.[paso]?.hecho) { abierto = id; render(); return; }   // hecho: el detalle tiene "Deshacer"
+      // Hecho: el detalle tiene "Deshacer". La excepción es un QBO hecho SIN
+      // número de factura: ahí el clic abre la ficha para anotarlo, porque si
+      // no ese paso se queda a medias para siempre (2026-09-14).
+      const hecho = a.pasos?.[paso];
+      const faltaNum = hecho?.hecho && paso === 'qbo' && !hecho.factura;
+      if (hecho?.hecho && !faltaNum) { abierto = id; render(); return; }
       popAbierto = (popAbierto && popAbierto.id === id && popAbierto.paso === paso) ? null : { id, paso };
       render();
       const inp = document.querySelector(`.fb-pop[data-pop="${CSS.escape(id)}"] .form-input`);
@@ -372,12 +411,31 @@ window.FacturacionBandeja = (() => {
       return;
     }
     if (act === 'pop-cancel') { ev.stopPropagation(); popAbierto = null; render(); return; }
+    // Anotar el número de factura de un paso QBO que ya estaba marcado.
+    if (act === 'pop-factura') {
+      ev.stopPropagation();
+      const pop = t.closest('.fb-pop');
+      const txt = pop.querySelector('[data-f="factura"]')?.value;
+      await conCandado(async () => {
+        try {
+          const num = await S().anotarFactura(a, txt);
+          a.pasos.qbo.factura = num;
+          popAbierto = null;
+          Toast.show(`Factura ${num} anotada`, 'ok');
+          render();
+        } catch (e) {
+          const err = pop.querySelector('[data-f="err"]'); if (err) err.textContent = e.message || 'Error';
+        }
+      });
+      return;
+    }
     if (act === 'pop-ok') {
       ev.stopPropagation();
       const paso = t.getAttribute('data-paso');
       const pop = t.closest('.fb-pop');
       const datos = {
         facturar_desde: pop.querySelector('[data-f="desde"]')?.value,
+        factura: pop.querySelector('[data-f="factura"]')?.value,
         ref: pop.querySelector('[data-f="ref"]')?.value,
         nota: pop.querySelector('[data-f="nota"]')?.value,
       };
