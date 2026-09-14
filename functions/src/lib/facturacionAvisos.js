@@ -29,6 +29,13 @@ const TIPOS = {
   baja_aprobada:          { efecto: "termina", pasos: { qbo: true, poc: false }, titulo: "Baja aprobada" },
   terminacion_completada: { efecto: "termina", pasos: { qbo: true, poc: true },  titulo: "Terminación completada" },
   venta_propio:           { efecto: "arranca", pasos: { qbo: true, poc: false }, titulo: "Venta con contrato Propio" },
+  // Cotización de taller ya ENTREGADA (2026-09-14, pedido de Solangel). El
+  // cobro de una reparación es un monto ÚNICO, no un alquiler: por eso
+  // `periodo: false` — el paso QBO no pregunta "facturar desde", que es una
+  // pregunta de contrato mensual. POC no aplica: el radio es del cliente y no
+  // se activa nada. La fila nace al ENTREGAR la orden, no al enviar la
+  // cotización: antes de entregar no hay nada que facturar.
+  cotizacion_servicio:    { efecto: "arranca", pasos: { qbo: true, poc: false }, titulo: "Cotización de taller", periodo: false },
 };
 
 const ESTADOS = ["esperando", "pendiente", "hecho", "descartado"];
@@ -52,6 +59,7 @@ const COMISIONABLE = {
   // número). Sale de QuickBooks en la F4; hasta entonces la base va en null.
   venta_propio:           { aplica: true,  base: "factura_venta" },
   ajuste_tarifa:          { aplica: false, motivo: "el ajuste se comisiona en la renovación" },
+  cotizacion_servicio:    { aplica: false, motivo: "reparación de taller: el servicio no paga comisión" },
   regularizacion:         { aplica: false, motivo: "corrige el registro; no es dinero nuevo" },
   baja_aprobada:          { aplica: false, motivo: "una baja no paga comisión" },
   terminacion_completada: { aplica: false, motivo: "una terminación no paga comisión" },
@@ -103,7 +111,13 @@ function avisoId(tipo, origenId) {
 function pasosIniciales(tipo) {
   const def = TIPOS[tipo] || { pasos: { qbo: true, poc: true } };
   const mk = (aplica) => ({ aplica: !!aplica, hecho: false, at: null, por_email: null });
-  return { qbo: mk(def.pasos.qbo), poc: mk(def.pasos.poc) };
+  // `periodo` viaja EN EL PASO, no solo en esta tabla: la bandeja y el
+  // servicio del navegador deciden si piden "facturar desde" leyendo el propio
+  // documento, sin tener que conocer el catálogo de tipos. Los avisos creados
+  // antes de este campo no lo traen → se lee como true (comportamiento previo).
+  const qbo = mk(def.pasos.qbo);
+  if (def.periodo === false) qbo.periodo = false;
+  return { qbo, poc: mk(def.pasos.poc) };
 }
 
 // Estado derivado de los pasos: 'hecho' cuando todos los que aplican están

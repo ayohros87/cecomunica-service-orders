@@ -259,9 +259,15 @@ window.FacturacionAvisosService = {
     const nuevo = { ...actual, hecho: true, at: ahora, por_email: a.por_email };
     let detalle;
     if (paso === 'qbo') {
+      // "Facturar desde" es una pregunta de contrato MENSUAL: desde qué día
+      // corre el alquiler. Una reparación de taller se cobra una sola vez, así
+      // que su paso nace con `periodo: false` (lib/facturacionAvisos) y no se
+      // pide la fecha. Los avisos anteriores a ese campo no lo traen → se leen
+      // como true y siguen exigiéndola, igual que antes.
+      const pidePeriodo = actual.periodo !== false;
       const desde = (datos.facturar_desde || '').toString().trim();
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) throw new Error('Escribe desde qué fecha se factura.');
-      nuevo.facturar_desde = desde;
+      if (pidePeriodo && !/^\d{4}-\d{2}-\d{2}$/.test(desde)) throw new Error('Escribe desde qué fecha se factura.');
+      if (pidePeriodo) nuevo.facturar_desde = desde;
       // Dos cosas distintas, dos campos distintos (2026-09-14): el NÚMERO, que
       // es con lo que la verificación automática del pago consulta a
       // QuickBooks, y la nota libre. Antes era un solo campo que pedía ambas y
@@ -274,7 +280,7 @@ window.FacturacionAvisosService = {
       nuevo.factura = f.numero;
       nuevo.factura_fuente = f.numero ? f.fuente : null;
       nuevo.ref = (datos.ref || '').toString().trim() || null;
-      detalle = `QuickBooks hecho · facturar desde ${desde}`
+      detalle = `QuickBooks hecho${pidePeriodo ? ` · facturar desde ${desde}` : ''}`
         + (f.numero ? ` · factura ${f.numero}` : ' · SIN número de factura')
         + (nuevo.ref ? ` · ${nuevo.ref}` : '');
     } else {

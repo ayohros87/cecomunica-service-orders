@@ -92,6 +92,12 @@ window.FacturacionBandeja = (() => {
         partes.push(c.terminacion_total ? 'terminación total' : 'baja parcial');
         partes.push('los equipos entran por devolución');
         break;
+      case 'cotizacion_servicio':
+        partes.push(`Entregado <b>${fCorta(a.fecha_efectiva)}</b>${c.orden ? ` · orden ${esc(c.orden)}` : ''}`);
+        if (c.cotizacion_id) partes.push(`cotización ${esc(c.cotizacion_id)}`);
+        if (a.pasos?.qbo?.hecho && a.pasos.qbo.factura) partes.push(`factura <b>${esc(a.pasos.qbo.factura)}</b>`);
+        else if (!a.pasos?.qbo?.hecho) partes.push('cobro único, pendiente de facturar');
+        break;
       case 'terminacion_completada':
         partes.push(`Flota recuperada <b>${fCorta(a.fecha_efectiva)}</b>${c.orden ? ` (devolución ${esc(c.orden)})` : ''} · cerrar en QuickBooks y apagar en POC`);
         break;
@@ -110,6 +116,11 @@ window.FacturacionBandeja = (() => {
 
   function montoHtml(a) {
     const r = a.resumen || {};
+    // Reparación de taller: un cobro ÚNICO. Pintarlo con "/mes" sería decir que
+    // se le va a cobrar todos los meses.
+    if (a.tipo === 'cotizacion_servicio') {
+      return `<div class="fb-monto">${money(r.total)}<small>${r.exento ? 'único · exento' : 'único · con ITBMS'}</small></div>`;
+    }
     if (a.estado === 'esperando' && r.mensual != null) return `<div class="fb-monto">${money(r.mensual)}<small>/mes al entregar</small></div>`;
     if (r.delta_mensual == null && r.mensual == null) return `<div class="fb-monto">—<small>&nbsp;</small></div>`;
     if (a.efecto === 'termina') {
@@ -172,6 +183,26 @@ window.FacturacionBandeja = (() => {
       }
       const def = fIso(a.fecha_efectiva) || fIso(new Date());
       const c = a.contexto || {};
+      // Cobro ÚNICO (reparación de taller): "facturar desde" no significa nada
+      // —no hay período que arranque— así que el formulario no la pregunta y
+      // el número de factura sube a primer campo, que es el dato que cierra el
+      // círculo con el taller.
+      if (q.periodo === false) {
+        return `<div class="fb-pop show" data-pop="${esc(a.id)}">
+          <h6>Facturado en QuickBooks</h6>
+          <div class="hint">Cobro único de ${esc(c.cotizacion_id || 'la cotización')}${a.resumen?.total != null ? ` por <b>${money(a.resumen.total)}</b>` : ''}.</div>
+          <label>N.° de factura</label>
+          <input type="text" class="form-input" data-f="factura" maxlength="40" placeholder="10791">
+          <div class="hint">Solo el número. Con él, ${esc((c.cotizado_por || 'el taller').split('@')[0])} recibe
+            el aviso de que ya quedó facturada; si ahora no lo tienes, se puede anotar después.</div>
+          <label>Nota (opcional)</label>
+          <input type="text" class="form-input" data-f="ref" maxlength="80" placeholder="Sin fiscalizar, parcial, etc.">
+          <div class="err" data-f="err"></div>
+          <div class="act"><button type="button" class="btn btn-sm btn-ghost" data-act="pop-cancel">Cancelar</button>
+            <button type="button" class="btn btn-sm btn-primary" data-act="pop-ok" data-id="${esc(a.id)}" data-paso="qbo">Marcar facturada</button></div>
+          <div class="hint">Quedará como ${esc(quien)} · ahora</div>
+        </div>`;
+      }
       // Dos campos, no uno (2026-09-14). "Referencia — N.° de factura o nota"
       // pedía las dos cosas a la vez y salieron tres formatos en cuatro
       // registros: "Factura N° 10791", "FACTURA SIN FISCALIZAR … BAJO EL N°
@@ -217,6 +248,15 @@ window.FacturacionBandeja = (() => {
         (r.mensual != null ? `<tr><td colspan="2"><b>Total mensual</b></td><td class="r"><b>${money(r.mensual)}</b>${r.exento ? ' · exento' : (r.con_itbms != null ? ` · ${money(r.con_itbms)} con ITBMS` : '')}</td></tr>` : '') +
         `</table>`;
     }
+    // Renglones de una cotización de taller: lo que se le cobra al cliente,
+    // pieza por pieza, para que Recepción arme la factura sin abrir la
+    // cotización.
+    const rgs = (d.renglones || []).filter(x => Number(x.cant || 0) > 0);
+    if (rgs.length) {
+      izq += `<h5>Lo cotizado</h5><table><tr><th>Cant.</th><th>Concepto</th><th class="r">Importe</th></tr>` +
+        rgs.map(x => `<tr><td>${Number(x.cant || 0)}</td><td>${esc(x.nombre || '—')}${x.parte ? ` <span class="seriales">${esc(x.parte)}</span>` : ''}${x.serial ? `<br><span class="seriales" style="color:var(--fg-3)">${esc(x.serial)}</span>` : ''}</td><td class="r">${money(x.importe)}</td></tr>`).join('') +
+        `<tr><td colspan="2"><b>Total</b></td><td class="r"><b>${money(r.total)}</b>${r.exento ? ' · exento' : ` · incl. ITBMS ${money(r.itbms)}`}</td></tr></table>`;
+    }
     if ((d.cargos || []).length) {
       izq += `<h5 style="margin-top:12px">Cargos</h5><table><tr><th>Cant.</th><th>Concepto</th><th>Tipo</th><th class="r">Monto</th></tr>` +
         d.cargos.map(cg => `<tr><td>${Number(cg.cantidad || 1)}</td><td>${esc(cg.concepto || '—')}</td><td>${cg.recurrente ? 'Mensual' : 'Único'}</td><td class="r">${money(cg.monto)}</td></tr>`).join('') + `</table>`;
@@ -261,6 +301,8 @@ window.FacturacionBandeja = (() => {
         hist.map(h => `<b>${fHora(h.fecha_iso)}</b> · ${esc(h.detalle || h.accion || '')}${h.por_email ? ` — ${esc(h.por_email.split('@')[0])}` : ''}`).join('<br>') + `</div>`;
     }
     const links = [];
+    if (c.cotizacion_doc_id) links.push(`<a class="btn btn-sm" href="../cotizaciones/detalle-cotizacion.html?id=${encodeURIComponent(c.cotizacion_doc_id)}"><i data-lucide="receipt"></i> Ver la cotización</a>`);
+    if (a.tipo === 'cotizacion_servicio' && a.orden_id) links.push(`<a class="btn btn-sm" href="../ordenes/editar-orden.html?id=${encodeURIComponent(a.orden_id)}"><i data-lucide="wrench"></i> Ver la orden</a>`);
     if (a.contrato_doc_id) links.push(`<a class="btn btn-sm" href="../contratos/documento.html?id=${encodeURIComponent(a.contrato_doc_id)}"><i data-lucide="file-text"></i> Ver el contrato</a>`);
     if (a.gestion_id && a.cliente_id) links.push(`<a class="btn btn-sm" href="../clientes/centro.html?id=${encodeURIComponent(a.cliente_id)}&g=${encodeURIComponent(a.gestion_id)}"><i data-lucide="folder-open"></i> Ver el expediente</a>`);
     if (a.cliente_id) links.push(`<a class="btn btn-sm" href="../clientes/centro.html?id=${encodeURIComponent(a.cliente_id)}"><i data-lucide="user"></i> Ficha del cliente</a>`);
@@ -299,7 +341,7 @@ window.FacturacionBandeja = (() => {
       <div class="fb-main" data-act="abrir" data-id="${esc(a.id)}">
         <span class="fb-efecto fb-efecto--${efectoCls}">${esc(efectoTxt)}</span>
         <div class="fb-txt">
-          <div class="fb-t1"><b>${esc(a.cliente_nombre || '—')}</b> <span class="id">${esc(a.contrato_id || a.gestion_id || '')}</span> <span class="que">· ${esc(que)}</span></div>
+          <div class="fb-t1"><b>${esc(a.cliente_nombre || '—')}</b> <span class="id">${esc(a.contrato_id || a.contexto?.cotizacion_id || a.gestion_id || '')}</span> <span class="que">· ${esc(que)}</span></div>
           <div class="fb-t2">${linea2(a)}</div>
         </div>
         ${montoHtml(a)}
@@ -322,7 +364,9 @@ window.FacturacionBandeja = (() => {
   function coincide(a) {
     if (!busqueda) return true;
     const q = busqueda.toLowerCase();
-    return [a.cliente_nombre, a.contrato_id, a.gestion_id, a.resumen?.equipos].some(v => String(v || '').toLowerCase().includes(q));
+    return [a.cliente_nombre, a.contrato_id, a.gestion_id, a.resumen?.equipos,
+      a.contexto?.cotizacion_id, a.orden_id, a.pasos?.qbo?.factura,
+    ].some(v => String(v || '').toLowerCase().includes(q));
   }
   function pasaFiltro(a) {
     if (filtro === 'all') return true;

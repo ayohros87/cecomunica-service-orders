@@ -56,7 +56,13 @@
     if (!mostrarEliminadas) list = list.filter(c => !c.deleted);
     // Vendedor solo ve las propias (forzado). Admin con toggle.
     if (soloMias) list = list.filter(c => c.creado_por_uid === userUid);
-    if (filtroEstado !== 'todas') list = list.filter(c => (c.estado || 'borrador') === filtroEstado);
+    // Los dos últimos segmentos no filtran por estado sino por FACTURACIÓN: es
+    // el control que el taller llevaba a mano ("cuáles ya se facturaron y
+    // cuáles no"). Solo aplican a cotizaciones de taller, que son las únicas
+    // que abren fila en la bandeja al entregarse la orden.
+    if (filtroEstado === 'por_facturar')      list = list.filter(c => facturacionEstado(c) === 'pendiente');
+    else if (filtroEstado === 'facturadas')   list = list.filter(c => facturacionEstado(c) === 'facturada');
+    else if (filtroEstado !== 'todas')        list = list.filter(c => (c.estado || 'borrador') === filtroEstado);
     if (term) {
       list = list.filter(c => {
         const blob = (c.cotizacion_id || '') + ' ' + (c.cliente_nombre || '') + ' ' + (c.ejecutivo_nombre || '');
@@ -101,10 +107,19 @@
     CotState.ESTADO_ORDEN.forEach(e => {
       counts[e] = base.filter(c => (c.estado || 'borrador') === e).length;
     });
+    const porFacturar = base.filter(c => facturacionEstado(c) === 'pendiente').length;
+    const facturadas  = base.filter(c => facturacionEstado(c) === 'facturada').length;
     const segs = [
       { key: 'todas', label: 'Todas', count: counts.todas },
       ...CotState.ESTADO_ORDEN.map(e => ({ key: e, label: CotState.ESTADOS[e].label, count: counts[e] })),
     ];
+    // Solo aparecen cuando hay algo que contar: en una lista de puras
+    // cotizaciones comerciales estos dos segmentos siempre dirían 0 y no
+    // significan nada ahí.
+    if (porFacturar || facturadas || filtroEstado === 'por_facturar' || filtroEstado === 'facturadas') {
+      segs.push({ key: 'por_facturar', label: 'Por facturar', count: porFacturar });
+      segs.push({ key: 'facturadas',   label: 'Facturadas',   count: facturadas });
+    }
     wrap.innerHTML = segs.map(s => `
       <button type="button" class="cc-seg${filtroEstado === s.key ? ' active' : ''}" data-estado="${s.key}">
         ${s.label} <span class="cc-seg-count">${s.count}</span>
@@ -143,6 +158,28 @@
   function estadoChip(estado) {
     const e = CotState.ESTADOS[estado] || CotState.ESTADOS.borrador;
     return `<span class="chip-estado ${e.chip}">${e.label}</span>`;
+  }
+
+  // ── Facturación de las cotizaciones de taller ─────────────────
+  // `facturacion` lo escriben las Cloud Functions, nunca el navegador: nace
+  // 'pendiente' cuando la orden se ENTREGA (onOrdenEntregada abre la fila en
+  // Facturación pendiente) y pasa a 'facturada' cuando Recepción marca el paso
+  // QBO con el número (onCotizacionFacturada). Una cotización sin el campo
+  // simplemente no participa — las comerciales no se facturan por esta vía.
+  function facturacionEstado(c) {
+    const f = c.facturacion;
+    if (!f || !f.estado) return null;
+    return f.estado === 'facturada' ? 'facturada' : 'pendiente';
+  }
+
+  function facturacionChip(c) {
+    const e = facturacionEstado(c);
+    if (!e) return '';
+    if (e === 'facturada') {
+      const n = c.facturacion.factura;
+      return `<span class="chip-estado chip-entregada" title="${n ? `Factura N.° ${FMT.esc(n)}` : 'Facturada, sin número anotado'}">Facturada${n ? ` ${FMT.esc(n)}` : ''}</span>`;
+    }
+    return `<span class="chip-estado chip-reparacion" title="El equipo ya se entregó: está en la bandeja de Facturación pendiente">Por facturar</span>`;
   }
 
   // ¿El usuario puede operar esta fila? Los roles con vista global mantienen sus
@@ -188,7 +225,7 @@
             ${c.cliente_email ? '<div class="cc-aten">' + FMT.esc(c.cliente_email) + '</div>' : ''}
           </td>
           <td class="td-muted">${fmtFechaCorta(fechaIso(c))}</td>
-          <td>${estadoChip(c.estado || 'borrador')}</td>
+          <td><div style="display:flex;flex-wrap:wrap;gap:4px;">${estadoChip(c.estado || 'borrador')}${facturacionChip(c)}</div></td>
           <td style="font-size:13px;">${c.ejecutivo_nombre ? FMT.esc(c.ejecutivo_nombre) : '—'}</td>
           <td class="cc-cell-total">${total}</td>
           <td class="td-actions">

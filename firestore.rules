@@ -192,6 +192,15 @@ service cloud.firestore {
       function aprobadaAntes() {
         return resource.data.get("fecha_aprobacion", null) != null;
       }
+      // `facturacion` es de Cloud Functions: lo abre onOrdenEntregada cuando la
+      // reparación SALE y lo cierra onCotizacionFacturada cuando Recepción
+      // marca el paso QBO con el número de factura. Sin este candado, el dueño
+      // de la cotización podía marcarla "facturada" desde el navegador y el
+      // control del taller pasaría a ser un palomeo — justo lo que este
+      // circuito existe para retirar.
+      function tocaFacturacion() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasAny(["facturacion"]);
+      }
 
       allow get:  if verTodasCot() || esDueno() || esSupervisorCot();
       // `list` lo usa la generación del correlativo (nextCotizacionId); se concede
@@ -208,6 +217,7 @@ service cloud.firestore {
       // Un técnico de taller solo puede mantener SU borrador (editarlo): no puede
       // moverlo a 'enviada' ni 'aprobada' — eso lo hace el supervisor.
       allow update: if (verTodasCot() || esDueno())
+                     && !tocaFacturacion()
                      && (!esTecnicoTaller() || request.resource.data.estado == "borrador")
                      && (isAdmin()
                          || !aprobacionTocada()

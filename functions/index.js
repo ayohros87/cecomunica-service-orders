@@ -116,6 +116,9 @@ exports.onOrdenWriteGestion           = require("./src/triggers/gestiones/onOrde
 exports.onGestionArchivo              = require("./src/triggers/gestiones/onGestionArchivo");
 // Bandeja "Facturación pendiente" (2026-09-04): reenvío del correo + estado derivado.
 exports.onFacturacionAvisoWrite       = require("./src/triggers/facturacion/onFacturacionAvisoWrite");
+// Cierra el círculo de la cotización de taller (2026-09-14): cuando Recepción
+// marca QBO, quien elaboró la cotización recibe el número de factura.
+exports.onCotizacionFacturada         = require("./src/triggers/facturacion/onCotizacionFacturada");
 // Historial de la ficha del cliente: quién cambió qué (representante, RUC,
 // vendedor…) — diff server-side en clientes/{id}/historial, inmutable por rules
 exports.onClienteHistorial            = require("./src/triggers/clientes/onClienteHistorial");
