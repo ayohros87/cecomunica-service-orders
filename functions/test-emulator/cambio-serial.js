@@ -20,7 +20,8 @@
 //      el correo de corrección a activaciones con el par anterior→nuevo;
 //   3) queda rastro en seriales_historial del contrato;
 //   4) volver a correr el trigger NO aplica la corrección dos veces;
-//   5) un ítem que apunta al contrato de OTRO cliente no se aplica.
+//   5) un ítem que apunta al contrato de OTRO cliente no se aplica;
+//   6) un radio que salió en un DEMO tampoco (ahí se anula el demo).
 const assert = require("node:assert/strict");
 const admin = require("firebase-admin");
 
@@ -208,6 +209,32 @@ const pool = (s) => db.doc(`equipos_pool/${s}`).get().then((d) => d.data());
   const evs = await db.collection(`gestiones/${GID2}/eventos`).get();
   assert.ok(evs.docs.some((d) => d.data().accion === "correccion_incompleta"),
     "y queda dicho en el expediente por qué no se aplicó");
+
+  // ── 6) Un radio que salio en un DEMO no se corrige por aqui ──────────
+  // Caso R. SMITH ALTA PLAZA (2026-09-15): el demo no tiene contrato, asi que
+  // "corregirlo" dejaria demo.seriales_asignados y la OS con los viejos.
+  await db.doc("equipos_pool/DEMO0001").set({
+    serial: "DEMO0001", serial_norm: "DEMO0001", modelo_label: MODELO, estado: "en_cliente",
+    asignacion: { contrato_doc_id: null, contrato_id: "", cliente_id: CLIENTE,
+      cliente_nombre: "CDP HOLDINGS INC", gestion_doc_id: "GD20260914-01", tipo: "demo" },
+  });
+  const GID3 = "GC20260915-03";
+  const ref3 = db.doc(`gestiones/${GID3}`);
+  await ref3.set({
+    tipo: "cambio_serial", estado: "pendiente_bodega",
+    cliente_id: CLIENTE, cliente_nombre: "CDP HOLDINGS INC",
+    items: [{ serial: "DEMO0001", modelo: MODELO, contrato_doc_id: null,
+      motivo_codigo: "error_captura", serial_nuevo: "DEMO0002" }],
+    cierre: {}, ordenes: {}, deleted: false,
+  });
+  const after3 = await ref3.get();
+  await onGestion.run({ data: { before: null, after: after3 }, params: { gid: GID3 } });
+  const g3 = (await ref3.get()).data();
+  assert.ok(!g3.cierre?.derivacion, "un equipo en demo no se corrige por esta via");
+  assert.equal((await pool("DEMO0001")).estado, "en_cliente", "y el pool no se toca");
+  const evs3 = await db.collection(`gestiones/${GID3}/eventos`).get();
+  assert.ok(evs3.docs.some((d) => /demo/.test(d.data().detalle || "")),
+    "el expediente dice que el camino es anular el demo");
 
   console.log("OK cambio-serial: contrato corregido, intercambio en el pool, cierre solo,");
   console.log("   correo a activaciones, idempotente y con candado de cliente.");

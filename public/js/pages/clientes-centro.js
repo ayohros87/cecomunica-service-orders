@@ -4402,8 +4402,11 @@ window.Centro = {
     this._cerrarModal();
     document.getElementById('cgMenu')?.classList.add('hidden');
     const flota = this._flotaCorregible();
+    const enDemo = this._enDemo();
     if (!flota.length) {
-      Toast.show('Este cliente no tiene equipos registrados en campo que corregir.', 'warn');
+      Toast.show(enDemo.length
+        ? 'Los equipos que este cliente tiene salieron en un demo: para cambiarlos, anula el demo y ábrelo con los radios correctos.'
+        : 'Este cliente no tiene equipos registrados en campo que corregir.', 'warn');
       return;
     }
     this._abrirModal(`
@@ -4412,6 +4415,12 @@ window.Centro = {
         Para cuando el sistema tiene anotado un serial y el cliente en realidad tiene otro.
         <b>No mueve equipo</b>: el radio ya está donde tiene que estar. Si el radio que el cliente
         tiene se dañó y hay que sustituirlo, eso es un <b>reemplazo</b>, no esto.</p>
+      ${enDemo.length ? `<div class="cg-senal warn" style="margin:0 0 12px;">
+        <span><b>${enDemo.length} equipo(s) no salen en esta lista porque están en un demo</b>
+        (<span class="cg-mono">${enDemo.map(e => this.esc(e.serial || e.id)).join(', ')}</span>).
+        Un demo no tiene contrato, así que corregirlo aquí dejaría el expediente del demo y su orden
+        diciendo los seriales viejos. Para cambiar los radios de un demo: <b>anula el demo y ábrelo
+        con los correctos</b>.</span></div>` : ''}
       <div class="cg-twrap" style="max-height:44vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
         <th style="width:34px;"></th><th>Figura en el sistema</th><th>Modelo</th><th>Contrato</th>
         </tr></thead><tbody>${this._csFilasHtml(flota)}</tbody></table></div>
@@ -4424,9 +4433,27 @@ window.Centro = {
   // Lo que se puede corregir: lo que el sistema dice que el cliente tiene.
   // Un radio en taller o ya devuelto no se corrige por aquí — su serial ya
   // dejó de colgar de la cuenta y tocarlo enredaría la orden que lo mueve.
+  //
+  // FUERA los radios que salieron en un DEMO (caso R. SMITH ALTA PLAZA,
+  // 2026-09-15): un demo no tiene contrato, así que la corrección no tendría
+  // fila de seriales que reescribir y dejaría el expediente del demo y su OS
+  // diciendo los seriales viejos. Media corrección es peor que ninguna. Ahí el
+  // camino es otro: anular el demo y abrirlo con los radios correctos.
+  // Se reconocen por colgar de una gestión SIN contrato; el entrante de un
+  // reemplazo también trae `gestion_doc_id` pero hereda el contrato del que
+  // sustituye, y ese sí se corrige normal.
   _flotaCorregible() {
     return (this.equipos || []).filter(e =>
-      ['en_cliente', 'asignado_contrato'].includes(e.estado) && !e.pendiente_devolucion);
+      ['en_cliente', 'asignado_contrato'].includes(e.estado) && !e.pendiente_devolucion
+      && !(e.asignacion?.gestion_doc_id && !e.asignacion?.contrato_doc_id));
+  },
+
+  // Los que quedaron fuera por estar en un demo — se dicen, no se esconden:
+  // quien vino a corregir ese serial tiene que saber por dónde va.
+  _enDemo() {
+    return (this.equipos || []).filter(e =>
+      ['en_cliente', 'asignado_contrato'].includes(e.estado) && !e.pendiente_devolucion
+      && e.asignacion?.gestion_doc_id && !e.asignacion?.contrato_doc_id);
   },
 
   _csFilasHtml(flota) {

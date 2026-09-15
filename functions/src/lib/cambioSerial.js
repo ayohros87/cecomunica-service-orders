@@ -115,6 +115,19 @@ async function aplicar(gid, g) {
         });
         aplicados.push({ anterior, nuevo, modelo, contrato_id: it.contrato_id || "", via: "contrato" });
       } else {
+        // Sin contrato hay dos mundos distintos y solo uno se corrige aquí.
+        // El que NO: un radio que salió en un DEMO (caso R. SMITH ALTA PLAZA,
+        // 2026-09-15). Corregirlo dejaría el expediente del demo y su orden de
+        // programación diciendo los seriales viejos — media corrección, que es
+        // peor que ninguna. Para cambiar los radios de un demo se anula y se
+        // abre con los correctos. La página ya no los ofrece; esto es el
+        // candado de verdad, porque el ítem lo arma el navegador.
+        const { data: ficha } = await pool.resolver(anterior, modeloId, modelo);
+        if (ficha?.asignacion?.gestion_doc_id && !ficha.asignacion.contrato_doc_id) {
+          fallidos.push({ anterior, nuevo,
+            motivo: `el equipo está tomado por la gestión ${ficha.asignacion.gestion_doc_id} (demo): ahí se cambia anulándola, no corrigiendo el serial` });
+          continue;
+        }
         // Custodia sin contrato: no hay fila que reescribir. El vínculo del
         // viejo se suelta y el nuevo nace/queda en poder del cliente.
         await pool.soltarDelCliente(anterior, modeloId, modelo, {
