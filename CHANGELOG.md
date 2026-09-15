@@ -107,6 +107,17 @@
 > - Los deep-links usan `?ids=` y no `?orden=`: estas órdenes son de julio y
 >   agosto, y la bandeja carga las 40 más recientes — `?orden=` solo filtra lo ya
 >   cargado y la persona aterrizaría en una lista vacía.
+> - **La fila avisa.** *"¿Le va a aparecer alguna señal en la orden para que sepa
+>   que tiene que gestionar la anulación?"* — no: la señal vivía dentro del ⋯, que
+>   hay que abrir para verlo, y la fila seguía ofreciendo **Entregar** como si nada.
+>   Ahora **"Resolver contrato" sustituye a "Entregar"**: no es un aviso decorativo
+>   al lado, es que la siguiente acción de esa orden dejó de ser entregar, y
+>   ofrecer un botón que el candado va a denegar igual solo manda a la persona a
+>   chocar con un modal. En POR ASIGNAR y ASIGNADO sale *junto* al botón del flujo
+>   — la orden sí puede avanzar, pero es trabajo que no se podrá entregar hasta
+>   resolver el papel. Sin chip ni color nuevo (el estado sigue siendo la única voz
+>   de color): usa el amarillo que ya significa *"esto te está esperando"*. Solo a
+>   admin y recepción; al técnico no se le pinta una acción que no puede hacer.
 
 ## [El contrato de REEMPLAZO no lleva firma del cliente — y el DEMO tampoco] — 2026-09-15
 
