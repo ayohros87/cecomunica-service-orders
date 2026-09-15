@@ -67,7 +67,12 @@ test("G3 · la bandeja Hoy no manda la asignación fuera de /almacen/", () => {
   assert.ok(!/clientes\/centro\.html/.test(hoy), "Hoy sigue enlazando al Centro");
   assert.ok(/tab=asignar/.test(hoy), "Hoy debe abrir la pestaña Asignar");
   const html = leer("public", "almacen", "index.html");
-  assert.ok(/id: 'asignar'/.test(html) && /id="tab-asignar"/.test(html), "almacen/index.html: falta la pestaña Asignar");
+  // La tira de pestañas del espacio se declara en js/ui/almacen-nav.js desde
+  // 0ac7aea (antes vivía suelta en cada HTML): la pestaña se busca ahí y la
+  // sección que monta, en la página.
+  assert.ok(/id: 'asignar'/.test(leer("public", "js", "ui", "almacen-nav.js")),
+    "almacen-nav.js: falta la pestaña Asignar en la tira del espacio");
+  assert.ok(/id="tab-asignar"/.test(html), "almacen/index.html: falta la sección de Asignar");
   assert.ok(/asignador-seriales\.js/.test(html) && /almacen-asignar\.js/.test(html), "almacen/index.html: faltan los scripts de Asignar");
 });
 
