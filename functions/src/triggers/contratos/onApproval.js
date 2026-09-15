@@ -14,7 +14,7 @@ const { catalogo } = require("../../domain/modeloCatalogo");
 const { propiedadDeUnidad } = require("../../domain/propiedadUnidad");
 const { aplicarPlanRenovacion, serialesExcluidosPorPlan, reemplazosPorModelo } = require("../../lib/planRenovacion");
 const { esDocumentoV2 } = require("../../lib/documentoContrato");
-const { llevaFirma } = require("../../domain/contratoFirma");
+const { llevaFirma, nombreContrato } = require("../../domain/contratoFirma");
 const poolDom = require("../../domain/equiposPool");
 const G = require("../../lib/gestiones");
 
@@ -375,20 +375,22 @@ const onContratoAprobadoSolicitaSeriales = onDocumentUpdated(
              <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:center;">${Number(cg.cantidad || 1)}</td>
              <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right;">$${Number(cg.monto || 0).toFixed(2)}${cg.recurrente ? "/mes" : ""}</td></tr>`),
         ].join("");
-        // Un REEMPLAZO no lleva firma del cliente (2026-09-15, caso MACELLO):
-        // este mismo correo es el que mandaba a la vendedora a perseguir una
-        // firma que no existe. Su siguiente paso no es firmar: es entregar.
+        // Un REEMPLAZO ni un DEMO llevan firma del cliente (2026-09-15, caso
+        // MACELLO): este mismo correo es el que mandaba a la vendedora a
+        // perseguir una firma que no existe. Su siguiente paso no es firmar:
+        // es entregar.
         const conFirma = llevaFirma(after);
+        const queEs = nombreContrato(after);   // 'reemplazo' | 'demo'
         await db.collection("mail_queue").add({
           to: vend,
           subject: conFirma
             ? `Contrato ${after.contrato_id || event.params.docId} APROBADO — sigue la firma del cliente`
-            : `Reemplazo ${after.contrato_id || event.params.docId} APROBADO — sigue la entrega`,
+            : `${queEs.toUpperCase()} ${after.contrato_id || event.params.docId} APROBADO — sigue la entrega`,
           preheader: conFirma
             ? "Envíale el enlace de firma digital desde la ficha del cliente"
-            : "No lleva firma: bodega programa y la entrega se cierra en la orden de servicio",
+            : `No lleva firma: bodega programa y la entrega se cierra en la orden de servicio`,
           bodyContent: `
-            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065F46;">${conFirma ? "Tu contrato fue aprobado" : "Tu reemplazo fue aprobado"}</h2>
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065F46;">${conFirma ? "Tu contrato fue aprobado" : `Tu ${escapeHtml(queEs)} fue aprobado`}</h2>
             <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
               El contrato <b>${escapeHtml(after.contrato_id || "")}</b> de
               <b>${escapeHtml(after.cliente_nombre || "—")}</b> quedó <b>aprobado</b>.
@@ -396,10 +398,12 @@ const onContratoAprobadoSolicitaSeriales = onDocumentUpdated(
                 ? `El siguiente paso es tuyo: desde la ficha del cliente, usa
                    <b>Enviar para firma</b> — el cliente lee el contrato completo en su celular y firma
                    con el dedo. Bodega prepara los seriales en paralelo.`
-                : `<b>Un reemplazo no se firma</b>: sustituye una unidad por otra bajo el contrato que el
-                   cliente ya firmó. Bodega programa los equipos y lo único que falta es
-                   <b>entregarlos</b> — la entrega se cierra en la orden de servicio, con la nota de
-                   entrega firmada por quien los recibe.`}</p>
+                : `<b>Un ${escapeHtml(queEs)} no se firma</b>: ${queEs === "demo"
+                     ? "es un préstamo de evaluación"
+                     : "sustituye una unidad por otra bajo el contrato que el cliente ya firmó"}.
+                   Bodega programa los equipos y lo único que falta es <b>entregarlos</b> — la
+                   entrega se cierra en la orden de servicio, con la nota de entrega firmada por
+                   quien los recibe.`}</p>
             <table role="presentation" width="100%" style="border-collapse:collapse;font:14px Arial,sans-serif;margin:8px 0 4px;">
               <thead><tr><th style="text-align:left;padding:5px 8px;border-bottom:2px solid #e5e7eb;">Detalle</th>
                 <th style="text-align:center;padding:5px 8px;border-bottom:2px solid #e5e7eb;">Cant.</th>

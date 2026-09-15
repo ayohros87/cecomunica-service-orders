@@ -512,20 +512,24 @@ service cloud.firestore {
       // inexistente): ese caso es un problema de datos, no de firma, y la UI
       // lo muestra. Admin exento por el OR de isAdmin() del allow.
       //
-      // Un REEMPLAZO no lleva firma (2026-09-15, caso MACELLO / OS 2026090310):
-      // sustituye una unidad por otra bajo el contrato que el cliente YA firmó,
-      // así que no pacta nada que firmar — 79 de los 82 REEMP del sistema están
-      // sin firmar y esa es su forma normal. Espejo de
+      // REEMPLAZO y DEMO no llevan firma (2026-09-15, caso MACELLO / OS
+      // 2026090310): el reemplazo sustituye una unidad por otra bajo el
+      // contrato que el cliente YA firmó, y el demo es un préstamo de
+      // evaluación cuya custodia la documentan la nota de entrega y el retorno.
+      // Ninguno pacta nada que firmar — 79 de 82 REEMP y 44 de 45 DEMO están
+      // sin firmar, y esa es su forma normal. Espejo de
       // js/domain/contratoFirma.js. El tipo se mira en el DOC del contrato, no
       // en el prefijo del número: hay un reemplazo numerado ALQ20251024-01.
+      // Los dos tipos van en UN `in […]` y no en cuatro cláusulas sueltas: este
+      // match ya está al tope de 1000 expresiones en los caminos de denegación.
       function contratoFirmadoParaEntregar() {
         let c = resource.data.get("contrato", {});
         let cid = c.get("contrato_doc_id", "");
         return c.get("aplica", false) != true
           || !(cid is string) || cid == ""
           || !exists(/databases/$(database)/documents/contratos/$(cid))
-          || get(/databases/$(database)/documents/contratos/$(cid)).data.get("codigo_tipo", "") == "REEMP"
-          || get(/databases/$(database)/documents/contratos/$(cid)).data.get("tipo_contrato", "") == "Reemplazo"
+          || get(/databases/$(database)/documents/contratos/$(cid)).data.get("codigo_tipo", "") in ["REEMP", "DEMO"]
+          || get(/databases/$(database)/documents/contratos/$(cid)).data.get("tipo_contrato", "") in ["Reemplazo", "Demo"]
           || get(/databases/$(database)/documents/contratos/$(cid)).data.get("firmado", false) == true
           || get(/databases/$(database)/documents/contratos/$(cid)).data.get("estado", "") == "activo";
       }

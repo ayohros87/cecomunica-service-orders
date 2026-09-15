@@ -17,11 +17,26 @@
 // onApproval le crea un aviso de facturación `contrato_activo` con su
 // comisión — un cobro que nadie pactó, por unos radios que solo cambiaron de
 // número de serie. Por eso el Centro tampoco ofrece ya "subir el firmado" de
-// un REEMP.
+// un REEMP. Lo mismo vale para el DEMO, que entró en la segunda vuelta del
+// mismo repaso: ver SIN_FIRMA.
 window.ContratoFirma = {
 
-  // Tipos de contrato que NO llevan firma del cliente.
-  SIN_FIRMA: ['REEMP'],
+  // Tipos de contrato que NO llevan firma del cliente, y por qué — el motivo
+  // se pinta en pantalla, así que vive con la regla y no suelto en cada vista.
+  SIN_FIRMA: {
+    REEMP: {
+      nombre: 'reemplazo',
+      porQue: 'un reemplazo no lleva firma: sustituye una unidad por otra bajo el contrato que el cliente ya firmó',
+    },
+    // Demo (2026-09-15, segunda vuelta): 14 de 14 demos entregados nunca se
+    // firmaron y ninguno llegó a `activo`. Y el sistema ya se contradecía solo:
+    // un demo creado como GESTIÓN no tiene paso de firma (CIERRE_DEFS.demo),
+    // pero el mismo demo creado como CONTRATO exigía firma para entregar.
+    DEMO: {
+      nombre: 'demo',
+      porQue: 'un demo no lleva firma: es un préstamo de evaluación — la custodia la documentan la nota de entrega y el retorno',
+    },
+  },
 
   // Mismo criterio que Centro._codigoTipo / regularizacion.codigoTipo: el
   // campo manda, el nombre es el respaldo, y el prefijo del número es el
@@ -36,15 +51,14 @@ window.ContratoFirma = {
   },
 
   /** ¿Este contrato lleva la firma del cliente? */
-  lleva(c) { return !this.SIN_FIRMA.includes(this.codigoTipo(c)); },
+  lleva(c) { return !this.SIN_FIRMA[this.codigoTipo(c)]; },
 
   /** ¿Está esperando esa firma AHORA? (aprobado y todavía sin firmar) */
   esperando(c) { return this.lleva(c) && c?.estado === 'aprobado' && c.firmado !== true; },
 
   /** Por qué no la lleva, para decirlo en la pantalla. */
-  porQue(c) {
-    return this.codigoTipo(c) === 'REEMP'
-      ? 'un reemplazo no lleva firma: sustituye una unidad por otra bajo el contrato que el cliente ya firmó'
-      : '';
-  },
+  porQue(c) { return this.SIN_FIRMA[this.codigoTipo(c)]?.porQue || ''; },
+
+  /** Cómo llamarlo en una frase ("el demo espera la entrega"). */
+  nombre(c) { return this.SIN_FIRMA[this.codigoTipo(c)]?.nombre || 'contrato'; },
 };

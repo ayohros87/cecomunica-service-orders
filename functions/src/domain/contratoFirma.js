@@ -4,11 +4,20 @@
 // archivo del front.
 //
 // En resumen: un REEMPLAZO sustituye una unidad por otra bajo el contrato que
-// el cliente YA firmó. No pacta nada nuevo, así que no se firma — ni se le
-// persigue la firma al vendedor, ni traba la entrega de los radios.
+// el cliente YA firmó, y un DEMO es un préstamo de evaluación. Ninguno pacta
+// nada nuevo, así que no se firman — ni se les persigue la firma al vendedor,
+// ni traban la entrega de los radios.
 
-// Tipos de contrato que NO llevan firma del cliente.
-const SIN_FIRMA = ["REEMP"];
+// Tipos de contrato que NO llevan firma del cliente, con el motivo pegado a la
+// regla (el front lo pinta en pantalla).
+//   REEMP — sustituye una unidad bajo el contrato que el cliente ya firmó.
+//   DEMO  — préstamo de evaluación: 14 de 14 demos entregados nunca se firmaron
+//           y la GESTIÓN demo ya no tenía paso de firma; el contrato sí la
+//           exigía para entregar, y esa contradicción es la que se cierra.
+const SIN_FIRMA = {
+  REEMP: { nombre: "reemplazo", porQue: "un reemplazo no lleva firma: sustituye una unidad por otra bajo el contrato que el cliente ya firmó" },
+  DEMO:  { nombre: "demo",      porQue: "un demo no lleva firma: es un préstamo de evaluación — la custodia la documentan la nota de entrega y el retorno" },
+};
 
 function codigoTipo(c) {
   const x = c || {};
@@ -20,9 +29,15 @@ function codigoTipo(c) {
 }
 
 /** ¿Este contrato lleva la firma del cliente? */
-function llevaFirma(c) { return !SIN_FIRMA.includes(codigoTipo(c)); }
+function llevaFirma(c) { return !SIN_FIRMA[codigoTipo(c)]; }
 
 /** ¿Está esperando esa firma AHORA? */
 function esperandoFirma(c) { return llevaFirma(c) && c?.estado === "aprobado" && c.firmado !== true; }
 
-module.exports = { SIN_FIRMA, codigoTipo, llevaFirma, esperandoFirma };
+/** Cómo llamarlo en una frase ("tu demo fue aprobado"). */
+function nombreContrato(c) { return SIN_FIRMA[codigoTipo(c)]?.nombre || "contrato"; }
+
+/** Por qué no lleva firma, para escribirlo en el correo. */
+function porQueSinFirma(c) { return SIN_FIRMA[codigoTipo(c)]?.porQue || ""; }
+
+module.exports = { SIN_FIRMA, codigoTipo, llevaFirma, esperandoFirma, nombreContrato, porQueSinFirma };

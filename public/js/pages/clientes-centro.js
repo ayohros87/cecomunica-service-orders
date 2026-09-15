@@ -599,7 +599,8 @@ window.Centro = {
       vistos.add(c.id);
       const id = `<span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>`;
       const tipoTxt = c.accion === 'Renovación' ? 'Renovación de cuenta'
-        : this._codigoTipo(c) === 'REEMP' ? 'Reemplazo de equipos' : 'Contrato nuevo';
+        : this._codigoTipo(c) === 'REEMP' ? 'Reemplazo de equipos'
+        : this._codigoTipo(c) === 'DEMO' ? 'Demo de equipos' : 'Contrato nuevo';
       const unid = (c.equipos || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
       if (c.estado === 'pendiente_aprobacion') {
         if (esAprobador) it('warn', `Aprobar el contrato ${id}`,
@@ -615,11 +616,12 @@ window.Centro = {
         it('warn', `El contrato ${id} espera la firma del cliente`,
           c.firma_solicitud_estado === 'pendiente' ? 'El enlace de firma ya se envió — se puede reenviar' : 'Envíale el enlace de firma digital, o imprime el contrato y sube el firmado desde el expediente',
           B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`) + B('Enviar para firma', `Centro.enviarFirma('${this.esc(c.id)}')`, true));
-      // Un REEMPLAZO no le pide nada al cliente: lo único que falta es poner
-      // los radios en su mano (2026-09-15, caso MACELLO). Decirlo aquí evita
-      // que se quede en el limbo — la OS es la que termina el trámite.
+      // Un contrato sin firma (reemplazo, demo) no le pide nada al cliente: lo
+      // único que falta es poner los radios en su mano (2026-09-15, caso
+      // MACELLO). Decirlo aquí evita que se quede en el limbo — la OS es la
+      // que termina el trámite.
       } else if (!ContratoFirma.lleva(c) && c.estado === 'aprobado') {
-        it('info', `El reemplazo ${id} espera la entrega de los equipos`,
+        it('info', `El ${ContratoFirma.nombre(c)} ${id} espera la entrega de los equipos`,
           `${unid} unid. — ${ContratoFirma.porQue(c)}. La entrega se cierra en la orden de servicio.`,
           B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`));
       } else if (c.estado === 'activo') {
@@ -2320,9 +2322,11 @@ window.Centro = {
       ? `${Number(r?.amarradas || 0)} amarrado(s) · ${reg.sob} SIN resolver: ${reg.seriales.slice(0, 4).join(', ')}${reg.seriales.length > 4 ? '…' : ''} — agrégalos por anexo o libéralos`
       : (r?.at && !reg) ? `${Number(r.amarradas || 0)} radio(s) amarrados — conciliación en cero`
       : 'la custodia se amarra sola al entregarse la orden de servicio';
-    // Un REEMPLAZO no firma ni se activa: su camino es aprobar → programar →
-    // entregar (2026-09-15). Pintarle "Firma del cliente" y "Activación" era
-    // ponerle dos pasos que nunca iba a dar.
+    // Un contrato sin firma (reemplazo, demo) no firma ni se activa: su camino
+    // es aprobar → programar → entregar (2026-09-15). Pintarle "Firma del
+    // cliente" y "Activación" era ponerle dos pasos que nunca iba a dar. El
+    // retorno del demo NO es un paso de este expediente: lo cierra su propia
+    // orden de devolución (ContratoCierre / la ENTRADA).
     const llevaFirma = ContratoFirma.lleva(c);
     const pasos = llevaFirma ? [
       ['Aprobación comercial', c.estado !== 'pendiente_aprobacion', 'llega a ventas@cecomunica.com'],

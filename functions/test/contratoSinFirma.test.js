@@ -1,4 +1,4 @@
-// Un contrato de REEMPLAZO no lleva firma del cliente (2026-09-15).
+// Hay contratos que NO llevan firma del cliente: REEMPLAZO y DEMO (2026-09-15).
 //
 // Caso de Brenda — MACELLO, S.A., orden de servicio 2026090310: tres radios
 // reemplazados que la vendedora ya le había entregado al cliente el 4 de
@@ -16,6 +16,14 @@
 // Y firmarlo tampoco era inocuo: la firma ACTIVA el contrato, y una activación
 // le crea un aviso de facturación con su comisión — un cobro que nadie pactó
 // por unos radios que solo cambiaron de número de serie.
+//
+// SEGUNDA VUELTA — el DEMO (decisión de Alberto, mismo día). Al repasar el resto
+// de los tipos apareció el mismo cuadro, y peor: **14 de 14 demos entregados
+// nunca se firmaron**, ninguno llegó a `activo`, y el sistema ya se contradecía
+// solo — un demo creado como GESTIÓN no tiene paso de firma (CIERRE_DEFS.demo),
+// pero el mismo demo creado como CONTRATO exigía la firma para entregar, con 14
+// órdenes vivas trancadas. TEMP se queda pidiendo firma: es un alquiler de
+// evento con precio, y ahí la firma sí documenta la custodia.
 //
 // Corre con `npm test` (node --test). Sin navegador ni red.
 const { test } = require("node:test");
@@ -61,6 +69,9 @@ const REEMP = { id: "cR", contrato_id: "REEMP20260901-02", codigo_tipo: "REEMP",
   estado: "aprobado", accion: "No Aplica", fecha_creacion: new Date(), equipos: [{ cantidad: 1, precio: 0 }] };
 const ALQ = { id: "cA", contrato_id: "ALQ20260901-01", codigo_tipo: "ALQ", tipo_contrato: "Alquiler",
   estado: "aprobado", accion: "Nuevo", fecha_creacion: new Date(), equipos: [{ cantidad: 5, precio: 25 }] };
+// Un demo real de los que estaban trancados (P.H. PLAZA DEL ESTE, 3 radios).
+const DEMO = { id: "cD", contrato_id: "DEMO20260730-02", codigo_tipo: "DEMO", tipo_contrato: "Demo",
+  estado: "aprobado", accion: "No Aplica", fecha_creacion: new Date(), equipos: [{ cantidad: 3, precio: 0 }] };
 
 test("R1 · el tipo manda, no el número: qué contratos llevan firma", () => {
   const { front } = montar();
@@ -71,7 +82,10 @@ test("R1 · el tipo manda, no el número: qué contratos llevan firma", () => {
     // REEMP20251024 se numeró ALQ20251024-01 por error y sigue siendo un
     // reemplazo: el campo manda sobre el prefijo.
     assert.equal(F({ codigo_tipo: "REEMP", contrato_id: "ALQ20251024-01" }), false, "el campo gana al prefijo");
-    for (const t of ["ALQ", "PROP", "DEMO", "TEMP", "SERV"]) {
+    assert.equal(F({ codigo_tipo: "DEMO" }), false, "DEMO por codigo_tipo");
+    assert.equal(F({ tipo_contrato: "Demo" }), false, "DEMO por nombre del tipo");
+    // TEMP es alquiler de evento con precio: la firma documenta la custodia.
+    for (const t of ["ALQ", "PROP", "TEMP", "SERV"]) {
       assert.equal(F({ codigo_tipo: t }), true, `${t} sí lleva firma`);
     }
   }
@@ -79,47 +93,54 @@ test("R1 · el tipo manda, no el número: qué contratos llevan firma", () => {
 
 test("R2 · front y back dicen lo mismo, contrato por contrato", () => {
   const { front } = montar();
-  const casos = [REEMP, ALQ, { codigo_tipo: "DEMO" }, { tipo_contrato: "Propio" },
-    { contrato_id: "TEMP20260902-01" }, {}, null];
+  const casos = [REEMP, ALQ, DEMO, { tipo_contrato: "Propio" },
+    { contrato_id: "TEMP20260902-01" }, { codigo_tipo: "TEMP" }, {}, null];
   for (const c of casos) {
     assert.equal(front.lleva(c), back.llevaFirma(c), `llevaFirma difiere en ${JSON.stringify(c)}`);
     assert.equal(front.esperando(c), back.esperandoFirma(c), `esperandoFirma difiere en ${JSON.stringify(c)}`);
   }
 });
 
-test("R3 · al reemplazo no se le ofrece firmarlo ni subirle un firmado", () => {
+test("R3 · al contrato sin firma no se le ofrece firmarlo ni subirle un firmado", () => {
   const { C } = montar();
-  C.contratos = [REEMP, ALQ];
-  const idsR = C._accionesContrato(REEMP).map(a => a.id);
+  C.contratos = [REEMP, DEMO, ALQ];
+  for (const c of [REEMP, DEMO]) {
+    const ids = C._accionesContrato(c).map(a => a.id);
+    assert.ok(!ids.includes("firma"), `${c.codigo_tipo} NO se manda a firma`);
+    assert.ok(!ids.includes("subir_firmado"), `a ${c.codigo_tipo} NO se le sube un firmado (lo activaría y arrancaría a facturar)`);
+    // Lo demás del menú no se toca: sigue siendo un expediente completo.
+    for (const id of ["ver", "documento", "editar", "anular"]) {
+      assert.ok(ids.includes(id), `${c.codigo_tipo} perdió "${id}" del menú`);
+    }
+  }
   const idsA = C._accionesContrato(ALQ).map(a => a.id);
-  assert.ok(!idsR.includes("firma"), "el reemplazo NO se manda a firma");
-  assert.ok(!idsR.includes("subir_firmado"), "al reemplazo NO se le sube un firmado (lo activaría y arrancaría a facturar)");
   assert.ok(idsA.includes("firma"), "el alquiler aprobado SÍ se manda a firma");
   assert.ok(idsA.includes("subir_firmado"), "al alquiler aprobado SÍ se le sube el firmado");
-  // Lo demás del menú no se toca: el reemplazo sigue siendo un expediente.
-  for (const id of ["ver", "documento", "editar", "anular"]) {
-    assert.ok(idsR.includes(id), `el reemplazo perdió "${id}" del menú`);
-  }
 });
 
-test("R4 · la cola Ahora pide la ENTREGA del reemplazo, no una firma", () => {
+test("R4 · la cola Ahora pide la ENTREGA, no una firma, y lo llama por su nombre", () => {
   const { C } = montar();
-  C.contratos = [REEMP];
-  const textos = C._itemsAccion().map(i => `${i.t} ${i.s}`).join(" | ");
-  assert.ok(!/espera la firma/.test(textos), `la cola sigue pidiendo firma: ${textos}`);
-  assert.ok(/espera la entrega/.test(textos), `la cola no pide la entrega: ${textos}`);
-  assert.ok(!/Enviar para firma/.test(textos), "sigue ofreciendo el botón de firma");
+  for (const [c, nombre] of [[REEMP, "reemplazo"], [DEMO, "demo"]]) {
+    C.contratos = [c];
+    const textos = C._itemsAccion().map(i => `${i.t} ${i.s}`).join(" | ");
+    assert.ok(!/espera la firma/.test(textos), `${c.codigo_tipo}: la cola sigue pidiendo firma: ${textos}`);
+    assert.ok(/espera la entrega/.test(textos), `${c.codigo_tipo}: la cola no pide la entrega: ${textos}`);
+    assert.ok(!/Enviar para firma/.test(textos), `${c.codigo_tipo}: sigue ofreciendo el botón de firma`);
+    assert.ok(new RegExp(`El ${nombre} `).test(textos), `${c.codigo_tipo}: el aviso no lo llama "${nombre}": ${textos}`);
+  }
   // Y el contrato que sí la lleva no perdió su aviso.
   C.contratos = [ALQ];
   assert.ok(/espera la firma/.test(C._itemsAccion().map(i => i.t).join(" | ")), "el alquiler perdió su aviso de firma");
 });
 
-test("R5 · el trámite del reemplazo se cierra con la entrega, no con la firma", () => {
+test("R5 · el trámite sin firma se cierra con la entrega, no con la firma", () => {
   const { C } = montar();
-  C.contratos = [{ ...REEMP }];
-  assert.equal(C._tramitesContrato().length, 1, "un reemplazo aprobado sin entregar sigue en trámite");
-  C.contratos = [{ ...REEMP, entrega_confirmada: true }];
-  assert.equal(C._tramitesContrato().length, 0, "entregado, el trámite del reemplazo se cierra");
+  for (const c of [REEMP, DEMO]) {
+    C.contratos = [{ ...c }];
+    assert.equal(C._tramitesContrato().length, 1, `${c.codigo_tipo} aprobado sin entregar sigue en trámite`);
+    C.contratos = [{ ...c, entrega_confirmada: true }];
+    assert.equal(C._tramitesContrato().length, 0, `entregado, el trámite de ${c.codigo_tipo} se cierra`);
+  }
   // El contrato con firma no cambia de criterio: lo cierra la firma.
   C.contratos = [{ ...ALQ, entrega_confirmada: true }];
   assert.equal(C._tramitesContrato().length, 1, "un alquiler entregado pero SIN firmar sigue en trámite");
@@ -127,12 +148,16 @@ test("R5 · el trámite del reemplazo se cierra con la entrega, no con la firma"
   assert.equal(C._tramitesContrato().length, 0, "firmado, el trámite del alquiler se cierra");
 });
 
-test("R6 · el candado de la entrega exime al reemplazo en rules y en el front", () => {
+test("R6 · el candado de la entrega exime a los tipos sin firma en rules y en el front", () => {
   const rules = leer("firestore.rules");
   const bloque = rules.slice(rules.indexOf("function contratoFirmadoParaEntregar()"));
   const cuerpo = bloque.slice(0, bloque.indexOf("\n      }"));
-  assert.ok(/codigo_tipo[^\n]*REEMP/.test(cuerpo), "rules: el candado de entrega no exime al REEMP por codigo_tipo");
-  assert.ok(/tipo_contrato[^\n]*Reemplazo/.test(cuerpo), "rules: el candado de entrega no exime al REEMP por tipo_contrato");
+  for (const t of ["REEMP", "DEMO"]) {
+    assert.ok(new RegExp(`codigo_tipo[^\n]*${t}`).test(cuerpo), `rules: el candado de entrega no exime al ${t} por codigo_tipo`);
+  }
+  for (const t of ["Reemplazo", "Demo"]) {
+    assert.ok(new RegExp(`tipo_contrato[^\n]*${t}`).test(cuerpo), `rules: el candado de entrega no exime al ${t} por tipo_contrato`);
+  }
   const flujo = leer("public", "js", "pages", "ordenes-flujo.js");
   assert.ok(/ContratoFirma\.lleva/.test(flujo), "ordenes-flujo: el espejo del candado no consulta ContratoFirma");
   assert.ok(/domain\/contratoFirma\.js/.test(leer("public", "ordenes", "index.html")),
@@ -141,7 +166,7 @@ test("R6 · el candado de la entrega exime al reemplazo en rules y en el front",
     "clientes/centro.html no carga el módulo del que depende el Centro");
 });
 
-test("R7 · al vendedor de un reemplazo no se le pide que persiga una firma", () => {
+test("R7 · al vendedor de un contrato sin firma no se le pide que persiga una", () => {
   const src = leer("functions", "src", "triggers", "contratos", "onApproval.js");
   assert.ok(/llevaFirma/.test(src), "onApproval no consulta si el contrato lleva firma");
   const i = src.indexOf("APROBADO — sigue la firma del cliente");

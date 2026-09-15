@@ -266,6 +266,17 @@ async function main() {
     await db.doc("contratos/cReempNombre").set({ estado: "aprobado", tipo_contrato: "Reemplazo", contrato_id: "ALQ20251024-01" });
     await db.doc("ordenes_de_servicio/oProgReempCodigo").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cReempCodigo" } });
     await db.doc("ordenes_de_servicio/oProgReempNombre").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cReempNombre" } });
+    // El DEMO tampoco la lleva (segunda vuelta del mismo repaso): es un
+    // prestamo de evaluacion y 14 de 14 demos entregados nunca se firmaron.
+    // El TEMP SI: es un alquiler de evento con precio, y va aqui como control
+    // negativo para que la exencion no se derrame al resto de los tipos. Ojo:
+    // su assertFails no PRUEBA el candado (este match llega al tope de 1000
+    // expresiones al denegar y la denegacion se habria dado igual sin el) —
+    // lo que sostiene la exencion son los assertSucceeds de arriba.
+    await db.doc("contratos/cDemo").set({ estado: "aprobado", codigo_tipo: "DEMO", contrato_id: "DEMO-1" });
+    await db.doc("contratos/cTemp").set({ estado: "aprobado", codigo_tipo: "TEMP", contrato_id: "TEMP-1" });
+    await db.doc("ordenes_de_servicio/oProgDemo").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cDemo" } });
+    await db.doc("ordenes_de_servicio/oProgTemp").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cTemp" } });
   });
   const ENTREGADO = { estado_reparacion: "ENTREGADO AL CLIENTE" };
   await assertFails(as("recepcion").doc("ordenes_de_servicio/oProgSinFirma").set(ENTREGADO, { merge: true }));
@@ -284,6 +295,10 @@ async function main() {
   ok("firma: REEMPLAZO sin firmar (codigo_tipo) SI se entrega — no lleva firma");
   await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oProgReempNombre").set(ENTREGADO, { merge: true }));
   ok("firma: REEMPLAZO sin firmar (tipo_contrato) SI se entrega — no lleva firma");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oProgDemo").set(ENTREGADO, { merge: true }));
+  ok("firma: DEMO sin firmar SI se entrega — prestamo de evaluacion, no lleva firma");
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oProgTemp").set(ENTREGADO, { merge: true }));
+  ok("firma: TEMPORAL sin firmar NO se entrega — la exencion no se derrama");
 
   // ── Candado de factura de la venta en la ENTREGA (2026-09-03, Zuleika) ────
   // Un contrato "Propio" VENDE los radios: sin contratos.factura_venta.numero
