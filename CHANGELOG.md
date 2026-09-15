@@ -1,5 +1,55 @@
 # Changelog
 
+## [Corregir un serial mal registrado vuelve a tener puerta, ahora como gestión] — 2026-09-15
+
+> Alberto: *"verifica qué pasó con la opción de solicitar cambio de serial que
+> teníamos en el módulo de contratos viejos"* → *"modélalo como una gestión
+> mejor"*.
+>
+> Pasó que se quedó **sin puerta**. La opción nació el 2026-07-01 en el menú de
+> la lista de contratos y el 2026-09-09, cuando */contratos/* pasó a ser archivo
+> de solo lectura, se fue con las otras 13 acciones — pero al Centro **nunca
+> llegó**. El modal seguía en el repo (hasta recibió mejoras el 8-sep, un día
+> antes de quedar desconectado) y ninguna página lo cargaba.
+>
+> Lo engañoso es que **media tubería seguía viva**: las reglas, el trigger
+> `onSerialCambio`, el modo reemplazo de bodega y la cola de inventario. Salida
+> abierta, entrada tapiada. Y la página de seriales seguía mandando a la gente
+> a *"la lista de Contratos → Solicitar cambio de serial"*, una puerta que ya no
+> existía.
+>
+> - **Es una gestión del cliente** (`cambio_serial`, prefijo **GC** — la Ola 5
+>   que el plan dejaba pendiente), no un modal colgado del contrato. Con eso
+>   hereda expediente, bitácora, edición, anulación y archivo, y deja de exigir
+>   que el contrato esté en *aprobado*: la ventana la define el equipo, no el
+>   papel.
+> - **Centro › Nueva gestión › "Corregir un serial mal registrado"**, sobre la
+>   flota del cliente. Va **directo a bodega, sin aprobación**: corregir un typo
+>   no saca equipo del estante ni cambia la facturación, y hacerlo esperar una
+>   firma es trancar el trámite corto con el largo.
+> - **El serial real se puede proponer al abrirla.** Recepción muchas veces ya
+>   lo sabe (el caso CDP fue *"este serial no es el de la factura 10317"*);
+>   bodega lo verifica contra el radio en vez de empezar de cero.
+> - **Almacén · Asignar sin picklist y sin "tomar del estante"**, con el banner
+>   diciendo que **no hay nada que sacar**. Si esto se lee como un reemplazo,
+>   alguien sale a buscar un radio que ya está con el cliente.
+> - **Se aplica sola.** Al confirmarse, el trigger reescribe la fila de seriales
+>   del contrato y deja que `onSerialWrite` haga el intercambio de siempre: el
+>   serial equivocado vuelve al estante marcado *verificar físicamente* y el
+>   real queda con el cliente. Avisa la corrección a activaciones y la gestión
+>   cierra sola. Un solo dueño del camino pool←contrato.
+> - **Candado de cliente en el trigger**: el `contrato_doc_id` viaja en el ítem,
+>   o sea que lo escribe el navegador. Sin comprobarlo, una gestión mal armada
+>   le cambiaría los seriales al contrato de otro cliente en silencio.
+> - **Canal viejo cerrado.** La única solicitud que quedaba colgada (CDP
+>   HOLDINGS, duplicada de una que ya se había resuelto 26314A1691 → 26314A1687)
+>   se anuló con `scripts/cerrar-cambios-serial-viejos.js`, que **avisa en vez
+>   de barrer** si el contrato todavía lista el serial que se pedía cambiar.
+>   Corregidos los tres avisos que mandaban a la puerta que ya no existe.
+> - Probado contra el emulador (`test-emulator/cambio-serial.js` y
+>   `cambio-serial-rules.js`). Valió la pena: el harness destapó que el trigger
+>   descartaba `cambio_serial` en la primera línea.
+
 ## [El radio vendido también entra al contrato de su dueño] — 2026-09-15
 
 > Solís: *"estos radios 25219A0944, 24708A1192 los amarré con la factura 10762,
