@@ -934,6 +934,21 @@ function _btnEntregar(ordenId, od) {
   return `<button class="btn-flujo btn-flujo--entregar${cls}" title="${title}" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
 }
 
+// El contrato de la orden se ANULÓ (2026-09-15). Este botón SUSTITUYE a
+// "Entregar": no es un aviso decorativo al lado, es que la siguiente acción de
+// la fila dejó de ser entregar. Sin él, la única señal vivía dentro del menú ⋯
+// —que hay que abrir para verlo— y la persona hacía el viaje completo: clic en
+// Entregar, modal que la frena, y a empezar de nuevo. Respeta la regla de la
+// bandeja (el estado es la única voz de color): no estrena chip ni color, usa
+// el amarillo que ya significa "esto te está esperando", el mismo del QC.
+function _btnResolverContratoAnulado(ordenId, od) {
+  const n = Number(od?.contrato_anulado_revisar?.equipos_n || 0);
+  const c = od?.contrato_anulado_revisar?.contrato || '';
+  const title = `El contrato ${c} fue anulado: ${n || 'los'} equipo(s) preparados sin contrato bajo el cual entregar.`
+    + ' Pásala al contrato nuevo del cliente, o anúlala.';
+  return `<button class="btn-flujo btn-flujo--qc" title="${title.replace(/"/g, "'")}" data-action="resolver-contrato-anulado" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="git-branch"></i> Resolver contrato</button>`;
+}
+
 // Órdenes de ENTRADA (inspección de devueltos): la revisión termina y las
 // unidades quedan bajo control de inventario — no hay entrega al cliente,
 // así que su terminal es "Cerrar entrada" (CERRADA (ENTRADA)), no Entregar.
@@ -1119,6 +1134,18 @@ function botonesFlujo(ordenId, estado, ordenData) {
   // verdad hay una entrega parcial en curso.
   html += badgeEntregaParcial(od);
 
+  // El contrato de la orden se anuló y falta decidir qué pasa con ella. Va
+  // ANTES del dispatch por rol para que lo vea todo el que trabaja la fila, en
+  // cualquier estado: la orden puede seguir avanzando (asignar, completar),
+  // pero es trabajo que no va a poder entregarse hasta resolver el papel, y
+  // callarlo hasta el final es lo que dejó 15 radios de CONCORD dando vueltas
+  // desde agosto. Solo admin y recepción pueden resolverla — a los demás no se
+  // les pone un botón que no les va a funcionar.
+  const contratoAnulado = !!od.contrato_anulado_revisar;
+  if (contratoAnulado && (rol === ROLES.ADMIN || rol === ROLES.RECEPCION)) {
+    html += _btnResolverContratoAnulado(ordenId, od);
+  }
+
   // jefe_taller (supervisor de taller) comparte el flujo completo con
   // admin/recepción: recibir → asignar → completar → entregar. Tiene el
   // permiso 'asignar-tecnico' en roles.js, así que debe ver el botón de
@@ -1143,7 +1170,12 @@ function botonesFlujo(ordenId, estado, ordenData) {
         html += _btnCerrarEntrada(ordenId);
       } else {
         html += _btnQc(ordenId, od, rol);
-        html += _btnEntregar(ordenId, od);
+        // "Entregar" se calla cuando el contrato está anulado: el candado lo
+        // va a denegar igual (rules y el espejo del navegador), así que
+        // ofrecerlo solo manda a la persona a chocar con un modal. Su
+        // siguiente acción real es resolver el contrato, y ese botón ya está
+        // puesto arriba.
+        if (!contratoAnulado) html += _btnEntregar(ordenId, od);
       }
     }
   }

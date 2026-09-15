@@ -33,6 +33,7 @@
 //   A9  — rules deja anular con motivo, solo desde un estado vivo.
 //   A10 — al anular, los radios que nunca salieron vuelven a bodega.
 //   A11 — el Centro recuerda las señaladas, con un deep-link que SÍ las trae.
+//   A12 — la FILA avisa: "Resolver contrato" sustituye a "Entregar" (render real).
 //
 // Corre con `npm test` (node --test). Sin emulador: planOrdenes es lógica pura.
 const { test } = require("node:test");
@@ -198,4 +199,64 @@ test("A11 · el Centro recuerda las órdenes que quedaron sin contrato", () => {
   const i = centro.indexOf("ordenesPorDecidir || []");
   assert.ok(/ordenes\/index\.html\?ids=/.test(centro.slice(i, i + 900)),
     "el CTA usa ?orden= en vez de ?ids=: aterrizaría en una lista vacía");
+});
+
+// A12 monta el render REAL de la fila (vm + stubs) en vez de mirar el código con
+// un regex: lo que importa no es que el botón exista, es que SUSTITUYA a
+// "Entregar" — ofrecerlo manda a la persona a chocar con un modal que la frena.
+function botonesDe(estado, orden, rol = "recepcion") {
+  const vm = require("node:vm");
+  const ctx = {
+    console, JSON, Date, Math, Number, String, Array, Object, Set, Map, RegExp, window: {},
+    document: {
+      getElementById: () => null, querySelector: () => null, querySelectorAll: () => [],
+      addEventListener() {}, removeEventListener() {},
+      createElement: () => ({ style: {}, setAttribute() {}, appendChild() {} }),
+      body: { appendChild() {} },
+    },
+    ROLES: { ADMIN: "administrador", RECEPCION: "recepcion", TECNICO: "tecnico",
+      TECNICO_OPERATIVO: "tecnico_operativo", JEFE_TALLER: "jefe_taller",
+      VENDEDOR: "vendedor", VISTA: "vista", GERENTE: "gerente", INVENTARIO: "inventario" },
+    APP: { state: { userRole: rol, orders: [] } },
+    canRole: () => true,
+    esOrdenVisita: (o) => /VISITA/.test(o.tipo_de_servicio || ""),
+    esOrdenDevolucion: (o) => /DEVOLUCION/.test(o.tipo_de_servicio || ""),
+    esOrdenEntrada: (o) => /ENTRADA/.test(o.tipo_de_servicio || ""),
+    esOrdenProgramacion: (o) => /PROGRAMAC/.test(o.tipo_de_servicio || ""),
+    OrdenesQC: { qcPendiente: () => false, qcCaducado: () => false, puedeHacerQc: () => false },
+    EntregaTandas: { puedeEntregarParcial: () => false, equiposPendientes: (o) => o.equipos || [],
+      resumen: () => ({ tandas: 0, entregados: 0, total: 0 }) },
+    escapeHtml: (s) => String(s ?? ""),
+  };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(leer("public", "js", "pages", "ordenes-render.js"), ctx);
+  const html = ctx.botonesFlujo("os1", estado, orden);
+  return (html.match(/data-action="([a-z-]+)"/g) || []).map(m => m.slice(13, -1));
+}
+
+test("A12 · la fila AVISA: 'Resolver contrato' sustituye a 'Entregar'", () => {
+  const base = { tipo_de_servicio: "PROGRAMACIÓN", equipos: [{ serial: "S1" }] };
+  const marcada = { ...base, contrato_anulado_revisar: { contrato: "ALQ20260806-01", equipos_n: 15 } };
+
+  // Sin la marca, nada cambia: la fila sigue ofreciendo entregar.
+  assert.deepEqual(botonesDe("COMPLETADO (EN OFICINA)", base), ["entregar-orden"]);
+
+  // Con la marca, "Entregar" DESAPARECE — el candado lo denegaría igual.
+  const completada = botonesDe("COMPLETADO (EN OFICINA)", marcada);
+  assert.ok(completada.includes("resolver-contrato-anulado"), "la fila no avisa del contrato anulado");
+  assert.ok(!completada.includes("entregar-orden"),
+    "sigue ofreciendo Entregar: la persona hace el viaje y choca con el modal");
+
+  // En estados tempranos la orden SÍ puede seguir avanzando, pero el aviso ya
+  // está: es trabajo que no se va a poder entregar hasta resolver el papel.
+  for (const [estado, accion] of [["POR ASIGNAR", "asignar-tecnico"], ["ASIGNADO", "completar-orden"]]) {
+    const b = botonesDe(estado, marcada);
+    assert.ok(b.includes("resolver-contrato-anulado"), `${estado}: sin aviso`);
+    assert.ok(b.includes(accion), `${estado}: el aviso le comió el botón del flujo`);
+  }
+
+  // A quien no puede resolverla no se le pone un botón que no le funciona.
+  assert.ok(!botonesDe("ASIGNADO", marcada, "tecnico").includes("resolver-contrato-anulado"),
+    "al técnico se le ofrece una acción que sus permisos no permiten");
 });
