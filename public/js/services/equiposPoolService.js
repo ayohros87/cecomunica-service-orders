@@ -886,6 +886,33 @@ const EquiposPoolService = {
     }, user);
   },
 
+  // Anular la venta: la unidad vuelve al estante y deja de ser del cliente.
+  // Es la ÚNICA salida de `vendido` (caso Solís 2026-09-15: registró la venta
+  // con la factura equivocada y el radio quedó congelado — `vendido` no tenía
+  // ninguna acción en la ficha y el asignador de Almacén lo rechaza, así que
+  // no había forma de deshacerlo desde la app).
+  // El bloque `venta` se borra a propósito: dejar un número de factura falso
+  // es peor que no tener ninguno. El rastro queda en el kardex, que sí guarda
+  // la factura anulada y el motivo.
+  async anularVenta(id, motivo, user) {
+    const db = firebase.firestore();
+    const snap = await db.collection('equipos_pool').doc(id).get();
+    const fact = snap.exists ? (snap.data().venta?.factura || '') : '';
+    return this.cambiarEstado(id, this.ESTADOS.EN_BODEGA, {
+      esperado: this.ESTADOS.VENDIDO,
+      tipo: 'correccion_venta',
+      ref: fact ? { tipo: 'factura_qbo', id: fact, label: fact } : null,
+      notas: `Venta anulada${fact ? ` (factura ${fact})` : ''} — ${motivo}`,
+      extra: {
+        propiedad: 'cecomunica',
+        asignacion: null,
+        orden_actual_id: null,
+        verificado: false,
+        venta: firebase.firestore.FieldValue.delete(),
+      },
+    }, user);
+  },
+
   // Venta CON contrato ("Propio"): el contrato ya tiene los seriales asignados
   // y Recepción registra la factura QBO después. La unidad NO cambia de estado
   // (sigue asignado_contrato / en_cliente — el ciclo del contrato manda): solo

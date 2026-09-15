@@ -104,3 +104,43 @@ test("G6 · contratos/seriales.html redirige al rol inventario a Almacén", () =
   const src = sinComentarios(leer("public", "js", "pages", "contrato-seriales-page.js"));
   assert.ok(/rol === 'inventario'[\s\S]{0,200}almacen\/index\.html\?tab=asignar&contrato=/.test(src), "falta la redirección del rol inventario");
 });
+
+// G7 — "vendido" dejó de ser un callejón sin salida (caso Jean Simancas,
+// factura 10762, 2026-09-15). Bodega registró la venta de dos radios que el
+// cliente compró y que además van en su contrato de servicio (línea "propio").
+// La política dura los rechazaba por 'ocupado', el panel de bloqueo no ofrece
+// forzar ese tipo, y la ficha del equipo no tenía ninguna acción para un
+// radio vendido: no había forma de avanzar ni de deshacer. Dos salidas nuevas,
+// una para cada lado del problema.
+test("G7 · un radio vendido al MISMO cliente entra a su contrato", () => {
+  const alm = sinComentarios(leer("public", "js", "pages", "almacen-asignar.js"));
+  const fn = alm.slice(alm.indexOf("function permitirContrato("));
+  const cuerpo = fn.slice(0, fn.indexOf("\n  }") + 4);
+  assert.ok(/ESTADOS\.VENDIDO/.test(cuerpo),
+    "permitirContrato debe dejar pasar una unidad 'vendido' del mismo cliente");
+  assert.ok(/venta\?\.cliente_id === c\.clienteId/.test(cuerpo),
+    "el dueño también se reconoce por venta.cliente_id, no solo por asignacion");
+  // El candado de renovación sigue vivo para el resto de los 'ocupado': una
+  // unidad que está con OTRO cliente, o con este pero por un contrato nuevo
+  // sin venta de por medio, sigue bloqueada.
+  assert.ok(/accion \|\| 'Nuevo'\) !== 'Nuevo'/.test(cuerpo),
+    "sin venta, el permiso sigue reservado a renovaciones y reemplazos");
+});
+
+test("G7b · una venta mal registrada se puede anular desde la ficha", () => {
+  const pool = sinComentarios(leer("public", "js", "services", "equiposPoolService.js"));
+  const fn = pool.slice(pool.indexOf("async anularVenta("));
+  const cuerpo = fn.slice(0, fn.indexOf("\n  }") + 4);
+  assert.ok(/esperado: this\.ESTADOS\.VENDIDO/.test(cuerpo),
+    "anularVenta solo aplica a una unidad vendida (evita pisar otro estado)");
+  assert.ok(/ESTADOS\.EN_BODEGA/.test(cuerpo), "anularVenta devuelve la unidad al estante");
+  assert.ok(/propiedad: 'cecomunica'/.test(cuerpo), "al anular, el radio vuelve a ser flota nuestra");
+  assert.ok(/venta: firebase\.firestore\.FieldValue\.delete\(\)/.test(cuerpo),
+    "el número de factura equivocado se borra de la ficha");
+  assert.ok(/notas: `Venta anulada/.test(cuerpo), "el kardex conserva la factura anulada y el motivo");
+
+  const ficha = sinComentarios(leer("public", "js", "ui", "equipo-ficha.js"));
+  assert.ok(/eq\.estado === 'vendido'[\s\S]{0,200}anular_venta/.test(ficha),
+    "la ficha debe ofrecer la acción cuando el equipo está vendido");
+  assert.ok(/EquiposPoolService\.anularVenta\(/.test(ficha), "la acción debe llamar a anularVenta");
+});

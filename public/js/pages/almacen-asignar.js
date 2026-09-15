@@ -388,9 +388,20 @@ window.AlmacenAsignar = (() => {
     return set;
   }
   function permitirContrato(c) {
-    return (e) => e.tipo === 'ocupado' && !!c.clienteId
-      && e.doc?.asignacion?.cliente_id === c.clienteId
-      && String(c.contrato.accion || 'Nuevo') !== 'Nuevo';
+    return (e) => {
+      if (e.tipo !== 'ocupado' || !c.clienteId || !e.doc) return false;
+      const mismoCliente = e.doc.asignacion?.cliente_id === c.clienteId
+        || e.doc.venta?.cliente_id === c.clienteId;
+      if (!mismoCliente) return false;
+      // El cliente YA compró el radio: ponerlo en su contrato no se lo quita a
+      // nadie — es la promo "compra el equipo y paga la frecuencia", y pasa en
+      // contratos NUEVOS. Sin esto bodega quedaba trancada: el panel de bloqueo
+      // no ofrece forzar un 'ocupado' (caso Jean Simancas, factura 10762,
+      // 2026-09-15) y `vendido` tampoco tenía salida en la ficha del equipo.
+      if (e.doc.estado === EquiposPoolService.ESTADOS.VENDIDO) return true;
+      // Renovación / reemplazo: la unidad sigue con el MISMO cliente.
+      return String(c.contrato.accion || 'Nuevo') !== 'Nuevo';
+    };
   }
 
   async function persistirContrato(c, estado, datos) {

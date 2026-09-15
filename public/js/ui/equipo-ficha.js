@@ -216,6 +216,11 @@ window.EquipoFicha = {
     } else if (eq.estado === 'en_bodega') {
       if (window.AsistenteVenta) a.push(btn('vender', 'Registrar venta'));
       a.push(btn('baja', 'Dar de baja'));
+    } else if (eq.estado === 'vendido') {
+      // Sin esta puerta, una venta mal registrada (factura equivocada, serial
+      // tecleado de más) dejaba el radio congelado: `vendido` no tenía acción
+      // aquí y el asignador de Almacén lo rechaza. Caso Solís 2026-09-15.
+      a.push(btn('anular_venta', 'Anular venta → bodega', 'btn-accent'));
     } else if (eq.estado === 'baja') {
       a.push(btn('reactivar', 'Reactivar → bodega', 'btn-accent'));
     }
@@ -250,6 +255,17 @@ window.EquipoFicha = {
         if (!motivo) return;
         await EquiposPoolService.reactivar(eq.id, motivo, user);
         aviso(`${serial} → en bodega.`);
+      } else if (accion === 'anular_venta') {
+        const fact = eq.venta?.factura ? ` (factura ${eq.venta.factura})` : '';
+        const motivo = await Modal.prompt({
+          title: 'Anular venta', confirmLabel: 'Anular venta',
+          message: `Anular la venta de ${serial}${fact} — el radio vuelve a bodega`
+            + ' y deja de figurar como del cliente. El número de factura se borra'
+            + ' de la ficha (queda en el historial). Motivo (obligatorio):',
+        });
+        if (!motivo) return;
+        await EquiposPoolService.anularVenta(eq.id, motivo, user);
+        aviso(`${serial} → en bodega (venta anulada).`);
       } else if (accion === 'verificar') {
         await EquiposPoolService.verificar(eq.id, user);
         aviso(`${serial} marcado como verificado.`);

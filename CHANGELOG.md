@@ -1,5 +1,44 @@
 # Changelog
 
+## [El radio vendido también entra al contrato de su dueño] — 2026-09-15
+
+> Solís: *"estos radios 25219A0944, 24708A1192 los amarré con la factura 10762,
+> le envié las series a Brenda para la orden ya que en el contrato cuando lo
+> abro en facturación pendiente sale acceso restringido"*.
+>
+> JEAN SIMANCAS compró dos PNC360S-R **y además** contrató la frecuencia: el
+> contrato `SERV20260911-01` los lista con modalidad **propio** a $15+ITBMS cada
+> uno. Bodega hizo bien su parte —registró la venta con la factura 10762— y con
+> eso mismo se trancó: la política dura de *Almacén · Asignar* exige que el
+> serial esté **en bodega**, un radio `vendido` cae como `ocupado`, y el panel de
+> bloqueo **solo ofrece "Volver a editar"** (el *"Asignar de todos modos"* existe
+> nada más para el caso *modelo distinto*). La única excepción prevista pedía
+> renovación o reemplazo, y este contrato es *Nuevo*.
+>
+> Lo peor no era el candado sino que no había marcha atrás: **`vendido` no tenía
+> ninguna acción en la ficha del equipo**. Un número de factura mal tecleado
+> dejaba el radio congelado para siempre.
+>
+> - **El dueño puede poner su radio en su contrato**: `permitirContrato` deja
+>   pasar una unidad `vendido` del **mismo cliente** sin exigir que el contrato
+>   sea renovación — comprar el equipo y pagar la frecuencia es la promo que se
+>   vende, y pasa en contratos nuevos. El dueño se reconoce por `asignacion` o
+>   por `venta.cliente_id`. Para el resto de los `ocupado` el candado sigue igual.
+> - **Anular venta → bodega** (`EquiposPoolService.anularVenta`, acción nueva en
+>   la ficha para admin e inventario): el radio vuelve al estante, deja de ser
+>   del cliente y se le borra la factura equivocada. El kardex conserva el número
+>   anulado y el motivo.
+> - Caso cerrado a mano: los dos seriales quedaron asignados al contrato
+>   (`asignado_contrato`, propiedad *del cliente*, factura 10762 intacta) y su
+>   orden de programación 2026091404 ya los espera.
+> - **JEAN SIMANCAS estaba duplicado**: la ficha completa (RUC 8-147-389) tenía
+>   el contrato; una ficha pelada del 8-sep tenía las ventas. Fusionadas — con lo
+>   que *Admin · Clientes duplicados* no cubre: `equipos_pool.asignacion` y
+>   `equipos_pool.venta`.
+> - Lo de *"acceso restringido"* **no es un error**: */facturacion/bandeja.html*
+>   es de administración, recepción y contabilidad (need-to-know). Bodega no
+>   tiene nada que hacer ahí.
+
 ## [El contrato de REEMPLAZO no lleva firma del cliente] — 2026-09-15
 
 > Brenda: *"En esta orden aparece que el contrato de reemplazo aún no ha sido
