@@ -292,6 +292,16 @@ async function contratoSinFirmarParaEntrega(orden) {
 function abrirModalFirmaPendiente(orden, contrato) {
   const esAdmin = (APP.state.userRole || '') === (typeof ROLES !== 'undefined' ? ROLES.ADMIN : 'administrador');
   const clienteId = orden.cliente_id || contrato.cliente_id || '';
+  // Contrato MUERTO (anulado o vencido): no es que falte una firma — es que ya
+  // no hay papel que firmar. Decirle "falta la firma" y ofrecerle mandar a
+  // firmar un contrato anulado era un callejón sin salida (2026-09-15): ese
+  // enlace no lleva a ninguna parte y la orden se queda trancada para siempre.
+  // El trigger de la anulación ya no las deja mudas —estampa
+  // `contrato_anulado_revisar` y le avisa a Recepción— pero la salida real la
+  // decide una persona, y este es el momento en que está parada frente a ella.
+  if (['anulado', 'vencido'].includes(contrato.estado)) {
+    return abrirModalContratoMuerto(orden, contrato, { esAdmin, clienteId });
+  }
   const enValidacion = contrato.firmado_pendiente_validacion === true;
   const detalle = enValidacion
     ? `La firma digital <b>ya llegó</b>, pero el firmante no coincide con el representante
@@ -316,6 +326,44 @@ function abrirModalFirmaPendiente(orden, contrato) {
       ...(esAdmin ? [{ action: 'override', label: 'Entregar sin firma (admin)' }] : []),
       { action: 'cerrar', label: 'Cerrar' },
       ...(clienteId ? [{ action: 'ficha', label: 'Abrir la ficha y gestionar la firma', primary: true, icon: 'pen-line' }] : []),
+    ],
+    onAction: (a) => {
+      if (a === 'override') { setTimeout(() => abrirModalEntrega(orden.ordenId), 0); return 'override'; }
+      if (a === 'ficha') { location.href = url; return 'ficha'; }
+      return null;
+    },
+  });
+}
+
+// El contrato de esta orden está ANULADO o VENCIDO. No hay firma que perseguir:
+// la pregunta es otra — ¿el cliente firmó un contrato nuevo? Entonces esta orden
+// pasa a ese contrato. ¿No? Entonces la orden ya no va a ninguna parte.
+function abrirModalContratoMuerto(orden, contrato, { esAdmin, clienteId }) {
+  const num = escapeHtml(contrato.contrato_id || orden.contrato?.contrato_id || '—');
+  const anulado = contrato.estado === 'anulado';
+  const motivo = String(contrato.anulado_motivo || contrato.vencido_motivo || '').trim();
+  const url = `../clientes/centro.html?id=${encodeURIComponent(clienteId)}`;
+  const nEquipos = (orden.equipos || []).filter(e => !e.eliminado).length;
+  Modal.sheet({
+    title: anulado ? 'El contrato de esta orden está ANULADO' : 'El contrato de esta orden está vencido',
+    icon: 'file-x', size: 'md',
+    html: `
+      <p style="margin:0 0 8px;font-size:13.5px;color:var(--fg-2,#374151);">
+        Esta orden entrega ${nEquipos ? `<b>${nEquipos} equipo(s)</b> ` : ''}bajo el contrato
+        <b>${num}</b>, que está <b>${anulado ? 'anulado' : 'vencido'}</b>.
+        ${motivo ? `Motivo: <i>${escapeHtml(motivo)}</i>.` : ''}
+        No falta una firma: falta un contrato.
+      </p>
+      <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">
+        Casi siempre anular es <b>rehacer el papel</b>: si el cliente ya tiene un contrato
+        nuevo, esta orden debe <b>pasar a ese contrato</b> —búscalo en la ficha del cliente y
+        pídele a administración que la repunte— y la entrega sale sola. Si no hay contrato
+        nuevo, esta orden no va a ninguna parte y hay que <b>anularla</b>.
+      </p>`,
+    buttons: [
+      ...(esAdmin ? [{ action: 'override', label: 'Entregar igual (admin)' }] : []),
+      { action: 'cerrar', label: 'Cerrar' },
+      ...(clienteId ? [{ action: 'ficha', label: 'Ver los contratos del cliente', primary: true, icon: 'user' }] : []),
     ],
     onAction: (a) => {
       if (a === 'override') { setTimeout(() => abrirModalEntrega(orden.ordenId), 0); return 'override'; }

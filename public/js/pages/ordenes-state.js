@@ -68,7 +68,13 @@ window.CONFIG = {
     // los radios siguen en nuestro estante. NO es una entrega — marcarlas
     // ENTREGADO mandaría al pool a decir que el cliente los tiene. Las
     // unidades quedan en `no_retirado` esperando una decisión de inventario.
-    CERRADA_SIN_RETIRAR: 'CERRADA (SIN RETIRAR)'
+    CERRADA_SIN_RETIRAR: 'CERRADA (SIN RETIRAR)',
+    // Orden cuyo CONTRATO se anuló (2026-09-15): ya no hay papel bajo el cual
+    // entregar esos equipos. Lo escribe el trigger de la anulación
+    // (functions/src/lib/ordenesDeContratoAnulado.js), no una persona — si la
+    // anulación declara un contrato sustituto, la orden se repunta en vez de
+    // anularse. El estado ya existía suelto en los datos; aquí se hace canónico.
+    ANULADA: 'ANULADA'
   },
   
   // Pagination — per-role page size. Técnicos see far fewer orders

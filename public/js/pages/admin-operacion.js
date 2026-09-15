@@ -148,6 +148,9 @@
       'ENTREGADO AL CLIENTE', 'COMPLETADO (EN OFICINA)',
       'CERRADA (VISITA)', 'CERRADA (DEVOLUCION)', 'CERRADA (ENTRADA)',
       'CERRADA (SIN RETIRAR)',
+      // Su contrato se anuló: no hay entrega posible y no es trabajo pendiente
+      // de nadie (2026-09-15). Sin esto reaparecía como "sin asignar".
+      'ANULADA',
     ]);
     // La DEVOLUCION nace "POR ASIGNAR" pero nunca se asigna (vida binaria:
     // abierta → cerrada) — fuera de las alertas de asignación/estancamiento.

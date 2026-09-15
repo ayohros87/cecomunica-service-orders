@@ -7,6 +7,7 @@ const { recepcionEmails } = require("../../lib/mailRecipients");
 const { origenIdsDe } = require("../../lib/linaje");
 const { clasificarUnidadesAnulacion, TIPO_ANULACION } = require("../../lib/devolucion");
 const { traspasarASustituto } = require("../../lib/sustitucionContrato");
+const { cerrarOrdenesDeContratoAnulado } = require("../../lib/ordenesDeContratoAnulado");
 
 module.exports = onDocumentUpdated(
   {
@@ -292,6 +293,21 @@ module.exports = onDocumentUpdated(
       });
     }
 
+    // Las ÓRDENES DE SERVICIO del contrato (2026-09-15). Hasta hoy este trigger
+    // no las miraba: el contrato moría y su orden se quedaba viva en la bandeja
+    // para siempre, sin poder entregarse (el candado de firma deniega bajo un
+    // contrato anulado) y sin poder cerrarse. El porqué y las dos salidas
+    // —repuntar al sustituto, o ANULADA— están en lib/ordenesDeContratoAnulado.
+    // No crítico: un fallo aquí no debe frenar el correo de la anulación.
+    let ordenesResueltas = { anuladas: [], repuntadas: [], revisar: [], intactas: 0 };
+    try {
+      ordenesResueltas = await cerrarOrdenesDeContratoAnulado(event.params.docId, after);
+    } catch (e) {
+      logger.warn("[onContratoAnuladoNotify] Órdenes del contrato no resueltas (no crítico)", {
+        contratoId, message: e.message
+      });
+    }
+
     const escapeHtml = (value) => String(value ?? "").replace(/[<>&]/g, (ch) => ({
       "<": "&lt;", ">": "&gt;", "&": "&amp;"
     }[ch]));
@@ -352,6 +368,20 @@ module.exports = onDocumentUpdated(
         <tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Anulado por</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${escapeHtml(anuladorInfo.nombre || "—")}</td></tr>
         <tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Elaborador</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${escapeHtml(elaboradorInfo.nombre || "—")}</td></tr>
       </table>
+      ${ordenesResueltas.anuladas.length || ordenesResueltas.repuntadas.length || ordenesResueltas.revisar.length ? `
+      <p style="margin:0 0 12px; font:14px/1.5 Arial, sans-serif;"><b>Órdenes de servicio</b></p>
+      <ul style="margin:0 0 14px; padding-left:20px; font:14px/1.6 Arial, sans-serif;">
+        ${ordenesResueltas.repuntadas.length ? `<li>Pasan al contrato sustituto:
+          <b>${escapeHtml(ordenesResueltas.repuntadas.join(", "))}</b> — el trabajo sigue, solo cambió el papel.</li>` : ""}
+        ${ordenesResueltas.anuladas.length ? `<li>Anuladas:
+          <b>${escapeHtml(ordenesResueltas.anuladas.join(", "))}</b> — no tenían equipos asignados y ya no
+          hay contrato bajo el cual entregar. Quedan en el historial con el motivo.</li>` : ""}
+        ${ordenesResueltas.revisar.length ? `<li style="color:#991b1b;"><b>Necesitan una decisión:</b>
+          ${escapeHtml(ordenesResueltas.revisar.map(o => `${o.id} (${o.equipos_n} equipo${o.equipos_n === 1 ? "" : "s"})`).join(", "))}.
+          Estas órdenes ya tienen equipos preparados, así que <b>no se anularon solas</b>: si el cliente
+          firmó un contrato nuevo, hay que pasarlas a ese contrato; si no, anularlas a mano. Mientras
+          tanto no se pueden entregar — su contrato está anulado.</li>` : ""}
+      </ul>` : ""}
     `;
 
     await db.collection("mail_queue").add({
