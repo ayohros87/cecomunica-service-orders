@@ -598,7 +598,8 @@ window.Centro = {
     for (const c of this._tramitesContrato()) {
       vistos.add(c.id);
       const id = `<span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>`;
-      const tipoTxt = c.accion === 'Renovación' ? 'Renovación de cuenta' : 'Contrato nuevo';
+      const tipoTxt = c.accion === 'Renovación' ? 'Renovación de cuenta'
+        : this._codigoTipo(c) === 'REEMP' ? 'Reemplazo de equipos' : 'Contrato nuevo';
       const unid = (c.equipos || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
       if (c.estado === 'pendiente_aprobacion') {
         if (esAprobador) it('warn', `Aprobar el contrato ${id}`,
@@ -610,10 +611,17 @@ window.Centro = {
         if (esAprobador) it('warn', `Validar al firmante del contrato ${id}`,
           'Firmó una persona distinta al representante registrado — revisa la cédula, el selfie y la firma',
           B('Validar firmante…', `Centro.aceptarFirmante('${this.esc(c.id)}')`, true));
-      } else if (c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()) {
+      } else if (ContratoFirma.esperando(c) && this.puedeCrearGestion()) {
         it('warn', `El contrato ${id} espera la firma del cliente`,
           c.firma_solicitud_estado === 'pendiente' ? 'El enlace de firma ya se envió — se puede reenviar' : 'Envíale el enlace de firma digital, o imprime el contrato y sube el firmado desde el expediente',
           B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`) + B('Enviar para firma', `Centro.enviarFirma('${this.esc(c.id)}')`, true));
+      // Un REEMPLAZO no le pide nada al cliente: lo único que falta es poner
+      // los radios en su mano (2026-09-15, caso MACELLO). Decirlo aquí evita
+      // que se quede en el limbo — la OS es la que termina el trámite.
+      } else if (!ContratoFirma.lleva(c) && c.estado === 'aprobado') {
+        it('info', `El reemplazo ${id} espera la entrega de los equipos`,
+          `${unid} unid. — ${ContratoFirma.porQue(c)}. La entrega se cierra en la orden de servicio.`,
+          B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`));
       } else if (c.estado === 'activo') {
         const reg = this._regPendiente(c);
         if (reg?.motivo === 'sobrantes' && this.puedeCrearGestion()) {
@@ -1055,7 +1063,8 @@ window.Centro = {
         ${dato('Origen', (c.contrato_origen_refs || []).map(r => `<span class="cg-mono">${this.esc(r)}</span>`).join(', ')
           || (c.origen_legacy_ref ? `papel: ${this.esc(c.origen_legacy_ref)}` : ''))}
         ${dato('Renovado por', renovador ? `<span class="cg-mono">${this.esc(renovador.contrato_id || renovador.id)}</span>` : '')}
-        ${dato('Firmado', this._firmadoTxt(c))}
+        ${dato('Firmado', this._firmadoTxt(c)
+          || (!ContratoFirma.lleva(c) ? `<span style="color:var(--fg-3);">no lleva firma — ${ContratoFirma.porQue(c)}</span>` : ''))}
         ${dato('Entregado', this._entregaTxt(c))}
         ${dato('Firma digital', c.firmado_pendiente_validacion
           ? '<span class="cg-venc por_vencer">recibida — validar firmante</span>'
@@ -1239,7 +1248,11 @@ window.Centro = {
   // falta nada: la firma vive dentro del documento. Sin esta excepción, al
   // volverse alcanzable esa rama (2026-09-10) le ofrecíamos "adjuntar el
   // firmado" a contratos que ya están completos.
+  // Un REEMPLAZO queda fuera (2026-09-15): no solo no lleva firma — subirle
+  // una lo pasa a `activo`, y una activación le crea un aviso de facturación
+  // con su comisión por unos radios que solo cambiaron de número de serie.
   _aceptaFirmado(c) {
+    if (!ContratoFirma.lleva(c)) return false;
     return (c?.estado === 'aprobado' && !c.firmado)
       || (c?.estado === 'activo' && !c.firmado_url && c.firmado_tipo !== 'digital');
   },
@@ -1332,6 +1345,9 @@ window.Centro = {
     if (!this._puedeSubirFirmado()) { Toast.show('Solo administración o el vendedor suben el contrato firmado', 'warn'); return; }
     const c = this.contratos.find(x => x.id === id);
     if (!c) { Toast.show('Contrato no encontrado', 'bad'); return; }
+    // Candado, no solo el menú escondido (ver _aceptaFirmado): subirle un
+    // firmado a un reemplazo lo activaría, y una activación arranca a facturar.
+    if (!ContratoFirma.lleva(c)) { Toast.show(`Este contrato no lleva firma: ${ContratoFirma.porQue(c)}`, 'warn'); return; }
     const modo = c.estado === 'aprobado' ? 'activacion' : c.estado === 'activo' ? 'reemplazo' : null;
     if (!modo) { Toast.show('Solo se sube el firmado a contratos aprobados o activos', 'warn'); return; }
     const legible = c.contrato_id || id;
@@ -1418,6 +1434,8 @@ window.Centro = {
   async enviarFirma(id) {
     const c = this.contratos.find(x => x.id === id);
     if (!c || c.estado !== 'aprobado') { Toast.show('Solo contratos APROBADOS se envían a firma', 'warn'); return; }
+    // Candado, no solo el botón escondido: un reemplazo no se manda a firmar.
+    if (!ContratoFirma.lleva(c)) { Toast.show(`Este contrato no lleva firma: ${ContratoFirma.porQue(c)}`, 'warn'); return; }
     this._cerrarModal();
     let sid = (c.firma_solicitud_id && c.firma_solicitud_estado === 'pendiente') ? c.firma_solicitud_id : null;
     try {
@@ -2261,9 +2279,14 @@ window.Centro = {
   // con las acciones aquí mismo.
   _tramitesContrato() {
     const dias = (t) => { const d = t?.toDate ? t.toDate() : (t ? new Date(t) : null); return d && !isNaN(d) ? (Date.now() - d) / 86400000 : null; };
+    // Un contrato que lleva firma sigue en trámite hasta que el cliente firma;
+    // uno que NO la lleva (REEMPLAZO), hasta que los equipos se entregan
+    // (2026-09-15): antes se quedaba para siempre en "Esperando firma", que es
+    // justo lo que mandó a Brenda a perseguir una firma inexistente.
+    const abierto = (c) => ContratoFirma.lleva(c) ? !c.firmado : c.entrega_confirmada !== true;
     return (this.contratos || []).filter(c => !c.deleted && (
       c.estado === 'pendiente_aprobacion'
-      || (c.estado === 'aprobado' && !c.firmado && (dias(c.fecha_creacion) ?? 999) < 45)
+      || (c.estado === 'aprobado' && abierto(c) && (dias(c.fecha_creacion) ?? 999) < 45)
       // Renovación ACTIVA pero con la regularización PENDIENTE o PARCIAL
       // (caso C COMUNICA 2026-08-28: el trigger amarró 2 y dejó 2 sin línea,
       // y el check se daba por listo con solo regularizacion.at): el trámite
@@ -2297,14 +2320,23 @@ window.Centro = {
       ? `${Number(r?.amarradas || 0)} amarrado(s) · ${reg.sob} SIN resolver: ${reg.seriales.slice(0, 4).join(', ')}${reg.seriales.length > 4 ? '…' : ''} — agrégalos por anexo o libéralos`
       : (r?.at && !reg) ? `${Number(r.amarradas || 0)} radio(s) amarrados — conciliación en cero`
       : 'la custodia se amarra sola al entregarse la orden de servicio';
-    const pasos = [
+    // Un REEMPLAZO no firma ni se activa: su camino es aprobar → programar →
+    // entregar (2026-09-15). Pintarle "Firma del cliente" y "Activación" era
+    // ponerle dos pasos que nunca iba a dar.
+    const llevaFirma = ContratoFirma.lleva(c);
+    const pasos = llevaFirma ? [
       ['Aprobación comercial', c.estado !== 'pendiente_aprobacion', 'llega a ventas@cecomunica.com'],
       ['Firma del cliente', !!c.firmado, c.firma_solicitud_estado === 'pendiente' ? 'enlace de firma enviado — esperando' : 'enlace digital, o subir el firmado'],
       ['Activación', c.estado === 'activo', 'automática al validarse la firma'],
       ['Regularización de la cuenta', c.estado === 'activo' && !reg, regSub],
+    ] : [
+      ['Aprobación de administración', c.estado !== 'pendiente_aprobacion', 'llega a ventas@cecomunica.com'],
+      ['Programación de los equipos', c.estado !== 'pendiente_aprobacion', 'la orden de servicio sale con la aprobación'],
+      ['Entrega al cliente', c.entrega_confirmada === true, ContratoFirma.porQue(c)],
     ];
     const done = pasos.filter(p => p[1]).length;
     const [chipCls, chipTxt] = c.estado === 'pendiente_aprobacion' ? ['cg-chip--warn', 'Esperando aprobación']
+      : !llevaFirma ? (c.entrega_confirmada === true ? ['cg-chip--ok', 'Entregado'] : ['cg-chip--info', 'Aprobado — por entregar'])
       : !c.firmado ? ['cg-chip--warn', 'Esperando firma']
       : c.estado === 'activo' && reg?.motivo === 'sobrantes' ? ['cg-chip--warn', 'Activo — regularización parcial']
       : c.estado === 'activo' && reg ? ['cg-chip--info', 'Activo — regularización pendiente']
@@ -3321,8 +3353,11 @@ window.Centro = {
     const A = [];
     const puedeG = this.puedeCrearGestion();
     const mando = [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol);
-    const esperaFirma = c.estado === 'aprobado' && !c.firmado;
-    const conEnlace = esperaFirma && c.firma_solicitud_estado === 'pendiente';
+    // Un REEMPLAZO no lleva firma (2026-09-15): ni se manda a firmar ni se le
+    // sube un firmado. `conEnlace` NO cuelga de esto: si a uno se le mandó un
+    // enlace por error, "Retirar el enlace" tiene que seguir estando.
+    const esperaFirma = ContratoFirma.esperando(c);
+    const conEnlace = c.estado === 'aprobado' && !c.firmado && c.firma_solicitud_estado === 'pendiente';
     const reg = this._regPendiente(c);
 
     // Cerrar el contrato (2026-09-14): el acuerdo terminó y el equipo ya está

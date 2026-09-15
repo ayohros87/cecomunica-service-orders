@@ -258,6 +258,14 @@ async function main() {
     await db.doc("ordenes_de_servicio/oProgActivo").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cActivo" } });
     await db.doc("ordenes_de_servicio/oProgNoAplica").set({ ...base, contrato: { aplica: false, contrato_doc_id: null, motivo_no_aplica: "venta directa" } });
     await db.doc("ordenes_de_servicio/oProgRoto").set({ ...base, contrato: { aplica: true, contrato_doc_id: "no-existe" } });
+    // Un REEMPLAZO no lleva firma (2026-09-15, caso MACELLO / OS 2026090310):
+    // sustituye una unidad bajo el contrato que el cliente ya firmo. El tipo se
+    // mira en el doc del contrato — por eso los dos campos, y por eso el numero
+    // del segundo empieza por ALQ (REEMP20251024 se numero ALQ20251024-01).
+    await db.doc("contratos/cReempCodigo").set({ estado: "aprobado", codigo_tipo: "REEMP", contrato_id: "REEMP-1" });
+    await db.doc("contratos/cReempNombre").set({ estado: "aprobado", tipo_contrato: "Reemplazo", contrato_id: "ALQ20251024-01" });
+    await db.doc("ordenes_de_servicio/oProgReempCodigo").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cReempCodigo" } });
+    await db.doc("ordenes_de_servicio/oProgReempNombre").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cReempNombre" } });
   });
   const ENTREGADO = { estado_reparacion: "ENTREGADO AL CLIENTE" };
   await assertFails(as("recepcion").doc("ordenes_de_servicio/oProgSinFirma").set(ENTREGADO, { merge: true }));
@@ -272,6 +280,10 @@ async function main() {
   ok("firma: vínculo roto (contrato inexistente) no bloquea — fail-open");
   await assertSucceeds(as("administrador").doc("ordenes_de_servicio/oProgSinFirmaAdm").set(ENTREGADO, { merge: true }));
   ok("firma: admin exento (override de casos excepcionales)");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oProgReempCodigo").set(ENTREGADO, { merge: true }));
+  ok("firma: REEMPLAZO sin firmar (codigo_tipo) SI se entrega — no lleva firma");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oProgReempNombre").set(ENTREGADO, { merge: true }));
+  ok("firma: REEMPLAZO sin firmar (tipo_contrato) SI se entrega — no lleva firma");
 
   // ── Candado de factura de la venta en la ENTREGA (2026-09-03, Zuleika) ────
   // Un contrato "Propio" VENDE los radios: sin contratos.factura_venta.numero

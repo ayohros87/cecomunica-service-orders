@@ -265,15 +265,21 @@ async function contratoSinFirmarParaEntrega(orden) {
   if (!(typeof esOrdenProgramacion === 'function' && esOrdenProgramacion(orden))) return null;
   try {
     const ref = firebase.firestore().collection('contratos').doc(c.contrato_doc_id);
-    const firmado = (d) => !!d && (d.firmado === true || d.estado === 'activo');
+    // Un REEMPLAZO no lleva firma del cliente (2026-09-15, caso MACELLO / OS
+    // 2026090310): sustituye una unidad por otra bajo el contrato que el
+    // cliente YA firmó, así que no hay nada nuevo que firmar y la entrega no
+    // se detiene. El tipo sale del DOC del contrato, no del prefijo del
+    // número (hay un reemplazo numerado ALQ20251024-01).
+    const puedeEntregar = (d) => !!d && (d.firmado === true || d.estado === 'activo'
+      || (window.ContratoFirma && !ContratoFirma.lleva(d)));
     let snap = await ref.get();
-    if (snap.exists && firmado(snap.data())) return null;
+    if (snap.exists && puedeEntregar(snap.data())) return null;
     // La caché multi-pestaña puede pintar viejo (patrón del Centro): antes de
     // bloquear una entrega, la firma se revalida contra el servidor — pudo
     // llegar hace un momento desde el celular del cliente.
     if (snap.metadata && snap.metadata.fromCache) {
       snap = await ref.get({ source: 'server' });
-      if (snap.exists && firmado(snap.data())) return null;
+      if (snap.exists && puedeEntregar(snap.data())) return null;
     }
     if (!snap.exists) return null; // vínculo roto = problema de datos, no de firma
     return { id: c.contrato_doc_id, ...snap.data() };

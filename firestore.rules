@@ -511,12 +511,21 @@ service cloud.firestore {
       // el único punto duro es la entrega. Fail-open con vínculo roto (doc
       // inexistente): ese caso es un problema de datos, no de firma, y la UI
       // lo muestra. Admin exento por el OR de isAdmin() del allow.
+      //
+      // Un REEMPLAZO no lleva firma (2026-09-15, caso MACELLO / OS 2026090310):
+      // sustituye una unidad por otra bajo el contrato que el cliente YA firmó,
+      // así que no pacta nada que firmar — 79 de los 82 REEMP del sistema están
+      // sin firmar y esa es su forma normal. Espejo de
+      // js/domain/contratoFirma.js. El tipo se mira en el DOC del contrato, no
+      // en el prefijo del número: hay un reemplazo numerado ALQ20251024-01.
       function contratoFirmadoParaEntregar() {
         let c = resource.data.get("contrato", {});
         let cid = c.get("contrato_doc_id", "");
         return c.get("aplica", false) != true
           || !(cid is string) || cid == ""
           || !exists(/databases/$(database)/documents/contratos/$(cid))
+          || get(/databases/$(database)/documents/contratos/$(cid)).data.get("codigo_tipo", "") == "REEMP"
+          || get(/databases/$(database)/documents/contratos/$(cid)).data.get("tipo_contrato", "") == "Reemplazo"
           || get(/databases/$(database)/documents/contratos/$(cid)).data.get("firmado", false) == true
           || get(/databases/$(database)/documents/contratos/$(cid)).data.get("estado", "") == "activo";
       }

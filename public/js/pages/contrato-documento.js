@@ -60,7 +60,10 @@
     const nacidoDespuesDelCorte = window.DocumentoContrato
       && DocumentoContrato._millis(c.fecha_creacion) >= DocumentoContrato.CORTE_V2;
     if (nacidoDespuesDelCorte) lnkClasico.hidden = true;
-    if (c.estado === 'pendiente_aprobacion' || (!c.firmado && c.estado !== 'activo')) {
+    // Un REEMPLAZO no lleva firma del cliente (2026-09-15): avisarle "aprobado
+    // pero sin firma" era declarar incompleto un documento que está completo.
+    const llevaFirma = !window.ContratoFirma || ContratoFirma.lleva(c);
+    if (c.estado === 'pendiente_aprobacion' || (llevaFirma && !c.firmado && c.estado !== 'activo')) {
       const av = $('avisoEstado');
       av.style.display = 'block';
       av.textContent = c.estado === 'pendiente_aprobacion'
