@@ -1095,12 +1095,23 @@ service cloud.firestore {
         return request.resource.data.tipo != "reemplazo"
           || request.resource.data.estado == "pendiente_aprobacion";
       }
+      // El CAMBIO DE SERIAL nace en bodega y en blanco (2026-09-15). No lleva
+      // aprobación —corregir un typo no saca equipo del estante— pero tampoco
+      // puede nacer diciendo que ya se aplicó: quien aplica es onGestionWrite,
+      // y un expediente que nace con `cierre` puesto sería un acta de algo que
+      // nunca pasó. El serial real SÍ puede venir propuesto en los items.
+      function cambioSerialNaceEnBodega() {
+        return request.resource.data.tipo != "cambio_serial"
+          || (request.resource.data.estado == "pendiente_bodega"
+              && request.resource.data.get("cierre", {}).keys().size() == 0);
+      }
       allow read:   if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion","inventario","tecnico","tecnico_operativo","jefe_taller","contabilidad"];
       allow create: if isSignedIn()
                     && (userRole() in ["administrador","gerente","vendedor","recepcion"] || esPropuestaTaller())
                     && request.resource.data.cliente_id is string
                     && request.resource.data.tipo in ["reemplazo","demo","baja","aumento","devolucion","cambio_serial"]
                     && reemplazoNaceEnAprobacion()
+                    && cambioSerialNaceEnBodega()
                     && request.resource.data.deleted == false;
       allow update: if isSignedIn() && (
                       esAprobacionGestion() || esAnulacionGestion() || esCartaGestion()

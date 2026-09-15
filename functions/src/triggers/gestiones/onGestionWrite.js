@@ -20,6 +20,7 @@ const { admin, db } = require("../../lib/admin");
 const { APP_BASE_URL } = require("../../lib/inventario");
 const pool = require("../../domain/equiposPool");
 const G = require("../../lib/gestiones");
+const CS = require("../../lib/cambioSerial");
 const AP = require("../../lib/adendaPapel");
 const RC = require("../../domain/regularizacionCuentas");
 
@@ -37,6 +38,11 @@ const CIERRE_POR_TIPO = {
   // firma del cliente en el anexo → derivación (líneas con tramo propio en el
   // contrato) → asignación → programación → entrega. Sin entrada: no sale nada.
   aumento: ["aprobacion", "firma", "derivacion", "asignacion", "programacion", "entrega"],
+  // Cambio de serial (Ola 5): corregir el papel, no mover equipo. Dos pasos —
+  // bodega declara cuál es el serial de verdad (`asignacion`) y la corrección
+  // queda aplicada al contrato y al pool (`derivacion`). Sin OS, sin entrega y
+  // sin entrada: el radio ya está donde tiene que estar.
+  cambio_serial: ["asignacion", "derivacion"],
 };
 
 function asignacionCompleta(g) {
@@ -381,6 +387,92 @@ async function correoBodega(gid, g, { anticipo = false } = {}) {
   });
 }
 
+// ── Cambio de serial: los dos correos del flujo ────────────────────────────
+// Va aparte de correoBodega a propósito: aquí no se pide sacar nada del
+// estante, se pide confirmar cuál es el serial de verdad. Meterlo en la
+// cadena de arriba haría que el correo dijera "asignar equipos", que es
+// justo lo que NO hay que hacer.
+async function correoBodegaCambioSerial(gid, g) {
+  const to = await G.bodegaEmailTo();
+  if (!to) {
+    logger.warn("[onGestionWrite] sin buzón de bodega — cambio de serial sin aviso", { gid });
+    return;
+  }
+  const items = g.items || [];
+  const filas = items.map(it => [
+    `<code>${G.escapeHtml(it.serial || "—")}</code>`,
+    G.escapeHtml(it.modelo || "—"),
+    it.serial_nuevo
+      ? `<code>${G.escapeHtml(it.serial_nuevo)}</code> <span style="color:#6B7280;">(por confirmar)</span>`
+      : "<span style=\"color:#6B7280;\">por declarar</span>",
+    G.escapeHtml(it.contrato_id || "sin contrato"),
+    G.escapeHtml(it.motivo_detalle || it.motivo_codigo || "—"),
+  ]);
+  const propuestos = items.filter(it => String(it.serial_nuevo || "").trim()).length;
+  // En copia quien lo pidió (se entera de que llegó) y el vendedor del cliente.
+  const cc = [...new Set([
+    g.responsable_email,
+    await G.vendedorEmailDeCliente(g.cliente_id).catch(() => null),
+  ].filter(e => G.isEmail(e)).map(e => String(e).toLowerCase()))].join(",");
+  await G.encolarCorreo({
+    to,
+    ...(cc ? { cc } : {}),
+    subject: `Cambio de serial ${gid}: confirmar el serial correcto — ${g.cliente_nombre || "Cliente"}`,
+    preheader: `Corregir ${items.length} serial(es) mal registrado(s)`,
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Cambio de serial — corrección de registro</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        El sistema tiene mal ${items.length === 1 ? "un serial" : `${items.length} seriales`} de
+        <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>. <b>No hay que sacar nada del estante ni ir a buscar
+        ningún radio</b>: el equipo ya está donde tiene que estar — lo que está mal es el registro.
+        ${propuestos
+    ? `Quien abrió la gestión ya propuso ${propuestos === items.length ? "el serial correcto" : "algunos seriales"}; confírmalo contra el radio y guarda.`
+    : "Confirma contra el radio cuál es el serial de verdad y guárdalo."}
+      </p>
+      ${G.tablaHtml(["Figura en el sistema", "Modelo", "Serial real", "Contrato", "Motivo"], filas)}
+      <p style="margin:12px 0 0;font:13px/1.5 Arial,sans-serif;color:#6B7280;">
+        Al guardarlo, el sistema corrige el contrato, devuelve al estante el serial que estaba mal
+        (marcado <i>verificar físicamente</i>) y avisa la corrección a activaciones.
+      </p>`,
+    ctaUrl: G.urlBodegaGestion(gid),
+    ctaLabel: "Corregir el serial",
+    meta: { gestion_id: gid, paso: "bodega_cambio_serial" },
+  });
+}
+
+// Corrección aplicada → activaciones actualiza sus registros (el envío
+// original salió con el serial equivocado). Mismo cuadro anterior→nuevo que
+// mandaba el canal viejo (onSerialCambio.resuelto), ahora desde la gestión.
+async function correoActivacionesCambioSerial(gid, g, aplicados) {
+  const { activacionesEmailTo } = require("../../lib/mailRecipients");
+  const filas = aplicados.map(r => [
+    G.escapeHtml(r.modelo || "—"),
+    `<code style="color:#991B1B;text-decoration:line-through;">${G.escapeHtml(r.anterior || "—")}</code>`,
+    `<code style="color:#065F46;font-weight:700;">${G.escapeHtml(r.nuevo || "—")}</code>`,
+    G.escapeHtml(r.contrato_id || "sin contrato"),
+  ]);
+  const cc = [...new Set([
+    g.responsable_email,
+    await G.vendedorEmailDeCliente(g.cliente_id).catch(() => null),
+  ].filter(e => G.isEmail(e)).map(e => String(e).toLowerCase()))].join(",");
+  await G.encolarCorreo({
+    to: await activacionesEmailTo(),
+    ...(cc ? { cc } : {}),
+    subject: `Corrección de seriales: ${g.cliente_nombre || "Cliente"} — gestión ${gid}`,
+    preheader: `Se corrigieron ${aplicados.length} serial(es) mal registrado(s)`,
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Corrección de seriales</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        Se corrigieron seriales de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> que salieron mal en el
+        envío original. Actualiza tus registros:
+      </p>
+      ${G.tablaHtml(["Modelo", "Serial anterior", "Serial correcto", "Contrato"], filas)}`,
+    ctaUrl: G.urlGestion(g, gid),
+    ctaLabel: "Ver el expediente",
+    meta: { gestion_id: gid, paso: "correccion_activaciones" },
+  });
+}
+
 // Los seriales del aumento ya están completos (pre-asignados durante la firma):
 // misma cuenta que asignacionCompleta, sin exigir cierre.derivacion.
 function serialesAumentoCompletos(g) {
@@ -457,7 +549,8 @@ module.exports = onDocumentWritten(
     const before = event.data.before?.exists ? event.data.before.data() : null;
     const after = event.data.after?.exists ? event.data.after.data() : null;
     if (!after) return null;
-    if (!["reemplazo", "demo", "baja", "aumento"].includes(after.tipo)) return null; // devolución/cambio_serial: ola 5
+    // `devolucion` sigue esperando su ola; `cambio_serial` entró el 2026-09-15.
+    if (!["reemplazo", "demo", "baja", "aumento", "cambio_serial"].includes(after.tipo)) return null;
     if (["cerrada", "anulada"].includes(after.estado) && before?.estado === after.estado) return null;
 
     const creada = !before;
@@ -470,7 +563,9 @@ module.exports = onDocumentWritten(
     // eco entraron a la sección C a 300 ms uno del otro y salieron DOS OS de
     // programación (2026091003 y 2026091004), dos correos a Recepción y una
     // "incidencia de pool" falsa en el expediente. El eco no decide nada.
-    if (soloCambiaron(before, after, ["seriales_norm"])) return null;
+    // `correccion_en_curso` va en la misma bolsa: es la puerta de la sección
+    // C2, no información — y su propia escritura no tiene nada que decidir.
+    if (soloCambiaron(before, after, ["seriales_norm", "correccion_en_curso"])) return null;
 
     // ── A0) ANULADA → revertir los efectos regados (caso P223344) ────────
     // Órdenes creadas sin trabajar se eliminan; flags del pool se limpian;
@@ -587,7 +682,18 @@ module.exports = onDocumentWritten(
       // seriales ya quedaron pre-asignados durante la firma tampoco recibe el
       // segundo correo: a bodega no le queda nada que hacer y la OS sale sola
       // unos segundos después (sección C de este mismo flanco).
-      const entraABodega = after.tipo !== "baja" && after.aumento?.es_regularizacion !== true
+      // Cambio de serial: nace directo en bodega (no lleva aprobación — es una
+      // corrección de registro, no saca equipo del estante) con su propio
+      // correo, que dice explícitamente que NO hay nada que sacar.
+      if (creada && after.tipo === "cambio_serial" && after.estado === "pendiente_bodega") {
+        await correoBodegaCambioSerial(gid, after);
+        const props = (after.items || []).filter(it => String(it.serial_nuevo || "").trim()).length;
+        await G.registrarEvento(gid, "correo_bodega", props
+          ? `Aviso enviado a Bodega para confirmar el serial correcto (${props} propuesto(s) por quien abrió la gestión).`
+          : "Aviso enviado a Bodega para declarar cuál es el serial correcto.");
+      }
+      const entraABodega = after.tipo !== "baja" && after.tipo !== "cambio_serial"
+        && after.aumento?.es_regularizacion !== true
         && after.aumento?.es_ajuste !== true && (
         (creada && after.estado === "pendiente_bodega") ||
         (before && ["pendiente_aprobacion", "pendiente_firma"].includes(before.estado)
@@ -1358,6 +1464,67 @@ module.exports = onDocumentWritten(
       }
     } catch (e) {
       logger.error("[onGestionWrite] bloque de asignación falló", { gid, message: e.message });
+    }
+
+    // ── C2) CAMBIO DE SERIAL con el serial correcto declarado → aplicar ──
+    // Bodega confirmó cuál es el radio de verdad: se reescribe la fila del
+    // contrato (onSerialWrite hace el intercambio en el pool) y se avisa la
+    // corrección a activaciones. Puerta TRANSACCIONAL antes del efecto, no
+    // después: dos eventos casi simultáneos sobre el mismo expediente (la
+    // escritura de bodega y el eco de seriales_norm) aplicarían la corrección
+    // dos veces y el segundo pase no encontraría el serial viejo — mismo
+    // patrón que la reserva de `programacion_en_curso` de la sección C.
+    try {
+      const listoCS = after.tipo === "cambio_serial"
+        && !["cerrada", "anulada"].includes(after.estado)
+        && after.cierre?.derivacion !== true
+        && CS.asignacionCompleta(after);
+      let gCS = null;
+      if (listoCS) {
+        gCS = await db.runTransaction(async (tx) => {
+          const s = await tx.get(ref);
+          const d = s.exists ? s.data() : null;
+          if (!d || d.correccion_en_curso === true || d.cierre?.derivacion === true
+              || ["cerrada", "anulada"].includes(d.estado) || !CS.asignacionCompleta(d)) return null;
+          tx.set(ref, { correccion_en_curso: true }, { merge: true });
+          return d;
+        });
+      }
+      if (gCS) {
+        let r = { aplicados: [], fallidos: [] };
+        try {
+          r = await CS.aplicar(gid, gCS);
+        } finally {
+          // La puerta se cierra SIEMPRE: si la aplicación se cae a medias, el
+          // próximo evento tiene que poder reintentar lo que quedó pendiente.
+          const nuevos = r.aplicados.filter(x => x.via !== "ya_aplicado");
+          const ok = r.aplicados.length > 0 && r.fallidos.length === 0;
+          await ref.set({
+            correccion_en_curso: admin.firestore.FieldValue.delete(),
+            ...(ok ? {
+              cierre: { ...(gCS.cierre || {}), asignacion: true, derivacion: true },
+              correccion: { aplicados: r.aplicados, at: admin.firestore.FieldValue.serverTimestamp() },
+            } : {}),
+          }, { merge: true });
+          if (nuevos.length) {
+            await G.registrarEvento(gid, "correccion",
+              `Corrección aplicada: ${nuevos.map(x => `${x.anterior} → ${x.nuevo}`).join(", ")}. `
+              + "El serial que estaba mal vuelve al estante marcado «verificar físicamente».");
+            await correoActivacionesCambioSerial(gid, gCS, r.aplicados);
+            await G.registrarEvento(gid, "correo_correccion",
+              "Corrección avisada a activaciones, con el vendedor y quien la pidió en copia.");
+          }
+          if (r.fallidos.length) {
+            await G.registrarEvento(gid, "correccion_incompleta",
+              `No se pudo corregir ${r.fallidos.length} serial(es): `
+              + r.fallidos.map(f => `${f.anterior} → ${f.nuevo} (${f.motivo})`).join("; ")
+              + ". La gestión queda abierta: corrige el expediente o anúlala.");
+            logger.warn("[onGestionWrite] cambio de serial incompleto", { gid, fallidos: r.fallidos.length });
+          }
+        }
+      }
+    } catch (e) {
+      logger.error("[onGestionWrite] aplicación del cambio de serial falló", { gid, message: e.message });
     }
 
     // ── D) cierre automático (flags completos según el tipo) ─────────────

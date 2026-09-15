@@ -324,8 +324,12 @@ const GestionesService = {
       return { ok: false, motivo: 'Bodega ya asignó los seriales y salió la orden de programación.' };
     }
     if (g.cierre?.entrega === true) return { ok: false, motivo: 'Los equipos ya se entregaron.' };
+    // En un CAMBIO DE SERIAL, `serial_nuevo` no prueba que bodega actuó: quien
+    // abre la corrección puede proponer el serial real si lo tiene a mano
+    // (Alberto 2026-09-15). Ahí la prueba es `cierre.asignacion`, que estampa
+    // el trigger al aplicar la corrección — y ya se comprobó arriba.
     if ((g.aumento?.seriales_asignados || []).length || (g.demo?.seriales_asignados || []).length
-        || (g.items || []).some(it => it.serial_nuevo)) {
+        || (g.tipo !== 'cambio_serial' && (g.items || []).some(it => it.serial_nuevo))) {
       return { ok: false, motivo: 'Bodega ya asignó seriales a esta gestión — anúlala si hay que rehacerla.' };
     }
     if (g.firma_solicitud_estado === 'pendiente') {
@@ -423,10 +427,15 @@ const GestionesService = {
   // Bodega asigna los seriales de un REEMPLAZO: reescribe items[] con
   // serial_nuevo/pool_doc_id_nuevo por ítem. El trigger detecta la asignación
   // completa, mueve el pool y crea la(s) OS de programación.
-  async asignarItems(gestionId, items) {
+  // Reemplazo y cambio de serial comparten la forma (items[] con el serial que
+  // entra), pero no la historia: uno sustituye un radio, el otro corrige lo
+  // que quedó mal anotado. La bitácora tiene que decir cuál de los dos fue.
+  async asignarItems(gestionId, items, { tipo = 'reemplazo' } = {}) {
     await firebase.firestore().collection(this.COL).doc(gestionId).update({ items });
-    await this.registrarEvento(gestionId, 'asignar',
-      `Bodega asignó: ${items.map(i => `${i.serial_saliente}→${i.serial_nuevo || '—'}`).join(', ')}`);
+    const pares = items.map(i => `${i.serial_saliente || i.serial || '—'}→${i.serial_nuevo || '—'}`).join(', ');
+    await this.registrarEvento(gestionId, 'asignar', tipo === 'cambio_serial'
+      ? `Bodega confirmó el serial real contra el radio: ${pares}`
+      : `Bodega asignó: ${pares}`);
   },
 
   // Bodega asigna los seriales de un DEMO.

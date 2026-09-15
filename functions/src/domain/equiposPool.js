@@ -441,7 +441,8 @@ async function desasignarContrato(serial, modeloId, modeloLabel,
 // asignado_contrato, por_clasificar). Una devolución en curso o una baja no se
 // tocan. Retorna 'liberado' | 'sin-cambio' | 'no-existe'.
 async function soltarDelCliente(serial, modeloId, modeloLabel,
-                                { cliente_id, refMov = null, notas = "" }) {
+                                { cliente_id, refMov = null, notas = "",
+                                  motivo = "no_tiene_en_renovacion" }) {
   const norm = normSerial(serial);
   if (!esSerialValido(norm) || !cliente_id) return "no-existe";
   const { ref, data } = await resolver(serial, modeloId, modeloLabel, { adoptarSiExiste: true });
@@ -464,7 +465,7 @@ async function soltarDelCliente(serial, modeloId, modeloLabel,
       ultima_asignacion: {
         ...(actual.asignacion || {}),
         soltada_at: admin.firestore.FieldValue.serverTimestamp(),
-        soltada_motivo: "no_tiene_en_renovacion",
+        soltada_motivo: motivo,
         soltada_ref: refMov || null,
       },
       updated_at: admin.firestore.FieldValue.serverTimestamp(),

@@ -18,7 +18,7 @@ const escapeHtml = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, s => (
 ));
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
 
-const TIPO_LABEL = { reemplazo: "Reemplazo", demo: "Demo", baja: "Baja de equipos", aumento: "Aumento de equipos" };
+const TIPO_LABEL = { reemplazo: "Reemplazo", demo: "Demo", baja: "Baja de equipos", aumento: "Aumento de equipos", cambio_serial: "Cambio de serial" };
 
 // Deep-link al expediente dentro del Centro de gestión.
 // Enlace de BODEGA: la pestaña Asignar de Almacén con la gestión abierta

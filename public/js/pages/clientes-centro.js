@@ -2161,6 +2161,13 @@ window.Centro = {
       ['programacion', 'Programación', 'OS de programación confirmada'],
       ['entrega', 'Entrega al cliente', 'Arranca el tramo: inicio y vencimiento propios'],
     ],
+    // Cambio de serial: corregir el papel, no mover equipo. Dos pasos y ya —
+    // sin OS, sin entrega y sin entrada, porque el radio ya está donde tiene
+    // que estar. Un checklist de cuatro pasos aquí mentiría.
+    cambio_serial: [
+      ['asignacion', 'Serial confirmado por bodega', 'Contra el radio: cuál es el serial de verdad'],
+      ['derivacion', 'Corrección aplicada', 'Contrato y pool corregidos; activaciones avisada'],
+    ],
   },
 
   puedeAsignar() { return [ROLES.ADMIN, ROLES.INVENTARIO].includes(this.rol); },
@@ -2795,6 +2802,35 @@ window.Centro = {
         ${asignando ? `<p style="font-size:12.5px; color:var(--fg-3); margin:10px 0 0;">Bodega elige en
           <b>Almacén · Asignar</b> (Acciones ›) la unidad que sustituye a cada radio.
           Al completar todos, el sistema crea la OS de programación y avisa a Recepción.</p>` : ''}`;
+    } else if (g.tipo === 'cambio_serial') {
+      // Lo primero que hay que dejar claro es lo que NO es: nadie tiene que ir
+      // a buscar un radio. El equipo está donde tiene que estar; lo que está
+      // mal es el registro. Sin esta línea, bodega lo lee como un reemplazo.
+      const enBodega = this.puedeAsignar() && g.estado === 'pendiente_bodega';
+      const props = (g.items || []).filter(it => it.serial_nuevo && !g.cierre?.derivacion).length;
+      cuerpo = `
+        <div class="cg-senal info" style="margin:0 0 10px;">
+          <span><b>Corrección de registro.</b> El equipo ya está donde tiene que estar —
+          lo que está mal es el serial anotado. No sale nada del estante ni hay que recoger ningún radio.</span></div>
+        <div class="cg-twrap"><table class="cg-tabla"><thead><tr>
+          <th>Figura en el sistema</th><th>Modelo</th><th>Serial real</th><th>Contrato</th><th>Motivo</th>
+          </tr></thead><tbody>
+          ${(g.items || []).map(it => `<tr>
+            <td class="cg-mono" style="${g.cierre?.derivacion ? 'color:var(--fg-3); text-decoration:line-through;' : ''}">${this.esc(it.serial || '—')}</td>
+            <td>${this.esc(it.modelo || '—')}</td>
+            <td class="cg-mono">${it.serial_nuevo
+              ? `${this.esc(it.serial_nuevo)}${g.cierre?.derivacion ? '' : ' <span style="color:var(--fg-4); font-family:inherit; font-size:11.5px;">(por confirmar)</span>'}`
+              : '<span style="color:var(--fg-3); font-family:inherit;">pendiente de bodega</span>'}</td>
+            <td class="cg-mono" style="font-size:12px;">${this.esc(it.contrato_id || 'sin contrato')}</td>
+            <td style="font-size:12.5px;">${this.esc(it.motivo_detalle || this.MOTIVOS_CAMBIO_SERIAL_LABEL[it.motivo_codigo] || it.motivo_codigo || '—')}</td>
+          </tr>`).join('')}</tbody></table></div>
+        ${g.cierre?.derivacion ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:10px 0 0;">
+          ✓ Corrección aplicada al contrato y al pool. El serial que estaba mal volvió al estante marcado
+          <b>verificar físicamente</b>, y activaciones recibió el aviso.</p>` : ''}
+        ${enBodega ? `<p style="font-size:12.5px; color:var(--fg-3); margin:10px 0 0;">
+          Bodega confirma el serial contra el radio en <b>Almacén · Asignar</b> (Acciones ›)${props
+    ? ` — ${props === 1 ? 'ya viene propuesto' : `ya vienen ${props} propuestos`}, solo hay que verificarlo.` : '.'}
+          Al guardarlo, la corrección se aplica sola y la gestión cierra.</p>` : ''}`;
     } else {
       const total = (g.demo?.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
       const asignados = g.demo?.seriales_asignados || [];
@@ -3038,6 +3074,7 @@ window.Centro = {
     const cuerpo = g.tipo === 'aumento' ? this._edAumentoHtml(g)
       : g.tipo === 'baja' ? this._edBajaHtml(g)
       : g.tipo === 'reemplazo' ? this._edReemplazoHtml(g)
+      : g.tipo === 'cambio_serial' ? this._edCambioSerialHtml(g)
       : this._edDemoHtml(g);
     this._abrirModalA({
       banda: false,
@@ -3157,6 +3194,30 @@ window.Centro = {
         El serial que <b>entra</b> lo declara bodega en Almacén · Asignar.</p>`;
   },
 
+  // Cambio de serial: qué seriales se corrigen, por qué y —si se sabe— cuál
+  // es el de verdad. Se puede corregir hasta que bodega aplique la corrección
+  // (puedeEditarse la cierra al estamparse cierre.asignacion/derivacion).
+  _edCambioSerialHtml(g) {
+    return `
+      <div class="cg-twrap" style="max-height:38vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
+        <th style="width:34px;"></th><th>Figura en el sistema</th><th>Qué pasó</th><th>Serial real</th><th>Detalle</th>
+        </tr></thead><tbody>
+        ${(g.items || []).map((it, i) => `<tr>
+          <td><input type="checkbox" data-gesel="${i}" checked></td>
+          <td class="cg-mono">${this.esc(it.serial || '—')}<div style="font-size:11.5px; color:var(--fg-4);">${this.esc(it.modelo || '')}</div></td>
+          <td><select class="form-select" data-gemot="${i}" style="min-width:200px;">
+            <option value="">— Qué pasó —</option>
+            ${this.MOTIVOS_CAMBIO_SERIAL.map(([k, l]) => `<option value="${k}" ${k === it.motivo_codigo ? 'selected' : ''}>${this.esc(l)}</option>`).join('')}
+          </select></td>
+          <td><input class="form-input" data-gereal="${i}" style="min-width:150px; font-family:var(--font-mono, monospace);"
+            value="${this.esc(it.serial_nuevo || '')}" placeholder="Si lo sabes"></td>
+          <td><input class="form-input" data-gedet="${i}" style="min-width:140px;" value="${this.esc(it.motivo_detalle || '')}" placeholder="Opcional"></td>
+        </tr>`).join('')}
+      </tbody></table></div>
+      <p style="margin:6px 0 0; font-size:12px; color:var(--fg-3);">Desmarca los que no van en esta corrección.
+        Lo que dejes en <b>Serial real</b> le llega a bodega como propuesta: lo verifica contra el radio antes de aplicarlo.</p>`;
+  },
+
   _edDemoHtml(g) {
     const d = g.demo || {};
     return `
@@ -3261,6 +3322,40 @@ window.Centro = {
       });
       dicho.push(`${nuevos.length} radio(s): ${nuevos.map(i => `${i.serial_saliente}→${i.modelo_solicitado}`).join(', ')}`);
 
+    } else if (g.tipo === 'cambio_serial') {
+      const sel = [...document.querySelectorAll('input[data-gesel]:checked')].map(i => Number(i.dataset.gesel));
+      if (!sel.length) { Toast.show('Deja al menos un serial en la corrección', 'warn'); return; }
+      const nuevos = [];
+      const propuestos = new Set();
+      for (const i of sel) {
+        const it = g.items[i];
+        const motivo = document.querySelector(`select[data-gemot="${i}"]`)?.value || '';
+        if (!motivo) { Toast.show(`Indica qué pasó con el serial ${it.serial}`, 'warn'); return; }
+        const real = (document.querySelector(`input[data-gereal="${i}"]`)?.value || '').trim();
+        let serialNuevo = null;
+        if (real) {
+          const norm = EquiposPoolService.normalizarSerial(real);
+          if (!EquiposPoolService.esSerialValido(norm)) { Toast.show(`"${real}" no parece un serial válido`, 'warn'); return; }
+          if (norm === EquiposPoolService.normalizarSerial(it.serial)) {
+            Toast.show(`El serial real de ${it.serial} es el mismo que ya figura`, 'warn'); return;
+          }
+          if (propuestos.has(norm)) { Toast.show(`${real} está propuesto dos veces`, 'warn'); return; }
+          propuestos.add(norm);
+          serialNuevo = real;
+        }
+        nuevos.push({ ...it,
+          motivo_codigo: motivo,
+          motivo_detalle: document.querySelector(`input[data-gedet="${i}"]`)?.value.trim() || '',
+          serial_nuevo: serialNuevo,
+          ...(serialNuevo ? { serial_nuevo_propuesto: true } : {}),
+        });
+      }
+      Object.assign(cambios, {
+        items: nuevos,
+        contratos_afectados: Array.from(new Set(nuevos.map(i => i.contrato_doc_id).filter(Boolean))),
+      });
+      dicho.push(`${nuevos.length} serial(es): ${nuevos.map(i => `${i.serial}→${i.serial_nuevo || 'por confirmar'}`).join(', ')}`);
+
     } else {
       const lineas = this._lineasModelo('wdl').map(l => ({ modelo: l.modelo, modelo_id: l.modelo_id, cantidad: l.cantidad }));
       const finalidad = document.getElementById('wdFin')?.value.trim() || '';
@@ -3344,13 +3439,18 @@ window.Centro = {
         ok: [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol), motivo: 'lo valida administración o gerencia' }));
     }
     // Bodega. El formulario vive en Almacén · Asignar desde 2026-09-03.
+    const esCS = g.tipo === 'cambio_serial';
     const faltanSeriales = !g.ordenes?.programacion_id && !esAct && !g.aumento?.es_ajuste
       && (g.estado === 'pendiente_bodega' || (esAum && g.estado === 'pendiente_firma'));
     if (faltanSeriales) {
       const yaHay = (g.aumento?.seriales_asignados || []).length || (g.demo?.seriales_asignados || []).length
         || (g.items || []).some(i => i.serial_nuevo);
-      A.push(this._acc({ id: 'asignar', label: yaHay ? 'Completar seriales en Almacén' : 'Asignar seriales en Almacén',
-        primaria: g.estado === 'pendiente_bodega', hint: 'el picker del estante y la política dura viven allá',
+      // El cambio de serial no "asigna" nada: bodega verifica cuál es el serial
+      // de verdad. Llamarlo asignar manda a bodega a sacar un radio del estante.
+      A.push(this._acc({ id: 'asignar',
+        label: esCS ? 'Confirmar el serial en Almacén' : yaHay ? 'Completar seriales en Almacén' : 'Asignar seriales en Almacén',
+        primaria: g.estado === 'pendiente_bodega',
+        hint: esCS ? 'contra el radio: cuál es el serial de verdad' : 'el picker del estante y la política dura viven allá',
         href: `../almacen/index.html?tab=asignar&g=${encodeURIComponent(g.id)}`,
         ok: this.puedeAsignar(), motivo: 'los seriales los declara bodega (Almacén · Asignar)' }));
     }
@@ -3671,6 +3771,11 @@ window.Centro = {
     ]);
     const cambiar = grupo('Cambiar', [
       hayRadios ? item('Centro.wizReemplazo()', 'Reemplazar un equipo') : '',
+      // Corregir ≠ reemplazar: aquí no se mueve equipo. Va junto al reemplazo
+      // porque es donde lo busca quien acaba de descubrir el error, y el hint
+      // es lo que evita que abran el trámite equivocado.
+      hayRadios ? item('Centro.wizCambioSerial()', 'Corregir un serial mal registrado',
+        'el cliente tiene otro radio del que dice el sistema — no mueve equipo') : '',
       hayContrato ? item(est.tipo === 'consolidada' ? `Centro.wizAjuste('${this.esc(est.maestro.id)}')` : 'Centro.wizAjuste()',
         'Ajustar tarifa / servicios', 'cargos como GPS, amarrados por serial') : '',
       renovar,
@@ -3910,6 +4015,20 @@ window.Centro = {
     ['servicio_cliente', 'Servicio al cliente'],
     ['otro', 'Otro'],
   ],
+
+  // Motivos del CAMBIO DE SERIAL. Son otros que los del reemplazo a propósito:
+  // aquí nadie va a buscar un radio — se corrige lo que quedó mal anotado.
+  // "Cambiado en el mostrador" es el caso real que más se repite: bodega
+  // entregó otro radio del mismo modelo y el papel se quedó con el primero.
+  MOTIVOS_CAMBIO_SERIAL: [
+    ['error_captura', 'Serial mal digitado al registrarlo'],
+    ['cambiado_mostrador', 'Bodega entregó otro radio y no se actualizó'],
+    ['defectuoso', 'El radio salió defectuoso y se cambió antes de entregarlo'],
+    ['otro', 'Otro'],
+  ],
+  get MOTIVOS_CAMBIO_SERIAL_LABEL() {
+    return Object.fromEntries(this.MOTIVOS_CAMBIO_SERIAL);
+  },
 
   // ── Modales del Centro: hojas del kit (Modal.sheet, 2026-09-10) ────────
   // Antes esto pintaba a mano dentro de un <div id="cgModal"> con CSS suelto
@@ -4262,6 +4381,141 @@ window.Centro = {
       console.error('[centro] JSON de reemplazo para recepción:', e);
       Toast.show('No se pudo leer la configuración de los radios salientes.', 'bad');
     }
+  },
+
+  /* ═════════ Cambio de serial (corrección de registro) ═════════
+     El sistema dice que el cliente tiene el serial X y en realidad tiene el Y:
+     un dígito mal tecleado al asignar, o bodega cambió el radio en el mostrador
+     y el papel se quedó con el primero. NO es un reemplazo — no sale nada del
+     estante ni hay que recoger un radio; lo que está mal es el registro.
+
+     Sustituye al canal viejo (`contratos/{cid}/seriales_cambios`, un modal
+     colgado de la lista de contratos que exigía el contrato en 'aprobado' y
+     que se quedó sin puerta el 2026-09-09, cuando /contratos/ pasó a ser
+     archivo). Ahora es una gestión más del expediente del cliente: Ola 5 de
+     docs/ARQUITECTURA_GESTIONES_POR_CLIENTE_2026-08-25.md.
+
+     Va DIRECTO a bodega, sin aprobación (Alberto 2026-09-15): corregir un typo
+     no saca equipo del estante ni cambia la facturación — hacerlo esperar una
+     firma de administración es trancar el trámite corto con el largo. */
+  async wizCambioSerial() {
+    this._cerrarModal();
+    document.getElementById('cgMenu')?.classList.add('hidden');
+    const flota = this._flotaCorregible();
+    if (!flota.length) {
+      Toast.show('Este cliente no tiene equipos registrados en campo que corregir.', 'warn');
+      return;
+    }
+    this._abrirModal(`
+      <h3 style="margin:0 0 6px;">Corregir un serial mal registrado — ${this.esc(this.cliente.nombre)}</h3>
+      <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:72ch;">
+        Para cuando el sistema tiene anotado un serial y el cliente en realidad tiene otro.
+        <b>No mueve equipo</b>: el radio ya está donde tiene que estar. Si el radio que el cliente
+        tiene se dañó y hay que sustituirlo, eso es un <b>reemplazo</b>, no esto.</p>
+      <div class="cg-twrap" style="max-height:44vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
+        <th style="width:34px;"></th><th>Figura en el sistema</th><th>Modelo</th><th>Contrato</th>
+        </tr></thead><tbody>${this._csFilasHtml(flota)}</tbody></table></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
+        <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="Centro.crearCambioSerial()">Enviar a bodega</button>
+      </div>`);
+  },
+
+  // Lo que se puede corregir: lo que el sistema dice que el cliente tiene.
+  // Un radio en taller o ya devuelto no se corrige por aquí — su serial ya
+  // dejó de colgar de la cuenta y tocarlo enredaría la orden que lo mueve.
+  _flotaCorregible() {
+    return (this.equipos || []).filter(e =>
+      ['en_cliente', 'asignado_contrato'].includes(e.estado) && !e.pendiente_devolucion);
+  },
+
+  _csFilasHtml(flota) {
+    return flota.map((e, ix) => `<tr>
+      <td><input type="checkbox" data-cssel="${ix}" onchange="Centro._csFila(${ix}, this.checked)"></td>
+      <td class="cg-mono">${this.esc(e.serial || e.id)}</td>
+      <td>${this.esc(e.modelo_label || '—')}</td>
+      <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || '')
+        || '<span style="color:var(--fg-4); font-family:inherit;">sin contrato</span>'}</td>
+    </tr>
+    <tr id="cscfg-${ix}" class="hidden"><td></td><td colspan="3" style="background:var(--surface-sunken, #EEF2F6);">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; padding:4px 0;">
+        <select class="form-select" data-csmot="${ix}" style="max-width:300px;">
+          <option value="">— Qué pasó —</option>
+          ${this.MOTIVOS_CAMBIO_SERIAL.map(([k, l]) => `<option value="${k}">${this.esc(l)}</option>`).join('')}
+        </select>
+        <input class="form-input" data-csreal="${ix}" style="max-width:200px; font-family:var(--font-mono, monospace);"
+          placeholder="Serial real (si lo sabes)" aria-label="Serial real">
+        <input class="form-input" data-csdet="${ix}" style="flex:1; min-width:180px;" placeholder="Detalle (opcional)">
+      </div>
+      <div style="font-size:11.5px; color:var(--fg-4); padding-bottom:4px;">
+        Si no tienes el serial real a mano, déjalo en blanco: bodega lo confirma contra el radio.</div>
+    </td></tr>`).join('');
+  },
+
+  _csFila(ix, on) {
+    document.getElementById(`cscfg-${ix}`)?.classList.toggle('hidden', !on);
+  },
+
+  async crearCambioSerial() {
+    const flota = this._flotaCorregible();
+    const seleccion = [...document.querySelectorAll('input[data-cssel]:checked')].map(i => Number(i.dataset.cssel));
+    if (!seleccion.length) { Toast.show('Marca al menos un serial', 'warn'); return; }
+    const items = [];
+    const propuestos = new Set();
+    for (const ix of seleccion) {
+      const e = flota[ix];
+      if (!e) continue;
+      const motivo = document.querySelector(`select[data-csmot="${ix}"]`)?.value || '';
+      if (!motivo) { Toast.show(`Indica qué pasó con el serial ${e.serial || e.id}`, 'warn'); return; }
+      const real = (document.querySelector(`input[data-csreal="${ix}"]`)?.value || '').trim();
+      let serialNuevo = null;
+      if (real) {
+        const norm = EquiposPoolService.normalizarSerial(real);
+        if (!EquiposPoolService.esSerialValido(norm)) {
+          Toast.show(`"${real}" no parece un serial válido — déjalo en blanco y bodega lo confirma`, 'warn');
+          return;
+        }
+        if (norm === EquiposPoolService.normalizarSerial(e.serial || e.id)) {
+          Toast.show(`El serial real de ${e.serial || e.id} es el mismo que ya figura — no hay nada que corregir`, 'warn');
+          return;
+        }
+        if (propuestos.has(norm)) { Toast.show(`${real} está propuesto dos veces`, 'warn'); return; }
+        propuestos.add(norm);
+        serialNuevo = real;
+      }
+      items.push({
+        serial: e.serial || e.id,
+        serial_norm: EquiposPoolService.normalizarSerial(e.serial || e.id),
+        pool_doc_id: e.id || null,
+        modelo: e.modelo_label || '',
+        modelo_id: e.modelo_id || null,
+        contrato_doc_id: e.asignacion?.contrato_doc_id || null,
+        contrato_id: e.asignacion?.contrato_id || null,
+        motivo_codigo: motivo,
+        motivo_detalle: document.querySelector(`input[data-csdet="${ix}"]`)?.value.trim() || '',
+        // Propuesto por quien abre la gestión; bodega confirma o corrige.
+        serial_nuevo: serialNuevo,
+        pool_doc_id_nuevo: null,
+        ...(serialNuevo ? { serial_nuevo_propuesto: true } : {}),
+      });
+    }
+    try {
+      const gid = await GestionesService.crear({ ...Centro._estampaReg(),
+        tipo: 'cambio_serial',
+        cliente_id: this.cliente.id,
+        cliente_nombre: this.cliente.nombre || '',
+        estado: 'pendiente_bodega',
+        origen: { tipo: 'vendedor' },
+        items,
+      });
+      this._cerrarModal();
+      this.gSel = gid;
+      const n = items.filter(i => i.serial_nuevo).length;
+      Toast.show(n === items.length
+        ? `Corrección ${gid} enviada — bodega verifica ${items.length === 1 ? 'el serial' : 'los seriales'} y se aplica sola`
+        : `Corrección ${gid} enviada — bodega confirma cuál es el serial de verdad`, 'ok');
+      await this.recargarGestiones();
+    } catch (e) { console.error(e); Toast.show('No se pudo crear la corrección', 'bad'); }
   },
 
   // Modalidad de la línea: de quién es el equipo. Antes era un ganchito

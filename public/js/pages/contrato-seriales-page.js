@@ -328,7 +328,10 @@
       el.innerHTML = '<i data-lucide="lock" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Seriales asignados.</strong> Están bloqueados para evitar cambios accidentales. Pulsa <strong>“Editar seriales”</strong> para corregirlos.</div>';
     } else {
       el.style.cssText = s('#FCD34D', '#FFFBEB', '#92400E');
-      el.innerHTML = '<i data-lucide="lock" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Seriales asignados.</strong> Ya no se pueden editar desde aquí. Para corregir un serial, crea una <strong>solicitud de cambio</strong> desde la lista de Contratos (menú de acciones del contrato → "Solicitar cambio de serial") — un administrador la aprueba y esta página se desbloquea solo en los seriales marcados.</div>';
+      // El camino nuevo (2026-09-15): el cambio de serial es una gestión del
+      // cliente. Este aviso mandaba a la lista de Contratos, que desde el
+      // 2026-09-09 es un archivo de solo lectura y no tiene esa acción.
+      el.innerHTML = '<i data-lucide="lock" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Seriales asignados.</strong> Ya no se pueden editar desde aquí. Para corregir un serial, abre la ficha del cliente en el <strong>Centro de gestión</strong> → <strong>Nueva gestión › Corregir un serial mal registrado</strong>. Bodega confirma cuál es el serial de verdad y el sistema corrige el contrato solo.</div>';
     }
     return el;
   }
@@ -501,7 +504,7 @@
         <div style="margin-top:12px; padding:10px 12px; background:#FFFBEB; border:1px solid #FCD34D; border-radius:8px; color:#92400E; font-size:12.5px; line-height:1.55;">
           Al confirmar se envía el <b>correo a activaciones</b> con estos seriales y el PDF del contrato,
           y esta página <b>queda bloqueada</b>. Corregir un serial después requiere una
-          <b>solicitud de cambio</b> desde la lista de Contratos.
+          gestión de <b>cambio de serial</b> desde la ficha del cliente (Centro de gestión).
         </div>`,
       buttons: [
         { action: 'cancel', label: 'Volver a revisar' },

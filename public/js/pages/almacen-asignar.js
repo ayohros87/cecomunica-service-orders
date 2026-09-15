@@ -38,7 +38,13 @@ window.AlmacenAsignar = (() => {
     cerrados: new Map(),  // 'tipo:id' → ms en que se cerró desde esta pestaña
   };
 
-  const TIPO_G = { aumento: 'Aumento', reemplazo: 'Reemplazo', demo: 'Demo' };
+  const TIPO_G = { aumento: 'Aumento', reemplazo: 'Reemplazo', demo: 'Demo', cambio_serial: 'Cambio de serial' };
+
+  // El cambio de serial comparte la pantalla pero NO el trabajo: aquí no sale
+  // nada del estante — se confirma contra el radio cuál es el serial de verdad
+  // y el sistema corrige el contrato. Se distingue en cada sitio donde el
+  // texto diría "asignar" o "sacar".
+  const esCambio = (g) => g?.tipo === 'cambio_serial';
 
   function puedeAsignarGestion() {
     return st.rol === ROLES.ADMIN || st.rol === ROLES.INVENTARIO;
@@ -79,12 +85,15 @@ window.AlmacenAsignar = (() => {
         n: String((r.cambio?.items || []).length), at: r.at, cambio: r.cambio,
       }));
       (gestiones || []).forEach(g => {
-        const lineas = g.tipo === 'reemplazo'
-          ? `${(g.items || []).length} reemplazo(s)`
-          : resumenEquipos((g.tipo === 'demo' ? g.demo?.lineas : g.aumento?.lineas) || []);
-        const total = g.tipo === 'reemplazo' ? (g.items || []).length
+        const porItem = g.tipo === 'reemplazo' || esCambio(g);
+        const lineas = esCambio(g)
+          ? `corregir ${(g.items || []).map(i => i.serial || '—').join(', ')}`
+          : g.tipo === 'reemplazo'
+            ? `${(g.items || []).length} reemplazo(s)`
+            : resumenEquipos((g.tipo === 'demo' ? g.demo?.lineas : g.aumento?.lineas) || []);
+        const total = porItem ? (g.items || []).length
           : ((g.tipo === 'demo' ? g.demo?.lineas : g.aumento?.lineas) || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
-        const hechos = g.tipo === 'reemplazo'
+        const hechos = porItem
           ? (g.items || []).filter(i => i.serial_nuevo).length
           : ((g.tipo === 'demo' ? g.demo?.seriales_asignados : g.aumento?.seriales_asignados) || []).filter(s => String(s.serial || '').trim()).length;
         items.push({
@@ -317,7 +326,7 @@ window.AlmacenAsignar = (() => {
     const hay = asg.render(grupos);
 
     if (locked) {
-      $('asBanner').innerHTML = banner('ok', `<strong>Seriales listos.</strong> Este contrato ya pasó a programación${contrato.seriales_asignados_at?.toMillis ? ` (${hace(contrato.seriales_asignados_at.toMillis())})` : ''}. Para corregir un serial, recepción crea una <strong>solicitud de cambio</strong> y vuelve a aparecer aquí.`);
+      $('asBanner').innerHTML = banner('ok', `<strong>Seriales listos.</strong> Este contrato ya pasó a programación${contrato.seriales_asignados_at?.toMillis ? ` (${hace(contrato.seriales_asignados_at.toMillis())})` : ''}. Para corregir un serial, se abre una gestión de <strong>cambio de serial</strong> desde la ficha del cliente y el trabajo vuelve a aparecer aquí.`);
       asg.setLocked(true);
       footer([]);
     } else if (modoReemplazo) {
@@ -533,7 +542,7 @@ window.AlmacenAsignar = (() => {
         </div>
         <div style="margin-top:12px; padding:10px 12px; background:#FFFBEB; border:1px solid #FCD34D; border-radius:8px; color:#92400E; font-size:12.5px; line-height:1.55;">
           El contrato pasa a la <b>cola de programación</b> y activaciones recibe los seriales.
-          Después de esto, corregir un serial requiere una <b>solicitud de cambio</b> de recepción.
+          Después de esto, corregir un serial requiere una gestión de <b>cambio de serial</b> desde la ficha del cliente.
         </div>`,
       buttons: [
         { action: 'cancel', label: 'Volver a revisar' },
@@ -565,7 +574,10 @@ window.AlmacenAsignar = (() => {
     const label = TIPO_G[g.tipo] || g.tipo;
     const conOS = !!(g.ordenes?.programacion_id || (g.ordenes?.programacion_ids || []).length);
     const cerrada = ['cerrada', 'anulada'].includes(g.estado);
-    const esperaBodega = !cerrada && !conOS && (
+    // En el cambio de serial la corrección YA aplicada (cierre.derivacion) es
+    // el final del trabajo — no como en el aumento, donde `derivacion` es la
+    // firma del anexo y bodega todavía tiene que asignar.
+    const esperaBodega = !cerrada && !conOS && !(esCambio(g) && g.cierre?.derivacion) && (
       g.estado === 'pendiente_bodega'
       || (g.estado === 'en_proceso' && ['reemplazo', 'demo'].includes(g.tipo) && !g.cierre?.asignacion)
       || (g.estado === 'pendiente_firma' && g.tipo === 'aumento' && !g.aumento?.es_ajuste && !g.aumento?.es_regularizacion));
@@ -582,8 +594,11 @@ window.AlmacenAsignar = (() => {
       pillCls: esperaBodega ? 'aviso' : cerrada ? 'neutro' : 'listo',
     });
 
+    // La picklist dice "saca esto del estante". En un cambio de serial no hay
+    // nada que sacar: pintarla mandaría a bodega a buscar un radio que ya está
+    // con el cliente.
     const puede = esperaBodega && puedeAsignarGestion();
-    if (puede) $('asPicklist').innerHTML = await picklistHtml(grupos);
+    if (puede && !esCambio(g)) $('asPicklist').innerHTML = await picklistHtml(grupos);
 
     const asg = crearAsignador({ permitirOmitir: false, clienteId: g.cliente_id || null,
       textoVacio: 'Esta gestión no tiene equipos que asignar.' });
@@ -604,8 +619,21 @@ window.AlmacenAsignar = (() => {
       if (g.tipo === 'aumento' && g.estado === 'pendiente_firma') {
         $('asBanner').innerHTML = banner('info', 'El anexo está <strong>aprobado</strong> y la firma del cliente corre en paralelo. Puedes asignar desde ya: la orden de programación saldrá sola cuando el anexo quede firmado.');
       }
-      toolbar([`<button type="button" class="btn btn-primary btn-sm" data-as="tomar"><i data-lucide="scan-barcode"></i> Tomar del estante</button>`]);
-      footer([`<button type="button" class="btn btn-primary" data-as="guardar-gestion"><i data-lucide="save"></i> Guardar asignación</button>`]);
+      if (esCambio(g)) {
+        const props = (g.items || []).filter(i => i.serial_nuevo).length;
+        $('asBanner').innerHTML = banner('info',
+          '<strong>Corrección de registro — no saques nada del estante.</strong> El radio ya está con el cliente; '
+          + 'lo que está mal es el serial anotado. Escribe el serial que tiene el radio de verdad'
+          + (props ? ` (${props === 1 ? 'uno viene propuesto' : `${props} vienen propuestos`} — verifícalo).` : '.')
+          + ' Al guardar, el sistema corrige el contrato y avisa a activaciones.');
+        // Sin "Tomar del estante": lo que hay que teclear no está en bodega
+        // como stock disponible, es el radio que el cliente tiene en la mano.
+        toolbar([]);
+        footer([`<button type="button" class="btn btn-primary" data-as="guardar-gestion"><i data-lucide="replace"></i> Guardar corrección</button>`]);
+      } else {
+        toolbar([`<button type="button" class="btn btn-primary btn-sm" data-as="tomar"><i data-lucide="scan-barcode"></i> Tomar del estante</button>`]);
+        footer([`<button type="button" class="btn btn-primary" data-as="guardar-gestion"><i data-lucide="save"></i> Guardar asignación</button>`]);
+      }
     } else {
       footer([]);
     }
@@ -616,8 +644,8 @@ window.AlmacenAsignar = (() => {
   // norm(serial) → objeto guardado {serial, pool_doc_id, modelo, modelo_id}
   function serialesGuardadosGestion(g) {
     const out = {};
-    if (g.tipo === 'reemplazo') {
-      (g.items || []).forEach(it => { const k = norm(it.serial_nuevo); if (k) out[k] = { serial: it.serial_nuevo, pool_doc_id: it.pool_doc_id_nuevo || null, modelo: it.modelo_solicitado || it.modelo || '', modelo_id: it.modelo_solicitado_id || null }; });
+    if (g.tipo === 'reemplazo' || esCambio(g)) {
+      (g.items || []).forEach(it => { const k = norm(it.serial_nuevo); if (k) out[k] = { serial: it.serial_nuevo, pool_doc_id: it.pool_doc_id_nuevo || null, modelo: it.modelo_solicitado || it.modelo || '', modelo_id: it.modelo_solicitado_id || it.modelo_id || null }; });
     } else {
       const lista = (g.tipo === 'demo' ? g.demo?.seriales_asignados : g.aumento?.seriales_asignados) || [];
       lista.forEach(s => { const k = norm(s.serial); if (k) out[k] = s; });
@@ -626,6 +654,22 @@ window.AlmacenAsignar = (() => {
   }
 
   function gruposDeGestion(g) {
+    if (esCambio(g)) {
+      // Un grupo por ítem, con el serial equivocado en el título: lo que
+      // bodega compara contra el radio que tiene enfrente. El modelo NO
+      // cambia — un dígito mal tecleado no convierte un radio en otro.
+      return (g.items || []).map((it, ix) => ({
+        clave: String(ix),
+        modelo: it.modelo || '—',
+        modelo_id: it.modelo_id || '',
+        activos: 1,
+        titulo: `Figura <span style="font-family:var(--font-mono,monospace);">${esc(it.serial || '—')}</span>`
+          + ` <span style="color:var(--fg-3); font-weight:400;">(${esc(it.modelo || '—')}`
+          + `${it.contrato_id ? ` · contrato ${esc(it.contrato_id)}` : ''}) → ¿cuál es el serial real?</span>`,
+        nota: it.motivo_detalle || it.motivo_codigo ? esc(it.motivo_detalle || it.motivo_codigo) : '',
+        slots: it.serial_nuevo ? [{ serial: it.serial_nuevo }] : [],
+      }));
+    }
     if (g.tipo === 'reemplazo') {
       return (g.items || []).map((it, ix) => ({
         clave: String(ix),
@@ -662,7 +706,11 @@ window.AlmacenAsignar = (() => {
     const g = t.g;
     if (asg.validarCompleto() && $('asBody').querySelector('.serial-input.dup')) { toast('Hay seriales duplicados (marcados en rojo).', 'warn'); return; }
     const datos = asg.collect();
-    if (!datos.seriales.length && g.tipo !== 'reemplazo') { toast('Captura al menos un serial.', 'warn'); return; }
+    if (!datos.seriales.length && g.tipo !== 'reemplazo' && !esCambio(g)) { toast('Captura al menos un serial.', 'warn'); return; }
+    if (esCambio(g) && !datos.seriales.length) { toast('Escribe el serial que tiene el radio de verdad.', 'warn'); return; }
+    // Misma política dura que el resto: el serial existe, está en bodega y es
+    // del modelo pedido. En una corrección eso es justo lo que se espera —
+    // el radio "correcto" nunca salió, así que en el sistema sigue en bodega.
     const r = await asg.exigirEnBodega(datos.seriales, {});
     if (!r) return;
     const btn = $('asFoot').querySelector('[data-as="guardar-gestion"]'); if (btn) btn.disabled = true;
@@ -679,15 +727,17 @@ window.AlmacenAsignar = (() => {
         };
       };
       let completo = false;
-      if (g.tipo === 'reemplazo') {
+      if (g.tipo === 'reemplazo' || esCambio(g)) {
         const items = (g.items || []).map(it => ({ ...it }));
         items.forEach((it, ix) => {
           const s = datos.seriales.find(x => x.clave === String(ix));
           if (!s) { it.serial_nuevo = null; it.pool_doc_id_nuevo = null; return; }
           const o = objeto(s);
           it.serial_nuevo = o.serial; it.pool_doc_id_nuevo = o.pool_doc_id; it.asignado_at = new Date().toISOString();
+          // Lo que bodega confirma deja de ser propuesta de quien la pidió.
+          if (esCambio(g)) { it.serial_nuevo_propuesto = false; it.confirmado_por_bodega = true; }
         });
-        await GestionesService.asignarItems(t.gid, items);
+        await GestionesService.asignarItems(t.gid, items, { tipo: g.tipo });
         completo = items.every(it => it.serial_nuevo);
       } else {
         const seriales = datos.seriales.map(objeto);
@@ -701,9 +751,13 @@ window.AlmacenAsignar = (() => {
           `Excepción de modelo (${r.excepcion.seriales.join(', ')}): ${r.excepcion.motivo}`).catch(() => {});
       }
       invalidarBodega();
-      toast(completo
-        ? 'Asignación completa — el sistema crea la orden de programación y avisa a Recepción.'
-        : 'Asignación guardada (parcial).', 'ok');
+      toast(esCambio(g)
+        ? (completo
+          ? 'Corrección guardada — el sistema corrige el contrato y avisa a activaciones.'
+          : 'Corrección guardada (parcial): falta confirmar el resto para que se aplique.')
+        : completo
+          ? 'Asignación completa — el sistema crea la orden de programación y avisa a Recepción.'
+          : 'Asignación guardada (parcial).', 'ok');
       // El avance lo hace el trigger (~1-2 s): la cola se refresca después.
       setTimeout(() => siguiente({ cerrado: completo }), 1800);
     } catch (e) {

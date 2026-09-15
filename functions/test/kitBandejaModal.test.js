@@ -135,7 +135,7 @@ test("K8 · F3: una identidad de serial, un picker, un combo y un select filtrad
   assert.match(serial, /window\.Serial/);
   for (const f of [["public", "js", "services", "equiposPoolService.js"], ["public", "js", "services", "contratosService.js"],
     ["public", "js", "ui", "asignador-seriales.js"], ["public", "js", "pages", "almacen-asignar.js"],
-    ["public", "js", "pages", "ordenes-render.js"], ["public", "js", "pages", "ordenes-equipos.js"], ["public", "js", "pages", "contratos-seriales-cambio.js"]]) {
+    ["public", "js", "pages", "ordenes-render.js"], ["public", "js", "pages", "ordenes-equipos.js"]]) {
     const src = sinComentarios(leer(...f));
     assert.ok(!/toUpperCase\(\)\.replace\(\/\[\^A-Z0-9\]\/g/.test(src), `${f.at(-1)}: conserva una copia de la normalización de serial`);
     assert.ok(!/toLowerCase\(\)\.replace\(\/\[\^a-z0-9\]\/g/.test(src), `${f.at(-1)}: normaliza en minúsculas (divergente)`);
@@ -152,9 +152,11 @@ test("K8 · F3: una identidad de serial, un picker, un combo y un select filtrad
     const iSerial = s.indexOf("core/serial.js"), iSvc = s.search(/services\/(equiposPoolService|contratosService)\.js/);
     assert.ok(iSerial >= 0 && iSerial < iSvc, `${path2.relative(RAIZ, h)}: core/serial.js debe ir antes de los servicios de seriales`);
   }
-  // EntityPicker: el picker del estante y el cambio de serial ya no arman su lista.
+  // EntityPicker: el picker del estante ya no arma su lista. (El modal viejo
+  // de cambio de serial salió del censo el 2026-09-15: el cambio de serial es
+  // una gestión del Centro y bodega lo trabaja en Almacén · Asignar.)
   assert.match(leer("public", "js", "ui", "entity-picker.js"), /Modal\.sheet\(/);
-  for (const f of [["public", "js", "ui", "asignador-seriales.js"], ["public", "js", "pages", "contratos-seriales-cambio.js"]]) {
+  for (const f of [["public", "js", "ui", "asignador-seriales.js"]]) {
     const src = sinComentarios(leer(...f));
     assert.ok(/EntityPicker\.abrir\(/.test(src), `${f.at(-1)}: usa EntityPicker`);
     assert.ok(!/pp-check|scmb-check/.test(src), `${f.at(-1)}: no debe pintar su propia lista de checkboxes`);
