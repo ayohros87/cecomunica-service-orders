@@ -470,6 +470,17 @@ service cloud.firestore {
           // saben restar fechas sin encarecer un match que ya va justo.
           || (de == "COMPLETADO (EN OFICINA)" && a == "CERRADA (SIN RETIRAR)"
               && request.resource.data.get("sin_retirar", {}).get("motivo", "").size() >= 10)
+          // ANULADA: el contrato de la orden se anuló y no va a proceder
+          // (2026-09-15). Desde CUALQUIER estado vivo, porque la anulación no
+          // pregunta en qué punto va la orden — pero con MOTIVO escrito, el
+          // mismo listón que el cierre sin retirar: cerrar un caso sin decir
+          // por qué es como no cerrarlo. La otra salida —el papel se rehizo—
+          // no pasa por aquí: repuntar el contrato deja el estado intacto y
+          // `de == a` ya lo permite. Va en UNA cláusula con `in` porque este
+          // match está al tope de 1000 expresiones al denegar.
+          || (a == "ANULADA"
+              && de in ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO", "COMPLETADO (EN OFICINA)"]
+              && request.resource.data.get("anulada_motivo", "").size() >= 10)
           // Candado de control de calidad (ordenes-qc.js): las órdenes
           // completadas post-despliegue llevan qc_requerido:true (lo estampa
           // completeOrder) y solo pueden entregarse con qc.resultado ==

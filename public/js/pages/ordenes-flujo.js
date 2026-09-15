@@ -363,15 +363,138 @@ function abrirModalContratoMuerto(orden, contrato, { esAdmin, clienteId }) {
     buttons: [
       ...(esAdmin ? [{ action: 'override', label: 'Entregar igual (admin)' }] : []),
       { action: 'cerrar', label: 'Cerrar' },
-      ...(clienteId ? [{ action: 'ficha', label: 'Ver los contratos del cliente', primary: true, icon: 'user' }] : []),
+      ...(clienteId ? [{ action: 'ficha', label: 'Ver los contratos del cliente' }] : []),
+      { action: 'resolver', label: 'Resolver esta orden…', primary: true, icon: 'git-branch' },
     ],
     onAction: (a) => {
       if (a === 'override') { setTimeout(() => abrirModalEntrega(orden.ordenId), 0); return 'override'; }
       if (a === 'ficha') { location.href = url; return 'ficha'; }
+      if (a === 'resolver') { setTimeout(() => abrirResolverContratoAnulado(orden.ordenId), 0); return 'resolver'; }
       return null;
     },
   });
 }
+
+// ── Las DOS PUERTAS de una orden con el contrato anulado (2026-09-15) ──────
+// Mismo patrón que la válvula de casos viejos: aquí no hay un botón de
+// "cerrar", hay dos caminos y hay que elegir, porque el sistema no puede saber
+// cuál es sin preguntar — y equivocarse cuesta en las dos direcciones.
+//
+//   A · "El papel se rehizo" → la orden PASA al contrato nuevo. El trabajo es
+//       el mismo: los mismos radios, la misma programación. El estado no se
+//       toca y la entrega sale por el camino normal.
+//   B · "El contrato no va a proceder" → la orden se ANULA con motivo, y los
+//       radios que nunca salieron vuelven a bodega (onOrdenWritePool).
+//
+// Quién: admin y recepción — los mismos que editan la cabecera de una orden.
+async function abrirResolverContratoAnulado(ordenId) {
+  const rol = APP.state.userRole || '';
+  const ADMIN = (typeof ROLES !== 'undefined' ? ROLES.ADMIN : 'administrador');
+  const RECEP = (typeof ROLES !== 'undefined' ? ROLES.RECEPCION : 'recepcion');
+  if (![ADMIN, RECEP].includes(rol)) {
+    Toast.show('Solo administración o recepción resuelve una orden con el contrato anulado', 'warn');
+    return;
+  }
+  const orden = await OrdenesService.getOrder(ordenId);
+  if (!orden) { Toast.show('No se encontró la orden', 'bad'); return; }
+  const nEquipos = (orden.equipos || []).filter(e => !e.eliminado).length;
+  const actual = orden.contrato?.contrato_id || orden.contrato_anulado_revisar?.contrato || '—';
+
+  // Contratos VIVOS del cliente, el más nuevo primero: son los candidatos a
+  // recibir la orden. El que ya tiene (el anulado) no está: no está vivo.
+  let candidatos = [];
+  try {
+    const snap = await firebase.firestore().collection('contratos')
+      .where('cliente_id', '==', orden.cliente_id || '').get();
+    candidatos = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(c => !c.deleted && ['activo', 'aprobado'].includes(c.estado))
+      .sort((a, b) => (b.fecha_creacion?.seconds || 0) - (a.fecha_creacion?.seconds || 0));
+  } catch (e) {
+    console.warn('[resolver] no se pudieron leer los contratos del cliente:', e);
+  }
+
+  const opt = (c) => {
+    const unid = (c.equipos || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
+    return `<option value="${escapeHtml(c.id)}" data-num="${escapeHtml(c.contrato_id || c.id)}">`
+      + `${escapeHtml(c.contrato_id || c.id)} — ${escapeHtml(c.estado)}${unid ? ` · ${unid} unid.` : ''}</option>`;
+  };
+
+  Modal.sheet({
+    title: 'Resolver la orden: su contrato fue anulado', icon: 'git-branch', size: 'lg',
+    html: `
+      <p style="margin:0 0 12px;font-size:13.5px;color:var(--fg-2,#374151);">
+        La orden <b>${escapeHtml(ordenId)}</b> tiene <b>${nEquipos} equipo(s)</b> preparados bajo el
+        contrato <b>${escapeHtml(actual)}</b>, que está anulado. Elige qué pasa con ella.
+      </p>
+
+      <label class="rca-op" style="display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid var(--border-default,#d1d5db);border-radius:10px;cursor:pointer;margin-bottom:8px;">
+        <input type="radio" name="rcaTipo" value="repuntar" checked style="margin-top:3px;">
+        <span><b>El papel se rehizo — la orden pasa al contrato nuevo</b><br>
+          <small style="color:var(--fg-3,#6b7280);">Cambio de serial, de modelo, de representante, de precio…
+          Los radios son los mismos y el trabajo ya está hecho: solo cambia bajo qué contrato se entregan.</small></span>
+      </label>
+      <div id="rcaBloque" style="margin:0 0 12px 30px;">
+        <label style="display:block;font-weight:600;font-size:13px;margin-bottom:4px;">Contrato nuevo</label>
+        ${candidatos.length
+          ? `<select class="form-input" id="rcaContrato" style="width:100%;max-width:420px;">
+               <option value="">Elige el contrato…</option>${candidatos.map(opt).join('')}</select>`
+          : `<p style="font-size:13px;color:var(--warn-deep,#92400E);margin:0;">Este cliente no tiene
+               ningún contrato vivo. Hay que crearlo primero en la ficha del cliente, o anular la orden.</p>`}
+      </div>
+
+      <label class="rca-op" style="display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid var(--border-default,#d1d5db);border-radius:10px;cursor:pointer;">
+        <input type="radio" name="rcaTipo" value="anular" style="margin-top:3px;">
+        <span><b>El contrato no va a proceder — se anula la orden</b><br>
+          <small style="color:var(--fg-3,#6b7280);">La orden se cierra en ANULADA y queda en el historial
+          con el motivo. Los ${nEquipos} radio(s) que nunca salieron <b>vuelven a bodega</b> y se pueden
+          volver a asignar. No se borra nada.</small></span>
+      </label>
+      <div id="rcaBloqueAnular" style="margin:8px 0 0 30px;display:none;">
+        <label style="display:block;font-weight:600;font-size:13px;margin-bottom:4px;">Motivo</label>
+        <textarea class="form-input" id="rcaMotivo" rows="2" style="width:100%;resize:vertical;"
+          placeholder="Ej: el cliente desistió y no se firmó contrato nuevo"></textarea>
+      </div>`,
+    buttons: [
+      { action: 'cerrar', label: 'Cancelar' },
+      { action: 'aplicar', label: 'Aplicar', primary: true },
+    ],
+    onMount: (root) => {
+      const sync = () => {
+        const tipo = root.querySelector('input[name="rcaTipo"]:checked')?.value;
+        root.querySelector('#rcaBloque').style.display = tipo === 'repuntar' ? '' : 'none';
+        root.querySelector('#rcaBloqueAnular').style.display = tipo === 'anular' ? '' : 'none';
+      };
+      root.querySelectorAll('input[name="rcaTipo"]').forEach(r => r.addEventListener('change', sync));
+      sync();
+    },
+    onAction: async (a, root) => {
+      if (a !== 'aplicar') return null;
+      const tipo = root.querySelector('input[name="rcaTipo"]:checked')?.value;
+      try {
+        if (tipo === 'repuntar') {
+          const sel = root.querySelector('#rcaContrato');
+          const docId = sel?.value || '';
+          if (!docId) { Toast.show('Elige a qué contrato pasa la orden', 'warn'); return false; }
+          const num = sel.selectedOptions[0]?.dataset.num || '';
+          const r = await OrdenesService.repuntarContratoOrden(ordenId, { contratoDocId: docId, contratoId: num });
+          Toast.show(`Orden ${ordenId}: de ${r.de} a ${r.a}. Ya se puede entregar.`, 'ok');
+        } else {
+          const motivo = root.querySelector('#rcaMotivo')?.value || '';
+          const r = await OrdenesService.anularOrden(ordenId, { motivo });
+          Toast.show(`Orden ${ordenId} ANULADA — ${r.equipos} radio(s) vuelven a bodega.`, 'ok');
+        }
+        // El snapshot vivo de la bandeja repinta la fila solo.
+        return tipo;
+      } catch (e) {
+        console.error(e);
+        Toast.show(e.message || 'No se pudo resolver la orden', 'bad');
+        return false;
+      }
+    },
+  });
+}
+window.abrirResolverContratoAnulado = abrirResolverContratoAnulado;
 
 // ── Candado de firma del ANEXO de aumento (2026-09-03, segunda vuelta) ────
 // La OS de un aumento sale apenas bodega asigna, con el anexo todavía en

@@ -190,6 +190,12 @@
       const ordenId = el.dataset.ordenId;
       if (ordenId) window.location.href = `editar-orden.html?id=${ordenId}`;
     },
+    // Las dos puertas de una orden cuyo contrato se anuló (ordenes-flujo).
+    'resolver-contrato-anulado': (el) => {
+      const ordenId = el.dataset.ordenId;
+      closeAllMenus();
+      if (ordenId) abrirResolverContratoAnulado(ordenId);
+    },
     // Galería modal a nivel de orden (§5.23) — antes navegaba a
     // fotos-taller.html (página retirada). Mismos datos (fotos_taller[]).
     'go-fotos-taller': (el) => {

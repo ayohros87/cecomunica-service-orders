@@ -20,7 +20,19 @@
 //   A3 — con sustituto, se REPUNTA: el papel se rehizo, el trabajo es el mismo.
 //   A4 — es idempotente: correrlo dos veces no vuelve a tocar nada.
 //   A5 — el estado ANULADA es terminal en todas partes (pool, KPIs, bandeja).
-//   A7 — los 4 casos reales caen donde deben.
+//   A7 — un equipo eliminado no cuenta como trabajo.
+//
+// Y la salida HUMANA que faltaba (A8–A11): hasta hoy una orden así no tenía
+// puerta por ningún lado — no se podía entregar (el candado deniega bajo un
+// contrato anulado), el editor de cabecera solo abre en POR ASIGNAR, y
+// "CERRADA (SIN RETIRAR)" habría mentido diciendo que el cliente no vino a
+// buscar unos radios que ni contrato tienen. Se añadieron DOS PUERTAS, mismo
+// patrón que la válvula de casos viejos: pasar la orden al contrato nuevo, o
+// anularla con motivo. Y el Centro las recuerda donde el dato por fin existe.
+//   A8  — las dos puertas existen y son alcanzables desde la fila.
+//   A9  — rules deja anular con motivo, solo desde un estado vivo.
+//   A10 — al anular, los radios que nunca salieron vuelven a bodega.
+//   A11 — el Centro recuerda las señaladas, con un deep-link que SÍ las trae.
 //
 // Corre con `npm test` (node --test). Sin emulador: planOrdenes es lógica pura.
 const { test } = require("node:test");
@@ -128,4 +140,62 @@ test("A6 · el trigger de la anulación llama al cierre de órdenes", () => {
   assert.ok(i > 0, "no se llama con el doc del contrato");
   assert.ok(/try \{[^}]*cerrarOrdenesDeContratoAnulado/s.test(src.slice(Math.max(0, i - 300), i + 100)),
     "la llamada no está protegida: un fallo ahí frenaría el correo de anulación");
+});
+
+test("A8 · las DOS PUERTAS existen y son alcanzables", () => {
+  // Puerta 1 (repuntar) y puerta 2 (anular) en el servicio, con el listón de
+  // motivo que hace que un cierre diga por qué.
+  const svc = leer("public", "js", "services", "ordenesService.js");
+  assert.ok(/async repuntarContratoOrden\(/.test(svc), "falta la puerta de repuntar");
+  assert.ok(/async anularOrden\(/.test(svc), "falta la puerta de anular");
+  assert.ok(/texto\.length < 10/.test(svc.slice(svc.indexOf("async anularOrden("))),
+    "anularOrden acepta un cierre sin motivo");
+  // Las dos apagan la marca del trigger: si no, el aviso quedaría eterno.
+  for (const fn of ["repuntarContratoOrden", "anularOrden"]) {
+    const cuerpo = svc.slice(svc.indexOf(`async ${fn}(`), svc.indexOf(`async ${fn}(`) + 2400);
+    assert.ok(/contrato_anulado_revisar: firebase\.firestore\.FieldValue\.delete\(\)/.test(cuerpo),
+      `${fn} no apaga contrato_anulado_revisar`);
+  }
+  // La hoja y su entrada en el menú de la fila.
+  const flujo = leer("public", "js", "pages", "ordenes-flujo.js");
+  assert.ok(/function abrirResolverContratoAnulado\(/.test(flujo), "falta la hoja de las dos puertas");
+  assert.ok(/repuntarContratoOrden|anularOrden/.test(flujo), "la hoja no llama al servicio");
+  const render = leer("public", "js", "pages", "ordenes-render.js");
+  assert.ok(/resolver-contrato-anulado/.test(render), "el menú de la fila no ofrece resolverla");
+  assert.ok(/estadoUpper === "ANULADA"/.test(render), "ANULADA no cuenta como terminal en el menú");
+  assert.ok(/'resolver-contrato-anulado':/.test(leer("public", "js", "pages", "ordenes-events.js")),
+    "la acción no está cableada en el dispatcher");
+});
+
+test("A9 · rules deja ANULAR con motivo, y solo desde un estado vivo", () => {
+  const rules = leer("firestore.rules");
+  const i = rules.indexOf('a == "ANULADA"');
+  assert.ok(i > 0, "rules no permite la transición a ANULADA");
+  const bloque = rules.slice(i, i + 400);
+  assert.ok(/anulada_motivo[\s\S]*size\(\) >= 10/.test(bloque), "rules acepta anular sin motivo");
+  assert.ok(/COMPLETADO \(EN OFICINA\)/.test(bloque), "no se puede anular una orden ya completada");
+  assert.ok(!/ENTREGADO AL CLIENTE/.test(bloque), "deja anular una orden YA entregada");
+});
+
+test("A10 · al anular, los radios que nunca salieron vuelven a bodega", () => {
+  const pool = leer("functions", "src", "triggers", "ordenes", "onOrdenWritePool.js");
+  const i = pool.indexOf("const anulada = after");
+  assert.ok(i > 0, "el pool no reacciona a la orden ANULADA");
+  const bloque = pool.slice(i, i + 1200);
+  assert.ok(/EN_BODEGA/.test(bloque), "no los devuelve a bodega");
+  assert.ok(/soloDesde: \[pool\.ESTADOS\.EN_TALLER, pool\.ESTADOS\.ASIGNADO\]/.test(bloque),
+    "sin soloDesde le quitaría al cliente un radio ya entregado en una tanda");
+  assert.ok(/orden_actual_id === ordenId/.test(bloque),
+    "sin la condición tocaría un radio ya reasignado a otra orden");
+});
+
+test("A11 · el Centro recuerda las órdenes que quedaron sin contrato", () => {
+  const centro = leer("public", "js", "pages", "clientes-centro.js");
+  assert.ok(/_cargarOrdenesPorDecidir/.test(centro), "el Centro no busca las órdenes señaladas");
+  assert.ok(/ordenesPorDecidir/.test(centro), "no hay cola de órdenes por decidir");
+  // El deep-link tiene que TRAER la orden: son viejas y no caben en la primera
+  // página de la bandeja (?orden= solo filtra lo ya cargado).
+  const i = centro.indexOf("ordenesPorDecidir || []");
+  assert.ok(/ordenes\/index\.html\?ids=/.test(centro.slice(i, i + 900)),
+    "el CTA usa ?orden= en vez de ?ids=: aterrizaría en una lista vacía");
 });

@@ -390,8 +390,13 @@ module.exports = onDocumentUpdated(
       subject:     `Contrato ANULADO: ${contratoId} – ${after.cliente_nombre || "Cliente"}`,
       preheader,
       bodyContent: bodyHtml,
-      ctaUrl:      "https://app.cecomunica.net/contratos/index.html",
-      ctaLabel:    "Ver contratos",
+      // Si quedaron ordenes por decidir, el CTA lleva DIRECTO a ellas: son
+      // viejas y no caben en la primera pagina de la bandeja, por eso ?ids=
+      // (las trae del servidor) y no ?orden=, que solo filtra lo ya cargado.
+      ctaUrl: ordenesResueltas.revisar.length
+        ? `${APP_BASE_URL}/ordenes/index.html?ids=${encodeURIComponent(ordenesResueltas.revisar.map(o => o.id).join(","))}`
+        : "https://app.cecomunica.net/contratos/index.html",
+      ctaLabel: ordenesResueltas.revisar.length ? "Resolver las ordenes" : "Ver contratos",
       meta: {
         created_at:       admin.firestore.FieldValue.serverTimestamp(),
         source:           "contrato-anulado-notify",

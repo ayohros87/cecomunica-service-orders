@@ -300,6 +300,39 @@ async function main() {
   await assertFails(as("recepcion").doc("ordenes_de_servicio/oProgTemp").set(ENTREGADO, { merge: true }));
   ok("firma: TEMPORAL sin firmar NO se entrega — la exencion no se derrama");
 
+  // ── Anular la ORDEN cuando su contrato se anulo (2026-09-15) ────────────
+  // La salida que faltaba: sin ella una orden con el contrato anulado no se
+  // podia entregar (el candado deniega), ni editar (solo POR ASIGNAR), ni
+  // cerrar sin mentir. Terminal ANULADA con MOTIVO escrito, el mismo liston
+  // del cierre sin retirar. La otra puerta —repuntar el contrato— no toca el
+  // estado, asi que pasa por `de == a` y no necesita transicion propia.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const base = { tipo_de_servicio: "PROGRAMACIÓN", contrato: { aplica: true, contrato_doc_id: "cSinFirma" } };
+    await db.doc("ordenes_de_servicio/oAnulCompletada").set({ ...base, estado_reparacion: "COMPLETADO (EN OFICINA)" });
+    await db.doc("ordenes_de_servicio/oAnulSinMotivo").set({ ...base, estado_reparacion: "COMPLETADO (EN OFICINA)" });
+    await db.doc("ordenes_de_servicio/oAnulPorAsignar").set({ ...base, estado_reparacion: "POR ASIGNAR" });
+    await db.doc("ordenes_de_servicio/oAnulEntregada").set({ ...base, estado_reparacion: "ENTREGADO AL CLIENTE" });
+    await db.doc("ordenes_de_servicio/oRepunte").set({ ...base, estado_reparacion: "COMPLETADO (EN OFICINA)" });
+  });
+  const MOTIVO = "el cliente desistio y no se firmo contrato nuevo";
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oAnulCompletada")
+    .set({ estado_reparacion: "ANULADA", anulada_motivo: MOTIVO }, { merge: true }));
+  ok("anular orden: COMPLETADA con motivo SI se anula");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oAnulPorAsignar")
+    .set({ estado_reparacion: "ANULADA", anulada_motivo: MOTIVO }, { merge: true }));
+  ok("anular orden: POR ASIGNAR tambien (la anulacion no pregunta en que punto va)");
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oAnulSinMotivo")
+    .set({ estado_reparacion: "ANULADA", anulada_motivo: "porque si" }, { merge: true }));
+  ok("anular orden: sin motivo de verdad (<10) NO pasa");
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oAnulEntregada")
+    .set({ estado_reparacion: "ANULADA", anulada_motivo: MOTIVO }, { merge: true }));
+  ok("anular orden: una YA ENTREGADA no se anula — eso es historial del cliente");
+  // Puerta 1: repuntar el contrato deja el estado intacto.
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oRepunte")
+    .set({ contrato: { aplica: true, contrato_doc_id: "cActivo", contrato_id: "ALQ-3" } }, { merge: true }));
+  ok("repuntar: pasar la orden a otro contrato no necesita cambiar de estado");
+
   // ── Candado de factura de la venta en la ENTREGA (2026-09-03, Zuleika) ────
   // Un contrato "Propio" VENDE los radios: sin contratos.factura_venta.numero
   // la orden no pasa a ENTREGADO. Solo tipo Propio/PROP — que el alquiler pasa

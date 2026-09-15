@@ -27,6 +27,9 @@ const CERRADA_VISITA = "CERRADA (VISITA)";
 // Terminal de la válvula de casos viejos: el cliente nunca vino por sus
 // radios. NO es una entrega — las unidades siguen en nuestro estante.
 const CERRADA_SIN_RETIRAR = "CERRADA (SIN RETIRAR)";
+// Terminal de la orden cuyo CONTRATO se anuló y no va a proceder (2026-09-15).
+// Tampoco es una entrega: el radio nunca salió de la casa.
+const ANULADA = "ANULADA";
 const norm = (s) => String(s || "").trim().toUpperCase();
 // Contratos que siguen vivos: solo esos vale la pena marcar para cancelar.
 const VIGENTES = new Set(["activo", "aprobado"]);
@@ -415,6 +418,43 @@ module.exports = onDocumentWritten(
       // Solo se mueven las que SIGUEN en el taller: lo que ya salió en una
       // tanda está en_cliente y `soloDesde` lo rebota — así una orden con
       // entrega parcial cierra bien sin devolverle radios al estante.
+      // ── Orden ANULADA porque su contrato se anuló (2026-09-15) ──────────
+      // Distinto del no retiro: aquí el radio NUNCA salió — no hay cliente que
+      // lo tenga ni papel bajo el cual entregarlo. Vuelve a `en_bodega`, que es
+      // donde de verdad está y de donde se puede volver a asignar; dejarlo en
+      // `en_taller` lo condenaba a colgar de una orden muerta (los 13 radios de
+      // CONCORD, sept-2026). `no_retirado` mentiría al revés: diría que es del
+      // cliente y que espera que venga a buscarlo.
+      //
+      // `soloDesde` cubre las dos situaciones reales y rebota lo demás: lo que
+      // ya salió en una tanda está en_cliente y NO se le quita al cliente por
+      // anular el papel. `condicion` exige que la ficha siga apuntando a ESTA
+      // orden, para no tocar un radio que ya lo reasignaron a otra.
+      const anulada = after
+        && norm(after.estado_reparacion) === ANULADA
+        && norm(before?.estado_reparacion) !== ANULADA;
+      if (anulada) {
+        for (const e of despues) {
+          try {
+            await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+              aEstado: pool.ESTADOS.EN_BODEGA,
+              soloDesde: [pool.ESTADOS.EN_TALLER, pool.ESTADOS.ASIGNADO],
+              condicion: (d) => d.orden_actual_id === ordenId,
+              tipo: "liberacion",
+              refMov,
+              notas: String(after.anulada_motivo
+                || `Orden anulada — el contrato ${after.anulada_por_contrato || ""} no procede`).slice(0, 300),
+              extra: { orden_actual_id: null, asignacion: null },
+            });
+          } catch (err) {
+            logger.warn("[onOrdenWritePool] No se pudo devolver la unidad a bodega tras anular la orden", {
+              ordenId, serial: e.serial, message: err.message,
+            });
+          }
+        }
+        return null;
+      }
+
       const cerroSinRetirar = after
         && norm(after.estado_reparacion) === CERRADA_SIN_RETIRAR
         && norm(before?.estado_reparacion) !== CERRADA_SIN_RETIRAR;

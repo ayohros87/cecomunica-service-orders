@@ -251,6 +251,9 @@ window.Centro = {
       this.pintarEquipos();
       this.pintarGestiones();
       this.armarMenu();
+      // No bloquea la ficha: se pinta sola cuando llega (repinta "Ahora").
+      this.ordenesPorDecidir = [];
+      this._cargarOrdenesPorDecidir().catch(e => console.warn('[centro] ordenes por decidir:', e?.message || e));
       this._abrirBloques(clienteId);
       if (window.lucide?.createIcons) lucide.createIcons();
       if (this.cSel) {
@@ -633,6 +636,20 @@ window.Centro = {
         }
       }
     }
+    // Órdenes que se quedaron sin contrato cuando se anuló el suyo. Van aquí
+    // y no en el expediente del contrato anulado porque nadie abre un contrato
+    // muerto a ver qué dejó pendiente (2026-09-15).
+    for (const o of (this.ordenesPorDecidir || [])) {
+      it('warn', `La orden <span class="cg-mono">${this.esc(o.id)}</span> se quedó sin contrato`,
+        `${o.equipos_n} equipo(s) preparados bajo <span class="cg-mono">${this.esc(o.contrato)}</span>, que se anuló`
+        + `${o.motivo ? ` (${this.esc(String(o.motivo).slice(0, 80))})` : ''}. `
+        + `Si el cliente ya tiene contrato nuevo, la orden pasa a ese contrato y se entrega; si no, se anula.`,
+        // ?ids= y no ?orden=: la bandeja carga las 40 mas recientes y estas
+        // son de julio/agosto — ?orden= solo filtra lo ya cargado y la persona
+        // aterrizaria en una lista vacia. ?ids= las trae del servidor.
+        `<a class="btn btn-primary cg-act" href="../ordenes/index.html?ids=${encodeURIComponent(o.id)}">Resolver la orden</a>`);
+    }
+
     // Validaciones de firma fuera de la ventana de trámite.
     for (const c of (this.contratos || [])) {
       if (vistos.has(c.id) || !c.firmado_pendiente_validacion || !esAprobador) continue;
@@ -2404,6 +2421,39 @@ window.Centro = {
       this._osCache[cid] = { os: [], error: true };
     }
     if (this.gSel === 'ct-' + cid) { this.pintarGestiones(); if (window.lucide?.createIcons) lucide.createIcons(); }
+  },
+
+  // ── Órdenes que quedaron sin contrato al anularlo (2026-09-15) ────────────
+  // Cerrar el lazo donde el dato POR FIN existe. Al anular no se sabe cuál es
+  // el contrato nuevo —casi siempre se anula primero y se rehace después, por
+  // eso el sustituto del modal es opcional—, así que el trigger no puede
+  // repuntar solo y deja la orden SEÑALADA. El único sitio donde alguien ya
+  // está mirando al cliente y sus contratos es esta ficha: aquí se le
+  // recuerda, con el número de radios en juego, y el CTA lleva a la orden,
+  // donde viven las dos puertas (no se duplica la decisión en dos pantallas).
+  //
+  // Sin índice ni query nueva: reusa el mismo `contrato.contrato_doc_id` que
+  // ya usa `_cargarOsContrato`, y solo sobre los contratos ANULADOS del
+  // cliente — que son 0 en la inmensa mayoría de las fichas. Tope de 6, los
+  // más recientes: más atrás ya no es una decisión pendiente, es arqueología.
+  async _cargarOrdenesPorDecidir() {
+    const anulados = (this.contratos || [])
+      .filter(c => c.estado === 'anulado' && !c.deleted)
+      .sort((a, b) => (b.anulado_fecha?.seconds || 0) - (a.anulado_fecha?.seconds || 0))
+      .slice(0, 6);
+    if (!anulados.length) { this.ordenesPorDecidir = []; return; }
+    const out = [];
+    for (const c of anulados) {
+      await this._cargarOsContrato(c.id).catch(() => {});
+      for (const o of (this._osCache[c.id]?.os || [])) {
+        if (o.contrato_anulado_revisar) {
+          out.push({ id: o.id, equipos_n: Number(o.contrato_anulado_revisar.equipos_n || 0),
+            contrato: c.contrato_id || c.id, motivo: c.anulado_motivo || '' });
+        }
+      }
+    }
+    this.ordenesPorDecidir = out;
+    if (out.length) { this.pintarAcciones(); if (window.lucide?.createIcons) lucide.createIcons(); }
   },
   _osPasos(o) {
     const f = (ts) => { const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null); return d && !isNaN(d) ? d.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit' }) : null; };

@@ -706,6 +706,84 @@ const OrdenesService = {
     return { equipos: pendientes.length };
   },
 
+  // ── El contrato de la orden se anuló: las dos salidas (2026-09-15) ────────
+  // Anular un contrato dejaba su orden viva y sin destino: no se puede
+  // entregar (el candado de firma deniega bajo un contrato anulado), el editor
+  // de cabecera solo abre en POR ASIGNAR, y "CERRADA (SIN RETIRAR)" mentiría
+  // diciendo que el cliente no vino a buscar unos radios que ni contrato
+  // tienen. El trigger de la anulación ya reparte lo que puede solo
+  // (functions/src/domain/ordenesAnulacion.js) y SEÑALA —sin tocar el estado—
+  // las que tienen equipos preparados, porque ahí adivinar cuesta caro. Estas
+  // dos son la decisión humana que faltaba.
+
+  /**
+   * PUERTA 1 — el papel se rehizo: la orden pasa al contrato nuevo.
+   * El trabajo es el mismo (los mismos radios, la misma programación); lo
+   * único que cambia es bajo qué contrato se entregan. No toca el estado: la
+   * orden sigue donde estaba y la entrega sale por el camino normal.
+   *
+   * @param {string} ordenId
+   * @param {{contratoDocId:string, contratoId?:string, motivo?:string}} payload
+   */
+  async repuntarContratoOrden(ordenId, { contratoDocId, contratoId = '', motivo = '' }) {
+    if (!contratoDocId) throw new Error('Indica a qué contrato pasa la orden.');
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    const orden = (await db.collection('ordenes_de_servicio').doc(ordenId).get()).data() || {};
+    const anterior = orden.contrato?.contrato_id || orden.contrato?.contrato_doc_id || '—';
+    if (orden.contrato?.contrato_doc_id === contratoDocId) {
+      throw new Error('La orden ya está bajo ese contrato.');
+    }
+    await db.collection('ordenes_de_servicio').doc(ordenId).update({
+      contrato: { aplica: true, contrato_doc_id: contratoDocId, contrato_id: contratoId || '', motivo_no_aplica: null },
+      contrato_repuntado_desde: anterior,
+      contrato_repuntado_at: firebase.firestore.FieldValue.serverTimestamp(),
+      // La marca del trigger se apaga: ya se decidió.
+      contrato_anulado_revisar: firebase.firestore.FieldValue.delete(),
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'REPUNTAR_CONTRATO', by: user?.uid || '', at: firebase.firestore.Timestamp.now(),
+        nota: `De ${anterior} a ${contratoId || contratoDocId}${motivo ? ` — ${motivo}` : ''}`,
+      }),
+    });
+    return { de: anterior, a: contratoId || contratoDocId };
+  },
+
+  /**
+   * PUERTA 2 — el contrato no va a proceder: la orden se ANULA.
+   * Terminal con motivo escrito, igual que el cierre sin retirar: cerrar un
+   * caso sin decir por qué es como no cerrarlo. Los radios que nunca salieron
+   * vuelven a bodega — lo hace onOrdenWritePool al ver el estado, no esta
+   * función: el pool tiene un solo camino de escritura.
+   *
+   * @param {string} ordenId
+   * @param {{motivo:string}} payload
+   */
+  async anularOrden(ordenId, { motivo }) {
+    const texto = String(motivo || '').trim();
+    if (texto.length < 10) {
+      throw new Error('Explica en una frase por qué se anula la orden (mínimo 10 caracteres).');
+    }
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    const orden = (await db.collection('ordenes_de_servicio').doc(ordenId).get()).data() || {};
+    const pendientes = (typeof EntregaTandas !== 'undefined')
+      ? EntregaTandas.equiposPendientes(orden)
+      : (orden.equipos || []).filter(e => e && !e.eliminado);
+    await db.collection('ordenes_de_servicio').doc(ordenId).update({
+      estado_reparacion: 'ANULADA',
+      estado_previo: orden.estado_reparacion || null,
+      anulada_motivo: texto,
+      anulada_por_contrato: orden.contrato?.contrato_id || null,
+      anulada_at: firebase.firestore.FieldValue.serverTimestamp(),
+      contrato_anulado_revisar: firebase.firestore.FieldValue.delete(),
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'ANULAR', by: user?.uid || '', at: firebase.firestore.Timestamp.now(),
+        equipos: pendientes.length, nota: texto,
+      }),
+    });
+    return { equipos: pendientes.length };
+  },
+
   /**
    * Entrega PARCIAL — registra una tanda de equipos que el cliente se lleva
    * hoy, dejando el resto en el taller. NO toca `estado_reparacion`: la orden

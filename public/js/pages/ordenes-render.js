@@ -1322,7 +1322,8 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     // ruido — en la mayoría de las filas no se podía usar (auditoría P2).
     // Eliminar: solo en estados NO terminales; una orden entregada/cerrada es
     // historial del cliente y se conserva (anular ≠ borrar).
-    const esTerminal = estadoUpper.includes("ENTREGAD") || estadoUpper.startsWith("CERRADA");
+    const esTerminal = estadoUpper.includes("ENTREGAD") || estadoUpper.startsWith("CERRADA")
+      || estadoUpper === "ANULADA";
     menuItems.push(
       { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden-doc", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
       { icon: '<i data-lucide="clipboard-list"></i>', label: "Nota de entrega", action: "nota-entrega-doc", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
@@ -1331,6 +1332,18 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     if (estadoUpper === "POR ASIGNAR" || !esTerminal) menuItems.push({ divider: true });
     if (estadoUpper === "POR ASIGNAR") {
       menuItems.push({ icon: '<i data-lucide="pencil"></i>', label: "Editar orden", action: "editar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" });
+    }
+    // El contrato de esta orden se anuló y hay que decidir (2026-09-15). La
+    // marca la pone el trigger de la anulación cuando la orden ya tiene
+    // equipos preparados: hasta hoy esas órdenes no tenían salida por ningún
+    // menú — ni entregar (el candado deniega), ni editar (solo POR ASIGNAR),
+    // ni cerrar sin mentir. Va resaltado: es lo único accionable de la fila.
+    if (o.contrato_anulado_revisar && !esTerminal) {
+      menuItems.push({
+        icon: '<i data-lucide="git-branch"></i>', label: "Resolver contrato anulado…",
+        action: "resolver-contrato-anulado", dataAttributes: `data-orden-id="${ordenId}"`,
+        class: 'highlighted',
+      });
     }
     if (!esTerminal) {
       menuItems.push({ icon: '<i data-lucide="trash-2"></i>', label: "Eliminar orden", action: "eliminar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "danger" });
