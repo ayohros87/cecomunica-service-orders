@@ -39,7 +39,46 @@
 >   es de administración, recepción y contabilidad (need-to-know). Bodega no
 >   tiene nada que hacer ahí.
 
-## [El contrato de REEMPLAZO no lleva firma del cliente] — 2026-09-15
+## [Anular el contrato resuelve también sus órdenes de servicio] — 2026-09-15
+
+> Alberto, al revisar las órdenes que quedaban trancadas: *"si el contrato se
+> anuló, la orden se debería anular también, verifica por qué no se anularía"*.
+>
+> **No se anulaba porque nadie la tocaba.** El trigger de la anulación cerraba la
+> facturación, resolvía el pool y abría la devolución, pero no miraba
+> `ordenes_de_servicio` por ningún lado. El contrato moría y su orden seguía viva
+> en la bandeja para siempre — y desde el candado de firma de la entrega
+> (2026-09-03) ya ni podía entregarse: un contrato anulado no está firmado ni
+> activo, así que la única salida era el override de admin. Medido: **24 órdenes
+> colgaban de un contrato anulado**, 4 todavía vivas — tres COMPLETADAS con 15,
+> 10 y 1 radio esperando una entrega imposible desde julio y agosto, con los
+> radios en taller o en bodega, no con el cliente.
+>
+> **Tres salidas, no dos.** La versión obvia —"contrato anulado, orden anulada"—
+> se probó contra los 4 casos reales y habría destrozado 3: en los tres el cliente
+> SÍ tenía un contrato nuevo, ese contrato nuevo **no tenía orden propia**, y la
+> orden vieja era la única que llevaba el trabajo. Anularlas habría tirado a la
+> basura 26 radios ya preparados.
+>
+> - **Sustitución con sustituto declarado → se REPUNTA** al contrato nuevo: el
+>   papel se rehizo, el trabajo es el mismo y los seriales ya se traspasaron.
+> - **Sin sustituto y sin un solo serial → ANULADA.** No hay nada que perder.
+> - **Sin sustituto pero con equipos preparados → se SEÑALA.** El estado no se
+>   toca; la orden queda con el aviso encima y el correo de la anulación se lo
+>   dice a Recepción por número y con el conteo de radios, para que una persona
+>   decida. Adivinar cuesta caro en las dos direcciones: anular tira trabajo,
+>   callarse lo vuelve fantasma.
+>
+> Lo ya entregado o cerrado no se toca nunca, y se **cierra, no se borra**.
+> `ANULADA` pasa a ser un estado canónico y entra en los terminales de
+> **Admin · Operación**, donde se contaba como *"sin asignar"*.
+>
+> Y el callejón sin salida que quedaba en pantalla: el modal de entrega de una
+> orden con contrato anulado decía *"falta la firma"* y ofrecía **mandar a firmar
+> un contrato anulado**. Ahora dice que el contrato está anulado, con su motivo, y
+> cuáles son las dos salidas reales.
+
+## [El contrato de REEMPLAZO no lleva firma del cliente — y el DEMO tampoco] — 2026-09-15
 
 > Brenda: *"En esta orden aparece que el contrato de reemplazo aún no ha sido
 > firmado y, por esta razón, no permite realizar la entrega… en total son 3
@@ -82,6 +121,25 @@
 >   el que mandaba a la vendedora a perseguir una firma que no existía.
 > - El documento del contrato deja de avisar *"aprobado pero aún sin la firma
 >   del cliente"* sobre un papel que está completo.
+>
+> **Segunda vuelta — el DEMO.** Al repasar el resto de los tipos (*"verifica si
+> alguna otra gestión no lleva firma y requiere el mismo arreglo, como demo y
+> similares"*) apareció el mismo cuadro, y peor: **14 de 14 demos entregados
+> nunca se firmaron**, ninguno llega jamás a `activo`, y **el sistema ya se
+> contradecía solo** — un demo creado como *gestión* no tiene paso de firma, pero
+> el mismo demo creado como *contrato* exigía la firma para entregar, con 14
+> órdenes vivas trancadas por esa contradicción. El demo se exime igual que el
+> reemplazo: es un préstamo de evaluación y su custodia la documentan la nota de
+> entrega y el retorno.
+>
+> El **temporal se queda pidiendo firma**: es un alquiler de evento con precio (2
+> de 4 entregados sí están firmados) y ahí la firma sí documenta la custodia. Va
+> al harness de reglas como control negativo para que la exención no se derrame.
+>
+> En **gestiones no había nada que arreglar**: solo el `aumento` lleva paso de
+> firma y es el único que mira `anexoFirmadoParaEntregar()`; reemplazo, demo y
+> baja no lo tienen, y las órdenes que nacen de una gestión demo salen con
+> `contrato.aplica: false`, así que el candado del contrato ni las mira.
 
 ## [La intervención se puede LEER sin poder editarla] — 2026-09-10
 
