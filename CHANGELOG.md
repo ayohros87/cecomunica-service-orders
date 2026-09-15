@@ -1,5 +1,49 @@
 # Changelog
 
+## [El contrato de REEMPLAZO no lleva firma del cliente] — 2026-09-15
+
+> Brenda: *"En esta orden aparece que el contrato de reemplazo aún no ha sido
+> firmado y, por esta razón, no permite realizar la entrega… en total son 3
+> radios que fueron reemplazados y los tres fueron entregados al cliente por la
+> vendedora el 04 de septiembre… los equipos no continúen apareciendo como si
+> todavía estuvieran en la empresa, cuando en realidad ya se encuentran en poder
+> del cliente"* (MACELLO, S.A., OS 2026090310). La orden hermana —la 2026090306,
+> del mismo cliente y el mismo día— sí salió, y esa diferencia era todo el
+> síntoma: su REEMP estaba firmado por casualidad.
+>
+> **Un reemplazo no pacta nada.** No hay precio nuevo, ni plazo nuevo, ni
+> obligación nueva: sustituye una unidad por otra bajo el contrato que el cliente
+> YA firmó. Por eso **79 de los 82 REEMP del sistema están sin firmar** — esa es
+> su forma normal, no un pendiente. El candado de firma de la entrega
+> (2026-09-03, requerimiento de Zuleika) no miraba el tipo de contrato y tenía
+> **4 órdenes vivas trancadas con 33 radios**, la de MIDES desde el 21 de julio
+> con 30 equipos — radios que el sistema seguía contando como si estuvieran en la
+> empresa.
+>
+> Y firmarlo tampoco era inocuo: la firma **activa** el contrato, y una
+> activación le crea un aviso de facturación con su comisión — un cobro que
+> nadie pactó por unos radios que solo cambiaron de número de serie.
+>
+> - **Un solo predicado**, `js/domain/contratoFirma.js` con su espejo en
+>   `functions/src/domain/contratoFirma.js` y en `firestore.rules`: *¿este
+>   contrato lleva firma del cliente?* El tipo sale del **documento**, no del
+>   prefijo del número — hay un reemplazo numerado `ALQ20251024-01`.
+> - **La entrega sale**: `contratoFirmadoParaEntregar()` en rules y su espejo del
+>   navegador (`ordenes-flujo`) eximen al reemplazo. El resto del candado no se
+>   toca: un alquiler sin firmar sigue sin entregarse.
+> - **El Centro deja de pedir la firma**: la cola *Ahora* pide la **entrega** del
+>   reemplazo; su trámite se cierra cuando los equipos se entregan (antes se
+>   quedaba para siempre en *"Esperando firma"*); la línea de tiempo pinta
+>   aprobación → programación → entrega en vez de dos pasos que nunca iba a dar;
+>   y ya no se ofrece *Enviar para firma* ni *Subir el contrato firmado*, con
+>   candado en las dos acciones y no solo el botón escondido. *Retirar el enlace
+>   de firma* se queda: si a uno se le mandó por error, hay que poder retirarlo.
+> - **El correo al vendedor** de un reemplazo aprobado dice que sigue la
+>   **entrega**. Ese mismo correo (*"APROBADO — sigue la firma del cliente"*) era
+>   el que mandaba a la vendedora a perseguir una firma que no existía.
+> - El documento del contrato deja de avisar *"aprobado pero aún sin la firma
+>   del cliente"* sobre un papel que está completo.
+
 ## [La intervención se puede LEER sin poder editarla] — 2026-09-10
 
 > Solangel (jefatura de taller): *"no tengo acceso para visualizar las fotos ni
