@@ -77,6 +77,36 @@
 > orden con contrato anulado decía *"falta la firma"* y ofrecía **mandar a firmar
 > un contrato anulado**. Ahora dice que el contrato está anulado, con su motivo, y
 > cuáles son las dos salidas reales.
+>
+> **Segunda vuelta — la salida la maneja una persona, no solo el trigger.**
+> Alberto: *"en caso se anula el contrato por cambio de serial o que en verdad el
+> contrato no va a proceder, debe haber una forma en el sistema de destrabar
+> estas órdenes"*. Se revisaron los cinco caminos existentes y **ninguno servía**:
+> *Editar orden* (que sí cambia el contrato) solo abre en POR ASIGNAR y las
+> trancadas están en COMPLETADO; *Eliminar orden* borra en vez de cerrar;
+> *CERRADA (SIN RETIRAR)* mentiría diciendo que el cliente no vino a buscar unos
+> radios que ni contrato tienen; *Entregar sin firma (admin)* entrega bajo un
+> contrato muerto y deja al pool jurando que el cliente los tiene; y `ANULADA` no
+> la permitía `ordenTransicionLegal` — no existía en la UI y el pool ni se
+> enteraba.
+>
+> - **Las dos puertas**, mismo patrón que la válvula de casos viejos: aquí no hay
+>   un botón de *cerrar*, hay dos caminos y hay que elegir. *"El papel se rehizo"*
+>   → la orden **pasa al contrato nuevo** (picker de los contratos vivos del
+>   cliente), sin tocar el estado: el trabajo es el mismo y la entrega sale por el
+>   camino normal. *"El contrato no va a proceder"* → **ANULADA con motivo**, y
+>   los radios que nunca salieron **vuelven a bodega** — sin quitarle al cliente
+>   uno ya entregado en una tanda, ni tocar uno ya reasignado a otra orden.
+>   Vive en el ⋯ de la fila y en el modal de entrega. Admin y recepción.
+> - **El Centro lo recuerda donde el dato por fin existe.** Al anular casi nunca
+>   se sabe cuál será el contrato nuevo (se anula primero y se rehace después, por
+>   eso el sustituto del modal es opcional), así que el trigger no puede repuntar
+>   solo. La cola *Ahora* de la ficha del cliente saca la orden con su conteo de
+>   radios y el CTA lleva a la orden, donde viven las dos puertas — la decisión no
+>   se duplica en dos pantallas. Sin índice ni query nueva.
+> - Los deep-links usan `?ids=` y no `?orden=`: estas órdenes son de julio y
+>   agosto, y la bandeja carga las 40 más recientes — `?orden=` solo filtra lo ya
+>   cargado y la persona aterrizaría en una lista vacía.
 
 ## [El contrato de REEMPLAZO no lleva firma del cliente — y el DEMO tampoco] — 2026-09-15
 
