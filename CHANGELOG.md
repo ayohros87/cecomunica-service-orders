@@ -1,5 +1,49 @@
 # Changelog
 
+## [Bodega puede corregir los seriales de una gestión sin anularla] — 2026-09-16
+
+> Alberto: *"también debe haber un camino para corregir las gestiones, por
+> ejemplo una gestión de aumento o reemplazo"*.
+>
+> No lo había. En cuanto bodega completa la asignación de un aumento, un demo o
+> un reemplazo, **la OS de programación sale sola y con ella el expediente deja
+> de ser editable**. Un serial mal tecleado, un radio cambiado en el mostrador o
+> la decisión de mandar otros radios obligaban a **anular la gestión entera** y
+> rehacerla — la vuelta larga que tuvo que dar el caso R. SMITH ALTA PLAZA.
+>
+> Y la otra puerta, la que la gente sí encontraba, era peor: **editar el serial
+> dentro de la orden** cambiaba la orden, dejaba la gestión diciendo el serial
+> viejo y hacía que el pool **diera de alta una ficha por contacto**. Un dedazo
+> creaba un equipo inventado — de ahí salieron las tres fichas fantasma de
+> R. SMITH (`18607A05001`, `18607A0500123`, `18607A05123`).
+>
+> - **"Corregir seriales…"** en el menú del expediente, que lleva a
+>   *Almacén · Asignar* en modo corrección: bodega es quien tiene el radio en la
+>   mano. Una fila por serial —el que está puesto arriba, el correcto abajo— con
+>   la misma política dura de siempre.
+> - **Bodega solo deja el pedido**; aplicarlo es del trigger, que lo consume en
+>   una transacción. El navegador no toca tres sitios a la vez: si se cae a la
+>   mitad, queda medio corregido y nadie sabe dónde.
+> - **Regla de oro: el que entra toma el lugar exacto del que sale** — hereda su
+>   estado, su asignación y su orden. Así no hay que enumerar casos (en taller,
+>   asignado, con el cliente) ni adivinar a dónde va cada uno.
+> - **El que sale vuelve al estante**, y solo se marca *verificar físicamente*
+>   si la gestión ya se había entregado. Si nunca salió, estaba en bodega y ahí
+>   sigue: marcarlo sería ruido.
+> - **Llega a todas las órdenes de la gestión**, no solo a la de programación:
+>   una devolución que espera el serial viejo deja al cliente devolviendo un
+>   radio que el sistema no reconoce, y el check-in cae en cuarentena.
+> - **La puerta vieja se cierra donde importa**: editar el serial de una orden
+>   que nació de una gestión ahora explica y manda al expediente. En órdenes
+>   sueltas (entrada, visita, programación manual) sigue igual.
+> - Solo administración e inventario, y solo **hasta que la gestión cierre**:
+>   después ya alimentó devoluciones y facturación.
+> - Probado contra el emulador (`test-emulator/correccion-gestion.js`) con demo
+>   entregado, aumento sin entregar, política dura e idempotencia. Al escribir la
+>   prueba de reglas salió una trampa que vale anotar: **escribir el mismo valor
+>   deja el diff vacío y `hasOnly()` lo acepta en cualquier predicado** — la
+>   prueba pasa por una razón que no es la que se está probando.
+
 ## [Corregir un serial mal registrado vuelve a tener puerta, ahora como gestión] — 2026-09-15
 
 > Alberto: *"verifica qué pasó con la opción de solicitar cambio de serial que
