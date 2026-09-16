@@ -486,6 +486,7 @@ window.abrirEquiposMobile = function(ordenId) {
                  fila de escritorio (ordenes-render.js la arma), aquí al lado
                  de su intervención porque es donde el técnico lo diagnostica. -->
             ${typeof botonProponerReemplazo === 'function' ? botonProponerReemplazo(ordenId, o, e) : ''}
+            ${typeof botonCambioSerialTaller === 'function' ? botonCambioSerialTaller(ordenId, o, e) : ''}
           </div>
 
           ${trabajoDisplay}

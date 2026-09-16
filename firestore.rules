@@ -1072,6 +1072,17 @@ service cloud.firestore {
       // todo —gestión, órdenes y pool— es de onGestionWrite, que consume el
       // pedido en una transacción. Hasta que la gestión cierre: después ya
       // alimentó devoluciones y facturación.
+      // EL TALLER marca un radio que no sirve para la gestión (2026-09-16,
+      // pedido de Zuleika: "debería ser solicitado directamente por Taller
+      // desde el momento en que se determina la necesidad del cambio"). Es
+      // levantar la mano, no corregir: deja el serial señalado con su motivo y
+      // bodega pone el que va. Por eso el técnico solo puede tocar ESE campo —
+      // ni los seriales asignados, ni el estado, ni el cierre.
+      function esMarcaTallerGestion() {
+        return userRole() in ["tecnico","tecnico_operativo","jefe_taller","administrador"]
+          && soloTocaG(["correccion_solicitada"])
+          && !(resource.data.estado in ["cerrada","anulada"]);
+      }
       function esCorreccionSerialesGestion() {
         return userRole() in ["administrador","inventario"]
           && soloTocaG(["correccion_seriales_pendiente"])
@@ -1130,7 +1141,7 @@ service cloud.firestore {
                       || esFirmaAnexoGestion() || esRegularizacionSinFirmaGestion()
                       || esAprobacionActualizacionSeriales()
                       || esEnlaceFirmaGestion() || esAsignacionGestion()
-                      || esCorreccionSerialesGestion()
+                      || esCorreccionSerialesGestion() || esMarcaTallerGestion()
                       || esEdicionGestion());
       allow delete: if false;
       // Linaje del reemplazo (espejo del patrón contratos/{cid}/mapeos):

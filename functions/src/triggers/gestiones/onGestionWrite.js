@@ -1528,6 +1528,57 @@ module.exports = onDocumentWritten(
       logger.error("[onGestionWrite] aplicación del cambio de serial falló", { gid, message: e.message });
     }
 
+    // ── C2b) EL TALLER marcó un radio que no sirve → avisar a bodega ─────
+    // (Zuleika 2026-09-16.) El técnico, con el radio delante, dice cuál no se
+    // puede usar; bodega elige el que va en su lugar. Solo se avisa de lo que
+    // NO estaba marcado antes: la marca vive hasta que la corrección se
+    // aplique, así que sin este diff cada escritura del expediente repetiría
+    // el correo.
+    try {
+      const antes = before?.correccion_solicitada || {};
+      const ahora = after.correccion_solicitada || {};
+      const nuevas = Object.keys(ahora).filter(k => !antes[k] || antes[k].at_iso !== ahora[k].at_iso);
+      if (nuevas.length && !["cerrada", "anulada"].includes(after.estado)) {
+        const marcas = nuevas.map(k => ahora[k]);
+        const to = await G.bodegaEmailTo();
+        if (to) {
+          await G.encolarCorreo({
+            to,
+            subject: `El taller marcó ${marcas.length} radio(s) que no sirven — ${G.TIPO_LABEL[after.tipo] || after.tipo} ${gid}`,
+            preheader: `Cambiar ${marcas.map(m => m.serial).join(", ")} en la gestión ${gid}`,
+            bodyContent: `
+              <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Hay que cambiar seriales de esta gestión</h2>
+              <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+                El taller revisó los equipos de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b> y estos
+                <b>no se pueden usar</b>. No es un reemplazo: los radios no salieron a ningún lado —
+                hay que poner otros en su lugar.
+              </p>
+              ${G.tablaHtml(["Serial", "Modelo", "Qué pasa", "Quién avisó"], marcas.map(m => [
+    `<code>${G.escapeHtml(m.serial || "—")}</code>`,
+    G.escapeHtml(m.modelo || "—"),
+    G.escapeHtml(m.motivo_detalle || m.motivo_codigo || "—"),
+    G.escapeHtml(m.por_email || "taller"),
+  ]))}
+              <p style="margin:12px 0 0;font:13px/1.5 Arial,sans-serif;color:#6B7280;">
+                Se corrigen desde <b>Almacén · Asignar → Corregir seriales</b>: al guardar, el sistema
+                actualiza la gestión, sus órdenes de servicio y el inventario de una vez.
+              </p>`,
+            ctaUrl: `${G.urlBodegaGestion(gid)}&corregir=1`,
+            ctaLabel: "Corregir los seriales",
+            meta: { gestion_id: gid, paso: "correccion_solicitada_taller" },
+          });
+        } else {
+          logger.warn("[onGestionWrite] sin buzón de bodega — marca del taller sin aviso", { gid });
+        }
+        await G.registrarEvento(gid, "correccion_solicitada",
+          `El taller marcó ${marcas.length} radio(s) que no se pueden usar: `
+          + marcas.map(m => `${m.serial} (${m.motivo_detalle || m.motivo_codigo || "sin detalle"})`).join("; ")
+          + ". Bodega pone otros en su lugar.");
+      }
+    } catch (e) {
+      logger.error("[onGestionWrite] aviso de la marca del taller falló", { gid, message: e.message });
+    }
+
     // ── C3) CORRECCIÓN de los seriales ya asignados de una gestión ───────
     // Bodega deja los pares {anterior, nuevo} en `correccion_seriales_pendiente`
     // desde Almacén · Asignar y aquí se aplican: gestión, sus órdenes y el pool
@@ -1555,6 +1606,17 @@ module.exports = onDocumentWritten(
         const r = await CG.aplicar(gid, pedido.g, pedido.pares);
         if (r.aplicados.length) {
           const pares = r.aplicados.map(a => `${a.anterior} → ${a.nuevo}`).join(", ");
+          // Lo que el taller marcó ya está resuelto: se quita la marca de los
+          // seriales corregidos (y solo de esos — otro radio marcado del mismo
+          // expediente sigue esperando su cambio).
+          const limpiar = {};
+          for (const a of r.aplicados) {
+            const k = pool.normSerial(a.anterior);
+            if (k && pedido.g.correccion_solicitada?.[k]) {
+              limpiar[`correccion_solicitada.${k}`] = admin.firestore.FieldValue.delete();
+            }
+          }
+          if (Object.keys(limpiar).length) await ref.update(limpiar);
           await ref.set({
             correcciones: admin.firestore.FieldValue.arrayUnion({
               pares: r.aplicados.map(a => ({ anterior: a.anterior, nuevo: a.nuevo })),

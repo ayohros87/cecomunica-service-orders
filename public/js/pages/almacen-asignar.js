@@ -578,17 +578,31 @@ window.AlmacenAsignar = (() => {
       .map(s => ({ serial: s.serial, modelo: s.modelo || '', modelo_id: s.modelo_id || '', nota: '' }));
   }
 
-  // Una fila por serial: el que está puesto arriba, el correcto abajo.
+  // Una fila por serial: el que está puesto arriba, el correcto abajo. Lo que
+  // el TALLER marcó se dice en la fila con su motivo — es lo que le contesta a
+  // bodega "¿y cuál cambio?" sin tener que ir a leer el expediente.
   function gruposCorreccion(g) {
-    return serialesActuales(g).map((s, ix) => ({
-      clave: String(ix),
-      modelo: s.modelo || '—', modelo_id: s.modelo_id || '', activos: 1,
-      titulo: `Hoy figura <span style="font-family:var(--font-mono,monospace);">${esc(s.serial)}</span>`
-        + ` <span style="color:var(--fg-3); font-weight:400;">(${esc(s.modelo || '—')})</span> → ¿cuál es el correcto?`,
-      nota: s.nota,
-      slots: [{ serial: s.serial }],
-    }));
+    const marcas = g.correccion_solicitada || {};
+    return serialesActuales(g).map((s, ix) => {
+      const m = marcas[norm(s.serial)];
+      return {
+        clave: String(ix),
+        modelo: s.modelo || '—', modelo_id: s.modelo_id || '', activos: 1,
+        titulo: (m ? '<span title="El taller avisó que este no sirve">⚠ </span>' : '')
+          + `Hoy figura <span style="font-family:var(--font-mono,monospace);">${esc(s.serial)}</span>`
+          + ` <span style="color:var(--fg-3); font-weight:400;">(${esc(s.modelo || '—')})</span> → ¿cuál es el correcto?`,
+        nota: m
+          ? `El taller lo marcó: ${esc(m.motivo_detalle || m.motivo_codigo || 'no se puede usar')}`
+            + `${m.por_email ? ` — ${esc(m.por_email)}` : ''}`
+          : s.nota,
+        slots: [{ serial: s.serial }],
+      };
+    });
   }
+
+  // ¿El taller pidió cambiar algo de esta gestión? Es lo que enciende el aviso
+  // aunque bodega entre por la cola y no por el enlace del correo.
+  const marcadosPorTaller = (g) => Object.keys(g?.correccion_solicitada || {}).length;
 
   async function abrirGestion(gid, { corregir = false } = {}) {
     marcarSel('gestion', gid);
@@ -646,8 +660,12 @@ window.AlmacenAsignar = (() => {
 
     if (corrigiendo) {
       const entregado = g.cierre?.entrega === true;
-      $('asBanner').innerHTML = banner('info',
-        '<strong>Corrigiendo los seriales de esta gestión.</strong> Escribe el serial que de verdad va en cada línea. '
+      const marcados = marcadosPorTaller(g);
+      $('asBanner').innerHTML = banner(marcados ? 'aviso' : 'info',
+        (marcados
+          ? `<strong>El taller marcó ${marcados} radio(s) que no se pueden usar</strong> (van con ⚠ y su motivo). `
+          : '<strong>Corrigiendo los seriales de esta gestión.</strong> ')
+        + 'Escribe el serial que de verdad va en cada línea. '
         + (entregado
           ? 'Como ya se entregó, el radio que sale vuelve al estante marcado <strong>verificar físicamente</strong>.'
           : 'El radio que sale vuelve al estante disponible.')
@@ -660,6 +678,11 @@ window.AlmacenAsignar = (() => {
         ? '<strong>Seriales amarrados.</strong> La orden de programación ya existe; pool y orden los tienen.'
         : cerrada ? `<strong>Gestión ${g.estado}.</strong> Solo lectura.` : '<strong>Sin pendiente de bodega.</strong> Esta gestión no espera seriales en este paso.');
       asg.setLocked(true);
+      if (puedeCorregir && marcadosPorTaller(g)) {
+        $('asBanner').innerHTML = banner('aviso',
+          `<strong>El taller marcó ${marcadosPorTaller(g)} radio(s) que no se pueden usar.</strong> `
+          + 'Entra a <strong>Corregir seriales</strong> y pon los que van en su lugar.');
+      }
       // La salida: corregir un serial mal puesto sin anular la gestión entera.
       footer(puedeCorregir
         ? [`<button type="button" class="btn btn-ghost" data-as="corregir"><i data-lucide="replace"></i> Corregir seriales…</button>`]

@@ -72,6 +72,8 @@ window.CargaDiferida = (() => {
     // (expedientes de gestión y la garantía de la unidad), que no se cargan
     // en /ordenes/ para nada más.
     reemplazo:  "/js/pages/ordenes-reemplazo.js?v=2",
+    // El taller avisa que un radio no sirve para la gestion (Zuleika 2026-09-16).
+    cambioSerialTaller: "/js/pages/ordenes-cambio-serial.js?v=1",
     gestiones:  "/js/services/gestionesService.js?v=cg13",
     garantia:   "/js/domain/garantiaEquipo.js?v=1",
   };
@@ -130,6 +132,12 @@ window.CargaDiferida = (() => {
       return window.OrdenesReemplazo ? Promise.resolve()
         : Promise.all([script(MODULOS.gestiones), script(MODULOS.garantia)])
             .then(() => script(MODULOS.reemplazo));
+    },
+    // Solo necesita los expedientes de gestion: no mira garantia (el radio no
+    // es del cliente, esta en el mostrador y no salio a ningun lado).
+    cambioSerialTaller() {
+      return window.OrdenesCambioSerial ? Promise.resolve()
+        : script(MODULOS.gestiones).then(() => script(MODULOS.cambioSerialTaller));
     },
   };
 })();

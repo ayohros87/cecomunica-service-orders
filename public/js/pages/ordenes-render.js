@@ -585,6 +585,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
 
               <td class="col-acciones">
                 ${botonProponerReemplazo(ordenId, ordenData, e)}
+                ${botonCambioSerialTaller(ordenId, ordenData, e)}
                 <button data-action="eliminar-equipo" data-id="${ordenId}_${e.id}" class="btn-eliminar-equipo" title="Eliminar equipo">
                   <i data-lucide="trash-2"></i>
                 </button>
@@ -668,6 +669,46 @@ function botonProponerReemplazo(ordenId, ordenData, equipo) {
 window.botonProponerReemplazo = botonProponerReemplazo;
 window.puedeProponerReemplazoEquipo = puedeProponerReemplazoEquipo;
 window.propuestaReemplazoDe = propuestaReemplazoDe;
+
+/* ── El taller avisa que un radio no sirve para la gestión (2026-09-16) ────
+   Zuleika, caso R. SMITH ALTA PLAZA: los radios no se podían programar por su
+   versión, el técnico no tenía dónde decirlo, la orden se cerró con esos
+   seriales y recepción los dio por entregados. Para cuando se quiso cambiar,
+   los radios ya figuraban con el cliente y el sistema los daba por no
+   disponibles.
+
+   Solo en órdenes que salieron de una GESTIÓN: es a ella a la que se le
+   corrige el serial. En una orden suelta el camino es la gestión de cambio de
+   serial desde el Centro.                                                   */
+const ROLES_MARCAN_CAMBIO = [ROLES.TECNICO, ROLES.TECNICO_OPERATIVO, ROLES.JEFE_TALLER, ROLES.ADMIN];
+
+function marcaCambioSerialDe(ordenData, serial) {
+  const k = _normSerialBusqueda(serial);
+  return (k && ordenData?.correcciones_solicitadas?.[k]) || null;
+}
+
+function puedeMarcarCambioSerial(ordenData, equipo) {
+  if (!ROLES_MARCAN_CAMBIO.includes(APP.state.userRole || '')) return false;
+  if (!ordenData?.gestion?.id) return false;
+  if (!equipo || equipo.eliminado) return false;
+  return !!String(equipo.numero_de_serie || equipo.serial || '').trim();
+}
+
+function botonCambioSerialTaller(ordenId, ordenData, equipo) {
+  if (!puedeMarcarCambioSerial(ordenData, equipo)) return '';
+  const serial = String(equipo.numero_de_serie || equipo.serial || '').trim();
+  const ya = marcaCambioSerialDe(ordenData, serial);
+  const title = ya
+    ? `Ya avisado: ${serial} no sirve para ${ordenData.gestion.id} — bodega debe cambiarlo`
+    : `Avisar que ${serial} no se puede usar en la gestión ${ordenData.gestion.id} (bodega lo cambia)`;
+  return `<button data-action="marcar-cambio-serial" data-stop-propagation="true"
+            data-orden-id="${ordenId}" data-equipo-id="${escapeHtml(String(equipo.id))}"
+            class="btn-proponer-reemplazo${ya ? ' propuesto' : ''}" title="${escapeHtml(title)}"
+            aria-label="${escapeHtml(title)}"><i data-lucide="replace"></i></button>`;
+}
+window.botonCambioSerialTaller = botonCambioSerialTaller;
+window.puedeMarcarCambioSerial = puedeMarcarCambioSerial;
+window.marcaCambioSerialDe = marcaCambioSerialDe;
 
 // ── Buscador de serial dentro de una orden ────────────────────────────────
 // Petición de recepción (2026-08-25): con la lista larga, encontrar el radio

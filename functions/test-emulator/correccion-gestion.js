@@ -21,7 +21,9 @@
 //      nunca salió;
 //   3) el entrante tiene que estar en bodega: si no, se rechaza con motivo y
 //      no se mueve nada;
-//   4) el pedido se consume: re-correr el trigger no vuelve a mover radios.
+//   4) el pedido se consume: re-correr el trigger no vuelve a mover radios;
+//   5) el TALLER marca un radio que no sirve: avisa a bodega sin mover nada, no
+//      repite el correo, y la marca se limpia sola cuando bodega lo corrige.
 const assert = require("node:assert/strict");
 const admin = require("firebase-admin");
 
@@ -153,6 +155,58 @@ async function pedir(gid, pares) {
   const evs = await db.collection(`gestiones/${GA}/eventos`).get();
   assert.ok(evs.docs.some((d) => d.data().accion === "correccion_incompleta"),
     "y el expediente dice por qué no se pudo");
+
+  // ── 5) EL TALLER marca un radio que no sirve (Zuleika 2026-09-16) ────
+  const GT = "GD20260916-01";
+  await ficha("T0001", "en_taller", {
+    asignacion: { cliente_id: CLIENTE, gestion_doc_id: GT, tipo: "demo" }, orden_actual_id: "2026091601",
+  });
+  await ficha("T0002", "en_bodega", { asignacion: null });
+  await db.doc("ordenes_de_servicio/2026091601").set({
+    tipo_de_servicio: "PROGRAMACIÓN", estado_reparacion: "ASIGNADO", cliente_id: CLIENTE,
+    gestion: { id: GT, tipo: "demo" },
+    equipos: [{ id: "e1", serial: "T0001", numero_de_serie: "T0001", modelo: MODELO, modelo_id: MOD_ID, eliminado: false }],
+  });
+  await db.doc(`gestiones/${GT}`).set({
+    tipo: "demo", estado: "pendiente_bodega", cliente_id: CLIENTE, cliente_nombre: "R. SMITH ALTA PLAZA",
+    demo: { lineas: [{ modelo: MODELO, modelo_id: MOD_ID, cantidad: 1 }],
+      seriales_asignados: [{ serial: "T0001", pool_doc_id: "T0001", modelo: MODELO, modelo_id: MOD_ID }] },
+    ordenes: { programacion_id: "2026091601", programacion_ids: ["2026091601"] },
+    cierre: { asignacion: true }, deleted: false,
+  });
+
+  // El técnico levanta la mano desde la fila del radio.
+  const refT = db.doc(`gestiones/${GT}`);
+  let bT = await refT.get();
+  await refT.set({ correccion_solicitada: { T0001: {
+    serial: "T0001", modelo: MODELO, modelo_id: MOD_ID, motivo_codigo: "version_incompatible",
+    motivo_detalle: "La versión no permite programarlo", orden_id: "2026091601",
+    por_email: "jesus.santos@cecomunica.com", at_iso: new Date().toISOString(),
+  } } }, { merge: true });
+  await onGestion.run({ data: { before: bT, after: await refT.get() }, params: { gid: GT } });
+
+  const mails = await db.collection("mail_queue").get();
+  const aviso = mails.docs.map((d) => d.data()).find((m) => /El taller marcó/.test(m.subject || ""));
+  assert.ok(aviso, "sale el aviso a bodega");
+  assert.match(aviso.bodyContent, /T0001/);
+  assert.match(aviso.bodyContent, /versión no permite programarlo/);
+  assert.match(aviso.ctaUrl, /corregir=1/, "el enlace abre directo el modo corrección");
+  assert.equal((await pool("T0001")).estado, "en_taller", "marcar NO mueve nada todavía");
+
+  // No se repite el correo en cada escritura del expediente.
+  bT = await refT.get();
+  await refT.set({ notas: "otra cosa" }, { merge: true });
+  await onGestion.run({ data: { before: bT, after: await refT.get() }, params: { gid: GT } });
+  assert.equal((await db.collection("mail_queue").get()).docs
+    .filter((d) => /El taller marcó/.test(d.data().subject || "")).length, 1, "un solo aviso por marca");
+
+  // Bodega corrige: la marca se limpia sola.
+  await pedir(GT, [{ anterior: "T0001", nuevo: "T0002", modelo: MODELO, modelo_id: MOD_ID }]);
+  const gt = (await refT.get()).data();
+  assert.equal(gt.demo.seriales_asignados[0].serial, "T0002");
+  assert.ok(!gt.correccion_solicitada?.T0001, "la marca del taller se limpia al corregirse");
+  assert.equal((await pool("T0002")).estado, "en_taller", "el entrante hereda el lugar (sigue en la orden)");
+  assert.equal((await pool("T0002")).orden_actual_id, "2026091601", "y la orden del saliente");
 
   console.log("OK correccion-gestion: gestión, órdenes (programación y devolución) y pool");
   console.log("   corregidos a la vez; marca solo si el radio salió; idempotente; con política dura.");

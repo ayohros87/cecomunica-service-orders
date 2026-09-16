@@ -127,6 +127,27 @@ async function main() {
   }));
   ok("bodega deja el pedido, no aplica la corrección ella misma");
 
+  // ── El taller marca un radio que no sirve (2026-09-16) ─────────────────
+  const marca = (n2) => ({ [`SER${n2}`]: { serial: `SER${n2}`, motivo_codigo: "version_incompatible",
+    motivo_detalle: "no programa", por_email: "tecnico@test", at_iso: `2026-09-16T0${n2}:00:00.000Z` } });
+
+  await assertSucceeds(updateDoc(doc(as("tecnico"), "gestiones/gd1"), { correccion_solicitada: marca(1) }));
+  ok("el taller marca el radio que no se puede usar");
+
+  await assertFails(updateDoc(doc(as("tecnico"), "gestiones/gd1"), {
+    correccion_solicitada: marca(2),
+    demo: { seriales_asignados: [{ serial: "ZZZ999" }] },
+  }));
+  ok("el taller levanta la mano, NO cambia los seriales");
+
+  await assertFails(updateDoc(doc(as("tecnico"), "gestiones/gd1"), {
+    correccion_seriales_pendiente: pedido(6),
+  }));
+  ok("ni pide la corrección directa: eso es de bodega");
+
+  await assertFails(updateDoc(doc(as("tecnico"), "gestiones/gd2"), { correccion_solicitada: marca(3) }));
+  ok("no se marca nada en una gestión cerrada");
+
   console.log(`\nOK cambio-serial-rules: ${n} comprobaciones`);
   await testEnv.cleanup();
   process.exit(0);

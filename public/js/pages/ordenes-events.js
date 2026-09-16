@@ -186,6 +186,16 @@
       CargaDiferida.reemplazo().then(() => abrirProponerReemplazo(ordenId, equipoId))
         .catch(() => Toast.show('Sin conexión — no se pudo abrir la propuesta.', 'bad'));
     },
+    // El taller avisa que ESTE radio no sirve para la gestion de la que salio
+    // la orden (ordenes-cambio-serial.js, diferido): se marca el serial en la
+    // gestion y bodega lo cambia. No es un reemplazo: el radio no salio.
+    'marcar-cambio-serial': (el) => {
+      const { ordenId, equipoId } = el.dataset;
+      if (!ordenId || !equipoId) return;
+      closeAllMenus();
+      CargaDiferida.cambioSerialTaller().then(() => abrirCambioSerialTaller(ordenId, equipoId))
+        .catch(() => Toast.show('Sin conexion - no se pudo abrir el aviso.', 'bad'));
+    },
     'editar-orden': (el) => {
       const ordenId = el.dataset.ordenId;
       if (ordenId) window.location.href = `editar-orden.html?id=${ordenId}`;
