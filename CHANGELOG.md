@@ -1,5 +1,30 @@
 # Changelog
 
+## [Cerrar una cotización por "otro motivo", con el motivo escrito] — 2026-09-16
+
+> "Cerrar cotización" solo tenía dos salidas: **Convertida** o **Rechazada**. El
+> caso más común no era ninguna de las dos — *se va a hacer otra cotización con
+> otra cantidad de equipos* — y el vendedor no tenía más remedio que marcar
+> "Rechazada". Una mentira que además costaba caro: esa cotización entraba como
+> oportunidad **perdida** en la tasa de cierre, y la que la reemplazaba entraba
+> como una oportunidad nueva. La misma venta castigaba dos veces al vendedor.
+>
+> - **Tercera salida: "Otro motivo"**, que pide el motivo en palabras del
+>   vendedor y no cierra la hoja sin texto ("Se rehace con 12 radios en vez de
+>   20"). El motivo queda en el **historial** de la cotización y en el tooltip
+>   del chip del listado — no hay que abrirla para saber qué pasó.
+> - Estado nuevo **`descartada`**, gris a propósito: ni ganada ni perdida. **No
+>   cuenta como oportunidad** en la tasa de cierre, y en el tablero de
+>   operación se cuenta aparte de las rechazadas. Desde ahí se puede devolver a
+>   borrador, o duplicarla — que es el camino real del "se rehace".
+> - Disponible **en los dos lados**: el botón "Cerrar cotización" del detalle y
+>   la banderita de la fila del listado usan la misma hoja, y ahora también el
+>   mismo sellado de campos (`CotState.patchCierre`) — antes cada pantalla
+>   estampaba los suyos por su cuenta.
+> - De paso: la hoja **reventaba** al abrirse (`esc is not defined`) en cuanto
+>   se le pasaba el importe como texto, o sea siempre que se abría desde el
+>   detalle. Nadie podía cerrar una cotización desde ahí.
+
 ## [El taller avisa desde la fila del radio que un serial no sirve] — 2026-09-16
 
 > Zuleika, sobre el caso R. SMITH ALTA PLAZA: *"en este tipo de caso donde hay

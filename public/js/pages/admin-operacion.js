@@ -91,6 +91,9 @@
     const cot_aprobadas   = AdminMetrics.countWhere(d.cotizaciones, c => within(c.fecha_aprobacion));
     const cot_convertidas = AdminMetrics.countWhere(d.cotizaciones, c => within(c.fecha_conversion));
     const cot_rechazadas  = AdminMetrics.countWhere(d.cotizaciones, c => within(c.fecha_rechazo));
+    // Cerradas por otro motivo (se rehace, cambió el alcance…). Se cuentan
+    // aparte de las rechazadas: no son un "no" del cliente.
+    const cot_descartadas = AdminMetrics.countWhere(d.cotizaciones, c => within(c.fecha_descarte));
 
     const clientes_nuevos = AdminMetrics.countWhere(d.clientes, c => within(c.fecha_creacion));
     const poc_nuevos      = AdminMetrics.countWhere(d.poc,      p => within(p.created_at));
@@ -98,7 +101,7 @@
     return {
       ordenes_recibidas, ordenes_asignadas, ordenes_completadas, ordenes_entregadas,
       contratos_nuevos, contratos_aprobados, contratos_anulados,
-      cot_enviadas, cot_aprobadas, cot_convertidas, cot_rechazadas,
+      cot_enviadas, cot_aprobadas, cot_convertidas, cot_rechazadas, cot_descartadas,
       clientes_nuevos, poc_nuevos,
     };
   }
@@ -120,7 +123,7 @@
     };
 
     const contratoSub = `${r.contratos_aprobados} aprobado${r.contratos_aprobados !== 1 ? 's' : ''} · ${r.contratos_anulados} anulado${r.contratos_anulados !== 1 ? 's' : ''}`;
-    const cotSub      = `${r.cot_enviadas} env · ${r.cot_aprobadas} apr · ${r.cot_convertidas} conv · ${r.cot_rechazadas} rech`;
+    const cotSub      = `${r.cot_enviadas} env · ${r.cot_aprobadas} apr · ${r.cot_convertidas} conv · ${r.cot_rechazadas} rech${r.cot_descartadas ? ' · ' + r.cot_descartadas + ' desc' : ''}`;
 
     el.innerHTML = `
       <div class="recent-grid">
@@ -129,7 +132,7 @@
         ${card('check-circle','Órdenes completadas',   r.ordenes_completadas)}
         ${card('truck',       'Órdenes entregadas',    r.ordenes_entregadas)}
         ${card('file-text',   'Contratos nuevos',      r.contratos_nuevos, contratoSub, '../contratos/index.html')}
-        ${card('receipt',     'Cotizaciones',          r.cot_enviadas + r.cot_aprobadas + r.cot_convertidas + r.cot_rechazadas, cotSub, '../cotizaciones/index.html')}
+        ${card('receipt',     'Cotizaciones',          r.cot_enviadas + r.cot_aprobadas + r.cot_convertidas + r.cot_rechazadas + r.cot_descartadas, cotSub, '../cotizaciones/index.html')}
         ${card('users',       'Clientes nuevos',       r.clientes_nuevos, '', '../clientes/index.html')}
         ${card('radio-tower', 'Equipos PoC añadidos',  r.poc_nuevos, '', '../POC/index.html')}
       </div>`;

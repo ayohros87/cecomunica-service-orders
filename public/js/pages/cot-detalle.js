@@ -74,6 +74,15 @@
         meta: fmtFechaAny(cot.fecha_rechazo) + ' · cliente declinó',
       });
     }
+    if (cot.fecha_descarte || cot.estado === 'descartada') {
+      // El motivo lo escribió el vendedor al cerrar (cerrarPrompt → 'Otro
+      // motivo'); es la única pista de por qué murió esta cotización, así que
+      // va en la línea del historial, no escondido en el documento.
+      h.push({
+        act: 'Descartada',
+        meta: fmtFechaAny(cot.fecha_descarte) + (cot.cierre_motivo ? ' · ' + cot.cierre_motivo : ''),
+      });
+    }
     if (cot.estado === 'vencida') {
       h.push({
         act: 'Validez vencida',
@@ -329,6 +338,10 @@
     aprobada:   ['enviada', 'convertida', 'rechazada'],
     enviada:    ['convertida', 'rechazada', 'vencida'],
     rechazada:  ['borrador'],
+    // 'descartada' no ofrece atajo a convertida/rechazada: el desenlace real
+    // se marca con "Cerrar cotización" (que sí pide el motivo). Aquí solo se
+    // permite devolverla a borrador para rehacerla — el caso típico.
+    descartada: ['borrador'],
     vencida:    ['enviada', 'borrador'],
     convertida: [],
   };
@@ -373,26 +386,22 @@
 
   async function cerrarCotizacion(cli) {
     const t = T.calcTotales(cot);
-    const desenlace = await CotState.cerrarPrompt({
+    const cierre = await CotState.cerrarPrompt({
       cotizacionId: cot.id,
       // El importe real, no el proyectado a 12 meses: quien cierra reconoce la
       // cotización por lo que se le cotizó al cliente.
       totalTexto: resumenImporte(t),
       cliente: cli?.razon || cot.cliente_nombre || '',
     });
-    if (!desenlace) return;
+    if (!cierre) return;
+    const desenlace = cierre.estado;
     try {
-      const patch = { estado: desenlace };
-      if (desenlace === 'convertida') {
-        patch.fecha_conversion = firebase.firestore.Timestamp.now();
-        patch.convertida_por_uid = firebase.auth().currentUser?.uid || null;
-      } else {
-        patch.fecha_rechazo = firebase.firestore.Timestamp.now();
-        patch.rechazado_por_uid = firebase.auth().currentUser?.uid || null;
-      }
+      const patch = CotState.patchCierre(desenlace, cierre.motivo, firebase.auth().currentUser?.uid || null);
       await CotizacionesService.updateCotizacion(cot._docId, patch);
-      cot.estado = desenlace;
-      Toast.show(desenlace === 'convertida' ? '🏆 Convertida a venta' : 'Cotización rechazada', desenlace === 'convertida' ? 'ok' : 'warn');
+      // Se mezcla el patch completo (no solo el estado) para que el historial
+      // recién renderizado muestre la fecha y el motivo sin recargar.
+      Object.assign(cot, patch);
+      Toast.show(CotState.cierreToast(desenlace), desenlace === 'convertida' ? 'ok' : 'warn');
       render();
     } catch (e) {
       console.error(e);

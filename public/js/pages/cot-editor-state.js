@@ -8,10 +8,15 @@
     enviada:    { label: 'Enviada',    chip: 'chip-cotizada'  },
     aprobada:   { label: 'Aprobada',   chip: 'chip-aprobada'  },
     rechazada:  { label: 'Rechazada',  chip: 'chip-cancelada' },
+    // 'descartada' NO es un rechazo del cliente: es el cierre por cualquier
+    // otro motivo que el vendedor escribe a mano (típico: se rehace la
+    // cotización con otra cantidad de equipos). Chip gris a propósito — ni
+    // ganada ni perdida — y fuera de las oportunidades de la tasa de cierre.
+    descartada: { label: 'Descartada', chip: 'chip-entregada' },
     vencida:    { label: 'Vencida',    chip: 'chip-reparacion' },
     convertida: { label: 'Convertida', chip: 'chip-entregada' },
   };
-  const ESTADO_ORDEN = ['borrador', 'enviada', 'aprobada', 'rechazada', 'vencida', 'convertida'];
+  const ESTADO_ORDEN = ['borrador', 'enviada', 'aprobada', 'rechazada', 'descartada', 'vencida', 'convertida'];
 
   // Una cotización solo es editable mientras está en 'borrador'. Apenas se aprueba,
   // envía, convierte, rechaza o vence queda como registro inmutable — ni siquiera un
@@ -548,40 +553,119 @@
     });
   }
 
-  // ── Modal "Cerrar cotización" ─────────────────────────────────────────────
-  // Permite al usuario marcar el desenlace de una cotización enviada / aprobada
-  // como Convertida (venta cerrada) o Rechazada (cliente declinó), evitando
-  // tener dos botones separados. Devuelve Promise<'convertida'|'rechazada'|null>.
+  // ── Modal "Cerrar cotización" ─────────────────────────────────
+  // Marca el desenlace de una cotización enviada / aprobada sin llenar la
+  // pantalla de botones. Tres salidas:
+  //   · convertida  — el cliente aceptó, se cerró el negocio
+  //   · rechazada   — el cliente declinó la propuesta
+  //   · descartada  — cualquier otro motivo, EN PALABRAS DEL VENDEDOR. El caso
+  //     común es "se rehace con otra cantidad de equipos": antes había que
+  //     marcarla "Rechazada" — una mentira que además ensuciaba la tasa de
+  //     cierre contando como perdida una oportunidad que sigue viva.
+  //
+  // Devuelve Promise<{ estado, motivo } | null>. `motivo` solo llega con
+  // 'descartada' y nunca vacío: el botón no cierra la hoja sin texto.
   function cerrarPrompt({ cotizacionId, total, totalTexto, cliente } = {}) {
     const esc = FMT.esc; // helper canónico (core/formatting.js)
+    const importe = totalTexto ? esc(totalTexto) : (total != null ? window.FMT.money(total) : '');
     return Modal.sheet({
       title: 'Cerrar cotización', icon: 'flag', size: 'sm',
       html: `
         <p style="margin:0 0 12px; font-size:14px; color:var(--fg-2);">
-          ${cotizacionId ? '<b>' + esc(cotizacionId) + '</b> · ' : ''}${esc(cliente || '')}${totalTexto ? ' · ' + esc(totalTexto) : (total != null ? ' · ' + window.FMT.money(total) : '')}
+          ${cotizacionId ? '<b>' + esc(cotizacionId) + '</b> · ' : ''}${esc(cliente || '')}${importe ? ' · ' + importe : ''}
         </p>
         <p style="margin:0 0 16px; font-size:13.5px; color:var(--fg-2); line-height:1.5;">
           ¿Cómo terminó esta cotización? Solo las cotizaciones convertidas a venta cuentan en el "Monto cerrado" del tablero.
         </p>
-        <div style="display:flex; flex-direction:column; gap:10px;">
+        <div id="cpOpciones" style="display:flex; flex-direction:column; gap:10px;">
           <button type="button" class="btn btn-secondary" data-act="convertida"
-                  style="background:#065F46; color:#fff; border-color:#065F46; justify-content:flex-start;">
+                  style="background:#065F46; color:#fff; border-color:#065F46; justify-content:flex-start; text-align:left;">
             <i data-lucide="trophy"></i>
             <span style="margin-left:8px;"><b>Convertida a venta</b> — el cliente aceptó y se cerró el negocio</span>
           </button>
           <button type="button" class="btn btn-secondary" data-act="rechazada"
-                  style="background:#991B1B; color:#fff; border-color:#991B1B; justify-content:flex-start;">
+                  style="background:#991B1B; color:#fff; border-color:#991B1B; justify-content:flex-start; text-align:left;">
             <i data-lucide="x-circle"></i>
             <span style="margin-left:8px;"><b>Rechazada</b> — el cliente declinó la propuesta</span>
           </button>
+          <button type="button" class="btn btn-secondary" data-act="otros"
+                  style="justify-content:flex-start; text-align:left;">
+            <i data-lucide="pencil"></i>
+            <span style="margin-left:8px;"><b>Otro motivo</b> — se rehace con otra cantidad, cambió el alcance…</span>
+          </button>
+        </div>
+        <div id="cpOtros" style="display:none;">
+          <label class="form-label" for="cpMotivo">¿Por qué se cierra?</label>
+          <textarea id="cpMotivo" class="form-input form-textarea" rows="3" maxlength="300"
+                    placeholder="Ej.: se rehace con 12 radios en vez de 20; el cliente pidió otra configuración."></textarea>
+          <p style="margin:6px 0 0; font-size:12px; color:var(--fg-3);">
+            Queda en el historial de la cotización. No cuenta como oportunidad perdida en la tasa de cierre.
+          </p>
+          <p id="cpError" style="display:none; margin:8px 0 0; font-size:12.5px; color:#991B1B;"></p>
+          <div style="display:flex; gap:8px; margin-top:12px;">
+            <button type="button" class="btn btn-primary" data-act="guardar-otros">Cerrar con este motivo</button>
+            <button type="button" class="btn btn-ghost" data-act="volver">Volver</button>
+          </div>
         </div>`,
       buttons: [{ action: 'cancel', label: 'Cancelar' }],
-      onMount: (root, api) => root.addEventListener('click', (e) => {
-        const act = e.target.closest('[data-act]')?.dataset.act;
-        if (act === 'convertida' || act === 'rechazada') api.close(act);
-      }),
+      onMount: (root, api) => {
+        const opciones = root.querySelector('#cpOpciones');
+        const otros    = root.querySelector('#cpOtros');
+        const ta       = root.querySelector('#cpMotivo');
+        const error    = root.querySelector('#cpError');
+        const guardar = () => {
+          const motivo = (ta.value || '').trim();
+          // Un motivo de tres letras no le sirve a nadie que lea el historial
+          // dentro de tres meses: se exige algo escrito de verdad.
+          if (motivo.length < 5) {
+            error.textContent = 'Escribe el motivo — es lo que va a leer quien revise esta cotización después.';
+            error.style.display = '';
+            ta.focus();
+            return;
+          }
+          api.close({ estado: 'descartada', motivo });
+        };
+        root.addEventListener('click', (e) => {
+          const act = e.target.closest('[data-act]')?.dataset.act;
+          if (!act) return;
+          if (act === 'convertida' || act === 'rechazada') { api.close({ estado: act, motivo: '' }); return; }
+          if (act === 'otros')  { opciones.style.display = 'none'; otros.style.display = ''; ta.focus(); return; }
+          if (act === 'volver') { otros.style.display = 'none'; opciones.style.display = ''; error.style.display = 'none'; return; }
+          if (act === 'guardar-otros') guardar();
+        });
+        // Ctrl/⌘+Enter cierra desde el propio textarea.
+        ta.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); guardar(); }
+        });
+      },
       onAction: () => null,
     });
+  }
+
+  // Sellos del cierre. Viven aquí y no en cada pantalla porque el detalle y la
+  // banderita del listado cierran la MISMA cotización: cuando se duplicaba el
+  // estampado, una de las dos se olvidaba de un campo.
+  function patchCierre(estado, motivo, uid) {
+    const ahora = firebase.firestore.Timestamp.now();
+    const patch = { estado };
+    if (estado === 'convertida') {
+      patch.fecha_conversion = ahora;
+      patch.convertida_por_uid = uid || null;
+    } else if (estado === 'descartada') {
+      patch.fecha_descarte = ahora;
+      patch.descartada_por_uid = uid || null;
+      patch.cierre_motivo = String(motivo || '').trim().slice(0, 300);
+    } else {
+      patch.fecha_rechazo = ahora;
+      patch.rechazado_por_uid = uid || null;
+    }
+    return patch;
+  }
+
+  function cierreToast(estado) {
+    if (estado === 'convertida') return '🏆 Convertida a venta';
+    if (estado === 'descartada') return 'Cotización descartada — el motivo queda en el historial';
+    return 'Cotización rechazada';
   }
 
   // ── Modal "Reenviar al cliente" ───────────────────────────────────────────
@@ -820,7 +904,7 @@
     mapClienteToUI, mapModeloToCatItem, mapVendedorToEjec, precioSugerido,
     toUi, toDoc, nuevaCotizacion, nextCotizacionId, bootstrapCatalogos,
     filtrarClientes, mountClienteCombo, requiereAprobacionPara, bloqueTotalesHtml,
-    cerrarPrompt, reenviarPrompt,
+    cerrarPrompt, patchCierre, cierreToast, reenviarPrompt,
     enqueueAprobacionMail,
     adjuntosToAttachments,
   };

@@ -140,7 +140,10 @@
     const montoCerrado = convertidasList.reduce((s, c) => s + Number(c.total || 0), 0);
     const hayRentaCerrada = convertidasList.some(c => Number(c.total_mensual || 0) > 0);
     // Tasa de cierre: convertidas / oportunidades activas (enviadas + convertidas + rechazadas + vencidas).
-    // Excluye borrador (en proceso) y aprobada (aún no llegó al cliente).
+    // Excluye borrador (en proceso) y aprobada (aún no llegó al cliente), y
+    // también 'descartada': esa cotización se cerró por otro motivo (típico:
+    // se rehace con otra cantidad) y contarla como perdida castigaría al
+    // vendedor dos veces por la misma oportunidad.
     const convertidas = visibles.filter(c => c.estado === 'convertida').length;
     const oportunidades = visibles.filter(c => ['enviada', 'convertida', 'rechazada', 'vencida'].includes(c.estado)).length;
     const tasa = oportunidades > 0 ? Math.round(convertidas / oportunidades * 100) : 0;
@@ -155,9 +158,12 @@
     $('statTasa').textContent = tasa + '%';
   }
 
-  function estadoChip(estado) {
+  function estadoChip(estado, motivo) {
     const e = CotState.ESTADOS[estado] || CotState.ESTADOS.borrador;
-    return `<span class="chip-estado ${e.chip}">${e.label}</span>`;
+    // Una cotización descartada sin el por qué a la vista obliga a abrirla:
+    // el motivo que escribió el vendedor viaja en el tooltip del chip.
+    const tip = motivo ? ` title="${FMT.esc(motivo)}"` : '';
+    return `<span class="chip-estado ${e.chip}"${tip}>${e.label}</span>`;
   }
 
   // ── Facturación de las cotizaciones de taller ─────────────────
@@ -225,7 +231,7 @@
             ${c.cliente_email ? '<div class="cc-aten">' + FMT.esc(c.cliente_email) + '</div>' : ''}
           </td>
           <td class="td-muted">${fmtFechaCorta(fechaIso(c))}</td>
-          <td><div style="display:flex;flex-wrap:wrap;gap:4px;">${estadoChip(c.estado || 'borrador')}${facturacionChip(c)}</div></td>
+          <td><div style="display:flex;flex-wrap:wrap;gap:4px;">${estadoChip(c.estado || 'borrador', c.cierre_motivo)}${facturacionChip(c)}</div></td>
           <td style="font-size:13px;">${c.ejecutivo_nombre ? FMT.esc(c.ejecutivo_nombre) : '—'}</td>
           <td class="cc-cell-total">${total}</td>
           <td class="td-actions">
@@ -321,25 +327,20 @@
   }
 
   async function cerrarDesdeLista(cot) {
-    const desenlace = await CotState.cerrarPrompt({
+    const cierre = await CotState.cerrarPrompt({
       cotizacionId: cot.cotizacion_id || cot.id,
       total: Number(cot.total || 0),
       cliente: cot.cliente_nombre || '',
     });
-    if (!desenlace) return;
-    const patch = { estado: desenlace };
-    if (desenlace === 'convertida') {
-      patch.fecha_conversion = firebase.firestore.Timestamp.now();
-      patch.convertida_por_uid = userUid;
-    } else {
-      patch.fecha_rechazo = firebase.firestore.Timestamp.now();
-      patch.rechazado_por_uid = userUid;
-    }
+    if (!cierre) return;
+    const desenlace = cierre.estado;
+    const patch = CotState.patchCierre(desenlace, cierre.motivo, userUid);
     try {
       await CotizacionesService.updateCotizacion(cot.id, patch);
-      cot.estado = desenlace;
-      Toast.show(desenlace === 'convertida' ? '🏆 Convertida a venta' : 'Cotización rechazada',
-                 desenlace === 'convertida' ? 'ok' : 'warn');
+      // La fila se repinta desde `cotizaciones` en memoria: entra el patch
+      // completo para que el chip muestre el motivo en su tooltip.
+      Object.assign(cot, patch);
+      Toast.show(CotState.cierreToast(desenlace), desenlace === 'convertida' ? 'ok' : 'warn');
       render();
     } catch (e) {
       Toast.show('No se pudo cerrar: ' + (e?.message || e), 'bad');
