@@ -8,6 +8,12 @@ const { origenIdsDe } = require("../../lib/linaje");
 const { clasificarUnidadesAnulacion, TIPO_ANULACION } = require("../../lib/devolucion");
 const { traspasarASustituto } = require("../../lib/sustitucionContrato");
 const { cerrarOrdenesDeContratoAnulado } = require("../../lib/ordenesDeContratoAnulado");
+// El CTA del correo lleva a las órdenes que quedaron por decidir. Faltaba el
+// import (2026-09-16): se usaba `APP_BASE_URL` a pelo y reventaba con
+// ReferenceError justo en el caso para el que se hizo — cuando SÍ quedan
+// órdenes que revisar. Sin órdenes pendientes el correo salía bien, así que el
+// fallo solo aparecía en el caso que importa.
+const { APP_BASE_URL } = require("../../lib/inventario");
 
 module.exports = onDocumentUpdated(
   {
