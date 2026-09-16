@@ -72,6 +72,9 @@
     ['cargador', 'Cargador'], ['fuente', 'Fuente'], ['cubrepolvo', 'Cubrepolvo'],
   ];
   const esc = (v) => window.FMT ? FMT.esc(String(v ?? '')) : String(v ?? '');
+  // Misma normalización que el pool y que el backend: así calza la llave del
+  // mapa `devolucion.poc` que estampa el cierre de la ficha de POC.
+  const normSerial = (s) => String(s ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   const ESTADO_CERRADA = 'CERRADA (DEVOLUCION)';   // terminal del tiquete
 
   let _orden = null;      // copia fresca del doc
@@ -868,6 +871,50 @@
         ${bloqueAcuse}
       </div>` : '';
 
+    // ── Desconexión del airtime (2026-09-16) ─────────────────────────────
+    // Recibir el equipo CIERRA su ficha de POC. Recepción tiene que pedirle
+    // después la desconexión al proveedor, y para eso necesita el Unit ID y el
+    // SIM que la ficha tenía — antes había que ir a buscarlos a POC ANTES del
+    // check-in, capturar la pantalla y volver, con el cliente esperando
+    // (Brenda). Ahora el cierre los deja aquí: `devolucion.poc[serial_norm]`.
+    const pocPorSerial = dev.poc || {};
+    const fichasPoc = esperados
+      .filter(e => e.resolucion === 'recibido')
+      .map(e => ({ e, p: pocPorSerial[normSerial(e.serial || '')] }))
+      .filter(x => x.p);
+    const secPoc = fichasPoc.length ? `
+      <div style="border:1px solid #bae6fd;border-radius:10px;overflow:hidden;margin-bottom:14px;">
+        <div style="padding:8px 14px;background:#eff6ff;border-bottom:1px solid #bae6fd;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-weight:700;font-size:13px;color:#075985;">Desconexión del airtime — datos de POC</span>
+          <span style="font-size:12px;color:#0369a1;">${fichasPoc.length} equipo(s)</span>
+          <button type="button" class="btn btn-sm" id="devPocCopiar" style="margin-left:auto;"
+                  title="Copia la lista lista para pegarla en el correo de desconexión">
+            <i data-lucide="copy"></i> Copiar para desconexión
+          </button>
+        </div>
+        <div style="padding:8px 14px 10px;">
+          <p style="margin:0 0 8px;font-size:11.5px;color:var(--fg-3,#6b7280);">
+            Al recibirlos, su ficha de POC quedó <b>cerrada</b> y el SIM volvió al pool. Esto es lo que tenían —
+            también se puede consultar después en POC con el filtro <b>“Incluir cerradas”</b>.
+          </p>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:520px;">
+              <thead><tr style="text-align:left;color:var(--fg-3,#6b7280);font-size:12px;">
+                <th style="padding:6px 8px;">Serial</th><th style="padding:6px 8px;">Unit ID</th>
+                <th style="padding:6px 8px;">SIM / teléfono</th><th style="padding:6px 8px;">Operador</th>
+              </tr></thead>
+              <tbody>${fichasPoc.map(({ e, p }) => `
+                <tr>
+                  <td style="${tdS}font-family:var(--font-mono,monospace);">${esc(e.serial)}</td>
+                  <td style="${tdS}font-family:var(--font-mono,monospace);">${esc(p.unit_id || '—')}</td>
+                  <td style="${tdS}font-family:var(--font-mono,monospace);">${esc(p.sim_number || '—')}${p.sim_phone ? ` / ${esc(p.sim_phone)}` : ''}</td>
+                  <td style="${tdS}">${esc(p.operador || '—')}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>` : '';
+
     // Otras resoluciones: nunca salió / no se devuelve — no van al taller.
     const secOtras = filasOtras ? `
       <div style="border:1px solid var(--border-subtle,#e5e7eb);border-radius:10px;overflow:hidden;margin-top:16px;">
@@ -900,6 +947,7 @@
           ${bloqueLote}
           ${secPorRecibir}
           ${secTanda}
+          ${secPoc}
           ${secAcuses}
           ${secOtras}
         </div>
@@ -926,6 +974,23 @@
 
     _overlay.querySelector('#devCerrarModal')?.addEventListener('click', cerrarModal);
     _overlay.querySelector('#devCerrarOrden')?.addEventListener('click', cerrarOrden);
+    // Lista lista para pegar en el correo de desconexión del airtime.
+    _overlay.querySelector('#devPocCopiar')?.addEventListener('click', async () => {
+      const cab = `${_orden.cliente_nombre || ''} — DEVOLUCIÓN ${_ordenId}`.trim();
+      const lineas = fichasPoc.map(({ e, p }) => [
+        e.serial,
+        p.unit_id ? `Unit ID ${p.unit_id}` : null,
+        p.sim_number ? `SIM ${p.sim_number}` : null,
+        p.sim_phone || null,
+        p.operador || null,
+      ].filter(Boolean).join(' · '));
+      try {
+        await navigator.clipboard.writeText([cab, ...lineas].join('\n'));
+        Toast.show(`Copiado: ${lineas.length} equipo(s) para desconexión.`, 'ok');
+      } catch (err) {
+        Toast.show('No se pudo copiar — selecciona la tabla y cópiala a mano.', 'bad');
+      }
+    });
     // "Marcar recibido" abre el mini-checklist; la escritura ocurre al confirmar.
     _overlay.querySelectorAll('.dev-recibido').forEach(b => b.addEventListener('click', () => {
       const id = b.dataset.id;

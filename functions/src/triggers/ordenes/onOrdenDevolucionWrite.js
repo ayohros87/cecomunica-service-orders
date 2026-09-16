@@ -46,6 +46,25 @@ const { cerrarFichasPoc } = require("../../lib/pocCierre");
 // paraba en seco (Municipio de Arraiján: 20 radios de un evento trancados por
 // 3 fichas del evento anterior). Solo se cierran las fichas de ESTE cliente, y
 // el SIM vuelve al pool salvo que ya esté en otro radio (ver lib/pocCierre).
+// Lo que la ficha tenía queda TAMBIÉN en la orden (2026-09-16): recepción
+// pide la desconexión del airtime con el serial, el Unit ID y el SIM, y hasta
+// hoy tenía que ir a buscarlos a POC —con el cliente esperando— antes de
+// recibir el equipo. Ahora la orden los trae: `devolucion.poc[serial_norm]`.
+// Se escribe con merge sobre el mapa, no sobre `esperados`, para no pisar lo
+// que la pantalla esté editando.
+async function guardarPocEnOrden(ordenId, cerradasPorSerial) {
+  const serials = Object.keys(cerradasPorSerial);
+  if (!serials.length) return;
+  try {
+    await db.collection("ordenes_de_servicio").doc(ordenId)
+      .set({ devolucion: { poc: cerradasPorSerial } }, { merge: true });
+  } catch (err) {
+    logger.warn("[onOrdenDevolucionWrite] no se pudo guardar el POC en la orden (no crítico)", {
+      ordenId, seriales: serials, message: err.message,
+    });
+  }
+}
+
 // Best-effort: un fallo aquí no puede tumbar la devolución.
 async function cerrarPocDelCliente(e, after, ordenId, motivo) {
   try {
@@ -63,11 +82,26 @@ async function cerrarPocDelCliente(e, after, ordenId, motivo) {
         simsAjenos: r.simsAjenos, fichasDeOtrosClientes: r.deOtros,
       });
     }
+    // La primera ficha cerrada del serial es la del equipo que volvió (las de
+    // otros clientes no se tocan): esa es la que va a la orden.
+    const f = r.cerradas[0];
+    if (!f) return null;
+    return {
+      serial: f.serial || e.serial || "",
+      unit_id: f.unit_id || "",
+      sim_number: f.sim_number || "",
+      sim_phone: f.sim_phone || "",
+      operador: f.operador || "",
+      ip: f.ip || "",
+      ficha_id: f.id,
+      at: admin.firestore.Timestamp.now(),
+    };
   } catch (err) {
     logger.warn("[onOrdenDevolucionWrite] no se pudo cerrar la ficha POC (no crítico)", {
       ordenId, serial: e.serial, message: err.message,
     });
   }
+  return null;
 }
 
 // ── Sustitución del serial saliente (2026-09-07) ─────────────────────────
@@ -530,6 +564,7 @@ module.exports = onDocumentWritten(
     const dev = after.devolucion || {};
     const antes = new Map(((before?.devolucion?.esperados) || []).map(e => [e.id, e]));
     const tandaRecibida = []; // recibidos NUEVOS de esta escritura → ENTRADA por tanda
+    const pocDeLaTanda = {};  // serial_norm → ficha POC que se cerró (desconexión del airtime)
 
     for (const e of (dev.esperados || [])) {
       const res = e.resolucion || null;
@@ -574,7 +609,8 @@ module.exports = onDocumentWritten(
                 });
           }
           logger.info("[onOrdenDevolucionWrite] recibido", { ordenId, serial: e.serial, r, modo: dev.modo || "recuperacion" });
-          await cerrarPocDelCliente(e, after, ordenId, "Devolución recibida");
+          const poc = await cerrarPocDelCliente(e, after, ordenId, "Devolución recibida");
+          if (poc) pocDeLaTanda[pool.normSerial(e.serial || "") || e.id] = poc;
           tandaRecibida.push({
             serial: e.serial, modelo: e.modelo, modelo_id: e.modelo_id,
             accesorios: e.accesorios || null,
@@ -686,6 +722,10 @@ module.exports = onDocumentWritten(
         logger.warn("[onOrdenDevolucionWrite] sustitución no aplicada (no crítico)", { ordenId, de: s.serial_original, a: s.serial, error: e.message });
       }
     }
+
+    // La ficha de POC de lo recibido queda en la orden, para pedir la
+    // desconexión del airtime sin volver a buscarla (ver guardarPocEnOrden).
+    await guardarPocEnOrden(ordenId, pocDeLaTanda);
 
     // ENTRADA por tanda: cada lote de recibidos alimenta la inspección del
     // taller de inmediato (crea la ENTRADA en la primera tanda, agrega en las

@@ -26,8 +26,17 @@
 >   existe pero está cerrado, el resumen lo dice —*"hay 1 ficha cerrada (equipo
 >   devuelto)"*— con un botón para verla. Ya no hay que adivinar si el equipo
 >   nunca estuvo en POC o si es que lo devolvieron.
+> - **Y la propia orden de devolución lo trae**: al recibir cada unidad, su
+>   ficha de POC queda en la orden — bloque *"Desconexión del airtime — datos
+>   de POC"* con serial, Unit ID, SIM/teléfono y operador, y un botón **Copiar
+>   para desconexión** que deja la lista lista para pegar en el correo. Ya no
+>   hay que ir a POC a capturar pantallas ANTES de recibir, con el cliente en
+>   el mostrador.
 > - **Se recuperó lo ya perdido**: 1,169 fichas cerradas antes de hoy volvieron
->   a tener su foto de cierre (958 con SIM) reconstruida desde `poc_logs`.
+>   a tener su foto de cierre (958 con SIM) reconstruida desde `poc_logs`, y
+>   las 6 devoluciones ya hechas (HASDAY, Einstein, AB SECURITY, Tocumen, Club
+>   Unión, Importadora Centroamericana) quedaron con sus datos de POC dentro de
+>   la orden.
 > - Se sigue pagando solo lo que se usa: el histórico (~1,800 fichas) se lee
 >   únicamente al prender el toggle o cuando una búsqueda quedó en cero.
 

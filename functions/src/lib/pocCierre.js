@@ -152,7 +152,14 @@ async function cerrarFichasPoc({
   const simsAjenos = [];
   for (const ficha of aCerrar) {
     const r = await cerrarUna(ficha, { motivo, ref, usuario }, db);
-    cerradas.push({ id: ficha.id, serial: ficha.serial, unit_id: ficha.unit_id || null, sim: soloDigitos(ficha.sim_number) || null });
+    cerradas.push({
+      id: ficha.id, serial: ficha.serial, unit_id: ficha.unit_id || null,
+      sim: soloDigitos(ficha.sim_number) || null,
+      // Para quien pide la desconexión del airtime: el número tal como está en
+      // POC, su teléfono y el operador (ver onOrdenDevolucionWrite).
+      sim_number: ficha.sim_number || "", sim_phone: ficha.sim_phone || "",
+      operador: ficha.operador || "", ip: ficha.ip || "",
+    });
     if (r === "cerrada-sim-ajeno") simsAjenos.push(soloDigitos(ficha.sim_number));
   }
   // Fichas del serial que quedan abiertas con OTRO cliente: no se tocan, pero
