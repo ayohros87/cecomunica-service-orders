@@ -3455,6 +3455,21 @@ window.Centro = {
         ok: this.puedeAsignar(), motivo: 'los seriales los declara bodega (Almacén · Asignar)' }));
     }
 
+    // Corregir los seriales que bodega YA asignó (2026-09-16). Antes de esto,
+    // un serial mal puesto —o un radio cambiado en el mostrador— obligaba a
+    // anular la gestión entera: la OS sale sola al completarse la asignación y
+    // con ella el expediente deja de ser editable. El trabajo es de bodega
+    // (tiene el radio en la mano), así que vive en Almacén · Asignar.
+    const yaTieneSeriales = (g.aumento?.seriales_asignados || []).some(s => String(s.serial || '').trim())
+      || (g.demo?.seriales_asignados || []).some(s => String(s.serial || '').trim())
+      || (g.items || []).some(i => i.serial_nuevo);
+    if (yaTieneSeriales && !terminal && !esCS) {
+      A.push(this._acc({ id: 'corregir_seriales', label: 'Corregir seriales…',
+        hint: 'bodega puso otro radio o tecleó mal: se corrigen la gestión, sus órdenes y el inventario',
+        href: `../almacen/index.html?tab=asignar&g=${encodeURIComponent(g.id)}&corregir=1`,
+        ok: this.puedeAsignar(), motivo: 'los seriales los corrige bodega (Almacén · Asignar)' }));
+    }
+
     // ── Documentos: papeles y órdenes ──
     if (esAum && !esAct) {
       A.push(this._acc({ id: 'imprimir', grupo: 'Documentos', label: 'Imprimir el anexo',

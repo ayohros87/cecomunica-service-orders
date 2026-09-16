@@ -56,11 +56,11 @@ window.AlmacenAsignar = (() => {
   // ── Entrada ───────────────────────────────────────────────────────────
   // activar({contrato, g}): carga la cola (una vez) y abre el deep-link o el
   // primero de la cola. Lo llama AlmacenPage.setTab('asignar') y el init.
-  async function activar({ contrato = null, g = null, forzar = false } = {}) {
+  async function activar({ contrato = null, g = null, forzar = false, corregir = false } = {}) {
     st.rol = window.userRole || st.rol;
     if (!st.cargado || forzar) await cargarCola();
     if (contrato) return abrirContrato(contrato);
-    if (g) return abrirGestion(g);
+    if (g) return abrirGestion(g, { corregir });
     if (!st.sel && st.items.length) return seleccionar(st.items[0]);
     if (!st.sel) renderTrabajoVacio();
   }
@@ -562,14 +562,48 @@ window.AlmacenAsignar = (() => {
 
   /* ═════════ GESTIÓN (aumento · demo · reemplazo) ═════════ */
 
-  async function abrirGestion(gid) {
+  // Los seriales que la gestión tiene HOY, en una sola lista 1:1 — sin
+  // importar dónde los guarde su tipo. Es lo que la corrección necesita: cada
+  // fila es "este radio por este otro", no "cuántos de este modelo".
+  function serialesActuales(g) {
+    if (g.tipo === 'reemplazo' || esCambio(g)) {
+      return (g.items || []).filter(it => it.serial_nuevo).map(it => ({
+        serial: it.serial_nuevo, modelo: it.modelo_solicitado || it.modelo || '',
+        modelo_id: it.modelo_solicitado_id || it.modelo_id || '',
+        nota: it.serial_saliente ? `sustituye a ${it.serial_saliente}` : '',
+      }));
+    }
+    const lista = (g.tipo === 'demo' ? g.demo?.seriales_asignados : g.aumento?.seriales_asignados) || [];
+    return lista.filter(s => String(s.serial || '').trim())
+      .map(s => ({ serial: s.serial, modelo: s.modelo || '', modelo_id: s.modelo_id || '', nota: '' }));
+  }
+
+  // Una fila por serial: el que está puesto arriba, el correcto abajo.
+  function gruposCorreccion(g) {
+    return serialesActuales(g).map((s, ix) => ({
+      clave: String(ix),
+      modelo: s.modelo || '—', modelo_id: s.modelo_id || '', activos: 1,
+      titulo: `Hoy figura <span style="font-family:var(--font-mono,monospace);">${esc(s.serial)}</span>`
+        + ` <span style="color:var(--fg-3); font-weight:400;">(${esc(s.modelo || '—')})</span> → ¿cuál es el correcto?`,
+      nota: s.nota,
+      slots: [{ serial: s.serial }],
+    }));
+  }
+
+  async function abrirGestion(gid, { corregir = false } = {}) {
     marcarSel('gestion', gid);
     const el = cascaron({ titulo: 'Cargando…', sub: '' });
     let g = null;
     try { g = await GestionesService.get(gid); } catch (e) { console.error(e); }
     if (!g) { el.innerHTML = Bandeja.vacio('No se encontró la gestión.', 'search-x'); return; }
 
-    const grupos = gruposDeGestion(g);
+    // Modo corrección: las filas son los seriales que ya tiene puestos, para
+    // cambiarlos por los correctos. Solo se entra a pedido (el botón del
+    // banner o el enlace del expediente), nunca por defecto.
+    const actuales = serialesActuales(g);
+    const corrigiendo = corregir && actuales.length > 0 && puedeAsignarGestion()
+      && !['cerrada', 'anulada'].includes(g.estado);
+    const grupos = corrigiendo ? gruposCorreccion(g) : gruposDeGestion(g);
     const total = grupos.reduce((s, x) => s + x.activos, 0);
     const label = TIPO_G[g.tipo] || g.tipo;
     const conOS = !!(g.ordenes?.programacion_id || (g.ordenes?.programacion_ids || []).length);
@@ -582,7 +616,7 @@ window.AlmacenAsignar = (() => {
       || (g.estado === 'en_proceso' && ['reemplazo', 'demo'].includes(g.tipo) && !g.cierre?.asignacion)
       || (g.estado === 'pendiente_firma' && g.tipo === 'aumento' && !g.aumento?.es_ajuste && !g.aumento?.es_regularizacion));
     const guardadosObj = serialesGuardadosGestion(g);
-    st.trabajo = { tipo: 'gestion', g, gid, guardadosObj };
+    st.trabajo = { tipo: 'gestion', g, gid, guardadosObj, corrigiendo, actuales };
 
     cascaron({
       titulo: `${esc(gid)} · ${total} equipo${total === 1 ? '' : 's'}`,
@@ -590,27 +624,46 @@ window.AlmacenAsignar = (() => {
         + (g.tipo === 'aumento' && g.aumento?.contrato_id ? ` · al contrato ${esc(g.aumento.contrato_id)}` : '')
         + (g.tipo === 'demo' && g.demo?.finalidad ? ` · ${esc(g.demo.finalidad)}` : '')
         + (g.tipo === 'aumento' && g.estado === 'pendiente_firma' ? ' · <b>firma del anexo en paralelo</b>' : ''),
-      pill: cerrada ? (g.estado === 'anulada' ? 'Anulada' : 'Cerrada') : esperaBodega ? 'Por asignar' : conOS ? 'En programación' : 'Sin pendiente de bodega',
-      pillCls: esperaBodega ? 'aviso' : cerrada ? 'neutro' : 'listo',
+      pill: corrigiendo ? 'Corrigiendo seriales'
+        : cerrada ? (g.estado === 'anulada' ? 'Anulada' : 'Cerrada') : esperaBodega ? 'Por asignar' : conOS ? 'En programación' : 'Sin pendiente de bodega',
+      pillCls: corrigiendo ? 'info' : esperaBodega ? 'aviso' : cerrada ? 'neutro' : 'listo',
     });
 
     // La picklist dice "saca esto del estante". En un cambio de serial no hay
     // nada que sacar: pintarla mandaría a bodega a buscar un radio que ya está
     // con el cliente.
     const puede = esperaBodega && puedeAsignarGestion();
-    if (puede && !esCambio(g)) $('asPicklist').innerHTML = await picklistHtml(grupos);
+    if (puede && !esCambio(g) && !corrigiendo) $('asPicklist').innerHTML = await picklistHtml(grupos);
 
     const asg = crearAsignador({ permitirOmitir: false, clienteId: g.cliente_id || null,
       textoVacio: 'Esta gestión no tiene equipos que asignar.' });
     asg.setGuardados(Object.keys(guardadosObj));
     const hay = asg.render(grupos);
 
-    if (!esperaBodega) {
+    // ¿Se puede corregir? Bodega ya asignó, la gestión sigue viva. Hasta que
+    // cierre: después ya alimentó devoluciones y facturación.
+    const puedeCorregir = !cerrada && !esperaBodega && actuales.length > 0 && puedeAsignarGestion();
+
+    if (corrigiendo) {
+      const entregado = g.cierre?.entrega === true;
+      $('asBanner').innerHTML = banner('info',
+        '<strong>Corrigiendo los seriales de esta gestión.</strong> Escribe el serial que de verdad va en cada línea. '
+        + (entregado
+          ? 'Como ya se entregó, el radio que sale vuelve al estante marcado <strong>verificar físicamente</strong>.'
+          : 'El radio que sale vuelve al estante disponible.')
+        + ' El que entra tiene que estar en bodega, y toma el lugar exacto del que sale: '
+        + 'se corrigen la gestión, sus órdenes y el inventario de una vez.');
+      toolbar([]);
+      footer([`<button type="button" class="btn btn-primary" data-as="guardar-correccion"><i data-lucide="replace"></i> Guardar corrección</button>`]);
+    } else if (!esperaBodega) {
       $('asBanner').innerHTML = banner('ok', conOS
-        ? '<strong>Seriales amarrados.</strong> La orden de programación ya existe; pool y orden los tienen. Cambios, desde la orden.'
+        ? '<strong>Seriales amarrados.</strong> La orden de programación ya existe; pool y orden los tienen.'
         : cerrada ? `<strong>Gestión ${g.estado}.</strong> Solo lectura.` : '<strong>Sin pendiente de bodega.</strong> Esta gestión no espera seriales en este paso.');
       asg.setLocked(true);
-      footer([]);
+      // La salida: corregir un serial mal puesto sin anular la gestión entera.
+      footer(puedeCorregir
+        ? [`<button type="button" class="btn btn-ghost" data-as="corregir"><i data-lucide="replace"></i> Corregir seriales…</button>`]
+        : []);
     } else if (!puedeAsignarGestion()) {
       $('asBanner').innerHTML = banner('warn', 'Solo administración e inventario asignan seriales de gestiones.');
       asg.setLocked(true);
@@ -699,6 +752,76 @@ window.AlmacenAsignar = (() => {
       if (gr) gr.slots.push({ serial: s.serial });
     });
     return grupos;
+  }
+
+  // Corregir seriales YA asignados. Bodega solo deja el PEDIDO (los pares
+  // anterior→nuevo) en la gestión; mover la gestión, sus órdenes y el pool es
+  // de onGestionWrite. El navegador no toca tres sitios a la vez: si se cae a
+  // la mitad, queda medio corregido y nadie sabe dónde.
+  async function guardarCorreccion() {
+    const t = st.trabajo; const asg = st.asignador;
+    const g = t.g;
+    if ($('asBody').querySelector('.serial-input.dup')) { toast('Hay seriales duplicados (marcados en rojo).', 'warn'); return; }
+    const datos = asg.collect();
+
+    // Solo lo que de verdad cambió. Lo que bodega dejó igual no se valida ni
+    // se toca: esos radios están asignados, no en bodega — exigirlos en el
+    // estante rebotaría la corrección entera por las líneas que están bien.
+    const pares = [];
+    (t.actuales || []).forEach((a, ix) => {
+      const s = datos.seriales.find(x => x.clave === String(ix));
+      const nuevo = String(s?.serial || '').trim();
+      if (!nuevo || norm(nuevo) === norm(a.serial)) return;
+      pares.push({ anterior: a.serial, nuevo, modelo: a.modelo || '', modelo_id: a.modelo_id || null });
+    });
+    if (!pares.length) { toast('No cambiaste ningún serial.', 'warn'); return; }
+
+    const r = await asg.exigirEnBodega(pares.map(p => ({ serial: p.nuevo, modelo: p.modelo, modelo_id: p.modelo_id })), {});
+    if (!r) return;
+
+    const entregado = g.cierre?.entrega === true;
+    const ok = await Modal.sheet({
+      title: 'Corregir los seriales de la gestión', icon: 'replace', size: 'md',
+      html: `
+        <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
+          Se corrige la gestión <b>${esc(t.gid)}</b>, sus órdenes de servicio y el inventario, de una vez.</p>
+        <div style="border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+          <table style="border-collapse:collapse; width:100%; font-size:13px;">
+            ${pares.map(p => `<tr>
+              <td style="padding:6px 10px; border-bottom:1px solid var(--border); font-family:var(--font-mono,monospace); color:#991B1B; text-decoration:line-through;">${esc(p.anterior)}</td>
+              <td style="padding:6px 10px; border-bottom:1px solid var(--border);">→</td>
+              <td style="padding:6px 10px; border-bottom:1px solid var(--border); font-family:var(--font-mono,monospace); color:#065F46; font-weight:700;">${esc(p.nuevo)}</td>
+            </tr>`).join('')}
+          </table>
+        </div>
+        <div style="margin-top:12px; padding:10px 12px; background:#FFFBEB; border:1px solid #FCD34D; border-radius:8px; color:#92400E; font-size:12.5px; line-height:1.55;">
+          El radio que entra toma el lugar exacto del que sale.
+          ${entregado
+    ? 'Como la gestión ya se entregó, el que sale vuelve al estante marcado <b>verificar físicamente</b>: confirma que lo tienes.'
+    : 'El que sale vuelve al estante disponible.'}
+        </div>`,
+      buttons: [
+        { action: 'cancel', label: 'Volver a revisar' },
+        { action: 'confirm', label: 'Corregir', primary: true, icon: 'replace' },
+      ],
+    });
+    if (ok !== 'confirm') return;
+
+    const btn = $('asFoot').querySelector('[data-as="guardar-correccion"]'); if (btn) btn.disabled = true;
+    try {
+      await GestionesService.pedirCorreccionSeriales(t.gid, pares);
+      if (r.excepcion) {
+        await GestionesService.registrarEvento(t.gid, 'asignar',
+          `Excepción de modelo al corregir (${r.excepcion.seriales.join(', ')}): ${r.excepcion.motivo}`).catch(() => {});
+      }
+      invalidarBodega();
+      toast(`Corrección enviada (${pares.length}) — el sistema actualiza la gestión, sus órdenes y el inventario.`, 'ok');
+      setTimeout(() => abrirGestion(t.gid), 2500);
+    } catch (e) {
+      console.error('[Asignar] corrección:', e);
+      toast('No se pudo guardar la corrección: ' + (e.message || e), 'bad');
+      if (btn) btn.disabled = false;
+    }
   }
 
   async function guardarGestion() {
@@ -807,6 +930,8 @@ window.AlmacenAsignar = (() => {
       else if (a === 'listo') listoParaProgramar();
       else if (a === 'reemplazo') guardarReemplazo();
       else if (a === 'guardar-gestion') guardarGestion();
+      else if (a === 'corregir') abrirGestion(st.trabajo?.gid, { corregir: true });
+      else if (a === 'guardar-correccion') guardarCorreccion();
     });
   });
 

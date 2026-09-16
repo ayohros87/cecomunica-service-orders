@@ -1065,6 +1065,18 @@ service cloud.firestore {
         return userRole() in ["administrador","inventario"]
           && (soloTocaG(["items"]) || soloTocaG(["demo"]) || soloTocaG(["aumento"]));
       }
+      // Bodega CORRIGE seriales que ya asignó (2026-09-16). Antes de esto, un
+      // serial mal puesto obligaba a anular la gestión entera: la OS sale sola
+      // al completarse la asignación y con ella el expediente deja de ser
+      // editable. Bodega solo deja el PEDIDO (pares anterior→nuevo); moverlo
+      // todo —gestión, órdenes y pool— es de onGestionWrite, que consume el
+      // pedido en una transacción. Hasta que la gestión cierre: después ya
+      // alimentó devoluciones y facturación.
+      function esCorreccionSerialesGestion() {
+        return userRole() in ["administrador","inventario"]
+          && soloTocaG(["correccion_seriales_pendiente"])
+          && !(resource.data.estado in ["cerrada","anulada"]);
+      }
       // El TALLER propone un reemplazo (2026-09-09): el técnico ve el radio
       // dañado y abre la solicitud desde la fila de ESE radio, sin pasar por
       // el Centro (al que no entra). Es una PROPUESTA, no una decisión: nace
@@ -1118,6 +1130,7 @@ service cloud.firestore {
                       || esFirmaAnexoGestion() || esRegularizacionSinFirmaGestion()
                       || esAprobacionActualizacionSeriales()
                       || esEnlaceFirmaGestion() || esAsignacionGestion()
+                      || esCorreccionSerialesGestion()
                       || esEdicionGestion());
       allow delete: if false;
       // Linaje del reemplazo (espejo del patrón contratos/{cid}/mapeos):

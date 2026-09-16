@@ -438,6 +438,31 @@ const GestionesService = {
       : `Bodega asignó: ${pares}`);
   },
 
+  // Bodega CORRIGE seriales que ya asignó (2026-09-16). Solo deja el pedido:
+  // aplicar la corrección —gestión, sus órdenes y el pool— es de onGestionWrite,
+  // que consume el pedido en una transacción. El navegador no toca tres sitios
+  // a la vez: si se cae a la mitad, queda medio corregido y nadie sabe dónde.
+  async pedirCorreccionSeriales(gestionId, pares) {
+    const lista = (pares || [])
+      .filter(p => p && String(p.anterior || '').trim() && String(p.nuevo || '').trim())
+      .map(p => ({
+        anterior: String(p.anterior).trim(),
+        nuevo: String(p.nuevo).trim(),
+        modelo: p.modelo || '',
+        modelo_id: p.modelo_id || null,
+      }));
+    if (!lista.length) throw new Error('No hay seriales que corregir.');
+    const user = firebase.auth().currentUser;
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      correccion_seriales_pendiente: {
+        pares: lista,
+        por_uid: user?.uid || null,
+        por_email: user?.email || null,
+        at: new Date().toISOString(),
+      },
+    });
+  },
+
   // Bodega asigna los seriales de un DEMO.
   async asignarDemo(gestionId, seriales) {
     await firebase.firestore().collection(this.COL).doc(gestionId).update({

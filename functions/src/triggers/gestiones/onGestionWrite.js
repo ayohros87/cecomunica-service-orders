@@ -21,6 +21,7 @@ const { APP_BASE_URL } = require("../../lib/inventario");
 const pool = require("../../domain/equiposPool");
 const G = require("../../lib/gestiones");
 const CS = require("../../lib/cambioSerial");
+const CG = require("../../lib/correccionGestion");
 const AP = require("../../lib/adendaPapel");
 const RC = require("../../domain/regularizacionCuentas");
 
@@ -1525,6 +1526,59 @@ module.exports = onDocumentWritten(
       }
     } catch (e) {
       logger.error("[onGestionWrite] aplicación del cambio de serial falló", { gid, message: e.message });
+    }
+
+    // ── C3) CORRECCIÓN de los seriales ya asignados de una gestión ───────
+    // Bodega deja los pares {anterior, nuevo} en `correccion_seriales_pendiente`
+    // desde Almacén · Asignar y aquí se aplican: gestión, sus órdenes y el pool
+    // (el entrante toma el lugar exacto del saliente). Antes esto no existía y
+    // un serial mal puesto obligaba a anular la gestión entera.
+    //
+    // La petición se consume dentro de la transacción que la lee: si el evento
+    // se re-entrega, el segundo pase ya no la encuentra y no vuelve a mover
+    // radios. El resultado queda en `correcciones` (histórico, append-only).
+    try {
+      const pend = after.correccion_seriales_pendiente;
+      let pedido = null;
+      if (pend && Array.isArray(pend.pares) && pend.pares.length
+          && !["anulada"].includes(after.estado)) {
+        pedido = await db.runTransaction(async (tx) => {
+          const s = await tx.get(ref);
+          const d = s.exists ? s.data() : null;
+          const p = d?.correccion_seriales_pendiente;
+          if (!d || !p || !Array.isArray(p.pares) || !p.pares.length || d.estado === "anulada") return null;
+          tx.set(ref, { correccion_seriales_pendiente: admin.firestore.FieldValue.delete() }, { merge: true });
+          return { g: d, pares: p.pares, por: p.por_email || p.por_uid || "bodega" };
+        });
+      }
+      if (pedido) {
+        const r = await CG.aplicar(gid, pedido.g, pedido.pares);
+        if (r.aplicados.length) {
+          const pares = r.aplicados.map(a => `${a.anterior} → ${a.nuevo}`).join(", ");
+          await ref.set({
+            correcciones: admin.firestore.FieldValue.arrayUnion({
+              pares: r.aplicados.map(a => ({ anterior: a.anterior, nuevo: a.nuevo })),
+              por: pedido.por, at_iso: new Date().toISOString(),
+              ordenes_tocadas: r.ordenes,
+            }),
+          }, { merge: true });
+          await G.registrarEvento(gid, "correccion_seriales",
+            `Seriales corregidos por ${pedido.por}: ${pares}. `
+            + `${r.ordenes ? `Se actualizaron ${r.ordenes} línea(s) en las órdenes de la gestión. ` : ""}`
+            + (pedido.g.cierre?.entrega === true
+              ? "El radio que salía vuelve al estante marcado «verificar físicamente»."
+              : "El radio que salía vuelve al estante."));
+          logger.info("[onGestionWrite] seriales de gestión corregidos", { gid, pares: r.aplicados.length, ordenes: r.ordenes });
+        }
+        if (r.fallidos.length) {
+          await G.registrarEvento(gid, "correccion_incompleta",
+            `No se pudo corregir ${r.fallidos.length} serial(es): `
+            + r.fallidos.map(f => `${f.anterior} → ${f.nuevo} (${f.motivo})`).join("; ") + ".");
+          logger.warn("[onGestionWrite] corrección de seriales incompleta", { gid, fallidos: r.fallidos.length });
+        }
+      }
+    } catch (e) {
+      logger.error("[onGestionWrite] corrección de seriales falló", { gid, message: e.message });
     }
 
     // ── D) cierre automático (flags completos según el tipo) ─────────────

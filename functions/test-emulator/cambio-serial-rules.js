@@ -91,6 +91,42 @@ async function main() {
   await assertFails(doc(as("administrador"), "gestiones/gc1") && updateDoc(doc(as("administrador"), "gestiones/gc1"), { cliente_id: "otro-cliente" }));
   ok("ni siquiera admin le cambia el cliente por la puerta de atrás");
 
+  // ── Bodega corrige seriales ya asignados (2026-09-16) ──────────────────
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const dbx = ctx.firestore();
+    await setDoc(doc(dbx, "gestiones/gd1"), { tipo: "demo", estado: "en_demo", cliente_id: "cli-1",
+      deleted: false, cierre: { asignacion: true, entrega: true },
+      demo: { seriales_asignados: [{ serial: "AAA111" }] } });
+    await setDoc(doc(dbx, "gestiones/gd2"), { tipo: "demo", estado: "cerrada", cliente_id: "cli-1",
+      deleted: false, cierre: { asignacion: true, entrega: true, entrada: true },
+      demo: { seriales_asignados: [{ serial: "BBB222" }] } });
+  });
+  // Cada escritura lleva un valor DISTINTO a propósito: escribir lo mismo deja
+  // el diff vacío y `hasOnly([...])` lo acepta en cualquier predicado — la
+  // prueba pasaría por una razón que no es la que se está probando.
+  const pedido = (n) => ({
+    pares: [{ anterior: "AAA111", nuevo: `CCC33${n}`, modelo: "PD606-R", modelo_id: "m1" }],
+    por_uid: "inventario", por_email: "inventario@test", at: `2026-09-16T0${n}:00:00.000Z`,
+  });
+
+  await assertSucceeds(updateDoc(doc(as("inventario"), "gestiones/gd1"), { correccion_seriales_pendiente: pedido(1) }));
+  ok("bodega pide corregir los seriales de una gestión viva");
+
+  await assertSucceeds(updateDoc(doc(as("administrador"), "gestiones/gd1"), { correccion_seriales_pendiente: pedido(2) }));
+  ok("administración también");
+
+  await assertFails(updateDoc(doc(as("vendedor"), "gestiones/gd1"), { correccion_seriales_pendiente: pedido(3) }));
+  ok("un vendedor no corrige seriales: los declara bodega");
+
+  await assertFails(updateDoc(doc(as("inventario"), "gestiones/gd2"), { correccion_seriales_pendiente: pedido(4) }));
+  ok("una gestión CERRADA ya no se corrige");
+
+  await assertFails(updateDoc(doc(as("inventario"), "gestiones/gd1"), {
+    correccion_seriales_pendiente: pedido(5),
+    demo: { seriales_asignados: [{ serial: "CCC333" }] },
+  }));
+  ok("bodega deja el pedido, no aplica la corrección ella misma");
+
   console.log(`\nOK cambio-serial-rules: ${n} comprobaciones`);
   await testEnv.cleanup();
   process.exit(0);

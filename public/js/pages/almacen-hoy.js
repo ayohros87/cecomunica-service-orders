@@ -546,7 +546,9 @@ window.AlmacenHoy = (() => {
     // la sección ya está visible desde el parse; aquí se cargan sus datos.
     const qs = new URLSearchParams(location.search);
     if (qs.get('tab') === 'asignar' && window.AlmacenAsignar) {
-      AlmacenAsignar.activar({ contrato: qs.get('contrato'), g: qs.get('g') });
+      // &corregir=1 — el expediente manda a bodega a CORREGIR seriales ya
+      // asignados, no a asignar los que faltan (2026-09-16).
+      AlmacenAsignar.activar({ contrato: qs.get('contrato'), g: qs.get('g'), corregir: qs.get('corregir') === '1' });
     }
     // ?accion=conteo|recibir|vender — deep-links de los asistentes.
     const accion = new URLSearchParams(location.search).get('accion');

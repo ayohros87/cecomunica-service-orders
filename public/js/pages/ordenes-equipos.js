@@ -131,6 +131,31 @@ window.editarCampoEquipo = async function(compuestoId, campo, valorActual = "") 
   // ve en la tabla es decoración de lectura, no valida lo que escribes. Ahora
   // el chip dice, mientras tecleas, de quién es el radio y dónde figura.
   const esSerial = campo === "numero_de_serie";
+
+  // Una orden que nació de una GESTIÓN no se corrige por aquí (2026-09-16).
+  // Editar el serial suelto cambiaba la orden y dejaba la gestión diciendo el
+  // viejo —`demo.seriales_asignados`, `items[].serial_nuevo`— y encima el pool
+  // daba de alta una ficha por contacto: un dedazo creaba un equipo inventado.
+  // Así nacieron las tres fichas fantasma de R. SMITH ALTA PLAZA. La
+  // corrección vive en la gestión, que sabe mover las tres cosas a la vez.
+  const gestion = target.orden?.gestion;
+  if (esSerial && gestion?.id) {
+    await Modal.sheet({
+      title: "El serial se corrige en la gestión", icon: "replace", size: "md",
+      html: `
+        <p style="margin:0 0 10px; font-size:13.5px; line-height:1.6;">
+          Esta orden salió de la gestión <b>${gestion.id}</b>${gestion.tipo ? ` (${gestion.tipo})` : ""}.
+          Cambiar el serial solo aquí dejaría la <b>gestión</b> y el <b>inventario</b> diciendo el serial
+          viejo, y la orden diciendo otro.</p>
+        <p style="margin:0 0 10px; font-size:13.5px; line-height:1.6;">
+          Pídele a <b>bodega</b> que lo corrija desde el expediente:
+          <b>Centro de gestión → la gestión → Corregir seriales…</b>
+          Desde ahí se corrigen la gestión, esta orden y el inventario de una vez.</p>`,
+      buttons: [{ action: "cancel", label: "Entendido", primary: true }],
+    });
+    return;
+  }
+
   const nuevoValor = await Modal.prompt({
     title: `Editar ${etiqueta}`,
     defaultValue: valorActual ?? "",
