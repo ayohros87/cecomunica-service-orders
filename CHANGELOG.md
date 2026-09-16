@@ -1,5 +1,43 @@
 # Changelog
 
+## [El taller avisa desde la fila del radio que un serial no sirve] — 2026-09-16
+
+> Zuleika, sobre el caso R. SMITH ALTA PLAZA: *"en este tipo de caso donde hay
+> cambio de seriales, debería ser solicitado directamente por Taller desde el
+> momento en que se determina la necesidad del cambio, quizás en la intervención
+> del técnico"*.
+>
+> Tiene razón, y es la raíz del caso. Los radios **no se podían programar por su
+> versión**. Quien lo ve es el técnico, con el radio delante y la orden abierta
+> — pero no tenía dónde decirlo. Así que la orden se cerró con esos seriales,
+> recepción los dio por entregados, y para cuando se quiso cambiarlos los radios
+> ya figuraban con el cliente: el sistema los daba por **no disponibles** y la
+> única salida fue abrir un demo nuevo.
+>
+> La corrección de bodega arregla el desastre *después*; esto lo evita *antes*.
+>
+> - **Un botón en la fila del radio**, al lado de "proponer reemplazo" y con el
+>   mismo molde: el técnico marca cuál no sirve y por qué, arrancando con lo que
+>   ya escribió en la intervención. Solo en órdenes que salieron de una gestión
+>   — es a ella a la que se le corrige el serial.
+> - **No es un reemplazo, y el texto lo dice.** El reemplazo es para el radio
+>   *del cliente* que se dañó, y abre una devolución para ir a buscarlo. Aquí el
+>   radio nunca salió: simplemente se va otro en su lugar.
+> - **El técnico dice cuál no; bodega elige cuál sí.** Las reglas lo sostienen:
+>   el taller solo puede tocar la marca — ni los seriales asignados, ni el
+>   estado, ni el cierre.
+> - **El aviso a bodega lleva el enlace directo al modo corrección**, y no se
+>   repite en cada escritura del expediente: solo se avisa de las marcas nuevas.
+>   La marca se limpia sola cuando bodega corrige ese serial, y solo ese — otro
+>   radio marcado sigue esperando su cambio.
+> - En el modo corrección las filas marcadas van con **su motivo y quién avisó**.
+>   Es lo que le contesta a bodega *"¿y cuál cambio?"* sin ir a leer el
+>   expediente, y el banner lo dice aunque entre por la cola y no por el correo.
+> - **Las tres fichas fantasma de R. SMITH quedaron borradas**
+>   (`18607A05001`, `18607A0500123`, `18607A05123`): las había creado el camino
+>   viejo al probarlo. El script comprueba antes que nadie las cite y no borra la
+>   que aparezca en algún lado. La flota del cliente vuelve a 10 equipos reales.
+
 ## [Bodega puede corregir los seriales de una gestión sin anularla] — 2026-09-16
 
 > Alberto: *"también debe haber un camino para corregir las gestiones, por
