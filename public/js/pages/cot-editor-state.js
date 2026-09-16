@@ -553,11 +553,12 @@
   // como Convertida (venta cerrada) o Rechazada (cliente declinó), evitando
   // tener dos botones separados. Devuelve Promise<'convertida'|'rechazada'|null>.
   function cerrarPrompt({ cotizacionId, total, totalTexto, cliente } = {}) {
+    const esc = FMT.esc; // helper canónico (core/formatting.js)
     return Modal.sheet({
       title: 'Cerrar cotización', icon: 'flag', size: 'sm',
       html: `
         <p style="margin:0 0 12px; font-size:14px; color:var(--fg-2);">
-          ${cotizacionId ? '<b>' + cotizacionId + '</b> · ' : ''}${cliente || ''}${totalTexto ? ' · ' + esc(totalTexto) : (total != null ? ' · ' + window.FMT.money(total) : '')}
+          ${cotizacionId ? '<b>' + esc(cotizacionId) + '</b> · ' : ''}${esc(cliente || '')}${totalTexto ? ' · ' + esc(totalTexto) : (total != null ? ' · ' + window.FMT.money(total) : '')}
         </p>
         <p style="margin:0 0 16px; font-size:13.5px; color:var(--fg-2); line-height:1.5;">
           ¿Cómo terminó esta cotización? Solo las cotizaciones convertidas a venta cuentan en el "Monto cerrado" del tablero.
