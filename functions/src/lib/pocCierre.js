@@ -21,6 +21,10 @@
 //     SimCardsService.liberarDeEquipo en el navegador). Hoy la invariante
 //     "SIM asignado ⇒ ficha viva" se cumple al 100% (338/338) y este cierre la
 //     tiene que mantener.
+//   · Cerrar NO es borrar: la ficha queda con `cierre` (motivo, orden, y la
+//     foto del SIM/operador que tenía). La lista de POC la sigue encontrando
+//     con "Incluir cerradas", que es como recepción pide la desconexión del
+//     airtime después de la devolución (Brenda, 2026-09-16).
 //   · Todo queda en `poc_logs` con `origen`, igual que un borrado a mano.
 //   · Best-effort para el llamador: devuelve lo que hizo, no tumba el flujo.
 const { admin, db: dbReal } = require("./admin");
@@ -77,6 +81,19 @@ async function cerrarUna(ficha, { motivo, ref, usuario }, db = dbReal) {
     // El radio ya no está en servicio con ese cliente: la ficha se cierra Y
     // queda inactiva (si alguien la restaura, no revive "activa").
     activo: false,
+    // Foto de lo que la ficha tenía al cerrarse (Brenda, 2026-09-16). El SIM
+    // vuelve al pool y los campos vivos se limpian, pero recepción necesita
+    // ese dato DESPUÉS del cierre: con el serial, el Unit ID y el SIM se pide
+    // la desconexión del airtime. Antes se perdía y había que capturar la
+    // pantalla de POC con el cliente esperando en recepción.
+    cierre: {
+      at: FV.serverTimestamp(),
+      motivo,
+      ref: ref || null,
+      sim_number: ficha.sim_number || "",
+      sim_phone: ficha.sim_phone || "",
+      operador: ficha.operador || "",
+    },
     updated_at: FV.serverTimestamp(),
     updated_by: null,
     updated_by_email: usuario,

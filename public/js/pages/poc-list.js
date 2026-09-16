@@ -10,6 +10,7 @@ window.PocList = {
   _cargando:     false,          // guard en vuelo de cargar()
   _debounceTimer: null,          // debounce del buscador
   _allDocs:      null,           // memo {t, docs} del barrido completo (filtrar)
+  _cerradasDocs: null,           // memo {t, docs} de las fichas cerradas
   _ALL_TTL_MS:   60000,
   _docsPorId:    new Map(),      // docId → doc de la última vez que se pintó
 
@@ -18,6 +19,7 @@ window.PocList = {
   // invalida el memo del barrido — el próximo filtrar() lee fresco.
   refresh() {
     this._allDocs = null;
+    this._cerradasDocs = null;
     const v = document.getElementById('filtroValor')?.value.trim() || '';
     if (v.length >= 2) this.filtrar();
     else if (!v) this.cargar(true);
@@ -49,6 +51,38 @@ window.PocList = {
       this._allDocs = { t: Date.now(), docs };
       return docs;
     });
+  },
+
+  // Mismo memo para las fichas CERRADAS (deleted:true). Son ~1,800 docs que
+  // NO se pagan en la carga normal: solo entran cuando alguien prende
+  // "Incluir cerradas" para buscar un equipo que el cliente ya devolvió.
+  _getCerradasMemo() {
+    const m = this._cerradasDocs;
+    if (m && Date.now() - m.t < this._ALL_TTL_MS) return Promise.resolve(m.docs);
+    return PocService.getCerradas().then(docs => {
+      this._cerradasDocs = { t: Date.now(), docs };
+      return docs;
+    });
+  },
+
+  // ── Fichas cerradas ─────────────────────────────────────────────
+  // Una ficha cerrada (deleted:true por una devolución) tiene el SIM y el
+  // operador en blanco —el SIM volvió al pool— y la foto de lo que tenía en
+  // `cierre`. Para buscar y para pintar, ese es el valor que la gente espera
+  // ver: es el dato con el que se pide la desconexión del airtime.
+  _campoVisible(d, campo) {
+    const v = d[campo];
+    if (v != null && !(typeof v === 'string' && v.trim() === '')) return v;
+    if (d.deleted === true && d.cierre && d.cierre[campo] != null) return d.cierre[campo];
+    return v;
+  },
+
+  // "Incompleta" es un pendiente de captura, y una ficha cerrada no lo es:
+  // nadie va a volver a llenarle el SIM a un radio que ya devolvieron.
+  _incompleta(d) {
+    if (d.deleted === true) return false;
+    return [PocState.nombreClienteDe(d), d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone]
+      .some(v => !v || v.trim?.() === '');
   },
 
   // ── Cell builders ───────────────────────────────────────────────
@@ -101,11 +135,12 @@ window.PocList = {
   _buildRow(docId, d) {
     const COL           = PocState.COL;
     const nombreCliente = PocState.nombreClienteDe(d);
-    const camposCrit    = [nombreCliente, d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
-    const algunoVacio   = camposCrit.some(v => !v || v.trim?.() === '');
+    const algunoVacio   = this._incompleta(d);
+    const cerrada       = d.deleted === true;
 
     const row = document.createElement('tr');
     row.dataset.id = docId;
+    if (cerrada) { row.dataset.cerrada = '1'; row.style.opacity = '.72'; }
     // Para refrescarNombresVisibles: los nombres de cliente pueden llegar
     // DESPUÉS del primer paint (los mapas ya no bloquean la lista).
     this._docsPorId.set(docId, d);
@@ -135,14 +170,33 @@ window.PocList = {
       tdCliente.appendChild(document.createElement('br'));
       tdCliente.appendChild(sub);
     }
+    // Ficha cerrada: se dice de UNA vez de qué devolución salió. Sin esto la
+    // fila parece viva y con datos a medias.
+    if (cerrada) {
+      const c = d.cierre || {};
+      const chip = document.createElement('span');
+      chip.style.cssText = 'display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;'
+        + 'border:1px solid var(--line);background:var(--gray-100,#f1f3f5);color:var(--fg-3);'
+        + 'font-size:10.5px;font-weight:600;';
+      const de = c.ref?.label || c.ref?.id || '';
+      chip.textContent = `Cerrada${c.at ? ' ' + FMT.date(c.at) : ''}${de ? ' · ' + de : ''}`;
+      chip.title = c.motivo ? `${c.motivo}. El equipo ya no está con el cliente.`
+                            : 'El equipo ya no está con el cliente.';
+      tdCliente.appendChild(document.createElement('br'));
+      tdCliente.appendChild(chip);
+    }
     row.appendChild(tdCliente);
 
     // operador (2) — stamp raw value on the cell so bulk edit can pre-select.
     // Empty operadores get a critical marker so they're easy to spot/complete.
     const tdOperador = document.createElement('td');
     tdOperador.dataset.operador = d.operador || '';
-    if (d.operador && d.operador.trim()) {
-      tdOperador.textContent = d.operador;
+    const operadorVisible = String(this._campoVisible(d, 'operador') || '').trim();
+    if (operadorVisible) {
+      tdOperador.textContent = operadorVisible;
+      if (!d.operador) tdOperador.title = 'Operador que tenía al cerrarse la ficha';
+    } else if (cerrada) {
+      tdOperador.textContent = '—';
     } else {
       tdOperador.innerHTML = '<span style="color:var(--status-critical);" title="Operador faltante"><i data-lucide="alert-circle"></i></span>';
     }
@@ -171,15 +225,37 @@ window.PocList = {
     // grupos (9)
     row.appendChild(this.crearCeldaConExpansor((d.grupos || []).join(', '), 'grupos'));
 
-    // sim_tel (10)
+    // sim_tel (10) — en una ficha cerrada el SIM ya volvió al pool, pero se
+    // muestra el que tenía: es lo que recepción manda a desconectar.
     const tdSim = document.createElement('td');
-    tdSim.innerHTML = `<i data-lucide="smartphone"></i> ${FMT.esc(d.sim_number)} / ${FMT.esc(d.sim_phone)}`;
+    const simNum = FMT.esc(this._campoVisible(d, 'sim_number'));
+    const simTel = FMT.esc(this._campoVisible(d, 'sim_phone'));
+    tdSim.innerHTML = `<i data-lucide="smartphone"></i> ${simNum} / ${simTel}`;
+    if (cerrada && (simNum || simTel)) tdSim.title = 'SIM que tenía al cerrarse la ficha (ya liberado del equipo)';
     row.appendChild(tdSim);
 
     // acciones (11)
     const actionCell = document.createElement('td');
     actionCell.style.whiteSpace = 'nowrap';
-    if (!PocState.esLectura()) {
+    if (cerrada) {
+      // Una ficha cerrada es histórico: se consulta, no se edita. Lo único que
+      // queda es reabrirla si se cerró por error (el radio nunca volvió).
+      if (!PocState.esLectura()) {
+        const restBtn = document.createElement('button');
+        restBtn.className = 'btn btn-ghost btn-icon btn-sm';
+        restBtn.title = 'Reabrir la ficha (el equipo volvió a estar con el cliente)';
+        restBtn.setAttribute('aria-label', 'Reabrir ficha');
+        restBtn.innerHTML = '<i data-lucide="rotate-ccw"></i>';
+        restBtn.onclick = async () => {
+          if (!await Modal.confirm({ message: '¿Reabrir esta ficha de POC? El equipo vuelve a contar como activo con el cliente.' })) return;
+          await PocService.restorePocDevice(docId, {
+            antes: d, user: firebase.auth().currentUser, origen: 'poc-lista',
+          });
+          this.refresh();
+        };
+        actionCell.appendChild(restBtn);
+      }
+    } else if (!PocState.esLectura()) {
       const editBtn = document.createElement('button');
       editBtn.className = 'btn btn-ghost btn-icon btn-sm';
       editBtn.title = 'Editar equipo';
@@ -204,18 +280,7 @@ window.PocList = {
         }
       };
       actionCell.appendChild(delBtn);
-
-      if (d.deleted) {
-        const restBtn = document.createElement('button');
-        restBtn.className = 'btn btn-ghost btn-icon btn-sm';
-        restBtn.title = 'Restaurar';
-        restBtn.setAttribute('aria-label', 'Restaurar equipo');
-        restBtn.innerHTML = '<i data-lucide="rotate-ccw"></i>';
-        restBtn.onclick = () => PocService.restorePocDevice(docId, {
-          antes: d, user: firebase.auth().currentUser, origen: 'poc-lista',
-        }).then(() => this.refresh());
-        actionCell.appendChild(restBtn);
-      }
+      // (el "Reabrir" de una ficha cerrada va en la rama de arriba)
     }
     row.appendChild(actionCell);
     return row;
@@ -430,8 +495,15 @@ window.PocList = {
     const soloInactivos   = document.getElementById('soloInactivos')?.checked;
     const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
     const soloSinContrato = document.getElementById('soloSinContrato')?.checked;
+    const incluirCerradas = document.getElementById('incluirCerradas')?.checked;
 
-    this._getAllMemo().then(docs => {
+    // Las cerradas se suman al barrido vivo SOLO si el toggle está prendido:
+    // la búsqueda de todos los días no paga esos ~1,800 docs.
+    const fuente = incluirCerradas
+      ? Promise.all([this._getAllMemo(), this._getCerradasMemo()]).then(([a, b]) => a.concat(b))
+      : this._getAllMemo();
+
+    fuente.then(docs => {
         if (ejecucionID !== this._filtroID) return;
         let total = 0, activos = 0, incompletos = 0;
         const coincidencias = [];
@@ -441,8 +513,7 @@ window.PocList = {
           idsVistos.add(d.id);
 
           const nombreCliente = PocState.nombreClienteDe(d);
-          const camposCrit    = [nombreCliente, d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
-          const algunoVacio   = camposCrit.some(v => !v || v.trim?.() === '');
+          const algunoVacio   = this._incompleta(d);
 
           if (soloSinContrato && (d.contrato_id || d.contrato_doc_id)) return;
           if (soloIncompletos) {
@@ -450,12 +521,13 @@ window.PocList = {
             incompletos++;
           }
 
-          if (campo !== 'cliente' && (d[campo] == null || (typeof d[campo] === 'string' && d[campo].trim() === ''))) return;
+          const valorCampo = this._campoVisible(d, campo);
+          if (campo !== 'cliente' && (valorCampo == null || (typeof valorCampo === 'string' && valorCampo.trim() === ''))) return;
 
           let contenido;
           if (campo === 'cliente')          contenido = nombreCliente.toLowerCase();
-          else if (Array.isArray(d[campo])) contenido = d[campo].join(' ').toLowerCase();
-          else                              contenido = String(d[campo] ?? '').toLowerCase();
+          else if (Array.isArray(valorCampo)) contenido = valorCampo.join(' ').toLowerCase();
+          else                              contenido = String(valorCampo ?? '').toLowerCase();
 
           if ((!soloActivos || d.activo === true) && (!soloInactivos || !d.activo)) {
             if (contenido.includes(valor)) {
@@ -470,6 +542,10 @@ window.PocList = {
         this._ordenarDocs(coincidencias);
         coincidencias.forEach(d => tbody.appendChild(this._buildRow(d.id, d)));
         PocState.actualizarResumen({ total, activos, incompletos });
+        // "No se encontraron resultados" se leía como "este equipo nunca estuvo
+        // en POC", y muchas veces es al revés: la devolución CERRÓ la ficha
+        // (Brenda, 2026-09-16). Si el histórico lo tiene, se dice aquí mismo.
+        if (!total && !incluirCerradas && valor) this._ofrecerCerradas(ejecucionID, campo, valor);
         this.actualizarFlechitas();
         if (window.Icons) Icons.pintar(tbody);
         else if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -483,9 +559,49 @@ window.PocList = {
       });
   },
 
+  // Busca lo mismo en las fichas cerradas y, si aparece, lo ofrece en el
+  // resumen con un botón que prende el toggle. Solo corre cuando la búsqueda
+  // viva quedó en cero, así que el barrido del histórico casi nunca se paga.
+  _ofrecerCerradas(ejecucionID, campo, valor) {
+    this._getCerradasMemo().then(docs => {
+      if (ejecucionID !== this._filtroID) return;
+      const hits = docs.filter(d => {
+        const v = campo === 'cliente' ? PocState.nombreClienteDe(d) : this._campoVisible(d, campo);
+        const contenido = Array.isArray(v) ? v.join(' ') : String(v ?? '');
+        return contenido.toLowerCase().includes(valor);
+      }).length;
+      if (!hits) return;
+
+      const pintar = (el) => {
+        if (!el) return;
+        el.textContent = '';
+        const txt = document.createElement('span');
+        txt.textContent = hits === 1
+          ? 'Sin equipos activos — hay 1 ficha cerrada (equipo devuelto). '
+          : `Sin equipos activos — hay ${hits} fichas cerradas (equipos devueltos). `;
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-secondary btn-sm';
+        btn.innerHTML = '<i data-lucide="archive"></i> Ver el histórico';
+        btn.onclick = () => {
+          const chk = document.getElementById('incluirCerradas');
+          if (chk) chk.checked = true;
+          this.filtrar();
+        };
+        el.appendChild(txt);
+        el.appendChild(btn);
+        if (window.Icons) Icons.pintar(el);
+        else if (typeof lucide !== 'undefined') lucide.createIcons();
+      };
+      pintar(document.getElementById('resumenEquipos'));
+      pintar(document.getElementById('resumenEquiposTop'));
+    }).catch(() => { /* el histórico es un extra: si falla, la búsqueda ya respondió */ });
+  },
+
   limpiarFiltro() {
     document.getElementById('filtroValor').value = '';
     document.getElementById('filtroCampo').value = 'cliente';
+    const cerradas = document.getElementById('incluirCerradas');
+    if (cerradas) cerradas.checked = false;
     document.getElementById('resumenEquipos').innerHTML =
       '<div class="loader" style="width:24px;height:24px;border-width:3px;"></div>';
     this.cargar(true);
@@ -538,6 +654,18 @@ window.PocList = {
   manejarCambioSinContrato() {
     const valorFiltro = document.getElementById('filtroValor').value.trim();
     if (valorFiltro) this.filtrar(); else this.cargar(true);
+  },
+
+  // "Incluir cerradas" solo tiene sentido BUSCANDO: la lista de todos los días
+  // es de equipos vivos y volcarle 1,800 fichas cerradas no le sirve a nadie
+  // (ni a la cuota de lecturas). Sin texto de búsqueda se avisa y ya.
+  manejarCambioCerradas() {
+    const valorFiltro = document.getElementById('filtroValor').value.trim();
+    if (valorFiltro) { this.filtrar(); return; }
+    if (document.getElementById('incluirCerradas')?.checked) {
+      Toast.show('Escribe un serial, cliente o Unit ID: las fichas cerradas salen en la búsqueda.', 'info');
+    }
+    this.cargar(true);
   },
 
   // ── Show-all (no pagination) ─────────────────────────────────────

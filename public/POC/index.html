@@ -272,6 +272,11 @@
         <label class="toggle-pill"><input type="checkbox" id="soloInactivos" onchange="PocList.manejarCambioInactivos()"> <i data-lucide="x-circle" style="width:14px;height:14px;"></i> Solo inactivos</label>
         <label class="toggle-pill"><input type="checkbox" id="soloIncompletos" onchange="PocList.manejarCambioIncompletos()"> <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> Solo incompletos</label>
         <label class="toggle-pill" title="Equipos sin contrato vinculado"><input type="checkbox" id="soloSinContrato" onchange="PocList.manejarCambioSinContrato()"> <i data-lucide="file-x" style="width:14px;height:14px;"></i> Sin contrato</label>
+        <!-- Histórico: una devolución CIERRA la ficha de POC (el radio ya no está
+             con el cliente). Con esto la búsqueda también trae esas fichas, con el
+             SIM que tenían — es como recepción pide la desconexión del airtime
+             después de cerrar la devolución. -->
+        <label class="toggle-pill" title="Trae también las fichas cerradas: equipos que el cliente ya devolvió, con el SIM que tenían"><input type="checkbox" id="incluirCerradas" onchange="PocList.manejarCambioCerradas()"> <i data-lucide="archive" style="width:14px;height:14px;"></i> Incluir cerradas</label>
 
         <!-- Selección rápida por contrato: los últimos contratos con equipos POC.
              Elegir uno filtra la tabla a ese contrato y deja TODOS seleccionados,

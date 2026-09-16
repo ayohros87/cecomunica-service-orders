@@ -1,5 +1,36 @@
 # Changelog
 
+## [El equipo devuelto sigue estando en POC — ahora como ficha cerrada] — 2026-09-16
+
+> Brenda: *"cuando posteriormente voy a buscar los seriales en PoC para
+> enviárselos al Sr. Mariche para su desconexión, me he encontrado con que
+> algunos seriales ya no aparecen"*. Los casos: HASDAY (1 radio), Inst. Alberto
+> Einstein (2), AB SECURITY (1, con captura del antes y el después).
+>
+> No era un borrado accidental: desde el 2026-09-09 la devolución **cierra** la
+> ficha de POC del radio que volvió, que es lo que destrancó a recepción
+> (Arraiján: 20 radios de un evento trancados por 3 fichas del evento anterior).
+> Lo que estaba mal era lo demás: cerrar hacía **desaparecer** la ficha de la
+> pantalla, y de paso le borraba el SIM y el operador — justo el dato con el que
+> se pide la desconexión del airtime. Después del cierre no quedaba de dónde
+> sacarlo.
+>
+> - **Cerrar ya no es desaparecer.** La ficha cerrada guarda la foto de lo que
+>   tenía (SIM, teléfono, operador), con el motivo y **la orden de devolución**
+>   que la cerró.
+> - **"Incluir cerradas"** en la barra de filtros de POC: la búsqueda también
+>   trae los equipos que el cliente ya devolvió, con su SIM viejo a la vista y
+>   una etiqueta *Cerrada 15/09/2026 · DEVOLUCIÓN 2026091508*. Son de consulta:
+>   no se editan ni se borran, solo se pueden **reabrir** si se cerraron por error.
+> - **El "No se encontraron resultados" ahora avisa.** Si el serial que se buscó
+>   existe pero está cerrado, el resumen lo dice —*"hay 1 ficha cerrada (equipo
+>   devuelto)"*— con un botón para verla. Ya no hay que adivinar si el equipo
+>   nunca estuvo en POC o si es que lo devolvieron.
+> - **Se recuperó lo ya perdido**: 1,169 fichas cerradas antes de hoy volvieron
+>   a tener su foto de cierre (958 con SIM) reconstruida desde `poc_logs`.
+> - Se sigue pagando solo lo que se usa: el histórico (~1,800 fichas) se lee
+>   únicamente al prender el toggle o cuando una búsqueda quedó en cero.
+
 ## [Cerrar una cotización por "otro motivo", con el motivo escrito] — 2026-09-16
 
 > "Cerrar cotización" solo tenía dos salidas: **Convertida** o **Rechazada**. El

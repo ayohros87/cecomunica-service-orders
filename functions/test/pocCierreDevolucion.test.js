@@ -170,3 +170,21 @@ test("no se vuelve a cerrar lo ya cerrado", async () => {
   assert.equal(r.cerradas.length, 0);
   assert.equal(estado.poc_logs.length, 0, "sin log de un cierre que no ocurrió");
 });
+
+// 2026-09-16 (Brenda): cerrar no es borrar. Recepción busca el serial en POC
+// DESPUÉS de la devolución para pedirle la desconexión del airtime al
+// proveedor, y el SIM/operador que se limpian de la ficha son justo ese dato.
+// La foto queda en `cierre` — con el motivo y la orden que lo cerró.
+test("la ficha cerrada guarda la foto del SIM y de quién la cerró", async () => {
+  const SIM = "8950702902411531805";
+  const { estado, db } = escenario({ sim: SIM });
+
+  await cerrar(db);
+
+  const c = estado.poc_devices.devArraijan.cierre;
+  assert.equal(c.sim_number, SIM, "el SIM que tenía, aunque ya volvió al pool");
+  assert.equal(c.sim_phone, "6000-0000");
+  assert.equal(c.operador, "+móvil");
+  assert.equal(c.motivo, "Devolución recibida");
+  assert.equal(c.ref.id, "2026090907");
+});

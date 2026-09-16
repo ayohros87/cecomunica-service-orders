@@ -365,6 +365,19 @@ const PocService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
+  // Fichas CERRADAS (deleted:true) — el histórico de lo que el cliente TUVO.
+  // Fuera de la lista normal: solo las trae el toggle "Incluir cerradas", y
+  // por eso no se ordena en el servidor (sin orderBy no hace falta índice
+  // compuesto; el orden lo pone el caller como a cualquier otra fila).
+  // Una devolución cierra la ficha (functions/src/lib/pocCierre.js): recepción
+  // sigue necesitando el serial —y el SIM que tenía, guardado en `cierre`—
+  // para pedir la desconexión del airtime (Brenda, 2026-09-16).
+  async getCerradas() {
+    const db = firebase.firestore();
+    const snap = await db.collection('poc_devices').where('deleted', '==', true).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
   // ── Group administration ─────────────────────────────────────────────
   // Two layers:
   //   1. Canonical CATALOG — clientes/{id}.poc_grupos (string[]). Source of
