@@ -873,10 +873,11 @@
 
     // ── Desconexión del airtime (2026-09-16) ─────────────────────────────
     // Recibir el equipo CIERRA su ficha de POC. Recepción tiene que pedirle
-    // después la desconexión al proveedor, y para eso necesita el Unit ID y el
-    // SIM que la ficha tenía — antes había que ir a buscarlos a POC ANTES del
-    // check-in, capturar la pantalla y volver, con el cliente esperando
-    // (Brenda). Ahora el cierre los deja aquí: `devolucion.poc[serial_norm]`.
+    // después la desconexión al proveedor, y para eso necesita el **Unit ID y
+    // el nombre del radio** (lo que pide Mariche, 2026-09-17) — antes había
+    // que ir a buscarlos a POC ANTES del check-in, capturar la pantalla y
+    // volver, con el cliente esperando (Brenda). El SIM y el operador NO van
+    // aquí: quedan en la ficha cerrada, que es su lugar.
     const pocPorSerial = dev.poc || {};
     const fichasPoc = esperados
       .filter(e => e.resolucion === 'recibido')
@@ -894,21 +895,20 @@
         </div>
         <div style="padding:8px 14px 10px;">
           <p style="margin:0 0 8px;font-size:11.5px;color:var(--fg-3,#6b7280);">
-            Al recibirlos, su ficha de POC quedó <b>cerrada</b> y el SIM volvió al pool. Esto es lo que tenían —
-            también se puede consultar después en POC con el filtro <b>“Incluir cerradas”</b>.
+            Al recibirlos, su ficha de POC quedó <b>cerrada</b>. Esto es lo que hace falta para pedir la
+            desconexión; el SIM y el operador que tenían se consultan en POC con el filtro <b>“Incluir cerradas”</b>.
           </p>
           <div style="overflow-x:auto;">
             <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:520px;">
               <thead><tr style="text-align:left;color:var(--fg-3,#6b7280);font-size:12px;">
-                <th style="padding:6px 8px;">Serial</th><th style="padding:6px 8px;">Unit ID</th>
-                <th style="padding:6px 8px;">SIM / teléfono</th><th style="padding:6px 8px;">Operador</th>
+                <th style="padding:6px 8px;">Unit ID</th><th style="padding:6px 8px;">Nombre del radio</th>
+                <th style="padding:6px 8px;">Serial</th>
               </tr></thead>
               <tbody>${fichasPoc.map(({ e, p }) => `
                 <tr>
-                  <td style="${tdS}font-family:var(--font-mono,monospace);">${esc(e.serial)}</td>
                   <td style="${tdS}font-family:var(--font-mono,monospace);">${esc(p.unit_id || '—')}</td>
-                  <td style="${tdS}font-family:var(--font-mono,monospace);">${esc(p.sim_number || '—')}${p.sim_phone ? ` / ${esc(p.sim_phone)}` : ''}</td>
-                  <td style="${tdS}">${esc(p.operador || '—')}</td>
+                  <td style="${tdS}">${esc(p.radio_name || '—')}</td>
+                  <td style="${tdS}font-family:var(--font-mono,monospace);color:var(--fg-3,#6b7280);">${esc(e.serial)}</td>
                 </tr>`).join('')}</tbody>
             </table>
           </div>
@@ -976,14 +976,13 @@
     _overlay.querySelector('#devCerrarOrden')?.addEventListener('click', cerrarOrden);
     // Lista lista para pegar en el correo de desconexión del airtime.
     _overlay.querySelector('#devPocCopiar')?.addEventListener('click', async () => {
+      // Lo que Mariche necesita para desconectar: Unit ID y nombre del radio.
+      // Nada más — el SIM y el operador no entran en el correo.
       const cab = `${_orden.cliente_nombre || ''} — DEVOLUCIÓN ${_ordenId}`.trim();
-      const lineas = fichasPoc.map(({ e, p }) => [
-        e.serial,
-        p.unit_id ? `Unit ID ${p.unit_id}` : null,
-        p.sim_number ? `SIM ${p.sim_number}` : null,
-        p.sim_phone || null,
-        p.operador || null,
-      ].filter(Boolean).join(' · '));
+      const lineas = fichasPoc.map(({ p }) => [
+        p.unit_id || '(sin Unit ID)',
+        p.radio_name || '(sin nombre)',
+      ].join(' · '));
       try {
         await navigator.clipboard.writeText([cab, ...lineas].join('\n'));
         Toast.show(`Copiado: ${lineas.length} equipo(s) para desconexión.`, 'ok');

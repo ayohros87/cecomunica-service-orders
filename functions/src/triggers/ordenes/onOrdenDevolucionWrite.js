@@ -46,10 +46,11 @@ const { cerrarFichasPoc } = require("../../lib/pocCierre");
 // paraba en seco (Municipio de Arraiján: 20 radios de un evento trancados por
 // 3 fichas del evento anterior). Solo se cierran las fichas de ESTE cliente, y
 // el SIM vuelve al pool salvo que ya esté en otro radio (ver lib/pocCierre).
-// Lo que la ficha tenía queda TAMBIÉN en la orden (2026-09-16): recepción
-// pide la desconexión del airtime con el serial, el Unit ID y el SIM, y hasta
-// hoy tenía que ir a buscarlos a POC —con el cliente esperando— antes de
-// recibir el equipo. Ahora la orden los trae: `devolucion.poc[serial_norm]`.
+// Lo que la ficha tenía queda TAMBIÉN en la orden (2026-09-16): la desconexión
+// del airtime se pide con el **Unit ID y el nombre del radio** (Mariche), y
+// hasta hoy recepción tenía que ir a buscarlos a POC —con el cliente
+// esperando— antes de recibir el equipo. Ahora la orden los trae:
+// `devolucion.poc[serial_norm]`.
 // Se escribe con merge sobre el mapa, no sobre `esperados`, para no pisar lo
 // que la pantalla esté editando.
 async function guardarPocEnOrden(ordenId, cerradasPorSerial) {
@@ -89,6 +90,7 @@ async function cerrarPocDelCliente(e, after, ordenId, motivo) {
     return {
       serial: f.serial || e.serial || "",
       unit_id: f.unit_id || "",
+      radio_name: f.radio_name || "",
       sim_number: f.sim_number || "",
       sim_phone: f.sim_phone || "",
       operador: f.operador || "",

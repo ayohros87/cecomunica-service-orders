@@ -4,11 +4,12 @@
  *
  * POR QUÉ
  *   Desde hoy, recibir una unidad deja en la orden `devolucion.poc[serial_norm]`
- *   = {unit_id, sim_number, sim_phone, operador} para pedir la desconexión del
- *   airtime sin volver a buscar en POC (onOrdenDevolucionWrite). Las
- *   devoluciones que ya cerraron no lo tienen — y son justamente las que están
- *   pendientes de desconexión (HASDAY, Einstein, AB SECURITY). Se reconstruye
- *   del log de cierre, que guardó la ficha completa.
+ *   = {unit_id, radio_name, sim…} para pedir la desconexión del airtime sin
+ *   volver a buscar en POC (onOrdenDevolucionWrite). Mariche desconecta con el
+ *   Unit ID y el nombre del radio. Las devoluciones que ya cerraron no lo
+ *   tienen — y son justamente las que están pendientes de desconexión (HASDAY,
+ *   Einstein, AB SECURITY). Se reconstruye del log de cierre, que guardó la
+ *   ficha completa. Volver a correrlo es inofensivo: reescribe el mismo mapa.
  *
  * QUÉ TOCA
  *   Solo `devolucion.poc` de las órdenes que nombra un log de POC con
@@ -38,6 +39,7 @@ const txt = (v) => (v == null ? "" : String(v));
     const m = porOrden.get(ordenId) || {};
     m[serial] = {
       serial: txt(antes.serial), unit_id: txt(antes.unit_id),
+      radio_name: txt(antes.radio_name),
       sim_number: txt(antes.sim_number), sim_phone: txt(antes.sim_phone),
       operador: txt(antes.operador), ip: txt(antes.ip),
       ficha_id: x.equipo_id || null, at: x.fecha || null,
@@ -52,8 +54,8 @@ const txt = (v) => (v == null ? "" : String(v));
     const snap = await ref.get();
     if (!snap.exists) { sinOrden++; continue; }
     const seriales = Object.keys(poc);
-    const conSim = seriales.filter(s => poc[s].sim_number).length;
-    console.log(`  ${ordenId} · ${snap.data().cliente_nombre || ""} · ${seriales.length} equipo(s), ${conSim} con SIM`);
+    const conNombre = seriales.filter(s => poc[s].unit_id && poc[s].radio_name).length;
+    console.log(`  ${ordenId} · ${snap.data().cliente_nombre || ""} · ${seriales.length} equipo(s), ${conNombre} con Unit ID y nombre`);
     if (APLICAR) await ref.set({ devolucion: { poc } }, { merge: true });
     escritas++;
   }

@@ -155,8 +155,10 @@ async function cerrarFichasPoc({
     cerradas.push({
       id: ficha.id, serial: ficha.serial, unit_id: ficha.unit_id || null,
       sim: soloDigitos(ficha.sim_number) || null,
-      // Para quien pide la desconexión del airtime: el número tal como está en
-      // POC, su teléfono y el operador (ver onOrdenDevolucionWrite).
+      // La desconexión del airtime se pide con el Unit ID y el NOMBRE del radio
+      // (Brenda/Mariche, 2026-09-17); el SIM y el operador viajan igual porque
+      // son el rastro de lo que la ficha tenía (ver onOrdenDevolucionWrite).
+      radio_name: ficha.radio_name || "",
       sim_number: ficha.sim_number || "", sim_phone: ficha.sim_phone || "",
       operador: ficha.operador || "", ip: ficha.ip || "",
     });
