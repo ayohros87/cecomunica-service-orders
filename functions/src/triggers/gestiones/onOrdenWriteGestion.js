@@ -444,8 +444,15 @@ module.exports = onDocumentWritten(
         const esperados = after.devolucion?.esperados || [];
         if (!esperados.length) return null;
         const pendientes = pendientesDevolucion(after.devolucion);
-        const antes = before ? pendientesDevolucion(before.devolucion) : null;
-        if (pendientes === 0 && antes !== 0) {
+        // Sin flanco: basta con que NO queden pendientes (GR20260915-01 /
+        // SilverKing, 2026-09-17). Antes se exigía ver el salto de "faltaba
+        // algo" a "no falta nada" en esta misma escritura, y eso se pierde
+        // cuando la orden de devolución se liga a la gestión DESPUÉS de estar
+        // resuelta — que es lo normal si recepción recibe el radio primero y
+        // la papelería va después. El expediente se quedaba abierto para
+        // siempre con todo cumplido. El guard de abajo (cierre.entrada ya
+        // true) es el que evita repetir trabajo.
+        if (pendientes === 0) {
           const gSnap = await gRef.get();
           if (!gSnap.exists) return null;
           const g = gSnap.data();

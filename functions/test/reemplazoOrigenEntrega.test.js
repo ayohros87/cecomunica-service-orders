@@ -53,3 +53,21 @@ test("la UI puede explicar el cambio sin abrir el kardex", () => {
   assert.match(servicio, /sustituye a/);
   assert.match(servicio, /orden_entrega_id/);
 });
+
+// ── El expediente tiene que poder CERRAR ────────────────────────────────
+// GR20260915-01 (SilverKing) quedó "en proceso" con todo cumplido: recepción
+// recibió el radio viejo ANTES de que nadie marcara la entrega del nuevo, así
+// que cuando la orden de devolución se ligó a la gestión ya no quedaban
+// pendientes y el trigger —que solo miraba el SALTO de pendientes a cero— no
+// vio nada. Un trámite cumplido que el sistema no puede dar por terminado no
+// aguanta una auditoría.
+test("la entrada cierra con que no queden pendientes, sin depender del flanco", () => {
+  const i = trigger.indexOf('if (norm(after.tipo_de_servicio) === "DEVOLUCION")');
+  assert.ok(i > 0, "existe el bloque de la devolución");
+  const bloque = trigger.slice(i, i + 1600);
+  assert.match(bloque, /if \(pendientes === 0\) \{/);
+  assert.doesNotMatch(bloque, /antes !== 0/,
+    "no puede exigir ver la transición: la orden se liga a la gestión después");
+  assert.match(bloque, /if \(g\.cierre\?\.entrada === true\) return null;/,
+    "el guard de idempotencia es el que evita repetir");
+});
