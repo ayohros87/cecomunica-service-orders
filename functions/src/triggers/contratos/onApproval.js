@@ -741,6 +741,36 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
 
       const total    = Number((contrato.total_con_itbms ?? contrato.total) || 0);
       const preheader = `Contrato ${contrato.contrato_id} – seriales asignados (${contrato.cliente_nombre})`;
+
+      // Este correo NO sale al aprobar: sale cuando bodega asigna los seriales,
+      // que puede ser semanas después (CONCORD ALQ20260810-01: aprobado el
+      // 26-ago, seriales el 17-sep). Decía "Contrato aprobado" sin fecha, así
+      // que activaciones lo leía como una cuenta activada HOY y volvía a
+      // activar lo ya activado. El correo ahora dice desde cuándo está viva la
+      // cuenta y, si el trámite viene viejo, lo grita en el asunto y arriba.
+      const tsFecha  = (t) => (t?.toDate ? t.toDate() : (t ? new Date(t) : null));
+      const fmtFecha = (t) => {
+        const d = tsFecha(t);
+        return d && !isNaN(d)
+          ? d.toLocaleDateString("es-PA", { day: "2-digit", month: "long", year: "numeric", timeZone: "America/Panama" })
+          : null;
+      };
+      const fAprobacion = tsFecha(contrato.fecha_aprobacion);
+      const fActivacion = tsFecha(contrato.fecha_activacion);
+      const fReferencia = fActivacion || fAprobacion;   // desde cuándo está viva la cuenta
+      const diasDesde   = fReferencia && !isNaN(fReferencia)
+        ? Math.floor((Date.now() - fReferencia.getTime()) / 86400000)
+        : 0;
+      const VIEJO_DIAS  = 2;                            // más que ayer ya no es "de hoy"
+      const esTramiteViejo = diasDesde >= VIEJO_DIAS;
+      const avisoTramiteViejoHtml = esTramiteViejo
+        ? `<div style="margin:0 0 14px;padding:12px 14px;border:2px solid #b45309;border-radius:10px;background:#fffbeb;font:14px/1.6 Arial,sans-serif;color:#7c2d12;">
+             <b>Esta cuenta NO se activó hoy.</b> El contrato está ${contrato.estado === "activo" ? "activo" : "aprobado"}
+             desde el <b>${fmtFecha(fReferencia)}</b> (hace ${diasDesde} día${diasDesde === 1 ? "" : "s"}).
+             Lo que pasó hoy es que <b>bodega asignó los seriales</b>. Si ya la activaste en su momento,
+             no la vuelvas a activar: solo toma los seriales de abajo.
+           </div>`
+        : "";
       const renovacionHighlightHtml = contrato.accion === "Renovación"
         ? `<div style="margin:0 0 14px;padding:12px 14px;border:2px solid #2563eb;border-radius:10px;background:#eff6ff;font:700 15px Arial,sans-serif;color:#1e3a8a;">Modalidad de renovación: ${contrato.renovacion_sin_equipo ? "RENOVACIÓN SIN EQUIPO" : "RENOVACIÓN CON EQUIPO"}</div>`
         : "";
@@ -752,14 +782,20 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
         : "";
 
       const bodyHtml = `
-        <h2 style="margin:0 0 12px; font:700 22px Arial, sans-serif; color:#111827;">Contrato aprobado</h2>
+        <h2 style="margin:0 0 12px; font:700 22px Arial, sans-serif; color:#111827;">${esTramiteViejo ? "Seriales asignados" : "Contrato aprobado"}</h2>
         <p style="margin:0 0 12px; font:14px/1.5 Arial, sans-serif;">
-          El contrato <b>${contrato.contrato_id}</b> ha sido aprobado.
+          ${esTramiteViejo
+            ? `Bodega acaba de asignar los seriales del contrato <b>${contrato.contrato_id}</b>, aprobado el <b>${fmtFecha(fAprobacion) || "—"}</b>.`
+            : `El contrato <b>${contrato.contrato_id}</b> ha sido aprobado.`}
         </p>
+        ${avisoTramiteViejoHtml}
         ${renovacionHighlightHtml}
         ${refurbishedHighlightHtml}
         <table role="presentation" width="100%" style="font:14px Arial, sans-serif; margin:12px 0 16px;">
           <tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Cliente</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${contrato.cliente_nombre || "—"}</td></tr>
+          <tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Aprobado el</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${fmtFecha(fAprobacion) || "—"}</td></tr>
+          ${fActivacion ? `<tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Cuenta activa desde</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${fmtFecha(fActivacion)}</td></tr>` : ""}
+          <tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Seriales asignados</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">hoy${esTramiteViejo ? ` — ${diasDesde} día${diasDesde === 1 ? "" : "s"} después` : ""}</td></tr>
           <tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Elaborador del contrato</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${vendedorInfo?.nombre || "—"}</td></tr>
           <tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Tipo</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${contrato.tipo_contrato || "—"}</td></tr>
           <tr><td style="padding:6px 0; border-bottom:1px solid #eee;"><b>Acción</b></td><td style="padding:6px 0; border-bottom:1px solid #eee;">${contrato.accion || "—"}</td></tr>
@@ -796,7 +832,12 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
         to:      await activacionesEmailTo(),
         // CC: vendedor + copias del panel (empresa/config.mail_cc_contrato_aprobado)
         cc:      [vendedorInfo?.email, ...(await ccContratoAprobado())].filter(Boolean).join(",") || undefined,
-        subject: `Contrato APROBADO: ${contrato.contrato_id} – ${contrato.cliente_nombre}`,
+        // El asunto conserva la palabra "APROBADO" (por la que activaciones
+        // filtra) pero cuando el trámite viene viejo dice primero lo que de
+        // verdad pasó hoy y desde cuándo está viva la cuenta.
+        subject: esTramiteViejo
+          ? `Seriales asignados hoy · contrato APROBADO el ${fmtFecha(fReferencia)}: ${contrato.contrato_id} – ${contrato.cliente_nombre}`
+          : `Contrato APROBADO: ${contrato.contrato_id} – ${contrato.cliente_nombre}`,
       };
 
       await sendEmail({
