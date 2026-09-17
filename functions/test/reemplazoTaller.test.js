@@ -257,8 +257,11 @@ test("C1 · el radio que YA está en el mostrador no genera orden de devolución
     "los salientes que ya están en casa no se mandan a recuperar");
   assert.match(trg, /const todosEnCasa =/);
   assert.match(trg, /entrada: true/, "y el paso de entrada queda cumplido");
-  assert.match(trg, /if \(!it\.saliente_en_casa\) \{/,
-    "tampoco se les pone pendiente_devolucion: sería una deuda falsa en el cron");
+  // Ni a los que ya están en casa ni a los que volvieron por su cuenta antes
+  // de que alguien marcara la entrega (SilverKing 2026-09-17) se les pone
+  // pendiente_devolucion: sería una deuda falsa que el cron cobra a diario.
+  assert.match(trg, /if \(!it\.saliente_en_casa && !yaVolvio\) \{/);
+  assert.match(trg, /const yaVolvio = !EN_PODER_DEL_CLIENTE\.has\(rSal\.data\.estado\);/);
 });
 
 test("C1 · el correo de aprobación va a ventas con el vendedor y el técnico en copia", () => {

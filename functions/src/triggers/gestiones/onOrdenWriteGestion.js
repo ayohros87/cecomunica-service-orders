@@ -22,9 +22,16 @@ const pool = require("../../domain/equiposPool");
 const { pendientesDevolucion } = require("../../lib/devolucion");
 const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
 const G = require("../../lib/gestiones");
+const { decidirMarcaCancelacion } = require("../../domain/cancelacionEntrada");
 const AP = require("../../lib/adendaPapel");
 
 const ENTREGADO = "ENTREGADO AL CLIENTE";
+
+// Estados en los que el radio está FUERA de la casa. Cualquier otro (bodega,
+// devuelto_revision, taller, por_clasificar…) significa que ya volvió.
+const EN_PODER_DEL_CLIENTE = new Set([
+  pool.ESTADOS.EN_CLIENTE, pool.ESTADOS.ASIGNADO, pool.ESTADOS.PENDIENTE_COBRO, pool.ESTADOS.VENDIDO,
+]);
 const norm = (s) => String(s || "").trim().toUpperCase();
 
 // Linaje del reemplazo, directo al pool (espejo del patrón onMapeoWrite pero
@@ -61,15 +68,26 @@ async function estamparLinaje(gid, g) {
         // esperar, así que no se marca `pendiente_devolucion` — esa marca es
         // el hilo de una recuperación pendiente y aquí sería una deuda falsa
         // (el cron de devoluciones pendientes la cobraría a diario).
-        if (!it.saliente_en_casa) {
+        //
+        // Lo mismo si el radio YA VOLVIÓ por su cuenta: en el mostrador es
+        // normal quitarle el malo al cliente y darle el bueno, de modo que la
+        // devolución y su ENTRADA cierran ANTES de que alguien marque la
+        // entrega (ALQ20260902-01 / SilverKing, 2026-09-17). Ahí el linaje
+        // llega tarde y no debe resucitar una deuda que ya no existe: el pool
+        // manda sobre el flag, no al revés.
+        const yaVolvio = !EN_PODER_DEL_CLIENTE.has(rSal.data.estado);
+        if (!it.saliente_en_casa && !yaVolvio) {
           await rSal.ref.set({
             pendiente_devolucion: true,
             updated_at: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
         }
-        await rSal.ref.collection("movimientos").add(movimiento(it.saliente_en_casa
-          ? `Reemplazada por ${entrante} — el radio ya estaba en CECOMUNICA (gestión ${gid})`
-          : `Reemplazada por ${entrante} — pendiente de devolución (gestión ${gid})`));
+        await rSal.ref.collection("movimientos").add(movimiento(
+          it.saliente_en_casa
+            ? `Reemplazada por ${entrante} — el radio ya estaba en CECOMUNICA (gestión ${gid})`
+            : yaVolvio
+              ? `Reemplazada por ${entrante} — el radio ya había vuelto (${rSal.data.estado}), no queda devolución pendiente (gestión ${gid})`
+              : `Reemplazada por ${entrante} — pendiente de devolución (gestión ${gid})`));
       }
     } catch (e) {
       logger.warn("[onOrdenWriteGestion] marca del saliente falló", { gid, saliente, message: e.message });
@@ -87,6 +105,61 @@ async function estamparLinaje(gid, g) {
       });
     } catch (e) {
       logger.warn("[onOrdenWriteGestion] mapeo no registrado", { gid, saliente, message: e.message });
+    }
+  }
+  await retirarMarcaCancelacion(gid, g);
+}
+
+// La ENTRADA del saliente pudo cerrar ANTES de que nadie marcara la entrega
+// del entrante (el mostrador cambia el radio en el acto y la papelería va
+// después). En ese momento el cierre de la ENTRADA no tenía forma de saber del
+// reemplazo y dejó el contrato pidiendo cancelación en el home
+// (ALQ20260902-01 / SilverKing, 2026-09-17). Ahora que el linaje existe, se
+// vuelve a hacer la misma pregunta con los salientes a la vista y, si la marca
+// ya no se sostiene, se retira dejando dicho por qué — el mismo rastro
+// (`cancelacion_descartada`) que deja scripts/limpia-marcas-cancelacion-reemplazo.js.
+async function retirarMarcaCancelacion(gid, g) {
+  const salientes = (g.items || []).map(it => String(it.serial_saliente || "").trim()).filter(Boolean);
+  if (!salientes.length) return;
+  const contratos = new Set([
+    ...(Array.isArray(g.contratos_afectados) ? g.contratos_afectados : []),
+    ...(g.items || []).map(it => it.contrato_doc_id).filter(Boolean),
+  ]);
+  for (const cid of contratos) {
+    try {
+      const ref = db.collection("contratos").doc(cid);
+      const snap = await ref.get();
+      const c = snap.exists ? snap.data() : null;
+      const cp = c?.cancelacion_pendiente;
+      // Solo las marcas nacidas de una ENTRADA: las del conteo de bodega y las
+      // de temporales vencidos preguntan otra cosa y no son nuestras.
+      if (!cp || cp.motivo !== "entrada" || !(cp.seriales || []).length) continue;
+      let propios = null;
+      try {
+        const ss = await ref.collection("seriales").get();
+        propios = ss.docs.map(d => d.data()?.serial).filter(x => typeof x === "string");
+      } catch (e) { /* propios null → la regla decide marcar y no se toca nada */ }
+      const decision = decidirMarcaCancelacion({ devueltos: cp.seriales, propios, sustituidos: salientes });
+      if (decision.marcar) continue;
+      await ref.set({
+        cancelacion_pendiente: admin.firestore.FieldValue.delete(),
+        cancelacion_descartada: {
+          orden_entrada_id: cp.orden_entrada_id || null,
+          orden_numero: cp.orden_numero || cp.orden_entrada_id || null,
+          seriales: cp.seriales || [],
+          motivo: decision.motivo,
+          gestion_id: gid,
+          nota: `Los seriales que entraron son salientes del reemplazo ${gid}: el cliente se quedó con el equipo entrante y el contrato sigue vigente.`,
+          at: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      }, { merge: true });
+      await G.registrarEvento(gid, "entrada",
+        `Se retiró del home la petición de cancelar el contrato ${c.contrato_id || cid}: lo que entró por la ENTRADA ${cp.orden_numero || cp.orden_entrada_id || "—"} fue el/los radio(s) sustituido(s) por este reemplazo, no una devolución.`);
+      logger.info("[onOrdenWriteGestion] marca de cancelación retirada por reemplazo",
+        { gid, contrato: c.contrato_id || cid, seriales: cp.seriales });
+    } catch (e) {
+      logger.warn("[onOrdenWriteGestion] no se pudo revisar la marca de cancelación",
+        { gid, contrato: cid, message: e.message });
     }
   }
 }

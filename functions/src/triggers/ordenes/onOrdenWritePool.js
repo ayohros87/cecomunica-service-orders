@@ -4,6 +4,7 @@ const pool = require("../../domain/equiposPool");
 const { catalogo } = require("../../domain/modeloCatalogo");
 const { decidirMarcaCancelacion } = require("../../domain/cancelacionEntrada");
 const { decidirCierreTrasEntrada, buildCierre } = require("../../domain/cierreContrato");
+const G = require("../../lib/gestiones");
 const tandas = require("../../domain/entregaTandas");
 const { admin, db } = require("../../lib/admin");
 
@@ -287,7 +288,14 @@ module.exports = onDocumentWritten(
                 logger.warn("[onOrdenWritePool] No se pudieron leer los seriales del contrato",
                   { ordenId, contrato: c.contrato_id || c.contrato_doc_id, err: String(e) });
               }
-              const decision = decidirMarcaCancelacion({ devueltos: despues, propios });
+              // Los salientes de un reemplazo POR GESTIÓN son equipo propio del
+              // contrato y aun así su regreso no lo termina: el cliente se
+              // quedó con el entrante (ALQ20260902-01 / SilverKing,
+              // 2026-09-17). `null` = no se pudieron leer: en la duda, marca.
+              const sustituidos = await G.salientesDeReemplazo(c.contrato_doc_id);
+              const decision = decidirMarcaCancelacion({
+                devueltos: despues, propios, sustituidos: sustituidos || [],
+              });
               // Antes de pedirle nada a nadie: un TEMPORAL o un DEMO sin una
               // sola unidad ya en campo terminó — se cierra solo (2026-09-14,
               // FANLYC/TEMP20260902-01). Ese era el "flujo propio" que
@@ -333,8 +341,9 @@ module.exports = onDocumentWritten(
                 logger.info("[onOrdenWritePool] Contrato marcado para cancelar tras ENTRADA",
                   { ordenId, contrato: c.contrato_id || c.contrato_doc_id, unidades: despues.length, motivo: decision.motivo });
               } else {
-                logger.info("[onOrdenWritePool] ENTRADA con equipo ajeno al contrato (reemplazo/renovación): no se marca",
-                  { ordenId, contrato: c.contrato_id || c.contrato_doc_id, unidades: despues.length, propios: propios.length });
+                logger.info("[onOrdenWritePool] ENTRADA que no cancela el contrato (equipo ajeno o saliente de reemplazo)",
+                  { ordenId, contrato: c.contrato_id || c.contrato_doc_id, unidades: despues.length,
+                    motivo: decision.motivo, propios: (propios || []).length });
               }
             }
           } catch (err) {

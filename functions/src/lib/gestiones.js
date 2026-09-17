@@ -701,6 +701,39 @@ function regularizacionConsistente(aumento) {
 // el texto sale del expediente y nunca del camino que tomó el código.
 const autorizacionTexto = (g) => require("../domain/gestionAutorizacion").texto(g);
 
+// ── Salientes de reemplazo de un contrato ────────────────────────────────
+// Los seriales que una gestión de reemplazo declaró como SUSTITUIDOS en este
+// contrato. Cuando uno de ellos vuelve no es una devolución: el cliente se
+// quedó con el entrante y el contrato sigue vivo. Lo pregunta el cierre de la
+// ENTRADA (triggers/ordenes/onOrdenWritePool.js) antes de marcar el contrato
+// "por cancelar" — caso ALQ20260902-01 / SilverKing, 2026-09-17.
+//
+// Se leen TODAS las gestiones de reemplazo del contrato, incluso las cerradas:
+// el radio saliente puede volver semanas después del cierre del trámite y
+// sigue siendo un sustituido. Las anuladas no cuentan — ahí el cambio no pasó.
+// Devuelve null si la lectura falla: quien pregunta decide en la duda (marca).
+async function salientesDeReemplazo(contratoDocId) {
+  if (!contratoDocId) return [];
+  try {
+    const snap = await db.collection("gestiones")
+      .where("contratos_afectados", "array-contains", contratoDocId).get();
+    const out = [];
+    for (const d of snap.docs) {
+      const g = d.data();
+      if (g.tipo !== "reemplazo" || g.deleted === true || g.estado === "anulada") continue;
+      for (const it of (g.items || [])) {
+        const s = String(it.serial_saliente || "").trim();
+        if (s) out.push(s);
+      }
+    }
+    return out;
+  } catch (e) {
+    logger.warn("[gestiones] No se pudieron leer los reemplazos del contrato",
+      { contrato: contratoDocId, message: e.message });
+    return null;
+  }
+}
+
 module.exports = {
   regularizacionConsistente,
   limpiarAnulacion,
@@ -710,4 +743,5 @@ module.exports = {
   configEmailTo,
   registrarEvento, crearOrdenesProgramacion,
   bodegaEmailTo,
+  salientesDeReemplazo,
 };

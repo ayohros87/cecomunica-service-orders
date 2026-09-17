@@ -61,3 +61,50 @@ test("filas sin serial y valores raros no rompen ni cuentan", () => {
   assert.equal(r.marcar, true);
   assert.deepEqual(r.propiosDevueltos, ["B4B00085"]);
 });
+
+// ── Reemplazo POR GESTIÓN sobre el MISMO contrato (ALQ20260902-01 /
+// SilverKing, 2026-09-17). Aquí el saliente SÍ es equipo propio del contrato:
+// la regla de "equipo ajeno" no lo cubría y el home pedía cancelar un alquiler
+// vivo al que solo le habían cambiado un radio.
+test("saliente de un reemplazo del propio contrato → NO marcar", () => {
+  const r = decidirMarcaCancelacion({
+    devueltos: [{ serial: "22806A0230" }],
+    propios: ["22806A0230", "24220A2357", "24708A1168", "23706A0610"],
+    sustituidos: ["22806A0230"],
+  });
+  assert.equal(r.marcar, false);
+  assert.equal(r.motivo, "reemplazo_sustituido");
+});
+
+test("entra el saliente del reemplazo Y otro radio propio → marcar por el otro", () => {
+  const r = decidirMarcaCancelacion({
+    devueltos: ["22806A0230", "24708A1168"],
+    propios: ["22806A0230", "24708A1168"],
+    sustituidos: ["22806A0230"],
+  });
+  assert.equal(r.marcar, true);
+  assert.equal(r.motivo, "equipo_propio");
+  assert.deepEqual(r.propiosDevueltos, ["24708A1168"]);
+});
+
+test("sustituidos también manda sobre contrato sin seriales y lectura fallida", () => {
+  for (const propios of [[], null]) {
+    const r = decidirMarcaCancelacion({
+      devueltos: ["22806A0230"], propios, sustituidos: [" 22806-a0230 "],
+    });
+    assert.equal(r.marcar, false, `propios=${JSON.stringify(propios)}`);
+    assert.equal(r.motivo, "reemplazo_sustituido");
+  }
+});
+
+test("sin sustituidos la regla es la de siempre (compatibilidad)", () => {
+  const r = decidirMarcaCancelacion({ devueltos: ["B5100031"], propios: ["B5100031"] });
+  assert.equal(r.marcar, true);
+  assert.equal(r.motivo, "equipo_propio");
+});
+
+test("ENTRADA vacía con sustituidos declarados no se cuela como reemplazo", () => {
+  const r = decidirMarcaCancelacion({ devueltos: [], propios: ["B5100031"], sustituidos: ["B5100031"] });
+  assert.equal(r.marcar, false);
+  assert.equal(r.motivo, "equipo_ajeno");
+});
