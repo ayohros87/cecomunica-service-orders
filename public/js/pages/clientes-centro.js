@@ -1063,7 +1063,7 @@ window.Centro = {
       (b.propiedad === 'cliente' ? 1 : 0) - (a.propiedad === 'cliente' ? 1 : 0)
       || String(a.serial || '').localeCompare(String(b.serial || '')));
     const filasCampo = enCampoOrd.map(e => `<tr>
-      <td class="cg-mono"><a href="#" onclick="Centro.verKardex('${this.esc(e.id)}'); return false;">${this.esc(e.serial || e.id)}</a></td>
+      <td class="cg-mono"><a href="#" onclick="Centro.verKardex('${this.esc(e.id)}'); return false;">${this.esc(e.serial || e.id)}</a>${P?.origenReemplazoHtml ? P.origenReemplazoHtml(e) : ''}</td>
       <td>${this.esc(e.modelo_label || '—')}</td>
       <td>${P?.chipPropiedadHtml ? P.chipPropiedadHtml(e) : this.esc(e.propiedad || '')}</td>
       <td>${P?.chipEstadoHtml ? P.chipEstadoHtml(e.estado) : this.esc(e.estado || '')}</td></tr>`).join('');
@@ -1983,8 +1983,13 @@ window.Centro = {
     const chipProp = (e) => (window.EquiposPoolService?.chipPropiedadHtml)
       ? EquiposPoolService.chipPropiedadHtml(e)
       : this.esc(e.propiedad || '—');
+    // "Sustituye a X · entregado con la orden Y": el contrato firmado conserva
+    // el serial original, así que sin esta línea el radio que el cliente tiene
+    // hoy no cuadra con el papel y nadie sabe por qué (SilverKing 2026-09-17).
+    const origen = (e) => (window.EquiposPoolService?.origenReemplazoHtml)
+      ? EquiposPoolService.origenReemplazoHtml(e) : '';
     const fila = (e) => `<tr>
-      <td class="cg-mono">${this.esc(e.serial || e.id)}</td>
+      <td class="cg-mono">${this.esc(e.serial || e.id)}${origen(e)}</td>
       <td>${this.esc(e.modelo_label || '—')}</td>
       <td>${chipProp(e)}</td>
       <td>${chip(e)}${e.pendiente_devolucion ? ' <span class="cg-venc por_vencer">pend. devolución</span>' : ''}</td>

@@ -154,7 +154,13 @@ window.EquipoFicha = {
         ? EquiposPoolService.chipPropiedadHtml(eq)
         : (eq.propiedad === 'cliente' ? 'Del cliente' : 'Sin clasificar')],
       ['Plataforma POC', eq.poc_device_id ? 'Registrado' : '—'],
-      eq.reemplaza_a ? ['Reemplaza a', `<span style="font-family:var(--mono, monospace);">${esc(eq.reemplaza_a)}</span>`] : null,
+      // Cómo llegó aquí: el saliente al que sustituye y, sobre todo, la orden
+      // con que se entregó — el contrato firmado conserva el serial original y
+      // la entrega es la prueba del cambio (2026-09-17).
+      eq.reemplaza_a ? ['Reemplaza a', `<span style="font-family:var(--mono, monospace);">${esc(eq.reemplaza_a)}</span>`
+        + (eq.reemplazo_origen?.orden_entrega_id
+          ? ` <span style="font-size:12px; color:var(--fg-3);">· entregado con la <a href="/ordenes/editar-orden.html?id=${encodeURIComponent(eq.reemplazo_origen.orden_entrega_id)}">orden ${esc(eq.reemplazo_origen.orden_entrega_id)}</a></span>`
+          : '')] : null,
       (eq.venta && eq.venta.factura) ? ['Factura QBO', esc(eq.venta.factura)] : null,
       eq.baja_motivo ? ['Motivo de baja', esc(eq.baja_motivo)] : null,
     ].filter(Boolean).map(([k, v]) => `

@@ -363,6 +363,34 @@ const EquiposPoolService = {
     return `${base}?serial=${encodeURIComponent((serial || '').toString().trim())}`;
   },
 
+  // "Cómo llegó aquí" — la unidad entró por un REEMPLAZO.
+  //
+  // El contrato firmado NO se reescribe (decisión de Alberto, 2026-09-17): sus
+  // seriales son los que el cliente firmó. La prueba de que hoy tiene otro
+  // radio es la ENTREGA, así que esta línea nombra el radio sustituido, la
+  // gestión que lo autorizó y la orden con la que se entregó — que es donde
+  // está la firma. Sin esto, el serial del sistema y el del contrato no
+  // cuadraban y nadie podía explicar por qué sin abrir el kardex.
+  //
+  // `reemplazo_origen` lo estampa el trigger onOrdenWriteGestion al registrarse
+  // la entrega; `reemplaza_a` solo (unidades anteriores a ese campo) alcanza
+  // para nombrar al saliente.
+  origenReemplazoHtml(eq, { desdeRaiz = false } = {}) {
+    if (!eq?.reemplaza_a && !eq?.reemplazo_origen) return '';
+    const o = eq.reemplazo_origen || {};
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const saliente = o.saliente || eq.reemplaza_a || '';
+    const base = desdeRaiz ? 'ordenes/editar-orden.html' : '../ordenes/editar-orden.html';
+    const orden = o.orden_entrega_id
+      ? ` · entregado con la <a href="${base}?id=${encodeURIComponent(o.orden_entrega_id)}" onclick="event.stopPropagation()">orden ${esc(o.orden_entrega_id)}</a>`
+      : '';
+    const gestion = o.gestion_id ? ` (${esc(o.gestion_id)})` : '';
+    return `<div class="eq-sub" style="font-size:11.5px; color:var(--fg-3);"
+      title="El contrato firmado conserva el serial original; este radio llegó por un reemplazo y la prueba es la entrega">
+      sustituye a <span style="font-family:var(--mono, monospace);">${esc(saliente)}</span>${gestion}${orden}</div>`;
+  },
+
   // Chip "pendiente de devolución" (transición renovación/reemplazo). Solo
   // aplica mientras la unidad sigue con el cliente: al registrarse la ENTRADA
   // la unidad pasa a devuelto_revision y el flag deja de mostrarse (no hay

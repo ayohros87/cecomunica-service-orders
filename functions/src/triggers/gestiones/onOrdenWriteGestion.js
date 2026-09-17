@@ -37,7 +37,14 @@ const norm = (s) => String(s || "").trim().toUpperCase();
 // Linaje del reemplazo, directo al pool (espejo del patrón onMapeoWrite pero
 // colgado de la gestión): entrante.reemplaza_a = saliente; saliente queda
 // pendiente_devolucion. Deja además el registro en gestiones/{gid}/mapeos.
-async function estamparLinaje(gid, g) {
+//
+// EL CONTRATO FIRMADO NO SE TOCA (decisión de Alberto, 2026-09-17): sus
+// seriales son los que el cliente firmó y así se quedan. La prueba de que hoy
+// tiene otro radio es LA ENTREGA — la orden con la que se le dio. Por eso el
+// entrante guarda `reemplazo_origen`: de dónde salió, con qué gestión y con
+// qué orden se entregó. Es lo que deja leer la ficha del equipo sin abrir el
+// kardex y sin reescribir el papel.
+async function estamparLinaje(gid, g, ordenEntregaId) {
   for (const it of (g.items || [])) {
     const saliente = String(it.serial_saliente || "").trim();
     const entrante = String(it.serial_nuevo || "").trim();
@@ -54,9 +61,18 @@ async function estamparLinaje(gid, g) {
       if (rEnt.data) {
         await rEnt.ref.set({
           reemplaza_a: pool.normSerial(saliente),
+          reemplazo_origen: {
+            gestion_id: gid,
+            saliente: pool.normSerial(saliente),
+            orden_entrega_id: ordenEntregaId || null,
+            contrato_doc_id: it.contrato_doc_id || null,
+            contrato_id: it.contrato_id || null,
+            at: admin.firestore.FieldValue.serverTimestamp(),
+          },
           updated_at: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
-        await rEnt.ref.collection("movimientos").add(movimiento(`Reemplaza a ${saliente} (gestión ${gid})`));
+        await rEnt.ref.collection("movimientos").add(movimiento(
+          `Reemplaza a ${saliente} (gestión ${gid})${ordenEntregaId ? ` — entregado con la orden ${ordenEntregaId}` : ""}`));
       }
     } catch (e) {
       logger.warn("[onOrdenWriteGestion] linaje del entrante falló", { gid, entrante, message: e.message });
@@ -215,7 +231,7 @@ module.exports = onDocumentWritten(
             && (g.items || []).every(it => it.saliente_en_casa && String(it.serial_saliente || "").trim());
           if (todosEnCasa) {
             patch.cierre = { ...patch.cierre, entrada: true };
-            await estamparLinaje(gid, g);
+            await estamparLinaje(gid, g, ordenId);
             await G.registrarEvento(gid, "entrega",
               `Entrega registrada desde la OS ${ordenId}. El/los radio(s) sustituido(s) ya estaban en CECOMUNICA (propuesta del taller): no se abre orden de devolución y el paso de entrada queda cumplido. Su disposición sigue en la orden de taller que los trajo.`);
             await gRef.set(patch, { merge: true });
@@ -241,7 +257,7 @@ module.exports = onDocumentWritten(
             }, { merge: true });
             patch.ordenes = { ...(g.ordenes || {}), devolucion_id: devId };
           }
-          await estamparLinaje(gid, g);
+          await estamparLinaje(gid, g, ordenId);
           await G.registrarEvento(gid, "entrega",
             `Entrega registrada desde la OS ${ordenId}. Orden de devolución ${devId || "—"} creada para recuperar el/los saliente(s); linaje reemplaza_a estampado.`);
         } else if (g.tipo === "demo" && !g.ordenes?.devolucion_id) {
