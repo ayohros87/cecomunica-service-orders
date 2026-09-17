@@ -65,6 +65,28 @@
     no_devuelve: '<span class="chip-estado" style="background:#fdf3e4;color:#9a5b00;">No se devuelve</span>',
   };
   const RES_TEXTO = { recibido: 'recibido', nunca_salio: 'nunca salió', no_devuelve: 'no se devuelve' };
+  // Por qué una tanda se registra SIN la firma del cliente (2026-09-17).
+  // Salen de los 24 motivos que recepción escribió a mano entre julio y
+  // septiembre: el caso dominante no es que el cliente se negara a firmar —
+  // es que EL CLIENTE NO ESTUVO. Casi siempre el radio lo trajo a oficina un
+  // vendedor o un técnico nuestro. Ese escenario es legítimo y el proceso
+  // tiene que nombrarlo, no castigarlo; lo que no puede pasar es que la
+  // unidad quede recibida sin decir nada (210 de 403 hasta hoy).
+  //
+  // Se eligen de una lista para poder contarlos y auditarlos; `quien` guarda
+  // a la persona concreta, que antes vivía dentro del texto libre.
+  const MOTIVOS_SIN_FIRMA = [
+    ['vendedor_trajo',  'Lo trajo un vendedor o técnico nuestro a oficina', true],
+    ['cliente_no_firma', 'El cliente lo dejó y no esperó a firmar',         true],
+    ['mensajeria',      'Llegó por mensajería o encomienda',                false],
+    ['ya_estaba',       'Ya estaba en CECOMUNICA (entró por una orden)',    false],
+    ['falla_firma',     'La firma digital no funcionó en el momento',       true],
+    ['otro',            'Otro (detallar)',                                  false],
+  ];
+  const MOTIVO_LABEL = Object.fromEntries(MOTIVOS_SIN_FIRMA.map(([k, l]) => [k, l]));
+  // Los que piden nombrar a la persona que hizo la entrega física.
+  const MOTIVO_PIDE_QUIEN = new Set(MOTIVOS_SIN_FIRMA.filter(m => m[2]).map(m => m[0]));
+
   // Checklist del acuse: qué entregó el cliente con cada unidad. Espeja los
   // booleanos de accesorios del equipo en la orden de ENTRADA (agregar-equipo).
   const ACCESORIOS = [
@@ -191,6 +213,62 @@
       } catch (e) { _modelos = []; }
     }
     render();
+  }
+
+  // Lleva la vista a la firma y la hace notar. Se usa desde el pie del modal y
+  // sola, apenas se registra una unidad: el bloque vive más abajo en el scroll
+  // y con el cliente enfrente nadie baja a buscarlo — así se quedaron 210
+  // unidades recibidas sin acuse entre julio y septiembre de 2026.
+  function _irAFirma() {
+    const b = _overlay?.querySelector('#devAcuseBloque');
+    if (!b) return;
+    b.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Un parpadeo corto: la vista ya se movió, esto dice DÓNDE mirar.
+    b.animate(
+      [{ boxShadow: '0 0 0 0 rgba(245,158,11,0)' },
+       { boxShadow: '0 0 0 5px rgba(245,158,11,.55)' },
+       { boxShadow: '0 0 0 0 rgba(245,158,11,0)' }],
+      { duration: 1100, iterations: 2 },
+    );
+    // Sin robarle el foco a la tablet: si la firma se está pidiendo allá, el
+    // cliente ya tiene el aparato en la mano.
+    if (!_solTabletId) _overlay.querySelector('#acuseNombre')?.focus({ preventScroll: true });
+  }
+
+  // Salir del check-in con unidades recibidas y sin acuse es la forma exacta
+  // en que se perdieron 210 firmas: el modal se cierra, el cliente se va, y no
+  // queda ni la firma ni una línea que diga por qué no la hay. No se tranca a
+  // recepción —siempre puede salir— pero dejar de hacerlo tiene que ser una
+  // decisión, no un descuido.
+  async function intentarCerrar() {
+    const dev = _orden?.devolucion || {};
+    const sinAcuse = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id);
+    if (!sinAcuse.length || !puedeOperar()
+        || (_orden?.estado_reparacion || '').toUpperCase() === ESTADO_CERRADA) {
+      cerrarModal();
+      return;
+    }
+    const r = await Modal.sheet({
+      title: 'Falta el acuse', icon: 'pen-line', size: 'sm',
+      html: `
+        <p style="margin:0 0 10px;font-size:13.5px;line-height:1.45;">
+          Ya registraste <b>${sinAcuse.length} unidad${sinAcuse.length === 1 ? '' : 'es'}</b> como recibida${sinAcuse.length === 1 ? '' : 's'},
+          pero nadie ha firmado el acuse.
+        </p>
+        <p style="margin:0 0 10px;font-size:13px;line-height:1.45;color:var(--fg-2,#374151);">
+          El acuse es el papel que dice qué entregó el cliente y en qué estado. Si se va sin firmarlo,
+          después no hay con qué responder por los accesorios ni por el daño.
+        </p>
+        <p style="margin:0;font-size:12.5px;color:var(--fg-3,#6b7280);">
+          ¿No está el cliente para firmar? Usa <b>«El cliente no puede firmar ahora»</b> y di quién trajo los equipos.
+        </p>`,
+      buttons: [
+        { action: 'salir', label: 'Salir sin el acuse', ghost: true },
+        { action: 'firmar', label: 'Ir a la firma', primary: true, icon: 'pen-line' },
+      ],
+    });
+    if (r === 'salir') { cerrarModal(); return; }
+    _irAFirma();   // también en 'firmar' y al cerrar la hoja con la X
   }
 
   function cerrarModal() {
@@ -699,7 +777,7 @@
           </div>
         </div>`;
     const bloqueAcuse = (editable && sinAcuse.length) ? `
-      <div style="border-top:1px solid #fcd34d;background:#fffbeb;padding:12px 14px;">
+      <div id="devAcuseBloque" style="border-top:1px solid #fcd34d;background:#fffbeb;padding:12px 14px;scroll-margin-top:12px;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
           <span style="font-weight:700;font-size:13px;">Acuse de recibido — firma del cliente</span>
           <span style="font-family:var(--font-mono,monospace);font-size:12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:1px 8px;">${esc(numeroSiguiente)}</span>
@@ -721,11 +799,11 @@
           <button type="button" class="btn btn-ghost btn-sm" id="acuseTabletCancelar">Cancelar</button>
         </div>
         <style>@keyframes devspin{to{transform:rotate(360deg)}}</style>` : `
-        <div class="form-field" style="margin-bottom:8px;">
-          <label class="form-label" for="acuseNombre">Nombre de quien entrega</label>
-          <input class="form-input" id="acuseNombre" placeholder="Nombre y apellido" autocomplete="off" style="height:32px;" value="${esc(_acuseNombreDraft)}">
-        </div>
         <div id="acuseFirmaWrap">
+          <div class="form-field" style="margin-bottom:8px;">
+            <label class="form-label" for="acuseNombre">Nombre de quien entrega</label>
+            <input class="form-input" id="acuseNombre" placeholder="Nombre y apellido" autocomplete="off" style="height:32px;" value="${esc(_acuseNombreDraft)}">
+          </div>
           <label class="form-label">Firma</label>
           <canvas id="acuseFirmaCanvas" style="width:100%;height:140px;border:1px dashed var(--line,#cbd5e1);border-radius:8px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
           <div style="display:flex;align-items:center;gap:10px;margin-top:2px;">
@@ -737,11 +815,29 @@
           </div>
         </div>
         <label class="form-check" style="margin-top:6px;display:flex;align-items:center;gap:8px;font-size:12.5px;">
-          <input type="checkbox" id="acuseSinFirma"> <span>Registrar sin firma del cliente</span>
+          <input type="checkbox" id="acuseSinFirma"> <span>El cliente no puede firmar ahora</span>
         </label>
-        <div class="form-field hidden" id="acuseSinFirmaBloque" style="margin-top:6px;">
-          <label class="form-label" for="acuseSinFirmaMotivo">Motivo (obligatorio)</label>
-          <input class="form-input" id="acuseSinFirmaMotivo" style="height:32px;" placeholder="Ej.: equipos recogidos por el técnico en sitio">
+        <div class="hidden" id="acuseSinFirmaBloque" style="margin-top:6px;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px;background:#fff;">
+          <div class="form-field">
+            <label class="form-label" for="acuseSinFirmaCodigo">¿Por qué? (obligatorio)</label>
+            <select class="form-input" id="acuseSinFirmaCodigo" style="height:32px;">
+              <option value="">Elige el motivo…</option>
+              ${MOTIVOS_SIN_FIRMA.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="hidden" id="acuseQuienBloque" style="margin-top:6px;">
+            <div class="form-field">
+              <label class="form-label" for="acuseSinFirmaQuien">¿Quién hizo la entrega?</label>
+              <input class="form-input" id="acuseSinFirmaQuien" style="height:32px;" placeholder="Nombre y apellido" autocomplete="off">
+            </div>
+          </div>
+          <div class="form-field" style="margin-top:6px;">
+            <label class="form-label" for="acuseSinFirmaMotivo">Detalle <span id="acuseDetalleReq" style="color:var(--fg-3,#6b7280);font-weight:400;">(opcional)</span></label>
+            <input class="form-input" id="acuseSinFirmaMotivo" style="height:32px;" placeholder="Lo que haga falta saber después">
+          </div>
+          <div style="font-size:11px;color:#92400e;margin-top:5px;">
+            Queda constancia de quién trajo los equipos y por qué no hay firma del cliente. Es lo que responde la pregunta el día que alguien la haga.
+          </div>
         </div>`}
         ${bloqueEnvioCopia}
         ${!_solTabletId ? `<button type="button" class="btn btn-primary btn-sm" id="acuseGuardarBtn" style="margin-top:10px;"><i data-lucide="pen-line"></i> Guardar acuse</button>` : ''}
@@ -951,12 +1047,21 @@
           ${secAcuses}
           ${secOtras}
         </div>
+        ${(editable && sinAcuse.length) ? `
+        <div class="sheet-footer" style="display:flex;align-items:center;gap:10px;padding:12px 18px;border-top:2px solid #f59e0b;background:#fffbeb;">
+          <i data-lucide="pen-line" style="width:18px;height:18px;color:#b45309;flex:none;"></i>
+          <span style="font-size:13px;color:#78350f;flex:1;">
+            <b>Falta el acuse de ${sinAcuse.length} unidad${sinAcuse.length === 1 ? '' : 'es'} ya recibida${sinAcuse.length === 1 ? '' : 's'}.</b>
+            El cliente firma aquí mismo, o se deja dicho por qué no puede firmar.
+          </span>
+          <button type="button" class="btn btn-primary" id="devIrAFirma" style="flex:none;"><i data-lucide="arrow-down"></i> Ir a la firma</button>
+        </div>` : `
         <div class="sheet-footer" style="display:flex;justify-content:space-between;gap:8px;padding:12px 18px;border-top:1px solid var(--border-subtle,#e5e7eb);">
           <span style="font-size:12px;color:var(--fg-3,#6b7280);align-self:center;">${cerrada
             ? `Orden cerrada.${Number(dev.cierre_pendientes || 0) ? ` <b style="color:#92400e;">Cerró con ${dev.cierre_pendientes} equipo(s) sin devolver.</b>` : ''}`
-            : `${totalPend} equipo(s) pendiente(s) por devolver${sinAcuse.length ? ` · ${sinAcuse.length} sin acuse firmado` : ''}${esSinContrato ? '' : ' · se cierra sola al resolver y firmar todo'}`}</span>
+            : `${totalPend} equipo(s) pendiente(s) por devolver${esSinContrato ? '' : ' · se cierra sola al resolver y firmar todo'}`}</span>
           ${cierreManual ? `<button type="button" class="btn btn-primary" id="devCerrarOrden" ${bloqueaCierre ? 'disabled title="Resuelve todas las unidades para cerrar"' : ''}><i data-lucide="check"></i> Cerrar devolución</button>` : ''}
-        </div>
+        </div>`}
       </div>`;
 
     if (!_overlay) {
@@ -972,7 +1077,8 @@
     _overlay.innerHTML = html;
     if (window.lucide) lucide.createIcons();
 
-    _overlay.querySelector('#devCerrarModal')?.addEventListener('click', cerrarModal);
+    _overlay.querySelector('#devCerrarModal')?.addEventListener('click', intentarCerrar);
+    _overlay.querySelector('#devIrAFirma')?.addEventListener('click', () => _irAFirma());
     _overlay.querySelector('#devCerrarOrden')?.addEventListener('click', cerrarOrden);
     // Lista lista para pegar en el correo de desconexión del airtime.
     _overlay.querySelector('#devPocCopiar')?.addEventListener('click', async () => {
@@ -1113,6 +1219,15 @@
       _overlay.querySelector('#acuseSinFirmaBloque')?.classList.toggle('hidden', !cbSin.checked);
       _overlay.querySelector('#acuseFirmaWrap')?.classList.toggle('hidden', cbSin.checked);
     });
+    // El motivo manda qué más hay que decir: unos piden nombrar a la persona
+    // que trajo los equipos, y "otro" obliga a escribir el detalle.
+    const selMotivo = _overlay.querySelector('#acuseSinFirmaCodigo');
+    if (selMotivo) selMotivo.addEventListener('change', () => {
+      const cod = selMotivo.value;
+      _overlay.querySelector('#acuseQuienBloque')?.classList.toggle('hidden', !MOTIVO_PIDE_QUIEN.has(cod));
+      const req = _overlay.querySelector('#acuseDetalleReq');
+      if (req) req.textContent = cod === 'otro' ? '(obligatorio)' : '(opcional)';
+    });
     _overlay.querySelector('#acuseLimpiarFirma')?.addEventListener('click', () => {
       _firmaSnapshot = null;
       _firmaAcuse?.clear();
@@ -1212,6 +1327,14 @@
     if (cierra) {
       _orden.estado_reparacion = ESTADO_CERRADA;
       _avisarCierre(dev);
+      return;
+    }
+    // Acaba de entrar una unidad y el cliente está enfrente: la firma es el
+    // paso que sigue AHORA, no algo para buscar más abajo. Se salta sola a la
+    // firma en cuanto hay algo que firmar (2026-09-17). El render lo dispara
+    // quien nos llamó, así que el salto espera al siguiente tick.
+    if ((dev.esperados || []).some(e => e.resolucion === 'recibido' && !e.acuse_id)) {
+      setTimeout(() => _irAFirma(), 0);
     }
   }
 
@@ -1716,7 +1839,8 @@
     return String((_acuseEmailDraft != null ? _acuseEmailDraft : _emailCliente) || '').trim().toLowerCase();
   }
 
-  async function _persistirAcuse({ nombre, cedula, firmaUrl, sin, motivo, via, solicitudId, laxEmail }) {
+  async function _persistirAcuse({ nombre, cedula, firmaUrl, sin, motivo, via, solicitudId, laxEmail,
+                                   sinFirmaCodigo, sinFirmaQuien, sinFirmaDetalle }) {
     const dev = _orden.devolucion;
     const pendientes = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id);
     if (!pendientes.length) return false;
@@ -1741,6 +1865,11 @@
       firma_url: firmaUrl || null,
       sin_firma: !!sin,
       sin_firma_motivo: sin ? (motivo || '') : null,
+      // Partes estructuradas del motivo (2026-09-17): el texto de arriba es
+      // el que se imprime; estos son los que se pueden contar y filtrar.
+      sin_firma_codigo: sin ? (sinFirmaCodigo || null) : null,
+      sin_firma_quien: sin ? (sinFirmaQuien || null) : null,
+      sin_firma_detalle: sin ? (sinFirmaDetalle || null) : null,
       via: via || 'mostrador',
       solicitud_id: solicitudId || null,
       seriales: pendientes.map(e => e.serial),
@@ -1789,9 +1918,19 @@
 
     const sin = !!_overlay.querySelector('#acuseSinFirma')?.checked;
     const nombre = (_overlay.querySelector('#acuseNombre')?.value || '').trim();
-    const motivo = (_overlay.querySelector('#acuseSinFirmaMotivo')?.value || '').trim();
+    const detalle = (_overlay.querySelector('#acuseSinFirmaMotivo')?.value || '').trim();
+    const codigo = (_overlay.querySelector('#acuseSinFirmaCodigo')?.value || '').trim();
+    const quien = (_overlay.querySelector('#acuseSinFirmaQuien')?.value || '').trim();
+    // El texto que se imprime en el acuse y viaja en el correo se compone de
+    // las partes estructuradas: así el documento sigue leyéndose igual que
+    // siempre y la base queda consultable.
+    const motivo = sin
+      ? [MOTIVO_LABEL[codigo] || '', quien ? `Entregó: ${quien}` : '', detalle].filter(Boolean).join(' — ')
+      : '';
     if (sin) {
-      if (!motivo) { Toast.show('Indica el motivo para registrar sin firma.', 'bad'); return; }
+      if (!codigo) { Toast.show('Elige por qué no hay firma del cliente.', 'bad'); return; }
+      if (MOTIVO_PIDE_QUIEN.has(codigo) && !quien) { Toast.show('Indica quién hizo la entrega.', 'bad'); return; }
+      if (codigo === 'otro' && !detalle) { Toast.show('Detalla el motivo.', 'bad'); return; }
     } else {
       if (!nombre) { Toast.show('Ingresa el nombre de quien entrega.', 'bad'); return; }
       if (!_firmaAcuse || _firmaAcuse.isEmpty()) { Toast.show('La firma es obligatoria (o marca "Registrar sin firma").', 'bad'); return; }
@@ -1809,7 +1948,8 @@
         await ref.put(blob, { contentType: 'image/png' });
         firmaUrl = await ref.getDownloadURL();
       }
-      await _persistirAcuse({ nombre, firmaUrl, sin, motivo, via: 'mostrador' });
+      await _persistirAcuse({ nombre, firmaUrl, sin, motivo, via: 'mostrador',
+        sinFirmaCodigo: codigo || null, sinFirmaQuien: quien || null, sinFirmaDetalle: detalle || null });
     } catch (err) {
       console.error(err);
       Toast.show('No se pudo guardar el acuse.', 'bad');

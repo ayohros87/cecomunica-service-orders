@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Harness · check-in de devolución</title>
+<!-- Código de PRODUCCIÓN (public/js/pages/ordenes-devolucion.js) sobre un
+     Firestore de mentira: sirve para ver y probar el check-in sin red, sin
+     credenciales y sin tocar una orden real. Lo maneja
+     functions/test-browser/revisar-devolucion.js. El CSS se carga en el mismo
+     orden que public/ordenes/index.html — ceco-ui primero y ordenes-index
+     después — porque ahí es donde `.hidden` gana con !important; con otro
+     orden, campos que deben esconderse se quedan a la vista. -->
+<link rel="stylesheet" href="../../public/css/ceco-ui.css">
+<link rel="stylesheet" href="../../public/css/ordenes-index.css">
+<style>body{font-family:system-ui;padding:20px}</style>
+</head>
+<body>
+<button id="ir">Abrir check-in</button>
+<div id="log"></div>
+
+<script src="../../public/js/core/roles.js"></script>
+<script src="../../public/js/ui/modal.js"></script>
+<script src="../../public/js/ui/firmaPad.js"></script>
+<script>
+// ── Stubs mínimos: solo lo que la pantalla toca ──────────────────────────
+window.APP = { state: { userRole: 'recepcion' }, utils: { lucideRefresh() {} } };
+window.FMT = { esc: (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
+               date: (d) => new Date(d).toLocaleDateString('es-PA') };
+window.Toast = { show: (m, k) => { window.__toasts.push([k || 'ok', m]); console.log('TOAST:', k, m); } };
+window.__toasts = [];
+window.lucide = { createIcons() {} };
+window.ModelosService = { getModelos: async () => [] };
+window.FirmaTablet = {
+  disponible: () => false,
+  vivasDeOrden: async () => ({ pendiente: null, firmada: null }),
+  unidadesDeEquipos: () => [],
+};
+function pendientesDevolucion(orden) {
+  const dev = orden.devolucion || {};
+  const esp = dev.esperados || [];
+  const porSerial = esp.filter(e => !e.resolucion).length;
+  let papel = 0;
+  if (dev.modo === 'sin_contrato') {
+    const total = Number(dev.total_esperado || 0);
+    const rec = esp.filter(e => e.resolucion === 'recibido').length;
+    if (total > 0) papel = Math.max(0, total - rec);
+  }
+  return porSerial + papel;
+}
+
+// Orden de mentira: 2 unidades esperadas, ninguna resuelta.
+window.__orden = {
+  ordenId: '2026091799', cliente_id: 'cli1', cliente_nombre: 'CLIENTE DE PRUEBA, S.A.',
+  estado_reparacion: 'POR ASIGNAR', tipo_de_servicio: 'DEVOLUCION',
+  devolucion: {
+    modo: 'recuperacion', total_esperado: 2,
+    esperados: [
+      { id: 'u1', serial: '22806A0230', modelo: 'PNC360S-R' },
+      { id: 'u2', serial: '24220A2357', modelo: 'PNC360S-R' },
+    ],
+    acuses: [],
+  },
+};
+window.OrdenesService = {
+  getOrder: async () => JSON.parse(JSON.stringify(window.__orden)),
+  mergeOrder: async (id, patch) => { window.__writes = window.__writes || []; window.__writes.push(patch);
+    if (patch.devolucion) window.__orden.devolucion = patch.devolucion;
+    if (patch.estado_reparacion) window.__orden.estado_reparacion = patch.estado_reparacion; },
+};
+window.firebase = {
+  auth: () => ({ currentUser: { uid: 'u-test', email: 'recepcion@test.com' } }),
+  firestore: Object.assign(() => ({
+    collection: () => ({
+      doc: () => ({ get: async () => ({ exists: false, data: () => ({}) }),
+                    onSnapshot: () => () => {}, set: async () => {}, update: async () => {} }),
+      add: async () => ({ id: 'x' }),
+      where: () => ({ where: () => ({ get: async () => ({ docs: [] }) }), get: async () => ({ docs: [] }) }),
+    }),
+  }), { FieldValue: { arrayUnion: (...a) => ({ __arrayUnion: a }), serverTimestamp: () => 'ts', delete: () => null },
+        Timestamp: { now: () => ({ toDate: () => new Date() }) } }),
+  storage: () => ({ ref: () => ({ put: async () => {}, getDownloadURL: async () => 'https://x/f.png' }) }),
+};
+</script>
+<script src="../../public/js/pages/ordenes-devolucion.js"></script>
+<script>
+document.getElementById('ir').onclick = () => window.OrdenesDevolucion.abrir('2026091799');
+</script>
+</body>
+</html>
