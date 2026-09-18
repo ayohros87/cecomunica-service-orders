@@ -27,12 +27,12 @@
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/services/clientesService.js?v=vend1"></script>
+  <script defer src="../js/services/clientesService.js?v=doc2"></script>
   <script defer src="../js/services/clienteDocumentosService.js"></script>
   <script defer src="../js/services/empresaService.js"></script>
   <script defer src="../js/ui/modal.js?v=f7"></script>
-  <script defer src="../js/domain/docIdentidad.js?v=doc1"></script>
-  <script defer src="../js/ui/formKit.js?v=sh2"></script>
+  <script defer src="../js/domain/docIdentidad.js?v=doc2"></script>
+  <script defer src="../js/ui/formKit.js?v=sh3"></script>
   <script defer src="/js/vendor/lucide.min.js?v=3"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
 </head>
@@ -108,16 +108,24 @@
         <div class="fk-cab"><h3>Representante legal</h3><span class="fk-auditado">queda en el historial</span></div>
         <p class="fk-desc">Quien firma contratos y anexos. Si cambió por acta de junta, adjunta la evidencia:
           queda en los documentos del cliente junto al registro del cambio.</p>
+        <div class="form-field">
+          <label class="form-label" for="representante">Nombre completo</label>
+          <input class="form-input" id="representante" data-fk="Representante legal">
+        </div>
         <div class="form-grid-2">
           <div class="form-field">
-            <label class="form-label" for="representante">Nombre completo</label>
-            <input class="form-input" id="representante" data-fk="Representante legal">
+            <label class="form-label" for="representante_doc_tipo">Tipo de documento</label>
+            <select class="form-select" id="representante_doc_tipo" data-fk="Tipo de documento">
+              <option value="cedula">Cédula</option>
+              <option value="pasaporte">Pasaporte</option>
+            </select>
+            <span class="form-hint">Con esta palabra sale nombrado en el contrato.</span>
           </div>
           <div class="form-field">
-            <label class="form-label" for="representante_cedula">Cédula o pasaporte</label>
+            <label class="form-label" for="representante_cedula">Número</label>
             <input class="form-input" id="representante_cedula" data-fk="Documento del representante" data-fk-valida="documento" style="font-family:var(--font-mono);">
-            <span class="form-hint">Si es pasaporte, escribe la palabra: <b>PASAPORTE 150685537</b> — así lo dice el contrato.</span>
-            <span class="form-error-msg">Escribe el documento: 8-712-1043, E-13077112 o PASAPORTE 150685537.</span>
+            <span class="form-hint">Ej.: 8-712-1043, E-13077112, 150685537.</span>
+            <span class="form-error-msg">Eso no parece un número de documento.</span>
           </div>
         </div>
         <div class="form-field">
@@ -241,7 +249,7 @@
   </div>
 
   <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/pages/clientes-ficha.js?v=doc1"></script>
+  <script defer src="../js/pages/clientes-ficha.js?v=doc2"></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

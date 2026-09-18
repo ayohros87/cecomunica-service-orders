@@ -376,6 +376,7 @@ window.Centro = {
   HIST_LABELS: {
     nombre: 'Nombre', ruc: 'RUC', dv: 'DV',
     representante: 'Representante legal', representante_cedula: 'Documento del representante',
+    representante_doc_tipo: 'Tipo de documento',
     representante_email: 'Correo del representante',
     telefono: 'Teléfono', email: 'Correo', email_acuses: 'Correo de acuses',
     direccion: 'Dirección', direccion_facturacion: 'Dirección de facturación',
@@ -1473,7 +1474,11 @@ window.Centro = {
           contrato_id: c.contrato_id || c.id,
           cliente_id: c.cliente_id || this.cliente.id,
           cliente_nombre: c.cliente_nombre || this.cliente.nombre || '',
-          representante: { nombre: c.representante || this.cliente.representante || '', cedula: c.representante_cedula || this.cliente.representante_cedula || '' },
+          representante: {
+            nombre: c.representante || this.cliente.representante || '',
+            cedula: c.representante_cedula || this.cliente.representante_cedula || '',
+            doc_tipo: c.representante_doc_tipo || this.cliente.representante_doc_tipo || '',
+          },
           // El TEXTO ÍNTEGRO queda CONGELADO en la solicitud (2026-08-31,
           // reclamo de Alberto: la firma no puede caer sobre un texto que el
           // cliente no vio — ni cambiar después de firmado). /firmar/ muestra
@@ -1683,7 +1688,11 @@ window.Centro = {
             : a.es_regularizacion
             ? `Declaro que los equipos del anexo ${gid} (${(a.regulariza_seriales || []).map(s => s.serial).join(', ')}) están en poder de ${g.cliente_nombre || 'la empresa'} y acepto su incorporación al contrato ${a.contrato_id || ''} con las tarifas indicadas.`
             : `Declaro que he leído el anexo de aumento ${gid} al contrato ${a.contrato_id || ''} y acepto sus términos y condiciones en nombre de ${g.cliente_nombre || 'la empresa'}.`,
-          representante: { nombre: this.cliente.representante || '', cedula: this.cliente.representante_cedula || '' },
+          representante: {
+            nombre: this.cliente.representante || '',
+            cedula: this.cliente.representante_cedula || '',
+            doc_tipo: this.cliente.representante_doc_tipo || '',
+          },
           ...(a.es_ajuste ? { es_ajuste: true,
             ...(Array.isArray(a.ajustes_precio) && a.ajustes_precio.length
               ? { ajustes_precio: a.ajustes_precio } : {}) } : {}),
@@ -6353,7 +6362,8 @@ window.Centro = {
     const rep = (c.representante || '').trim();
     const ficha = `../clientes/centro.html?id=${encodeURIComponent(c.id || '')}`;
     return rep
-      ? `<div>${this.esc(rep)}${c.representante_cedula ? ` — ${this.esc(window.DocIdentidad ? DocIdentidad.frase(c.representante_cedula) : 'céd. ' + c.representante_cedula)}` : ''}</div>
+      ? `<div>${this.esc(rep)}${c.representante_cedula ? ` — ${this.esc(window.DocIdentidad
+           ? DocIdentidad.frase(c.representante_cedula, c.representante_doc_tipo) : 'céd. ' + c.representante_cedula)}` : ''}</div>
          <div id="wcRepCtx" class="hint" style="margin:4px 0 8px;">Consultando la ficha…</div>
          <label class="cg-toggle">
            <input type="checkbox" id="wcRepValidado" onchange="Centro._wcRepGate()">
@@ -6482,6 +6492,7 @@ window.Centro = {
           id: cli.id, nombre: cli.nombre || '', direccion: cli.direccion || '',
           telefono: cli.telefono || '', ruc: cli.ruc || '', dv: cli.dv || '',
           representante: cli.representante || '', representante_cedula: cli.representante_cedula || '',
+          representante_doc_tipo: cli.representante_doc_tipo || '',
         },
         codigo_tipo: tipo,
         tipo_contrato: tipoNombre,

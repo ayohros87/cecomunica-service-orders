@@ -54,4 +54,10 @@ function hashFirma({ contrato_id, firmante_nombre, firmante_cedula, firmado_at, 
     .digest("hex");
 }
 
-module.exports = { normCedula, normNombre, firmanteCoincide, hashFirma };
+// Cómo se nombra el documento en los correos y el rastro: lo declara quien
+// firma (y el vendedor en la ficha), no se deduce del número.
+function etiquetaDocumento(tipo) {
+  return tipo === "pasaporte" ? "pasaporte" : "cédula";
+}
+
+module.exports = { normCedula, normNombre, firmanteCoincide, hashFirma, etiquetaDocumento };

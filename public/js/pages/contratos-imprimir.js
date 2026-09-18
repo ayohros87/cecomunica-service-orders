@@ -72,7 +72,8 @@ if (data.estado === "activo" && data.fecha_aprobacion) {
   // La etiqueta sigue al documento: cédula panameña o pasaporte.
   const lblRep = document.getElementById("labelRepresentanteDoc");
   if (lblRep && window.DocIdentidad && data.representante_cedula) {
-    lblRep.textContent = DocIdentidad.etiqueta(data.representante_cedula) === "pasaporte" ? "Pasaporte:" : "Cédula:";
+    lblRep.textContent = DocIdentidad.etiqueta(data.representante_cedula, data.representante_doc_tipo) === "pasaporte"
+      ? "Pasaporte:" : "Cédula:";
   }
   document.getElementById("observaciones").textContent = data.observaciones || "—";
   const repEl = document.getElementById("cliente_representante");

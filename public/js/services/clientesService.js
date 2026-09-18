@@ -81,6 +81,15 @@ const ClientesService = {
       updated_by: user?.uid || null,
     };
 
+    // Qué documento presenta el representante (2026-09-18): lo CONTESTA el
+    // vendedor en el selector, no se deduce del número. Igual que el vendedor
+    // asignado, solo se toca si quien guarda trae la clave: un formulario que
+    // no pregunta (la fusión de duplicados) mandaría el payload canónico
+    // completo y le pondría "cédula" al pasaporte de una ficha ajena.
+    if ('representante_doc_tipo' in raw) {
+      cliente.representante_doc_tipo = raw.representante_doc_tipo === "pasaporte" ? "pasaporte" : "cedula";
+    }
+
     // El vendedor SOLO se toca si el formulario lo trae. Un form sin el campo
     // (el alta/edición de contratos/nuevo-cliente.html) mandaba el payload
     // canónico completo y BORRABA el vendedor_asignado de la ficha en cada

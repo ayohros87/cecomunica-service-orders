@@ -36,7 +36,7 @@
   <script src="../js/core/layout.js?v=cc14"></script>
   <script src="../js/core/roles.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/services/clientesService.js?v=vend1"></script>
+  <script defer src="../js/services/clientesService.js?v=doc2"></script>
   <script defer src="../js/services/clienteDocumentosService.js"></script>
   <script defer src="../js/services/empresaService.js"></script>
   <script src="../js/core/serial.js?v=1"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
@@ -167,17 +167,26 @@
         <h3><i data-lucide="user"></i> Representante legal</h3>
       </div>
       <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-field">
+          <label class="form-label" for="representante">Representante legal</label>
+          <input class="form-input" type="text" id="representante">
+        </div>
+
         <div class="form-grid-2">
           <div class="form-field">
-            <label class="form-label" for="representante">Representante legal</label>
-            <input class="form-input" type="text" id="representante">
+            <label class="form-label" for="representante_doc_tipo">Tipo de documento</label>
+            <select class="form-select" id="representante_doc_tipo" data-fk="Tipo de documento">
+              <option value="cedula">Cédula</option>
+              <option value="pasaporte">Pasaporte</option>
+            </select>
+            <span class="form-hint">Con esta palabra sale nombrado en el contrato.</span>
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="representante_cedula">Cédula o pasaporte del representante</label>
+            <label class="form-label" for="representante_cedula">Número del documento</label>
             <input class="form-input" type="text" id="representante_cedula" data-fk="Documento del representante" data-fk-valida="documento" style="font-family:var(--font-mono);">
-            <span class="form-hint">Si es pasaporte, escribe la palabra: <b>PASAPORTE 150685537</b> — así lo dice el contrato.</span>
-            <span class="form-error-msg">Escribe el documento: 8-712-1043, E-13077112 o PASAPORTE 150685537.</span>
+            <span class="form-hint">Ej.: 8-712-1043, E-13077112, 150685537.</span>
+            <span class="form-error-msg">Eso no parece un número de documento.</span>
           </div>
         </div>
       </div>
@@ -274,9 +283,9 @@
 
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js?v=f7"></script>
-  <script defer src="../js/domain/docIdentidad.js?v=doc1"></script>
-  <script defer src="../js/ui/formKit.js?v=sh2"></script>
-  <script src="../js/pages/nuevo-cliente.js?v=nc5" defer></script>
+  <script defer src="../js/domain/docIdentidad.js?v=doc2"></script>
+  <script defer src="../js/ui/formKit.js?v=sh3"></script>
+  <script src="../js/pages/nuevo-cliente.js?v=nc6" defer></script>
   <script src="../js/pages/cliente-documentos.js" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->

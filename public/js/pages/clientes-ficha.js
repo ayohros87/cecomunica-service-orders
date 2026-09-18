@@ -159,7 +159,15 @@ window.FichaCliente = {
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v == null ? '' : v; };
     set('nombre', c.nombre); set('ruc', c.ruc); set('dv', c.dv);
     set('representante', c.representante);
-    set('representante_cedula', c.representante_cedula || c.cedula_representante);
+    // El documento: QUÉ documento es lo contesta el vendedor en el selector.
+    // Las fichas viejas que traen la palabra metida en el número ("PASAPORTE:
+    // XDB367055") se acomodan solas al abrirlas — número en su casilla, tipo
+    // en el selector — y quedan derechas en el primer guardado.
+    const docCrudo = c.representante_cedula || c.cedula_representante || '';
+    set('representante_cedula', window.DocIdentidad ? DocIdentidad.limpiar(docCrudo) : docCrudo);
+    set('representante_doc_tipo', window.DocIdentidad
+      ? DocIdentidad.tipo(docCrudo, c.representante_doc_tipo)
+      : (c.representante_doc_tipo || 'cedula'));
     set('representante_email', c.representante_email);
     set('telefono', c.telefono); set('email', c.email); set('email_acuses', c.email_acuses);
     set('direccion', c.direccion); set('direccion_facturacion', c.direccion_facturacion);
@@ -190,6 +198,20 @@ window.FichaCliente = {
   armarKit(textoGuardar = 'Guardar cambios') {
     const root = document.getElementById('fkRoot');
     this.fk = FormKit.crear({ root, textoGuardar, onGuardar: (cambios) => this.guardar(cambios) });
+
+    // Pegar "Pasaporte No. 150685537" en la casilla del número mueve el
+    // selector, en vez de dejar la palabra dentro del número. Va en `input` y
+    // no en `blur` a propósito: al salir del campo, FormKit ya le quitó la
+    // palabra al valor y aquí no quedaría nada que leer.
+    document.getElementById('representante_cedula').addEventListener('input', (e) => {
+      if (window.DocIdentidad && DocIdentidad.traePalabraPasaporte(e.target.value)) {
+        const sel = document.getElementById('representante_doc_tipo');
+        if (sel.value !== 'pasaporte') {
+          sel.value = 'pasaporte';
+          sel.dispatchEvent(new Event('change'));
+        }
+      }
+    });
 
     document.getElementById('itbms_exento').addEventListener('change', () => this._syncMotivo());
     document.getElementById('itbms_exento').addEventListener('fk:restaurado', () => this._syncMotivo());
@@ -237,6 +259,7 @@ window.FichaCliente = {
       nombre: g('nombre').value, ruc: g('ruc').value, dv: g('dv').value,
       representante: g('representante').value,
       representante_cedula: g('representante_cedula').value,
+      representante_doc_tipo: g('representante_doc_tipo').value,
       representante_email: g('representante_email').value,
       telefono: g('telefono').value, email: g('email').value, email_acuses: g('email_acuses').value,
       direccion: g('direccion').value, direccion_facturacion: g('direccion_facturacion').value,
@@ -360,6 +383,7 @@ window.FichaCliente = {
   HIST_LABELS: {
     nombre: 'Nombre', ruc: 'RUC', dv: 'DV',
     representante: 'Representante legal', representante_cedula: 'Documento del representante',
+    representante_doc_tipo: 'Tipo de documento',
     representante_email: 'Correo del representante',
     telefono: 'Teléfono', email: 'Correo', email_acuses: 'Correo de acuses',
     direccion: 'Dirección', direccion_facturacion: 'Dirección de facturación',

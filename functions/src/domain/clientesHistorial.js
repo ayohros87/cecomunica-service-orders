@@ -13,7 +13,7 @@
 
 const CAMPOS_AUDITADOS = [
   "nombre", "ruc", "dv",
-  "representante", "representante_cedula", "representante_email",
+  "representante", "representante_cedula", "representante_doc_tipo", "representante_email",
   "telefono", "email", "email_acuses",
   "direccion", "direccion_facturacion",
   "itbms_exento", "itbms_motivo_exencion",

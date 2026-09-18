@@ -101,6 +101,7 @@ auth.onAuthStateChanged(async user => {
       email: document.getElementById("email").value,
       representante: document.getElementById("representante").value,
       representante_cedula: document.getElementById("representante_cedula").value,
+      representante_doc_tipo: document.getElementById("representante_doc_tipo").value,
       ip: document.getElementById("ip")?.value || "",
       direccion_facturacion: document.getElementById("direccion_facturacion").value,
       itbms_exento: document.getElementById("itbms_exento")?.value === "true",
@@ -177,6 +178,15 @@ window.addEventListener("DOMContentLoaded", async () => {
     window._fkValidarTodo = FormKit.enlazarValidacion(document.getElementById("formCliente"));
   }
 
+  // Pegar "Pasaporte No. 150685537" en la casilla del número mueve el
+  // selector. En `input` y no en `blur`: al salir del campo, el kit ya le quitó
+  // la palabra al valor y aquí no quedaría nada que leer.
+  document.getElementById("representante_cedula")?.addEventListener("input", (e) => {
+    if (window.DocIdentidad && DocIdentidad.traePalabraPasaporte(e.target.value)) {
+      document.getElementById("representante_doc_tipo").value = "pasaporte";
+    }
+  });
+
   // Wire del botón "agregar IP" (independiente del modo crear/editar).
   document.getElementById("addIP")?.addEventListener("click", agregarIP);
 
@@ -207,9 +217,15 @@ window.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("telefono").value = d.telefono || "";
     document.getElementById("email").value = d.email || "";
     document.getElementById("representante").value = d.representante || "";
-    // Tolerar legacy `cedula_representante` además del canónico
+    // Tolerar legacy `cedula_representante` además del canónico. QUÉ documento
+    // es lo contesta el vendedor en el selector; las fichas viejas que traen la
+    // palabra dentro del número se acomodan solas al abrirlas.
+    const docCrudo = d.representante_cedula || d.cedula_representante || "";
     document.getElementById("representante_cedula").value =
-      d.representante_cedula || d.cedula_representante || "";
+      window.DocIdentidad ? DocIdentidad.limpiar(docCrudo) : docCrudo;
+    document.getElementById("representante_doc_tipo").value = window.DocIdentidad
+      ? DocIdentidad.tipo(docCrudo, d.representante_doc_tipo)
+      : (d.representante_doc_tipo || "cedula");
     document.getElementById("direccion_facturacion").value = d.direccion_facturacion || "";
     ipActual = d.ip || "";
 

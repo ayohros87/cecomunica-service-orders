@@ -779,7 +779,10 @@ async function main() {
   await assertFails(as("tecnico").doc("clientes/cliQbo").set({ representante: "Rep Nuevo" }, { merge: true }));
   await assertFails(as("vendedor").doc("clientes/cliQbo").set({ vendedor_asignado: "yo" }, { merge: true }));
   await assertFails(as("jefe_taller").doc("clientes/cliQbo").set({ itbms_exento: true }, { merge: true }));
-  await assertSucceeds(as("recepcion").doc("clientes/cliQbo").set({ representante: "Rep Nuevo", representante_cedula: "8-1-1" }, { merge: true }));
+  // Qué documento presenta el representante (cédula o pasaporte) define a quién
+  // se le atribuye el contrato: es identidad, no contacto (2026-09-18).
+  await assertFails(as("tecnico").doc("clientes/cliQbo").set({ representante_doc_tipo: "pasaporte" }, { merge: true }));
+  await assertSucceeds(as("recepcion").doc("clientes/cliQbo").set({ representante: "Rep Nuevo", representante_cedula: "8-1-1", representante_doc_tipo: "cedula" }, { merge: true }));
   await assertSucceeds(as("gerente").doc("clientes/cliQbo").set({ activo: false }, { merge: true }));
   await assertSucceeds(as("administrador").doc("clientes/cliQbo").set({ nombre: "Z2", nombre_norm: "z2" }, { merge: true }));
   await assertSucceeds(as("tecnico").doc("clientes/cliQbo").set({ email_acuses: "a@b.com" }, { merge: true }));

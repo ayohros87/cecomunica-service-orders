@@ -84,7 +84,7 @@
     // (js/domain/docIdentidad.js) — un pasaporte impreso como "cédula" es una
     // declaración falsa en un contrato.
     const repDoc = window.DocIdentidad
-      ? DocIdentidad.frase(c.representante_cedula)
+      ? DocIdentidad.frase(c.representante_cedula, c.representante_doc_tipo)
       : `cédula ${c.representante_cedula || '________________'}`;
     $('sPartes').innerHTML = `<b>C COMUNICA, S.A.</b> (RUC 32977-27-249966 DV 39), en adelante
       <b>LA EMPRESA</b>, y <b>${esc(c.cliente_nombre || '—')}</b>${rucdv ? ` (RUC ${esc(rucdv)})` : ''},

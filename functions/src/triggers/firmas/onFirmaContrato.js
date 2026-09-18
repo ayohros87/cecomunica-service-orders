@@ -23,7 +23,7 @@
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
-const { firmanteCoincide, hashFirma } = require("../../lib/firmas");
+const { firmanteCoincide, hashFirma, etiquetaDocumento } = require("../../lib/firmas");
 const G = require("../../lib/gestiones");
 const { APP_BASE_URL } = require("../../lib/inventario");
 
@@ -107,7 +107,7 @@ async function aplicarAnexo(sid, s, extraFirma = {}) {
   if (g.estado === "pendiente_firma") upd.estado = "pendiente_bodega";
   await gRef.update(upd);
   await G.registrarEvento(s.gestion_id, "firma",
-    `Anexo firmado DIGITALMENTE por ${f.nombre || "—"} (cédula ${f.cedula || "—"}) — hash ${hash.slice(0, 12)}…; pasa a bodega.`);
+    `Anexo firmado DIGITALMENTE por ${f.nombre || "—"} (${etiquetaDocumento(f.doc_tipo)} ${f.cedula || "—"}) — hash ${hash.slice(0, 12)}…; pasa a bodega.`);
   return { g, hash };
 }
 
@@ -191,7 +191,7 @@ module.exports = onDocumentUpdated(
         const f = after.firma || {};
         const tabla = G.tablaHtml(["", "Registrado", "Firmó"], [
           ["Nombre", G.escapeHtml(after.representante?.nombre || "—"), G.escapeHtml(f.nombre || "—")],
-          ["Cédula", G.escapeHtml(after.representante?.cedula || "—"), G.escapeHtml(f.cedula || "—")],
+          ["Documento", G.escapeHtml(after.representante?.cedula || "—"), G.escapeHtml(f.cedula || "—")],
           ["Cargo", "representante legal", G.escapeHtml(f.cargo || "—")],
         ]);
 
@@ -247,7 +247,7 @@ module.exports = onDocumentUpdated(
             `<h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065F46;">Contrato firmado y activado</h2>
              <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
                <b>${G.escapeHtml(after.contrato_id || "")}</b> de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b> fue firmado
-               digitalmente por <b>${G.escapeHtml(f.nombre || "—")}</b> (cédula ${G.escapeHtml(f.cedula || "—")}) — coincide con el
+               digitalmente por <b>${G.escapeHtml(f.nombre || "—")}</b> (${etiquetaDocumento(f.doc_tipo)} ${G.escapeHtml(f.cedula || "—")}) — coincide con el
                representante registrado — y quedó <b>activo</b>. La firma, el rastro y el sello de verificación quedaron en el contrato.</p>
              ${resumenAnexoHtml(after)}`,
             urlFicha, "Abrir la ficha del cliente", { firma_solicitud: sid, resultado: "activado" });
@@ -297,6 +297,10 @@ module.exports = onDocumentUpdated(
           await db.collection("clientes").doc(after.cliente_id).update({
             representante: after.firma.nombre,
             representante_cedula: after.firma.cedula || "",
+            // Qué documento declaró (2026-09-18). Las firmas viejas no lo
+            // traen: ahí la ficha conserva el tipo que ya tenía.
+            ...(["cedula", "pasaporte"].includes(after.firma.doc_tipo)
+              ? { representante_doc_tipo: after.firma.doc_tipo } : {}),
           }).catch((e) => logger.warn("[onFirmaContrato] ficha no actualizada", { message: e.message }));
         }
         const vendedor = await G.vendedorEmailDeCliente(after.cliente_id);

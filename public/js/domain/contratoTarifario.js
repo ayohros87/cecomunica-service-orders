@@ -132,6 +132,9 @@ window.ContratoTarifario = {
       cliente_rucdv: (cli.ruc || '') + (cli.dv ? ' - DV' + cli.dv : ''),
       representante: cli.representante || '',
       representante_cedula: cli.representante_cedula || '',
+      // Qué documento es (2026-09-18): viaja congelado con el número, para que
+      // el contrato impreso diga "cédula" o "pasaporte" aunque la ficha cambie.
+      representante_doc_tipo: cli.representante_doc_tipo === 'pasaporte' ? 'pasaporte' : 'cedula',
       duracion: d.duracion,
       codigo_tipo: d.codigo_tipo,
       tipo_contrato: d.tipo_contrato,
