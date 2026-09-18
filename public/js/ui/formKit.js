@@ -121,7 +121,9 @@
       el.addEventListener("input", () => marcar(el));
       el.addEventListener("change", () => marcar(el));
       el.addEventListener("blur", () => {
-        if (normalizarCampo(el)) marcar(el);
+        // Solo se reescribe lo que el usuario tocó: abrir una ficha no debe
+        // cambiarle un dato viejo por su cuenta.
+        if (sucios.has(el) && normalizarCampo(el)) marcar(el);
         validarCampo(el);
       });
     });
@@ -149,8 +151,15 @@
     $btnGuardar.addEventListener("click", async () => {
       let primero = null;
       campos.forEach((el) => {
-        if (normalizarCampo(el)) marcar(el);
-        if (!validarCampo(el) && !primero) primero = el;
+        if (sucios.has(el) && normalizarCampo(el)) marcar(el);
+        // Un dato VIEJO que el usuario no tocó se marca en rojo pero NO tranca
+        // el guardado (2026-09-18): `crear` se usa para EDITAR fichas y órdenes
+        // que ya existen, y en producción hay valores heredados que ninguna
+        // regla de hoy aprueba (un nombre escrito en la casilla del documento,
+        // un RUC a medias). Trancar ahí deja a recepción sin poder corregir el
+        // campo que sí venía a corregir. Las ALTAS validan todo — usan
+        // enlazarValidacion, no esto.
+        if (!validarCampo(el) && sucios.has(el) && !primero) primero = el;
       });
       if (primero) {
         primero.focus();

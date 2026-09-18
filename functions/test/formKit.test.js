@@ -27,7 +27,8 @@ test("documento: cédula panameña o pasaporte", () => {
   assert.equal(esValido("documento", "PE-12-345"), true);
   assert.equal(esValido("documento", "150685537"), true, "el pasaporte trancaba la ficha");
   assert.equal(esValido("documento", "Pasaporte No. 150685537"), true);
-  assert.equal(esValido("documento", "8-712"), false);
+  assert.equal(esValido("documento", "E-13077112"), true);
+  assert.equal(esValido("documento", "EUSEBIO LEZCANO"), false);
   delete global.DocIdentidad;
   assert.equal(esValido("documento", "lo que sea"), true, "sin docIdentidad el campo no estorba");
 });
