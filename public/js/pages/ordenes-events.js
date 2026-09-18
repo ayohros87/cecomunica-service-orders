@@ -19,6 +19,42 @@
   
   // Action handlers map
   const ACTION_HANDLERS = {
+    // La nota impresa que el cliente firmó, subida DESPUÉS de la entrega
+    // (auditoría 2026-09-17): en el mostrador con cola no siempre se alcanza a
+    // escanear, así que la orden la sigue pidiendo en su línea de tiempo y se
+    // sube desde ahí. Misma ruta y mismas reglas que la del modal de entrega.
+    'subir-nota-firmada': (el) => {
+      const ordenId = el.dataset.orden;
+      if (!ordenId) return;
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*,application/pdf';
+      input.onchange = async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        el.disabled = true; el.textContent = 'Subiendo…';
+        try {
+          if (window.CargaDiferida?.storage) await CargaDiferida.storage();
+          const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+          const path = `ordenes_notas_firmadas/${ordenId}_nota_${Date.now()}.${ext}`;
+          const ref = firebase.storage().ref(path);
+          await ref.put(file, { contentType: file.type || 'image/jpeg' });
+          await OrdenesService.mergeOrder(ordenId, {
+            nota_firmada_url: await ref.getDownloadURL(),
+            nota_firmada_path: path,
+            nota_firmada_at: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          Toast.show('Nota firmada guardada en la orden.', 'ok');
+          if (typeof window.cargarOrdenesYEquipos === 'function') window.cargarOrdenesYEquipos(true);
+        } catch (err) {
+          console.error('[subir-nota-firmada]', err);
+          Toast.show('No se pudo subir la nota: ' + err.message, 'bad');
+          el.disabled = false; el.textContent = 'Subir la nota';
+        }
+      };
+      input.click();
+    },
+
     // Navigation actions
     'go-nueva-orden': () => window.location.href = BASE + 'nueva-orden.html',
     'go-config': () => window.location.href = BASE + 'config.html',

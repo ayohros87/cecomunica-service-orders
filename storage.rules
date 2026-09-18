@@ -27,6 +27,23 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // ── Entrega flow: nota impresa firmada por el cliente ───────────────
+    // Cuando el cliente firma la nota EN PAPEL porque la firma digital no se
+    // pudo capturar (flag histórico `no_recibido`), esta es la única prueba de
+    // la entrega — hasta 2026-09-17 vivía en un archivador que el sistema no
+    // sabía ubicar, y por ahí salieron 7 de cada 10 entregas de septiembre.
+    // Mismo criterio que contratos_firmados: material legal-adjacente, lectura
+    // para staff autenticado, sin borrado desde el frontend. Imagen o PDF
+    // (recepción la fotografía con el celular o la escanea).
+    match /ordenes_notas_firmadas/{file} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.size < 10 * 1024 * 1024
+                    && (request.resource.contentType.matches('image/.*')
+                        || request.resource.contentType == 'application/pdf');
+      allow update, delete: if false;
+    }
+
     // ── Entrega flow: customer ID photo (current path) ───────────────────
     // Compressed client-side to ~200-500 KB JPEG; 6 MiB cap covers the
     // fail-open case where compression skipped/failed.

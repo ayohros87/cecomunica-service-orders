@@ -1530,6 +1530,23 @@ window.copiarSeriales = function (ordenId) {
     if (preview) preview.innerHTML = `<img src="${url}" style="max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:4px;">`;
   };
 
+  // Foto de la NOTA FIRMADA en papel. A diferencia de la identificación, esto
+  // no es PII del cliente: es el comprobante de la entrega, así que se guarda
+  // como URL y se puede ver desde la orden sin pasar por un callable.
+  window._entregaFotoPapelChange = function (input) {
+    const file = input.files[0];
+    const preview = document.getElementById('entregaPreviewPapel');
+    if (!file || !preview) return;
+    if (file.type === 'application/pdf') {
+      preview.innerHTML = `<div style="font-size:12px;color:var(--fg-3,#6b7280);margin-top:4px;">
+        <i data-lucide="file-text" style="width:14px;height:14px;vertical-align:-2px;"></i> ${FMT.esc(file.name)}</div>`;
+      if (window.lucide) lucide.createIcons();
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    preview.innerHTML = `<img src="${url}" style="max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:4px;">`;
+  };
+
   // ── ID-photo upload preparation ─────────────────────────────────
   // Modern phones produce 4–6 MB JPEGs; without resizing, a year of
   // deliveries fills storage with multi-GB of ID photos and 4G techs
@@ -1740,6 +1757,20 @@ window.copiarSeriales = function (ordenId) {
         if (!personaInterna) { Toast.show('Indique quién recibió los equipos por el cliente', 'bad'); return; }
         firestoreData.no_recibido_motivo = motivo;
         firestoreData.entrega_persona_interna = personaInterna;
+        // La nota impresa que el cliente firmó. Opcional aquí —con cola en el
+        // mostrador no se tranca la entrega—, pero la orden queda pidiéndola
+        // hasta que alguien la suba (auditoría 2026-09-17).
+        const filePapel = document.getElementById('entregaFotoPapel')?.files[0];
+        if (filePapel) {
+          await CargaDiferida.storage();
+          const { blob, contentType, ext } = await _prepareIdUpload(filePapel);
+          const pathPapel = `ordenes_notas_firmadas/${ordenId}_nota_${Date.now()}.${ext}`;
+          const refPapel = firebase.storage().ref(pathPapel);
+          await refPapel.put(blob, { contentType });
+          firestoreData.nota_firmada_url = await refPapel.getDownloadURL();
+          firestoreData.nota_firmada_path = pathPapel;
+          firestoreData.nota_firmada_at = firebase.firestore.FieldValue.serverTimestamp();
+        }
         emailOpts = { ...emailOpts, motivo, personaInterna };
 
       } else {

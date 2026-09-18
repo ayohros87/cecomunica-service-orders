@@ -333,12 +333,26 @@ function _buildTimelineHTML(ordenData) {
     });
   }
   if (ordenData.fecha_entrega) {
+    // Firma en papel: la nota impresa es la ÚNICA prueba de esta entrega, así
+    // que la línea dice si ya está guardada o si sigue en el archivador
+    // (auditoría 2026-09-17). Sin esto, "firma en papel" se leía como
+    // documentado cuando el papel podía no existir en ningún lado.
+    const notaOk = !!ordenData.nota_firmada_url;
     entries.push({
       icon: ordenData.no_recibido ? 'alert-triangle' : 'package-check',
-      label: ordenData.no_recibido ? 'Entregada (firma en papel)' : 'Entregada al cliente',
+      label: ordenData.no_recibido
+        ? `Entregada (firma en papel)${notaOk ? ' · nota guardada' : ' · falta subir la nota'}`
+        : 'Entregada al cliente',
       ts: ordenData.fecha_entrega,
       by: ordenData.entrega_por_email || '',
-      kind: ordenData.no_recibido ? 'no-recibido' : 'entregado'
+      kind: ordenData.no_recibido ? 'no-recibido' : 'entregado',
+      // El papel se puede subir después: con cola en el mostrador la entrega
+      // no se tranca, pero la orden lo sigue pidiendo hasta que llegue.
+      accion: !ordenData.no_recibido ? ''
+        : notaOk
+        ? `<a href="${ordenData.nota_firmada_url}" target="_blank" rel="noopener" class="timeline-accion">Ver la nota</a>`
+        : `<button type="button" class="timeline-accion" data-action="subir-nota-firmada"
+                   data-orden="${safe(ordenData.ordenId || ordenData.id || '')}">Subir la nota</button>`,
     });
   }
   if (ordenData.fecha_eliminacion) {
@@ -368,6 +382,7 @@ function _buildTimelineHTML(ordenData) {
         <div class="timeline-meta">
           <span class="timeline-date">${safe(formatFechaHora(e.ts))}</span>
           ${e.by ? `<span class="timeline-by">· ${safe(e.by)}</span>` : ''}
+          ${e.accion || ''}
         </div>
       </div>
     </div>`).join('');

@@ -817,6 +817,20 @@ body.hide-fecha-entrega .fecha-entrega { display: none !important; }
   gap: 4px;
 }
 .timeline-by { font-style: italic; }
+/* Acción dentro de la línea de tiempo — hoy solo "Subir la nota" / "Ver la
+   nota" de una entrega firmada en papel (auditoría 2026-09-17). Se lee como
+   enlace, no como botón: la línea de tiempo es un relato, no una barra de
+   herramientas. */
+.timeline-accion {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--brand, #0b72b9);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.timeline-accion:disabled { color: var(--fg-3); cursor: default; text-decoration: none; }
 
 /* Per-state dot colors — pick up the same semantic palette as
    the .estado-pill so the timeline feels consistent. */

@@ -611,6 +611,21 @@
                  placeholder="Nombre de quien firmó la nota impresa"
                  class="modal-entrega__warn-input">
         </div>
+        <!-- La nota impresa que el cliente firmó (auditoría 2026-09-17): sin
+             ella la prueba de la entrega vive en un archivador que el sistema
+             no sabe ubicar, y 7 de cada 10 entregas de septiembre salieron por
+             aquí. Opcional para no trancar el mostrador con cola: si no se
+             sube ahora, la orden queda pidiéndola. -->
+        <div class="form-field">
+          <label class="modal-entrega__label--warn">Foto de la nota firmada
+            <span class="modal-entrega__hint">(se puede subir después, desde la orden)</span>
+          </label>
+          <input type="file" id="entregaFotoPapel"
+                 accept="image/*,application/pdf" capture="environment"
+                 class="file modal-entrega__file"
+                 onchange="_entregaFotoPapelChange(this)">
+          <div id="entregaPreviewPapel" class="modal-entrega__preview"></div>
+        </div>
       </div>
     </div>
 
