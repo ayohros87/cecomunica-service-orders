@@ -3826,6 +3826,7 @@ window.Centro = {
       ${this._puedeCotizar() ? `<a href="../cotizaciones/nueva-cotizacion.html?cliente_id=${id}&from=centro">Nueva cotización<span class="cg-menu-hint">abre el editor con este cliente ya elegido</span></a>` : ''}
       <a href="./ficha.html?id=${id}&from=centro">${this._puedeEditarCliente() ? 'Editar datos del cliente' : 'Ver datos del cliente'}<span class="cg-menu-hint">${this._puedeEditarCliente() ? 'RUC, representante, contacto, vendedor' : 'solo lectura — los cambios los hace cobros'}</span></a>
       ${this._puedeVerDocs() ? `<button type="button" onclick="Centro.verDocumentos()">Documentos del cliente<span class="cg-menu-hint">registro público, cédula, poderes</span></button>` : ''}
+      <button type="button" onclick="Centro.constanciaEquipos()">Constancia de equipos<span class="cg-menu-hint">lo que tiene hoy, con qué contrato y con qué entrega</span></button>
       <button type="button" onclick="Centro.abrirBloque('blkActividad')">Historial de la ficha<span class="cg-menu-hint">quién cambió qué y cuándo</span></button>`;
   },
 
@@ -3836,6 +3837,138 @@ window.Centro = {
   // admin + recepción. A los demás ni se les ofrece — la lista de metadata sí
   // la dejan leer las rules, pero los bytes los negaría la callable.
   _puedeVerDocs() { return [ROLES.ADMIN, 'admin', ROLES.RECEPCION].includes(this.rol); },
+
+  // ── Constancia de equipos (auditoría 2026-09-17) ─────────────────────
+  // "¿Qué equipos tengo con ustedes y desde cuándo?" se contestaba a mano
+  // desde tres pantallas, así que salía distinta según quién la armara. Esto
+  // la arma sola con lo que YA está escrito: nada se calcula de nuevo.
+  //
+  // Para cada radio dice desde cuándo está con el cliente y CON QUÉ ORDEN se
+  // entregó — el dato sale del kardex (el movimiento que lo dejó en_cliente),
+  // que es la prueba de la entrega. Una lectura de subcolección por equipo:
+  // se paga solo cuando alguien pide el documento, y por eso hay tope.
+  TOPE_CONSTANCIA: 200,
+
+  async constanciaEquipos() {
+    if (!this.cliente) return;
+    this._cerrarAcciones();
+    const enCampo = (this.equipos || [])
+      .filter(e => ['en_cliente', 'asignado_contrato'].includes(e.estado));
+    if (!enCampo.length) { Toast.show('Esta cuenta no tiene equipos en campo.', 'warn'); return; }
+
+    Toast.show('Armando la constancia…', 'info');
+    const conDetalle = enCampo.length <= this.TOPE_CONSTANCIA;
+    const detalle = new Map();
+    if (conDetalle) {
+      // El movimiento MÁS RECIENTE que dejó la unidad con el cliente: si el
+      // radio fue y volvió del taller, la fecha que vale es la última salida.
+      await Promise.all(enCampo.map(async (e) => {
+        try {
+          const movs = await EquiposPoolService.getMovimientos(e.id);   // desc
+          const m = (movs || []).find(x => x.a_estado === 'en_cliente');
+          if (m) detalle.set(e.id, { at: m.at, orden: m.ref?.tipo === 'orden' ? m.ref.id : null });
+        } catch (err) { /* sin kardex legible: la fila sale sin fecha */ }
+      }));
+    }
+
+    const fmtF = (ts) => {
+      const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
+      return d && !isNaN(d) ? d.toLocaleDateString('es-PA', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+    };
+    const esc = (v) => this.esc(v);
+    // Agrupado por contrato, que es como el cliente entiende su cuenta.
+    const grupos = new Map();
+    for (const e of enCampo) {
+      const k = e.asignacion?.contrato_doc_id || '__sin__';
+      if (!grupos.has(k)) grupos.set(k, []);
+      grupos.get(k).push(e);
+    }
+    const bloques = [...grupos.entries()].map(([k, items]) => {
+      const c = this.contratos.find(x => x.id === k);
+      const titulo = c
+        ? `Contrato ${esc(c.contrato_id || '—')}${c.tipo_contrato ? ` · ${esc(c.tipo_contrato)}` : ''}`
+        : 'Equipos sin contrato registrado';
+      const filas = items
+        .sort((a, b) => String(a.serial || '').localeCompare(String(b.serial || '')))
+        .map((e) => {
+          const d = detalle.get(e.id);
+          return `<tr>
+            <td class="mono">${esc(e.serial || e.id)}</td>
+            <td>${esc(e.modelo_label || '—')}</td>
+            <td>${e.propiedad === 'cliente' ? 'Del cliente' : 'En alquiler'}</td>
+            <td>${conDetalle ? esc(fmtF(d?.at)) : '—'}</td>
+            <td class="mono">${d?.orden ? esc(d.orden) : '—'}</td>
+          </tr>`;
+        }).join('');
+      return `<h2>${titulo} <span class="cuenta">${items.length} equipo(s)</span></h2>
+        <table>
+          <thead><tr><th>Serial</th><th>Modelo</th><th>Régimen</th><th>Con el cliente desde</th><th>Orden de entrega</th></tr></thead>
+          <tbody>${filas}</tbody>
+        </table>`;
+    }).join('');
+
+    const hoy = new Date().toLocaleDateString('es-PA', { day: 'numeric', month: 'long', year: 'numeric' });
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+      <title>Constancia de equipos — ${esc(this.cliente.nombre || '')}</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; }
+        body { background: #e8e6e0; font: 14px/1.55 'Source Serif 4', Georgia, 'Times New Roman', serif; color: #26221C; }
+        .toolbar { display: flex; gap: 10px; justify-content: flex-end; max-width: 820px; margin: 0 auto; padding: 12px 16px 0; font-family: 'Segoe UI', Arial, sans-serif; }
+        .toolbar button { font: 600 13.5px 'Segoe UI', Arial, sans-serif; border: 0; border-radius: 8px; cursor: pointer; padding: 9px 16px; background: #0B2A47; color: #fff; }
+        .hoja { background: #FDFCF8; max-width: 820px; margin: 12px auto 40px; padding: 44px 52px; box-shadow: 0 8px 30px rgba(20,20,30,.18); }
+        .memb { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; border-bottom: 2px solid #26221C; padding-bottom: 14px; flex-wrap: wrap; }
+        .memb img { height: 42px; }
+        .memb .datos-emp { font: 10.5px/1.5 'Segoe UI', Arial, sans-serif; color: #5C554A; margin-top: 4px; }
+        .docnum { text-align: right; font-size: 12.5px; color: #5C554A; }
+        h1 { font-size: 18px; text-align: center; margin: 26px 0 4px; letter-spacing: .02em; }
+        .subt { text-align: center; font-size: 12.5px; color: #5C554A; margin-bottom: 22px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; font-size: 13px; margin-bottom: 22px; }
+        .grid .lbl { display: block; font: 10.5px 'Segoe UI', Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #5C554A; }
+        h2 { font-size: 13.5px; margin: 22px 0 8px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; border-bottom: 1px solid #E4DFD2; padding-bottom: 4px; }
+        h2 .cuenta { font: 10.5px 'Segoe UI', Arial, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: #5C554A; }
+        table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+        th { font: 10.5px 'Segoe UI', Arial, sans-serif; letter-spacing: .07em; text-transform: uppercase; color: #5C554A; text-align: left; padding: 6px 10px; border-bottom: 1.5px solid #26221C; }
+        td { padding: 7px 10px; border-bottom: 1px solid #E4DFD2; vertical-align: top; }
+        td.mono { font-family: Consolas, monospace; font-size: 12px; white-space: nowrap; }
+        .legal { font-size: 11.5px; color: #5C554A; border-left: 2px solid #E4DFD2; padding-left: 14px; margin: 24px 0 0; font-style: italic; }
+        .pie { margin-top: 30px; padding-top: 10px; border-top: 1px solid #E4DFD2; font: 10.5px 'Segoe UI', Arial, sans-serif; color: #5C554A; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        @media print { body { background: #fff; } .toolbar { display: none; } .hoja { box-shadow: none; margin: 0; max-width: none; padding: 6mm 4mm; } }
+      </style></head>
+      <body>
+        <div class="toolbar"><button onclick="window.print()">🖨 Imprimir</button></div>
+        <div class="hoja">
+          <div class="memb">
+            <div>
+              <img src="${location.origin}/brand/logo-lockup-horizontal.svg" alt="C Comunica">
+              <div class="datos-emp">C COMUNICA, S.A. · RUC 32977-27-249966 DV 39 · Panamá<br>ventas@cecomunica.com · +507 279-5570</div>
+            </div>
+            <div class="docnum">Emitida el <b>${esc(hoy)}</b></div>
+          </div>
+          <h1>Constancia de equipos en poder del cliente</h1>
+          <p class="subt">Estado de la cuenta a la fecha de emisión</p>
+          <div class="grid">
+            <div><span class="lbl">Cliente</span><b>${esc(this.cliente.nombre || '—')}</b></div>
+            <div><span class="lbl">RUC</span><b>${esc(this.cliente.ruc || '—')}</b></div>
+            <div><span class="lbl">Equipos en campo</span><b>${enCampo.length}</b></div>
+            <div><span class="lbl">Contratos involucrados</span><b>${[...grupos.keys()].filter(k => k !== '__sin__').length}</b></div>
+          </div>
+          ${bloques}
+          <p class="legal">Esta constancia lista los equipos que, según los registros de C COMUNICA, S.A.,
+            se encuentran en poder del cliente a la fecha de emisión, con la orden de servicio que respalda
+            cada entrega.${conDetalle ? '' : ' Por el volumen de la cuenta se omite el detalle de entrega por equipo; se puede emitir por contrato.'}
+            Cualquier diferencia debe notificarse para su conciliación.</p>
+          <div class="pie">
+            <span>Generado por el sistema de órdenes de servicio</span>
+            <span>${enCampo.length} equipo(s) · ${esc(hoy)}</span>
+          </div>
+        </div>
+      </body></html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) { Toast.show('El navegador bloqueó la ventana. Permite las ventanas emergentes.', 'bad'); return; }
+    w.document.write(html);
+    w.document.close();
+  },
 
   async verDocumentos() {
     if (!this.cliente || !this._puedeVerDocs()) return;

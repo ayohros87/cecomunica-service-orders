@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Harness · constancia de equipos</title>
+<!-- Genera la CONSTANCIA del Centro (Centro.constanciaEquipos, código de
+     producción) con una cuenta de mentira: sirve para ver el documento sin
+     red, sin credenciales y sin abrir la ficha de un cliente real. Lo maneja
+     functions/test-browser/revisar-constancia.js. -->
+<style>body{font-family:system-ui;padding:20px}</style>
+</head>
+<body>
+<button id="ir">Generar la constancia</button>
+
+<script>
+// Stubs mínimos: la constancia solo toca estos.
+window.Toast = { show: (m, k) => { (window.__toasts = window.__toasts || []).push([k || 'ok', m]); } };
+window.EquiposPoolService = {
+  // Kardex de mentira: el radio salió, volvió a taller y salió otra vez —
+  // la constancia debe tomar la salida MÁS RECIENTE (movimientos en desc).
+  async getMovimientos(id) {
+    return [
+      { a_estado: 'en_cliente', at: { toDate: () => new Date('2026-08-14T15:00:00Z') }, ref: { tipo: 'orden', id: '2026081402' } },
+      { a_estado: 'en_taller',  at: { toDate: () => new Date('2026-07-02T15:00:00Z') }, ref: { tipo: 'orden', id: '2026070201' } },
+      { a_estado: 'en_cliente', at: { toDate: () => new Date('2026-02-03T15:00:00Z') }, ref: { tipo: 'orden', id: '2026020301' } },
+    ];
+  },
+};
+</script>
+<script src="../../public/js/pages/clientes-centro.js"></script>
+<script>
+// La página entera no se monta (necesita Firebase): se le presta al objeto
+// Centro solo el estado que la constancia lee.
+Centro.cliente  = { id: 'cli1', nombre: 'CLIENTE DE PRUEBA, S.A.', ruc: '1135843-1-568374' };
+Centro.contratos = [
+  { id: 'c1', contrato_id: 'ALQ20260902-01', tipo_contrato: 'Alquiler' },
+  { id: 'c2', contrato_id: 'PROP20260202-01', tipo_contrato: 'Propio' },
+];
+Centro.equipos = [
+  { id: '22806A0230', serial: '22806A0230', modelo_label: 'HYTERA PNC360S-R', estado: 'en_cliente',
+    propiedad: 'cecomunica', asignacion: { contrato_doc_id: 'c1' } },
+  { id: '24220A2357', serial: '24220A2357', modelo_label: 'HYTERA PNC360S-R', estado: 'en_cliente',
+    propiedad: 'cecomunica', asignacion: { contrato_doc_id: 'c1' } },
+  { id: '19O16C0852', serial: '19O16C0852', modelo_label: 'HYT-P50', estado: 'asignado_contrato',
+    propiedad: 'cliente', asignacion: { contrato_doc_id: 'c2' } },
+  { id: 'SINCONTRATO1', serial: 'SINCONTRATO1', modelo_label: 'TC-508U-R', estado: 'en_cliente',
+    propiedad: 'cecomunica', asignacion: {} },
+  // En taller: NO debe salir en la constancia (no está con el cliente).
+  { id: 'ENTALLER1', serial: 'ENTALLER1', modelo_label: 'PD606-R', estado: 'en_taller',
+    propiedad: 'cecomunica', asignacion: { contrato_doc_id: 'c1' } },
+];
+document.getElementById('ir').onclick = () => Centro.constanciaEquipos();
+</script>
+</body>
+</html>
