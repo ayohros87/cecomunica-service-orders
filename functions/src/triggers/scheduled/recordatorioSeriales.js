@@ -72,6 +72,14 @@ function buildEscalacionBody(c, docId, diasAprobado, intento) {
       </tr></thead>
       <tbody>${equiposRows}</tbody>
     </table>
+    <div style="margin:16px 0 0;padding:10px 12px;border-left:3px solid #cbd5e1;background:#f8fafc;font:13px/1.6 Arial,sans-serif;color:#475569;">
+      <b>Por qué te llegó este correo:</b> el contrato ya pasó los ${MAX_RECORDATORIOS} recordatorios
+      que se le mandan a bodega, así que el aviso sube de nivel y va a las tres personas que pueden
+      destrabarlo — <b>activaciones</b>, porque la cuenta no puede darse por lista sin equipos
+      declarados; <b>bodega</b>, porque es quien asigna los seriales; y el <b>vendedor del contrato</b>,
+      porque es su cuenta y él sabe si todavía va o hay que anularla.
+      Los tres reciben el mismo correo: basta con que uno lo resuelva y deja de llegar.
+    </div>
     <p style="margin:12px 0 0;font:12px/1.5 Arial,sans-serif;color:#6b7280;">
       Aviso ${intento} de escalamiento — se repite cada semana hasta que el contrato tenga seriales o se anule.
     </p>`;

@@ -123,6 +123,16 @@ test("C1 · la escalación sale de bodega: va a activaciones con copia al vended
   assert.ok(!/if \(count >= MAX_RECORDATORIOS\) continue;/.test(src), "el `continue` mudo al llegar al tope no debe volver");
 });
 
+test("C3 · el correo explica por qué le llegó a cada uno de los tres", () => {
+  const src = leer("src", "triggers", "scheduled", "recordatorioSeriales.js");
+  const bloque = src.slice(src.indexOf("Por qué te llegó este correo"), src.indexOf("Aviso ${intento} de escalamiento"));
+  assert.ok(bloque, "falta el bloque que explica los destinatarios");
+  for (const quien of ["activaciones", "bodega", "vendedor del contrato"]) {
+    assert.ok(bloque.includes(quien), `el bloque debe decir por qué lo recibe ${quien}`);
+  }
+  assert.ok(/basta con que uno lo resuelva/.test(bloque), "debe aclarar que es el mismo correo para los tres");
+});
+
 test("C2 · el correo de seriales asignados dice desde cuándo está viva la cuenta", () => {
   const src = leer("src", "triggers", "contratos", "onApproval.js");
   assert.ok(/esTramiteViejo/.test(src), "debe distinguir el trámite viejo del recién aprobado");
