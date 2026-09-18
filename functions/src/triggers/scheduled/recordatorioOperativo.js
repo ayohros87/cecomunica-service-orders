@@ -875,6 +875,85 @@ module.exports = onSchedule(
       logger.error("[recordatorioOperativo] sección demos falló", { message: e.message });
     }
 
+    // ── J) Aumentos esperando la firma del anexo (auditoría 2026-09-17) ──
+    // El aumento se aprueba, bodega aparta los seriales... y la firma del
+    // cliente se queda esperando. Cuesta doble: el equipo queda inmovilizado
+    // (apartado para ese cliente, sin poder asignarse a otro) y el ingreso no
+    // arranca, porque el tramo se factura DESDE LA ENTREGA. El más viejo al
+    // hacer la auditoría llevaba 14 días con el radio listo en oficina y nada
+    // avisaba.
+    //
+    // A diferencia del demo, aquí el aviso SE REPITE cada `dias`: la firma es
+    // una gestión viva que alguien tiene que perseguir hasta que entre, y un
+    // solo recordatorio se olvida igual que no mandar ninguno.
+    try {
+      const G = require("../../lib/gestiones");
+      let dias = 5;
+      try {
+        const cfg = (await db.collection("empresa").doc("config").get()).data() || {};
+        const n = Number(cfg.aumento_firma_recordatorio_dias);
+        if (Number.isFinite(n) && n >= 1) dias = n;
+      } catch (e) { /* default */ }
+
+      const snap = await db.collection("gestiones")
+        .where("estado", "==", "pendiente_firma")
+        .limit(500)
+        .get();
+
+      let avisados = 0;
+      for (const d of snap.docs) {
+        const g = d.data() || {};
+        if (g.deleted || g.tipo !== "aumento") continue;
+
+        // Se cuenta desde que se aprobó (que es cuando la firma queda
+        // pendiente de verdad); sin aprobación, desde que se pidió.
+        const base = aDate(g.aprobacion?.at) || aDate(g.fecha_solicitud);
+        if (!base) continue;
+        const edad = Math.floor((now - base) / 86400000);
+        if (edad < dias) continue;
+
+        // Re-aviso: solo si ya pasó otro tramo completo desde el último.
+        const ultimo = aDate(g.firma_recordatorio_at);
+        if (ultimo && (now - ultimo) / 86400000 < dias) continue;
+
+        const to = g.responsable_email || await G.vendedorEmailDeCliente(g.cliente_id);
+        const cc = await G.aprobacionesTo();
+        if (!to && !cc) { logger.warn("[recordatorioOperativo] aumento sin buzón", { gid: d.id }); continue; }
+        const seriales = (g.aumento?.seriales_asignados || []).map(s => s.serial).filter(Boolean);
+        await db.collection("mail_queue").add({
+          to: to || cc,
+          ...(to && cc ? { cc } : {}),
+          subject: `Anexo sin firmar hace ${edad} días — ${g.cliente_nombre || "Cliente"} (${d.id})`,
+          preheader: `${seriales.length || "Los"} equipo(s) apartados esperando la firma del cliente`,
+          bodyContent: `
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Falta la firma del anexo</h2>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              El aumento <b>${esc(d.id)}</b> de <b>${esc(g.cliente_nombre || "—")}</b> lleva
+              <b>${edad} días</b> aprobado y esperando la firma del cliente
+              ${g.aumento?.contrato_id ? `(contrato <b>${esc(g.aumento.contrato_id)}</b>)` : ""}.
+            </p>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              Mientras no entre la firma, ${seriales.length ? `los <b>${seriales.length}</b> equipos siguen apartados` : "el equipo sigue apartado"}
+              sin poder asignarse a otro cliente, y el tramo <b>no se factura</b> — arranca desde la entrega.
+            </p>
+            ${seriales.length ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              Equipos apartados: ${seriales.map(x => `<code>${esc(x)}</code>`).join(", ")}</p>` : ""}
+            <p style="margin:0;font:13px/1.5 Arial,sans-serif;color:#6b7280;">
+              Si el cliente ya no lo quiere, anula la gestión para soltar los equipos.
+            </p>`,
+          ctaUrl: G.urlGestion(g, d.id),
+          ctaLabel: "Abrir la gestión",
+          meta: { source: "recordatorioOperativo", seccion: "aumento_firma", gestion: d.id, dias: edad },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await d.ref.update({ firma_recordatorio_at: admin.firestore.FieldValue.serverTimestamp() });
+        avisados++;
+      }
+      logger.info("[recordatorioOperativo] aumentos esperando firma", { pendientes: snap.size, avisados });
+    } catch (e) {
+      logger.error("[recordatorioOperativo] sección aumentos falló", { message: e.message });
+    }
+
     return null;
   }
 );
