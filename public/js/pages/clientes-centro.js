@@ -375,7 +375,7 @@ window.Centro = {
   // Se lee BAJO DEMANDA (botón) para no sumar lecturas a cada apertura.
   HIST_LABELS: {
     nombre: 'Nombre', ruc: 'RUC', dv: 'DV',
-    representante: 'Representante legal', representante_cedula: 'Cédula del representante',
+    representante: 'Representante legal', representante_cedula: 'Documento del representante',
     representante_email: 'Correo del representante',
     telefono: 'Teléfono', email: 'Correo', email_acuses: 'Correo de acuses',
     direccion: 'Dirección', direccion_facturacion: 'Dirección de facturación',
@@ -6353,7 +6353,7 @@ window.Centro = {
     const rep = (c.representante || '').trim();
     const ficha = `../clientes/centro.html?id=${encodeURIComponent(c.id || '')}`;
     return rep
-      ? `<div>${this.esc(rep)}${c.representante_cedula ? ` — céd. ${this.esc(c.representante_cedula)}` : ''}</div>
+      ? `<div>${this.esc(rep)}${c.representante_cedula ? ` — ${this.esc(window.DocIdentidad ? DocIdentidad.frase(c.representante_cedula) : 'céd. ' + c.representante_cedula)}` : ''}</div>
          <div id="wcRepCtx" class="hint" style="margin:4px 0 8px;">Consultando la ficha…</div>
          <label class="cg-toggle">
            <input type="checkbox" id="wcRepValidado" onchange="Centro._wcRepGate()">

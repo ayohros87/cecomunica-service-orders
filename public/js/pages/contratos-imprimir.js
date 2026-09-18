@@ -69,6 +69,11 @@ if (data.estado === "activo" && data.fecha_aprobacion) {
   document.getElementById("firmaClienteLabel").textContent = `Firma del Cliente – ${data.cliente_nombre || ""}`;
   document.getElementById("nombreRepresentante").textContent = data.representante || "____________________";
   document.getElementById("rucRepresentante").textContent = data.representante_cedula || "________________";
+  // La etiqueta sigue al documento: cédula panameña o pasaporte.
+  const lblRep = document.getElementById("labelRepresentanteDoc");
+  if (lblRep && window.DocIdentidad && data.representante_cedula) {
+    lblRep.textContent = DocIdentidad.etiqueta(data.representante_cedula) === "pasaporte" ? "Pasaporte:" : "Cédula:";
+  }
   document.getElementById("observaciones").textContent = data.observaciones || "—";
   const repEl = document.getElementById("cliente_representante");
   if (repEl) repEl.textContent = data.representante || "";

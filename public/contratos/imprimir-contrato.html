@@ -158,7 +158,7 @@
         <div class="print-sig-space"></div>
         <div class="print-sig-label" id="firmaClienteLabel">Firma del cliente</div>
         <div class="print-sig-name">Representante: <span id="nombreRepresentante">________________</span></div>
-        <div class="print-sig-name">Cédula: <span id="rucRepresentante">________________</span></div>
+        <div class="print-sig-name"><span id="labelRepresentanteDoc">Cédula:</span> <span id="rucRepresentante">________________</span></div>
         <div class="print-sig-date fecha-cliente-manual">Fecha: ___ / ___ / ______</div>
       </div>
 
@@ -221,6 +221,7 @@
 
   </div>
 
-  <script src="../js/pages/contratos-imprimir.js?v=num1" defer></script>
+  <script defer src="../js/domain/docIdentidad.js?v=doc1"></script>
+  <script src="../js/pages/contratos-imprimir.js?v=doc1" defer></script>
 </body>
 </html>

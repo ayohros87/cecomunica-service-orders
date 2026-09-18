@@ -19,13 +19,17 @@ test("dv: 1 o 2 dígitos", () => {
   assert.equal(esValido("dv", "8a"), false);
 });
 
-test("cédula panameña: provincia, PE/E/N", () => {
-  assert.equal(esValido("cedula", "8-712-1043"), true);
-  assert.equal(esValido("cedula", "PE-12-345"), true);
-  assert.equal(esValido("cedula", "pe-12-345"), true);
-  assert.equal(esValido("cedula", "E-8-91234"), true);
-  assert.equal(esValido("cedula", "8712043"), false);
-  assert.equal(esValido("cedula", "8-712"), false);
+// El detalle del formato vive en functions/test/docIdentidad.test.js; aquí
+// solo que el kit delegue en esa regla (y no estorbe si no está cargada).
+test("documento: cédula panameña o pasaporte", () => {
+  global.DocIdentidad = require("../../public/js/domain/docIdentidad.js");
+  assert.equal(esValido("documento", "8-712-1043"), true);
+  assert.equal(esValido("documento", "PE-12-345"), true);
+  assert.equal(esValido("documento", "150685537"), true, "el pasaporte trancaba la ficha");
+  assert.equal(esValido("documento", "Pasaporte No. 150685537"), true);
+  assert.equal(esValido("documento", "8-712"), false);
+  delete global.DocIdentidad;
+  assert.equal(esValido("documento", "lo que sea"), true, "sin docIdentidad el campo no estorba");
 });
 
 test("teléfono: dígitos, espacios, guiones y prefijo +", () => {

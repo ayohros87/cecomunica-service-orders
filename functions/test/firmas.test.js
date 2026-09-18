@@ -11,6 +11,18 @@ test("normalización de cédula: formato panameño con guiones y espacios", () =
   assert.equal(normCedula(null), "");
 });
 
+// 2026-09-18: el representante extranjero firma con PASAPORTE. Si uno de los
+// dos lados escribe la palabra delante del número, sigue siendo el mismo
+// documento — antes no coincidía y el contrato quedaba esperando a mano.
+test("el documento se compara sin la palabra que lo nombra", () => {
+  assert.equal(normCedula("Pasaporte No. 150685537"), "150685537");
+  assert.equal(normCedula("PASAPORTE 150685537"), "150685537");
+  assert.equal(normCedula("Céd. 8-123-4567"), "81234567");
+  assert.equal(firmanteCoincide(
+    { nombre: "Hans Müller", cedula: "150685537" },
+    { nombre: "Hans Muller", cedula: "Pasaporte No. 150685537" }), true);
+});
+
 test("normalización de nombre: tildes, mayúsculas y espacios", () => {
   assert.equal(normNombre("  María  José  Pérez "), "MARIA JOSE PEREZ");
   assert.equal(normNombre("JOSÉ ÁNGEL"), "JOSE ANGEL");

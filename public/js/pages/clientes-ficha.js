@@ -359,7 +359,7 @@ window.FichaCliente = {
   // ── Historial (mismo formato que el modal del Centro) ──
   HIST_LABELS: {
     nombre: 'Nombre', ruc: 'RUC', dv: 'DV',
-    representante: 'Representante legal', representante_cedula: 'Cédula del representante',
+    representante: 'Representante legal', representante_cedula: 'Documento del representante',
     representante_email: 'Correo del representante',
     telefono: 'Teléfono', email: 'Correo', email_acuses: 'Correo de acuses',
     direccion: 'Dirección', direccion_facturacion: 'Dirección de facturación',

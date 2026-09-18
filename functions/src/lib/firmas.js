@@ -10,8 +10,17 @@
 // CECOMUNICA, nunca el cliente).
 const crypto = require("crypto");
 
+// El documento puede ser cédula panameña o PASAPORTE (2026-09-18: el
+// representante extranjero no residente no tiene cédula). Antes de comparar se
+// le quita la palabra que algunos escriben delante ("Pasaporte No. 150685537"):
+// sin eso, el mismo documento escrito de dos maneras no coincidía consigo mismo
+// y el contrato se quedaba esperando validación manual.
+const RE_PREFIJO_DOC = /^(?:C[EÉ]D(?:ULA)?|C\.?\s*I|PASAPORTE|PASAP?|PASSPORT)\.?\s*(?:N[O°º]?\.?|#|N[UÚ]M(?:ERO)?\.?|:)?\s*/;
+
 function normCedula(s) {
-  return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return String(s || "").toUpperCase().trim()
+    .replace(RE_PREFIJO_DOC, "")
+    .replace(/[^A-Z0-9]/g, "");
 }
 
 function normNombre(s) {

@@ -28,12 +28,20 @@
 
   // Reglas de FORMATO (no de negocio). permiteVacio: un vacío no es error —
   // lo obligatorio se marca con `required` en el input.
+  // Una regla es `re` (expresión) o `ok` (función), y puede traer `norm`:
+  // cómo se reescribe el valor al salir del campo.
   const VALIDA = {
     ruc:    { re: /^[0-9-]+$/ },
     dv:     { re: /^\d{1,2}$/ },
-    cedula: { re: /^(PE|E|N|\d{1,2})-\d{1,4}-\d{1,6}$/i },
     email:  { re: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ },
     tel:    { re: /^[+\d][\d\s-]{5,}$/ },
+    // Documento de identidad: cédula panameña O pasaporte. La regla vive en
+    // js/domain/docIdentidad.js, que es también quien decide con qué palabra
+    // se imprime en el contrato — una sola fuente para las dos cosas.
+    documento: {
+      ok:   (v) => (typeof DocIdentidad === "undefined" ? true : DocIdentidad.esValido(v)),
+      norm: (v) => (typeof DocIdentidad === "undefined" ? v : DocIdentidad.limpiar(v)),
+    },
   };
 
   // Pura (testeable): ¿el valor pasa la regla de formato?
@@ -41,7 +49,20 @@
     const v = String(valor == null ? "" : valor).trim();
     if (!v) return !requerido;
     const regla = VALIDA[tipo];
-    return regla ? regla.re.test(v) : true;
+    if (!regla) return true;
+    return regla.ok ? !!regla.ok(v) : regla.re.test(v);
+  }
+
+  // Reescribe el valor del campo a su forma guardable. Se llama SOLO al salir
+  // del campo: hacerlo mientras se escribe le come letras al usuario.
+  // Devuelve true si el valor cambió (hay que re-evaluar los cambios sucios).
+  function normalizarCampo(el) {
+    const regla = VALIDA[el.dataset.fkValida];
+    if (!regla || !regla.norm || el.type === "checkbox") return false;
+    const limpio = regla.norm(el.value);
+    if (limpio === el.value) return false;
+    el.value = limpio;
+    return true;
   }
 
   function _valorDe(el) {
@@ -99,7 +120,10 @@
     campos.forEach((el) => {
       el.addEventListener("input", () => marcar(el));
       el.addEventListener("change", () => marcar(el));
-      el.addEventListener("blur", () => validarCampo(el));
+      el.addEventListener("blur", () => {
+        if (normalizarCampo(el)) marcar(el);
+        validarCampo(el);
+      });
     });
 
     function setLimpio() {
@@ -124,7 +148,10 @@
 
     $btnGuardar.addEventListener("click", async () => {
       let primero = null;
-      campos.forEach((el) => { if (!validarCampo(el) && !primero) primero = el; });
+      campos.forEach((el) => {
+        if (normalizarCampo(el)) marcar(el);
+        if (!validarCampo(el) && !primero) primero = el;
+      });
       if (primero) {
         primero.focus();
         if (primero.scrollIntoView) primero.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -179,7 +206,7 @@
   function enlazarValidacion(root) {
     const campos = Array.prototype.slice.call(root.querySelectorAll("[data-fk-valida], [data-fk][required]"));
     campos.forEach((el) => {
-      el.addEventListener("blur", () => validarCampo(el));
+      el.addEventListener("blur", () => { normalizarCampo(el); validarCampo(el); });
       el.addEventListener("input", () => {
         const wrap = el.closest(".form-field");
         if (wrap && wrap.classList.contains("has-error")) validarCampo(el);
@@ -187,7 +214,10 @@
     });
     return function validarTodo() {
       let primero = null;
-      campos.forEach((el) => { if (!validarCampo(el) && !primero) primero = el; });
+      campos.forEach((el) => {
+        normalizarCampo(el);
+        if (!validarCampo(el) && !primero) primero = el;
+      });
       if (primero) {
         primero.focus();
         if (primero.scrollIntoView) primero.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -222,7 +252,7 @@
   }
 
   if (typeof window !== "undefined") {
-    window.FormKit = { VALIDA, esValido, validarCampo, crear, enlazarValidacion, guardia };
+    window.FormKit = { VALIDA, esValido, validarCampo, normalizarCampo, crear, enlazarValidacion, guardia };
   }
   // Para los tests de node (sin DOM): exporta solo lo puro.
   if (typeof module !== "undefined" && module.exports) {

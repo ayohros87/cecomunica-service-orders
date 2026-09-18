@@ -174,9 +174,10 @@
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="representante_cedula">Cédula del representante</label>
-            <input class="form-input" type="text" id="representante_cedula" data-fk="Cédula del representante" data-fk-valida="cedula" style="font-family:var(--font-mono);">
-            <span class="form-error-msg">Formato de cédula panameña, por ejemplo 8-712-1043 o PE-12-345.</span>
+            <label class="form-label" for="representante_cedula">Cédula o pasaporte del representante</label>
+            <input class="form-input" type="text" id="representante_cedula" data-fk="Documento del representante" data-fk-valida="documento" style="font-family:var(--font-mono);">
+            <span class="form-hint">Solo el número: el contrato dice "cédula" o "pasaporte" según lo que se escriba.</span>
+            <span class="form-error-msg">Cédula panameña (8-712-1043, PE-12-345) o número de pasaporte (150685537).</span>
           </div>
         </div>
       </div>
@@ -273,7 +274,8 @@
 
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js?v=f7"></script>
-  <script defer src="../js/ui/formKit.js?v=sh1"></script>
+  <script defer src="../js/domain/docIdentidad.js?v=doc1"></script>
+  <script defer src="../js/ui/formKit.js?v=sh2"></script>
   <script src="../js/pages/nuevo-cliente.js?v=nc5" defer></script>
   <script src="../js/pages/cliente-documentos.js" defer></script>
   </div> <!-- /cc-work -->

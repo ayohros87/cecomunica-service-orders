@@ -80,10 +80,15 @@
     const rucdv = (c.cliente_rucdv && String(c.cliente_rucdv).trim())
       || ((c.cliente_ruc || c.ruc || '') + (c.cliente_dv ? ` DV ${c.cliente_dv}` : '')).trim();
     const rep = c.representante || '____________________';
-    const repCed = c.representante_cedula || '________________';
+    // Cédula o pasaporte: la palabra la decide el documento, no el molde
+    // (js/domain/docIdentidad.js) — un pasaporte impreso como "cédula" es una
+    // declaración falsa en un contrato.
+    const repDoc = window.DocIdentidad
+      ? DocIdentidad.frase(c.representante_cedula)
+      : `cédula ${c.representante_cedula || '________________'}`;
     $('sPartes').innerHTML = `<b>C COMUNICA, S.A.</b> (RUC 32977-27-249966 DV 39), en adelante
       <b>LA EMPRESA</b>, y <b>${esc(c.cliente_nombre || '—')}</b>${rucdv ? ` (RUC ${esc(rucdv)})` : ''},
-      representada por <b>${esc(rep)}</b>, cédula ${esc(repCed)}, en adelante <b>EL CLIENTE</b>,
+      representada por <b>${esc(rep)}</b>, ${esc(repDoc)}, en adelante <b>EL CLIENTE</b>,
       convienen el presente contrato de servicio de comunicación conforme a las secciones y
       cláusulas siguientes, que se citan por su número.`;
 

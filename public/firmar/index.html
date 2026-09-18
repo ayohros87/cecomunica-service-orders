@@ -14,6 +14,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
   <script defer src="/js/firebase-init.js?v=ses2"></script>
+  <script defer src="/js/domain/docIdentidad.js?v=doc1"></script>
   <script defer src="/js/domain/contratoV2Texto.js?v=2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; }
@@ -310,7 +311,8 @@
         <h3>1. Partes</h3>
         <p><b>C COMUNICA, S.A.</b> (RUC 32977-27-249966 DV 39), en adelante <b>LA EMPRESA</b>, y
           <b>${this.esc(s.cliente_nombre || 'EL CLIENTE')}</b>${d.cliente_rucdv ? ` (RUC ${this.esc(d.cliente_rucdv)})` : ''},
-          representada por <b>${this.esc(s.representante?.nombre || '____________')}</b>${s.representante?.cedula ? `, cédula ${this.esc(s.representante.cedula)}` : ''},
+          representada por <b>${this.esc(s.representante?.nombre || '____________')}</b>${s.representante?.cedula
+            ? `, ${this.esc(window.DocIdentidad ? DocIdentidad.frase(s.representante.cedula) : 'cédula ' + s.representante.cedula)}` : ''},
           en adelante <b>EL CLIENTE</b>, convienen el presente contrato de servicio de comunicación
           conforme a las secciones y cláusulas siguientes, que se citan por su número.</p>
         <h3>2. Equipos y servicio contratado</h3>
@@ -422,7 +424,11 @@
     async enviar() {
       this.aviso('');
       const nombre = document.getElementById('fNombre').value.trim();
-      const cedula = document.getElementById('fCedula').value.trim();
+      // Se guarda el NÚMERO: quien escribe "Pasaporte No. X" declara lo mismo
+      // que quien escribe "X", y así el cotejo contra el representante
+      // registrado (firmanteCoincide) no falla por una palabra de más.
+      const cedulaCruda = document.getElementById('fCedula').value.trim();
+      const cedula = window.DocIdentidad ? DocIdentidad.limpiar(cedulaCruda) : cedulaCruda;
       const cargo  = document.getElementById('fCargo').value.trim();
       if (nombre.length < 3) { this.aviso('Escriba el nombre completo de quien firma.'); return; }
       if (!cedula) { this.aviso('Escriba la cédula o pasaporte de quien firma.'); return; }
