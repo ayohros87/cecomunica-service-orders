@@ -1627,7 +1627,8 @@ window.Centro = {
       // se lee, no se recalcula aquí con otra regla.
       const veredicto = s.firmante_coincide === true
         ? 'El sistema lo comparó con el representante legal registrado: <b>coincide</b>.'
-        : s.estado === 'aceptado'
+        // Tras aceptar, el trigger la lleva a 'activado': la marca que queda es validado_at.
+        : (s.estado === 'aceptado' || s.validado_at)
         ? `El firmante <b>no coincidía</b> con el representante registrado y administración lo aceptó el ${this.esc(this._histCuando(s.validado_at))}.`
         : s.estado === 'validacion'
         ? '<b>El firmante no coincide</b> con el representante registrado — está pendiente de validar (<b>Acciones › Aceptar al firmante</b>).'
