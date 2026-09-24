@@ -1182,13 +1182,22 @@ service cloud.firestore {
           && request.resource.data.firma.nombre.size() > 2
           && request.resource.data.firma.cedula is string
           && request.resource.data.firma.png is string
-          && request.resource.data.firma.png.size() < 900000)
+          && request.resource.data.firma.png.size() < 900000
+          // El documento de autorización solo puede apuntar a SU carpeta:
+          // la callable de lectura firma rutas, no se le cuelan ajenas.
+          && (!("autorizacion_path" in request.resource.data.firma)
+            || request.resource.data.firma.autorizacion_path.matches("firmas_identidad/" + sid + "/autorizacion-[0-9]+[.](pdf|jpg)")))
         // Ventas valida un firmante distinto al registrado: validacion → aceptado.
         || (isSignedIn() && userRole() in ["administrador","gerente"]
           && resource.data.estado == "validacion"
           && request.resource.data.estado == "aceptado"
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(["estado","validado_por_uid","validado_at","actualizar_ficha"]))
+               .hasOnly(["estado","validado_por_uid","validado_at","actualizar_ficha","validacion_motivo"])
+          // Sin documento que autorice al firmante, se acepta solo con un
+          // motivo escrito (2026-09-24): queda en el rastro de quién y por qué.
+          && (("firma" in resource.data && "autorizacion_path" in resource.data.firma)
+            || (request.resource.data.validacion_motivo is string
+              && request.resource.data.validacion_motivo.size() >= 10)))
         // Cancelar un enlace pendiente (se generó por error / venció el trato,
         // o hay que corregir el contrato o el anexo antes de que firmen).
         // Recepción también: el botón "Retirar enlace de firma" vive donde

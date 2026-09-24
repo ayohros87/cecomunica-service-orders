@@ -13,7 +13,9 @@ const { admin, db } = require("../lib/admin");
  * acceso gated por rol (quienes validan firmantes), URL que expira en minutos
  * y auditoría de cada vista.
  *
- * Input:  { sid, cual: 'cedula'|'selfie' }
+ * Input:  { sid, cual: 'cedula'|'selfie'|'autorizacion' }
+ *   'autorizacion' (2026-09-24): poder / Registro Público / acta que sube quien
+ *   firma sin ser el representante registrado. Puede ser PDF.
  * Output: { status:'ok', url, expiresAt } | { status:'missing' }
  */
 
@@ -52,8 +54,8 @@ module.exports = onCall(
 
     const sid  = (request.data?.sid || "").trim();
     const cual = (request.data?.cual || "").trim();
-    if (!sid || !["cedula", "selfie"].includes(cual)) {
-      throw new HttpsError("invalid-argument", "sid y cual ('cedula'|'selfie') requeridos.");
+    if (!sid || !["cedula", "selfie", "autorizacion"].includes(cual)) {
+      throw new HttpsError("invalid-argument", "sid y cual ('cedula'|'selfie'|'autorizacion') requeridos.");
     }
 
     const sSnap = await db.collection("firma_solicitudes").doc(sid).get();

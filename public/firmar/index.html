@@ -15,6 +15,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
   <script defer src="/js/firebase-init.js?v=ses2"></script>
   <script defer src="/js/domain/docIdentidad.js?v=doc2"></script>
+  <script defer src="/js/domain/firmante.js?v=1"></script>
   <script defer src="/js/domain/contratoV2Texto.js?v=2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; }
@@ -138,6 +139,22 @@
         <input type="text" id="fCargo" value="Representante Legal">
       </div>
 
+      <!-- Documento que autoriza al firmante (2026-09-24): aparece SOLO cuando
+           quien firma no es el representante registrado, y entonces es
+           obligatorio. Con él, C Comunica valida sin pedirle nada después. -->
+      <div class="card hidden" id="fAutCard">
+        <h2>Documento que lo autoriza a firmar</h2>
+        <p class="nota">Quien firma <b>no es el representante legal registrado</b> de la empresa. Suba el
+          documento que lo autoriza a firmar en su nombre: un <b>poder</b>, el <b>certificado del Registro
+          Público</b> donde conste como representante, o el <b>acta</b> de la junta directiva.
+          Si tiene varias páginas, súbalo en PDF.</p>
+        <label for="fAutTipo">Tipo de documento</label>
+        <select id="fAutTipo"></select>
+        <label class="foto-btn" id="fAutBtn">📎 Subir el documento (PDF o foto)
+          <input type="file" id="fAutArchivo" accept="application/pdf,image/*" class="hidden"></label>
+        <img id="fAutPrev" class="prev hidden" alt="">
+      </div>
+
       <div class="card">
         <h2>Identidad del firmante</h2>
         <p class="nota">Dos fotos, <b>por separado</b> — cada una con su toma:</p>
@@ -223,6 +240,7 @@
         this.ver('form');
         this.armarCanvas();
         this.armarFotos();
+        this.armarAutorizacion();
       } catch (e) { console.error(e); this.ver('noValido'); }
     },
 
@@ -401,6 +419,47 @@
       wire('fCedFoto', 'fCedBtn', 'fCedPrev', 'cedula', 'Cédula capturada');
       wire('fSelfieFoto', 'fSelfieBtn', 'fSelfiePrev', 'selfie', 'Selfie capturado');
     },
+    // ── Documento de autorización: obligatorio si el firmante NO coincide ──
+    // Misma regla que el trigger (js/domain/firmante.js, espejo de
+    // lib/firmas.firmanteCoincide): si aquí coincide, allá se activa solo.
+    _autorizacion: null,   // { blob, contentType, ext, nombre }
+    requiereAutorizacion() {
+      const firma = { nombre: document.getElementById('fNombre').value,
+        cedula: window.DocIdentidad ? DocIdentidad.limpiar(document.getElementById('fCedula').value) : document.getElementById('fCedula').value };
+      return !window.Firmante || !Firmante.coincide(this.doc?.representante, firma);
+    },
+    armarAutorizacion() {
+      const sel = document.getElementById('fAutTipo');
+      (window.Firmante?.TIPOS_AUTORIZACION || [{ value: 'otro', label: 'Documento de autorización' }])
+        .forEach((t) => { const o = document.createElement('option'); o.value = t.value; o.textContent = t.label; sel.appendChild(o); });
+      const refrescar = () => document.getElementById('fAutCard').classList.toggle('hidden', !this.requiereAutorizacion());
+      ['fNombre', 'fCedula'].forEach((id) => document.getElementById(id).addEventListener('input', refrescar));
+      refrescar();
+      document.getElementById('fAutArchivo').addEventListener('change', async (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        const prev = document.getElementById('fAutPrev');
+        const btn = document.getElementById('fAutBtn');
+        try {
+          if (f.type === 'application/pdf') {
+            if (f.size > 10 * 1024 * 1024) { this.aviso('El PDF pesa más de 10 MB. Envíe uno más liviano o una foto.'); return; }
+            this._autorizacion = { blob: f, contentType: 'application/pdf', ext: 'pdf', nombre: f.name || 'autorizacion.pdf' };
+            prev.classList.add('hidden');
+          } else if ((f.type || '').startsWith('image/')) {
+            const blob = await this._comprimir(f, 2200);
+            this._autorizacion = { blob, contentType: 'image/jpeg', ext: 'jpg', nombre: f.name || 'autorizacion.jpg' };
+            prev.src = URL.createObjectURL(blob);
+            prev.classList.remove('hidden');
+          } else { this.aviso('El documento debe ser PDF o foto.'); return; }
+          btn.classList.add('ok');
+          btn.firstChild.textContent = `✓ ${this._autorizacion.nombre} — tocar para cambiarlo `;
+        } catch (err) {
+          console.error(err);
+          this.aviso('No se pudo procesar el documento. Intente de nuevo.');
+        }
+      });
+    },
+
     // Redimensiona a máx. 1600px y comprime a JPEG: la cédula queda legible y
     // la subida pesa ~200-500 KB en vez de varios MB de la cámara.
     _comprimir(file, maxDim = 1600) {
@@ -443,6 +502,11 @@
       if (!cedula) { this.aviso('Escriba el número del documento de quien firma.'); return; }
       if (!this._fotos.cedula) { this.aviso('Tome la foto de su cédula (paso 1 de Identidad).'); return; }
       if (!this._fotos.selfie) { this.aviso('Tome su selfie (paso 2 de Identidad).'); return; }
+      const requiereAut = this.requiereAutorizacion();
+      if (requiereAut && !this._autorizacion) {
+        this.aviso('Quien firma no es el representante legal registrado: suba el documento que lo autoriza (poder, Registro Público o acta).');
+        return;
+      }
       if (!document.getElementById('fConsentBio').checked) { this.aviso('Debe autorizar el uso de sus fotos para verificar su identidad.'); return; }
       if (this.trazos < 8) { this.aviso('Dibuje su firma en el recuadro.'); return; }
       if (!this._docVisto) { this.aviso('Abra y lea el documento completo ("Leer el contrato completo") antes de firmar.'); return; }
@@ -456,6 +520,13 @@
         const selPath = `firmas_identidad/${this.sid}/selfie.jpg`;
         await st.ref(cedPath).put(this._fotos.cedula, { contentType: 'image/jpeg' });
         await st.ref(selPath).put(this._fotos.selfie, { contentType: 'image/jpeg' });
+        // Nombre con marca de tiempo: Storage no deja sobrescribir (update:false)
+        // y un reintento tras una subida a medias no debe trancar la firma.
+        let autPath = null;
+        if (requiereAut && this._autorizacion) {
+          autPath = `firmas_identidad/${this.sid}/autorizacion-${Date.now()}.${this._autorizacion.ext}`;
+          await st.ref(autPath).put(this._autorizacion.blob, { contentType: this._autorizacion.contentType });
+        }
 
         btn.textContent = 'Registrando la firma…';
         const png = document.getElementById('firmaCanvas').toDataURL('image/png');
@@ -467,6 +538,12 @@
             png,
             cedula_path: cedPath,
             selfie_path: selPath,
+            ...(autPath ? {
+              autorizacion_path: autPath,
+              autorizacion_tipo: document.getElementById('fAutTipo').value || 'otro',
+              autorizacion_content_type: this._autorizacion.contentType,
+              autorizacion_nombre: String(this._autorizacion.nombre).slice(0, 120),
+            } : {}),
             consent_biometrico: true,
             acepta: true,
             user_agent: navigator.userAgent || '',

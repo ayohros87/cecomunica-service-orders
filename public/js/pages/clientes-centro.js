@@ -1623,6 +1623,11 @@ window.Centro = {
       // El trazo lo escribe el firmante desde /firmar/ (página pública) y va
       // crudo al src: solo se pinta si es de verdad un PNG en base64.
       const pngOk = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(String(f.png || ''));
+      // Poder / Registro Público / acta que sube quien firma sin ser el
+      // representante (obligatorio en /firmar/ desde el 2026-09-24).
+      const hayAut = !!f.autorizacion_path;
+      const esPdfAut = f.autorizacion_content_type === 'application/pdf';
+      const labelAut = (t) => window.Firmante?.labelAutorizacion ? Firmante.labelAutorizacion(t) : 'Documento de autorización';
       // El veredicto lo estampó onFirmaContrato (lib/firmas.firmanteCoincide):
       // se lee, no se recalcula aquí con otra regla.
       const veredicto = s.firmante_coincide === true
@@ -1662,17 +1667,34 @@ window.Centro = {
         <p style="font-size:11px; color:var(--fg-4); margin:0 0 10px;">Evidencia de identidad — dato sensible (Ley 81):
           cada vista queda auditada; los enlaces expiran en 5 minutos.</p>`
         : '<p style="font-size:12px; color:var(--fg-4); margin:0 0 10px;">Sin evidencia de identidad adjunta (firma anterior a la actualización).</p>'}
+        ${hayAut || s.firmante_coincide !== true ? `
+        <div class="form-label" style="margin:4px 0 4px;">Documento que lo autoriza a firmar</div>
+        ${!hayAut
+          ? `<div class="cg-senal warn" style="margin:0 0 10px;"><span>El firmante <b>no subió</b> documento de autorización
+              (firma anterior al 2026-09-24). Revisa el expediente del cliente${soloLectura ? '' : '; si no hay respaldo, el motivo es obligatorio'}.</span></div>`
+          : !veIdentidad
+          ? `<p style="font-size:12px; color:var(--fg-4); margin:0 0 10px;">Subió: <b>${this.esc(labelAut(f.autorizacion_tipo))}</b> — lo ven administración y gerencia.</p>`
+          : `<p style="font-size:13px; margin:0 0 6px;">Subió: <b>${this.esc(labelAut(f.autorizacion_tipo))}</b>
+              <button type="button" class="btn btn-ghost cg-act" onclick="Centro._abrirAutorizacion('${this.esc(sid)}', this)">Abrir el documento</button></p>
+             ${esPdfAut ? '' : '<img id="wvAut" style="max-width:100%; max-height:260px; border:1px solid var(--border-subtle); border-radius:8px; display:block; margin:0 auto 10px;" alt="cargando…">'}`}` : ''}
+        ${this._puedeVerDocs() && s.firmante_coincide !== true ? `
+        <div class="form-label" style="margin:4px 0 4px;">Expediente del cliente</div>
+        <div id="wvDocs" style="margin-bottom:10px;"><p style="font-size:12px; color:var(--fg-4); margin:0;">Cargando documentos…</p></div>` : ''}
+        ${s.validacion_motivo ? `<p style="font-size:12.5px; margin:0 0 10px;"><b>Motivo de la aceptación:</b> ${this.esc(s.validacion_motivo)}</p>` : ''}
         ${soloLectura ? `
         <div style="display:flex; gap:8px; justify-content:flex-end;">
           <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cerrar</button>
         </div>` : `
+        <label class="form-label" for="wfMotivo" style="margin:4px 0 4px;">Motivo de la aceptación${hayAut ? ' (opcional)' : ' — <b>obligatorio</b>: no hay documento que lo autorice'}</label>
+        <textarea id="wfMotivo" class="form-input" rows="2" style="width:100%; margin-bottom:10px;"
+          placeholder="${hayAut ? 'Ej.: el poder está vigente y lo faculta para firmar contratos' : 'Ej.: consta como presidente en el registro público del expediente'}"></textarea>
         <label class="cg-toggle" style="margin-bottom:12px;">
           <input type="checkbox" id="wfActualizar" checked>
           Actualizar la ficha del cliente con este representante (el directorio se corrige solo)
         </label>
         <div style="display:flex; gap:8px; justify-content:flex-end;">
           <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
-          <button class="btn btn-primary" onclick="Centro._aceptarFirmanteConfirmar('${this.esc(sid)}')">Aceptar firmante y activar</button>
+          <button class="btn btn-primary" onclick="Centro._aceptarFirmanteConfirmar('${this.esc(sid)}', ${hayAut})">Aceptar firmante y activar</button>
         </div>`}`);
       // Evidencia de identidad: URLs firmadas de 5 min vía callable (los
       // bytes viven con read:false — dato sensible, cada vista se audita).
@@ -1689,7 +1711,52 @@ window.Centro = {
           });
         });
       }
+      if (hayAut && !esPdfAut && veIdentidad && firebase.functions) {
+        firebase.functions().httpsCallable('getFirmaIdentidadUrl')({ sid, cual: 'autorizacion' }).then(r => {
+          const img = document.getElementById('wvAut');
+          if (img) { if (r.data?.url) img.src = r.data.url; else img.alt = 'no disponible'; }
+        }).catch(() => { const img = document.getElementById('wvAut'); if (img) img.alt = 'no disponible'; });
+      }
+      if (document.getElementById('wvDocs')) this._pintarDocsValidacion(s.cliente_id || this.cliente?.id);
     } catch (e) { console.error(e); Toast.show('No se pudo cargar la solicitud de firma', 'bad'); }
+  },
+  // El expediente legal del cliente dentro de la ventana de validar: quien
+  // acepta a un firmante ve de una vez si hay registro público o poder.
+  async _pintarDocsValidacion(clienteId) {
+    const cont = document.getElementById('wvDocs');
+    if (!cont || !clienteId || !window.ClienteDocumentosService) { if (cont) cont.innerHTML = ''; return; }
+    try {
+      const docs = await ClienteDocumentosService.list(clienteId);
+      if (!document.getElementById('wvDocs')) return;
+      const urlSubir = `../contratos/nuevo-cliente.html?id=${encodeURIComponent(clienteId)}&from=centro#docsSection`;
+      cont.innerHTML = docs.length
+        ? `<table class="cg-tabla"><tbody>${docs.map(d => `<tr>
+            <td>${this.esc(ClienteDocumentosService.labelFor(d.tipo))}</td>
+            <td style="color:var(--fg-3); font-size:12px;">${this.esc(d.nombre_archivo || '')}</td>
+            <td style="text-align:right;"><button type="button" class="btn btn-ghost cg-act" onclick="Centro.verDocumento('${this.esc(d.id)}', this)">Ver</button></td>
+          </tr>`).join('')}</tbody></table>`
+        : `<p style="font-size:12.5px; color:var(--fg-3); margin:0;">El cliente no tiene documentos en el expediente.
+            <a href="${urlSubir}" target="_blank" rel="noopener">Cargar uno ›</a></p>`;
+    } catch (e) {
+      console.warn('[centro] expediente no disponible', e?.message || e);
+      cont.innerHTML = '<p style="font-size:12px; color:var(--fg-4); margin:0;">No se pudo cargar el expediente.</p>';
+    }
+  },
+  // Abre el documento de autorización (PDF o foto) en pestaña nueva. La
+  // pestaña se abre con el CLIC y recibe la URL firmada después: abrirla ya
+  // firmada la trataría como popup (mismo patrón que verDocumento).
+  async _abrirAutorizacion(sid, btn) {
+    const tab = window.open('about:blank', '_blank');
+    if (tab) { try { tab.opener = null; } catch (_) {} }
+    if (btn) btn.disabled = true;
+    try {
+      const r = await firebase.functions().httpsCallable('getFirmaIdentidadUrl')({ sid, cual: 'autorizacion' });
+      if (!r.data?.url) throw new Error('El documento no está disponible.');
+      if (tab) tab.location.href = r.data.url; else window.open(r.data.url, '_blank', 'noopener');
+    } catch (e) {
+      if (tab) tab.close();
+      Toast.show(e?.message || 'No se pudo abrir el documento.', 'bad');
+    } finally { if (btn) btn.disabled = false; }
   },
 
   // Enlace de firma digital para el ANEXO de aumento (pendiente_firma): la
@@ -1838,13 +1905,22 @@ window.Centro = {
     } catch (e) { console.error(e); Toast.show('No se pudo enviar el correo', 'bad'); }
   },
 
-  async _aceptarFirmanteConfirmar(sid) {
+  async _aceptarFirmanteConfirmar(sid, hayAut = false) {
+    // Sin documento que autorice al firmante, solo con motivo escrito (el
+    // mismo candado vive en rules: validacion_motivo >= 10 caracteres).
+    const motivo = (document.getElementById('wfMotivo')?.value || '').trim();
+    if (!hayAut && motivo.length < 10) {
+      Toast.show('Escribe por qué aceptas al firmante sin documento que lo autorice', 'warn');
+      document.getElementById('wfMotivo')?.focus();
+      return;
+    }
     try {
       await firebase.firestore().collection('firma_solicitudes').doc(sid).update({
         estado: 'aceptado',
         validado_por_uid: this.uid,
         validado_at: firebase.firestore.Timestamp.now(),
         actualizar_ficha: document.getElementById('wfActualizar')?.checked === true,
+        ...(motivo ? { validacion_motivo: motivo.slice(0, 500) } : {}),
       });
       this._cerrarModal();
       Toast.show('Firmante aceptado — el contrato se activa en segundos', 'ok');
@@ -3898,7 +3974,9 @@ window.Centro = {
   // la callable getClienteDocUrl (functions/src/callable/getClienteDocUrl.js):
   // admin + recepción. A los demás ni se les ofrece — la lista de metadata sí
   // la dejan leer las rules, pero los bytes los negaría la callable.
-  _puedeVerDocs() { return [ROLES.ADMIN, 'admin', ROLES.RECEPCION].includes(this.rol); },
+  // Espejo de ALLOWED_ROLES de getClienteDocUrl. Gerencia entra el 2026-09-24:
+  // valida firmantes y necesita el registro público / poder del expediente.
+  _puedeVerDocs() { return [ROLES.ADMIN, 'admin', ROLES.RECEPCION, ROLES.GERENTE].includes(this.rol); },
 
   // ── Constancia de equipos (auditoría 2026-09-17) ─────────────────────
   // "¿Qué equipos tengo con ustedes y desde cuándo?" se contestaba a mano

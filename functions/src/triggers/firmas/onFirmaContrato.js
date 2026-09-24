@@ -27,6 +27,46 @@ const { firmanteCoincide, hashFirma, etiquetaDocumento } = require("../../lib/fi
 const G = require("../../lib/gestiones");
 const { APP_BASE_URL } = require("../../lib/inventario");
 
+// Documento que autoriza a un firmante distinto al representante (poder,
+// Registro Público, acta — obligatorio en /firmar/ desde el 2026-09-24).
+// Espejo de las etiquetas de public/js/domain/firmante.js.
+const ETIQUETA_AUTORIZACION = {
+  poder: "Poder", registro_publico: "Certificado del Registro Público",
+  acta: "Acta de junta directiva", otro: "Otro documento",
+};
+// Tipo con el que entra al expediente del cliente (ClienteDocumentosService.TIPOS).
+const TIPO_EXPEDIENTE = { poder: "poder", registro_publico: "registro_publico" };
+
+// Al aceptar al firmante, su documento de autorización se COPIA al expediente
+// legal del cliente: la próxima vez que firme, ya consta. Best-effort — la
+// copia nunca frena la activación. Idempotente por id derivado del sid.
+async function copiarAutorizacionAlExpediente(sid, s) {
+  const f = s.firma || {};
+  if (!f.autorizacion_path || !s.cliente_id) return;
+  if (!String(f.autorizacion_path).startsWith(`firmas_identidad/${sid}/`)) return;
+  try {
+    const docId = `firma-${sid}`;
+    const docRef = db.collection("clientes").doc(s.cliente_id).collection("documentos").doc(docId);
+    if ((await docRef.get()).exists) return;
+    const ext = f.autorizacion_content_type === "application/pdf" ? "pdf" : "jpg";
+    const destino = `clientes_documentos/${s.cliente_id}/${docId}.${ext}`;
+    await admin.storage().bucket().file(f.autorizacion_path).copy(destino);
+    await docRef.set({
+      tipo: TIPO_EXPEDIENTE[f.autorizacion_tipo] || "otro",
+      nombre_archivo: `${ETIQUETA_AUTORIZACION[f.autorizacion_tipo] || "Autorización"} — ${f.nombre || "firmante"}.${ext}`,
+      storage_path: destino,
+      content_type: f.autorizacion_content_type || null,
+      size: null,
+      subido_por: s.validado_por_uid || null,
+      subido_en: admin.firestore.FieldValue.serverTimestamp(),
+      deleted: false,
+      origen: { firma_solicitud: sid, firmante: f.nombre || "", tipo_declarado: f.autorizacion_tipo || "otro" },
+    });
+  } catch (e) {
+    logger.warn("[onFirmaContrato] autorización no copiada al expediente", { sid, message: e.message });
+  }
+}
+
 async function activarContrato(sid, s, extraFirmado = {}) {
   const cRef = db.collection("contratos").doc(s.contrato_doc_id);
   const cSnap = await cRef.get();
@@ -194,6 +234,12 @@ module.exports = onDocumentUpdated(
           ["Documento", G.escapeHtml(after.representante?.cedula || "—"), G.escapeHtml(f.cedula || "—")],
           ["Cargo", "representante legal", G.escapeHtml(f.cargo || "—")],
         ]);
+        const autHtml = f.autorizacion_path
+          ? `<p style="margin:10px 0 0;font:14px/1.5 Arial,sans-serif;">Adjuntó el documento que lo autoriza:
+               <b>${G.escapeHtml(ETIQUETA_AUTORIZACION[f.autorizacion_tipo] || "documento de autorización")}</b>
+               — se revisa en la ventana de validar, junto con su cédula y el expediente del cliente.</p>`
+          : `<p style="margin:10px 0 0;font:14px/1.5 Arial,sans-serif;color:#92400e;"><b>No adjuntó documento
+               de autorización.</b> Para aceptarlo hay que escribir el motivo.</p>`;
 
         // ── Anexo de aumento ──
         if (after.tipo === "anexo_aumento") {
@@ -231,6 +277,7 @@ module.exports = onDocumentUpdated(
                  fue firmado, pero el firmante <b>no coincide</b> con el representante registrado. Se aplica cuando
                  ventas acepte al firmante (botón en el expediente de la gestión).</p>
                ${tabla}
+               ${autHtml}
                <p style="margin:12px 0 4px;font:14px Arial,sans-serif;"><b>Qué contiene el anexo:</b></p>
                ${resumenAnexoHtml(after)}`,
               urlFicha, "Revisar y aceptar firmante", { firma_solicitud: sid, resultado: "validacion" });
@@ -270,6 +317,7 @@ module.exports = onDocumentUpdated(
                La firma quedó registrada con su rastro completo; el contrato se activa cuando ventas acepte al firmante
                (botón en la ficha del cliente, vista del contrato).</p>
              ${tabla}
+             ${autHtml}
              <p style="margin:12px 0 4px;font:14px Arial,sans-serif;"><b>Qué contiene el contrato:</b></p>
              ${resumenAnexoHtml(after)}`,
             urlFicha, "Revisar y aceptar firmante", { firma_solicitud: sid, resultado: "validacion" });
@@ -284,13 +332,18 @@ module.exports = onDocumentUpdated(
     // ── Ventas aceptó al firmante ──
     if (before.estado === "validacion" && after.estado === "aceptado") {
       try {
+        // Con qué se sostuvo la aceptación queda en el rastro del documento.
+        const extra = {
+          validado_por_uid: after.validado_por_uid || null,
+          ...(after.validacion_motivo ? { validacion_motivo: String(after.validacion_motivo).slice(0, 500) } : {}),
+          ...(after.firma?.autorizacion_path ? { autorizacion_tipo: after.firma.autorizacion_tipo || "otro" } : {}),
+        };
         const r = after.tipo === "anexo_aumento"
-          ? await aplicarAnexo(sid, { ...after, firmante_coincide: false },
-              { validado_por_uid: after.validado_por_uid || null })
-          : await activarContrato(sid, { ...after, firmante_coincide: false },
-              { validado_por_uid: after.validado_por_uid || null });
+          ? await aplicarAnexo(sid, { ...after, firmante_coincide: false }, extra)
+          : await activarContrato(sid, { ...after, firmante_coincide: false }, extra);
         await ref.update({ estado: "activado", hash: r?.hash || null,
           procesado_at: admin.firestore.FieldValue.serverTimestamp() });
+        await copiarAutorizacionAlExpediente(sid, after);
         if (after.actualizar_ficha === true && after.cliente_id && after.firma?.nombre) {
           // El directorio se corrige solo: el firmante aceptado pasa a ser el
           // representante registrado del cliente.

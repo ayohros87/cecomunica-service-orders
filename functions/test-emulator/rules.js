@@ -533,6 +533,37 @@ async function main() {
   await assertFails(as("vendedor").doc("firma_solicitudes/fsD").update({ ...cancelar, resumen: { total_mensual: 1 } }));
   ok("firma: al retirar no se cuela ningún otro campo");
 
+  // ── Firmante distinto al representante (2026-09-24) ──
+  // El documento que lo autoriza solo apunta a SU carpeta, y sin él la
+  // aceptación exige motivo escrito.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const base = { estado: "pendiente", contrato_doc_id: "c1", cliente_id: "x" };
+    for (const id of ["fsAut1", "fsAut2"]) await db.doc(`firma_solicitudes/${id}`).set(base);
+    const firma = { nombre: "Otra Persona", cedula: "8-1-1", png: "data:image/png;base64,AA==", acepta: true };
+    for (const id of ["fsVal1", "fsVal2", "fsVal3"]) {
+      await db.doc(`firma_solicitudes/${id}`).set({ ...base, estado: "validacion", firma });
+    }
+    await db.doc("firma_solicitudes/fsValAut").set({ ...base, estado: "validacion",
+      firma: { ...firma, autorizacion_path: "firmas_identidad/fsValAut/autorizacion-1.pdf" } });
+  });
+  const anon = testEnv.unauthenticatedContext().firestore();
+  const firmaCon = (path) => ({ estado: "firmado", firma: { nombre: "Otra Persona", cedula: "8-1-1",
+    png: "data:image/png;base64,AA==", acepta: true, autorizacion_path: path, autorizacion_tipo: "poder" } });
+  await assertSucceeds(anon.doc("firma_solicitudes/fsAut1").update(firmaCon("firmas_identidad/fsAut1/autorizacion-1727200000000.pdf")));
+  ok("firma: el firmante adjunta su autorización en la carpeta de SU solicitud");
+  await assertFails(anon.doc("firma_solicitudes/fsAut2").update(firmaCon("firmas_identidad/OTRA/autorizacion-1.pdf")));
+  ok("firma: la autorización no puede apuntar a la carpeta de otra solicitud");
+  const aceptar = { estado: "aceptado", validado_por_uid: "gerente", validado_at: new Date(), actualizar_ficha: false };
+  await assertFails(as("gerente").doc("firma_solicitudes/fsVal1").update(aceptar));
+  ok("firma: sin autorización, aceptar SIN motivo se rechaza");
+  await assertFails(as("gerente").doc("firma_solicitudes/fsVal2").update({ ...aceptar, validacion_motivo: "ok" }));
+  ok("firma: sin autorización, un motivo de trámite (<10) no basta");
+  await assertSucceeds(as("gerente").doc("firma_solicitudes/fsVal3").update({ ...aceptar, validacion_motivo: "Consta como presidente en el registro público" }));
+  ok("firma: sin autorización, con motivo escrito sí se acepta");
+  await assertSucceeds(as("administrador").doc("firma_solicitudes/fsValAut").update(aceptar));
+  ok("firma: con autorización adjunta, el motivo es opcional");
+
   // ── QC: los cuatro huecos de la auditoría del 2026-08-04 ──────────────────
   const COMPLETADO = "COMPLETADO (EN OFICINA)";
   const seedOrden = (id, data) => testEnv.withSecurityRulesDisabled(async (ctx) => {

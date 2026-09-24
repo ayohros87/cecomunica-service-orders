@@ -32,7 +32,10 @@ const SIGNED_URL_TTL_MS = 5 * 60 * 1000; // 5 minutes
 // recepción. Vendedores NO tienen acceso al directorio de clientes, así que
 // tampoco a sus documentos legales (el dato más sensible). Recepción es un
 // acceso considerado temporal — a revisar cuando exista el módulo restrictivo.
-const ALLOWED_ROLES = new Set(["administrador", "recepcion"]);
+// Gerencia (2026-09-24): valida firmantes distintos al representante y
+// necesita el registro público / poder del expediente para hacerlo.
+// Espejo: Centro._puedeVerDocs (clientes-centro.js).
+const ALLOWED_ROLES = new Set(["administrador", "recepcion", "gerente"]);
 
 async function writeAudit({ actorUid, clienteId, docId, status }) {
   try {

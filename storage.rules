@@ -173,8 +173,14 @@ service firebase.storage {
     // admin SDK.
     match /firmas_identidad/{sid}/{file} {
       allow read:   if false;
-      allow create: if request.resource.size < 6 * 1024 * 1024
-                    && request.resource.contentType.matches('image/.*');
+      // Fotos de identidad (cédula, selfie): imagen <6MB. El documento que
+      // autoriza a un firmante distinto al representante (poder, Registro
+      // Público, acta — 2026-09-24) puede venir en PDF y pesar hasta 10MB.
+      allow create: if (request.resource.size < 6 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*'))
+                    || (file.matches('autorizacion-[0-9]+[.](pdf|jpg)')
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('(image/.*|application/pdf)'));
       allow update, delete: if false;
     }
 
