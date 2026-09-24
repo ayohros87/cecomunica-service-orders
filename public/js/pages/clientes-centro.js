@@ -1594,27 +1594,64 @@ window.Centro = {
     if (!g?.firma_solicitud_id) { Toast.show('La gestión no tiene solicitud de firma vinculada', 'warn'); return; }
     this._abrirValidacionFirma(g.firma_solicitud_id, gid);
   },
-  async _abrirValidacionFirma(sid, etiqueta) {
+  // "Ver la firma" (2026-09-24, pedido de Alberto): la misma ventana en solo
+  // lectura. Un anexo digital cuyo firmante coincidía se aplicaba solo y el
+  // trazo quedaba guardado en la solicitud sin ninguna pantalla que lo mostrara.
+  verFirmaGestion(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    const sid = g?.anexo_firma_digital?.solicitud_id || g?.firma_solicitud_id;
+    if (!sid) { Toast.show('La gestión no tiene firma digital registrada', 'warn'); return; }
+    this._abrirValidacionFirma(sid, gid, { soloLectura: true });
+  },
+  verFirmaContrato(id) {
+    const c = this.contratos.find(x => x.id === id);
+    if (!c?.firma_solicitud_id) { Toast.show('El contrato no tiene solicitud de firma vinculada', 'warn'); return; }
+    this._abrirValidacionFirma(c.firma_solicitud_id, c.contrato_id || c.id, { soloLectura: true });
+  },
+  async _abrirValidacionFirma(sid, etiqueta, { soloLectura = false } = {}) {
     this._cerrarModal();
     try {
       const snap = await firebase.firestore().collection('firma_solicitudes').doc(sid).get();
       const s = snap.exists ? snap.data() : null;
-      if (!s || s.estado !== 'validacion') { Toast.show('La solicitud no está pendiente de validación', 'warn'); return; }
+      if (soloLectura) {
+        if (!s?.firma) { Toast.show('La solicitud todavía no tiene firma', 'warn'); return; }
+      } else if (!s || s.estado !== 'validacion') { Toast.show('La solicitud no está pendiente de validación', 'warn'); return; }
       const f = s.firma || {};
+      // La evidencia de identidad la sirve un callable solo admin/gerente
+      // (getFirmaIdentidadUrl): a los demás ni se les pide.
+      const veIdentidad = [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol);
+      // El trazo lo escribe el firmante desde /firmar/ (página pública) y va
+      // crudo al src: solo se pinta si es de verdad un PNG en base64.
+      const pngOk = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(String(f.png || ''));
+      // El veredicto lo estampó onFirmaContrato (lib/firmas.firmanteCoincide):
+      // se lee, no se recalcula aquí con otra regla.
+      const veredicto = s.firmante_coincide === true
+        ? 'El sistema lo comparó con el representante legal registrado: <b>coincide</b>.'
+        : s.estado === 'aceptado'
+        ? `El firmante <b>no coincidía</b> con el representante registrado y administración lo aceptó el ${this.esc(this._histCuando(s.validado_at))}.`
+        : s.estado === 'validacion'
+        ? '<b>El firmante no coincide</b> con el representante registrado — está pendiente de validar (<b>Acciones › Aceptar al firmante</b>).'
+        : 'Compara el nombre y la cédula con el representante legal registrado.';
       this._abrirModal(`
-        <h3 style="margin:0 0 6px;">Validar firmante — <span class="cg-mono">${this.esc(etiqueta)}</span></h3>
-        <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:66ch;">
+        <h3 style="margin:0 0 6px;">${soloLectura ? 'Firma del cliente' : 'Validar firmante'} — <span class="cg-mono">${this.esc(etiqueta)}</span></h3>
+        ${soloLectura
+          ? `<p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:66ch;">
+              Firmado el ${this.esc(this._histCuando(f.firmado_at))}. ${veredicto}</p>`
+          : `<p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:66ch;">
           La firma quedó registrada con su rastro completo, pero el firmante no coincide con el
           representante legal registrado. Al aceptar, el documento <b>se aplica</b> (contrato → activo;
-          anexo → las líneas entran y bodega asigna).</p>
+          anexo → las líneas entran y bodega asigna).</p>`}
         <table class="cg-tabla" style="margin-bottom:10px;"><thead><tr><th></th><th>Registrado</th><th>Firmó</th></tr></thead><tbody>
           <tr><td>Nombre</td><td>${this.esc(s.representante?.nombre || '—')}</td><td><b>${this.esc(f.nombre || '—')}</b></td></tr>
-          <tr><td>Cédula</td><td class="cg-mono">${this.esc(s.representante?.cedula || '—')}</td><td class="cg-mono"><b>${this.esc(f.cedula || '—')}</b></td></tr>
+          <tr><td>${f.doc_tipo === 'pasaporte' ? 'Cédula / pasaporte' : 'Cédula'}</td><td class="cg-mono">${this.esc(s.representante?.cedula || '—')}</td><td class="cg-mono"><b>${this.esc(f.cedula || '—')}</b></td></tr>
           <tr><td>Cargo</td><td>representante legal</td><td>${this.esc(f.cargo || '—')}</td></tr>
         </tbody></table>
-        ${f.png ? `<div style="border:1px solid var(--border-subtle); border-radius:10px; padding:6px; margin-bottom:10px; background:#fff;">
-          <img src="${f.png}" alt="firma" style="max-height:110px; display:block; margin:0 auto;"></div>` : ''}
-        ${f.cedula_path ? `
+        ${pngOk ? `<div style="border:1px solid var(--border-subtle); border-radius:10px; padding:6px; margin-bottom:10px; background:#fff;">
+          <img src="${f.png}" alt="firma" style="max-height:110px; display:block; margin:0 auto;"></div>`
+          : '<p style="font-size:12px; color:var(--fg-4); margin:0 0 10px;">La solicitud no trae el trazo de la firma.</p>'}
+        ${f.cedula_path && !veIdentidad
+          ? '<p style="font-size:12px; color:var(--fg-4); margin:0 0 10px;">La foto de la cédula y la selfie del firmante las ven administración y gerencia.</p>'
+          : f.cedula_path ? `
         <div style="display:flex; gap:10px; margin-bottom:10px;">
           <div style="flex:1; text-align:center;"><div class="form-label" style="margin-bottom:4px;">Cédula del firmante</div>
             <img id="wvCed" style="max-width:100%; max-height:170px; border:1px solid var(--border-subtle); border-radius:8px;" alt="cargando…"></div>
@@ -1624,6 +1661,10 @@ window.Centro = {
         <p style="font-size:11px; color:var(--fg-4); margin:0 0 10px;">Evidencia de identidad — dato sensible (Ley 81):
           cada vista queda auditada; los enlaces expiran en 5 minutos.</p>`
         : '<p style="font-size:12px; color:var(--fg-4); margin:0 0 10px;">Sin evidencia de identidad adjunta (firma anterior a la actualización).</p>'}
+        ${soloLectura ? `
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+          <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cerrar</button>
+        </div>` : `
         <label class="cg-toggle" style="margin-bottom:12px;">
           <input type="checkbox" id="wfActualizar" checked>
           Actualizar la ficha del cliente con este representante (el directorio se corrige solo)
@@ -1631,10 +1672,10 @@ window.Centro = {
         <div style="display:flex; gap:8px; justify-content:flex-end;">
           <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
           <button class="btn btn-primary" onclick="Centro._aceptarFirmanteConfirmar('${this.esc(sid)}')">Aceptar firmante y activar</button>
-        </div>`);
+        </div>`}`);
       // Evidencia de identidad: URLs firmadas de 5 min vía callable (los
       // bytes viven con read:false — dato sensible, cada vista se audita).
-      if (f.cedula_path && firebase.functions) {
+      if (f.cedula_path && veIdentidad && firebase.functions) {
         const fn = firebase.functions().httpsCallable('getFirmaIdentidadUrl');
         [['cedula', 'wvCed'], ['selfie', 'wvSelfie']].forEach(([cual, imgId]) => {
           fn({ sid, cual }).then(r => {
@@ -2733,7 +2774,8 @@ window.Centro = {
           <button class="btn btn-ghost cg-act" onclick="Centro.verAnexo('${this.esc(g.anexo_firmado_path)}')">Ver anexo</button></p>` : ''}
         ${g.anexo_firma_digital ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">
           ✓ Anexo firmado <b>digitalmente</b> por ${this.esc(g.anexo_firma_digital.firmante_nombre || '—')}
-          (cédula ${this.esc(g.anexo_firma_digital.firmante_cedula || '—')})</p>` : ''}
+          (cédula ${this.esc(g.anexo_firma_digital.firmante_cedula || '—')})
+          <button class="btn btn-ghost cg-act" onclick="Centro.verFirmaGestion('${this.esc(g.id)}')">Ver la firma</button></p>` : ''}
         ${g.sin_firma ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0;">✓ Regularización cerrada
           <b>sin firma del cliente</b> por ${this.esc(g.sin_firma.por_email || '—')}${g.sin_firma.motivo ? ` — ${this.esc(g.sin_firma.motivo)}` : ''}</p>` : ''}
         ${g.firma_solicitud_estado === 'pendiente' ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0;">
@@ -3502,6 +3544,11 @@ window.Centro = {
       A.push(this._acc({ id: 'ver_anexo', grupo: 'Documentos', label: 'Ver el anexo firmado',
         onclick: `Centro.verAnexo('${this.esc(g.anexo_firmado_path)}')` }));
     }
+    if (g.anexo_firma_digital) {
+      A.push(this._acc({ id: 'ver_firma', grupo: 'Documentos', label: 'Ver la firma del cliente',
+        hint: 'trazo, nombre y cédula de quien firmó el anexo',
+        onclick: `Centro.verFirmaGestion('${id}')` }));
+    }
     const ordenes = [
       ...(g.ordenes?.programacion_ids || (g.ordenes?.programacion_id ? [g.ordenes.programacion_id] : [])).map(x => ['PROGRAMACIÓN', x]),
       ...(g.ordenes?.devolucion_id ? [['DEVOLUCIÓN', g.ordenes.devolucion_id]] : []),
@@ -3613,6 +3660,11 @@ window.Centro = {
     // reconstruido, que es donde vive esa firma (no hay PDF que abrir).
     const firmadoAcc = this._accFirmado(c);
     if (firmadoAcc) A.push(firmadoAcc);
+    if (c.firmado_tipo === 'digital' && c.firma_solicitud_id) {
+      A.push(this._acc({ id: 'ver_firma', grupo: 'Documentos', label: 'Ver la firma del cliente',
+        hint: 'trazo, nombre y cédula de quien firmó, contra el representante registrado',
+        onclick: `Centro.verFirmaContrato('${id}')` }));
+    }
 
     // Corregir. El criterio de si el contrato admite cambios vive en
     // js/domain/contratoEdicion.js — el mismo que aplica el editor al abrirse.
