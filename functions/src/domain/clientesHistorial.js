@@ -12,7 +12,7 @@
 // solo meterían ruido.
 
 const CAMPOS_AUDITADOS = [
-  "nombre", "ruc", "dv",
+  "nombre", "ruc", "ruc_tipo", "dv",
   "representante", "representante_cedula", "representante_doc_tipo", "representante_email",
   "telefono", "email", "email_acuses",
   "direccion", "direccion_facturacion",

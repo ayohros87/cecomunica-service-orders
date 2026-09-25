@@ -411,7 +411,7 @@ service cloud.firestore {
       // Todo cambio queda igualmente en clientes/{id}/historial (trigger).
       function tocaIdentidadCliente() {
         return request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          "nombre", "nombre_norm", "ruc", "dv", "ruc_norm", "dv_norm", "rucdv_norm",
+          "nombre", "nombre_norm", "ruc", "ruc_tipo", "dv", "ruc_norm", "dv_norm", "rucdv_norm",
           "representante", "representante_cedula", "representante_doc_tipo", "representante_email",
           "itbms_exento", "itbms_motivo_exencion",
           "vendedor_asignado", "vendedor_email", "activo", "deleted"

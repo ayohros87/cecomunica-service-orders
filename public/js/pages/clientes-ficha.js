@@ -157,7 +157,13 @@ window.FichaCliente = {
 
     // Campos (los ids calzan con los nombres de campo del doc).
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v == null ? '' : v; };
-    set('nombre', c.nombre); set('ruc', c.ruc); set('dv', c.dv);
+    set('nombre', c.nombre);
+    // RUC por partes (js/ui/rucInput.js): lo guardado se muestra por partes
+    // sin reescribirse; si está sucio (DV pegado, NT perdido) ofrece acomodarlo.
+    if (window.RucInput && window.RucPanama) {
+      this.rucW = this.rucW || RucInput.montar(document.getElementById('rucBloque'));
+      this.rucW.cargar(c.ruc, c.ruc_tipo, c.dv);
+    } else { set('ruc', c.ruc); set('ruc_tipo', c.ruc_tipo); set('dv', c.dv); }
     set('representante', c.representante);
     // El documento: QUÉ documento es lo contesta el vendedor en el selector.
     // Las fichas viejas que traen la palabra metida en el número ("PASAPORTE:
@@ -256,7 +262,7 @@ window.FichaCliente = {
     const raw = {
       ...this.cliente,
       ip: g('ip') ? g('ip').value : this.cliente.ip,
-      nombre: g('nombre').value, ruc: g('ruc').value, dv: g('dv').value,
+      nombre: g('nombre').value, ruc: g('ruc').value, ruc_tipo: g('ruc_tipo').value, dv: g('dv').value,
       representante: g('representante').value,
       representante_cedula: g('representante_cedula').value,
       representante_doc_tipo: g('representante_doc_tipo').value,
@@ -276,6 +282,10 @@ window.FichaCliente = {
 
     // Reglas de negocio al guardar (banner arriba, con nombre del campo).
     const errores = [];
+    // El RUC por partes: faltan partes, o el DV no cuadra con el de la DGI
+    // (solo si el usuario tocó el RUC o el DV — lo viejo no tranca).
+    const probRuc = this.rucW ? this.rucW.problema() : null;
+    if (probRuc) errores.push(probRuc);
     if (!payload.nombre) errores.push('El nombre no puede quedar vacío.');
     if (payload.nombre.includes('/')) errores.push("El nombre no puede contener '/'.");
     if (payload.nombre_norm !== this.cliente.nombre_norm && await this._duplicado('nombre_norm', payload.nombre_norm)) {
@@ -381,7 +391,7 @@ window.FichaCliente = {
 
   // ── Historial (mismo formato que el modal del Centro) ──
   HIST_LABELS: {
-    nombre: 'Nombre', ruc: 'RUC', dv: 'DV',
+    nombre: 'Nombre', ruc: 'RUC', ruc_tipo: 'Tipo de contribuyente', dv: 'DV',
     representante: 'Representante legal', representante_cedula: 'Documento del representante',
     representante_doc_tipo: 'Tipo de documento',
     representante_email: 'Correo del representante',

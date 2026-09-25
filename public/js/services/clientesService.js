@@ -100,6 +100,14 @@ const ClientesService = {
       cliente.representante_doc_tipo = raw.representante_doc_tipo === "pasaporte" ? "pasaporte" : "cedula";
     }
 
+    // Tipo de contribuyente del RUC ('juridica' | 'natural' | 'otro'): lo
+    // contesta quien captura (js/ui/rucInput.js) — un NT de persona natural y
+    // uno jurídico se escriben igual y dan DV distinto. Solo si el formulario
+    // lo trae: un alta rápida no borra el de una ficha que ya lo tenía.
+    if ('ruc_tipo' in raw) {
+      cliente.ruc_tipo = ["juridica", "natural", "otro"].includes(raw.ruc_tipo) ? raw.ruc_tipo : "";
+    }
+
     // El vendedor SOLO se toca si el formulario lo trae. Un form sin el campo
     // (el alta/edición de contratos/nuevo-cliente.html) mandaba el payload
     // canónico completo y BORRABA el vendedor_asignado de la ficha en cada

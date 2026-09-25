@@ -95,6 +95,7 @@ auth.onAuthStateChanged(async user => {
     const raw = {
       nombre: document.getElementById("nombre").value,
       ruc: document.getElementById("ruc").value,
+      ruc_tipo: document.getElementById("ruc_tipo").value,
       dv: document.getElementById("dv").value,
       direccion: document.getElementById("direccion").value,
       telefono: document.getElementById("telefono").value,
@@ -116,6 +117,10 @@ auth.onAuthStateChanged(async user => {
     if (raw.dv.trim() && !/^\d{1,2}$/.test(raw.dv.trim())) {
       mostrarMensaje("El DV son 1 o 2 dígitos.", "red"); return;
     }
+    // RUC por partes: faltan partes, o el DV no cuadra con el de la DGI (solo
+    // si se tocó el RUC o el DV — lo viejo no tranca).
+    const probRuc = window._rucW ? window._rucW.problema() : null;
+    if (probRuc) { mostrarMensaje(probRuc, "red"); return; }
     if (raw.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.email.trim().toLowerCase())) {
       mostrarMensaje("Ese correo no parece válido.", "red"); return;
     }
@@ -177,6 +182,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (window.FormKit) {
     window._fkValidarTodo = FormKit.enlazarValidacion(document.getElementById("formCliente"));
   }
+  // RUC por partes, como en e-Tax (js/ui/rucInput.js).
+  if (window.RucInput && window.RucPanama) {
+    window._rucW = RucInput.montar(document.getElementById("rucBloque"));
+  }
 
   // Pegar "Pasaporte No. 150685537" en la casilla del número mueve el
   // selector. En `input` y no en `blur`: al salir del campo, el kit ya le quitó
@@ -211,8 +220,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (!d) return;
 
     document.getElementById("nombre").value = d.nombre || "";
-    document.getElementById("ruc").value = d.ruc || "";
-    document.getElementById("dv").value = d.dv || "";
+    if (window._rucW) window._rucW.cargar(d.ruc, d.ruc_tipo, d.dv);
+    else {
+      document.getElementById("ruc").value = d.ruc || "";
+      document.getElementById("dv").value = d.dv || "";
+    }
     document.getElementById("direccion").value = d.direccion || "";
     document.getElementById("telefono").value = d.telefono || "";
     document.getElementById("email").value = d.email || "";
@@ -250,10 +262,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (selExento) selExento.addEventListener("change", syncMotivoVisibility);
   syncMotivoVisibility();
 
-  // Format RUC on the fly (remove spaces)
-  document.getElementById("ruc").addEventListener("input", (e) => {
-    e.target.value = (e.target.value || "").replace(/\s+/g, "");
-  });
 
   document.getElementById("nombre").focus();
 });

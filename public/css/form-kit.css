@@ -95,8 +95,65 @@
 .fk-bar .fk-bar-btn:hover { border-color: #fff; color: #fff; }
 @media (max-width: 560px) { .fk-bar-campos { display: none; } }
 
+/* ── RUC por partes (js/ui/rucInput.js, 2026-09-25) ──
+   Tipo de contribuyente arriba; debajo provincia · letras · tomo · asiento
+   en una fila que envuelve en el celular; el DV a la derecha; y una línea de
+   estado con cómo queda y si el DV cuadra con el de la DGI. */
+.ruc-bloque { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 10px 16px; margin-bottom: var(--sp-4, 16px); }
+.ruc-bloque .form-field { margin-bottom: 0; }
+.ruc-bloque .ruc-dv { align-self: end; }
+.ruc-bloque .ruc-dv .form-input { text-align: center; }
+.ruc-estado { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; }
+.ruc-estado:empty { display: none; }
+
+.ruc-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border-default, #D5DDE3); border-radius: 999px; overflow: hidden; margin-bottom: 10px; }
+.ruc-seg .ruc-seg-btn { border: 0; background: var(--surface-card, #fff); color: var(--fg-2, #445); padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ruc-seg .ruc-seg-btn + .ruc-seg-btn { border-left: 1px solid var(--border-default, #D5DDE3); }
+.ruc-seg .ruc-seg-btn.is-on { background: var(--accent, #0091D7); color: #fff; }
+.ruc-seg .ruc-seg-btn:focus-visible { outline: 2px solid var(--accent, #0091D7); outline-offset: -2px; }
+.ruc-seg .ruc-seg-btn:disabled { cursor: default; }
+.ruc-seg .ruc-seg-corto { display: none; }
+
+.ruc-partes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.ruc-parte { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ruc-parte .ruc-in { width: calc(var(--w, 8ch) + 26px); max-width: 100%; font-family: var(--font-mono); text-align: center; }
+.ruc-parte .ruc-sel { min-width: 0; max-width: 190px; }
+.ruc-parte-libre { flex: 1; min-width: 200px; }
+.ruc-parte-libre .form-input { font-family: var(--font-mono); }
+.ruc-cap { font-size: 11px; font-weight: 600; color: var(--fg-3, #667); white-space: nowrap; }
+.ruc-guion { color: var(--fg-3, #667); font-family: var(--font-mono); font-weight: 600; padding-bottom: 9px; white-space: nowrap; }
+
+.ruc-nota { font-size: 12.5px; color: var(--fg-3, #667); line-height: 1.6; display: block; }
+.ruc-nota b { color: var(--fg-1, #1a2530); }
+.ruc-mono { font-family: var(--font-mono); }
+.ruc-nota.ruc-ok { color: #17714B; }
+.ruc-nota.ruc-ok b { color: #17714B; }
+.ruc-nota.ruc-bad { color: #A03030; background: var(--soft-bad, #FBE9E9); border-radius: 8px; padding: 7px 10px; }
+.ruc-nota.ruc-bad b { color: #A03030; }
+.ruc-nota.ruc-warn { color: #8A5A00; background: var(--soft-warn, #FDF4E1); border-radius: 8px; padding: 7px 10px; }
+.ruc-nota.ruc-warn b { color: #6B4600; }
+.ruc-confirma { cursor: pointer; color: var(--fg-2, #445); }
+.ruc-accion { padding: 1px 10px; font-size: 12px; margin-left: 6px; vertical-align: baseline; }
+
+/* En error, solo la casilla que falta va en rojo (no las cuatro), y el
+   mensaje sale una vez: el del campo, no también la nota gris. */
+.ruc-campo.has-error .ruc-partes .form-input,
+.ruc-campo.has-error .ruc-partes .form-select { border-color: var(--border-default, #D5DDE3); box-shadow: none; }
+.ruc-campo.has-error .ruc-partes .ruc-falta { border-color: var(--bad, #C0392B); box-shadow: 0 0 0 3px var(--soft-bad, #FBE9E9); }
+.ruc-bloque:has(.ruc-campo.has-error) .ruc-nota-falta { display: none; }
+
+@media (max-width: 560px) {
+  .ruc-bloque { grid-template-columns: minmax(0, 1fr); }
+  .ruc-bloque .ruc-dv { max-width: 120px; }
+  .ruc-seg { display: flex; flex-wrap: nowrap; width: 100%; }
+  .ruc-seg .ruc-seg-btn { flex: 1 1 0; padding: 7px 6px; font-size: 12.5px; }
+  .ruc-seg .ruc-seg-largo { display: none; }
+  .ruc-seg .ruc-seg-corto { display: inline; }
+}
+
 /* Modo solo lectura (rol sin permiso de edición) */
 .fk-solo-lectura .fk-bar { display: none; }
+.fk-solo-lectura .ruc-accion, .fk-solo-lectura .ruc-confirma { display: none; }
 .fk-solo-lectura .fk-evidencia { pointer-events: none; opacity: .6; }
 
 @media (prefers-reduced-motion: reduce) {

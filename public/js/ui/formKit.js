@@ -31,10 +31,13 @@
   // Una regla es `re` (expresión) o `ok` (función), y puede traer `norm`:
   // cómo se reescribe el valor al salir del campo.
   const VALIDA = {
-    // El RUC lleva letras cuando la DGI lo asigna a quien no tiene cédula
-    // (8-NT-2-39271, organismos internacionales) o a extranjeros (E-8-…, PE-…).
-    // Al menos un número; sin espacios adentro.
-    ruc:    { re: /^(?=[A-Z0-9-]*\d)[A-Z0-9-]+$/i, norm: (v) => String(v).trim().toUpperCase() },
+    // El RUC lo arma por partes js/ui/rucInput.js; la regla (formatos de la
+    // DGI, letras incluidas: 8-NT-2-39271, E-8-…, 8AV-…) vive en
+    // js/domain/rucPanama.js. Sin ella, lo mínimo: letras, números y guiones.
+    ruc: {
+      ok: (v) => (typeof RucPanama === "undefined" ? /^(?=[A-Z0-9-]*\d)[A-Z0-9-]+$/i.test(v) : RucPanama.esValido(v)),
+      norm: (v) => String(v).trim().toUpperCase(),
+    },
     dv:     { re: /^\d{1,2}$/ },
     email:  { re: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ },
     tel:    { re: /^[+\d][\d\s-]{5,}$/ },
@@ -74,6 +77,19 @@
   function _ponerValor(el, v) {
     if (el.type === "checkbox") el.checked = !!v;
     else el.value = v == null ? "" : v;
+  }
+
+  // Un campo oculto (el RUC lo escribe su componente por partes) no recibe
+  // foco ni tiene caja: se enfoca la primera casilla visible de su campo.
+  function _enfocar(el) {
+    let foco = el;
+    if (el.type === "hidden") {
+      const wrap = el.closest(".form-field");
+      foco = (wrap && wrap.querySelector("input:not([type=hidden]), select, button")) || el;
+    }
+    foco.focus();
+    const caja = el.type === "hidden" ? (el.closest(".form-field") || foco) : foco;
+    if (caja.scrollIntoView) caja.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
   function validarCampo(el) {
@@ -165,8 +181,7 @@
         if (!validarCampo(el) && sucios.has(el) && !primero) primero = el;
       });
       if (primero) {
-        primero.focus();
-        if (primero.scrollIntoView) primero.scrollIntoView({ block: "center", behavior: "smooth" });
+        _enfocar(primero);
         return;
       }
       const cambios = {};
@@ -231,8 +246,7 @@
         if (!validarCampo(el) && !primero) primero = el;
       });
       if (primero) {
-        primero.focus();
-        if (primero.scrollIntoView) primero.scrollIntoView({ block: "center", behavior: "smooth" });
+        _enfocar(primero);
       }
       return !primero;
     };

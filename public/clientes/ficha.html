@@ -13,7 +13,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="../css/ceco-ui.css?v=sh5">
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
-  <link rel="stylesheet" href="../css/form-kit.css?v=fk3">
+  <link rel="stylesheet" href="../css/form-kit.css?v=ruc2">
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -27,12 +27,14 @@
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/services/clientesService.js?v=ruc1"></script>
+  <script defer src="../js/services/clientesService.js?v=ruc2"></script>
   <script defer src="../js/services/clienteDocumentosService.js"></script>
   <script defer src="../js/services/empresaService.js"></script>
   <script defer src="../js/ui/modal.js?v=f7"></script>
   <script defer src="../js/domain/docIdentidad.js?v=doc2"></script>
-  <script defer src="../js/ui/formKit.js?v=ruc1"></script>
+  <script defer src="../js/domain/rucPanama.js?v=ruc2"></script>
+  <script defer src="../js/ui/rucInput.js?v=ruc2"></script>
+  <script defer src="../js/ui/formKit.js?v=ruc2"></script>
   <script defer src="/js/vendor/lucide.min.js?v=3"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
 </head>
@@ -88,18 +90,22 @@
           <input class="form-input" id="nombre" data-fk="Nombre" required>
           <span class="form-error-msg">El nombre no puede quedar vacío.</span>
         </div>
-        <div class="form-grid-2">
-          <div class="form-field">
-            <label class="form-label" for="ruc">RUC / Cédula <span class="req"></span></label>
-            <input class="form-input" id="ruc" data-fk="RUC" data-fk-valida="ruc" required autocapitalize="characters" style="font-family:var(--font-mono);">
-            <span class="form-hint">Números, letras y guiones (8-NT-2-39271), sin el DV.</span>
-            <span class="form-error-msg">Revisa el RUC: números, letras y guiones, sin espacios.</span>
+        <!-- RUC por partes, como en e-Tax (js/ui/rucInput.js). #ruc y #ruc_tipo
+             van ocultos: los escribe el componente y los rastrea el kit. -->
+        <div class="ruc-bloque" id="rucBloque">
+          <div class="form-field ruc-campo">
+            <span class="form-label" id="rucLabel">RUC / Cédula <span class="req"></span></span>
+            <div data-ruc-widget role="group" aria-labelledby="rucLabel"></div>
+            <input type="hidden" id="ruc" data-fk="RUC" data-fk-valida="ruc" required>
+            <input type="hidden" id="ruc_tipo" data-fk="Tipo de contribuyente">
+            <span class="form-error-msg" data-ruc-msg>Completa el RUC.</span>
           </div>
-          <div class="form-field">
+          <div class="form-field ruc-dv">
             <label class="form-label" for="dv">DV <span class="optional">opcional</span></label>
-            <input class="form-input" id="dv" data-fk="DV" data-fk-valida="dv" inputmode="numeric" maxlength="2" style="font-family:var(--font-mono);">
+            <input class="form-input" id="dv" data-fk="DV" data-fk-valida="dv" inputmode="numeric" maxlength="2" autocomplete="off" style="font-family:var(--font-mono);">
             <span class="form-error-msg">El DV son 1 o 2 dígitos.</span>
           </div>
+          <div class="ruc-estado" data-ruc-estado aria-live="polite"></div>
         </div>
       </div>
 
@@ -249,7 +255,7 @@
   </div>
 
   <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/pages/clientes-ficha.js?v=doc2"></script>
+  <script defer src="../js/pages/clientes-ficha.js?v=ruc2"></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

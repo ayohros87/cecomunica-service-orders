@@ -22,7 +22,7 @@
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
   <!-- Kit de formularios: esconde .form-error-msg hasta que el campo falle -->
-  <link rel="stylesheet" href="../css/form-kit.css?v=fk3">
+  <link rel="stylesheet" href="../css/form-kit.css?v=ruc2">
 
   <!-- Firebase compat -->
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -36,7 +36,7 @@
   <script src="../js/core/layout.js?v=cc14"></script>
   <script src="../js/core/roles.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/services/clientesService.js?v=ruc1"></script>
+  <script defer src="../js/services/clientesService.js?v=ruc2"></script>
   <script defer src="../js/services/clienteDocumentosService.js"></script>
   <script defer src="../js/services/empresaService.js"></script>
   <script src="../js/core/serial.js?v=1"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
@@ -65,6 +65,7 @@
     #formCliente .form-field { margin-bottom: var(--sp-4); }
     #formCliente .form-grid-2 .form-field { margin-bottom: 0; }
     #formCliente .ds-card-padded > :last-child { margin-bottom: 0; }
+    #formCliente .ruc-bloque .form-field { margin-bottom: 0; }
   </style>
   <div class="app-wrap" style="max-width:820px;">
 
@@ -95,20 +96,23 @@
             <input class="form-input" type="text" id="nombre" data-fk="Nombre" required>
             <span class="form-error-msg">El nombre no puede quedar vacío.</span>
           </div>
-
-          <div class="form-field">
-            <label class="form-label" for="ruc">RUC / Cédula <span class="req"></span></label>
-            <input class="form-input" type="text" id="ruc" data-fk="RUC" data-fk-valida="ruc" required autocapitalize="characters" style="font-family:var(--font-mono);">
-            <span class="form-hint">Ej: 155678901-2-2020 o 8-NT-2-39271 (sin DV)</span>
-            <span class="form-error-msg">Revisa el RUC: números, letras y guiones, sin espacios.</span>
+        </div>
+        <!-- RUC por partes, como en e-Tax (js/ui/rucInput.js). #ruc y #ruc_tipo
+             van ocultos: los escribe el componente. -->
+        <div class="ruc-bloque" id="rucBloque" style="margin-top:var(--sp-4, 16px); margin-bottom:0;">
+          <div class="form-field ruc-campo">
+            <span class="form-label" id="rucLabel">RUC / Cédula <span class="req"></span></span>
+            <div data-ruc-widget role="group" aria-labelledby="rucLabel"></div>
+            <input type="hidden" id="ruc" data-fk="RUC" data-fk-valida="ruc" required>
+            <input type="hidden" id="ruc_tipo" data-fk="Tipo de contribuyente">
+            <span class="form-error-msg" data-ruc-msg>Completa el RUC.</span>
           </div>
-
-          <div class="form-field">
+          <div class="form-field ruc-dv">
             <label class="form-label" for="dv">DV</label>
-            <input class="form-input" type="text" id="dv" data-fk="DV" data-fk-valida="dv" inputmode="numeric" maxlength="2" placeholder="Ej. 55" style="font-family:var(--font-mono);">
-            <span class="form-hint">Si aplica, ingresa 1–2 dígitos.</span>
+            <input class="form-input" type="text" id="dv" data-fk="DV" data-fk-valida="dv" inputmode="numeric" maxlength="2" autocomplete="off" style="font-family:var(--font-mono);">
             <span class="form-error-msg">El DV son 1 o 2 dígitos.</span>
           </div>
+          <div class="ruc-estado" data-ruc-estado aria-live="polite"></div>
         </div>
       </div>
 
@@ -284,8 +288,10 @@
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js?v=f7"></script>
   <script defer src="../js/domain/docIdentidad.js?v=doc2"></script>
-  <script defer src="../js/ui/formKit.js?v=ruc1"></script>
-  <script src="../js/pages/nuevo-cliente.js?v=nc6" defer></script>
+  <script defer src="../js/domain/rucPanama.js?v=ruc2"></script>
+  <script defer src="../js/ui/rucInput.js?v=ruc2"></script>
+  <script defer src="../js/ui/formKit.js?v=ruc2"></script>
+  <script src="../js/pages/nuevo-cliente.js?v=ruc2" defer></script>
   <script src="../js/pages/cliente-documentos.js" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->

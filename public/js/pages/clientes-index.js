@@ -581,11 +581,16 @@ function renderRow(id, c){
       <input type="text" class="td-input" value="${FMT.esc(c.nombre)}" ${ro?'readonly':''} data-field="nombre" />
     </td>
 
+    <!-- RUC y DV: solo lectura aquí (2026-09-25). Se capturan en la ficha,
+         por partes y con el DV verificado contra el de la DGI; la casilla
+         libre de esta tabla era por donde entraban el DV pegado y el NT perdido. -->
     <td>
-      <input type="text" class="td-input td-mono" value="${FMT.esc(c.ruc)}" ${ro?'readonly':''} data-field="ruc" />
+      <input type="text" class="td-input td-mono" value="${FMT.esc(c.ruc)}" readonly tabindex="-1"
+             title="El RUC se edita en la ficha del cliente (Editar)" data-field="ruc" />
     </td>
     <td>
-      <input type="text" class="td-input td-mono" value="${FMT.esc(c.dv)}" ${ro?'readonly':''} data-field="dv" />
+      <input type="text" class="td-input td-mono" value="${FMT.esc(c.dv)}" readonly tabindex="-1"
+             title="El DV se edita en la ficha del cliente (Editar)" data-field="dv" />
     </td>
 
     <td>

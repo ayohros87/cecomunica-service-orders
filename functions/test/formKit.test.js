@@ -17,6 +17,18 @@ test("ruc: números, letras y guiones; al menos un número y sin espacios", () =
   assert.equal(esValido("ruc", "8-NT-2-39271."), false);
 });
 
+// Con js/domain/rucPanama.js cargado (como en la ficha), la regla son los
+// formatos de la DGI; el detalle vive en functions/test/rucPanama.test.js.
+test("ruc: con RucPanama cargado, formatos de la DGI", () => {
+  global.RucPanama = require("../../public/js/domain/rucPanama.js");
+  assert.equal(esValido("ruc", "8-NT-2-39271"), true);
+  assert.equal(esValido("ruc", "8AV-130-765"), true);
+  assert.equal(esValido("ruc", "XDB367055"), true, "otro documento");
+  assert.equal(esValido("ruc", "ABC"), false);
+  assert.equal(esValido("ruc", "8-496-731:84"), true, "ficha vieja: no se marca, se ofrece acomodar");
+  delete global.RucPanama;
+});
+
 test("ruc: al salir del campo queda en mayúsculas", () => {
   assert.equal(VALIDA.ruc.norm(" 8-nt-2-39271 "), "8-NT-2-39271");
   assert.equal(VALIDA.ruc.norm("155612345-2-2015"), "155612345-2-2015");

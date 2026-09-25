@@ -374,7 +374,7 @@ window.Centro = {
   // rules): captura TODO escritor — grid, formulario, fusiones, scripts.
   // Se lee BAJO DEMANDA (botón) para no sumar lecturas a cada apertura.
   HIST_LABELS: {
-    nombre: 'Nombre', ruc: 'RUC', dv: 'DV',
+    nombre: 'Nombre', ruc: 'RUC', ruc_tipo: 'Tipo de contribuyente', dv: 'DV',
     representante: 'Representante legal', representante_cedula: 'Documento del representante',
     representante_doc_tipo: 'Tipo de documento',
     representante_email: 'Correo del representante',
