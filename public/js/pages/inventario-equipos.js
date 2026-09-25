@@ -10,6 +10,18 @@ function cerrarSesion() {
 
 window.EquiposPool = {
   _equipos: [],
+  // Carga por pestaña (auditoría de consumo 2026-09-24): abrir esta página
+  // barría el pool ENTERO (~7,650 fichas) en cada carga fría — el 38% de las
+  // lecturas de Firestore de un día normal. Ahora, si lo que se mira es UNA
+  // ubicación sin búsqueda ni filtros, se carga solo esa ubicación y los
+  // conteos globales salen del resumen (`agregados_pool`). Todo lo que
+  // necesita el pool entero —la búsqueda, Conflictos, Todos, Otros, cualquier
+  // filtro— lo sigue teniendo: render() lo pide ANTES de pintar (_datosListos).
+  _completo: false,       // _equipos es el pool entero
+  _cargadoEstado: null,   // qué ubicación hay en _equipos cuando NO es completo
+  _conteos: null,         // conteos GLOBALES para tarjetas y pestañas (modo por pestaña)
+  _pidiendo: null,        // carga en vuelo — una sola a la vez
+  _errorCarga: null,      // la última carga falló: se muestra, no se reintenta en bucle
   _modelos: [],
   _tab: 'en_cliente',
   _rol: null,
@@ -69,9 +81,18 @@ window.EquiposPool = {
   },
 
   // ── Carga ────────────────────────────────────────────────────────────
+  // Recarga "pesada": la de entrada, tras recibir/importar, o cuando el
+  // refresco puntual no alcanza. Conserva el modo — si ya se tenía el pool
+  // entero se relee entero, para no dejar a quien estaba buscando con media
+  // lista.
   async cargar() {
+    const eraCompleto = this._completo;
+    this._completo = false;
+    this._cargadoEstado = null;
+    this._conteos = null;
+    this._errorCarga = null;
     try {
-      this._equipos = await EquiposPoolService.listar();
+      await this._asegurarDatos({ forzarCompleto: eraCompleto });
       this.render();
       // Sub-estado derivado "listo para entrega" (P4a auditoría 2026-07-24):
       // "En taller" mezclaba radios en trabajo con radios TERMINADOS esperando
@@ -82,7 +103,140 @@ window.EquiposPool = {
     } catch (e) {
       console.error('Error al cargar equipos:', e);
       Toast.show('Error al cargar el pool: ' + (e.message || e), 'bad');
+      this.render();
     }
+  },
+
+  // Pestañas que son UNA ubicación: las únicas que se sirven cargando solo
+  // esa ubicación. Todos, Otros (baja+vendido) y Conflictos cruzan el pool.
+  TABS_DE_UN_ESTADO: ['en_bodega', 'asignado_contrato', 'en_cliente', 'en_taller',
+    'devuelto_revision', 'por_clasificar', 'no_retirado'],
+
+  // ¿Alcanza con la pestaña? Solo si NADA de lo que hay en pantalla mira fuera
+  // de ella. La búsqueda barre el pool entero (N1, auditoría 2026-08-04) y los
+  // contadores de pestaña respetan los filtros secundarios: con cualquiera de
+  // los dos hace falta el pool completo.
+  _bastaParcial() {
+    if (!this.TABS_DE_UN_ESTADO.includes(this._tab)) return false;
+    const f = this._filtrosActivos();
+    return !(f.q || f.mod || f.prop || f.sinVerificar || f.compartidos || f.sinCliente || f.listos);
+  },
+
+  // ¿Lo que hay en memoria sirve para pintar lo que se pide ahora? Una vez que
+  // se cargó el pool entero no se vuelve atrás: sirve para todo.
+  _datosListos() {
+    if (this._completo) return true;
+    return this._bastaParcial() && this._cargadoEstado === this._tab && !!this._conteos;
+  },
+
+  async _asegurarDatos({ forzarCompleto = false } = {}) {
+    // Una carga a la vez. Si hay una en vuelo se espera y se vuelve a mirar:
+    // al terminar puede que ya alcance, o que el usuario haya cambiado de
+    // pestaña mientras tanto y haga falta otra.
+    while (this._pidiendo) {
+      try { await this._pidiendo; } catch (e) { /* la maneja quien la lanzó */ }
+    }
+    if (!forzarCompleto && this._datosListos()) return;
+    const p = this._cargarDatos(forzarCompleto);
+    this._pidiendo = p;
+    try { await p; } finally { if (this._pidiendo === p) this._pidiendo = null; }
+  },
+
+  async _cargarDatos(forzarCompleto) {
+    try {
+      if (!forzarCompleto && this._bastaParcial()) {
+        const tab = this._tab;
+        const [lista, conteos] = await Promise.all([
+          EquiposPoolService.listar({ estado: tab }),
+          this._conteos ? Promise.resolve(this._conteos) : this._cargarConteos(),
+        ]);
+        // Sin resumen no hay de dónde sacar los conteos globales: en vez de
+        // pintar tarjetas y pestañas en cero, se cae al pool entero como antes
+        // — y se avisa, porque volver a barrerlo en silencio sería el error.
+        if (!conteos) {
+          console.warn('[Equipos] agregados_pool vacío — leyendo el pool completo');
+          if (typeof Toast !== 'undefined') Toast.show('Resumen de inventario no disponible: se leyó el pool completo.', 'warn');
+          this._equipos = await EquiposPoolService.listar();
+          this._completo = true;
+          this._cargadoEstado = null;
+        } else {
+          this._equipos = lista;
+          this._cargadoEstado = tab;
+          this._conteos = conteos;
+        }
+      } else {
+        this._equipos = await EquiposPoolService.listar();
+        this._completo = true;
+        this._cargadoEstado = null;
+      }
+      this._errorCarga = null;
+    } catch (e) {
+      this._errorCarga = e;
+      throw e;
+    }
+  },
+
+  // Conteos GLOBALES para cuando _equipos es una sola pestaña: las tarjetas de
+  // Pendientes y los contadores de pestaña dicen cuánto hay en TODO el pool.
+  // Cada fuente se verificó contra el pool completo en producción (2026-09-25)
+  // y coincide exacto: el resumen por estado, el count() de sin verificar
+  // (4,396 = 4,396) y la cola de conflictos por serial_compartido (los mismos
+  // 3 grupos). Devuelve null si el resumen no existe.
+  async _cargarConteos() {
+    const db = firebase.firestore();
+    const [resumen, sinVerif, grupos] = await Promise.all([
+      EquiposPoolService.resumenPorModelo(),
+      db.collection('equipos_pool').where('verificado', '==', false).count().get(),
+      ConflictosPoolService.listarPendientes(),
+    ]);
+    if (!resumen.length) return null;
+    const porEstado = {};
+    for (const r of resumen) {
+      for (const [e, n] of Object.entries(r.est || {})) porEstado[e] = (porEstado[e] || 0) + Number(n || 0);
+    }
+    return {
+      porEstado,
+      total: Object.values(porEstado).reduce((a, b) => a + b, 0),
+      sinVerificar: sinVerif.data().count,
+      conflictos: grupos.length,
+    };
+  },
+
+  // Corrige los conteos globales con el antes/después de UNA ficha, sin releer
+  // el resumen: el trigger lo actualiza con un par de segundos de retraso, y
+  // releerlo justo después de mutar devolvería el número viejo.
+  _ajustarConteos(viejo, nuevo) {
+    const C = this._conteos;
+    if (!C) return;
+    const mover = (eq, signo) => {
+      if (!eq) return;
+      const e = eq.estado || 'sin_estado';
+      C.porEstado[e] = Math.max(0, (C.porEstado[e] || 0) + signo);
+      C.total = Math.max(0, C.total + signo);
+      if (eq.verificado === false) C.sinVerificar = Math.max(0, C.sinVerificar + signo);
+    };
+    mover(viejo, -1);
+    mover(nuevo, +1);
+  },
+
+  _renderCargando(tbody) {
+    // Buscando se dice que se está buscando en todo el pool: este mensaje no
+    // puede confundirse nunca con "ningún equipo coincide".
+    const q = (document.getElementById('eqBusqueda')?.value || '').trim();
+    const msg = q ? `Buscando "${FMT.esc(q)}" en todo el pool…` : 'Cargando equipos…';
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--fg-3); padding:var(--sp-6);">${msg}</td></tr>`;
+  },
+
+  _renderErrorCarga(tbody) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:var(--sp-6);">
+      <span style="color:#991B1B;">No se pudo cargar el pool.</span>
+      <button class="btn btn-sm" style="margin-left:8px;" onclick="EquiposPool.reintentarCarga()">Reintentar</button>
+    </td></tr>`;
+  },
+
+  reintentarCarga() {
+    this._errorCarga = null;
+    this.render();
   },
 
   // Refresco quirúrgico (2026-09-02, factura de agosto): recargar el pool
@@ -98,14 +252,34 @@ window.EquiposPool = {
     try {
       const db = firebase.firestore();
       const snaps = await Promise.all(lista.map(id => db.collection('equipos_pool').doc(id).get()));
+      let tocaConflictos = false;
       for (const s of snaps) {
         const i = this._equipos.findIndex(e => e.id === s.id);
-        if (s.exists) {
-          const doc = { id: s.id, ...s.data() };
-          if (i >= 0) this._equipos[i] = doc; else this._equipos.push(doc);
+        const viejo = i >= 0 ? this._equipos[i] : null;
+        const nuevo = s.exists ? { id: s.id, ...s.data() } : null;
+        if (!this._completo) {
+          // Modo por pestaña: _equipos es SOLO la ubicación cargada. Una ficha
+          // que se fue a otra ubicación sale de la lista (y aparece en la suya
+          // cuando se abra esa pestaña); los conteos globales se corrigen con
+          // el delta. Una ficha que no estaba cargada entra como nueva: es un
+          // alta, o el ID nuevo de un serial corregido (el viejo ya restó).
+          this._ajustarConteos(viejo, nuevo);
+          if (viejo?.serial_compartido || nuevo?.serial_compartido) tocaConflictos = true;
+          const queda = nuevo && nuevo.estado === this._cargadoEstado;
+          if (queda) { if (i >= 0) this._equipos[i] = nuevo; else this._equipos.push(nuevo); }
+          else if (i >= 0) this._equipos.splice(i, 1);
+          continue;
+        }
+        if (nuevo) {
+          if (i >= 0) this._equipos[i] = nuevo; else this._equipos.push(nuevo);
         } else if (i >= 0) {
           this._equipos.splice(i, 1);
         }
+      }
+      // La cola de conflictos no sale de un delta (depende de cuántas fichas
+      // comparten serial): si se tocó una ficha compartida, se recuenta.
+      if (tocaConflictos && this._conteos) {
+        this._conteos.conflictos = (await ConflictosPoolService.listarPendientes()).length;
       }
       // Mismo orden que EquiposPoolService.listar(), por si cambió el modelo.
       this._equipos.sort((a, b) => (a.modelo_label || '').localeCompare(b.modelo_label || '')
@@ -287,6 +461,8 @@ window.EquiposPool = {
   // ── Render ───────────────────────────────────────────────────────────
   setTab(tab) {
     this._tab = tab;
+    // Pedir otra pestaña es pedir otra carga: si la anterior falló, se reintenta.
+    this._errorCarga = null;
     // Escoger una ubicación sale de cualquier cola (incluida "Sin verificar",
     // que no es una pestaña sino un toggle).
     const chk = document.getElementById('chkSinVerificar');
@@ -305,6 +481,7 @@ window.EquiposPool = {
     const chk = document.getElementById('chkSinVerificar');
     if (chk) chk.checked = !!cola.chk;
     this._tab = cola.tab;
+    this._errorCarga = null;
     this._pintarSeleccion();
     this.render();
   },
@@ -612,6 +789,20 @@ window.EquiposPool = {
   render() {
     const tbody = document.getElementById('eqTabla');
     if (!tbody) return;
+    // Si lo que se va a pintar necesita datos que no están en memoria (una
+    // búsqueda estando en una sola pestaña, un filtro, Conflictos, Todos…), se
+    // piden ANTES de pintar. Todo camino pasa por aquí —pestañas, tarjetas,
+    // filtros, búsqueda, deep-links—, así que nada puede pintarse con medio
+    // pool. Lo que NUNCA puede pasar es responder "ningún equipo coincide" con
+    // media lista en memoria: esa respuesta falsa es justo la que N1 quitó.
+    if (!this._datosListos()) {
+      if (this._errorCarga) return this._renderErrorCarga(tbody);
+      this._renderCargando(tbody);
+      this._asegurarDatos()
+        .then(async () => { this.render(); await this._cargarEstadosOrdenTaller(); this.render(); })
+        .catch(e => { console.error('[Equipos] no se pudo cargar:', e); this.render(); });
+      return;
+    }
     const lista = this._filtrados();
     const esc = FMT.esc;
 
@@ -621,11 +812,16 @@ window.EquiposPool = {
     // Tarjetas de "Pendientes": conteos GLOBALES del pool (no los toca ningún
     // filtro). Es una bandeja de trabajo — tiene que decir cuánto falta de
     // verdad, no cuánto falta dentro de lo que estés mirando ahora.
-    const nPorClasificar = this._equipos.filter(e => e.estado === 'por_clasificar').length;
-    const nPorInspeccionar = this._equipos.filter(e => e.estado === 'devuelto_revision').length;
-    const nNoRetirado = this._equipos.filter(e => e.estado === 'no_retirado').length;
-    const nConflictos = this._gruposConflicto().length;
-    const nSinVerificar = this._equipos.filter(e => e.verificado === false).length;
+    // Con el pool entero en memoria se cuentan como siempre; en modo por
+    // pestaña salen de los conteos globales (_cargarConteos), porque contar lo
+    // cargado diría cuánto falta dentro de una sola ubicación.
+    const C = this._completo ? null : this._conteos;
+    const cuenta = (estado) => C ? (C.porEstado[estado] || 0) : this._equipos.filter(e => e.estado === estado).length;
+    const nPorClasificar = cuenta('por_clasificar');
+    const nPorInspeccionar = cuenta('devuelto_revision');
+    const nNoRetirado = cuenta('no_retirado');
+    const nConflictos = C ? C.conflictos : this._gruposConflicto().length;
+    const nSinVerificar = C ? C.sinVerificar : this._equipos.filter(e => e.verificado === false).length;
     set('colaPorClasificar', fmt(nPorClasificar));
     set('colaPorInspeccionar', fmt(nPorInspeccionar));
     set('colaNoRetirado', fmt(nNoRetirado));
@@ -644,14 +840,27 @@ window.EquiposPool = {
     // Con búsqueda activa se vuelven "cuántos resultados hay en cada ubicación",
     // que es exactamente lo que uno quiere saber al buscar un serial.
     const fAct = this._filtrosActivos();
-    const filtrables = this._equipos.filter(e => this._pasaFiltrosSecundarios(e, fAct));
-    const n = estado => filtrables.filter(e => e.estado === estado).length;
-    set('countBodega', `(${fmt(n('en_bodega'))})`);
-    set('countAsignados', `(${fmt(n('asignado_contrato'))})`);
-    set('countCliente', `(${fmt(n('en_cliente'))})`);
-    set('countTaller', `(${fmt(n('en_taller'))})`);
-    set('countOtros', `(${fmt(filtrables.filter(e => this.ESTADOS_OTROS.includes(e.estado)).length)})`);
-    set('countTodos', `(${fmt(filtrables.length)})`);
+    if (C) {
+      // Modo por pestaña: por construcción no hay búsqueda ni filtros
+      // secundarios (_bastaParcial), así que el número de cada pestaña es su
+      // total global — el mismo que daría contarlo con el pool entero.
+      const pe = C.porEstado;
+      set('countBodega', `(${fmt(pe.en_bodega || 0)})`);
+      set('countAsignados', `(${fmt(pe.asignado_contrato || 0)})`);
+      set('countCliente', `(${fmt(pe.en_cliente || 0)})`);
+      set('countTaller', `(${fmt(pe.en_taller || 0)})`);
+      set('countOtros', `(${fmt(this.ESTADOS_OTROS.reduce((s, e) => s + (pe[e] || 0), 0))})`);
+      set('countTodos', `(${fmt(C.total)})`);
+    } else {
+      const filtrables = this._equipos.filter(e => this._pasaFiltrosSecundarios(e, fAct));
+      const n = estado => filtrables.filter(e => e.estado === estado).length;
+      set('countBodega', `(${fmt(n('en_bodega'))})`);
+      set('countAsignados', `(${fmt(n('asignado_contrato'))})`);
+      set('countCliente', `(${fmt(n('en_cliente'))})`);
+      set('countTaller', `(${fmt(n('en_taller'))})`);
+      set('countOtros', `(${fmt(filtrables.filter(e => this.ESTADOS_OTROS.includes(e.estado)).length)})`);
+      set('countTodos', `(${fmt(filtrables.length)})`);
+    }
     this._pintarSeleccion();
 
     // La vista de Conflictos pinta GRUPOS, no filas. Cede ante una búsqueda:
@@ -696,7 +905,10 @@ window.EquiposPool = {
       const msgBusqueda = hayOtrosFiltros
         ? `Ningún equipo del pool coincide con "${esc(fAct.q)}" y los demás filtros activos. Prueba a limpiarlos.`
         : `Ningún equipo del pool coincide con "${esc(fAct.q)}". Revisa que el serial esté bien escrito — si el equipo es real y nunca pasó por aquí, se dará de alta solo la próxima vez que toque un contrato, una orden o bodega.`;
-      const msg = !this._equipos.length
+      // En modo por pestaña una ubicación vacía NO es un pool vacío: se mira
+      // el total global, o la página diría "no hay equipos" con 7,600 fichas.
+      const poolVacio = C ? C.total === 0 : !this._equipos.length;
+      const msg = poolVacio
         ? 'No hay equipos en el pool. Usa "Recibir equipos" o "Importar Excel".'
         : fAct.q ? msgBusqueda
         : (hayOtrosFiltros ? 'Sin resultados con el filtro actual.' : (VACIO_POR_TAB[this._tab] || 'Sin resultados.'));
@@ -1766,6 +1978,18 @@ window.EquiposPool = {
   },
 
   // ── Conciliación pool vs conteo manual ───────────────────────────────
+  // El mismo Map que StockAgg.agruparPool arma recorriendo las fichas en
+  // bodega (modeloKey → {modelo_id, modelo_label, n}), pero desde el resumen.
+  // La clave del resumen ES el modeloKey (mismo cálculo front y back).
+  async _bodegaDesdeResumen() {
+    const m = new Map();
+    for (const r of await EquiposPoolService.resumenPorModelo()) {
+      const n = Number((r.est || {}).en_bodega || 0);
+      if (n) m.set(r.key, { modelo_id: r.modelo_id, modelo_label: r.modelo_label, n });
+    }
+    return m;
+  },
+
   async abrirConciliacion() {
     const cont = document.getElementById('concilTabla');
     cont.innerHTML = 'Cargando…';
@@ -1776,7 +2000,12 @@ window.EquiposPool = {
 
       // Join único conteo ↔ pool (StockAgg, mismo casado por id/label y misma
       // convención de signo que el tablero de Inventario: dif = pool − conteo).
-      const poolMap = StockAgg.agruparPool(this._equipos.filter(e => e.estado === 'en_bodega'));
+      // En modo por pestaña _equipos no tiene toda la bodega: agrupar lo
+      // cargado daría una conciliación con diferencias FALSAS en cada modelo.
+      // Ahí la bodega por modelo sale del resumen, con la misma forma de Map.
+      const poolMap = this._completo
+        ? StockAgg.agruparPool(this._equipos.filter(e => e.estado === 'en_bodega'))
+        : await this._bodegaDesdeResumen();
       const rows = StockAgg.join({ conteos, poolMap, labelDeModelo: id => this._modeloLabel(id) })
         .map(f => ({
           label: f.label,
