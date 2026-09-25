@@ -33,9 +33,39 @@
     return d.getDate() + ' ' + meses[d.getMonth()] + ' ' + d.getFullYear();
   }
 
-  function estadoChipHtml(estado) {
+  function estadoChipHtml(estado, doc = cot) {
     const e = CotState.ESTADOS[estado] || CotState.ESTADOS.borrador;
-    return `<span class="chip-estado ${e.chip}">${e.label}</span>`;
+    return `<span class="chip-estado ${e.chip}">${esc(CotState.estadoLabel(estado, doc))}</span>`;
+  }
+
+  const esTaller = () => CotizacionTaller.esTaller(cot);
+
+  // Pasos de una cotización de TALLER, a la vista arriba del detalle: dónde
+  // está parada y qué sigue, sin tener que leer el historial. El que sigue
+  // es el único que se marca como "estás aquí".
+  function pasosTallerHtml() {
+    const pasos = CotizacionTaller.pasos(cot);
+    const iNext = pasos.findIndex(p => !p.done && !p.cortada);
+    const cerrada = ['rechazada', 'descartada', 'vencida'].includes(cot.estado);
+    return `
+      <div class="cc-panel" style="margin-bottom:var(--sp-4);">
+        <div class="cc-panel-body" style="display:flex; gap:6px; flex-wrap:wrap; align-items:stretch;">
+          ${pasos.map((p, i) => {
+            const aqui = i === iNext;
+            const bg = p.done ? 'var(--ok-soft, #E7F6EE)' : aqui ? 'var(--warn-soft, #FFF7E6)' : 'var(--bg-2, #F5F7FA)';
+            const fg = p.done ? 'var(--ok-deep, #17714B)' : aqui ? 'var(--warn-deep, #8A5A00)' : 'var(--fg-3)';
+            return `<div style="flex:1 1 150px; min-width:140px; padding:10px 12px; border-radius:8px; background:${bg}; color:${fg};${p.cortada ? ' opacity:.55; text-decoration:line-through;' : ''}">
+              <div style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;">${p.done ? '✓ Hecho' : aqui ? '● Estás aquí' : 'Pendiente'}</div>
+              <div style="font-size:13.5px; font-weight:600; margin-top:2px;">${esc(p.t)}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        ${cerrada ? `<div class="cc-panel-body" style="padding-top:0; font-size:12.5px; color:var(--fg-3);">
+          Cerrada como <b>${esc(CotState.estadoLabel(cot.estado, cot))}</b>${cot.cierre_motivo ? ' — ' + esc(cot.cierre_motivo) : ''}. No va a facturación.</div>` : ''}
+        ${cot.gestion_id ? `<div class="cc-panel-body" style="padding-top:0; font-size:12.5px; color:var(--fg-2);">
+          <b>Reposición por daño</b> · gestión <span style="font-family:var(--font-mono);">${esc(cot.gestion_id)}</span>.
+          Al aceptarla, Bodega recibe el aviso para asignar el radio de reposición; si el cliente no la acepta, el caso pasa a cobranza.</div>` : ''}
+      </div>`;
   }
 
   // Historial reconstruido a partir de los timestamps reales del documento.
@@ -63,9 +93,25 @@
       });
     }
     if (cot.fecha_conversion) {
+      // En el taller no hay "venta": el cliente aceptó la reparación, y lo
+      // que importa es CÓMO lo dijo (correo, teléfono…) y quién lo anotó.
+      const ac = cot.aceptacion;
+      h.push(CotizacionTaller.esTaller(cot)
+        ? {
+            act: 'Aceptada por el cliente · pasó a facturación',
+            meta: fmtFechaAny(cot.fecha_conversion)
+              + (ac ? ' · ' + CotizacionTaller.medioLabel(ac.medio) + (ac.nota ? ' — ' + ac.nota : '') : '')
+              + (ac?.por_email ? ' · anotado por ' + ac.por_email : ''),
+          }
+        : {
+            act: 'Convertida a orden de venta',
+            meta: fmtFechaAny(cot.fecha_conversion) + ' · venta cerrada',
+          });
+    }
+    if (cot.facturacion?.estado === 'facturada') {
       h.push({
-        act: 'Convertida a orden de venta',
-        meta: fmtFechaAny(cot.fecha_conversion) + ' · venta cerrada',
+        act: 'Facturada',
+        meta: fmtFechaAny(cot.facturacion.facturada_at) + (cot.facturacion.factura ? ' · factura ' + cot.facturacion.factura : ''),
       });
     }
     if (cot.fecha_rechazo) {
@@ -121,7 +167,8 @@
 
   function render() {
     const cli = (catalogos.clientesById[cot.clienteId]) || { razon: cot.cliente_nombre, ruc: cot.cliente_ruc, email: cot.cliente_email, representante: '' };
-    const ej = catalogos.ejecutivos.find(e => e.id === cot.ejecutivoId) || { nombre: cot.ejecutivo_nombre || '—' };
+    const ej = catalogos.ejecutivos.find(e => e.id === cot.ejecutivoId)
+      || { nombre: cot.ejecutivo_nombre || '—', rol: cot.ejecutivo_cargo || '', email: cot.ejecutivo_email || '', tel: '' };
     const dirigidoA = cot.dirigido_a || cli.representante || '';
     const dirigidoEmail = cot.dirigido_email || cli.email || '';
     const t = T.calcTotales(cot);
@@ -143,17 +190,21 @@
       <div class="app-page-header">
         <div>
           <h1 style="display:flex; align-items:center; gap:12px;">${esc(cot.id)} ${estadoChipHtml(cot.estado)}</h1>
-          <p>${esc(cli.razon || '—')} · ${resumenImporte(t)} · ${cot.items.length} renglones</p>
+          <p>${esTaller() ? `<b>Servicio técnico</b> · orden ${esc(cot.orden_id || '—')} · ` : ''}${esc(cli.razon || '—')} · ${resumenImporte(t)} · ${cot.items.length} renglones</p>
         </div>
         <div class="app-page-header-actions">
           ${soloLectura ? '' : botonAccionPrincipal(cot.estado)}
           ${soloLectura ? '' : '<button class="btn btn-ghost" id="btnDuplicar"><i data-lucide="copy"></i> Duplicar</button>'}
           ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada' || cot.estado === 'convertida') ? '<button class="btn btn-ghost" id="btnEnviar"><i data-lucide="send"></i> Reenviar al cliente</button>' : ''}
-          ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada') ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#0B2A47; color:#fff; border-color:#0B2A47;"><i data-lucide="flag"></i> Cerrar cotización</button>' : ''}
+          ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada') ? (esTaller()
+            ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#065F46; color:#fff; border-color:#065F46;"><i data-lucide="circle-check"></i> Respuesta del cliente</button>'
+            : '<button class="btn btn-secondary" id="btnCerrar" style="background:#0B2A47; color:#fff; border-color:#0B2A47;"><i data-lucide="flag"></i> Cerrar cotización</button>') : ''}
           ${!soloLectura && CotState.esEditable(cot.estado) ? '<button class="btn btn-secondary" id="btnEditar"><i data-lucide="pencil"></i> Editar</button>' : ''}
           <button class="btn btn-primary" id="btnImprimir"><i data-lucide="printer"></i> Imprimir / PDF</button>
         </div>
       </div>
+
+      ${esTaller() ? pasosTallerHtml() : ''}
 
       <div class="cc-detail-grid">
         <div>
@@ -212,7 +263,8 @@
             </div>
           </div>
 
-          <!-- Condiciones -->
+          ${cot.condiciones.length ? `
+          <!-- Condiciones (una de taller sin condiciones no pinta el bloque) -->
           <div class="cc-panel">
             <div class="cc-panel-head"><h3><i data-lucide="clipboard-check"></i> Condiciones</h3></div>
             <div class="cc-panel-body">
@@ -220,7 +272,7 @@
                 ${cot.condiciones.map(c => `<dt>${esc(c.k)}</dt><dd>${esc(c.v)}</dd>`).join('')}
               </dl>
             </div>
-          </div>
+          </div>` : ''}
 
           ${(cot.adjuntos && cot.adjuntos.length) ? `
           <!-- Adjuntos (viajan con la propuesta) -->
@@ -250,7 +302,7 @@
               <dl class="cc-kv" style="margin-top:18px; gap:8px 14px;">
                 <dt>Emitida</dt><dd>${esc(fmtFechaCorta(cot.fecha))}</dd>
                 <dt>Vence</dt><dd>${esc(fmtFechaCorta(vence))}</dd>
-                <dt>Ejecutivo</dt><dd>${esc(ej.nombre)}</dd>
+                <dt>${esTaller() ? 'Firma' : 'Ejecutivo'}</dt><dd>${esc(ej.nombre)}<div style="font-size:12px; color:var(--fg-3);">${esc(CotizacionTaller.cargoFirmante(cot, ej))}</div></dd>
               </dl>
             </div>
           </div>
@@ -368,14 +420,17 @@
       cont.innerHTML = '<p style="font-size:12.5px; color:var(--fg-3); margin:0; line-height:1.5;">' + txt + '</p>';
       return;
     }
-    const opts = TRANSICIONES[cot.estado] || [];
+    // En el taller 'convertida' (Aceptada) solo se marca con "Respuesta del
+    // cliente": es el paso que pregunta cómo aceptó y abre la facturación. Un
+    // "Marcar Aceptada" suelto en este panel se saltaría esa pregunta.
+    const opts = (TRANSICIONES[cot.estado] || []).filter(e => !(esTaller() && e === 'convertida'));
     if (!opts.length) {
       cont.innerHTML = '<p style="font-size:12.5px; color:var(--fg-3); margin:0;">Estado final — sin transiciones disponibles.</p>';
       return;
     }
     cont.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:8px;">' +
       opts.map(e => {
-        const label = CotState.ESTADOS[e].label;
+        const label = CotState.estadoLabel(e, cot);
         const danger = (e === 'rechazada' || e === 'vencida');
         return `<button class="btn btn-${danger ? 'ghost' : 'secondary'} btn-sm" data-estado="${e}">Marcar ${label}</button>`;
       }).join('') + '</div>';
@@ -392,16 +447,18 @@
       // cotización por lo que se le cotizó al cliente.
       totalTexto: resumenImporte(t),
       cliente: cli?.razon || cot.cliente_nombre || '',
+      taller: esTaller(),
+      reposicion: !!cot.gestion_id,
     });
     if (!cierre) return;
     const desenlace = cierre.estado;
     try {
-      const patch = CotState.patchCierre(desenlace, cierre.motivo, firebase.auth().currentUser?.uid || null);
+      const patch = CotState.patchCierre(desenlace, cierre.motivo, firebase.auth().currentUser?.uid || null, cierre.aceptacion || null);
       await CotizacionesService.updateCotizacion(cot._docId, patch);
       // Se mezcla el patch completo (no solo el estado) para que el historial
       // recién renderizado muestre la fecha y el motivo sin recargar.
       Object.assign(cot, patch);
-      Toast.show(CotState.cierreToast(desenlace), desenlace === 'convertida' ? 'ok' : 'warn');
+      Toast.show(CotState.cierreToast(desenlace, { taller: esTaller() }), desenlace === 'convertida' ? 'ok' : 'warn');
       render();
     } catch (e) {
       console.error(e);
@@ -460,21 +517,9 @@
     // Se llama otra vez si el panel de envío cambia la casilla: el link es el
     // mismo, lo que cambia es el contenido que abre el cliente.
     const generarLink = async () => {
-      const snapshot = {
-        id: cot.id, estado: cot.estado, fecha: cot.fecha, validezDias: cot.validezDias,
-        moneda: cot.moneda, descuentoPct: cot.descuentoPct, itbmsPct: cot.itbmsPct,
-        intro: cot.intro, items: cot.items, condiciones: cot.condiciones,
-        // El espejo público muestra lo que PAGA el cliente, así que lleva los
-        // dos totales reales y el plazo. `total` se conserva por compatibilidad
-        // con los espejos ya emitidos (todos de pura venta, donde coincide con
-        // total_venta), pero verify pinta el desglose cuando hay alquiler.
-        subtotal: t.subtotal, descGlobal: t.descGlobal, itbms: t.itbms, total: t.total,
-        totalVenta: t.venta.total, totalMensual: t.alquiler.total,
-        plazoMeses: t.plazoMeses, hayAlquiler: t.hayAlquiler, hayVenta: t.hayVenta,
-        ventaDetalle: t.venta, alquilerDetalle: t.alquiler,
-        cliente: { razon: cli.razon, ruc: cli.ruc, tel: cli.tel, email: cli.email, representante: cli.representante },
-        ejecutivo: { nombre: ej.nombre, rol: ej.rol, email: ej.email, tel: ej.tel },
-      };
+      // El espejo público muestra lo que PAGA el cliente (los dos totales
+      // reales y el plazo) y, en el taller, que es un servicio técnico.
+      const snapshot = CotState.snapshotPublico(cot, t, cli, ej);
       const result = await CotizacionesService.ensureVerificacionPublica(cot._docId, {
         cotizacion_id: cot.id,
         cliente_nombre: cli.razon || '',
@@ -506,7 +551,9 @@
       ccEmail: cot.creado_por_email || '',
       intro: cot.intro || '',
       validezDias: cot.validezDias || 15,
-      ejecutivo: ej.nombre || '',
+      ejecutivo: ej.nombre || cot.ejecutivo_nombre || '',
+      ejecutivoCargo: CotizacionTaller.cargoFirmante(cot, ej),
+      doc: cot,
       link,
       adjuntos: cot.adjuntos || [],
       llevaCarta: cartaAplica ? CotState.llevaCarta(cot) : null,
@@ -535,6 +582,7 @@
         subject: payload.subject,
         html: payload.html,
         attachments: CotState.adjuntosToAttachments(cot.adjuntos),
+        replyTo: CotState.replyToDe({ ejecutivoEmail: ej.email || cot.ejecutivo_email, creadoPorEmail: cot.creado_por_email }),
       });
       cot.estado = 'enviada';
       Toast.show('Cotización enviada a ' + payload.dest, 'ok');

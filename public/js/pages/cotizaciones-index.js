@@ -12,6 +12,13 @@
   let soloMias = false;     // toggle "Solo mis cotizaciones" (admins; forzado para vendedores)
   let esSupervisor = false; // email en empresa/config.cotizaciones_supervisores → ve todas (solo lectura)
   let policyCfg = null;     // { descuentoMaxPct, totalMax } desde empresa/config
+  // Taller | Ventas | Todas (2026-09-25). Una cotización de taller y una de
+  // ventas terminan distinto (la de taller en facturación, la de ventas en un
+  // contrato o una venta) y mezclarlas hacía que las reparaciones del taller
+  // contaran en la tasa de cierre de los vendedores.
+  let filtroTipo = 'todas';
+  const esTallerC = (c) => CotizacionTaller.esTaller(c);
+  const pasaTipo = (c) => filtroTipo === 'todas' || (filtroTipo === 'taller' ? esTallerC(c) : !esTallerC(c));
 
   const $ = (id) => document.getElementById(id);
 
@@ -56,6 +63,7 @@
     if (!mostrarEliminadas) list = list.filter(c => !c.deleted);
     // Vendedor solo ve las propias (forzado). Admin con toggle.
     if (soloMias) list = list.filter(c => c.creado_por_uid === userUid);
+    list = list.filter(pasaTipo);
     // Los dos últimos segmentos no filtran por estado sino por FACTURACIÓN: es
     // el control que el taller llevaba a mano ("cuáles ya se facturaron y
     // cuáles no"). Solo aplican a cotizaciones de taller, que son las únicas
@@ -84,6 +92,7 @@
   // ── Render ────────────────────────────────────────────────────
   function render() {
     const filtradas = getFiltradas();
+    renderTipo();
     renderSegments();
     renderStats(filtradas);
     renderTabla(filtradas);
@@ -95,6 +104,18 @@
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
+  function renderTipo() {
+    const wrap = $('tipoSeg');
+    if (!wrap) return;
+    const base = cotizaciones.filter(c => !c.deleted && (!soloMias || c.creado_por_uid === userUid));
+    const n = { todas: base.length, taller: base.filter(esTallerC).length };
+    n.ventas = n.todas - n.taller;
+    wrap.innerHTML = [['taller', 'Taller'], ['ventas', 'Ventas'], ['todas', 'Todas']].map(([k, l]) => `
+      <button type="button" class="cc-seg${filtroTipo === k ? ' active' : ''}" data-tipo="${k}" role="tab" aria-selected="${filtroTipo === k}">
+        ${l} <span class="cc-seg-count">${n[k]}</span>
+      </button>`).join('');
+  }
+
   function renderSegments() {
     const wrap = $('segments');
     if (!wrap) return;
@@ -102,7 +123,7 @@
     // para que el segmento "Borrador 3" siempre coincida con lo que muestra el listado
     // al hacer click. Antes el segmento contaba globalmente y la tabla filtraba por
     // vendedor → "Borrador 3" vs "Sin resultados".
-    const base = cotizaciones.filter(c => !c.deleted && (!soloMias || c.creado_por_uid === userUid));
+    const base = cotizaciones.filter(c => !c.deleted && (!soloMias || c.creado_por_uid === userUid) && pasaTipo(c));
     const counts = { todas: base.length };
     CotState.ESTADO_ORDEN.forEach(e => {
       counts[e] = base.filter(c => (c.estado || 'borrador') === e).length;
@@ -111,7 +132,12 @@
     const facturadas  = base.filter(c => facturacionEstado(c) === 'facturada').length;
     const segs = [
       { key: 'todas', label: 'Todas', count: counts.todas },
-      ...CotState.ESTADO_ORDEN.map(e => ({ key: e, label: CotState.ESTADOS[e].label, count: counts[e] })),
+      // En la vista de Taller 'convertida' se lee "Aceptada" y 'aprobada' no
+      // existe en la práctica (el taller aprueba y envía de una vez), así que
+      // los segmentos vacíos que no significan nada ahí se esconden.
+      ...CotState.ESTADO_ORDEN
+        .filter(e => filtroTipo !== 'taller' || counts[e] > 0 || ['borrador', 'enviada', 'convertida'].includes(e) || filtroEstado === e)
+        .map(e => ({ key: e, label: filtroTipo === 'taller' && e === 'convertida' ? 'Aceptada' : CotState.ESTADOS[e].label, count: counts[e] })),
     ];
     // Solo aparecen cuando hay algo que contar: en una lista de puras
     // cotizaciones comerciales estos dos segmentos siempre dirían 0 y no
@@ -131,12 +157,38 @@
     // Los KPIs de negocio (enviadas / monto cerrado / tasa) reflejan el alcance del
     // usuario (soloMias forzado para vendedores), no el de toda la empresa.
     const visibles = cotizaciones.filter(c => !c.deleted && (!soloMias || c.creado_por_uid === userUid));
-    const enviadas = visibles.filter(c => c.estado === 'enviada').length;
+    // Vista de TALLER: sus propios números. Lo que el cliente todavía no
+    // contesta, lo que se aceptó y cuánto de eso ya se facturó.
+    if (filtroTipo === 'taller') {
+      const taller = visibles.filter(esTallerC);
+      const esperando = taller.filter(c => c.estado === 'enviada' || c.estado === 'aprobada').length;
+      const aceptadas = taller.filter(c => c.estado === 'convertida');
+      const oportunidadesT = taller.filter(c => ['enviada', 'convertida', 'rechazada', 'vencida'].includes(c.estado)).length;
+      const porFacturar = taller.filter(c => facturacionEstado(c) === 'pendiente').length;
+      $('statTotal').textContent = filtradas.length;
+      $('statPendientes').textContent = esperando;
+      $('statPendSub').textContent = 'esperando la respuesta del cliente';
+      $('statMontoLbl').textContent = 'Monto aceptado';
+      $('statMontoAprobado').textContent = FMT.money(aceptadas.reduce((s, c) => s + Number(c.total || 0), 0));
+      $('statMontoSub').textContent = porFacturar ? `${porFacturar} por facturar` : 'todo lo aceptado ya se facturó';
+      $('statTasaLbl').textContent = 'Tasa de aceptación';
+      $('statTasa').textContent = (oportunidadesT ? Math.round(aceptadas.length / oportunidadesT * 100) : 0) + '%';
+      $('statTasaSub').textContent = 'aceptadas / enviadas';
+      return;
+    }
+    $('statPendSub').textContent = 'requieren seguimiento';
+    $('statMontoLbl').textContent = 'Monto cerrado';
+    $('statTasaLbl').textContent = 'Tasa de cierre';
+    $('statTasaSub').textContent = 'convertidas / oportunidades';
+    // Los números de VENTAS no cuentan las reparaciones del taller: una
+    // reparación aceptada no es una venta cerrada del vendedor.
+    const ventas = visibles.filter(c => !esTallerC(c));
+    const enviadas = ventas.filter(c => c.estado === 'enviada').length;
     // "Monto cerrado": solo cotizaciones convertidas a venta efectiva.
     // `c.total` es el valor evaluado, así que una cotización de alquiler entra
     // con su primer año de renta — es la única forma de sumarla con las ventas
     // de pago único. El subtítulo lo dice cuando hay alguna.
-    const convertidasList = visibles.filter(c => c.estado === 'convertida');
+    const convertidasList = ventas.filter(c => c.estado === 'convertida');
     const montoCerrado = convertidasList.reduce((s, c) => s + Number(c.total || 0), 0);
     const hayRentaCerrada = convertidasList.some(c => Number(c.total_mensual || 0) > 0);
     // Tasa de cierre: convertidas / oportunidades activas (enviadas + convertidas + rechazadas + vencidas).
@@ -144,8 +196,8 @@
     // también 'descartada': esa cotización se cerró por otro motivo (típico:
     // se rehace con otra cantidad) y contarla como perdida castigaría al
     // vendedor dos veces por la misma oportunidad.
-    const convertidas = visibles.filter(c => c.estado === 'convertida').length;
-    const oportunidades = visibles.filter(c => ['enviada', 'convertida', 'rechazada', 'vencida'].includes(c.estado)).length;
+    const convertidas = ventas.filter(c => c.estado === 'convertida').length;
+    const oportunidades = ventas.filter(c => ['enviada', 'convertida', 'rechazada', 'vencida'].includes(c.estado)).length;
     const tasa = oportunidades > 0 ? Math.round(convertidas / oportunidades * 100) : 0;
     // "Total emitidas" debe ser consonante con lo que el usuario ve: cuenta
     // exactamente las filas listadas (respeta filtros de estado/texto/eliminadas
@@ -158,12 +210,12 @@
     $('statTasa').textContent = tasa + '%';
   }
 
-  function estadoChip(estado, motivo) {
+  function estadoChip(estado, motivo, doc) {
     const e = CotState.ESTADOS[estado] || CotState.ESTADOS.borrador;
     // Una cotización descartada sin el por qué a la vista obliga a abrirla:
     // el motivo que escribió el vendedor viaja en el tooltip del chip.
     const tip = motivo ? ` title="${FMT.esc(motivo)}"` : '';
-    return `<span class="chip-estado ${e.chip}"${tip}>${e.label}</span>`;
+    return `<span class="chip-estado ${e.chip}"${tip}>${FMT.esc(CotState.estadoLabel(estado, doc))}</span>`;
   }
 
   // ── Facturación de las cotizaciones de taller ─────────────────
@@ -185,7 +237,7 @@
       const n = c.facturacion.factura;
       return `<span class="chip-estado chip-entregada" title="${n ? `Factura N.° ${FMT.esc(n)}` : 'Facturada, sin número anotado'}">Facturada${n ? ` ${FMT.esc(n)}` : ''}</span>`;
     }
-    return `<span class="chip-estado chip-reparacion" title="El equipo ya se entregó: está en la bandeja de Facturación pendiente">Por facturar</span>`;
+    return `<span class="chip-estado chip-reparacion" title="Está en la bandeja de Facturación pendiente de Recepción">Por facturar</span>`;
   }
 
   // ¿El usuario puede operar esta fila? Los roles con vista global mantienen sus
@@ -231,13 +283,15 @@
             ${c.cliente_email ? '<div class="cc-aten">' + FMT.esc(c.cliente_email) + '</div>' : ''}
           </td>
           <td class="td-muted">${fmtFechaCorta(fechaIso(c))}</td>
-          <td><div style="display:flex;flex-wrap:wrap;gap:4px;">${estadoChip(c.estado || 'borrador', c.cierre_motivo)}${facturacionChip(c)}</div></td>
+          <td><div style="display:flex;flex-wrap:wrap;gap:4px;">${filtroTipo === 'todas' && esTallerC(c) ? '<span class="chip-estado chip-recibida" title="Cotización de servicio técnico (taller)">Taller</span>' : ''}${estadoChip(c.estado || 'borrador', c.cierre_motivo, c)}${facturacionChip(c)}</div></td>
           <td style="font-size:13px;">${c.ejecutivo_nombre ? FMT.esc(c.ejecutivo_nombre) : '—'}</td>
           <td class="cc-cell-total">${total}</td>
           <td class="td-actions">
             <span class="cc-row-actions">
               ${mutable ? botonBorrador(c) : ''}
-              ${mutable && (c.estado === 'aprobada' || c.estado === 'enviada') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Cerrar cotización" data-action="cerrar"><i data-lucide="flag"></i></button>` : ''}
+              ${mutable && (c.estado === 'aprobada' || c.estado === 'enviada') ? (esTallerC(c)
+                ? `<button class="btn btn-ghost btn-icon btn-sm" title="Respuesta del cliente (aceptó → a facturar)" data-action="cerrar"><i data-lucide="circle-check"></i></button>`
+                : `<button class="btn btn-ghost btn-icon btn-sm" title="Cerrar cotización" data-action="cerrar"><i data-lucide="flag"></i></button>`) : ''}
               <button class="btn btn-ghost btn-icon btn-sm" title="Ver" data-action="detalle"><i data-lucide="eye"></i></button>
               ${mutable && CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Editar" data-action="editar"><i data-lucide="pencil"></i></button>` : ''}
               ${mutable && (c.estado === 'aprobada' || c.estado === 'enviada' || c.estado === 'convertida') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Reenviar al cliente" data-action="enviar"><i data-lucide="send"></i></button>` : ''}
@@ -263,7 +317,7 @@
               <div class="responsive-card-title">${c.cliente_nombre ? FMT.esc(c.cliente_nombre) : '—'}</div>
               <div class="responsive-card-sub"><span class="cc-cell-num">${id}</span> · ${fmtFechaCorta(fechaIso(c))}</div>
             </div>
-            ${estadoChip(c.estado || 'borrador')}
+            ${estadoChip(c.estado || 'borrador', c.cierre_motivo, c)}
           </div>
           <div class="responsive-card-meta">
             <span>${c.ejecutivo_nombre ? FMT.esc(c.ejecutivo_nombre) : '—'}</span>
@@ -327,20 +381,23 @@
   }
 
   async function cerrarDesdeLista(cot) {
+    const taller = esTallerC(cot);
     const cierre = await CotState.cerrarPrompt({
       cotizacionId: cot.cotizacion_id || cot.id,
       total: Number(cot.total || 0),
       cliente: cot.cliente_nombre || '',
+      taller,
+      reposicion: !!cot.gestion_id,
     });
     if (!cierre) return;
     const desenlace = cierre.estado;
-    const patch = CotState.patchCierre(desenlace, cierre.motivo, userUid);
+    const patch = CotState.patchCierre(desenlace, cierre.motivo, userUid, cierre.aceptacion || null);
     try {
       await CotizacionesService.updateCotizacion(cot.id, patch);
       // La fila se repinta desde `cotizaciones` en memoria: entra el patch
       // completo para que el chip muestre el motivo en su tooltip.
       Object.assign(cot, patch);
-      Toast.show(CotState.cierreToast(desenlace), desenlace === 'convertida' ? 'ok' : 'warn');
+      Toast.show(CotState.cierreToast(desenlace, { taller }), desenlace === 'convertida' ? 'ok' : 'warn');
       render();
     } catch (e) {
       Toast.show('No se pudo cerrar: ' + (e?.message || e), 'bad');
@@ -364,6 +421,8 @@
       intro: cot.intro || '',
       validezDias: cot.validezDias || 15,
       ejecutivo: cot.ejecutivo_nombre || '',
+      ejecutivoCargo: CotizacionTaller.cargoFirmante(cot, null),
+      doc: cot,
       link,
       adjuntos: cot.adjuntos || [],
       llevaCarta: cartaAplica ? CotState.llevaCarta(cot) : null,
@@ -392,6 +451,7 @@
         subject: payload.subject,
         html: payload.html,
         attachments: CotState.adjuntosToAttachments(cot.adjuntos),
+        replyTo: CotState.replyToDe({ ejecutivoEmail: cot.ejecutivo_email, creadoPorEmail: cot.creado_por_email }),
       });
       cot.estado = 'enviada';
       Toast.show('Cotización enviada a ' + payload.dest, 'ok');
@@ -432,9 +492,12 @@
     copia.creado_por_uid = user?.uid || null;
     copia.creado_por_email = user?.email || null;
     // Reset de timestamps del ciclo de vida — la copia arranca limpia.
+    // `facturacion` y `aceptacion` son de la cotización ORIGINAL: una copia que
+    // los heredara nacería "Por facturar" sin que nadie la aceptara.
     ['enviada_en', 'enviada_manual', 'fecha_aprobacion', 'fecha_conversion', 'fecha_rechazo',
      'fecha_vencimiento', 'vencida_auto', 'vencida_manual',
-     'aprobado_por_uid', 'aprobado_por_email', 'convertida_por_uid', 'rechazado_por_uid']
+     'aprobado_por_uid', 'aprobado_por_email', 'convertida_por_uid', 'rechazado_por_uid',
+     'facturacion', 'aceptacion', 'resumen_bodega_at', 'fecha_descarte', 'descartada_por_uid', 'cierre_motivo']
       .forEach(k => { delete copia[k]; });
     // Flag persistido (A10) antes de escribir — misma evaluación que abajo.
     const polCopia = CotState.requiereAprobacionPara({ doc: copia, rol: userRol, policy: policyCfg });
@@ -479,16 +542,12 @@
     const cli = cat.clientesById[ui.clienteId] || {};
     // Fallback al nombre guardado en el doc: el firmante puede ser un supervisor
     // de taller (jefe_taller), que no está en el catálogo de ejecutivos (vendedores).
-    const ej  = cat.ejecutivos.find(e => e.id === ui.ejecutivoId) || { nombre: doc.ejecutivo_nombre || '', rol: '', email: '', tel: '' };
+    const ej  = cat.ejecutivos.find(e => e.id === ui.ejecutivoId)
+      || { nombre: doc.ejecutivo_nombre || '', rol: doc.ejecutivo_cargo || '', email: doc.ejecutivo_email || '', tel: '' };
     const t   = window.CotizacionTotales.calcTotales(ui);
-    const snapshot = {
-      id: ui.id, estado: ui.estado, fecha: ui.fecha, validezDias: ui.validezDias,
-      moneda: ui.moneda, descuentoPct: ui.descuentoPct, itbmsPct: ui.itbmsPct,
-      intro: ui.intro, items: ui.items, condiciones: ui.condiciones,
-      subtotal: t.subtotal, descGlobal: t.descGlobal, itbms: t.itbms, total: t.total,
-      cliente: { razon: cli.razon, ruc: cli.ruc, tel: cli.tel, email: cli.email, representante: cli.representante },
-      ejecutivo: { nombre: ej.nombre, rol: ej.rol, email: ej.email, tel: ej.tel },
-    };
+    // Mismo espejo que el detalle (antes esta copia no llevaba el desglose de
+    // venta/alquiler ni decía que era de taller).
+    const snapshot = CotState.snapshotPublico(ui, t, cli, ej);
     const { url } = await CotizacionesService.ensureVerificacionPublica(docId, {
       cotizacion_id: ui.id,
       cliente_nombre: cli.razon || doc.cliente_nombre || '',
@@ -694,40 +753,24 @@
         if (!dest) {
           Toast.show('✅ Aprobada, pero falta "Email destinatario" para enviar. Usa "Reenviar al cliente" desde el detalle cuando lo tengas.', 'warn');
         } else {
-          // Con el nombre de la empresa en el asunto/cuerpo la cotización se
-          // ubica desde el buzón sin cruzar el número contra el panel.
-          const clienteNom = String(doc.cliente_nombre || '').trim();
-          const subject = `Cotización ${doc.cotizacion_id} aprobada${clienteNom ? ` · ${clienteNom}` : ''} · CeComunica`;
-          const intro = (doc.intro || 'Adjuntamos la cotización solicitada.')
-            .replace(/[<>&]/g, s => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[s]));
-          const totalTxt = FMT.money(Number(doc.total || 0));
-          const dirA = doc.dirigido_a ? `<p style="margin:0 0 12px;">A la atención de: <b>${doc.dirigido_a}</b></p>` : '';
+          // Mismo correo que "Enviar al cliente" (CotState.correoCliente). La
+          // copia que vivía aquí le ponía "aprobada" en el asunto al cliente,
+          // que es justamente quien todavía no ha aprobado nada.
           const attachments = CotState.adjuntosToAttachments(doc.adjuntos);
-          const adjuntosHtml = attachments.length ? `
-              <p style="margin:14px 0 4px;"><b>Archivos adjuntos:</b></p>
-              <ul style="margin:0 0 12px; padding-left:18px; color:#374151;">
-                ${attachments.map(a => `<li>${a.filename}</li>`).join('')}
-              </ul>` : '';
-          const html = `
-            <div style="font-family:Arial, sans-serif; color:#111; max-width:560px;">
-              <h2 style="font:700 22px Arial,sans-serif; color:#0B2A47; margin:0 0 12px;">Cotización ${doc.cotizacion_id}</h2>
-              <p style="margin:0 0 12px;">Estimados señores,</p>
-              ${dirA}
-              <p style="margin:0 0 12px;">${intro}</p>
-              ${clienteNom ? `<p style="margin:0 0 4px;"><b>Empresa:</b> ${FMT.esc(clienteNom)}</p>` : ''}
-              <p style="margin:0 0 4px;"><b>Total:</b> ${totalTxt}</p>
-              <p style="margin:0 0 4px;"><b>Validez:</b> ${doc.validezDias || 15} días</p>
-              ${adjuntosHtml}
-              <p style="margin:18px 0;">
-                <a href="${link}" style="background:#0B2A47; color:#fff; padding:12px 18px; border-radius:6px; text-decoration:none; display:inline-block; font-weight:600;">
-                  Ver y descargar cotización (PDF)
-                </a>
-              </p>
-              <p style="font-size:12px; color:#6B7884; margin-top:24px;">
-                Si tiene cualquier consulta, puede responder a este correo. Atentamente, ${doc.ejecutivo_nombre || 'CeComunica'}.
-              </p>
-            </div>
-          `;
+          const { subject, html } = CotState.correoCliente({
+            doc,
+            cotizacionId: doc.cotizacion_id,
+            clienteNombre: doc.cliente_nombre || '',
+            total: Number(doc.total || 0),
+            dirigidoA: doc.dirigido_a || '',
+            intro: doc.intro || '',
+            validezDias: doc.validezDias || 15,
+            ejecutivo: doc.ejecutivo_nombre || '',
+            ejecutivoCargo: CotizacionTaller.cargoFirmante(doc, null),
+            link,
+            adjuntos: attachments,
+          });
+          const replyTo = CotState.replyToDe({ ejecutivoEmail: doc.ejecutivo_email, creadoPorEmail: doc.creado_por_email });
           await MailService.enqueue({
             to: dest,
             cc: doc.creado_por_email || null,
@@ -735,6 +778,7 @@
             subject,
             html,
             attachments,
+            ...(replyTo ? { replyTo } : {}),
             meta: { tipo: 'cotizacion_aprobada', cotizacion_id: doc.cotizacion_id, doc_id: _aprobId },
           });
           await CotizacionesService.updateCotizacion(_aprobId, {
@@ -818,6 +862,16 @@
     $('btnConfirmarAprob').addEventListener('click', confirmarAprobacion);
     $('btnRechazarAprob').addEventListener('click', rechazarAprobacion);
 
+    $('tipoSeg').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-tipo]');
+      if (!btn) return;
+      filtroTipo = btn.dataset.tipo;
+      // Un segmento de facturación no existe en Ventas: se vuelve a "Todas".
+      if (filtroTipo === 'ventas' && ['por_facturar', 'facturadas'].includes(filtroEstado)) filtroEstado = 'todas';
+      try { sessionStorage.setItem('cotTipo', filtroTipo); } catch (_) { /* preferencia de sesión */ }
+      render();
+    });
+
     $('segments').addEventListener('click', (e) => {
       const btn = e.target.closest('.cc-seg');
       if (!btn) return;
@@ -880,6 +934,17 @@
       // Deep-link ?estado= (señales del home, p.ej. S6 "enviadas"): aterrizar
       // con el segmento ya aplicado en vez de mostrar "Todas" y obligar a
       // filtrar a mano lo que la señal ya prometía.
+      // Vista por defecto según quién entra: la jefa de taller trabaja sus
+      // reparaciones; un vendedor, sus propuestas. `?tipo=` y la última
+      // elección de la sesión mandan sobre eso.
+      const tipoParam = new URLSearchParams(location.search).get('tipo');
+      let tipoSesion = null;
+      try { tipoSesion = sessionStorage.getItem('cotTipo'); } catch (_) { /* sin storage */ }
+      filtroTipo = ['taller', 'ventas', 'todas'].includes(tipoParam) ? tipoParam
+        : ['taller', 'ventas', 'todas'].includes(tipoSesion) ? tipoSesion
+        : rol === ROLES.JEFE_TALLER ? 'taller'
+        : rol === ROLES.VENDEDOR ? 'ventas' : 'todas';
+
       const estadoParam = new URLSearchParams(location.search).get('estado');
       if (estadoParam && (estadoParam === 'todas' || CotState.ESTADO_ORDEN.includes(estadoParam))) {
         filtroEstado = estadoParam;

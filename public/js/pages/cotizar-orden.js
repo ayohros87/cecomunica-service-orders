@@ -26,7 +26,12 @@
     clienteId: '',
     ejecutivoId: '',
     fecha: new Date().toISOString().slice(0, 10),
-    validezDias: 15,
+    // La validez de la empresa (admin · Configuración), como en ventas. El 15
+    // fijo que había aquí ignoraba esa configuración.
+    validezDias: Number(window.EMPRESA_CONFIG?.cotizacion_validez_dias) || 15,
+    // Condiciones de una REPARACIÓN (2026-09-25): nada de "tiempo de entrega"
+    // ni "forma de pago" de una venta de equipos. Se pueden corregir aquí.
+    condiciones: JSON.parse(JSON.stringify(window.CotizacionTaller?.CONDICIONES_TALLER || [])),
     itbmsPct: Math.round(FMT.ITBMS_RATE * 100),
     descuentoPct: 0,
     intro: '',
@@ -249,6 +254,21 @@
         <label class="form-label">Texto de introducción</label>
         <textarea class="form-textarea" rows="2" id="inpIntro">${esc(form.intro)}</textarea>
       </div>
+
+      <div class="form-field" style="margin-top:16px;">
+        <label class="form-label">Condiciones del servicio</label>
+        <div id="condRows" style="display:flex; flex-direction:column; gap:6px;">
+          ${(form.condiciones || []).map((c, i) => `
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input class="form-input" style="flex:0 0 38%;" data-cond-k="${i}" value="${esc(c.k)}" placeholder="Ej.: Garantía de la reparación">
+              <input class="form-input" style="flex:1;" data-cond-v="${i}" value="${esc(c.v)}" placeholder="Ej.: 30 días sobre el trabajo realizado">
+              <button type="button" class="btn btn-ghost btn-icon btn-sm" data-cond-del="${i}" title="Quitar esta condición"><i data-lucide="x"></i></button>
+            </div>`).join('')}
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnCondAdd" style="margin-top:6px;"><i data-lucide="plus"></i> Agregar condición</button>
+        <div class="form-hint" style="font-size:12px; color:var(--fg-3); margin-top:4px;">
+          Es lo que el cliente lee en el documento. Las de venta (tiempo de entrega, forma de pago…) no aplican a una reparación.</div>
+      </div>
     `;
 
     CotState.mountClienteCombo('comboCliente', {
@@ -266,7 +286,30 @@
     $('inpValidez').addEventListener('input', (e) => { form.validezDias = Number(e.target.value || 0); touch(); });
     $('selEjec').addEventListener('change', (e) => { form.ejecutivoId = e.target.value; touch(); });
     $('inpIntro').addEventListener('input', (e) => { form.intro = e.target.value; touch(); });
+    const pc = $('panelCliente');
+    pc.querySelectorAll('[data-cond-k]').forEach(inp => inp.addEventListener('input', (e) => {
+      form.condiciones[Number(e.target.dataset.condK)].k = e.target.value; touch();
+    }));
+    pc.querySelectorAll('[data-cond-v]').forEach(inp => inp.addEventListener('input', (e) => {
+      form.condiciones[Number(e.target.dataset.condV)].v = e.target.value; touch();
+    }));
+    pc.querySelectorAll('[data-cond-del]').forEach(b => b.addEventListener('click', () => {
+      form.condiciones.splice(Number(b.dataset.condDel), 1); touch(); renderCliente();
+    }));
+    $('btnCondAdd').addEventListener('click', () => {
+      form.condiciones.push({ k: '', v: '' }); touch(); renderCliente();
+      pc.querySelector(`[data-cond-k="${form.condiciones.length - 1}"]`)?.focus();
+    });
     if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  // ¿Este radio ya va a REPOSICIÓN POR DAÑO? Entonces se cobra la reposición
+  // (su propia cotización, la arma el sistema al aprobarse) y no una
+  // reparación encima: el aviso está para no cobrarle dos veces al cliente.
+  function reposicionDe(eq) {
+    const k = window.Serial?.norm ? Serial.norm(eq.serial) : String(eq.serial || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const m = (orden?.reemplazos_propuestos || {})[k];
+    return m && m.causa === 'dano_cliente' ? m : null;
   }
 
   // ── Equipos + líneas de pieza ──────────────────────────────────────────────
@@ -311,6 +354,9 @@
         <div class="co-interv ${eq.intervencion ? '' : 'vacia'}">
           <strong>Intervención:</strong> ${eq.intervencion ? esc(eq.intervencion) : 'Sin intervención registrada'}
         </div>
+        ${reposicionDe(eq) ? `<div class="form-hint" style="margin:8px 0; padding:8px 10px; border-radius:6px; background:#FFFBEB; border:1px solid #FDE68A; color:#92400e; font-size:12.5px;">
+          <b>Este radio va a reposición por daño</b> (${esc(reposicionDe(eq).gestion_id || '')}): la reposición se cobra en su propia cotización.
+          No le agregues la reparación aquí, o se le cobraría dos veces.</div>` : ''}
         ${consHtml}
         <table class="co-lineas">
           <thead>
@@ -634,6 +680,10 @@
         ? `Cotización correspondiente a la visita técnica${orden.visita?.sitio ? ' en ' + orden.visita.sitio : ''} (orden ${ordenId}).`
         : `Cotización correspondiente a la orden de servicio ${ordenId}.`);
       ui.items = items;
+      // Condiciones del SERVICIO, las que quedaron en pantalla (sin filas vacías).
+      ui.condiciones = (form.condiciones || [])
+        .map(c => ({ k: String(c.k || '').trim(), v: String(c.v || '').trim() }))
+        .filter(c => c.k && c.v);
       ui.creado_por_uid = user.uid;
       ui.creado_por_email = user.email || null;
 
@@ -664,7 +714,7 @@
         });
       } catch (e) { console.warn('No se pudo enlazar la cotización en la orden:', e); }
 
-      Toast.show('Cotización ' + ui.id + ' creada · solicitud enviada a ventas@cecomunica.com', 'ok');
+      Toast.show('Cotización ' + ui.id + ' creada · la jefatura de taller la revisa y la envía al cliente', 'ok');
       setTimeout(() => { location.href = '../cotizaciones/detalle-cotizacion.html?id=' + encodeURIComponent(ref.id); }, 700);
     } catch (err) {
       console.error(err);
@@ -993,6 +1043,11 @@
     form.ejecutivoId = catalogos.ejecutivos.find(e => e.id === user.uid)?.id
                     || supervisores[0]?.id
                     || '';
+
+    // La configuración de la empresa puede llegar después de que se armó
+    // `form`: la validez se relee aquí, antes del borrador (que manda).
+    const validezCfg = Number(window.EMPRESA_CONFIG?.cotizacion_validez_dias);
+    if (validezCfg > 0) form.validezDias = validezCfg;
 
     // Borrador autoguardado: se ofrece restaurar DESPUÉS de aplicar los
     // defaults, para que lo restaurado tenga la última palabra.

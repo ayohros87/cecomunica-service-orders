@@ -30,6 +30,9 @@ const GestionesService = {
   // retorno son de demo); la máquina fina por tipo la validan los triggers.
   ESTADOS: {
     pendiente_aprobacion: 'Pendiente de aprobación',
+    // Reemplazo por DAÑO aprobado con cargo (2026-09-25): la cotización de la
+    // reposición está con el cliente; bodega no asigna hasta que acepte.
+    pendiente_cliente:    'Esperando que el cliente acepte el cobro',
     pendiente_firma:      'Esperando firma del cliente',
     pendiente_bodega:     'Pendiente de bodega',
     en_proceso:           'En proceso',
@@ -38,7 +41,12 @@ const GestionesService = {
     cerrada:              'Cerrada',
     anulada:              'Anulada',
   },
-  ABIERTAS: ['pendiente_aprobacion', 'pendiente_firma', 'pendiente_bodega', 'en_proceso', 'en_demo', 'retorno'],
+  ABIERTAS: ['pendiente_aprobacion', 'pendiente_cliente', 'pendiente_firma', 'pendiente_bodega', 'en_proceso', 'en_demo', 'retorno'],
+
+  // ¿Reemplazo por daño causado por el cliente? ¿Se le cobra? (la cortesía
+  // aprobada sin cargo sigue siendo por daño, pero no cobra).
+  esReposicionDano(g) { return g?.tipo === 'reemplazo' && g?.causa === 'dano_cliente'; },
+  cobraCargo(g) { return this.esReposicionDano(g) && g?.cobro?.requiere === true; },
 
   tipoLabel(t)   { return this.TIPOS[t]?.label || t || '—'; },
   estadoLabel(e) { return this.ESTADOS[e] || e || '—'; },
@@ -115,6 +123,11 @@ const GestionesService = {
       // a facturación. Nunca bloquea. Lo arma Regularizacion.estampa().
       ...(data.cuenta_regularizacion ? { cuenta_regularizacion: data.cuenta_regularizacion } : {}),
       ...(data.aprobacion ? { aprobacion: data.aprobacion } : {}),
+      // Reemplazo: por qué se reemplaza (2026-09-25). 'dano_cliente' trae la
+      // prueba (`dano.fotos`) y el cobro por decidir; 'falla' es el de siempre.
+      ...(data.causa ? { causa: data.causa } : {}),
+      ...(data.dano ? { dano: data.dano } : {}),
+      ...(data.cobro ? { cobro: data.cobro } : {}),
       // Baja: la penalidad estimada y la fecha global viajan en el MISMO create
       // para que el correo de aprobación (trigger onCreate) ya traiga el desglose.
       ...(data.penalidad_estimada ? { penalidad_estimada: data.penalidad_estimada } : {}),
@@ -288,6 +301,60 @@ const GestionesService = {
     await this.registrarEvento(gestionId, 'aprobar', 'Gestión aprobada — pasa a Bodega para asignar seriales.');
   },
 
+  // Reemplazo por DAÑO — aprobar CON CARGO (2026-09-25). Administración fija
+  // el monto (parte del valor de reposición del catálogo) y la gestión queda
+  // esperando al cliente: el trigger arma la cotización de la reposición y
+  // Bodega NO recibe aviso hasta que el cliente la acepte.
+  async aprobarConCargo(gestionId, monto) {
+    const user = firebase.auth().currentUser;
+    const g = await this.get(gestionId);
+    const m = Math.round(Number(monto) * 100) / 100;
+    if (!(m > 0)) throw new Error('El monto de la reposición tiene que ser mayor que cero');
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      estado: 'pendiente_cliente',
+      'cierre.aprobacion': true,
+      aprobacion: {
+        requiere: true, motivo: g?.aprobacion?.motivo || 'propuesta_taller', decision: 'con_cargo',
+        aprobado_por_uid: user?.uid || null, aprobado_por_email: user?.email || null,
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      cobro: {
+        ...(g?.cobro || {}),
+        requiere: true,
+        monto: m,
+        estado: 'por_cotizar',
+        aprobado_por_email: user?.email || null,
+      },
+    });
+    await this.registrarEvento(gestionId, 'aprobar_con_cargo',
+      `Aprobado CON CARGO: $${m.toFixed(2)} + ITBMS si aplica. Se arma la cotización de la reposición; Bodega espera a que el cliente acepte.`);
+  },
+
+  // Reemplazo por DAÑO — aprobar SIN cargo, como cortesía (con motivo). Sigue
+  // el camino de siempre: pasa a Bodega de una vez.
+  async aprobarSinCargo(gestionId, motivo) {
+    const user = firebase.auth().currentUser;
+    const g = await this.get(gestionId);
+    const mot = String(motivo || '').trim().slice(0, 300);
+    if (mot.length < 5) throw new Error('Escribe por qué se repone sin cobrar');
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      estado: 'pendiente_bodega',
+      'cierre.aprobacion': true,
+      aprobacion: {
+        requiere: true, motivo: g?.aprobacion?.motivo || 'propuesta_taller', decision: 'cortesia',
+        aprobado_por_uid: user?.uid || null, aprobado_por_email: user?.email || null,
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      cobro: {
+        ...(g?.cobro || {}),
+        requiere: false,
+        estado: 'cortesia',
+        cortesia: { motivo: mot, por_email: user?.email || null },
+      },
+    });
+    await this.registrarEvento(gestionId, 'aprobar_cortesia', `Aprobado SIN cargo (cortesía): ${mot}`);
+  },
+
   // Anular el expediente (nunca se borra). Vale para rechazar una excepción o
   // cancelar una gestión que no avanzó.
   async anular(gestionId, motivo) {
@@ -305,7 +372,7 @@ const GestionesService = {
 
   // Estados en los que la gestión sigue BLANDA: nada se aplicó al contrato,
   // bodega no asignó seriales y no hay orden de servicio dando vueltas.
-  EDITABLES: ['pendiente_aprobacion', 'pendiente_firma', 'pendiente_bodega'],
+  EDITABLES: ['pendiente_aprobacion', 'pendiente_cliente', 'pendiente_firma', 'pendiente_bodega'],
 
   // Devuelve { ok, motivo }: la página DICE por qué no se puede en vez de
   // esconder el botón (misma decisión que el editor de contratos, 2026-09-09).

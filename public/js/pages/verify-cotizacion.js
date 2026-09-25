@@ -93,8 +93,10 @@
           </div>
         </div>
         <div class="cq-hd-right">
-          <div class="cq-doctype">Cotización</div>
+          <div class="cq-doctype">${esc(CotizacionTaller.tituloDocumento(snap))}</div>
           <div class="cq-num">N° ${esc(snap.id || '—')}</div>
+          ${CotizacionTaller.esTaller(snap) && snap.orden_id
+            ? `<div class="cq-num" style="margin-top:2px;">Orden de servicio ${esc(snap.orden_id)}</div>` : ''}
         </div>
       </div>
 
@@ -146,10 +148,11 @@
 
       <div class="cq-lower">
         <div class="cq-conditions">
+          ${(snap.condiciones || []).length ? `
           <div class="cq-lbl">Condiciones</div>
           <div class="cq-cgrid">
-            ${(snap.condiciones || []).map(c => `<div class="cq-ck">${esc(c.k)}</div><div class="cq-cv">${esc(c.v)}</div>`).join('')}
-          </div>
+            ${snap.condiciones.map(c => `<div class="cq-ck">${esc(c.k)}</div><div class="cq-cv">${esc(c.v)}</div>`).join('')}
+          </div>` : ''}
         </div>
         <div class="cq-totals">
           ${totalesEspejo(snap)}
@@ -160,7 +163,7 @@
         <div class="cq-col">
           <div class="cq-line">
             <div class="cq-nm">${esc(ej.nombre || '—')}</div>
-            <div class="cq-rl">${esc(ej.rol || 'Ejecutivo de Ventas')} · ${esc(emisor.razon)}</div>
+            <div class="cq-rl">${esc(ej.rol || CotizacionTaller.cargoFirmante(snap, ej))} · ${esc(emisor.razon)}</div>
             <div class="cq-ct">${esc(ej.email || '')}<br>${esc(ej.tel || '')}</div>
           </div>
         </div>
@@ -173,9 +176,7 @@
         </div>
       </div>
 
-      <div class="cq-note">
-        Precios expresados en dólares de los Estados Unidos de América (USD), equivalentes a Balboas (PAB). Esta cotización no constituye factura fiscal. Los precios pueden variar sin previo aviso una vez vencida la validez indicada. Equipos sujetos a disponibilidad de inventario al momento de la orden de compra.
-      </div>
+      <div class="cq-note">${esc(CotizacionTaller.notaLegal(snap))}</div>
 
       <div class="cq-band"></div>
       <div class="cq-ft">

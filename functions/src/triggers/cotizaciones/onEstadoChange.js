@@ -153,6 +153,45 @@ module.exports = onDocumentUpdated(
     const estadoDespues = String(after.estado  || "");
     if (estadoAntes === estadoDespues) return null;
 
+    // ── El cliente ACEPTÓ (2026-09-25, pedido de Solangel) ────────────────
+    // En el taller 'convertida' es "el cliente aceptó → a facturar". El mismo
+    // clic abre la fila en Facturación pendiente, aunque el equipo siga en el
+    // taller (decisión de Alberto): la fila dice dónde está. Si la cotización
+    // cobra la REPOSICIÓN de un radio dañado, además libera a bodega.
+    if (estadoDespues === "convertida") {
+      try {
+        const { abrirFacturacionCotizacion } = require("../../lib/facturacionCotizacion");
+        await abrirFacturacionCotizacion(event.data.after, { momento: "aceptacion" });
+      } catch (e) {
+        logger.error("[onCotizacionEstadoChange] cotización aceptada NO enviada a facturar", {
+          error: e.message, cotizacionId: event.params.docId,
+        });
+      }
+      if (after.gestion_id) {
+        try { await require("../../lib/reposicionDano").alAceptarse(event.params.docId, after); }
+        catch (e) {
+          logger.error("[onCotizacionEstadoChange] reposición aceptada: la gestión no avanzó", {
+            error: e.message, cotizacionId: event.params.docId, gestion: after.gestion_id,
+          });
+        }
+      }
+    }
+    // El cliente NO aceptó la reposición → la gestión se cierra y el daño
+    // pasa a cobranza (lib/reposicionDano). Una reparación normal rechazada
+    // solo reabre el candado de materiales, más abajo.
+    if (estadoDespues === "rechazada" && after.gestion_id) {
+      try { await require("../../lib/reposicionDano").alRechazarse(event.params.docId, after); }
+      catch (e) {
+        logger.error("[onCotizacionEstadoChange] reposición rechazada: la gestión no se cerró", {
+          error: e.message, cotizacionId: event.params.docId, gestion: after.gestion_id,
+        });
+      }
+    }
+    // La cotización de una REPOSICIÓN no es de piezas: no bloquea los
+    // materiales de la orden ni manda resumen a bodega (el radio de
+    // reposición lo pide la gestión, no esta cotización).
+    if (after.gestion_id) return null;
+
     let emitida = null;
     if (ESTADOS_BLOQUEAN.includes(estadoDespues)) emitida = true;
     else if (ESTADOS_REABREN.includes(estadoDespues)) emitida = false;

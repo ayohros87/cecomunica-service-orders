@@ -71,10 +71,10 @@ window.CargaDiferida = (() => {
     // Propuesta de reemplazo desde el taller: el módulo + lo que necesita
     // (expedientes de gestión y la garantía de la unidad), que no se cargan
     // en /ordenes/ para nada más.
-    reemplazo:  "/js/pages/ordenes-reemplazo.js?v=2",
+    reemplazo:  "/js/pages/ordenes-reemplazo.js?v=3",
     // El taller avisa que un radio no sirve para la gestion (Zuleika 2026-09-16).
     cambioSerialTaller: "/js/pages/ordenes-cambio-serial.js?v=1",
-    gestiones:  "/js/services/gestionesService.js?v=cg13",
+    gestiones:  "/js/services/gestionesService.js?v=cg16",
     garantia:   "/js/domain/garantiaEquipo.js?v=1",
   };
 

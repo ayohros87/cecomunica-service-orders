@@ -36,6 +36,13 @@
     return (doc?.origen || '') === 'orden' || !!doc?.orden_id;
   }
 
+  // Etiqueta del estado según el tipo: en el taller 'convertida' se lee
+  // "Aceptada" (ver CotizacionTaller.estadoLabel).
+  function estadoLabel(estado, doc) {
+    const base = ESTADOS[estado]?.label || estado;
+    return window.CotizacionTaller ? CotizacionTaller.estadoLabel(estado, doc, base) : base;
+  }
+
   // Decisión final para un documento (o su forma UI). `incluye_carta` ausente
   // se trata como true: el default es incluirla.
   function llevaCarta(doc) {
@@ -71,6 +78,9 @@
         { k: 'Cobertura', v: 'Área metropolitana de Panamá' },
       ],
     },
+    // Reparación en el taller (2026-09-25). La misma definición que usa la
+    // pantalla de cotizar una orden.
+    { id: 'taller', nombre: 'Reparación (taller)', cond: (window.CotizacionTaller?.CONDICIONES_TALLER) || [] },
   ];
 
   // Emisor de fallback si el doc empresa/emisor no existe.
@@ -135,7 +145,12 @@
     return {
       id: u?.id,
       nombre: u?.nombre || u?.name || u?.email || u?.id,
-      rol: u?.cargo || u?.puesto || u?.rol_titulo || 'Ejecutivo de Ventas',
+      // El cargo de la persona (usuarios.cargo, lo pone administración en
+      // Usuarios) y, sin él, el de su ROL: antes todo el que no tenía cargo
+      // salía "Ejecutivo de Ventas", incluida la jefa de taller.
+      rol: u?.cargo || u?.puesto || u?.rol_titulo
+        || (window.CotizacionTaller ? CotizacionTaller.cargoPorRol(u?.rol) : '')
+        || 'Ejecutivo de Ventas',
       email: u?.email || '',
       tel: u?.user_cel || u?.cel || u?.celular || '',
     };
@@ -192,9 +207,13 @@
       // Plazo del alquiler, en meses. Vive en el DOCUMENTO: una cotización es
       // un solo acuerdo con un solo plazo, y se convierte en un solo contrato.
       plazoMeses: Number(doc.plazoMeses || 0),
+      // Sin condiciones guardadas, una comercial vieja se sigue leyendo con las
+      // de venta de siempre. Una de TALLER no: sin condiciones es sin
+      // condiciones — rellenarla con las de venta era justo lo que Solangel
+      // pidió quitar.
       condiciones: Array.isArray(doc.condiciones) && doc.condiciones.length
         ? doc.condiciones.map(c => ({ k: c.k || '', v: c.v || '' }))
-        : JSON.parse(JSON.stringify(CONDICIONES_DEFAULT)),
+        : (esCotizacionDeTaller(doc) ? [] : JSON.parse(JSON.stringify(CONDICIONES_DEFAULT))),
       dirigido_a: doc.dirigido_a || '',
       dirigido_email: doc.dirigido_email || '',
       // Adjuntos (brochures / fichas técnicas) que viajan con la propuesta.
@@ -215,6 +234,18 @@
       incluye_carta: typeof doc.incluye_carta === 'boolean' ? doc.incluye_carta : true,
       creado_por_uid: doc.creado_por_uid || null,
       creado_por_email: doc.creado_por_email || null,
+      // Firmante tal como quedó guardado. El detalle y el "Atentamente" del
+      // correo caían a "—" porque este campo no viajaba: la jefa de taller no
+      // está en el catálogo de vendedores y no había de dónde sacar su nombre.
+      ejecutivo_nombre: doc.ejecutivo_nombre || '',
+      ejecutivo_cargo: doc.ejecutivo_cargo || '',
+      ejecutivo_email: doc.ejecutivo_email || '',
+      // Taller: cómo aceptó el cliente, la gestión de reemplazo que la originó
+      // (reposición por daño) y el estado de su facturación (lo escriben las
+      // Cloud Functions).
+      aceptacion: doc.aceptacion || null,
+      gestion_id: doc.gestion_id || '',
+      facturacion: doc.facturacion || null,
       // Timestamps del ciclo de vida — usados por el historial para mostrar
       // las fechas reales en vez de derivarlas de la fecha de creación.
       fecha_creacion: doc.fecha_creacion || null,
@@ -246,7 +277,12 @@
       dirigido_a: ui.dirigido_a || cliente.representante || '',
       dirigido_email: ui.dirigido_email || cliente.email || '',
       ejecutivoId: ui.ejecutivoId,
-      ejecutivo_nombre: ejec.nombre || '',
+      // Si el firmante no está en el catálogo cargado (la jefa de taller no es
+      // vendedora) se conserva lo que ya decía el documento: antes, volver a
+      // guardar un borrador de taller le borraba el nombre al firmante.
+      ejecutivo_nombre: ejec.nombre || ui.ejecutivo_nombre || '',
+      ejecutivo_cargo: ejec.rol || ui.ejecutivo_cargo || '',
+      ejecutivo_email: ejec.email || ui.ejecutivo_email || '',
       fecha: ui.fecha,
       validezDias: Number(ui.validezDias) || Number(window.EMPRESA_CONFIG?.cotizacion_validez_dias) || 15,
       moneda: ui.moneda || 'USD',
@@ -304,6 +340,7 @@
       // con 'orden' + orden_id después de toDoc (cotizaciones de servicio).
       origen: ui.origen || 'comercial',
       ...(ui.orden_id ? { orden_id: ui.orden_id } : {}),
+      ...(ui.gestion_id ? { gestion_id: ui.gestion_id } : {}),
       // Casilla "Incluir carta de presentación" — es solo la preferencia del
       // vendedor. En las de taller queda en true y sin efecto: el corte por
       // origen lo aplica llevaCarta(), no este campo.
@@ -565,9 +602,10 @@
   //
   // Devuelve Promise<{ estado, motivo } | null>. `motivo` solo llega con
   // 'descartada' y nunca vacío: el botón no cierra la hoja sin texto.
-  function cerrarPrompt({ cotizacionId, total, totalTexto, cliente } = {}) {
+  function cerrarPrompt({ cotizacionId, total, totalTexto, cliente, taller = false, reposicion = false } = {}) {
     const esc = FMT.esc; // helper canónico (core/formatting.js)
     const importe = totalTexto ? esc(totalTexto) : (total != null ? window.FMT.money(total) : '');
+    if (taller) return cerrarPromptTaller({ cotizacionId, importe, cliente, reposicion });
     return Modal.sheet({
       title: 'Cerrar cotización', icon: 'flag', size: 'sm',
       html: `
@@ -642,15 +680,131 @@
     });
   }
 
+  // ── Cierre de una cotización de TALLER (2026-09-25, pedido de Solangel) ──
+  // La salida que el taller usa de verdad es "el cliente aceptó → a
+  // facturar", y casi nunca la dice el cliente desde la página: contesta el
+  // correo o lo dice por teléfono. Por eso se pregunta CÓMO aceptó (queda en
+  // el historial y en la fila de Brenda) y con eso basta para seguir: el
+  // mismo clic abre la fila en Facturación pendiente (onCotizacionEstadoChange).
+  //
+  // `reposicion`: la cotización cobra la reposición de un radio dañado por el
+  // cliente (gestión de reemplazo por daño). Aceptarla libera a bodega;
+  // rechazarla cierra el reemplazo y lo manda a cobranza. El texto lo dice
+  // antes del clic, que es cuando sirve.
+  function cerrarPromptTaller({ cotizacionId, importe, cliente, reposicion }) {
+    const esc = FMT.esc;
+    const T = window.CotizacionTaller;
+    const medios = (T?.MEDIOS_ACEPTACION || [['correo', 'Por correo'], ['verbal', 'Verbalmente'], ['otro', 'Otro medio']]);
+    return Modal.sheet({
+      title: reposicion ? 'Respuesta del cliente a la reposición' : 'Respuesta del cliente',
+      icon: 'flag', size: 'sm',
+      html: `
+        <p style="margin:0 0 12px; font-size:14px; color:var(--fg-2);">
+          ${cotizacionId ? '<b>' + esc(cotizacionId) + '</b> · ' : ''}${esc(cliente || '')}${importe ? ' · ' + importe : ''}
+        </p>
+        <div id="ctOpciones" style="display:flex; flex-direction:column; gap:10px;">
+          <button type="button" class="btn btn-secondary" data-act="acepto"
+                  style="background:#065F46; color:#fff; border-color:#065F46; justify-content:flex-start; text-align:left;">
+            <i data-lucide="circle-check"></i>
+            <span style="margin-left:8px;"><b>El cliente aceptó — pasar a facturar</b><br>
+              <span style="font-size:12.5px; opacity:.9;">${reposicion
+                ? 'Recepción recibe la fila para facturar y Bodega el aviso para asignar el radio de reposición.'
+                : 'Recepción recibe la fila en Facturación pendiente, aunque el equipo siga en el taller.'}</span></span>
+          </button>
+          <button type="button" class="btn btn-secondary" data-act="rechazada"
+                  style="background:#991B1B; color:#fff; border-color:#991B1B; justify-content:flex-start; text-align:left;">
+            <i data-lucide="circle-x"></i>
+            <span style="margin-left:8px;"><b>El cliente no aceptó</b><br>
+              <span style="font-size:12.5px; opacity:.9;">${reposicion
+                ? 'No se repone el radio. El caso se cierra y el daño pasa a cobranza.'
+                : 'No se factura nada. El candado de materiales de la orden se reabre.'}</span></span>
+          </button>
+          <button type="button" class="btn btn-secondary" data-act="otros"
+                  style="justify-content:flex-start; text-align:left;">
+            <i data-lucide="pencil"></i>
+            <span style="margin-left:8px;"><b>Otro motivo</b> — se rehace la cotización, cambió el trabajo…</span>
+          </button>
+        </div>
+        <div id="ctAcepta" style="display:none;">
+          <label class="form-label" for="ctMedio">¿Cómo aceptó?</label>
+          <select id="ctMedio" class="form-select">
+            ${medios.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}
+          </select>
+          <label class="form-label" for="ctNota" style="margin-top:10px;">Detalle <span style="color:var(--fg-3); font-weight:400;">(opcional)</span></label>
+          <input id="ctNota" class="form-input" maxlength="200"
+                 placeholder="Ej.: respondió el correo el 25-sep · lo confirmó por teléfono con Juan Pérez">
+          <p style="margin:6px 0 0; font-size:12px; color:var(--fg-3);">Queda en el historial y en la fila de facturación.</p>
+          <div style="display:flex; gap:8px; margin-top:12px;">
+            <button type="button" class="btn btn-primary" data-act="confirmar-acepto"><i data-lucide="check"></i> Pasar a facturar</button>
+            <button type="button" class="btn btn-ghost" data-act="volver">Volver</button>
+          </div>
+        </div>
+        <div id="ctOtros" style="display:none;">
+          <label class="form-label" for="ctMotivo">¿Por qué se cierra?</label>
+          <textarea id="ctMotivo" class="form-input form-textarea" rows="3" maxlength="300"
+                    placeholder="Ej.: se rehace con otra pieza; el cliente retiró el equipo sin reparar."></textarea>
+          <p id="ctError" style="display:none; margin:8px 0 0; font-size:12.5px; color:#991B1B;"></p>
+          <div style="display:flex; gap:8px; margin-top:12px;">
+            <button type="button" class="btn btn-primary" data-act="guardar-otros">Cerrar con este motivo</button>
+            <button type="button" class="btn btn-ghost" data-act="volver">Volver</button>
+          </div>
+        </div>`,
+      buttons: [{ action: 'cancel', label: 'Cancelar' }],
+      onMount: (root, api) => {
+        const panel = (id) => ['ctOpciones', 'ctAcepta', 'ctOtros']
+          .forEach(p => { root.querySelector('#' + p).style.display = p === id ? '' : 'none'; });
+        root.addEventListener('click', (e) => {
+          const act = e.target.closest('[data-act]')?.dataset.act;
+          if (!act) return;
+          if (act === 'acepto') { panel('ctAcepta'); root.querySelector('#ctMedio').focus(); return; }
+          if (act === 'otros')  { panel('ctOtros'); root.querySelector('#ctMotivo').focus(); return; }
+          if (act === 'volver') { panel('ctOpciones'); return; }
+          if (act === 'rechazada') { api.close({ estado: 'rechazada', motivo: '' }); return; }
+          if (act === 'confirmar-acepto') {
+            api.close({
+              estado: 'convertida', motivo: '',
+              aceptacion: {
+                medio: root.querySelector('#ctMedio').value || 'otro',
+                nota: String(root.querySelector('#ctNota').value || '').trim().slice(0, 200),
+              },
+            });
+            return;
+          }
+          if (act === 'guardar-otros') {
+            const motivo = (root.querySelector('#ctMotivo').value || '').trim();
+            if (motivo.length < 5) {
+              const err = root.querySelector('#ctError');
+              err.textContent = 'Escribe el motivo — es lo que va a leer quien revise esta cotización después.';
+              err.style.display = '';
+              return;
+            }
+            api.close({ estado: 'descartada', motivo });
+          }
+        });
+      },
+      onAction: () => null,
+    });
+  }
+
   // Sellos del cierre. Viven aquí y no en cada pantalla porque el detalle y la
   // banderita del listado cierran la MISMA cotización: cuando se duplicaba el
   // estampado, una de las dos se olvidaba de un campo.
-  function patchCierre(estado, motivo, uid) {
+  // `aceptacion` ({medio, nota}) solo llega del cierre de taller.
+  function patchCierre(estado, motivo, uid, aceptacion = null) {
     const ahora = firebase.firestore.Timestamp.now();
     const patch = { estado };
     if (estado === 'convertida') {
       patch.fecha_conversion = ahora;
       patch.convertida_por_uid = uid || null;
+      if (aceptacion) {
+        patch.aceptacion = {
+          medio: aceptacion.medio || 'otro',
+          nota: aceptacion.nota || '',
+          por_uid: uid || null,
+          por_email: firebase.auth().currentUser?.email || null,
+          at: ahora,
+        };
+      }
     } else if (estado === 'descartada') {
       patch.fecha_descarte = ahora;
       patch.descartada_por_uid = uid || null;
@@ -662,7 +816,9 @@
     return patch;
   }
 
-  function cierreToast(estado) {
+  function cierreToast(estado, { taller = false } = {}) {
+    if (taller && estado === 'convertida') return '✅ Aceptada — Recepción la recibe en Facturación pendiente';
+    if (taller && estado === 'rechazada') return 'Registrado: el cliente no aceptó';
     if (estado === 'convertida') return '🏆 Convertida a venta';
     if (estado === 'descartada') return 'Cotización descartada — el motivo queda en el historial';
     return 'Cotización rechazada';
@@ -674,32 +830,46 @@
   // opts: { cotizacionId, clienteNombre, total, dirigidoA, defaultDest, ccEmail,
   //         intro, validezDias, ejecutivo, link }
   // Devuelve Promise<{ dest, subject, html } | null>.
-  function reenviarPrompt(opts) {
-      const esc = window.FMT.esc; // helper canónico (core/formatting.js)
-      // El nombre de la empresa va en el asunto y el cuerpo: sin él, ubicar la
-      // cotización desde el buzón obliga a abrir el panel y cruzar el número.
-      const clienteNom = String(opts.clienteNombre || '').trim();
-      const subject = `Cotización ${opts.cotizacionId || ''}${clienteNom ? ` · ${clienteNom}` : ''} · CeComunica`;
-      const dirAHtml = opts.dirigidoA ? `<p style="margin:0 0 10px;">A la atención de: <b>${esc(opts.dirigidoA)}</b></p>` : '';
-      const introHtml = esc(opts.intro || 'Adjuntamos la cotización solicitada.');
-      const adjuntos = Array.isArray(opts.adjuntos) ? opts.adjuntos.filter(a => a && a.url) : [];
-      // La carta solo aplica a cotizaciones comerciales; quien llama pasa
-      // `llevaCarta: null` cuando es de taller y la fila no se dibuja. Verla aquí
-      // es lo que cierra el hueco: el envío ocurre fuera del editor, así que sin
-      // esta fila nadie sabe con qué va a salir el documento.
-      const cartaAplica = typeof opts.llevaCarta === 'boolean';
-      const adjuntosHtml = adjuntos.length ? `
+  // ── Correo al cliente (asunto + cuerpo) ───────────────────────────────────
+  // UNA sola definición para las dos puertas por las que sale una cotización:
+  // "Enviar / Reenviar" (reenviarPrompt) y "Aprobar y enviar" del listado.
+  // Eran dos copias y ya decían cosas distintas — la de aprobar le ponía al
+  // cliente "Cotización X aprobada" en el asunto, cuando el que aprueba
+  // todavía es él. `doc` es la cotización (o su forma UI): de ahí sale si es
+  // de taller y la orden a la que pertenece.
+  function correoCliente(opts) {
+    const esc = window.FMT.esc;
+    const doc = opts.doc || {};
+    const CT = window.CotizacionTaller;
+    const taller = CT ? CT.esTaller(doc) : esCotizacionDeTaller(doc);
+    const clienteNom = String(opts.clienteNombre || '').trim();
+    const idCot = opts.cotizacionId || doc.cotizacion_id || doc.id || '';
+    const subject = CT
+      ? CT.asunto({ ...doc, cotizacion_id: idCot }, { clienteNombre: clienteNom })
+      : `Cotización ${idCot}${clienteNom ? ` · ${clienteNom}` : ''} · CeComunica`;
+    const titulo = CT ? CT.tituloDocumento(doc) : 'Cotización';
+    const dirAHtml = opts.dirigidoA ? `<p style="margin:0 0 10px;">A la atención de: <b>${esc(opts.dirigidoA)}</b></p>` : '';
+    const introHtml = esc(opts.intro || 'Adjuntamos la cotización solicitada.');
+    const adjuntos = Array.isArray(opts.adjuntos) ? opts.adjuntos.filter(a => a && (a.url || a.path)) : [];
+    const adjuntosHtml = adjuntos.length ? `
   <p style="margin:14px 0 4px;"><b>Archivos adjuntos:</b></p>
   <ul style="margin:0 0 10px; padding-left:18px; color:#374151;">
-    ${adjuntos.map(a => `<li>${esc(a.nombre || 'adjunto')}</li>`).join('')}
+    ${adjuntos.map(a => `<li>${esc(a.nombre || a.filename || 'adjunto')}</li>`).join('')}
   </ul>` : '';
-      const bodyHtml = `
+    // La orden va a la vista: es el número del comprobante con el que el
+    // cliente dejó el radio, y lo que hace que no la confunda con una
+    // propuesta de ventas.
+    const ordenHtml = taller && doc.orden_id
+      ? `<p style="margin:0 0 4px;"><b>Orden de servicio:</b> ${esc(doc.orden_id)}</p>` : '';
+    const firma = [opts.ejecutivo, opts.ejecutivoCargo].filter(Boolean).map(esc).join(' · ');
+    const html = `
 <div style="font-family:Arial, sans-serif; color:#111; max-width:560px;">
-  <h2 style="font:700 22px Arial,sans-serif; color:#0B2A47; margin:0 0 12px;">Cotización ${esc(opts.cotizacionId || '')}</h2>
+  <h2 style="font:700 22px Arial,sans-serif; color:#0B2A47; margin:0 0 12px;">${esc(titulo)} ${esc(idCot)}</h2>
   <p style="margin:0 0 10px;">Estimados señores,</p>
   ${dirAHtml}
   <p style="margin:0 0 10px;">${introHtml}</p>
   ${clienteNom ? `<p style="margin:0 0 4px;"><b>Empresa:</b> ${esc(clienteNom)}</p>` : ''}
+  ${ordenHtml}
   <p style="margin:0 0 4px;"><b>Total:</b> ${esc(opts.totalTexto || window.FMT.money(Number(opts.total || 0)))}</p>
   <p style="margin:0 0 4px;"><b>Validez:</b> ${opts.validezDias || 15} días</p>
   ${adjuntosHtml}
@@ -709,9 +879,60 @@
     </a>
   </p>
   <p style="font-size:12px; color:#6B7884; margin-top:24px;">
-    Si tiene cualquier consulta, puede responder a este correo. Atentamente, ${esc(opts.ejecutivo || 'CeComunica')}.
+    ${taller
+      ? 'Para autorizar la reparación basta con responder a este correo.'
+      : 'Si tiene cualquier consulta, puede responder a este correo.'} Atentamente, ${firma || 'CeComunica'}.
   </p>
 </div>`;
+    return { subject, html };
+  }
+
+  // A dónde vuelve la respuesta del cliente: al firmante (en el taller, la
+  // jefa de taller). Sin esto la respuesta caía en el buzón del SMTP, que no
+  // lee nadie — y en el taller "responder el correo" ES la aceptación.
+  function replyToDe({ ejecutivoEmail, creadoPorEmail } = {}) {
+    const ok = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || '').trim())
+      && !String(e).endsWith('@sin.email.cecomunica.com');
+    if (ok(ejecutivoEmail)) return String(ejecutivoEmail).trim();
+    if (ok(creadoPorEmail)) return String(creadoPorEmail).trim();
+    return null;
+  }
+
+  // Espejo público (cotizacion_verificaciones.snapshot) — lo que abre el
+  // cliente desde el correo. También eran dos copias: la del listado no
+  // llevaba el desglose de venta/alquiler que la del detalle sí.
+  function snapshotPublico(cot, t, cli = {}, ej = {}) {
+    const CT = window.CotizacionTaller;
+    const taller = CT ? CT.esTaller(cot) : esCotizacionDeTaller(cot);
+    return {
+      id: cot.id, estado: cot.estado, fecha: cot.fecha, validezDias: cot.validezDias,
+      moneda: cot.moneda, descuentoPct: cot.descuentoPct, itbmsPct: cot.itbmsPct,
+      intro: cot.intro, items: cot.items, condiciones: cot.condiciones || [],
+      subtotal: t.subtotal, descGlobal: t.descGlobal, itbms: t.itbms, total: t.total,
+      totalVenta: t.venta.total, totalMensual: t.alquiler.total,
+      plazoMeses: t.plazoMeses, hayAlquiler: t.hayAlquiler, hayVenta: t.hayVenta,
+      ventaDetalle: t.venta, alquilerDetalle: t.alquiler,
+      // Taller: el espejo se congela diciendo qué documento es. Los espejos ya
+      // emitidos no lo traen y se siguen viendo como se enviaron.
+      origen: taller ? 'orden' : 'comercial',
+      ...(taller && cot.orden_id ? { orden_id: cot.orden_id } : {}),
+      cliente: { razon: cli.razon || '', ruc: cli.ruc || '', tel: cli.tel || '', email: cli.email || '', representante: cli.representante || '' },
+      ejecutivo: {
+        nombre: ej.nombre || cot.ejecutivo_nombre || '',
+        rol: CT ? CT.cargoFirmante(cot, ej) : (ej.rol || ''),
+        email: ej.email || cot.ejecutivo_email || '', tel: ej.tel || '',
+      },
+    };
+  }
+
+  function reenviarPrompt(opts) {
+      const esc = window.FMT.esc; // helper canónico (core/formatting.js)
+      const { subject, html: bodyHtml } = correoCliente(opts);
+      // La carta solo aplica a cotizaciones comerciales; quien llama pasa
+      // `llevaCarta: null` cuando es de taller y la fila no se dibuja. Verla aquí
+      // es lo que cierra el hueco: el envío ocurre fuera del editor, así que sin
+      // esta fila nadie sabe con qué va a salir el documento.
+      const cartaAplica = typeof opts.llevaCarta === 'boolean';
 
       return Modal.sheet({
         title: 'Enviar cotización al cliente', icon: 'send', size: 'lg',
@@ -891,7 +1112,7 @@
   }
 
   window.CotState = {
-    ESTADOS, ESTADO_ORDEN, esEditable,
+    ESTADOS, ESTADO_ORDEN, esEditable, estadoLabel,
     // Re-exportados desde CotizacionTotales (viven ahi porque verify/ los
     // necesita y esa pagina publica NO carga este archivo).
     agruparPorEquipo: (i) => CotizacionTotales.agruparPorEquipo(i),
@@ -905,6 +1126,8 @@
     toUi, toDoc, nuevaCotizacion, nextCotizacionId, bootstrapCatalogos,
     filtrarClientes, mountClienteCombo, requiereAprobacionPara, bloqueTotalesHtml,
     cerrarPrompt, patchCierre, cierreToast, reenviarPrompt,
+    correoCliente, replyToDe, snapshotPublico,
+    CONDICIONES_TALLER: (window.CotizacionTaller?.CONDICIONES_TALLER) || [],
     enqueueAprobacionMail,
     adjuntosToAttachments,
   };

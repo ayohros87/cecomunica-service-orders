@@ -38,15 +38,16 @@
   <script src="../js/core/auth.js"></script>
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js?v=f7"></script>
-  <script defer src="../js/services/cotizacionesService.js?v=a8"></script>
+  <script defer src="../js/services/cotizacionesService.js?v=a9"></script>
   <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/modelosService.js?v=mf1"></script>
   <script defer src="../js/services/usuariosService.js"></script>
   <script defer src="../js/services/empresaService.js"></script>
   <script defer src="../js/services/mailService.js"></script>
   <script defer src="../js/domain/cotizacionesTotales.js?v=dl1"></script>
+  <script defer src="../js/domain/cotizacionTaller.js?v=tl1"></script>
   <script defer src="../js/ui/entity-combo.js?v=ec1"></script>
-  <script defer src="../js/pages/cot-editor-state.js?v=desc1"></script>
+  <script defer src="../js/pages/cot-editor-state.js?v=tl1"></script>
   <script defer src="/js/vendor/lucide.min.js?v=3"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
 </head>
@@ -77,19 +78,24 @@
     </div>
 
     <!-- Stats -->
+    <!-- Taller | Ventas (2026-09-25): son dos documentos distintos con dos
+         desenlaces distintos. La jefa de taller aterriza en Taller; ventas en
+         Ventas; administración ve las dos. -->
+    <div class="cc-segments" id="tipoSeg" role="tablist" aria-label="Tipo de cotización" style="margin-bottom:var(--sp-3);"></div>
+
     <div class="cc-stats" id="statsRegion">
       <div class="cc-stat"><div class="cc-stat-icon"><i data-lucide="file-text"></i></div>
         <div class="cc-stat-body"><div class="cc-stat-value" id="statTotal">—</div>
         <div class="cc-stat-label">Total emitidas</div><div class="cc-stat-sub">en la lista</div></div></div>
       <div class="cc-stat cc-stat--accent"><div class="cc-stat-icon"><i data-lucide="send"></i></div>
         <div class="cc-stat-body"><div class="cc-stat-value" id="statPendientes">—</div>
-        <div class="cc-stat-label">Enviadas · esperando</div><div class="cc-stat-sub">requieren seguimiento</div></div></div>
+        <div class="cc-stat-label">Enviadas · esperando</div><div class="cc-stat-sub" id="statPendSub">requieren seguimiento</div></div></div>
       <div class="cc-stat cc-stat--green"><div class="cc-stat-icon"><i data-lucide="check-circle"></i></div>
         <div class="cc-stat-body"><div class="cc-stat-value" id="statMontoAprobado">—</div>
-        <div class="cc-stat-label">Monto cerrado</div><div class="cc-stat-sub" id="statMontoSub" title="El alquiler no es un pago único: se cuenta su primer año para poder sumarlo con las ventas.">solo convertidas a venta</div></div></div>
+        <div class="cc-stat-label" id="statMontoLbl">Monto cerrado</div><div class="cc-stat-sub" id="statMontoSub" title="El alquiler no es un pago único: se cuenta su primer año para poder sumarlo con las ventas.">solo convertidas a venta</div></div></div>
       <div class="cc-stat cc-stat--amber"><div class="cc-stat-icon"><i data-lucide="trending-up"></i></div>
         <div class="cc-stat-body"><div class="cc-stat-value" id="statTasa">—</div>
-        <div class="cc-stat-label">Tasa de cierre</div><div class="cc-stat-sub">convertidas / oportunidades</div></div></div>
+        <div class="cc-stat-label" id="statTasaLbl">Tasa de cierre</div><div class="cc-stat-sub" id="statTasaSub">convertidas / oportunidades</div></div></div>
     </div>
 
     <!-- Tabla / lista -->
@@ -212,7 +218,7 @@
     </div>
   </div>
 
-  <script src="../js/pages/cotizaciones-index.js?v=desc1" defer></script>
+  <script src="../js/pages/cotizaciones-index.js?v=tl1" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

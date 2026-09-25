@@ -969,11 +969,17 @@ service cloud.firestore {
       // Aprobar (excepción → bodega · baja → en_proceso · aumento → firma):
       // solo administración/gerencia. La baja NO se aprueba sin la carta del
       // cliente — antes ese candado vivía solo en la página.
+      // Reemplazo por DAÑO del cliente (2026-09-25): aprobar CON CARGO lo deja
+      // `pendiente_cliente` (se cotiza y bodega espera a que el cliente
+      // acepte) y fija `cobro.monto`; aprobar SIN cargo (cortesía) va a bodega
+      // como cualquier reemplazo. `pendiente_cliente` solo existe para esa causa.
       function esAprobacionGestion() {
         return userRole() in ["administrador","gerente"]
           && resource.data.estado == "pendiente_aprobacion"
-          && request.resource.data.estado in ["pendiente_bodega","en_proceso","pendiente_firma"]
-          && soloTocaG(["estado","aprobacion","cierre"])
+          && request.resource.data.estado in ["pendiente_bodega","en_proceso","pendiente_firma","pendiente_cliente"]
+          && soloTocaG(["estado","aprobacion","cierre","cobro"])
+          && (request.resource.data.estado != "pendiente_cliente"
+              || resource.data.get("causa", "") == "dano_cliente")
           && (resource.data.tipo != "baja"
               || ("carta_path" in resource.data && resource.data.carta_path is string));
       }
@@ -981,7 +987,7 @@ service cloud.firestore {
       // y sin orden de programación. Es la ventana en la que todavía se puede
       // corregir o anular sin dejar efectos regados.
       function gestionBlanda() {
-        return resource.data.estado in ["pendiente_aprobacion","pendiente_firma","pendiente_bodega"]
+        return resource.data.estado in ["pendiente_aprobacion","pendiente_firma","pendiente_bodega","pendiente_cliente"]
           && resource.data.get("cierre", {}).get("derivacion", false) != true
           && resource.data.get("cierre", {}).get("asignacion", false) != true
           && !("programacion_id" in resource.data.get("ordenes", {}));
@@ -1098,13 +1104,18 @@ service cloud.firestore {
       // UN SERIAL POR PROPUESTA (Alberto, 2026-09-09): el técnico diagnostica
       // radio por radio y cada uno se aprueba o se rechaza por su cuenta. Un
       // expediente con dos ítems obligaría a decidir en bloque.
+      // Por DAÑO del cliente (2026-09-25) la propuesta trae la prueba: sin al
+      // menos una foto del daño no nace — es lo que administración mira para
+      // decidir si se cobra.
       function esPropuestaTaller() {
         return userRole() in ["tecnico","tecnico_operativo","jefe_taller"]
           && request.resource.data.tipo == "reemplazo"
           && request.resource.data.estado == "pendiente_aprobacion"
           && request.resource.data.get("origen", {}).get("tipo", "") == "taller"
           && request.resource.data.items.size() == 1
-          && request.resource.data.responsable_uid == request.auth.uid;
+          && request.resource.data.responsable_uid == request.auth.uid
+          && (request.resource.data.get("causa", "") != "dano_cliente"
+              || request.resource.data.get("dano", {}).get("fotos", []).size() > 0);
       }
       // TODO reemplazo nace esperando la decisión de administración: el buzón
       // ventas@cecomunica.com le llega a los admin de la empresa (2026-09-10). El

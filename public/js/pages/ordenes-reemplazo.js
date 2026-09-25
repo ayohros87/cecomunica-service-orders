@@ -20,8 +20,18 @@
  * programación, se entrega y la gestión cierra sola.
  *
  * Lo que el técnico NO decide: el modelo de reposición (se repone el mismo)
- * ni si se cobra. Eso es de ventas, y por eso pasa por aprobación SIEMPRE,
- * tenga garantía o no.
+ * ni si se cobra. Eso es de administración, y por eso pasa por aprobación
+ * SIEMPRE, tenga garantía o no.
+ *
+ * DOS CAUSAS, DOS CAMINOS (2026-09-25, Alberto). Lo PRIMERO que se decide es
+ * por qué hay que reemplazarlo, y lo decide quien tiene el radio en la mano:
+ *   · FALLA DEL EQUIPO (garantía, desgaste, falla recurrente) → sin cargo, el
+ *     camino de siempre.
+ *   · DAÑO CAUSADO POR EL CLIENTE (golpe, líquido, carcasa rota…) → se cotiza
+ *     y se factura. Exige fotos del daño (las reglas no dejan crearlo sin
+ *     ellas) y solo aplica a radios de ALQUILER: un radio propio dañado por
+ *     su dueño no tiene reemplazo — se le ofrece un equipo nuevo, con
+ *     descuento especial si ventas lo decide, o la reparación.
  *
  * Módulo diferido: lo carga CargaDiferida.reemplazo() al primer uso.
  * ======================================== */
@@ -34,12 +44,40 @@
   // Los motivos con los que un taller propone (subconjunto de los del
   // Centro — el técnico no propone "actualización de modelo" ni
   // "servicio al cliente": esos son comerciales).
+  // `dano_no_reparable` se conserva como clave (el histórico la usa) pero se
+  // lee como FALLA: "dañado" a secas no decía por culpa de quién, y el daño
+  // del cliente ahora es su propia causa, con cobro.
   const MOTIVOS = [
     ['garantia_fabrica', 'Garantía de fábrica'],
-    ['dano_no_reparable', 'Dañado — no reparable'],
+    ['dano_no_reparable', 'Falla que no tiene arreglo'],
     ['falla_recurrente', 'Falla recurrente'],
     ['otro', 'Otro'],
   ];
+
+  // Tipos de daño causado por el cliente (mismas claves que
+  // functions/src/lib/reposicionDano.TIPOS_DANO y Centro.TIPOS_DANO).
+  const TIPOS_DANO = [
+    ['golpe', 'Golpe o caída'],
+    ['liquido', 'Líquido o humedad'],
+    ['carcasa', 'Carcasa, pantalla o antena rota'],
+    ['manipulacion', 'Manipulación o sellos violados'],
+    ['otro', 'Otro daño físico'],
+  ];
+  const MAX_FOTOS = 4;
+
+  // Foto a JPEG de 1600 px: un celular saca fotos de 4–8 MB y el expediente
+  // solo necesita que se vea el daño.
+  async function comprimir(file, maxWidth = 1600, quality = 0.78) {
+    const url = await new Promise((res, rej) => {
+      const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file);
+    });
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const esc = Math.min(1, maxWidth / (img.width || maxWidth));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * esc); c.height = Math.round(img.height * esc);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('No se pudo comprimir la foto')), 'image/jpeg', quality));
+  }
 
   const ROLES_PROPONEN = ['tecnico', 'tecnico_operativo', 'jefe_taller', 'administrador'];
 
@@ -77,8 +115,8 @@
       return window.GarantiaEquipo.requiereExcepcion(g)
         ? { ok: true, code: 'propio_excepcion', label: `Del cliente · ${txt || 'sin garantía'}`,
             why: g.vigente
-              ? 'La fecha de garantía es estimada (no está capturada la factura): ventas confirma si va sin cargo.'
-              : 'Fuera de garantía: si procede, será por servicio al cliente — lo decide ventas.',
+              ? 'La fecha de garantía es estimada (no está capturada la factura): administración confirma si va sin cargo.'
+              : 'Fuera de garantía: si procede, será por servicio al cliente — lo decide administración.',
             garantia: g }
         : { ok: true, code: 'propio_garantia', label: `Del cliente · ${txt}`, garantia: g };
     }
@@ -115,7 +153,7 @@
   // salió la propuesta. Lo propio del taller viaja en dos campos extra:
   // `saliente_en_casa` (el radio ya está aquí: no hay que ir a buscarlo) y
   // `garantia` (lo que se vio al proponer, para que ventas decida con dato).
-  function construirItem(equipo, ficha, sit, { motivo, diagnostico, salienteEnCasa }) {
+  function construirItem(equipo, ficha, sit, { motivo, diagnostico, salienteEnCasa, causa }) {
     return {
       serial_saliente: serialDe(equipo),
       pool_doc_id_saliente: ficha?.id || null,
@@ -125,7 +163,7 @@
       contrato_id: ficha?.asignacion?.contrato_id || null,
       elegibilidad: sit.code === 'propio_garantia' ? 'propio_garantia'
         : sit.code === 'propio_excepcion' ? 'propio_excepcion' : 'alquiler',
-      motivo_codigo: motivo,
+      motivo_codigo: causa === 'dano_cliente' ? 'dano_cliente' : motivo,
       motivo_detalle: diagnostico,
       // Se repone el MISMO modelo: el técnico no elige catálogo.
       modelo_solicitado: ficha?.modelo_label || equipo.modelo || '',
@@ -208,6 +246,23 @@
     const diagPrevio = (equipo.trabajo_tecnico || '').trim();
     const modelo = ficha?.modelo_label || equipo.modelo || '—';
 
+    // Un radio PROPIO dañado por su dueño no tiene reemplazo por daño
+    // (Alberto, 2026-09-25): la tarjeta se ve, apagada, diciendo qué sí se
+    // puede hacer. Esconderla haría pensar que el sistema no contempla el caso.
+    const esPropio = sit.code === 'propio_garantia' || sit.code === 'propio_excepcion';
+
+    // Una tarjeta por causa. Es lo primero que se elige y cambia todo lo de
+    // abajo: el color, lo que se pide y a dónde va.
+    const tarjeta = (val, titulo, sub, pie, color, deshabilitada, porQue) => `
+      <label class="rp-causa" data-causa="${val}" style="flex:1 1 220px; display:block; cursor:${deshabilitada ? 'not-allowed' : 'pointer'};
+             border:2px solid var(--border-default, #D5DDE5); border-radius:10px; padding:12px; ${deshabilitada ? 'opacity:.6;' : ''}">
+        <input type="radio" name="rpCausa" value="${val}" ${deshabilitada ? 'disabled' : ''} style="margin:0 6px 0 0;">
+        <b style="font-size:14px;">${titulo}</b>
+        <div style="font-size:12.5px;color:var(--fg-3);margin:4px 0 8px;">${sub}</div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:${color};">${pie}</div>
+        ${porQue ? `<div style="font-size:12px;color:var(--fg-3);margin-top:6px;">${porQue}</div>` : ''}
+      </label>`;
+
     let enviando = false;
     return Modal.sheet({
       title: `Proponer reemplazo — ${serial}`,
@@ -215,45 +270,104 @@
       size: 'md',
       closable: () => !enviando,
       html: `
-        <div style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:12px;">
+        <div style="padding:10px 12px;border:1px solid var(--border-default, #D5DDE5);border-radius:8px;margin-bottom:12px;">
           <div style="font-family:var(--font-mono,monospace);font-size:14px;font-weight:600;">${esc(serial)}</div>
           <div style="font-size:13px;color:var(--fg-2);">${esc(modelo)}</div>
           <div style="font-size:12.5px;color:var(--fg-3);margin-top:4px;">${esc(sit.label)}${sit.why ? ` — ${esc(sit.why)}` : ''}</div>
           ${ficha?.asignacion?.contrato_id
             ? `<div style="font-size:12px;color:var(--fg-3);margin-top:2px;">Contrato ${esc(ficha.asignacion.contrato_id)}</div>` : ''}
         </div>
-        <p style="margin:0 0 12px;font-size:13px;color:var(--fg-3);">
-          Esta solicitud es <b>solo de este radio</b>. Va a <b>ventas@cecomunica.com</b> para aprobación,
-          con el vendedor de <b>${esc(orden.cliente_nombre || orden.cliente || 'el cliente')}</b> en copia.
-          Bodega repone el <b>mismo modelo</b>; si va con cargo o no, lo decide ventas.
-        </p>
-        <div class="form-field" style="margin-bottom:10px;">
-          <label class="form-label" for="rpMotivo">Motivo</label>
-          <select id="rpMotivo" class="form-select">
-            ${MOTIVOS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}
-          </select>
+        <div class="form-label" style="margin-bottom:6px;">¿Por qué hay que reemplazarlo?</div>
+        <div id="rpCausas" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+          ${tarjeta('falla', 'Falla del equipo', 'Garantía, desgaste o una falla que se repite', 'Sin cargo al cliente', 'var(--ok-deep, #17714B)', false, '')}
+          ${tarjeta('dano_cliente', 'Daño causado por el cliente', 'Golpe, líquido, carcasa o pantalla rota, sellos violados', 'Se cotiza y se factura', 'var(--warn-deep, #92400E)',
+            esPropio, esPropio ? 'Este radio es del cliente: no hay reemplazo por daño. Ofrécele un equipo nuevo (ventas puede darle un descuento especial) o cotiza la reparación.' : '')}
         </div>
-        <div class="form-field" style="margin-bottom:10px;">
-          <label class="form-label" for="rpDiag">Diagnóstico de este radio</label>
-          <textarea id="rpDiag" class="form-input" rows="3"
-            placeholder="Qué le pasa y por qué no tiene arreglo. Es lo que ventas va a leer para aprobar.">${esc(diagPrevio)}</textarea>
-          ${diagPrevio ? '<div class="form-hint" style="font-size:12px;color:var(--fg-3);margin-top:4px;">Traído de la intervención — corrígelo si hace falta.</div>' : ''}
-        </div>
-        <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--fg-2);">
-          <input type="checkbox" id="rpEnCasa" ${esVisita ? '' : 'checked'} style="margin-top:3px;">
-          <span>El radio <b>ya está aquí</b> (entró por el mostrador con esta orden).
-            <span style="color:var(--fg-3);">Si lo marcas, el sistema no abre una devolución para ir a buscarlo.</span></span>
-        </label>`,
+        <div id="rpCuerpo" style="display:none;">
+          <div id="rpFalla" style="display:none;" class="form-field">
+            <label class="form-label" for="rpMotivo">Motivo</label>
+            <select id="rpMotivo" class="form-select" style="margin-bottom:10px;">
+              ${MOTIVOS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}
+            </select>
+          </div>
+          <div id="rpDano" style="display:none;">
+            <div class="form-field" style="margin-bottom:10px;">
+              <label class="form-label" for="rpTipoDano">¿Qué daño tiene?</label>
+              <select id="rpTipoDano" class="form-select">
+                <option value="">— elige —</option>
+                ${TIPOS_DANO.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-field" style="margin-bottom:10px;">
+              <label class="form-label" for="rpFotos">Fotos del daño <span style="color:var(--bad,#991B1B);">(al menos una)</span></label>
+              <input type="file" id="rpFotos" accept="image/*" capture="environment" multiple class="form-input">
+              <div id="rpFotosInfo" class="form-hint" style="font-size:12px;color:var(--fg-3);margin-top:4px;">
+                Hasta ${MAX_FOTOS}. Es la prueba con la que administración decide el cobro.</div>
+            </div>
+            <p style="margin:0 0 10px;font-size:12.5px;color:var(--fg-3);">
+              El monto lo fija administración partiendo del <b>valor de reposición del catálogo</b>. Si lo aprueba con cargo,
+              el sistema arma la cotización y la jefatura de taller se la envía al cliente. Bodega no asigna el radio nuevo
+              hasta que el cliente acepte.</p>
+          </div>
+          <div class="form-field" style="margin-bottom:10px;">
+            <label class="form-label" for="rpDiag">Diagnóstico de este radio</label>
+            <textarea id="rpDiag" class="form-input" rows="3"
+              placeholder="Qué le pasa y por qué no tiene arreglo. Es lo que administración va a leer para decidir.">${esc(diagPrevio)}</textarea>
+            ${diagPrevio ? '<div class="form-hint" style="font-size:12px;color:var(--fg-3);margin-top:4px;">Traído de la intervención — corrígelo si hace falta.</div>' : ''}
+          </div>
+          <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--fg-2);">
+            <input type="checkbox" id="rpEnCasa" ${esVisita ? '' : 'checked'} style="margin-top:3px;">
+            <span>El radio <b>ya está aquí</b> (entró por el mostrador con esta orden).
+              <span style="color:var(--fg-3);">Si lo marcas, el sistema no abre una devolución para ir a buscarlo.</span></span>
+          </label>
+          <p id="rpDestino" style="margin:12px 0 0;font-size:12.5px;color:var(--fg-3);"></p>
+        </div>`,
       buttons: [
         { action: 'cerrar', label: 'Cancelar' },
         { action: 'enviar', label: 'Enviar propuesta', primary: true, icon: 'send' },
       ],
+      onMount: (root) => {
+        const destino = root.querySelector('#rpDestino');
+        const infoFotos = root.querySelector('#rpFotosInfo');
+        const pintar = () => {
+          const causa = root.querySelector('input[name="rpCausa"]:checked')?.value || '';
+          root.querySelectorAll('.rp-causa').forEach(t => {
+            const on = t.dataset.causa === causa;
+            t.style.borderColor = on ? (causa === 'dano_cliente' ? 'var(--warn-deep, #92400E)' : 'var(--ok-deep, #17714B)') : 'var(--border-default, #D5DDE5)';
+            t.style.background = on ? (causa === 'dano_cliente' ? 'var(--warn-soft, #FFF7E6)' : 'var(--ok-soft, #E7F6EE)') : '';
+          });
+          root.querySelector('#rpCuerpo').style.display = causa ? '' : 'none';
+          root.querySelector('#rpFalla').style.display = causa === 'falla' ? '' : 'none';
+          root.querySelector('#rpDano').style.display = causa === 'dano_cliente' ? '' : 'none';
+          destino.innerHTML = causa === 'dano_cliente'
+            ? `Va a <b>administración</b> (ventas@cecomunica.com) como reemplazo <b>con cargo</b>, con el vendedor de
+               <b>${esc(orden.cliente_nombre || orden.cliente || 'el cliente')}</b> en copia.`
+            : `Va a <b>administración</b> (ventas@cecomunica.com) para aprobación, con el vendedor de
+               <b>${esc(orden.cliente_nombre || orden.cliente || 'el cliente')}</b> en copia. Bodega repone el <b>mismo modelo</b>, sin cargo.`;
+        };
+        root.querySelectorAll('input[name="rpCausa"]').forEach(r => r.addEventListener('change', pintar));
+        root.querySelector('#rpFotos').addEventListener('change', (e) => {
+          const n = e.target.files?.length || 0;
+          infoFotos.textContent = n > MAX_FOTOS
+            ? `Elegiste ${n}: solo se suben las primeras ${MAX_FOTOS}.`
+            : n ? `${n} foto(s) lista(s) para subir.` : `Hasta ${MAX_FOTOS}. Es la prueba con la que administración decide el cobro.`;
+        });
+        pintar();
+      },
       onAction: async (action, root, api) => {
         if (action !== 'enviar') return null;
+        const causa = root.querySelector('input[name="rpCausa"]:checked')?.value || '';
+        if (!causa) { Toast.show('Elige primero por qué hay que reemplazarlo.', 'warn'); return false; }
         const motivo = root.querySelector('#rpMotivo').value;
         const diagnostico = (root.querySelector('#rpDiag').value || '').trim();
+        const tipoDano = root.querySelector('#rpTipoDano').value;
+        const fotos = [...(root.querySelector('#rpFotos').files || [])].slice(0, MAX_FOTOS);
+        if (causa === 'dano_cliente') {
+          if (!tipoDano) { Toast.show('Elige qué daño tiene el radio.', 'warn'); root.querySelector('#rpTipoDano').focus(); return false; }
+          if (!fotos.length) { Toast.show('Agrega al menos una foto del daño — sin ella no se puede decidir el cobro.', 'warn'); return false; }
+        }
         if (diagnostico.length < 10) {
-          Toast.show('Escribe el diagnóstico — es lo que ventas lee para aprobar.', 'warn');
+          Toast.show('Escribe el diagnóstico — es lo que administración lee para decidir.', 'warn');
           root.querySelector('#rpDiag')?.focus();
           return false;
         }
@@ -262,8 +376,11 @@
         enviando = true;
         root.querySelectorAll('button').forEach(b => { b.disabled = true; });
         try {
-          const gid = await enviar(orden, ordenId, { equipo, ficha, sit }, { motivo, diagnostico, salienteEnCasa });
-          Toast.show(`✅ ${serial}: propuesta ${gid} enviada a ventas@cecomunica.com`, 'ok');
+          const gid = await enviar(orden, ordenId, { equipo, ficha, sit },
+            { motivo, diagnostico, salienteEnCasa, causa, tipoDano, fotos });
+          Toast.show(causa === 'dano_cliente'
+            ? `✅ ${serial}: reemplazo por daño ${gid} enviado a administración`
+            : `✅ ${serial}: propuesta ${gid} enviada a administración`, 'ok');
           api.close(gid);
           return false;
         } catch (err) {
@@ -282,12 +399,39 @@
   async function enviar(orden, ordenId, { equipo, ficha, sit }, opts) {
     const user = firebase.auth().currentUser;
     const item = construirItem(equipo, ficha, sit, opts);
+    const esDano = opts.causa === 'dano_cliente';
+    // Por DAÑO: las fotos se suben ANTES de crear el expediente, con el
+    // número ya reservado — las reglas no dejan nacer una propuesta por daño
+    // sin fotos, y el correo a administración (trigger de creación) ya las ve.
+    let gidReservado = null;
+    const fotos = [];
+    if (esDano) {
+      gidReservado = await GestionesService.reservarId('reemplazo');
+      if (typeof CargaDiferida !== 'undefined') await CargaDiferida.storage();
+      for (let i = 0; i < (opts.fotos || []).length; i++) {
+        const blob = await comprimir(opts.fotos[i]);
+        const path = `gestiones_anexos/${gidReservado}/dano-${i + 1}-${Date.now()}.jpg`;
+        await firebase.storage().ref(path).put(blob, { contentType: 'image/jpeg' });
+        fotos.push(path);
+      }
+    }
     const gid = await GestionesService.crear({
       tipo: 'reemplazo',
       cliente_id: orden.cliente_id,
       cliente_nombre: orden.cliente_nombre || orden.cliente || '',
-      // SIEMPRE por aprobación: el taller propone, ventas decide.
+      // SIEMPRE por aprobación: el taller propone, administración decide.
       estado: 'pendiente_aprobacion',
+      ...(esDano ? {
+        causa: 'dano_cliente',
+        dano: {
+          tipo: opts.tipoDano,
+          tipo_label: (TIPOS_DANO.find(([k]) => k === opts.tipoDano) || [null, ''])[1],
+          fotos,
+        },
+        // El monto de referencia (valor de reposición del catálogo) lo pone
+        // el servidor al crearse: el técnico no decide el precio.
+        cobro: { requiere: true, fuente: 'valor_reposicion', estado: 'por_aprobar' },
+      } : { causa: 'falla' }),
       origen: {
         tipo: 'taller',
         ref_id: ordenId,
@@ -295,21 +439,25 @@
         equipo_id: equipo.id || null,
         serial: item.serial_saliente,
         diagnostico: opts.diagnostico,
-        motivo_codigo: opts.motivo,
+        motivo_codigo: esDano ? 'dano_cliente' : opts.motivo,
+        causa: esDano ? 'dano_cliente' : 'falla',
         saliente_en_casa: !!opts.salienteEnCasa,
         tecnico_uid: user?.uid || null,
         tecnico_email: user?.email || null,
         tecnico_nombre: orden.tecnico_asignado || '',
       },
-      aprobacion: { requiere: true, motivo: 'propuesta_taller' },
+      aprobacion: { requiere: true, motivo: esDano ? 'dano_cliente' : 'propuesta_taller' },
       items: [item],
-    });
+    }, { id: gidReservado });
 
     const clave = normSerial(item.serial_saliente);
     const marca = {
       gestion_id: gid,
       serial: item.serial_saliente,
       equipo_id: equipo.id || null,
+      // La pantalla de cotizar la orden lo lee para no cobrar la reparación
+      // de un radio que ya se va a cobrar como reposición.
+      causa: esDano ? 'dano_cliente' : 'falla',
       at: firebase.firestore.FieldValue.serverTimestamp(),
       por_uid: user?.uid || null,
       por_email: user?.email || null,
@@ -331,6 +479,6 @@
     return gid;
   }
 
-  window.OrdenesReemplazo = { abrir, situacion, puedeProponer, construirItem, propuestaDe, MOTIVOS, ROLES_PROPONEN };
+  window.OrdenesReemplazo = { abrir, situacion, puedeProponer, construirItem, propuestaDe, MOTIVOS, TIPOS_DANO, ROLES_PROPONEN };
   window.abrirProponerReemplazo = abrir;
 })();

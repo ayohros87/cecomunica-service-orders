@@ -18,6 +18,7 @@ const { admin, db } = require("../lib/admin");
  *   { action: "deactivate",    uid }                                   → { ok: true }
  *   { action: "reactivate",    uid }                                   → { ok: true }
  *   { action: "resetPassword", uid }                                   → { resetLink }
+ *   { action: "updateCargo",   uid, cargo }                            → { ok: true }
  *
  * Audit: every successful mutation writes to usuarios_audit/{autoId} so
  * admin/auditoria.html can render it alongside órdenes / contratos / PII.
@@ -184,6 +185,35 @@ module.exports = onCall(
           after:     { rol },
         });
 
+        return { ok: true };
+      }
+
+      // ─────────────── UPDATE CARGO ───────────────
+      // El cargo con el que la persona FIRMA (cotizaciones, firma de correo).
+      // Antes no había dónde ponerlo y todo el que firmaba sin él salía
+      // "Ejecutivo de Ventas" — incluida la jefa de taller (2026-09-25).
+      // Vacío = se borra y vuelve a valer el respaldo por rol.
+      case "updateCargo": {
+        const uid = data.uid;
+        const cargo = String(data.cargo || "").trim().replace(/\s+/g, " ");
+        if (!uid) throw new HttpsError("invalid-argument", "uid requerido.");
+        if (cargo.length > 60) throw new HttpsError("invalid-argument", "El cargo no puede pasar de 60 caracteres.");
+        const ref = db.collection("usuarios").doc(uid);
+        const snap = await ref.get();
+        if (!snap.exists) throw new HttpsError("not-found", "Usuario no encontrado.");
+        const antes = snap.data().cargo || "";
+        await ref.update({
+          cargo: cargo || admin.firestore.FieldValue.delete(),
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+          updated_by: callerUid,
+        });
+        await writeAudit({
+          actorUid:  callerUid,
+          targetUid: uid,
+          action:    "USUARIO_UPDATE_CARGO",
+          before:    { cargo: antes },
+          after:     { cargo },
+        });
         return { ok: true };
       }
 

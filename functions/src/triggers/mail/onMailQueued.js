@@ -167,7 +167,11 @@ module.exports = onDocumentWritten(
         subject:     after.subject,
         html,
         text:        after.text        || undefined,
-        attachments: after.attachments || undefined
+        attachments: after.attachments || undefined,
+        // Quien encola puede pedir que la respuesta vuelva a una persona y no
+        // al buzón del SMTP (cotizaciones: al firmante). Solo si es un correo.
+        replyTo:     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(after.replyTo || "").trim())
+          ? String(after.replyTo).trim() : undefined
       });
 
       await db.collection("mail_queue").doc(mailId).update({

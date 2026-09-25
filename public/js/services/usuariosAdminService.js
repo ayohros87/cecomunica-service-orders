@@ -21,6 +21,12 @@ const UsuariosAdminService = {
     return res.data; // { ok: true }
   },
 
+  // Cargo con el que firma (cotizaciones). '' lo borra.
+  async updateCargo(uid, cargo) {
+    const res = await this._call()({ action: 'updateCargo', uid, cargo });
+    return res.data;
+  },
+
   async deactivate(uid) {
     const res = await this._call()({ action: 'deactivate', uid });
     return res.data;

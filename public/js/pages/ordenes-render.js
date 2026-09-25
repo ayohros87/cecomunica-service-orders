@@ -675,7 +675,7 @@ function botonProponerReemplazo(ordenId, ordenData, equipo) {
   const ya = propuestaReemplazoDe(ordenData, serial);
   const title = ya
     ? `Reemplazo ya propuesto para ${serial} — solicitud ${ya.gestion_id}`
-    : `Proponer el reemplazo de ${serial} (garantía) — lo aprueba ventas`;
+    : `Proponer el reemplazo de ${serial} (falla o daño del cliente) — lo decide administración`;
   return `<button data-action="proponer-reemplazo" data-stop-propagation="true"
             data-orden-id="${ordenId}" data-equipo-id="${escapeHtml(String(equipo.id))}"
             class="btn-proponer-reemplazo${ya ? ' propuesto' : ''}" title="${escapeHtml(title)}"

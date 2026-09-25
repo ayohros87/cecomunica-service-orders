@@ -72,11 +72,19 @@ async function abrirCobro({
   modelo_id = "", modelo_label = "", cantidad = 1,
   motivo_codigo = "otro", motivo_detalle = "",
   por_email = "system:devolucion",
+  // Reposición por DAÑO que el cliente no aceptó (2026-09-25): el renglón nace
+  // del expediente de reemplazo, no de una devolución. Lleva el monto que
+  // administración aprobó (no el del catálogo a secas) y se deduplica por la
+  // gestión: una gestión = una deuda.
+  gestion_id = "", orden_id = "", cotizacion_id = "", monto_unit_aprobado = null,
 } = {}) {
   const norm = (serial_norm || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
   const qty = norm ? 1 : Math.max(1, Number(cantidad) || 1);
 
-  if (norm && orden_devolucion_id) {
+  if (gestion_id) {
+    const ya = await db.collection(COL).where("gestion_id", "==", gestion_id).limit(1).get();
+    if (!ya.empty) return null; // la deuda de esta gestión ya está abierta
+  } else if (norm && orden_devolucion_id) {
     const ya = await db.collection(COL)
       .where("serial_norm", "==", norm)
       .where("orden_devolucion_id", "==", orden_devolucion_id)
@@ -85,7 +93,8 @@ async function abrirCobro({
   }
 
   const cat = await precioCatalogo(modelo_id);
-  const unit = cat === null ? 0 : cat;
+  const aprobado = Number(monto_unit_aprobado);
+  const unit = Number.isFinite(aprobado) && aprobado > 0 ? redondear(aprobado) : (cat === null ? 0 : cat);
 
   const ref = await db.collection(COL).add({
     cliente_id, cliente_nombre,
@@ -97,11 +106,14 @@ async function abrirCobro({
     modelo_label: modelo_label || "",
     cantidad: qty,
     motivo_codigo, motivo_detalle,
+    ...(gestion_id ? { gestion_id, origen: "reposicion_dano" } : {}),
+    ...(orden_id ? { orden_id } : {}),
+    ...(cotizacion_id ? { cotizacion_id } : {}),
     monto_catalogo_unit: cat,
     monto_unit: unit,
     descuento_pct: descuentoPct(cat, unit),
     monto_total: redondear(unit * qty),
-    sin_referencia: cat === null,
+    sin_referencia: cat === null && !(unit > 0),
     etapa: ETAPAS.PENDIENTE,
     requiere_aprobacion: false,
     aprobado_por_email: "", aprobado_at: null,
@@ -112,7 +124,8 @@ async function abrirCobro({
     historial: [{
       accion: "abierto",
       detalle: `${qty} × ${modelo_label || "equipo"}${norm ? ` (${norm})` : ""}` +
-        `${orden_devolucion_id ? ` — devolución ${orden_devolucion_id}` : ""}`,
+        `${orden_devolucion_id ? ` — devolución ${orden_devolucion_id}` : ""}`
+        + `${gestion_id ? ` — reposición por daño no aceptada (${gestion_id}${cotizacion_id ? `, cotización ${cotizacion_id}` : ""})` : ""}`,
       fecha_iso: new Date().toISOString(),
       por_uid: "system", por_email,
     }],

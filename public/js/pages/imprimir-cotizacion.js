@@ -7,9 +7,9 @@
 
   function fmtFechaCorta(iso) { return FMT.dateShort(iso); } // delega en el helper canónico
 
-  function estadoChipHtml(estado) {
+  function estadoChipHtml(estado, doc) {
     const e = CotState.ESTADOS[estado] || CotState.ESTADOS.borrador;
-    return `<span class="chip-estado ${e.chip}">${e.label}</span>`;
+    return `<span class="chip-estado ${e.chip}">${esc(CotState.estadoLabel(estado, doc))}</span>`;
   }
 
   // Logo SVG inline (mismo del kit)
@@ -79,8 +79,10 @@
           </div>
         </div>
         <div class="cq-hd-right">
-          <div class="cq-doctype">Cotización</div>
+          <div class="cq-doctype">${esc(CotizacionTaller.tituloDocumento(doc || cot))}</div>
           <div class="cq-num">N° ${esc(cot.id || '—')}</div>
+          ${CotizacionTaller.esTaller(doc || cot) && (doc?.orden_id || cot.orden_id)
+            ? `<div class="cq-num" style="margin-top:2px;">Orden de servicio ${esc(doc?.orden_id || cot.orden_id)}</div>` : ''}
         </div>
       </div>
 
@@ -137,10 +139,11 @@
 
       <div class="cq-lower">
         <div class="cq-conditions">
+          ${(cot.condiciones || []).length ? `
           <div class="cq-lbl">Condiciones</div>
           <div class="cq-cgrid">
             ${cot.condiciones.map(c => `<div class="cq-ck">${esc(c.k)}</div><div class="cq-cv">${esc(c.v)}</div>`).join('')}
-          </div>
+          </div>` : ''}
         </div>
         <div class="cq-totals">
           ${totalesImpresion(t, cot)}
@@ -151,7 +154,7 @@
         <div class="cq-col">
           <div class="cq-line">
             <div class="cq-nm">${esc(ej.nombre || '—')}</div>
-            <div class="cq-rl">${esc(ej.rol || 'Ejecutivo de Ventas')} · ${esc(emisor.razon)}</div>
+            <div class="cq-rl">${esc(CotizacionTaller.cargoFirmante(doc || cot, ej))} · ${esc(emisor.razon)}</div>
             <div class="cq-ct">${esc(ej.email || '')}<br>${esc(ej.tel || '')}</div>
           </div>
         </div>
@@ -164,9 +167,7 @@
         </div>
       </div>
 
-      <div class="cq-note">
-        Precios expresados en dólares de los Estados Unidos de América (USD), equivalentes a Balboas (PAB). Esta cotización no constituye factura fiscal. Los precios pueden variar sin previo aviso una vez vencida la validez indicada. Equipos sujetos a disponibilidad de inventario al momento de la orden de compra.
-      </div>
+      <div class="cq-note">${esc(CotizacionTaller.notaLegal(doc || cot))}</div>
 
       <div class="cq-band"></div>
       <div class="cq-ft">
@@ -177,7 +178,7 @@
 
     // Toolbar
     $('ptTitle').textContent = cot.id || '—';
-    $('ptEstado').innerHTML = estadoChipHtml(cot.estado);
+    $('ptEstado').innerHTML = estadoChipHtml(cot.estado, doc || cot);
     $('btnEditarPt').addEventListener('click', () => {
       location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(cot._docId);
     });
@@ -231,7 +232,8 @@
     if (!doc) { $('cqPage').innerHTML = '<p style="padding:48px;">Cotización no encontrada.</p>'; return; }
     const cot = CotState.toUi(doc);
     const cli = catalogos.clientesById[cot.clienteId] || { razon: doc.cliente_nombre || '—', ruc: doc.cliente_ruc || '—', email: doc.cliente_email || '', tel: '', representante: doc.cliente_representante || '' };
-    const ej = catalogos.ejecutivos.find(e => e.id === cot.ejecutivoId) || { nombre: doc.ejecutivo_nombre || '—', rol: '', email: '', tel: '' };
+    const ej = catalogos.ejecutivos.find(e => e.id === cot.ejecutivoId)
+      || { nombre: doc.ejecutivo_nombre || '—', rol: doc.ejecutivo_cargo || '', email: doc.ejecutivo_email || '', tel: '' };
     render(cot, cli, ej, catalogos.emisor, doc);
   });
 })();

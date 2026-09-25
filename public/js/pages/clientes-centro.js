@@ -671,7 +671,8 @@ window.Centro = {
         if (puede) {
           const sinCarta = esBaja && !g.carta_path;
           const esTaller = g.origen?.tipo === 'taller';
-          it('warn', `Aprobar ${esBaja ? (g.terminacion_total_de?.length ? 'la TERMINACIÓN de la cuenta' : 'la baja de equipos') : esAum ? 'el aumento (enmienda)' : esTaller ? 'el reemplazo que propuso el taller' : 'la excepción de garantía'} ${gid}`,
+          const esDano = GestionesService.esReposicionDano(g);
+          it('warn', `Aprobar ${esBaja ? (g.terminacion_total_de?.length ? 'la TERMINACIÓN de la cuenta' : 'la baja de equipos') : esAum ? 'el aumento (enmienda)' : esDano ? 'el reemplazo POR DAÑO (con o sin cargo)' : esTaller ? 'el reemplazo que propuso el taller' : 'la excepción de garantía'} ${gid}`,
             sinCarta ? 'FALTA la carta del cliente — la aprobación está bloqueada hasta adjuntarla'
               : esTaller ? `Diagnóstico del taller (orden ${this.esc(g.origen?.orden_id || '—')}): ${this.esc(g.origen?.diagnostico || '—')}`
               : `${(g.items || []).length || (g.aumento?.lineas || []).length} renglón(es) — revisa la evidencia antes de aprobar`,
@@ -679,6 +680,13 @@ window.Centro = {
         } else if (esBaja && !g.carta_path && this.puedeCrearGestion()) {
           it('warn', `La baja ${gid} necesita la carta del cliente`, 'Adjúntala desde el expediente para desbloquear la aprobación', ver);
         }
+      } else if (g.estado === 'pendiente_cliente') {
+        // Reposición por daño: la cotización está con el cliente. Lo único que
+        // falta es su respuesta, y la anota el taller en la cotización.
+        const cot = g.cobro?.cotizacion_doc_id;
+        it('info', `Esperando que el cliente acepte el cobro de la reposición ${gid}`,
+          `Cotización ${this.esc(g.cobro?.cotizacion_id || 'en preparación')} · $${Number(g.cobro?.monto || 0).toFixed(2)} + ITBMS — Bodega asigna cuando el cliente acepte`,
+          ver + (cot ? `<a class="btn btn-primary cg-act" href="../cotizaciones/detalle-cotizacion.html?id=${encodeURIComponent(cot)}">Abrir la cotización</a>` : ''));
       } else if (g.tipo === 'aumento' && g.estado === 'pendiente_firma' && !g.firma_pendiente_validacion && this.puedeCrearGestion()) {
         it('warn', `El anexo de aumento ${gid} espera la firma del cliente`,
           g.firma_solicitud_estado === 'pendiente' ? 'El enlace de firma ya se envió — se puede reenviar' : 'Envíale el enlace de firma digital (o imprime y sube el firmado)',
@@ -2663,6 +2671,7 @@ window.Centro = {
             : `${(g.items || []).length} serial(es)`} · ${fecha}${g.estado === 'anulada' && g.anulada_motivo ? ` · <i>${this.esc(g.anulada_motivo)}</i>` : ''}</div></div>
         ${atenuada ? '' : `<span class="num" style="font-size:12px; color:var(--fg-3); flex:none;">${done}/${defsG.length}</span>`}
         ${g.regularizacion_bloqueada ? `<span class="cg-chip cg-chip--bad" style="flex:none;" title="Las cantidades del anexo no coinciden con los seriales — no se aplicó">No aplicado</span>` : ''}
+        ${this._chipCobro(g)}
         <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}" style="flex:none;">${this.esc(GestionesService.estadoLabel(g.estado))}</span>
         ${this._masFila(g.id, this._accionesGestion(g), g.id)}
         <span class="arr" style="margin-left:0;">${abierta ? '▾' : '›'}</span>
@@ -2674,7 +2683,7 @@ window.Centro = {
     // misma precedencia que las pendientes"): lo VIVO arriba — ordenado por
     // urgencia (quién espera una acción) — y cerradas/anuladas plegadas como
     // historial atenuado, igual que el Histórico de contratos.
-    const PESO = { pendiente_aprobacion: 0, pendiente_firma: 1, pendiente_bodega: 2, en_proceso: 3, retorno: 4, en_demo: 5 };
+    const PESO = { pendiente_aprobacion: 0, pendiente_cliente: 1, pendiente_firma: 1, pendiente_bodega: 2, en_proceso: 3, retorno: 4, en_demo: 5 };
     const ts = (g) => (g.fecha_solicitud?.toDate ? g.fecha_solicitud.toDate().getTime() : 0);
     const todas = this.gestiones || [];
     const vivas = todas.filter(g => !['cerrada', 'anulada'].includes(g.estado))
@@ -2708,6 +2717,30 @@ window.Centro = {
   _pasoDone(g, k) {
     if (g.cierre?.[k] === true) return true;
     return k === 'aprobacion' && !['pendiente_aprobacion', 'anulada'].includes(g.estado);
+  },
+
+  // Chip de DINERO de un reemplazo (2026-09-25): la diferencia entre "se repone
+  // gratis" y "se le cobra al cliente" tiene que verse sin abrir nada.
+  _chipCobro(g) {
+    if (g.tipo !== 'reemplazo') return '';
+    // Antes de que administración decida, el cobro NO está decidido: decir
+    // "Con cargo" ahí es adelantar una decisión que no se ha tomado.
+    if (GestionesService.esReposicionDano(g) && g.estado === 'pendiente_aprobacion') {
+      const ref = Number(g.cobro?.monto_referencia || 0);
+      return `<span class="cg-chip cg-chip--warn" style="flex:none;" title="El taller reporta daño causado por el cliente: administración decide si se cobra">Daño · por decidir${ref ? ` (ref. $${ref.toFixed(2)})` : ''}</span>`;
+    }
+    if (GestionesService.cobraCargo(g)) {
+      const m = Number(g.cobro?.monto || g.cobro?.monto_referencia || 0);
+      const txt = g.cobro?.estado === 'cobranza' ? 'En cobranza' : `Con cargo${m ? ` $${m.toFixed(2)}` : ''}`;
+      return `<span class="cg-chip cg-chip--warn" style="flex:none;" title="Reemplazo por daño causado por el cliente: se cotiza y se factura">${this.esc(txt)}</span>`;
+    }
+    if (GestionesService.esReposicionDano(g) && g.cobro?.estado === 'cortesia') {
+      return `<span class="cg-chip" style="flex:none;" title="${this.esc(g.cobro?.cortesia?.motivo || 'Aprobado sin cargo')}">Daño · cortesía</span>`;
+    }
+    if (GestionesService.esReposicionDano(g)) {
+      return `<span class="cg-chip cg-chip--warn" style="flex:none;" title="El taller reporta daño causado por el cliente">Daño · por decidir</span>`;
+    }
+    return `<span class="cg-chip" style="flex:none;" title="Reemplazo por garantía o falla: no se le cobra al cliente">Sin cargo</span>`;
   },
 
   // Los pasos que le tocan a ESTA gestión. El tipo manda, con las variantes
@@ -2755,8 +2788,19 @@ window.Centro = {
     // de ventas" entiende que se la aprueba otro vendedor — que es él mismo.
     if (!defs.some(([k]) => k === 'aprobacion') && g.aprobacion?.requiere === true) {
       defs = [['aprobacion', 'Aprobación',
-        g.origen?.tipo === 'taller' ? 'El taller propone; administración decide'
+        GestionesService.esReposicionDano(g) ? 'Administración decide si se cobra y cuánto'
+        : g.origen?.tipo === 'taller' ? 'El taller propone; administración decide'
           : 'Administración — antes de que Bodega asigne'], ...defs];
+    }
+    // Reposición por DAÑO con cargo: el cliente acepta el cobro ANTES de que
+    // bodega asigne. Es un paso más, y va justo donde ocurre.
+    if (GestionesService.cobraCargo(g)) {
+      const i = defs.findIndex(([k]) => k === 'aprobacion');
+      defs = [...defs.slice(0, i + 1),
+        ['cotizacion', 'El cliente acepta el cobro', g.estado === 'pendiente_aprobacion'
+          ? 'Solo si administración aprueba con cargo'
+          : `Cotización ${g.cobro?.cotizacion_id || 'de la reposición'} — la anota el taller`],
+        ...defs.slice(i + 1)];
     }
     return defs;
   },
@@ -2900,6 +2944,29 @@ window.Centro = {
             <b>Total estimado</b><b style="margin-left:auto;" class="num">$${Number(pen.total || 0).toFixed(2)}</b></div>` : ''}`;
     } else if (g.tipo === 'reemplazo') {
       const asignando = this.puedeAsignar() && g.estado === 'pendiente_bodega';
+      // DAÑO causado por el cliente (2026-09-25): qué se rompió, las fotos y
+      // el dinero — es lo que administración mira para decidir si se cobra.
+      const esDano = GestionesService.esReposicionDano(g);
+      const cb = g.cobro || {};
+      const EST_COBRO = {
+        por_aprobar: 'Por decidir (administración)', por_cotizar: 'Armando la cotización…',
+        cotizada: 'Cotización con el cliente', aceptada: 'El cliente aceptó — en facturación',
+        cobranza: 'El cliente no aceptó — en cobranza', cortesia: 'Sin cargo (cortesía)',
+      };
+      const danoBox = esDano ? `
+        <div class="cg-senal warn" style="margin:0 0 10px; display:block;">
+          <div style="font-size:12.5px; font-weight:700;">Daño causado por el cliente · ${this.esc(this.TIPOS_DANO[g.dano?.tipo] || g.dano?.tipo || 'daño físico')}</div>
+          <div style="display:flex; flex-wrap:wrap; gap:6px 16px; font-size:13px; margin-top:6px;">
+            <span>Valor de reposición (catálogo): <b class="num">${cb.monto_referencia ? '$' + Number(cb.monto_referencia).toFixed(2) : 'sin precio'}</b></span>
+            ${cb.monto ? `<span>Se cobra: <b class="num">$${Number(cb.monto).toFixed(2)}</b> + ITBMS</span>` : ''}
+            <span>Cobro: <b>${this.esc(EST_COBRO[cb.estado] || cb.estado || '—')}</b></span>
+            ${cb.cotizacion_doc_id ? `<a href="../cotizaciones/detalle-cotizacion.html?id=${encodeURIComponent(cb.cotizacion_doc_id)}">Cotización ${this.esc(cb.cotizacion_id || '')}</a>` : ''}
+          </div>
+          ${cb.cortesia?.motivo ? `<div style="font-size:12.5px; margin-top:4px;">Cortesía: ${this.esc(cb.cortesia.motivo)}</div>` : ''}
+          ${(g.dano?.fotos || []).length ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+            ${(g.dano.fotos || []).map((p, i) => `<button class="btn btn-ghost btn-sm cg-act" onclick="event.stopPropagation(); Centro.verAnexo('${this.esc(p)}')"><i data-lucide="camera"></i> Foto ${i + 1}</button>`).join('')}
+          </div>` : ''}
+        </div>` : '';
       // Propuesta del TALLER (2026-09-09): el diagnóstico va PRIMERO — es lo
       // que se lee para decidir. Sin esto, ventas aprobaría a ciegas.
       const taller = g.origen?.tipo === 'taller' ? `
@@ -2913,7 +2980,7 @@ window.Centro = {
               ? 'Los radios ya están en CECOMUNICA — no se abrirá orden de devolución.'
               : 'Los radios siguen donde el cliente — al entregar el reemplazo se abre sola la devolución.'}</div>
         </div>` : '';
-      cuerpo = taller + `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
+      cuerpo = taller + danoBox + `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
         <th>Sale</th><th>Modelo</th><th>Entra</th><th>Modelo solicitado</th><th>Motivo</th><th>Contrato</th>
         </tr></thead><tbody>
         ${(g.items || []).map((it, ix) => `<tr>
@@ -3004,6 +3071,8 @@ window.Centro = {
                ? 'Actualización de seriales esperando aprobación — al aprobar se aplica de una vez: el contrato gana las líneas, los seriales se amarran y no se le envía nada al cliente.'
              : esAumento
                ? 'Aumento esperando aprobación comercial — al aprobar, se imprime el anexo para la firma del cliente.'
+               : GestionesService.esReposicionDano(g)
+                 ? 'El taller reporta DAÑO CAUSADO POR EL CLIENTE. Decide en Acciones: con cargo (fijas el monto; se arma la cotización y Bodega espera a que el cliente acepte), sin cargo como cortesía (con motivo), o anular para rechazar.'
                : g.origen?.tipo === 'taller'
                  ? 'El taller propone este reemplazo y espera la decisión de administración. Al aprobar, Bodega recibe el aviso para asignar el equipo que sustituye a cada radio (mismo modelo).'
                  : g.aprobacion?.motivo === 'propio_excepcion' || (g.items || []).some(it => it.elegibilidad === 'propio_excepcion')
@@ -3011,6 +3080,17 @@ window.Centro = {
                    : 'Reemplazo esperando la aprobación de administración. Al aprobar, Bodega recibe el aviso para asignar el equipo que sustituye a cada radio.'}</span>
            </div>`;
       void puede; void fnAprobar; void sinCarta;
+    } else if (g.estado === 'pendiente_cliente') {
+      aprobacion = `<div class="cg-senal info" style="margin:10px 0 0;">
+           <span><b>Esperando la respuesta del cliente.</b> La cotización de la reposición
+             ${g.cobro?.cotizacion_id ? `<b>${this.esc(g.cobro.cotizacion_id)}</b> ` : ''}la envía la jefatura de taller.
+             Cuando el cliente conteste —por correo o de palabra— se anota en la cotización con
+             <b>Respuesta del cliente</b>: si acepta, Bodega recibe el aviso; si no, el caso se cierra y pasa a cobranza.
+             Si no contesta, administración lo pasa a cobranza desde Acciones.</span></div>`;
+    } else if (g.estado === 'cerrada' && g.resultado === 'sin_reemplazo_cobranza') {
+      aprobacion = `<div class="cg-senal warn" style="margin:10px 0 0;">
+           <span><b>Cerrada sin reemplazo.</b> El cliente no aceptó la reposición: el daño quedó en cobranza
+             ($${Number(g.cobro?.monto || 0).toFixed(2)} + ITBMS).${g.cerrada_motivo ? ` ${this.esc(g.cerrada_motivo)}` : ''}</span></div>`;
     } else if (g.estado === 'pendiente_firma' && g.tipo === 'aumento' && g.aumento?.es_regularizacion === true) {
       aprobacion = `<div class="cg-senal warn" style="margin:10px 0 0;">
            <span><b>Quedó esperando firma de antes.</b> Las actualizaciones de seriales ya no se firman
@@ -3043,6 +3123,79 @@ window.Centro = {
   },
 
   /* ── Acciones sobre el expediente ── */
+
+  // Reemplazo por DAÑO — con cargo: el monto parte del valor de reposición del
+  // catálogo (decisión de Alberto, 2026-09-25) y administración lo puede
+  // ajustar. Sin precio en el catálogo, lo escribe.
+  async aprobarConCargoGestion(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid) || await GestionesService.get(gid);
+    const ref = Number(g?.cobro?.monto_referencia || 0);
+    const it = (g?.items || [])[0] || {};
+    const v = await Modal.prompt({
+      title: 'Aprobar con cargo',
+      // Modal.prompt escapa el mensaje: texto plano.
+      message: `Reposición del radio ${it.serial_saliente || '—'} (${it.modelo || '—'}). `
+        + (ref ? `Valor de reposición del catálogo: $${ref.toFixed(2)}. ` : 'El modelo no tiene precio en el catálogo: escribe el monto. ')
+        + 'Monto a cobrar SIN ITBMS (la cotización lo suma si aplica):',
+      defaultValue: ref ? ref.toFixed(2) : '',
+      confirmLabel: 'Aprobar con este monto',
+    });
+    if (v === null || v === undefined) return;
+    const monto = Number(String(v).replace(/[^0-9.]/g, ''));
+    if (!(monto > 0)) { Toast.show('Escribe un monto mayor que cero', 'warn'); return; }
+    try {
+      await GestionesService.aprobarConCargo(gid, monto);
+      Toast.show('Aprobada con cargo — se arma la cotización para la jefatura de taller', 'ok');
+      await this.recargarGestiones();
+    } catch (e) { console.error(e); Toast.show('No se pudo aprobar: ' + (e?.message || e), 'bad'); }
+  },
+
+  async aprobarSinCargoGestion(gid) {
+    const motivo = await Modal.prompt({
+      title: 'Aprobar sin cargo (cortesía)',
+      message: 'El radio se repone GRATIS aunque el daño lo causó el cliente. ¿Por qué? Queda en el expediente.',
+      placeholder: 'Ej.: cliente grande en renovación; primer incidente en 3 años',
+      multiline: true,
+      confirmLabel: 'Aprobar sin cargo',
+    });
+    if (motivo === null || motivo === undefined) return;
+    if (String(motivo).trim().length < 5) { Toast.show('Escribe el motivo de la cortesía', 'warn'); return; }
+    try {
+      await GestionesService.aprobarSinCargo(gid, motivo);
+      Toast.show('Aprobada sin cargo — Bodega recibirá el aviso para asignar', 'ok');
+      await this.recargarGestiones();
+    } catch (e) { console.error(e); Toast.show('No se pudo aprobar: ' + (e?.message || e), 'bad'); }
+  },
+
+  // La salida para que el caso no quede colgando (Alberto, 2026-09-25): el
+  // cliente no contesta o no va a pagar. Se registra como la respuesta de la
+  // cotización ("no aceptó") — el MISMO camino que si lo anotara el taller —
+  // y el trigger cierra la gestión y abre la deuda en cobranza.
+  async cobranzaReposicion(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid) || await GestionesService.get(gid);
+    const cot = g?.cobro?.cotizacion_doc_id;
+    if (!cot) { Toast.show('La cotización todavía se está armando', 'warn'); return; }
+    const motivo = await Modal.prompt({
+      title: 'Pasar a cobranza',
+      message: `No se repone el radio. La gestión se cierra y el daño ($${Number(g.cobro?.monto || 0).toFixed(2)} + ITBMS) queda abierto en cobranza. ¿Qué pasó?`,
+      placeholder: 'Ej.: sin respuesta en 15 días; el cliente dice que no va a pagar',
+      multiline: true,
+      confirmLabel: 'Pasar a cobranza',
+    });
+    if (motivo === null || motivo === undefined) return;
+    if (String(motivo).trim().length < 5) { Toast.show('Escribe qué pasó — queda en el expediente', 'warn'); return; }
+    try {
+      await firebase.firestore().collection('cotizaciones').doc(cot).update({
+        estado: 'rechazada',
+        fecha_rechazo: firebase.firestore.Timestamp.now(),
+        rechazado_por_uid: firebase.auth().currentUser?.uid || null,
+        cierre_motivo: String(motivo).trim().slice(0, 300),
+      });
+      await GestionesService.registrarEvento(gid, 'cobranza_manual', `Pasado a cobranza por administración: ${String(motivo).trim()}`);
+      Toast.show('Pasa a cobranza — la gestión se cierra en unos segundos', 'ok');
+      setTimeout(() => this.recargarGestiones(), 2500);
+    } catch (e) { console.error(e); Toast.show('No se pudo: ' + (e?.message || e), 'bad'); }
+  },
 
   async aprobarGestion(gid) {
     try {
@@ -3539,7 +3692,17 @@ window.Centro = {
     const terminal = ['cerrada', 'anulada'].includes(g.estado);
 
     // ── Avanzar: lo que mueve el expediente al siguiente paso ──
-    if (g.estado === 'pendiente_aprobacion') {
+    if (g.estado === 'pendiente_aprobacion' && GestionesService.esReposicionDano(g)) {
+      // DAÑO del cliente: aprobar tiene DOS sentidos y cada uno es su botón.
+      // "Rechazar" es Anular, como en cualquier gestión.
+      const puede = this.puedeAprobar();
+      A.push(this._acc({ id: 'aprobar_cargo', label: 'Aprobar con cargo…', primaria: true,
+        hint: 'fijas el monto; se arma la cotización y Bodega espera a que el cliente acepte',
+        onclick: `Centro.aprobarConCargoGestion('${id}')`, ok: puede, motivo: 'solo administración o gerencia aprueba' }));
+      A.push(this._acc({ id: 'aprobar_cortesia', label: 'Aprobar sin cargo (cortesía)…',
+        hint: 'se repone gratis — pide el motivo', onclick: `Centro.aprobarSinCargoGestion('${id}')`,
+        ok: puede, motivo: 'solo administración o gerencia aprueba' }));
+    } else if (g.estado === 'pendiente_aprobacion') {
       const puede = (esBaja || esAum) ? this.puedeAprobarBaja() : this.puedeAprobar();
       const sinCarta = esBaja && !g.carta_path;
       const fn = esBaja ? 'aprobarBajaGestion' : esAct ? 'aprobarActualizacionSeriales'
@@ -3550,6 +3713,18 @@ window.Centro = {
         onclick: `Centro.${fn}('${id}')`,
         ok: puede && !sinCarta,
         motivo: !puede ? 'solo administración o gerencia aprueba' : 'falta la carta de solicitud del cliente' }));
+    }
+    if (g.estado === 'pendiente_cliente') {
+      const cot = g.cobro?.cotizacion_doc_id;
+      A.push(this._acc({ id: 'cotizacion', label: 'Abrir la cotización de la reposición', primaria: true,
+        hint: cot ? `${g.cobro?.cotizacion_id || ''} — ahí se envía y se anota la respuesta del cliente` : 'todavía se está armando',
+        href: cot ? `../cotizaciones/detalle-cotizacion.html?id=${encodeURIComponent(cot)}` : undefined,
+        ok: !!cot, motivo: 'la cotización se está armando — recarga en unos segundos' }));
+      A.push(this._acc({ id: 'cobranza', label: 'El cliente no paga → cobranza…', danger: true,
+        hint: 'cierra el caso sin reponer el radio y abre la deuda en cobranza',
+        onclick: `Centro.cobranzaReposicion('${id}')`,
+        ok: !!cot && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol),
+        motivo: !cot ? 'la cotización se está armando' : 'lo decide administración o gerencia' }));
     }
     if (esAct && g.estado === 'pendiente_firma') {
       A.push(this._acc({ id: 'aplicar_sin_firma', label: 'Aplicar sin firma', primaria: true,
@@ -4319,6 +4494,15 @@ window.Centro = {
     ['defectuoso', 'El radio salió defectuoso y se cambió antes de entregarlo'],
     ['otro', 'Otro'],
   ],
+  // Tipos de daño que declara el taller (mismas claves que
+  // functions/src/lib/reposicionDano.TIPOS_DANO y OrdenesReemplazo.TIPOS_DANO).
+  TIPOS_DANO: {
+    golpe: 'Golpe o caída',
+    liquido: 'Líquido o humedad',
+    carcasa: 'Carcasa, pantalla o antena rota',
+    manipulacion: 'Manipulación o sellos violados',
+    otro: 'Otro daño físico',
+  },
   get MOTIVOS_CAMBIO_SERIAL_LABEL() {
     return Object.fromEntries(this.MOTIVOS_CAMBIO_SERIAL);
   },

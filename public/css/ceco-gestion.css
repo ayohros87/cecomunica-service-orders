@@ -51,6 +51,7 @@
    centro.html durante la migración; al terminar, se reemplaza por cg-chip--*. */
 
 /* Estado de la gestión → color por etapa del pipeline. */
+.cg-chip--estado-pendiente_cliente,
 .cg-chip--estado-pendiente_aprobacion,
 .cg-chip--estado-pendiente_firma    { background: var(--cg-warn-soft); color: var(--cg-warn-deep); }
 .cg-chip--estado-pendiente_bodega   { background: var(--cg-info-soft); color: var(--cg-info-deep); }

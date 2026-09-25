@@ -273,7 +273,10 @@ test("C1 · el correo de aprobación va a ventas con el vendedor y el técnico e
   const cc = trg.slice(i, i + 600);
   assert.match(cc, /vendedorEmailDeCliente/, "el vendedor del cliente queda informado");
   assert.match(cc, /tecnico_email/, "y el técnico que propuso");
-  assert.match(trg, /subject: `Aprobación requerida: reemplazo del radio \$\{serial\}/,
+  assert.match(trg, /`Aprobación requerida: reemplazo del radio \$\{serial\}/,
     "el asunto nombra el radio — es lo que ventas necesita para decidir");
+  // Por DAÑO del cliente (2026-09-25) el asunto dice que va con cargo: es
+  // otra decisión (si se cobra y cuánto), y se tiene que ver desde el buzón.
+  assert.match(trg, /`Aprobación requerida: reemplazo CON CARGO por daño — radio \$\{serial\}/);
   assert.match(trg, /async function correoRechazoTaller/, "y el rechazo se le avisa al taller");
 });

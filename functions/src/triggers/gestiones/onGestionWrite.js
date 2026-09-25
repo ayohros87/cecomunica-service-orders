@@ -24,6 +24,7 @@ const CS = require("../../lib/cambioSerial");
 const CG = require("../../lib/correccionGestion");
 const AP = require("../../lib/adendaPapel");
 const RC = require("../../domain/regularizacionCuentas");
+const RD = require("../../lib/reposicionDano");
 
 // Condiciones de cierre por tipo. Reemplazo/demo: las 4 del correo de Zuleika.
 // Baja (Ola 3): aprobación → derivación (fin de facturación aplicado y
@@ -122,12 +123,44 @@ async function correoPropuestaTaller(gid, g) {
   // es lo que administración necesita para decidir sin abrir nada.
   const it = (g.items || [])[0] || {};
   const serial = it.serial_saliente || o.serial || "—";
+  // DAÑO CAUSADO POR EL CLIENTE (2026-09-25): el mismo expediente, pero es
+  // otra decisión — si se le cobra y cuánto. El asunto lo dice primero, y el
+  // cuerpo trae el monto de referencia y las fotos.
+  const dano = RD.esReposicionDano(g);
+  const ref = RD.montoReposicion(g);
+  const fotos = (g.dano?.fotos || []).length;
   await G.encolarCorreo({
     to: await G.aprobacionesTo(),
     cc: await ccTaller(g),
-    subject: `Aprobación requerida: reemplazo del radio ${serial} — ${g.cliente_nombre || "Cliente"} (${gid})`,
-    preheader: `El taller propone reemplazar ${serial} (${it.modelo || "sin modelo"}) de ${g.cliente_nombre || "un cliente"}`,
-    bodyContent: `
+    subject: dano
+      ? `Aprobación requerida: reemplazo CON CARGO por daño — radio ${serial} — ${g.cliente_nombre || "Cliente"} (${gid})`
+      : `Aprobación requerida: reemplazo del radio ${serial} — ${g.cliente_nombre || "Cliente"} (${gid})`,
+    preheader: dano
+      ? `El taller reporta que el cliente dañó ${serial}: se cotiza y se factura`
+      : `El taller propone reemplazar ${serial} (${it.modelo || "sin modelo"}) de ${g.cliente_nombre || "un cliente"}`,
+    bodyContent: dano ? `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Reemplazo por daño causado por el cliente</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        <b>${G.escapeHtml(o.tecnico_email || g.responsable_email || "El taller")}</b> revisó el radio
+        <b><code>${G.escapeHtml(serial)}</code></b> (${G.escapeHtml(it.modelo || "—")}) de
+        <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> en la orden <b>${G.escapeHtml(o.orden_id || "—")}</b>
+        y reporta <b>daño causado por el cliente</b>: ${G.escapeHtml(RD.TIPOS_DANO[g.dano?.tipo] || g.dano?.tipo || "daño físico")}.
+        No es garantía: <b>se cotiza y se factura</b>.</p>
+      <div style="margin:0 0 14px;padding:10px 12px;background:#F1F5F9;border-radius:6px;">
+        <p style="margin:0 0 4px;font:700 13px Arial,sans-serif;color:#334155;">Diagnóstico del taller</p>
+        <p style="margin:0;font:14px/1.5 Arial,sans-serif;">${G.escapeHtml(o.diagnostico || "—")}</p>
+      </div>
+      ${G.tablaHtml(["Radio", "Modelo", "Contrato", "Valor de reposición"], [[
+        `<code>${G.escapeHtml(serial)}</code>`,
+        G.escapeHtml(it.modelo || "—"),
+        `<code>${G.escapeHtml(it.contrato_id || "custodia")}</code>`,
+        ref ? `<b>$${ref.toFixed(2)}</b> + ITBMS` : "<b>sin precio en el catálogo</b> — lo fijas al aprobar",
+      ]])}
+      <p style="margin:12px 0 0;font:14px/1.5 Arial,sans-serif;">
+        <b>Tres salidas en el expediente:</b> aprobar <b>con cargo</b> (fijas el monto; el sistema arma la cotización y
+        la jefatura de taller se la envía al cliente — Bodega no asigna hasta que el cliente acepte), aprobar
+        <b>sin cargo</b> como cortesía (con motivo), o <b>rechazar</b>.
+        ${fotos ? `El técnico adjuntó <b>${fotos} foto(s)</b> del daño: están en el expediente.` : ""}</p>` : `
       <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">El taller propone reemplazar un radio</h2>
       <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
         <b>${G.escapeHtml(o.tecnico_email || g.responsable_email || "El taller")}</b> revisó el radio
@@ -169,7 +202,7 @@ async function correoRechazoTaller(gid, g) {
     to: para,
     cc: vend || null,
     subject: `Propuesta de reemplazo rechazada: radio ${(g.items || [])[0]?.serial_saliente || g.origen?.serial || "—"} — ${g.cliente_nombre || "Cliente"} (${gid})`,
-    preheader: "Ventas no aprobó el reemplazo propuesto desde el taller",
+    preheader: "Administración no aprobó el reemplazo propuesto desde el taller",
     bodyContent: `
       <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#991B1B;">Propuesta rechazada</h2>
       <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
@@ -341,7 +374,8 @@ async function correoBodega(gid, g, { anticipo = false } = {}) {
         `<code>${G.escapeHtml(it.serial_saliente || "—")}</code>`,
         G.escapeHtml(it.modelo || "—"),
         G.escapeHtml(it.modelo_solicitado || it.modelo || "—"),
-        G.escapeHtml(it.motivo_detalle || it.motivo_codigo || "—"),
+        (RD.cobraCargo(g) ? "<b>Reposición por daño — el cliente aceptó el cobro.</b> " : "")
+          + G.escapeHtml(it.motivo_detalle || it.motivo_codigo || "—"),
       ])
     : g.tipo === "aumento"
       ? (g.aumento?.lineas || []).map(l => [
@@ -566,7 +600,11 @@ module.exports = onDocumentWritten(
     // "incidencia de pool" falsa en el expediente. El eco no decide nada.
     // `correccion_en_curso` va en la misma bolsa: es la puerta de la sección
     // C2, no información — y su propia escritura no tiene nada que decidir.
-    if (soloCambiaron(before, after, ["seriales_norm", "correccion_en_curso"])) return null;
+    // `cobro` también: lo escriben SOLO este trigger y lib/reposicionDano (el
+    // monto de referencia, el puntero a la cotización) — sus ecos no deciden
+    // nada. Cuando administración aprueba, `cobro` cambia JUNTO con `estado`,
+    // y eso sí pasa.
+    if (soloCambiaron(before, after, ["seriales_norm", "correccion_en_curso", "cobro"])) return null;
 
     // ── A0) ANULADA → revertir los efectos regados (caso P223344) ────────
     // Órdenes creadas sin trabajar se eliminan; flags del pool se limpian;
@@ -577,6 +615,18 @@ module.exports = onDocumentWritten(
         await G.limpiarAnulacion(gid, after);
       } catch (e) {
         logger.error("[onGestionWrite] limpieza de anulación falló", { gid, message: e.message });
+      }
+      // Reposición por daño con la cotización todavía viva: se descarta, para
+      // que nadie la envíe ni la marque aceptada sobre un caso anulado.
+      if (RD.esReposicionDano(after)) {
+        try {
+          if (await RD.alAnularse(gid, after)) {
+            await G.registrarEvento(gid, "cotizacion_descartada",
+              `La cotización ${after.cobro?.cotizacion_id || ""} de la reposición se descartó junto con la gestión.`);
+          }
+        } catch (e) {
+          logger.error("[onGestionWrite] cotización de reposición no descartada", { gid, error: e.message });
+        }
       }
       if (esPropuestaTaller(after)) {
         try {
@@ -650,6 +700,20 @@ module.exports = onDocumentWritten(
           await correoAprobadoresAumento(gid, after);
           await G.registrarEvento(gid, "correo_aprobacion", "Correo de aprobación comercial enviado a administración y gerencia (aumento por enmienda).");
         } else if (esPropuestaTaller(after)) {
+          // Reemplazo por DAÑO: el valor de reposición lo pone el servidor
+          // (precio de venta del catálogo, con la caída a la base de la
+          // familia que usa cobranza), antes del correo que lo muestra.
+          if (RD.esReposicionDano(after) && after.cobro?.monto_referencia === undefined) {
+            try {
+              const CE = require("../../lib/cobrosEquipos");
+              const it0 = (after.items || [])[0] || {};
+              const precio = await CE.precioCatalogo(it0.modelo_id);
+              after.cobro = { ...(after.cobro || {}), monto_referencia: precio, modelo_id: it0.modelo_id || null };
+              await ref.update({ "cobro.monto_referencia": precio, "cobro.modelo_id": it0.modelo_id || null });
+            } catch (e) {
+              logger.warn("[onGestionWrite] valor de reposición no calculado", { gid, error: e.message });
+            }
+          }
           await correoPropuestaTaller(gid, after);
           await G.registrarEvento(gid, "correo_aprobacion",
             `Propuesta del taller (orden ${after.origen?.orden_id || "—"}) enviada a administración para aprobación, con el vendedor del cliente y el técnico en copia.`);
@@ -693,11 +757,22 @@ module.exports = onDocumentWritten(
           ? `Aviso enviado a Bodega para confirmar el serial correcto (${props} propuesto(s) por quien abrió la gestión).`
           : "Aviso enviado a Bodega para declarar cuál es el serial correcto.");
       }
+      // Reemplazo por DAÑO aprobado con cargo → se arma la cotización de la
+      // reposición. Bodega NO recibe nada todavía: espera a que el cliente
+      // acepte (pendiente_cliente → pendiente_bodega, lo mueve la cotización).
+      if (before && before.estado === "pendiente_aprobacion" && after.estado === "pendiente_cliente"
+          && RD.cobraCargo(after)) {
+        const r = await RD.crearCotizacionReposicion(gid);
+        if (r) logger.info("[onGestionWrite] cotización de reposición creada", { gid, cotizacion: r.cotizacionId });
+      }
+      // `pendiente_cliente` → `pendiente_bodega`: el cliente aceptó la
+      // reposición (lib/reposicionDano.alAceptarse). Es el aviso a bodega que
+      // se retuvo al aprobar.
       const entraABodega = after.tipo !== "baja" && after.tipo !== "cambio_serial"
         && after.aumento?.es_regularizacion !== true
         && after.aumento?.es_ajuste !== true && (
         (creada && after.estado === "pendiente_bodega") ||
-        (before && ["pendiente_aprobacion", "pendiente_firma"].includes(before.estado)
+        (before && ["pendiente_aprobacion", "pendiente_firma", "pendiente_cliente"].includes(before.estado)
           && after.estado === "pendiente_bodega"));
       if (entraABodega && !(after.tipo === "aumento" && serialesAumentoCompletos(after))) {
         await correoBodega(gid, after);

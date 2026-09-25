@@ -77,13 +77,15 @@
           <td>${escapeHtml(u.nombre || '—')}${isSelf ? ' <span class="pill" style="font-size:10px;">tú</span>' : ''}</td>
           <td><code style="font-size:11px;">${escapeHtml(u.email || u.correo || '—')}</code></td>
           <td>${rolDropdown}</td>
+          <td><button class="btn btn-ghost btn-sm" data-action="cargo" data-uid="${u.uid}" title="Cargo con el que firma las cotizaciones"
+                style="font-size:12px;${u.cargo ? '' : 'color:var(--fg-3);'}">${escapeHtml(u.cargo || 'Poner cargo')}</button></td>
           <td>${activo ? '<span class="pill" style="background:#d1fae5;color:#065f46;border-color:#a7f3d0;">activo</span>' : '<span class="pill" style="background:#fee2e2;color:#991b1b;border-color:#fecaca;">desactivado</span>'}</td>
           <td><code style="font-size:10px;color:var(--fg-3);">${u.uid.slice(0, 12)}…</code></td>
           <td style="text-align:right;white-space:nowrap;">${resetBtn} ${actBtn}</td>
         </tr>`;
     }).join('');
     el.innerHTML = `<table class="admin-table">
-      <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th>UID</th><th style="text-align:right;">Acciones</th></tr></thead>
+      <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Cargo (firma)</th><th>Estado</th><th>UID</th><th style="text-align:right;">Acciones</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
     setText('countShowing', `${state.filtered.length} de ${state.all.length}`);
@@ -112,6 +114,29 @@
         } catch (err) {
           Toast.show('Error: ' + (err.message || err.code), 'bad');
           sel.value = oldRol;
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-action="cargo"]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const uid = btn.dataset.uid;
+        const u = state.all.find(x => x.uid === uid);
+        const v = await Modal.prompt({
+          title: 'Cargo con el que firma',
+          message: `Así aparece bajo el nombre de ${u?.nombre || u?.email || 'la persona'} en las cotizaciones que firma. Déjalo vacío para usar el de su rol.`,
+          defaultValue: u?.cargo || '',
+          placeholder: 'Ej.: Jefa de Taller',
+          confirmLabel: 'Guardar',
+        });
+        if (v === null || v === undefined) return;
+        try {
+          await UsuariosAdminService.updateCargo(uid, v);
+          if (u) u.cargo = String(v).trim();
+          Toast.show('Cargo actualizado. Aplica a las cotizaciones que se creen desde ahora.', 'ok');
+          renderTable();
+        } catch (err) {
+          Toast.show('Error: ' + (err.message || err.code), 'bad');
         }
       });
     });

@@ -462,6 +462,33 @@ async function main() {
     aprobacion: { requiere: true, motivo: "reemplazo", aprobado_por_uid: "gerente" } }));
   ok("reemplazo: gerencia aprueba y ahí sí pasa a bodega");
 
+  // ── Reemplazo por DAÑO del cliente (2026-09-25) ──────────────────────────
+  // La propuesta trae la prueba (fotos) o no nace; aprobar CON cargo la deja
+  // esperando al cliente, y ese estado es solo de esta causa.
+  const propDano = (fotos) => ({ tipo: "reemplazo", estado: "pendiente_aprobacion", cliente_id: "cli1", deleted: false,
+    responsable_uid: "tecnico", causa: "dano_cliente",
+    origen: { tipo: "taller", orden_id: "o1", tecnico_uid: "tecnico" },
+    dano: { tipo: "liquido", fotos }, cobro: { requiere: true, estado: "por_aprobar" },
+    items: [{ serial_saliente: "B6810431", elegibilidad: "alquiler" }] });
+  await assertFails(as("tecnico").doc("gestiones/gDano0").set(propDano([])));
+  ok("daño: sin fotos del daño la propuesta no nace");
+  await assertSucceeds(as("tecnico").doc("gestiones/gDano1").set(propDano(["gestiones_anexos/gDano1/dano-1.jpg"])));
+  ok("daño: con fotos el técnico la propone");
+  await assertFails(as("vendedor").doc("gestiones/gDano1").update({ estado: "pendiente_cliente",
+    "cierre.aprobacion": true, cobro: { requiere: true, monto: 250 } }));
+  ok("daño: un vendedor no aprueba el cobro");
+  await assertSucceeds(as("administrador").doc("gestiones/gDano1").update({ estado: "pendiente_cliente",
+    "cierre.aprobacion": true, aprobacion: { requiere: true, decision: "con_cargo" },
+    cobro: { requiere: true, monto: 250, estado: "por_cotizar" } }));
+  ok("daño: administración aprueba CON cargo → espera al cliente");
+  await assertSucceeds(as("administrador").doc("gestiones/gDano1").update({ estado: "anulada",
+    anulada_motivo: "prueba", anulada_por_uid: "administrador" }));
+  ok("daño: mientras espera al cliente se puede anular");
+  await assertSucceeds(as("vendedor").doc("gestiones/gRe4").set(solicitud("pendiente_aprobacion")));
+  await assertFails(as("administrador").doc("gestiones/gRe4").update({ estado: "pendiente_cliente",
+    "cierre.aprobacion": true, cobro: { requiere: true, monto: 10 } }));
+  ok("daño: 'esperando al cliente' no existe para un reemplazo que no es por daño");
+
   // ── Editar / anular una gestión que todavía no surtió efecto (2026-09-09) ─
   // Se corrige en el sitio mientras nadie actuó: sin derivación, sin
   // asignación y sin OS. Y quien la creó puede anular LA SUYA en esa misma

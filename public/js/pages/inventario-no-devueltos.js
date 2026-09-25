@@ -130,10 +130,13 @@
           ${r.orden_devolucion_id
             ? `<div class="nd-meta"><a href="../ordenes/editar-orden.html?id=${encodeURIComponent(r.orden_devolucion_id)}">devolución ${esc(r.orden_devolucion_id)}</a></div>`
             : ''}
+          ${r.gestion_id
+            ? `<div class="nd-meta">reposición por daño ${esc(r.gestion_id)}${r.orden_id ? ` · <a href="../ordenes/editar-orden.html?id=${encodeURIComponent(r.orden_id)}">orden ${esc(r.orden_id)}</a>` : ''}</div>`
+            : ''}
         </td>
         <td>${_equipoHtml(r)}</td>
         <td>
-          <div style="font-size:12.5px;">${esc(r.motivo_codigo || '—')}</div>
+          <div style="font-size:12.5px;">${esc(r.motivo_codigo === 'dano_cliente' ? 'Daño causado por el cliente' : (r.motivo_codigo || '—'))}</div>
           ${r.motivo_detalle ? `<div class="nd-meta">${esc(r.motivo_detalle)}</div>` : ''}
         </td>
         <td style="text-align:right;">

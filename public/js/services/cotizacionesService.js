@@ -137,6 +137,9 @@ const CotizacionesService = {
       subject: payload.subject,
       html: payload.html,
       attachments: payload.attachments || [],
+      // La respuesta del cliente vuelve al firmante (CotState.replyToDe): en
+      // el taller "responder el correo" es la aceptación de la reparación.
+      ...(payload.replyTo ? { replyTo: payload.replyTo } : {}),
       meta: { tipo: 'cotizacion', cotizacion_id: id },
     });
     return this.updateCotizacion(id, {

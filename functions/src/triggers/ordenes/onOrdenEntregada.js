@@ -1,7 +1,6 @@
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
-const { APP_BASE_URL } = require("../../lib/inventario");
 
 // Lo que cuelga de una ENTREGA. Tres cosas, en este mismo trigger para no
 // sumar un séptimo onDocumentWritten sobre ordenes_de_servicio:
@@ -106,97 +105,19 @@ async function procesarEnviosTandas(ordenId, after) {
 // re-entrega no vuelva a encolar el correo.
 async function abrirFacturacionDeCotizaciones(ordenId, after) {
   const snap = await db.collection("cotizaciones").where("orden_id", "==", ordenId).get();
-  const cots = snap.docs.filter((d) => CS.esFacturable(d.data()));
+  // La reposición por daño (cotización con `gestion_id`) NO se abre aquí: se
+  // factura cuando el cliente la ACEPTA, y hasta entonces bodega ni siquiera
+  // asigna el radio que la sustituye. Si la orden del radio dañado se entrega
+  // antes de que el cliente conteste, facturarla sería cobrar algo que el
+  // cliente no aceptó.
+  const cots = snap.docs.filter((d) => CS.esFacturable(d.data()) && !d.data().gestion_id);
   if (!cots.length) return;
-
-  const G = require("../../lib/gestiones");
-  const FA = require("../../lib/facturacionAvisos");
-  const esc = G.escapeHtml;
-  const money = (n) => `$${Number(n || 0).toFixed(2)}`;
-  // El día en que salió el trabajo: la entrega en taller, o el cierre en sitio
-  // de una visita (`fecha_cierre_visita`). Es la fecha con la que la bandeja
-  // cuenta los días de antigüedad de la fila.
-  const salida = after.fecha_entrega || after.fecha_cierre_visita || after.fecha_completado || null;
-  const fechaEntrega = salida?.toDate ? salida.toDate() : new Date();
-  // Una visita cerró EN SITIO; una reparación se entregó en el taller. El
-  // correo lo dice como ocurrió: "ya se entregó" sobre una visita técnica
-  // suena a que alguien llevó algo, y Recepción pierde el hilo de qué cobrar.
-  const esVisita = norm(after.tipo_de_servicio) === "VISITA TECNICA"
-    || norm(after.estado_reparacion) === CERRADA_VISITA;
-  const salioTxt = esVisita ? "la visita ya se cerró en sitio" : "el equipo ya se entregó";
-  const tituloTxt = esVisita ? "Visita cerrada — hay que facturarla" : "Reparación entregada — hay que facturarla";
-  const asuntoTxt = esVisita ? "visita cerrada" : "reparación entregada";
-
+  // Una sola implementación para las dos puertas (entrega y aceptación):
+  // lib/facturacionCotizacion. Idempotente — si la cotización ya se pasó a
+  // facturar con el clic de "El cliente aceptó", aquí no pasa nada.
+  const { abrirFacturacionCotizacion } = require("../../lib/facturacionCotizacion");
   for (const d of cots) {
-    const cot = d.data();
-    const legible = cot.cotizacion_id || d.id;
-    if (cot.facturacion?.aviso_id) {
-      logger.info("[onOrdenEntregada] La cotización ya tiene fila de facturación", { ordenId, cotizacion: legible });
-      continue;
-    }
-    const r = CS.resumenCotizacion(cot);
-    const rs = CS.renglones(cot);
-    const filas = rs.map((x) => `
-      <tr><td style="padding:4px 8px;border-bottom:1px solid #eee;">${x.cant}</td>
-          <td style="padding:4px 8px;border-bottom:1px solid #eee;">${esc(x.nombre)}${x.parte ? ` <span style="font-family:monospace;color:#6b7280;">${esc(x.parte)}</span>` : ""}</td>
-          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right;">${money(x.importe)}</td></tr>`).join("");
-
-    await G.avisoFacturacion({
-      subject: `FACTURAR: ${asuntoTxt} — ${cot.cliente_nombre || "Cliente"} (${legible})`,
-      titulo: tituloTxt,
-      cuerpo: `
-        <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-          En la orden <b>${esc(ordenId)}</b> de <b>${esc(cot.cliente_nombre || "—")}</b>, ${salioTxt}.
-          La cotización <b>${esc(legible)}</b> que se le envió al cliente queda
-          <b>pendiente de facturar</b>.</p>
-        ${filas ? `<table role="presentation" width="100%" style="border-collapse:collapse;font:13px Arial,sans-serif;margin:8px 0;">
-          <thead><tr>
-            <th style="text-align:left;padding:4px 8px;border-bottom:2px solid #e5e7eb;">Cant.</th>
-            <th style="text-align:left;padding:4px 8px;border-bottom:2px solid #e5e7eb;">Concepto</th>
-            <th style="text-align:right;padding:4px 8px;border-bottom:2px solid #e5e7eb;">Importe</th>
-          </tr></thead><tbody>${filas}</tbody></table>` : ""}
-        <p style="margin:8px 0 0;font:14px Arial,sans-serif;">
-          Total a facturar: <b>${money(r.total)}</b>${r.exento ? " (exento de ITBMS)"
-            : ` · subtotal ${money(r.subtotal)} + ITBMS ${money(r.itbms)}`}</p>
-        <p style="margin:10px 0 0;font:13px/1.5 Arial,sans-serif;color:#40525f;">
-          Al marcar <b>QBO</b> con el número de factura, ${esc(cot.creado_por_email || "el taller")}
-          recibe el aviso de que ya quedó facturada.</p>`,
-      cliente_id: cot.clienteId || null,
-      cliente_nombre: cot.cliente_nombre || "",
-      responsable_uid: cot.creado_por_uid || null,
-      responsable_email: cot.creado_por_email || null,
-      ctaUrl: `${APP_BASE_URL}/cotizaciones/detalle-cotizacion.html?id=${encodeURIComponent(d.id)}`,
-      ctaLabel: "Ver la cotización",
-      meta: { source: "onOrdenEntregada", orden_id: ordenId, cotizacion_id: legible, paso: "facturar_cotizacion" },
-      aviso: {
-        tipo: "cotizacion_servicio",
-        origen_col: "cotizaciones", origen_id: d.id,
-        orden_id: ordenId,
-        fecha_efectiva: fechaEntrega,
-        esperando: false,
-        contexto: {
-          cotizacion_id: legible,
-          cotizacion_doc_id: d.id,
-          cotizado_por: cot.creado_por_email || null,
-          orden: ordenId,
-          es_visita: esVisita,
-          origen_texto: `${esVisita ? "Visita cerrada" : "Reparación entregada"} · cotización ${legible}`,
-        },
-        resumen: r,
-        detalle: { renglones: rs },
-      },
-    });
-    // El puntero en la cotización es lo que pinta el chip "Por facturar" en el
-    // listado — el control que Solangel llevaba a mano.
-    await d.ref.set({
-      facturacion: {
-        aviso_id: FA.avisoId("cotizacion_servicio", d.id),
-        estado: "pendiente",
-        abierta_at: admin.firestore.FieldValue.serverTimestamp(),
-        factura: null, facturada_at: null, facturada_por: null,
-      },
-    }, { merge: true });
-    logger.info("[onOrdenEntregada] Cotización de taller enviada a facturar", { ordenId, cotizacion: legible });
+    await abrirFacturacionCotizacion(d, { momento: "entrega", orden: after });
   }
 }
 
