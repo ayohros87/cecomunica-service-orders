@@ -410,7 +410,30 @@ const EquiposPoolService = {
 
   // Conteo de en_bodega agrupado por modelo — para KPIs y conciliación contra
   // inventario_actual. Retorna Map<modeloKey, {modelo_id, modelo_label, n}>.
+  // Bodega por modelo: Map<modeloKey, {modelo_id, modelo_label, n}>.
+  //
+  // Sale del resumen (2026-09-25): antes se leían las ~2,870 fichas de bodega
+  // solo para contarlas. Lo usan Almacén · Hoy (la sección de diferencias) y
+  // el asistente de conteo (el diff ANTES de guardar). Ninguno de los dos
+  // escribe este número: lo MUESTRAN — y es lo único para lo que sirve el
+  // resumen, que puede ir un par de segundos atrasado respecto del pool. El
+  // asistente guarda solo lo que el usuario tecleó ({modeloId, cantidad}).
+  //
+  // Verificado contra el pool en producción antes del cambio: cero modelos
+  // con diferencia (2,874 fichas). La clave del resumen ES el modeloKey.
   async contarBodegaPorModelo() {
+    const resumen = await this.resumenPorModelo();
+    if (resumen.length) {
+      const porModelo = new Map();
+      for (const r of resumen) {
+        const n = Number((r.est || {})[this.ESTADOS.EN_BODEGA] || 0);
+        if (n) porModelo.set(r.key, { modelo_id: r.modelo_id, modelo_label: r.modelo_label, n });
+      }
+      return porModelo;
+    }
+    // Sin resumen (aún sin construir, o vacío por un fallo): el camino viejo,
+    // exacto. Más caro, pero una diferencia de inventario mal contada es peor.
+    console.warn('[pool] agregados_pool vacío — contando la bodega sobre el pool');
     const enBodega = await this.listar({ estado: this.ESTADOS.EN_BODEGA });
     const porModelo = new Map();
     for (const d of enBodega) {
@@ -420,6 +443,32 @@ const EquiposPoolService = {
       porModelo.set(key, cur);
     }
     return porModelo;
+  },
+
+  // "Por clasificar" para la nota de Almacén · Hoy: { n, sinModelo }.
+  //
+  // La bandeja NO pinta esas fichas, a propósito (es deuda de migración y
+  // mostrarla entera sería una lista de reproches): solo dice cuántas son y
+  // cuántas sin modelo. Antes se leían las ~1,240 fichas para esos dos números.
+  //
+  // "Sin modelo" = el grupo `sinmodelo` del resumen: sin modelo_id Y sin
+  // etiqueta. Antes se contaba `!modelo_label`, que además incluiría una ficha
+  // con modelo_id de catálogo pero sin etiqueta — esa SÍ tiene modelo. Hoy las
+  // dos cuentas dan lo mismo (1,043 = 1,043; cero fichas con id sin etiqueta).
+  async contarPorClasificar() {
+    const resumen = await this.resumenPorModelo();
+    if (resumen.length) {
+      let n = 0, sinModelo = 0;
+      for (const r of resumen) {
+        const k = Number((r.est || {})[this.ESTADOS.POR_CLASIFICAR] || 0);
+        n += k;
+        if (r.key === 'sinmodelo') sinModelo += k;
+      }
+      return { n, sinModelo };
+    }
+    console.warn('[pool] agregados_pool vacío — contando "por clasificar" sobre el pool');
+    const docs = await this.listar({ estado: this.ESTADOS.POR_CLASIFICAR });
+    return { n: docs.length, sinModelo: docs.filter(d => !d.modelo_id && !d.modelo_label).length };
   },
 
   // ── Alta (con failsafe de colisión) ──────────────────────────────────

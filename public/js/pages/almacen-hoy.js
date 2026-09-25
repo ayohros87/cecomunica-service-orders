@@ -194,7 +194,13 @@ window.AlmacenHoy = (() => {
         ColaInventarioService.todo(),
         cargarGestionesBodega().catch(e => { console.warn('[Hoy] gestiones:', e?.code || e); return null; }),
         EquiposPoolService.listar({ estado: 'devuelto_revision' }).catch(e => { console.warn('[Hoy] devueltos:', e?.code || e); return null; }),
-        EquiposPoolService.listar({ estado: 'por_clasificar' }).catch(e => { console.warn('[Hoy] clasificar:', e?.code || e); return null; }),
+        // Solo dos números para una nota (ver notaClasificar): del resumen, no
+        // de las ~1,240 fichas. Envuelto en Promise.resolve().then a propósito:
+        // contarPorClasificar es nuevo (2026-09-25), y con un equiposPoolService
+        // viejo en caché llamarlo lanza un TypeError EN EL ACTO — antes de que
+        // .catch se enganche — y tumbaría el Promise.all y la bandeja ENTERA.
+        // Así cae solo la nota, que es la regla de este cargar().
+        Promise.resolve().then(() => EquiposPoolService.contarPorClasificar()).catch(e => { console.warn('[Hoy] clasificar:', e?.code || e); return null; }),
         cargarConflictos().catch(e => { console.warn('[Hoy] conflictos:', e?.code || e); return null; }),
         contarSinVerificar().catch(e => { console.warn('[Hoy] sin verificar:', e?.code || e); return null; }),
         cargarDiferencias().catch(e => { console.warn('[Hoy] diferencias:', e?.code || e); return null; }),
@@ -330,9 +336,9 @@ window.AlmacenHoy = (() => {
     // lista de reproches. Va como nota, con su tamaño real y su CTA.
     let notaClasificar = '';
     if (d.clasificar === null) fallidas.push('por clasificar');
-    else if (d.clasificar.length) {
-      const sinModelo = d.clasificar.filter(eq => !eq.modelo_label).length;
-      notaClasificar = `<p class="bj-nota">${d.clasificar.length.toLocaleString()} unidades en
+    else if (d.clasificar.n) {
+      const { n, sinModelo } = d.clasificar;
+      notaClasificar = `<p class="bj-nota">${n.toLocaleString()} unidades en
         "por clasificar" (deuda de migración — ubicación sin respaldo${sinModelo ? `, ${sinModelo.toLocaleString()} sin modelo` : ''})
         — <a href="${vol(`${EQUIPOS}?tab=por_clasificar`)}">revisar por lotes →</a></p>`;
     }

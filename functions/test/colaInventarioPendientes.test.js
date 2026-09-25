@@ -299,6 +299,9 @@ function cargarPagina(datos, transicionesActivas = true) {
     EquiposPoolService: {
       listar: async () => [],
       contarBodegaPorModelo: async () => new Map(),
+      // La nota de "por clasificar" sale del resumen desde 2026-09-25
+      // (almacenHoyResumen.test.js): { n, sinModelo }, no la lista de fichas.
+      contarPorClasificar: async () => ({ n: 0, sinModelo: 0 }),
     },
     ModelosService: { getModelos: async () => [] },
     ConflictosPoolService: { listarPendientes: async () => [] },
