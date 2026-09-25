@@ -378,6 +378,29 @@ const PocService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
+  // Suscripción VIVA a las fichas vivas o cerradas, para la búsqueda de la
+  // lista (poc-list.js, 2026-09-25). Misma query que getAll() (created_at ↓)
+  // y getCerradas(): tiene que dar exactamente el mismo conjunto.
+  //
+  // onDatos(docs, delServidor): `delServidor` es !metadata.fromCache. El
+  // primer snapshot de onSnapshot suele venir de la caché local de IndexedDB y
+  // PUEDE ESTAR INCOMPLETO — quien consume no debe tomarlo como el conjunto
+  // entero hasta ver uno del servidor (ver PocList._escuchar). Por eso
+  // includeMetadataChanges: sin él no llega el aviso de "ya sincronizó".
+  // Devuelve la función para cancelar la suscripción.
+  escuchar(nombre, onDatos, onError) {
+    const db = firebase.firestore();
+    const q = nombre === 'cerradas'
+      ? db.collection('poc_devices').where('deleted', '==', true)
+      : db.collection('poc_devices')
+          .where('deleted', '!=', true)
+          .orderBy('deleted')
+          .orderBy(this._sortFieldFor('created_at'), 'desc');
+    return q.onSnapshot({ includeMetadataChanges: true },
+      snap => onDatos(snap.docs.map(d => ({ id: d.id, ...d.data() })), !snap.metadata.fromCache),
+      onError);
+  },
+
   // ── Group administration ─────────────────────────────────────────────
   // Two layers:
   //   1. Canonical CATALOG — clientes/{id}.poc_grupos (string[]). Source of

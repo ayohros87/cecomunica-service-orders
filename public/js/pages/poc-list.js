@@ -9,19 +9,33 @@ window.PocList = {
   _filtroID:     0,
   _cargando:     false,          // guard en vuelo de cargar()
   _debounceTimer: null,          // debounce del buscador
-  _allDocs:      null,           // memo {t, docs} del barrido completo (filtrar)
-  _cerradasDocs: null,           // memo {t, docs} de las fichas cerradas
-  _ALL_TTL_MS:   60000,
+  // ── Conjuntos de búsqueda: suscripción viva + memo de respaldo ──────
+  // (2026-09-25) La búsqueda trae las ~4,600 fichas vivas (y las ~1,870
+  // cerradas si se prende el toggle). Era el mayor consumidor de Firestore
+  // que quedaba: ~36,000 lecturas/día, casi todo de recepción, con un memo de
+  // solo 60 s que obligaba a rebajar el conjunto en cada búsqueda.
+  //
+  // Ahora cada conjunto se mantiene con una suscripción VIVA (onSnapshot)
+  // mientras la página esté abierta: la primera búsqueda paga, las siguientes
+  // salen gratis y SIEMPRE al día — lo que cierra una devolución o toca otra
+  // persona llega solo. Si la suscripción no se puede abrir o no sincroniza a
+  // tiempo (sin red, permisos), se cae al get de siempre con un memo de
+  // _ALL_TTL_MS: el respaldo. Con la suscripción viva ese TTL no se consulta.
+  _escuchas:     { vivas: null, cerradas: null }, // estado de cada suscripción
+  _allDocs:      null,           // memo de RESPALDO {t, docs} de las vivas
+  _cerradasDocs: null,           // memo de RESPALDO {t, docs} de las cerradas
+  _ALL_TTL_MS:   10 * 60 * 1000, // respaldo: 10 min (antes 60 s; ver arriba)
+  _ESCUCHA_TOPE_MS: 15000,       // sin snapshot del servidor en 15 s → respaldo
   _docsPorId:    new Map(),      // docId → doc de la última vez que se pintó
 
-  // Reload using current filter state.
-  // Es la ruta que llaman las mutaciones (delete/restore/bulk), así que
-  // invalida el memo del barrido — el próximo filtrar() lee fresco.
   // Para cuando CAMBIARON los datos (se reabrió o cerró una ficha, un lote,
-  // un cambio de SIM): tira la memoria del barrido y vuelve a pintar.
+  // un cambio de SIM). Un conjunto con suscripción viva ya está al día: todas
+  // esas mutaciones son .update() del cliente, y Firestore le avisa al
+  // listener con el cambio local ANTES de que la escritura termine. Solo se
+  // tira el memo de respaldo de lo que no está escuchando.
   refresh() {
-    this._allDocs = null;
-    this._cerradasDocs = null;
+    if (!this._escuchas.vivas?.completo) this._allDocs = null;
+    if (!this._escuchas.cerradas?.completo) this._cerradasDocs = null;
     this._redespachar();
   },
 
@@ -51,28 +65,77 @@ window.PocList = {
     }, 300);
   },
 
-  // Barrido completo con memo de 60 s: la primera búsqueda paga la colección
-  // entera, las teclas siguientes filtran en memoria. NO usa {source:'cache'}
-  // de Firestore — devolvería resultados incompletos en silencio.
-  _getAllMemo() {
-    const m = this._allDocs;
-    if (m && Date.now() - m.t < this._ALL_TTL_MS) return Promise.resolve(m.docs);
-    return PocService.getAll({ sortField: 'created_at', sortAsc: false }).then(docs => {
-      this._allDocs = { t: Date.now(), docs };
-      return docs;
-    });
+  // Fichas vivas para la búsqueda. NUNCA usa {source:'cache'} ni un snapshot
+  // de caché como conjunto completo: devolvería resultados incompletos en
+  // silencio ("no existe" de una ficha que sí existe).
+  _getAllMemo() { return this._conjunto('vivas'); },
+
+  // Fichas CERRADAS (deleted:true), ~1,870. NO se pagan en la carga normal:
+  // solo entran cuando alguien prende "Incluir cerradas" para buscar un equipo
+  // que el cliente ya devolvió. También con suscripción viva: una ficha que se
+  // cierra sale de las vivas y tiene que aparecer aquí sin esperar a un TTL.
+  _getCerradasMemo() { return this._conjunto('cerradas'); },
+
+  _conjunto(nombre) {
+    const e = this._escuchas[nombre];
+    if (e && e.completo) return Promise.resolve(e.docs);
+    if (e && !e.fallo && e.listo) return e.listo;
+    if (e && e.fallo) return this._conjuntoPorGet(nombre);
+    return this._escuchar(nombre);
   },
 
-  // Mismo memo para las fichas CERRADAS (deleted:true). Son ~1,800 docs que
-  // NO se pagan en la carga normal: solo entran cuando alguien prende
-  // "Incluir cerradas" para buscar un equipo que el cliente ya devolvió.
-  _getCerradasMemo() {
-    const m = this._cerradasDocs;
+  // El camino de siempre (get + memo con TTL). Es el RESPALDO: se usa solo si
+  // la suscripción no se pudo abrir, falló, o no sincronizó a tiempo.
+  _conjuntoPorGet(nombre) {
+    const clave = nombre === 'cerradas' ? '_cerradasDocs' : '_allDocs';
+    const m = this[clave];
     if (m && Date.now() - m.t < this._ALL_TTL_MS) return Promise.resolve(m.docs);
-    return PocService.getCerradas().then(docs => {
-      this._cerradasDocs = { t: Date.now(), docs };
-      return docs;
+    const pedir = nombre === 'cerradas'
+      ? PocService.getCerradas()
+      : PocService.getAll({ sortField: 'created_at', sortAsc: false });
+    return pedir.then(docs => { this[clave] = { t: Date.now(), docs }; return docs; });
+  },
+
+  _escuchar(nombre) {
+    const e = { unsub: null, docs: null, completo: false, fallo: false, listo: null };
+    this._escuchas[nombre] = e;
+    e.listo = new Promise((resolver) => {
+      let tope = null;
+      // Pasar al respaldo. Si ya se había entregado el conjunto, la próxima
+      // búsqueda lo pedirá por get: una suscripción caída no sigue avisando, y
+      // sus datos dejarían de estar al día sin que nadie lo notara.
+      const abandonar = (motivo, err) => {
+        if (tope) clearTimeout(tope);
+        if (err) console.warn(`[POC] suscripción de ${nombre} → respaldo (${motivo}):`, err?.code || err);
+        try { if (e.unsub) e.unsub(); } catch (x) { /* ya estaba cerrada */ }
+        e.unsub = null;
+        e.fallo = true;
+        const yaEntregado = e.completo;
+        e.completo = false;
+        if (!yaEntregado) resolver(this._conjuntoPorGet(nombre));
+      };
+      tope = setTimeout(() => { if (!e.completo) abandonar('sin sincronizar a tiempo'); }, this._ESCUCHA_TOPE_MS);
+      try {
+        e.unsub = PocService.escuchar(nombre, (docs, delServidor) => {
+          if (e.fallo) return;
+          // Antes de tener el conjunto completo SOLO vale un snapshot del
+          // servidor: el primero suele venir de la caché local y puede estar
+          // incompleto. Ya sincronizado, todo snapshot es la mejor vista.
+          if (!e.completo && !delServidor) return;
+          e.docs = docs;
+          if (!e.completo) {
+            e.completo = true;
+            if (tope) clearTimeout(tope);
+            resolver(docs);
+          }
+        }, (err) => abandonar('error', err));
+      } catch (err) {
+        // Un pocService.js viejo en caché no tiene escuchar(): llamarlo lanza
+        // en el acto. Se cae al respaldo en vez de romper la búsqueda.
+        abandonar('no disponible', err);
+      }
     });
+    return e.listo;
   },
 
   // ── Fichas cerradas ─────────────────────────────────────────────
