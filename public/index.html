@@ -33,7 +33,6 @@
        senalesService (S15), así que las dos mitades tienen que ir juntas. -->
   <!-- Predicados de pendiente (espejo del servidor + test de sincronía):
        DEBE ir antes de senalesService, que delega en él. -->
-    <script type="module" src="js/firebase-aggregates.js?v=b2ec2fe6"></script>
          <!-- kit de bandeja (fila, panel, antigüedad); antes de señales y feeds -->
     <!-- Datos y acciones de la ficha "Órdenes por crear". equiposPoolService
        es la única ruta de escritura al pool: el descarte de una venta pasa
@@ -42,9 +41,6 @@
           <!-- Lucide en defer + icons.js (par adyacente, en este orden): icons.js hace
        el barrido inicial de <i data-lucide>; los guards inline viejos quedan
        como no-ops en parse. Ver js/core/icons.js. -->
-      <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script type="module" src="/js/entry/index.js"></script>
 </head>
 <body>

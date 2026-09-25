@@ -14,11 +14,7 @@
   <link rel="stylesheet" href="css/ceco-ui.css?v=bf320539" />
 
   <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script src="js/firebase-init.js?v=4174cf91"></script>
-  <script src="/js/vendor/lucide.min.js?v=5cc49c5c"></script>
+  <script type="module" src="/js/entry/login.js"></script>
 </head>
 <body>
   <div class="auth-shell">
@@ -100,7 +96,8 @@
     </div>
   </div>
 
-<script>
+<script type="module">
+  // Módulo (F3): corre después del entry, con window.firebase ya definido.
   const auth = firebase.auth();
 
   if (window.lucide) lucide.createIcons();
@@ -209,6 +206,8 @@
       setLoading(btn, false, 'Enviar correo');
     }
   });
+  // Puente window (F3): los onclick="" del HTML resuelven en el ámbito global.
+  Object.assign(window, { togglePass, mostrarReset, cancelarReset });
 </script>
 </body>
 </html>

@@ -1,4 +1,24 @@
-// firebase-init.js — init del SDK + caché de sesión (rol/nombre/config)
+// firebase-init.js — init del SDK (npm: compat + modular) + caché de sesión (rol/nombre/config)
+//
+// F3 (docs/plans/PLAN_MIGRACION_MODULAR.md): el SDK ya no viene de gstatic por
+// <script>; lo empaqueta Vite desde `firebase` (package.json). Se cargan las
+// DOS caras del mismo SDK, que comparten app, auth y Firestore:
+//   · compat → window.firebase, para los 134 archivos que usan firebase.*
+//   · modular → exports de este módulo y window.CecoFirebase, para código
+//     nuevo (política §8 del plan: archivo nuevo nace modular).
+import firebase from "firebase/compat/app";
+import "firebase/compat/auth";
+import "firebase/compat/firestore";
+import "firebase/compat/functions";
+import "firebase/compat/storage";
+import { getApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
+import { getStorage } from "firebase/storage";
+
+// Puente: el namespace compat como global, igual que lo dejaba el <script> de gstatic.
+window.firebase = firebase;
 
 if (!firebase.apps.length) {
   const firebaseConfig = {
@@ -12,32 +32,37 @@ if (!firebase.apps.length) {
 
   firebase.initializeApp(firebaseConfig);
 
+  // Caché persistente multi-pestaña, con la API modular pero aplicada a la
+  // instancia de compat (settings() antes del primer uso). Reemplaza al
+  // enablePersistence({synchronizeTabs:true}) deprecado: con
+  // persistentMultipleTabManager todas las pestañas comparten la caché y
+  // cualquiera puede hablar con el servidor (antes solo la "primaria", y una
+  // pestaña secundaria abierta por deep-link servía datos viejos).
+  // OJO: getFirestore(app) modular devuelve OTRA instancia (identificador
+  // distinto) sin esta caché — por eso el handle modular de abajo es el
+  // delegado de compat, no getFirestore(). Probado 2026-09-25 con Chrome:
+  // IndexedDB firestore/[DEFAULT]/… creado, dos pestañas sin advertencias.
+  try {
+    firebase.firestore().settings({
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch (err) {
+    console.warn("[firebase-init] caché persistente no disponible:", err?.code || err);
+  }
+
   firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 }
-// enablePersistence is deprecated in SDK 10.x but not removed — the replacement
-// (persistentLocalCache) is only available via the modular SDK, not the compat CDN build.
-// Revisit when migrating off the compat SDK.
-firebase.firestore().enablePersistence({ synchronizeTabs: true }).catch(async (err) => {
-  console.warn("Persistence no habilitada:", err.code || err);
-  // Auto-reparación: si el IndexedDB quedó escrito por un SDK más nuevo que el
-  // actual, la persistencia queda deshabilitada para siempre (todas las lecturas
-  // van a la red). Se limpia el caché una única vez por pestaña y se recarga;
-  // al volver, enablePersistence crea el caché con el formato de este SDK.
-  const esDowngrade = err.code === "failed-precondition" && /newer version/i.test(err.message || "");
-  if (esDowngrade && !sessionStorage.getItem("fsCacheReset")) {
-    sessionStorage.setItem("fsCacheReset", "1");
-    try {
-      await firebase.firestore().terminate();
-      await firebase.firestore().clearPersistence();
-      location.reload();
-    } catch (e) {
-      // p.ej. otra pestaña abierta impide clearPersistence — se sigue con
-      // caché en memoria y se reintentará en la próxima sesión.
-      console.warn("No se pudo limpiar el caché de Firestore:", e?.code || e);
-    }
-  }
-});
 const db = firebase.firestore();
+
+// Handles modulares (misma app, misma sesión, misma caché que compat).
+// db._delegate ES la instancia modular (Firestore) que envuelve compat: sirve
+// para collection()/getDoc()/getCountFromServer() y comparte caché y conexión.
+export const app = getApp();
+export const auth = getAuth(app);
+export const dbModular = db._delegate || getFirestore(app);
+export const fns = getFunctions(app);
+export const storage = getStorage(app);
+window.CecoFirebase = { app, auth, db: dbModular, fns, storage };
 
 /* =============================================================
    Sesion — caché de sesión del perfil (rol + nombre) por uid.

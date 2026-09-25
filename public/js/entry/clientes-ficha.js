@@ -3,6 +3,7 @@
 // archivo sigue publicando sus globales en window (puente F1), así que el
 // orden importa igual que antes. Vite lo empaqueta y le pone hash.
 import '/js/firebase-init.js';
+import '/js/firebase-aggregates.js';
 import '/js/services/usuariosService.js';
 import '/js/services/clientesService.js';
 import '/js/services/clienteDocumentosService.js';

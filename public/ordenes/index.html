@@ -46,7 +46,6 @@
      ordenes-render (el contador de la fila) y ordenes-flujo (el despacho). -->
 <!-- count() agregados para los chips/KPIs (mismos números que las señales
      del home) — auditoría M4/A8. -->
-<script type="module" src="../js/firebase-aggregates.js?v=b2ec2fe6"></script>
 <script src="../js/core/serial.js?v=37e4721b"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
 <!-- Protocolo de la tablet de firmas del mostrador (crear/escuchar/cancelar la
      solicitud). Lo usan el modal de entrega (ordenes-flujo) y la hoja de
@@ -60,9 +59,6 @@
 <!-- Lucide en defer + icons.js (par adyacente, en este orden): icons.js hace
      el barrido inicial de <i data-lucide>; los guards inline viejos quedan
      como no-ops en parse. Ver js/core/icons.js. -->
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script type="module" src="/js/entry/ordenes-index.js"></script>
 </head>
 <body>

@@ -45,7 +45,6 @@ window.CargaDiferida = (() => {
     return p;
   }
 
-  const GSTATIC = "https://www.gstatic.com/firebasejs/10.10.0/";
   const MODULOS = {
     firmaPad:   "/js/ui/firmaPad.js?v=dev3",
     // Protocolo de la tablet de firmas. En /ordenes/ ya viene del HTML
@@ -80,12 +79,11 @@ window.CargaDiferida = (() => {
 
   return {
     script, css,
-    storage() {
-      return firebase.storage ? Promise.resolve() : script(GSTATIC + "firebase-storage-compat.js");
-    },
-    functions() {
-      return firebase.functions ? Promise.resolve() : script(GSTATIC + "firebase-functions-compat.js");
-    },
+    // F3 (PLAN_MIGRACION_MODULAR.md): storage y functions compat vienen en el
+    // bundle de firebase-init (npm), en un chunk compartido y cacheado. Ya no
+    // se traen de gstatic: mezclar versiones del SDK rompe el registry compat.
+    storage() { return Promise.resolve(); },
+    functions() { return Promise.resolve(); },
     // Módulos de acción de órdenes. Cada uno garantiza sus dependencias:
     // el check-in de devolución necesita el pad de firma y storage; el
     // informe/cierre de visita y las fotos suben archivos a storage.
