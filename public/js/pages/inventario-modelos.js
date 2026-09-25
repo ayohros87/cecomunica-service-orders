@@ -808,3 +808,11 @@ async function renderSalud(){
         <div style="margin:4px 0 0 18px; font-size:12.5px; color:var(--fg-3); line-height:1.6;">${f.detalle || '—'}</div>
       </details>`).join('')}</div>` : ''}`;
 }
+
+// --- Puente window (F1, docs/plans/PLAN_MIGRACION_MODULAR.md) ---
+// Estos nombres los usan otros archivos o el HTML (onclick / inline). Hoy son
+// globales porque el archivo es un <script> clásico; al empaquetarse como
+// módulo ES dejarían de serlo. El puente los publica de forma explícita.
+Object.assign(window, {
+  onEstadoChange
+});

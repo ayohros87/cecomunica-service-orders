@@ -399,3 +399,13 @@ function esOrdenProgramacion(orden) {
 function esOrdenEntrada(orden) {
   return normTxt(orden?.tipo_de_servicio).includes("entrada");
 }
+
+// --- Puente window (F1, docs/plans/PLAN_MIGRACION_MODULAR.md) ---
+// Estos nombres los usan otros archivos o el HTML (onclick / inline). Hoy son
+// globales porque el archivo es un <script> clásico; al empaquetarse como
+// módulo ES dejarían de serlo. El puente los publica de forma explícita.
+Object.assign(window, {
+  esOrdenDevolucion, esOrdenEntrada, esOrdenProgramacion, esOrdenVisita,
+  escapeHtml, estadoCompacto, formatFecha, formatFechaHora, getEstadoClass,
+  nombreClienteDe, normTxt, pendientesDevolucion, tipoChip
+});

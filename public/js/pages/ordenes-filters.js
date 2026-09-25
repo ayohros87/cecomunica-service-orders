@@ -1032,3 +1032,13 @@ window.filtrarPorEstado = async function (estado) {
   actualizarResumen(resultados);
   if (typeof aplicarRestriccionesPorRol === 'function') aplicarRestriccionesPorRol(APP.state.userRole);
 };
+
+// --- Puente window (F1, docs/plans/PLAN_MIGRACION_MODULAR.md) ---
+// Estos nombres los usan otros archivos o el HTML (onclick / inline). Hoy son
+// globales porque el archivo es un <script> clásico; al empaquetarse como
+// módulo ES dejarían de serlo. El puente los publica de forma explícita.
+Object.assign(window, {
+  aplicarFiltrosCombinados, applyActiveFiltersToOrders, asegurarColaQc,
+  asegurarOrdenesDeCorreo, getActiveFilters, hasActiveFilters, olvidarColaQc,
+  setFechaEntregaVisible, syncMobileAdvancedFiltersToDesktop
+});

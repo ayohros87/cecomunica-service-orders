@@ -771,3 +771,13 @@ async function duplicar(id) {
   }
 }
 
+
+// --- Puente window (F1, docs/plans/PLAN_MIGRACION_MODULAR.md) ---
+// Estos nombres los usan otros archivos o el HTML (onclick / inline). Hoy son
+// globales porque el archivo es un <script> clásico; al empaquetarse como
+// módulo ES dejarían de serlo. El puente los publica de forma explícita.
+Object.assign(window, {
+  abrirBatchModal, abrirModal, ajustarStock, cerrarBatchModal, cerrarModal,
+  descargarPlantillaCSV, duplicar, eliminarPieza, guardarBatch, guardarPieza,
+  onTogglePiezas, sortBy, toggleActivo
+});
