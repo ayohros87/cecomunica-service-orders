@@ -18,9 +18,9 @@
   <meta charset="UTF-8">
   <title>Equipos por serial - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=sh5">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=bf320539">
   <!-- Rediseño Command Center: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
-  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=dc265958">
 
   <style>
     /* Page-local — kit primitives handle the rest.
@@ -149,42 +149,42 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
-  <script defer src="../js/firebase-init.js?v=ses2"></script>
-  <script src="../js/core/modulos.js?v=cc16"></script>
-  <script src="../js/core/layout.js?v=cc14"></script>
-  <script src="../js/core/roles.js"></script>
-  <script src="../js/core/formatting.js"></script>
-  <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/services/modelosService.js?v=mf1"></script>
-  <script defer src="../js/services/clientesService.js"></script>
-  <script defer src="../js/services/inventarioService.js"></script>
+  <script defer src="../js/firebase-init.js?v=4174cf91"></script>
+  <script src="../js/core/modulos.js?v=1838cd29"></script>
+  <script src="../js/core/layout.js?v=68295191"></script>
+  <script src="../js/core/roles.js?v=7a4f1b6f"></script>
+  <script src="../js/core/formatting.js?v=b2dcba44"></script>
+  <script defer src="../js/services/usuariosService.js?v=9511b285"></script>
+  <script defer src="../js/services/modelosService.js?v=01600968"></script>
+  <script defer src="../js/services/clientesService.js?v=1e55c7b3"></script>
+  <script defer src="../js/services/inventarioService.js?v=31a69da6"></script>
   <!-- ?v= aquí (y no en las otras páginas) porque el flujo de recepción de
        esta página y el servicio cambian juntos: la confirmación de colisión de
        modelo necesita las dos mitades de la misma versión. -->
-  <script defer src="../js/domain/modeloFamilia.js?v=mf1"></script>
-  <script src="../js/core/serial.js?v=1"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
-  <script defer src="../js/services/equiposPoolService.js?v=venta1"></script>
+  <script defer src="../js/domain/modeloFamilia.js?v=ad284933"></script>
+  <script src="../js/core/serial.js?v=37e4721b"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
+  <script defer src="../js/services/equiposPoolService.js?v=b70f2655"></script>
   <!-- Join único conteo↔pool — lo usa el modal de conciliación. -->
-  <script defer src="../js/domain/stockAgg.js"></script>
+  <script defer src="../js/domain/stockAgg.js?v=74b691f3"></script>
   <!-- Solo para el badge "Pendientes" del rail (conteo por agregados). -->
-  <script defer src="../js/services/colaInventarioService.js"></script>
-  <script defer src="../js/services/conflictosPoolService.js?v=cf1"></script> <!-- cola de Conflictos, compartida con Almacén -->
-  <script defer src="../js/ui/equipo-ficha.js?v=venta1"></script>
+  <script defer src="../js/services/colaInventarioService.js?v=3c6b9ef2"></script>
+  <script defer src="../js/services/conflictosPoolService.js?v=57f8b053"></script> <!-- cola de Conflictos, compartida con Almacén -->
+  <script defer src="../js/ui/equipo-ficha.js?v=129bd791"></script>
   <!-- Asistentes extraídos de esta página (2026-08-10): componentes con
        overlay propio, compartidos con el espacio Almacén. La página delega
        en ellos (EquiposPool.abrirRecibir / abrirVenta). -->
-  <script defer src="../js/ui/filtered-select.js?v=fs1"></script>
-  <script defer src="../js/ui/asistente-recibir.js?v=sh1"></script>
-  <script defer src="../js/ui/entity-combo.js?v=ec1"></script>
-  <script defer src="../js/ui/asistente-venta.js?v=sh1"></script>
-  <script defer src="../js/services/pocService.js?v=cc12"></script> <!-- soft-delete del device en "Corregir estado" -->
+  <script defer src="../js/ui/filtered-select.js?v=434bc440"></script>
+  <script defer src="../js/ui/asistente-recibir.js?v=3771ed6e"></script>
+  <script defer src="../js/ui/entity-combo.js?v=f185b9d4"></script>
+  <script defer src="../js/ui/asistente-venta.js?v=f4c5fa88"></script>
+  <script defer src="../js/services/pocService.js?v=ca6c36f3"></script> <!-- soft-delete del device en "Corregir estado" -->
 
-  <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
-  <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/ui/modal.js?v=f7"></script>
-  <script src="../js/pages/inventario-equipos.js?v=tab1" defer></script>
-  <script defer src="/js/vendor/lucide.min.js?v=3"></script>
-  <script defer src="/js/core/icons.js?v=1"></script>
+  <script defer src="../js/core/xlsx-loader.js?v=aefcd335"></script> <!-- SheetJS BAJO DEMANDA -->
+  <script defer src="../js/ui/toast.js?v=f4e03438"></script>
+  <script defer src="../js/ui/modal.js?v=0e2e184d"></script>
+  <script src="../js/pages/inventario-equipos.js?v=9c2ee2d2" defer></script>
+  <script defer src="/js/vendor/lucide.min.js?v=5cc49c5c"></script>
+  <script defer src="/js/core/icons.js?v=1c619298"></script>
 </head>
 <body>
   <div class="cc-app">

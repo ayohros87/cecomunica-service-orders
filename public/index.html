@@ -24,41 +24,41 @@
   <title>Cecomunica - Plataforma</title>
   <!-- Rediseño Command Center (F1) — esta página usa ceco-command.css.
        Las páginas aún no migradas siguen con ceco-ui.css. -->
-  <link rel="stylesheet" href="css/ceco-command.css?v=cc18">
-  <link rel="stylesheet" href="css/bandeja.css?v=bj2"> <!-- kit de bandeja: panel de señales y feeds -->
+  <link rel="stylesheet" href="css/ceco-command.css?v=2842eeaa">
+  <link rel="stylesheet" href="css/bandeja.css?v=0a2d7aa4"> <!-- kit de bandeja: panel de señales y feeds -->
 
   <!-- Firebase -->
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script defer src="js/firebase-init.js?v=ses2"></script>
-  <script src="js/core/modulos.js?v=cc16"></script>
-  <script defer src="js/services/usuariosService.js"></script>
+  <script defer src="js/firebase-init.js?v=4174cf91"></script>
+  <script src="js/core/modulos.js?v=1838cd29"></script>
+  <script defer src="js/services/usuariosService.js?v=9511b285"></script>
   <!-- Versión compartida a propósito: home-signals llama métodos nuevos de
        senalesService (S15), así que las dos mitades tienen que ir juntas. -->
   <!-- Predicados de pendiente (espejo del servidor + test de sincronía):
        DEBE ir antes de senalesService, que delega en él. -->
-  <script defer src="js/domain/pendientes.js?v=pen2"></script>
-  <script type="module" src="js/firebase-aggregates.js?v=agg1"></script>
-  <script defer src="js/domain/regularizacion.js?v=reg2"></script>
-  <script defer src="js/services/senalesService.js?v=pen12"></script>
-  <script defer src="js/services/aprobacionesService.js?v=apr2"></script>
-  <script defer src="js/ui/bandeja.js?v=bj2"></script> <!-- kit de bandeja (fila, panel, antigüedad); antes de señales y feeds -->
-  <script defer src="js/pages/home-signals.js?v=pen11"></script>
+  <script defer src="js/domain/pendientes.js?v=235e7467"></script>
+  <script type="module" src="js/firebase-aggregates.js?v=b2ec2fe6"></script>
+  <script defer src="js/domain/regularizacion.js?v=e452a66c"></script>
+  <script defer src="js/services/senalesService.js?v=f31bcd0a"></script>
+  <script defer src="js/services/aprobacionesService.js?v=1e018ca6"></script>
+  <script defer src="js/ui/bandeja.js?v=f13cd4bb"></script> <!-- kit de bandeja (fila, panel, antigüedad); antes de señales y feeds -->
+  <script defer src="js/pages/home-signals.js?v=c6ff20ce"></script>
   <!-- Datos y acciones de la ficha "Órdenes por crear". equiposPoolService
        es la única ruta de escritura al pool: el descarte de una venta pasa
        por ahí para que quede en el kardex de cada unidad. -->
-  <script defer src="js/domain/ordenProgPendiente.js?v=fo2"></script>
-  <script src="js/core/serial.js?v=1"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
-  <script defer src="js/services/equiposPoolService.js?v=venta1"></script>
-  <script defer src="js/services/feedOrdenesService.js?v=fo3"></script>
-  <script defer src="js/pages/home-feed-ordenes.js?v=fo5"></script>
-  <script defer src="js/pages/home-feed-devoluciones.js?v=fo4"></script>
+  <script defer src="js/domain/ordenProgPendiente.js?v=65ff6f57"></script>
+  <script src="js/core/serial.js?v=37e4721b"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
+  <script defer src="js/services/equiposPoolService.js?v=b70f2655"></script>
+  <script defer src="js/services/feedOrdenesService.js?v=2234bba1"></script>
+  <script defer src="js/pages/home-feed-ordenes.js?v=094a3a94"></script>
+  <script defer src="js/pages/home-feed-devoluciones.js?v=1084926c"></script>
   <!-- Lucide en defer + icons.js (par adyacente, en este orden): icons.js hace
        el barrido inicial de <i data-lucide>; los guards inline viejos quedan
        como no-ops en parse. Ver js/core/icons.js. -->
-  <script defer src="/js/vendor/lucide.min.js?v=3"></script>
-  <script defer src="/js/core/icons.js?v=1"></script>
+  <script defer src="/js/vendor/lucide.min.js?v=5cc49c5c"></script>
+  <script defer src="/js/core/icons.js?v=1c619298"></script>
 </head>
 <body>
   <!-- Banner de impersonation (modo "Ver como" para admin — se rellena dinámicamente) -->

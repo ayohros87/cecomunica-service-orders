@@ -22,10 +22,10 @@
   <meta charset="UTF-8">
   <title>Almacén - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=sh5">
-  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
-  <link rel="stylesheet" href="../css/ws-tabs.css?v=f3">
-  <link rel="stylesheet" href="../css/bandeja.css?v=bj2">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=bf320539">
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=dc265958">
+  <link rel="stylesheet" href="../css/ws-tabs.css?v=e58bb970">
+  <link rel="stylesheet" href="../css/bandeja.css?v=0a2d7aa4">
 
   <style>
     /* La bandeja "Hoy" y la cola de "Asignar" usan el kit de bandeja
@@ -123,50 +123,50 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <!-- functions-compat: fusionar fichas en conflicto (callable fusionarPoolFicha) -->
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
-  <script defer src="../js/firebase-init.js?v=ses2"></script>
-  <script src="../js/core/modulos.js?v=cc16"></script>
-  <script src="../js/core/layout.js?v=cc14"></script>
-  <script src="../js/core/roles.js"></script>
-  <script src="../js/core/formatting.js"></script> <!-- FMT: lo usan los asistentes -->
-  <script defer src="../js/ui/modal.js?v=f7"></script> <!-- confirmaciones de los asistentes + Modal.sheet -->
-  <script defer src="../js/ui/bandeja.js?v=bj2"></script> <!-- kit de bandeja: fila, grupo, antigüedad -->
-  <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/domain/transicionPendiente.js?v=reemp1"></script>
-  <script defer src="../js/services/colaInventarioService.js?v=cc2"></script>
-  <script defer src="../js/services/conflictosPoolService.js?v=cf1"></script> <!-- cola de Conflictos, compartida con Equipos por serial -->
-  <script defer src="../js/services/modelosService.js?v=mf1"></script>
-  <script defer src="../js/services/inventarioService.js?v=cc28"></script>
-  <script defer src="../js/domain/modeloFamilia.js?v=mf1"></script>
-  <script src="../js/core/serial.js?v=1"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
-  <script defer src="../js/services/equiposPoolService.js?v=agg2"></script>
-  <script defer src="../js/domain/stockAgg.js"></script>
-  <script defer src="../js/ui/toast.js"></script>
+  <script defer src="../js/firebase-init.js?v=4174cf91"></script>
+  <script src="../js/core/modulos.js?v=1838cd29"></script>
+  <script src="../js/core/layout.js?v=68295191"></script>
+  <script src="../js/core/roles.js?v=7a4f1b6f"></script>
+  <script src="../js/core/formatting.js?v=b2dcba44"></script> <!-- FMT: lo usan los asistentes -->
+  <script defer src="../js/ui/modal.js?v=0e2e184d"></script> <!-- confirmaciones de los asistentes + Modal.sheet -->
+  <script defer src="../js/ui/bandeja.js?v=f13cd4bb"></script> <!-- kit de bandeja: fila, grupo, antigüedad -->
+  <script defer src="../js/services/usuariosService.js?v=9511b285"></script>
+  <script defer src="../js/domain/transicionPendiente.js?v=bbcd194e"></script>
+  <script defer src="../js/services/colaInventarioService.js?v=3c6b9ef2"></script>
+  <script defer src="../js/services/conflictosPoolService.js?v=57f8b053"></script> <!-- cola de Conflictos, compartida con Equipos por serial -->
+  <script defer src="../js/services/modelosService.js?v=01600968"></script>
+  <script defer src="../js/services/inventarioService.js?v=31a69da6"></script>
+  <script defer src="../js/domain/modeloFamilia.js?v=ad284933"></script>
+  <script src="../js/core/serial.js?v=37e4721b"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
+  <script defer src="../js/services/equiposPoolService.js?v=b70f2655"></script>
+  <script defer src="../js/domain/stockAgg.js?v=74b691f3"></script>
+  <script defer src="../js/ui/toast.js?v=f4e03438"></script>
   <!-- Síncrono a propósito: las pestañas se pintan en el parse (ver abajo)
        para que no aparezcan tarde empujando el contenido. -->
-  <script src="../js/ui/workspace-tabs.js?v=f4"></script>
-  <script src="../js/ui/almacen-nav.js?v=alm1"></script>
-  <script defer src="../js/ui/equipo-ficha.js?v=venta1"></script>
-  <script defer src="../js/ui/asistente-conteo.js?v=sh1"></script>
-  <script defer src="../js/ui/filtered-select.js?v=fs1"></script>
-  <script defer src="../js/ui/asistente-recibir.js?v=sh1"></script>
-  <script defer src="../js/ui/entity-combo.js?v=ec1"></script>
-  <script defer src="../js/ui/asistente-venta.js?v=sh1"></script>
-  <script defer src="../js/domain/serialPatron.js?v=cc27"></script> <!-- lo usa el importador -->
-  <script defer src="../js/ui/asistente-importar.js?v=sh1"></script>
-  <script defer src="../js/services/clientesService.js"></script> <!-- autocomplete del asistente de venta -->
-  <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
+  <script src="../js/ui/workspace-tabs.js?v=2cf7489c"></script>
+  <script src="../js/ui/almacen-nav.js?v=5aade324"></script>
+  <script defer src="../js/ui/equipo-ficha.js?v=129bd791"></script>
+  <script defer src="../js/ui/asistente-conteo.js?v=c9cfa4d8"></script>
+  <script defer src="../js/ui/filtered-select.js?v=434bc440"></script>
+  <script defer src="../js/ui/asistente-recibir.js?v=3771ed6e"></script>
+  <script defer src="../js/ui/entity-combo.js?v=f185b9d4"></script>
+  <script defer src="../js/ui/asistente-venta.js?v=f4c5fa88"></script>
+  <script defer src="../js/domain/serialPatron.js?v=2567884d"></script> <!-- lo usa el importador -->
+  <script defer src="../js/ui/asistente-importar.js?v=e5c43de7"></script>
+  <script defer src="../js/services/clientesService.js?v=1e55c7b3"></script> <!-- autocomplete del asistente de venta -->
+  <script defer src="../js/core/xlsx-loader.js?v=aefcd335"></script> <!-- SheetJS BAJO DEMANDA -->
   <!-- Asignar: contratos (subcolección seriales) + gestiones, formulario compartido -->
-  <script defer src="../js/services/contratosService.js"></script>
-  <script defer src="../js/services/gestionesService.js?v=cg16"></script>
-  <script defer src="../js/services/equiposDescartadosService.js?v=qcdesc1"></script><script defer src="../js/services/equiposCondicionesService.js?v=cond1"></script>
-  <script defer src="../js/ui/serial-field.js?v=cond1"></script>
-  <script defer src="../js/ui/entity-picker.js?v=ep1"></script>
-  <script defer src="../js/ui/asignador-seriales.js?v=alm4"></script>
-  <script defer src="../js/pages/almacen-asignar.js?v=alm4"></script>
-  <script defer src="../js/pages/almacen-hoy.js?v=agg1"></script>
-  <script defer src="../js/pages/almacen-existencias.js?v=agg1"></script>
-  <script defer src="/js/vendor/lucide.min.js?v=3"></script>
-  <script defer src="/js/core/icons.js?v=1"></script>
+  <script defer src="../js/services/contratosService.js?v=2718de61"></script>
+  <script defer src="../js/services/gestionesService.js?v=c211ee3f"></script>
+  <script defer src="../js/services/equiposDescartadosService.js?v=6e47db2f"></script><script defer src="../js/services/equiposCondicionesService.js?v=de001a4a"></script>
+  <script defer src="../js/ui/serial-field.js?v=cf514b71"></script>
+  <script defer src="../js/ui/entity-picker.js?v=a168403c"></script>
+  <script defer src="../js/ui/asignador-seriales.js?v=d5839451"></script>
+  <script defer src="../js/pages/almacen-asignar.js?v=78584671"></script>
+  <script defer src="../js/pages/almacen-hoy.js?v=f12dea3b"></script>
+  <script defer src="../js/pages/almacen-existencias.js?v=d1912402"></script>
+  <script defer src="/js/vendor/lucide.min.js?v=5cc49c5c"></script>
+  <script defer src="/js/core/icons.js?v=1c619298"></script>
 </head>
 <body>
   <div class="cc-app">
