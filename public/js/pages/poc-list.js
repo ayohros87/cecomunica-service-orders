@@ -17,9 +17,19 @@ window.PocList = {
   // Reload using current filter state.
   // Es la ruta que llaman las mutaciones (delete/restore/bulk), así que
   // invalida el memo del barrido — el próximo filtrar() lee fresco.
+  // Para cuando CAMBIARON los datos (se reabrió o cerró una ficha, un lote,
+  // un cambio de SIM): tira la memoria del barrido y vuelve a pintar.
   refresh() {
     this._allDocs = null;
     this._cerradasDocs = null;
+    this._redespachar();
+  },
+
+  // Vuelve a pintar según lo que haya en el buscador, SIN tirar la memoria.
+  // Es lo que usa ordenar: filtrar() ordena EN MEMORIA (_ordenarDocs), así que
+  // el orden no cambia qué fichas hay — tirar la memoria por un clic en una
+  // columna obligaba a bajar otra vez las ~4,600 fichas vivas (2026-09-25).
+  _redespachar() {
     const v = document.getElementById('filtroValor')?.value.trim() || '';
     if (v.length >= 2) this.filtrar();
     else if (!v) this.cargar(true);
@@ -611,7 +621,10 @@ window.PocList = {
     if (this._campoOrden === campo) this._direccionAsc = !this._direccionAsc;
     else { this._campoOrden = campo; this._direccionAsc = true; }
     this._primeraCarga = true;
-    this.refresh();
+    // Ordenar no cambia los datos: repintar sin tirar la memoria (ver
+    // _redespachar). Sin buscar, cargar(true) pide la página ordenada al
+    // servidor como siempre — esa sí depende del orden, y son 50 fichas.
+    this._redespachar();
   },
 
   actualizarFlechitas() {
