@@ -1,6 +1,21 @@
 # Migración del frontend a Vite multipágina — versión corta
 
-> **Fecha:** 2026-09-04, recortado 2026-09-07 · **Estado:** plan, sin ejecutar.
+> **Fecha:** 2026-09-04, recortado 2026-09-07 · **Estado (2026-09-25):** Paso 0, F1, F2 y F3 hechos y commiteados (5234e57, db320ff, e0a2e1e, 30b1518). Producción sirve `public/` con el Paso 0 + F1; `dist/` (F2+F3) está en un canal de preview esperando el recorrido con sesión real. Ver §0.
+
+## 0. Estado de ejecución y hallazgos (2026-09-25)
+
+| Paso | Estado | Nota |
+|---|---|---|
+| Paso 0 · `?v=` por hash | **Hecho y en producción** | `tools/sellar-versiones.js` selló 1,361 etiquetas (430 no tenían `?v=`). Correr antes de cada deploy mientras producción se sirva desde `public/`; CI lo exige con `--check`. |
+| Paso 0 · caché multi-pestaña | **Hecho (en F3)** | Funciona sobre compat con `firebase.firestore().settings({ localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) })`. **Hallazgo:** `getFirestore(app)` modular devuelve OTRA instancia (identificador distinto) sin la caché; el handle modular correcto es `firebase.firestore()._delegate`. `initializeFirestore(app, …)` NO sirve para compat. |
+| F1 · puentes window | **Hecho y en producción** | 56 nombres en 17 archivos, no 320 en 28: el verificador cruza consumidores por página y solo puentea lo que otro archivo, el HTML o un handler generado usa de verdad. |
+| F2 · Vite | **Hecho, en preview** | 79 entries; 11 páginas quedan clásicas (10 son redirecciones sin scripts, más `login.html` que F3 convierte). Vite mueve el `<script type="module">` a `<head>`: los externos diferidos van junto al entry para conservar el orden. |
+| F3 · Firebase npm | **Hecho, en preview** | 261 etiquetas gstatic fuera. storage y functions compat van en el bundle (CargaDiferida ya no los trae de gstatic: mezclar versiones rompe el registry). Chunk `firebase-init` = 217 KB gzip, uno para toda la app, inmutable. |
+| F4 · cierre | Pendiente | Tras mover producción a `dist/`: quitar `sellar-versiones` del CI, actualizar `SISTEMA_TOP_DOWN.md` §1. |
+
+**Verificación hecha:** smoke test con Chrome headless (puppeteer-core, `functions/node_modules`) sobre las 90 páginas: `public/` en HEAD vs `dist/`, con auth interceptada para que nunca resuelva y cada página monte su cascarón. Resultado F2: 88/90 idénticas (2 con ruido de ViewTransition de Chrome). Resultado F3: 85/90 (las otras 5 = mismo ruido + 3 páginas públicas que consultan Firestore sin sesión y el harness bloquea la red). Persistencia probada con SDK real en dos pestañas: IndexedDB creado, consola limpia. **No verificado:** flujos con sesión (login real, bandejas, modales). Eso se hace en el canal de preview antes de cambiar `hosting.public`.
+
+**Lo que sigue a mano hasta F4:** los `?v=` que viven en constantes JS (`CargaDiferida.MODULOS`, `layout.js` palette) siguen siendo manuales: esos archivos se sirven verbatim desde `dist/js/`. Los harness de `functions/test-browser` que interceptan `/js/firebase-init.js` por URL dejan de aplicar con el bundle (el archivo no se pide por esa URL).
 > **Alcance:** solo `public/`. Firestore, rules, Functions y Hosting no cambian de proveedor ni de forma.
 > **Esfuerzo:** unas 2 semanas de trabajo concentrado. Todo lo demás (anexo A) se paga de paso con la regla del boy scout, sin proyecto dedicado.
 
