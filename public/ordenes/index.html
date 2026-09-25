@@ -33,69 +33,37 @@
        conserva ceco-ui). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=dc265958">
   
-<script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
 <!-- storage/functions compat DIFERIDOS (P3.15): ~50 KB gz que solo se usan
      al subir firma/foto o pedir la URL de una identificación. Los carga
      CargaDiferida al primer uso. -->
-<script defer src="../js/firebase-init.js?v=4174cf91"></script>
-<script defer src="../js/core/carga-diferida.js?v=45b0aa3a"></script>
 <script src="../js/core/roles.js?v=7a4f1b6f"></script>
 <script src="../js/core/modulos.js?v=1838cd29"></script>
 <script src="../js/core/layout.js?v=68295191"></script>
 <script src="../js/core/formatting.js?v=b2dcba44"></script>
 <script src="../js/core/auth.js?v=5bb0cc34"></script>
-<script defer src="../js/services/clientesService.js?v=1e55c7b3"></script>
 <!-- Predicados de pendiente: antes de ordenesService/senalesService/ordenes-qc, que delegan en él. -->
-<script defer src="../js/domain/pendientes.js?v=235e7467"></script>
 <!-- Tandas de entrega parcial: lo usan ordenesService (la escritura),
      ordenes-render (el contador de la fila) y ordenes-flujo (el despacho). -->
-<script defer src="../js/domain/entregaTandas.js?v=f79e3c0d"></script>
-<script defer src="../js/domain/contratoFirma.js?v=4940a344"></script>
-<script defer src="../js/services/ordenesService.js?v=f4f5dfd7"></script>
 <!-- count() agregados para los chips/KPIs (mismos números que las señales
      del home) — auditoría M4/A8. -->
 <script type="module" src="../js/firebase-aggregates.js?v=b2ec2fe6"></script>
-<script defer src="../js/services/senalesService.js?v=f31bcd0a"></script>
-<script defer src="../js/services/empresaService.js?v=b03e2553"></script>
-<script defer src="../js/services/usuariosService.js?v=9511b285"></script>
-<script defer src="../js/services/mailService.js?v=de0c3d87"></script>
-<script defer src="../js/services/piezasService.js?v=0f841af4"></script>
-<script defer src="../js/services/modelosService.js?v=01600968"></script>
 <script src="../js/core/serial.js?v=37e4721b"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
-<script defer src="../js/services/equiposPoolService.js?v=b70f2655"></script><script defer src="../js/services/equiposDescartadosService.js?v=6e47db2f"></script><script defer src="../js/services/equiposCondicionesService.js?v=de001a4a"></script>
-<script defer src="../js/ui/equipo-ficha.js?v=129bd791"></script>
-<script defer src="../js/ui/serial-field.js?v=cf514b71"></script>
-<script defer src="../js/domain/scoring.js?v=a119545a"></script>
-<script defer src="../js/ui/toast.js?v=f4e03438"></script>
 <!-- Protocolo de la tablet de firmas del mostrador (crear/escuchar/cancelar la
      solicitud). Lo usan el modal de entrega (ordenes-flujo) y la hoja de
      entrega parcial; va en el HTML porque el primero no es diferido. -->
-<script defer src="../js/ui/firmaTablet.js?v=2a429d42"></script>
-<script defer src="../js/ui/modal.js?v=0e2e184d"></script>
 <!-- firmaPad DIFERIDO (P3.15): solo lo usa el check-in de devolución;
      lo trae CargaDiferida.devolucion() al primer uso. -->
-<script defer src="../js/pages/ordenes-state.js?v=423ab9cc"></script>
-<script defer src="../js/pages/ordenes-data.js?v=0db9a649"></script>
-<script defer src="../js/pages/ordenes-render.js?v=6454ca45"></script>
-<script defer src="../js/pages/ordenes-filters.js?v=e8cb832d"></script>
-<script defer src="../js/pages/ordenes-flujo.js?v=3062b331"></script>
-<script defer src="../js/pages/ordenes-qc.js?v=5f233ece"></script>
-<script defer src="../js/pages/ordenes-equipos.js?v=4b576f53"></script>
 <!-- Módulos de acción DIFERIDOS (P3.15) — los carga CargaDiferida al primer
      uso, con sus dependencias (storage, firmaPad): ordenes-notas,
      ordenes-visita, ordenes-fotos (galería §5.23) y ordenes-devolucion.
      Sus ?v= viven en core/carga-diferida.js. -->
-<script defer src="../js/pages/ordenes-ui.js?v=91b95e0c"></script>
-<script defer src="../js/pages/ordenes-presets.js?v=ca5cac99"></script>
-<script defer src="../js/pages/ordenes-events.js?v=0241788d"></script>
 <!-- Lucide en defer + icons.js (par adyacente, en este orden): icons.js hace
      el barrido inicial de <i data-lucide>; los guards inline viejos quedan
      como no-ops en parse. Ver js/core/icons.js. -->
-<script defer src="/js/vendor/lucide.min.js?v=5cc49c5c"></script>
-<script defer src="/js/core/icons.js?v=1c619298"></script>
-<script defer src="../js/pages/ordenes-index.js?v=142fec13"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script type="module" src="/js/entry/ordenes-index.js"></script>
 </head>
 <body>
   <div class="cc-app">

@@ -24,25 +24,13 @@
   <link rel="stylesheet" href="../css/ceco-ui.css?v=bf320539">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=dc265958">
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script defer src="../js/firebase-init.js?v=4174cf91"></script>
-  <script src="../js/core/modulos.js?v=1838cd29"></script>
+          <script src="../js/core/modulos.js?v=1838cd29"></script>
   <script src="../js/core/layout.js?v=68295191"></script>
   <script src="../js/core/roles.js?v=7a4f1b6f"></script>
   <script src="../js/core/formatting.js?v=b2dcba44"></script>
   <script src="../js/core/auth.js?v=5bb0cc34"></script>
   <script src="../js/core/serial.js?v=37e4721b"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
-  <script defer src="../js/services/contratosService.js?v=2718de61"></script>
-  <script defer src="../js/services/pocService.js?v=ca6c36f3"></script>
-  <script defer src="../js/services/empresaService.js?v=b03e2553"></script>
-  <script defer src="../js/services/equiposPoolService.js?v=b70f2655"></script><script defer src="../js/services/equiposDescartadosService.js?v=6e47db2f"></script><script defer src="../js/services/equiposCondicionesService.js?v=de001a4a"></script>
-  <script defer src="../js/ui/equipo-ficha.js?v=129bd791"></script><script defer src="../js/ui/serial-field.js?v=cf514b71"></script>
-  <script defer src="../js/ui/toast.js?v=f4e03438"></script>
-  <script defer src="/js/vendor/lucide.min.js?v=5cc49c5c"></script>
-  <script defer src="/js/core/icons.js?v=1c619298"></script>
-
+                
   <style>
     /* Page-local — kit classes hacen el trabajo pesado */
     .app-body { padding-bottom: 84px; } /* espacio para el footer-strip sticky */
@@ -57,6 +45,10 @@
     /* Buscador de seriales: coincidencia resaltada (verde, distinta de dup/reemplazo). */
     .serial-input.buscado { border-color:#059669 !important; background:#ecfdf5; box-shadow:0 0 0 2px rgba(5,150,105,.25); }
   </style>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script type="module" src="/js/entry/contratos-seriales.js"></script>
 </head>
 <body>
   <div class="cc-app">
@@ -132,11 +124,8 @@
     </div>
   </div>
 
-  <script defer src="../js/ui/modal.js?v=0e2e184d"></script> <!-- Modal.sheet: hojas de revisión y confirmación -->
-  <script defer src="../js/ui/entity-picker.js?v=a168403c"></script>
-  <script defer src="../js/ui/asignador-seriales.js?v=d5839451"></script>
-  <script src="../js/pages/contrato-seriales-page.js?v=9c54c41a" defer></script>
-  </div> <!-- /cc-work -->
+   <!-- Modal.sheet: hojas de revisión y confirmación -->
+        </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
     // Rail Command Center (F5) — espera auth (scripts defer) y pinta el rail del

@@ -270,7 +270,13 @@ for (const ruta of archivosHtml) {
         const limpio = src.replace(/[?#].*$/, '');
         const abs = limpio.startsWith('/') ? path.join(PUBLIC, limpio) : path.resolve(path.dirname(path.join(RAIZ, ruta)), limpio);
         info.scripts = info.scripts || new Set();
-        info.scripts.add(rel(abs));
+        if (/[\\/]js[\\/]entry[\\/]/.test(abs) && fs.existsSync(abs)) {
+          // Entry de Vite (F2): la página carga lo que el entry importa.
+          const ent = fs.readFileSync(abs, 'utf8');
+          for (const im of ent.matchAll(/^import\s+['"]\/([^'"]+)['"];?/gm)) info.scripts.add(rel(path.join(PUBLIC, im[1])));
+        } else {
+          info.scripts.add(rel(abs));
+        }
       }
       continue;
     }

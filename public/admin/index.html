@@ -31,34 +31,22 @@
        URL que usa el lazy-loader de layout.js para compartir caché. -->
   <link rel="stylesheet" href="../css/search-palette.css?v=630b5484">
 
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script defer src="../js/firebase-init.js?v=4174cf91"></script>
-  <script src="../js/core/modulos.js?v=1838cd29"></script>
+          <script src="../js/core/modulos.js?v=1838cd29"></script>
   <script src="../js/core/layout.js?v=68295191"></script>
   <script src="../js/core/roles.js?v=7a4f1b6f"></script>
   <script src="../js/core/formatting.js?v=b2dcba44"></script>
   <script src="../js/core/auth.js?v=5bb0cc34"></script>
-  <script defer src="../js/ui/toast.js?v=f4e03438"></script>
-  <script defer src="../js/services/ordenesService.js?v=f4f5dfd7"></script>
-  <script src="../js/core/serial.js?v=37e4721b"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
-  <script defer src="../js/services/contratosService.js?v=2718de61"></script>
-  <script defer src="../js/services/cotizacionesService.js?v=8aa0a595"></script>
-  <script defer src="../js/services/pocService.js?v=ca6c36f3"></script>
-  <script defer src="../js/services/busquedaGlobalService.js?v=87d99f91"></script>
-  <script defer src="../js/ui/searchPalette.js?v=5d7f5847"></script>
-  <script defer src="../js/ui/verComoPicker.js?v=94b6bf5e"></script>
-  <script defer src="../js/domain/adminMetrics.js?v=6213604b"></script>
-  <script src="../js/pages/admin-index.js?v=5e33ae73" defer></script>
-  <script defer src="/js/vendor/lucide.min.js?v=5cc49c5c"></script>
-  <script defer src="/js/core/icons.js?v=1c619298"></script>
-
+      <script src="../js/core/serial.js?v=37e4721b"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
+                    
   <script>
     function cerrarSesion() {
       firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
     }
   </script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script type="module" src="/js/entry/admin-index.js"></script>
 </head>
 <body>
   <div class="cc-app">

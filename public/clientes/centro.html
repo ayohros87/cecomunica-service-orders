@@ -17,54 +17,18 @@
        pasos de wizard, expediente responsivo, jerarquía de botones. -->
   <link rel="stylesheet" href="../css/ceco-gestion.css?v=45619541">
 
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
-  <script defer src="../js/firebase-init.js?v=4174cf91"></script>
-  <script type="module" src="../js/firebase-aggregates.js?v=b2ec2fe6"></script>
-  <script defer src="../js/services/aprobacionesService.js?v=1e018ca6"></script>
-  <script defer src="../js/pages/centro-aprobaciones.js?v=4f3b19a7"></script>
-  <script src="../js/core/modulos.js?v=1838cd29"></script>
+              <script type="module" src="../js/firebase-aggregates.js?v=b2ec2fe6"></script>
+      <script src="../js/core/modulos.js?v=1838cd29"></script>
   <script src="../js/core/layout.js?v=68295191"></script>
   <script src="../js/core/roles.js?v=7a4f1b6f"></script>
   <script src="../js/core/formatting.js?v=b2dcba44"></script>
-  <script defer src="../js/services/usuariosService.js?v=9511b285"></script>
-  <script defer src="../js/services/clientesService.js?v=1e55c7b3"></script>
-  <script defer src="../js/services/clienteDocumentosService.js?v=bd558adc"></script>
-  <script src="../js/core/serial.js?v=37e4721b"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
-  <script defer src="../js/services/contratosService.js?v=2718de61"></script>
-  <script defer src="../js/domain/modeloFamilia.js?v=ad284933"></script>
-  <script defer src="../js/services/equiposPoolService.js?v=b70f2655"></script>
-  <script defer src="../js/services/modelosService.js?v=01600968"></script>
-  <script defer src="../js/domain/contratoV2Texto.js?v=3d993c84"></script>
-  <script defer src="../js/services/cargosService.js?v=f078679e"></script>
-  <script defer src="../js/services/gestionesService.js?v=c211ee3f"></script>
-  <script defer src="../js/services/mailService.js?v=de0c3d87"></script>
-  <script defer src="../js/services/equiposDescartadosService.js?v=6e47db2f"></script><script defer src="../js/services/equiposCondicionesService.js?v=de001a4a"></script>
-  <script defer src="../js/ui/serial-field.js?v=cf514b71"></script>
-  <script defer src="../js/domain/totales.js?v=fc7c2f43"></script>
-  <script defer src="../js/domain/contratoTarifario.js?v=fbb73393"></script>
-  <script defer src="../js/domain/origenContrato.js?v=181e5ca4"></script>
-  <!-- Candado del representante legal: el wizard lo hereda del formulario
+        <script src="../js/core/serial.js?v=37e4721b"></script> <!-- identidad de serial (Serial.norm), antes de los servicios -->
+                            <!-- Candado del representante legal: el wizard lo hereda del formulario
        clásico retirado (2026-09-09). -->
-  <script defer src="../js/domain/docIdentidad.js?v=0bd59842"></script>
-  <script defer src="../js/domain/firmante.js?v=4a2a94f4"></script>
-  <script defer src="../js/domain/repValidacion.js?v=0d87747b"></script>
-  <script defer src="../js/domain/transicionPlan.js?v=dce25034"></script>
-  <script defer src="../js/domain/contratoAnulacion.js?v=ca114b65"></script>
-  <script defer src="../js/domain/contratoCierre.js?v=5f54488f"></script>
-  <!-- Criterio ÚNICO de si un contrato admite cambios (antes escrito 3 veces). -->
-  <script defer src="../js/domain/contratoEdicion.js?v=761fbd68"></script>
-  <script defer src="../js/domain/regularizacion.js?v=e452a66c"></script>
-  <!-- Cómo quedó autorizada una gestión (firma digital / papel / sin firma):
+              <!-- Criterio ÚNICO de si un contrato admite cambios (antes escrito 3 veces). -->
+      <!-- Cómo quedó autorizada una gestión (firma digital / papel / sin firma):
        misma regla que los triggers, byte a byte. -->
-  <script defer src="../js/domain/gestionAutorizacion.js?v=2e56a1af"></script>
-  <script defer src="../js/domain/contratoFirma.js?v=4940a344"></script>
-  <script defer src="/js/vendor/lucide.min.js?v=5cc49c5c"></script>
-  <script defer src="/js/core/icons.js?v=1c619298"></script>
-
+        
   <style>
     /* Centro de gestión (cg-*) — Ola 1 gestiones por cliente */
     .cg-tools { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:var(--sp-4); }
@@ -229,6 +193,12 @@
        de la página. El del kit está en la hoja compartida y con guardias. */
     .hidden { display:none !important; }
   </style>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
+  <script type="module" src="/js/entry/clientes-centro.js"></script>
 </head>
 <body>
   <div class="cc-app">
@@ -356,21 +326,15 @@
 
 </div>
 
-<script defer src="../js/ui/toast.js?v=f4e03438"></script>
 <!-- Kit de modales: TODO el diálogo del Centro (Modal.sheet en _abrirModal/
      _abrirModalA, más Modal.prompt/confirm para anular gestión y retirar el
      enlace de firma). Sin él la página no abre modales: va antes que
      clientes-centro.js y ambos son defer. -->
-<script defer src="../js/ui/modal.js?v=0e2e184d"></script>
 <!-- Conversor fotos→PDF del contrato firmado (ContratosFirmado._fotosAPdf); su init no encuentra #fileFirmado aquí y no hace nada más. -->
-<script defer src="../js/pages/contratos-upload.js?v=e6bc3897"></script>
 <!-- Garantía de la unidad (cláusula 8): una sola definición, compartida con la propuesta de reemplazo del taller. -->
-<script defer src="../js/domain/garantiaEquipo.js?v=73cf4e4b"></script>
 <!-- Fichas de POC: el JSON de un reemplazo para recepción sale de la ficha del
      radio saliente (PocService.configDelSaliente), la misma fuente que usa el
      lote de POC. -->
-<script defer src="../js/services/pocService.js?v=ca6c36f3"></script>
-<script src="../js/pages/clientes-centro.js?v=71c444c9" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

@@ -7,13 +7,12 @@
     "rules": "storage.rules"
   },
   "hosting": {
-    "public": "public",
+    "public": "dist",
+    "predeploy": ["npm run build"],
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**",
-      "tools/**",
-      "dev-diag-*.html"
+      "**/node_modules/**"
     ],
     "rewrites": [
       {
@@ -72,6 +71,15 @@
           {
             "key": "Cache-Control",
             "value": "public, max-age=2592000, immutable"
+          }
+        ]
+      },
+      {
+        "source": "/assets/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
           }
         ]
       },

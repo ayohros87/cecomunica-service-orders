@@ -26,21 +26,12 @@
   <script src="../js/ui/finanzas-nav.js?v=155f9f86"></script>
 
   <!-- Firebase -->
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
-  <script defer src="../js/firebase-init.js?v=4174cf91"></script>
-  <script src="../js/core/modulos.js?v=1838cd29"></script>
+            <script src="../js/core/modulos.js?v=1838cd29"></script>
   <script src="../js/core/layout.js?v=68295191"></script>
   <script src="../js/core/roles.js?v=7a4f1b6f"></script>
-  <script defer src="../js/services/usuariosService.js?v=9511b285"></script>
-  <script defer src="../js/services/modelosService.js?v=01600968"></script>
-
-  <script defer src="../js/core/xlsx-loader.js?v=aefcd335"></script> <!-- SheetJS BAJO DEMANDA -->
-  <script defer src="/js/vendor/lucide.min.js?v=5cc49c5c"></script>
-  <script defer src="/js/core/icons.js?v=1c619298"></script>
-
+    
+   <!-- SheetJS BAJO DEMANDA -->
+    
   <style>
     /* ── Hoja de cálculo de Modelos y Tarifas ─────────────────────────────
        Celdas .td-input/.td-select del DS (borde invisible hasta hover/focus):
@@ -109,6 +100,11 @@
     .filtro-toggle:hover { background:var(--surface-sunken); }
     .filtro-toggle.is-on { border-color:var(--accent); background:var(--brand-soft); color:var(--accent); }
   </style>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
+  <script type="module" src="/js/entry/inventario-modelos.js"></script>
 </head>
 <body>
   <div class="cc-app">
@@ -336,10 +332,6 @@
   </div>
 </div>
 
-<script defer src="../js/ui/toast.js?v=f4e03438"></script>
-<script defer src="../js/ui/modal.js?v=0e2e184d"></script>
-<script defer src="../js/domain/modeloFamilia.js?v=ad284933"></script>
-<script src="../js/pages/inventario-modelos.js?v=97c232a1" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

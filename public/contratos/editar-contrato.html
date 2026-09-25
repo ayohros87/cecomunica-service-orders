@@ -7,11 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
   <meta name="theme-color" content="#0B2A47">
   <link rel="stylesheet" href="../css/ceco-ui.css?v=bf320539">
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script defer src="../js/firebase-init.js?v=4174cf91"></script>
-  <style>
+          <style>
     body { display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; background:var(--bg-page); }
     .aviso { max-width:520px; padding:32px; background:var(--surface-card); border:1px solid var(--border-default);
              border-radius:8px; box-shadow:0 1px 2px rgba(11,42,71,.05), 0 8px 24px -12px rgba(11,42,71,.18); }
@@ -19,6 +15,10 @@
     .aviso p  { font-size:15px; color:var(--fg-2); margin:0 0 14px; }
     .aviso .nota { font-size:13.5px; color:var(--fg-3); }
   </style>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script type="module" src="/js/entry/contratos-editar-contrato.js"></script>
 </head>
 <body>
   <!-- Retirada 2026-09-10: el editor vive dentro del Centro

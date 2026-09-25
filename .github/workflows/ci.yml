@@ -19,10 +19,21 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: functions/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
 
-      # El frontend es vanilla sin build step: un paréntesis roto no truena
-      # hasta que un usuario abre la página. node --check lo atrapa aquí.
+      # F2 (docs/plans/PLAN_MIGRACION_MODULAR.md): el frontend se empaqueta con
+      # Vite. El build falla si un entry importa un archivo que no existe o si
+      # un <script src> clásico apunta a un archivo inexistente.
+      - name: Build del frontend (Vite → dist/)
+        run: |
+          npm ci
+          npm run build
+
+      # Los archivos de public/js siguen siendo scripts sueltos (los entries
+      # los importan tal cual): un paréntesis roto no truena hasta que un
+      # usuario abre la página. node --check lo atrapa aquí.
       - name: Sintaxis del frontend (public/js) y functions
         run: |
           set -e
@@ -68,6 +79,19 @@ jobs:
       - name: Install functions deps
         working-directory: functions
         run: npm ci
+
+      # Radiografía modular (usa acorn/eslint-scope de functions/node_modules):
+      # puentes window faltantes, estado mutable compartido, escrituras a
+      # globales sin declarar. Informativa por ahora; --estricto cuando el
+      # build de Vite sea lo que se sirve en producción.
+      - name: Radiografía modular del frontend
+        run: node tools/check-modular.js
+
+      # Mientras producción se sirva desde public/ (sin build), cada <script>
+      # y <link> local lleva ?v=<hash del contenido>. Desactualizado = alguien
+      # tocó un JS/CSS sin correr `node tools/sellar-versiones.js`.
+      - name: Versiones selladas (?v= por hash)
+        run: node tools/sellar-versiones.js --check
 
       # Un export roto en index.js tumba el deploy COMPLETO de functions.
       - name: functions/index.js carga (exports completos)

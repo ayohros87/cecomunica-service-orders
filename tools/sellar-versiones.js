@@ -58,6 +58,7 @@ for (const html of caminar(PUBLIC)) {
   const orig = fs.readFileSync(html, 'utf8');
   const nuevo = orig.replace(RE, (m, pre, ruta, ver, post) => {
     if (/^(https?:)?\/\//.test(ruta)) return m;
+    if (/\/js\/entry\//.test(ruta)) return m; // los entries los empaqueta Vite con hash propio
     const abs = ruta.startsWith('/') ? path.join(PUBLIC, ruta) : path.resolve(path.dirname(html), ruta);
     if (!fs.existsSync(abs)) { rotas.push(`${path.relative(RAIZ, html)} → ${ruta}`); return m; }
     const nv = `?v=${hashDe(abs)}`;

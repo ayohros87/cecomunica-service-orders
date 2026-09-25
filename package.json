@@ -1,0 +1,21 @@
+{
+  "name": "cecomunica-service-orders",
+  "private": true,
+  "description": "Frontend de app.cecomunica.net — build multipágina con Vite (docs/plans/PLAN_MIGRACION_MODULAR.md)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check:modular": "node tools/check-modular.js",
+    "sellar": "node tools/sellar-versiones.js"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "devDependencies": {
+    "vite": "^8.3.1"
+  },
+  "dependencies": {
+    "firebase": "^12.19.0"
+  }
+}

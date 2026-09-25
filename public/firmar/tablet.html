@@ -12,13 +12,7 @@
        pasa a 'firmada' — el modal de la PC la recoge y guarda el acuse.
        Requiere sesión (verificarAccesoYAplicarVisibilidad): las reglas de
        firmas_tablet solo abren list a personal autenticado. -->
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
-  <script defer src="/js/firebase-init.js?v=4174cf91"></script>
-  <script defer src="/js/ui/firmaPad.js?v=7423e96e"></script>
-  <style>
+              <style>
     * { box-sizing: border-box; margin: 0; }
     html, body { height: 100%; }
     body { font: 16px/1.5 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1c2733; background: #f2f5f8; }
@@ -112,6 +106,11 @@
     .enc { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .hidden { display: none; }
   </style>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
+  <script type="module" src="/js/entry/firmar-tablet.js"></script>
 </head>
 <body>
   <div class="cab">

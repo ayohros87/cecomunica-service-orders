@@ -111,3 +111,6 @@ local-data/
 # hosting.ignore de firebase.json — nunca se despliegan.
 public/dev-diag-*.html
 firebase.emu-test.json
+
+# Salida del build de Vite (F2, PLAN_MIGRACION_MODULAR.md); se genera en cada deploy
+dist/
