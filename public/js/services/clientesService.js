@@ -21,11 +21,16 @@ function _tokensFrom(text){
   }
   return Array.from(toks).slice(0, 200);
 }
+// RUC comparable: mayúsculas, sin guiones ni espacios, CON las letras.
+function _rucNorm(s){
+  return String(s || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+}
 
 const ClientesService = {
   // ── Pure helpers exposed for callers ─────────────────────────────────
   norm: _norm,
   tokensFrom: _tokensFrom,
+  rucNorm: _rucNorm,
 
   // Build the searchTokens array from a cliente object.
   buildSearchTokens(cliente){
@@ -37,9 +42,12 @@ const ClientesService = {
     if (Array.isArray(cliente.tags)){
       for (const x of cliente.tags) _tokensFrom(x).forEach(k => t.add(k));
     }
-    if (cliente.ruc)        t.add(String(cliente.ruc).replace(/\D/g, ""));
+    if (cliente.ruc){
+      t.add(String(cliente.ruc).replace(/\D/g, ""));
+      t.add(_rucNorm(cliente.ruc).toLowerCase());   // la búsqueda llega en minúsculas
+    }
     if (cliente.rucdv_norm){
-      t.add(cliente.rucdv_norm);
+      t.add(cliente.rucdv_norm.toLowerCase());
       t.add(cliente.rucdv_norm.replace(/\D/g, ""));
     }
     return Array.from(t);
@@ -52,7 +60,9 @@ const ClientesService = {
     const ahora = firebase.firestore.FieldValue.serverTimestamp();
     const ruc = (raw.ruc || "").trim();
     const dv  = (raw.dv  || "").trim();
-    const ruc_norm = ruc.replace(/\D/g, "");
+    // Letras incluidas: quitarlas volvía 8-NT-2-39271 en 8239271, el mismo
+    // norm que la cédula 8-2-39271. Un RUC solo de números queda igual que antes.
+    const ruc_norm = _rucNorm(ruc);
     const dv_norm  = dv.replace(/\D/g, "");
     const rucdv_norm = ruc_norm + (dv_norm ? ("-" + dv_norm) : "");
     const itbmsExento = !!raw.itbms_exento;

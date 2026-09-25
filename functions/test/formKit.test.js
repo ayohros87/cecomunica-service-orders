@@ -5,11 +5,21 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { esValido, VALIDA } = require("../../public/js/ui/formKit.js");
 
-test("ruc: números y guiones; letras no", () => {
+test("ruc: números, letras y guiones; al menos un número y sin espacios", () => {
   assert.equal(esValido("ruc", "155612345-2-2015"), true);
   assert.equal(esValido("ruc", "8-712-1043"), true);
-  assert.equal(esValido("ruc", "ABC-123"), false);
+  assert.equal(esValido("ruc", "8-NT-2-39271"), true, "el RUC NT del PNUD trancaba el alta (Karla, 2026-09-25)");
+  assert.equal(esValido("ruc", "8-nt-2-39271"), true);
+  assert.equal(esValido("ruc", "PE-12-345"), true);
+  assert.equal(esValido("ruc", "E-8-123456"), true);
+  assert.equal(esValido("ruc", "NT-"), false, "sin número no es un RUC");
   assert.equal(esValido("ruc", "155612345 2 2015"), false);
+  assert.equal(esValido("ruc", "8-NT-2-39271."), false);
+});
+
+test("ruc: al salir del campo queda en mayúsculas", () => {
+  assert.equal(VALIDA.ruc.norm(" 8-nt-2-39271 "), "8-NT-2-39271");
+  assert.equal(VALIDA.ruc.norm("155612345-2-2015"), "155612345-2-2015");
 });
 
 test("dv: 1 o 2 dígitos", () => {

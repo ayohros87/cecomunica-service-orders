@@ -31,7 +31,10 @@
   // Una regla es `re` (expresión) o `ok` (función), y puede traer `norm`:
   // cómo se reescribe el valor al salir del campo.
   const VALIDA = {
-    ruc:    { re: /^[0-9-]+$/ },
+    // El RUC lleva letras cuando la DGI lo asigna a quien no tiene cédula
+    // (8-NT-2-39271, organismos internacionales) o a extranjeros (E-8-…, PE-…).
+    // Al menos un número; sin espacios adentro.
+    ruc:    { re: /^(?=[A-Z0-9-]*\d)[A-Z0-9-]+$/i, norm: (v) => String(v).trim().toUpperCase() },
     dv:     { re: /^\d{1,2}$/ },
     email:  { re: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ },
     tel:    { re: /^[+\d][\d\s-]{5,}$/ },

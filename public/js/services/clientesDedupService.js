@@ -61,8 +61,9 @@ function _nameSim(a, b){
   if (!na || !nb) return 0;
   return Math.max(_ratio(na, nb), _ratio(na.replace(/ /g, ""), nb.replace(/ /g, "")), _tokenSetRatio(na, nb));
 }
-function _rucDigits(c){ return ((c.ruc_norm || c.ruc || "") + "").replace(/\D/g, ""); }
-// Similitud de RUC por dígitos; null si alguno no tiene RUC.
+// Con las letras: 8-NT-2-39271 y 8-2-39271 son contribuyentes distintos.
+function _rucDigits(c){ return ((c.ruc_norm || c.ruc || "") + "").toUpperCase().replace(/[^0-9A-Z]/g, ""); }
+// Similitud de RUC; null si alguno no tiene RUC.
 function _rucSim(a, b){
   const ra = _rucDigits(a), rb = _rucDigits(b);
   if (!ra || !rb) return null;

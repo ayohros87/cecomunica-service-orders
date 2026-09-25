@@ -530,14 +530,14 @@ const _guardarInline = async (id, partial)=>{
         ? partial.ruc : (fila?.querySelector('input[data-field="ruc"]')?.value || '').trim();
       const dv  = Object.prototype.hasOwnProperty.call(partial,'dv')
         ? partial.dv  : (fila?.querySelector('input[data-field="dv"]')?.value || '').trim();
-      const ruc_norm = String(ruc || '').replace(/\D/g, '');
+      const ruc_norm = ClientesService.rucNorm(ruc);
       const dv_norm  = String(dv  || '').replace(/\D/g, '');
       partial.ruc_norm   = ruc_norm;
       partial.dv_norm    = dv_norm;
       partial.rucdv_norm = ruc_norm + (dv_norm ? ('-' + dv_norm) : '');
-      if (ruc_norm) toks.add(ruc_norm);
+      if (ruc_norm) toks.add(ruc_norm.toLowerCase());
       if (partial.rucdv_norm){
-        toks.add(partial.rucdv_norm);
+        toks.add(partial.rucdv_norm.toLowerCase());
         toks.add(partial.rucdv_norm.replace(/\D/g, ''));
       }
     }
