@@ -320,7 +320,7 @@ async function init() {
 
 firebase.auth().onAuthStateChanged(async (user) => {
   if (!user) {
-    window.location.href = "login.html";
+    window.location.href = "/login.html";
   } else {
     await init();
   }

@@ -20,7 +20,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cecomunica - Plataforma</title>
   <!-- Rediseño Command Center (F1) — esta página usa ceco-command.css.
        Las páginas aún no migradas siguen con ceco-ui.css. -->
@@ -233,7 +233,7 @@
     // Los scripts de Firebase cargan con defer: registrar tras DOMContentLoaded.
     document.addEventListener('DOMContentLoaded', () => {
     firebase.auth().onAuthStateChanged(async (user) => {
-      if (!user) { location.href = "login.html"; return; }
+      if (!user) { location.href = "/login.html"; return; }
 
       verificarAccesoYAplicarVisibilidad(async (rol) => {
         // === "Ver como" — impersonation visual para admin (solo visibilidad).
@@ -282,6 +282,17 @@
         if (effectiveRol === 'administrador') {
           document.getElementById('btnAdminPanel').style.display = '';
         }
+        // Cuenta sin rol: antes el home quedaba con solo "Mi Perfil" y ningún
+        // mensaje (auditoría UX 2026-09-28, T5).
+        if (!effectiveRol) {
+          document.getElementById('gridModulos').insertAdjacentHTML('beforebegin', `
+            <div class="alert-banner alert-warning" role="status" style="margin:0 0 16px;">
+              <div class="alert-banner-body">
+                <strong>Tu cuenta todavía no tiene un rol asignado.</strong>
+                Pídeselo a administración para ver los módulos que te corresponden.
+              </div>
+            </div>`);
+        }
 
         // Revelar el grid YA — con rol cacheado (Sesion) esto pinta sin haber
         // tocado Firestore. Señales y feeds llegan después, cada uno con su
@@ -302,7 +313,7 @@
 
     function cerrarSesion() {
       firebase.auth().signOut().then(() => {
-        window.location.href = "login.html"; // relativo (no uses "/login.html")
+        window.location.href = "/login.html"; // relativo (no uses "/login.html")
       });
     }
 
@@ -329,6 +340,9 @@
     // === ATAJOS DE TECLADO ===
     document.addEventListener("keydown", (e) => {
       if (["INPUT", "TEXTAREA"].includes((e.target.tagName || ""))) return;
+      // Solo teclas sueltas: con Ctrl/Cmd/Alt son atajos del navegador
+      // (Ctrl+F buscar, Ctrl+C copiar, Ctrl+P imprimir) y no deben navegar.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const go = (sel) => {
         const el = document.querySelector(`.mcard[data-mod='${sel}'][data-visible='true']`);
         if (el) el.click();
@@ -340,6 +354,7 @@
       if (e.key === "v") go("vendedores");
       if (e.key === "q") go("cotizaciones");
       if (e.key === "f") go("firma");
+      if (e.key === "g") go("centro");
     });
     if (typeof lucide !== 'undefined') lucide.createIcons();
   </script>

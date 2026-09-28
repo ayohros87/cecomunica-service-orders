@@ -68,7 +68,7 @@
 
           <div class="auth-footer-row">
             <label class="form-check" style="margin:0;">
-              <input type="checkbox" id="remember" />
+              <input type="checkbox" id="remember" checked />
               <span><span class="form-check-label" style="font-size:13px;">Mantener sesión</span></span>
             </label>
             <a href="#" onclick="mostrarReset(event)">¿Olvidaste tu contraseña?</a>
@@ -161,10 +161,28 @@
       'auth/user-disabled': 'Usuario deshabilitado.',
       'auth/user-not-found': 'Usuario no encontrado.',
       'auth/wrong-password': 'Contraseña incorrecta.',
+      // Firebase 12 con protección contra enumeración devuelve este código
+      // único para usuario inexistente o contraseña mala.
+      'auth/invalid-credential': 'Correo o contraseña incorrectos.',
+      'auth/invalid-login-credentials': 'Correo o contraseña incorrectos.',
+      'auth/network-request-failed': 'Sin conexión. Revisa la red e intenta de nuevo.',
       'auth/too-many-requests': 'Demasiados intentos. Intenta más tarde.'
     };
     return map[errCode] || 'No se pudo iniciar sesión. Inténtalo de nuevo.';
   }
+
+  // ¿Por qué me mandaron al login? El guard de firebase-init manda ?motivo=
+  // cuando cierra la sesión por un error al leer el perfil; antes cerraba
+  // la sesión en silencio (auditoría UX 2026-09-28, T5).
+  (function motivoDeLlegada() {
+    const motivo = new URLSearchParams(location.search).get('motivo');
+    const textos = {
+      perfil: 'No se pudo leer tu perfil de usuario. Vuelve a iniciar sesión; si se repite, avísale a administración.',
+      sesion: 'Tu sesión venció. Vuelve a iniciar sesión.',
+      sinrol: 'Tu cuenta todavía no tiene un rol asignado. Pídeselo a administración.',
+    };
+    if (motivo && textos[motivo]) showMsg(textos[motivo]);
+  })();
 
   // Login
   document.getElementById('formLogin').addEventListener('submit', async (e) => {

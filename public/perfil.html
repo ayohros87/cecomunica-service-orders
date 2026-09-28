@@ -69,7 +69,7 @@
     // Los scripts de Firebase cargan con defer: registrar tras DOMContentLoaded.
     document.addEventListener('DOMContentLoaded', () => {
     firebase.auth().onAuthStateChanged(async (user) => {
-      if (!user) { location.href = "login.html"; return; }
+      if (!user) { location.href = "/login.html"; return; }
 
       document.getElementById("perfil-correo").value = user.email || "";
 
@@ -87,7 +87,7 @@
     });
 
     function cerrarSesion() {
-      firebase.auth().signOut().then(() => { location.href = "login.html"; });
+      firebase.auth().signOut().then(() => { location.href = "/login.html"; });
     }
   </script>
   </div> <!-- /cc-work -->

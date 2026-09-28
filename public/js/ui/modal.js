@@ -282,10 +282,18 @@ window.Modal = {
         resolve(result);
       };
 
+      // Auditoría UX 2026-09-28 (T10): Enter solo confirma si el foco está en
+      // el botón de confirmar. Antes confirmaba aunque el foco estuviera en
+      // "Cancelar", y con `danger` un Enter distraído ejecutaba lo destructivo.
       const kbHandler = e => {
         if (!_esTope(overlay)) return;
         if (e.key === 'Escape') cleanup(false);
-        if (e.key === 'Enter')  cleanup(true);
+        if (e.key === 'Enter') {
+          const activo = document.activeElement;
+          const btnCancel = overlay.querySelector('[data-action="cancel"]');
+          if (activo === btnCancel) cleanup(false);
+          else if (!overlay.contains(activo) || activo.closest('[data-action="confirm"]')) cleanup(true);
+        }
       };
 
       overlay.addEventListener('click', e => {
@@ -298,7 +306,9 @@ window.Modal = {
       document.body.appendChild(overlay);
       _apilar(overlay);
       document.body.style.overflow = 'hidden';
-      overlay.querySelector('[data-action="confirm"]').focus();
+      // Con `danger` el foco inicial cae en Cancelar: la acción destructiva
+      // exige un click o un Tab deliberado.
+      overlay.querySelector(danger ? '[data-action="cancel"]' : '[data-action="confirm"]').focus();
     });
   },
 

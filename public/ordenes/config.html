@@ -30,11 +30,11 @@
     // Los scripts de Firebase cargan con defer: registrar tras DOMContentLoaded.
     document.addEventListener('DOMContentLoaded', () => {
     firebase.auth().onAuthStateChanged(function(user) {
-      if (!user) { window.location.href = "login.html"; }
+      if (!user) { window.location.href = "/login.html"; }
     });
     });
     function cerrarSesion() {
-      firebase.auth().signOut().then(() => { window.location.href = "login.html"; });
+      firebase.auth().signOut().then(() => { window.location.href = "/login.html"; });
     }
   </script>
   <script type="module" src="/js/entry/ordenes-config.js"></script>

@@ -2,6 +2,21 @@
 window.FMT = {
   ITBMS_RATE: 0.07,
 
+  // "YYYY-MM-DD" de HOY en hora de Panamá (America/Panama, sin DST). Úsalo
+  // para prellenar inputs type=date: `new Date().toISOString().slice(0,10)`
+  // da la fecha UTC, que después de las 7:00 pm ya es "mañana" (auditoría UX
+  // 2026-09-28, T8). `fechaISOPanama(d)` hace lo mismo para una fecha dada.
+  hoyISOPanama() {
+    return this.fechaISOPanama(new Date());
+  },
+  fechaISOPanama(d) {
+    const dt = d?.toDate ? d.toDate() : (d instanceof Date ? d : new Date(d));
+    if (isNaN(dt)) return '';
+    const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Panama', year: 'numeric', month: '2-digit', day: '2-digit' })
+      .formatToParts(dt).reduce((o, x) => (o[x.type] = x.value, o), {});
+    return `${p.year}-${p.month}-${p.day}`;
+  },
+
   // Escapa texto para interpolar de forma segura dentro de innerHTML (contenido
   // y atributos entrecomillados). Única fuente de verdad para escape HTML —
   // reemplaza las 14+ copias locales de escapeHtml/esc repartidas por el código.

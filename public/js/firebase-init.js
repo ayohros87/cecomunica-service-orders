@@ -303,7 +303,9 @@ window.Sesion = (() => {
     } catch (error) {
       console.error("❌ Error obteniendo rol:", error);
       firebase.auth().signOut();
-      window.location.href = "login.html";
+      // Ruta absoluta (desde /contratos/ o /admin/ el relativo daba 404) y
+      // motivo visible en el login en vez de cerrar la sesión en silencio.
+      window.location.href = "/login.html?motivo=perfil";
     }
   });
 };

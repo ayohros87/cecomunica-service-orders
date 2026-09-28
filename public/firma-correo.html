@@ -245,7 +245,7 @@
     // Los scripts de Firebase cargan con defer: registrar tras DOMContentLoaded.
     document.addEventListener('DOMContentLoaded', () => {
     firebase.auth().onAuthStateChanged(async (user) => {
-      if (!user) { location.href = 'login.html'; return; }
+      if (!user) { location.href = "/login.html"; return; }
 
       $('f-email').value = user.email || 'juan.perez@cecomunica.com';
       $('f-logo').value  = DEFAULT_LOGO_URL;
