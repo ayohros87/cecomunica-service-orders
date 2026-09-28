@@ -84,7 +84,12 @@ function pluginClasicos() {
           if (!fs.existsSync(abs)) {
             throw new Error(`${path.relative(RAIZ, ctx.filename)}: <link href="${href}"> no existe`);
           }
-          const url = '/' + path.relative(PUBLIC, abs).replace(/\\/g, '/') + '?v=' + hashDe(abs);
+          // Los preload de fuentes van SIN ?v=: el @font-face del CSS pide la
+          // URL pelada y, si no coinciden, el navegador baja la fuente dos veces
+          // y avisa "preloaded but not used" (2026-09-28). Las fuentes ya se
+          // cachean 30 días por firebase.json.
+          const esHoja = /\brel\s*=\s*"stylesheet"/i.test(attrs);
+          const url = '/' + path.relative(PUBLIC, abs).replace(/\\/g, '/') + (esHoja ? '?v=' + hashDe(abs) : '');
           const tag = `<link${a1}href="${url}"${a2}>`;
           return `<!--ceco-clasico:${Buffer.from(tag).toString('base64')}-->`;
         });
