@@ -53,8 +53,8 @@
       <div class="search-palette">
         <div class="search-palette-input-row">
           <i data-lucide="search"></i>
-          <input id="sp-input" type="search" placeholder="Buscar en clientes, órdenes, contratos, cotizaciones, PoC…" autocomplete="off" spellcheck="false">
-          <span class="sp-kbd">Esc</span>
+          <input id="sp-input" type="search" placeholder="Buscar cliente, orden, contrato, cotización, serial PoC…" autocomplete="off" spellcheck="false" aria-label="Buscar en todo el sistema">
+          <button type="button" class="sp-kbd sp-cerrar" aria-label="Cerrar la búsqueda" title="Cerrar (Esc)">Esc</button>
         </div>
         <div class="search-palette-results" id="sp-results">
           <div class="sp-hint">Escribe al menos 2 caracteres para buscar.</div>
@@ -66,13 +66,24 @@
     resultsEl = overlay.querySelector('#sp-results');
     input.addEventListener('input', onInput);
     input.addEventListener('keydown', onKeyDown);
+    // En táctil no hay Esc: el mismo rótulo es un botón (auditoría UX 2026-09-28).
+    overlay.querySelector('.sp-cerrar').addEventListener('click', close);
     if (window.lucide) lucide.createIcons();
   }
 
-  function open() {
+  // open(texto): con texto (p. ej. lo que se tecleó en el buscador del home)
+  // la búsqueda arranca sola, sin volver a escribirlo.
+  function open(texto) {
     ensureMounted();
     overlay.classList.add('is-open');
-    setTimeout(() => input.focus(), 0);
+    if (typeof texto === 'string' && texto.trim()) {
+      input.value = texto;
+      onInput();
+    }
+    setTimeout(() => {
+      input.focus();
+      try { input.setSelectionRange(input.value.length, input.value.length); } catch (_) { /* type=search */ }
+    }, 0);
   }
 
   function close() {

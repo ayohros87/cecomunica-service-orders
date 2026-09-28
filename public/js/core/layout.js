@@ -30,10 +30,10 @@
 
 const Layout = (() => {
 
-  // CeComunica monogram — acabado completo (placa navy con volumen,
+  // Cecomunica monogram — acabado completo (placa navy con volumen,
   // brillo superior, trazos C en relieve, nodo central con halo).
   // SVG maestro: public/brand/cecomunica-monogram.svg.
-  const BRAND_MARK = `<svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><defs><linearGradient id="ccPlate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A4267"/><stop offset="0.5" stop-color="#0B2A47"/><stop offset="1" stop-color="#06203A"/></linearGradient><linearGradient id="ccSheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/><stop offset="0.32" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient><linearGradient id="ccWhite" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C4D2E0"/></linearGradient><linearGradient id="ccCyan" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5BD3EE"/><stop offset="1" stop-color="#0091B0"/></linearGradient><radialGradient id="ccGlow"><stop offset="0" stop-color="#7FE3FF" stop-opacity="0.9"/><stop offset="1" stop-color="#7FE3FF" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="64" height="64" rx="10" fill="url(#ccPlate)"/><rect x="0" y="0" width="64" height="64" rx="10" fill="url(#ccSheen)"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="url(#ccWhite)" stroke-width="6" fill="none" stroke-linecap="round"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="url(#ccCyan)" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="32" cy="32" r="6" fill="url(#ccGlow)"/><rect x="30" y="30" width="4" height="4" rx="1" fill="#00B4D8"/></svg>`;
+  const BRAND_MARK = `<svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="Cecomunica" role="img"><defs><linearGradient id="ccPlate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A4267"/><stop offset="0.5" stop-color="#0B2A47"/><stop offset="1" stop-color="#06203A"/></linearGradient><linearGradient id="ccSheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/><stop offset="0.32" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient><linearGradient id="ccWhite" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C4D2E0"/></linearGradient><linearGradient id="ccCyan" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5BD3EE"/><stop offset="1" stop-color="#0091B0"/></linearGradient><radialGradient id="ccGlow"><stop offset="0" stop-color="#7FE3FF" stop-opacity="0.9"/><stop offset="1" stop-color="#7FE3FF" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="64" height="64" rx="10" fill="url(#ccPlate)"/><rect x="0" y="0" width="64" height="64" rx="10" fill="url(#ccSheen)"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="url(#ccWhite)" stroke-width="6" fill="none" stroke-linecap="round"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="url(#ccCyan)" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="32" cy="32" r="6" fill="url(#ccGlow)"/><rect x="30" y="30" width="4" height="4" rx="1" fill="#00B4D8"/></svg>`;
 
   /* Origen de navegación (?volver=): los espacios (Almacén/Finanzas) mandan
      a las páginas con este parámetro para que el botón Volver regrese AL
@@ -49,6 +49,12 @@ const Layout = (() => {
     finanzas:    { href: '/inventario/modelos.html',            label: '<i data-lucide="arrow-left"></i> Finanzas' },
   };
 
+  // Tecla del buscador según la plataforma: ⌘K en Mac, Ctrl K en el resto.
+  const _ATAJO = (() => {
+    try { return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌘K' : 'Ctrl K'; }
+    catch { return 'Ctrl K'; }
+  })();
+
   function renderTopbar(opts = {}) {
     const {
       title      = '',
@@ -59,6 +65,7 @@ const Layout = (() => {
       showLogout = true,
       menu       = [],
       menuId     = 'topbar-menu',  // override if multiple menus on a page
+      showSearch = true,       // botón "Buscar Ctrl K" (auditoría UX 2026-09-28, T6)
     } = opts;
     let back = opts.back || null;
     try {
@@ -114,6 +121,11 @@ const Layout = (() => {
     const logoutBtn  = showLogout
       ? `<button class="btn btn-ghost" onclick="cerrarSesion()" data-action="logout"><i data-lucide="log-out"></i> Cerrar sesión</button>`
       : '';
+    // El Ctrl+K existía en 62 páginas sin que nada en pantalla lo dijera (y en
+    // móvil no hay teclado): botón visible que abre el mismo palette.
+    const searchBtn  = showSearch
+      ? `<button type="button" class="btn btn-ghost topbar-search" data-cc-buscar title="Buscar cliente, orden, contrato, serial… (${_ATAJO})" aria-label="Buscar"><i data-lucide="search"></i> <span class="topbar-search__txt">Buscar</span> <kbd class="topbar-search__kbd">${_ATAJO}</kbd></button>`
+      : '';
 
     const html = `
 <header class="topbar app-topbar">
@@ -124,6 +136,7 @@ const Layout = (() => {
   </div>
   <span class="app-topbar-spacer"></span>
   <div class="topbar-actions topbar-right app-topbar-actions">
+    ${searchBtn}
     ${actionBtns}
     ${backBtn}
     ${menuBtn}
@@ -198,32 +211,12 @@ const Layout = (() => {
      });
      ============================================================= */
 
-  // Fuente única: MODULOS.CATALOGO (auditoría A9). El array de abajo es un
-  // ESPEJO de emergencia por si un layout.js nuevo corre con un modulos.js
-  // viejo cacheado (sin CATALOGO): con [] el rail perdería sus links. No
-  // editar el espejo sin editar la fuente.
-  const _RAIL_CATALOGO = (window.MODULOS && MODULOS.CATALOGO) || [
-    { grupo: 'Operación', items: [
-      { id: 'ordenes',     label: 'Órdenes',          icon: 'settings-2',  href: '/ordenes/index.html' },
-      { id: 'poc',         label: 'Base PoC',          icon: 'radio-tower', href: '/POC/index.html' },
-      { id: 'vendedores',  label: 'Registro (Ventas)', icon: 'briefcase',   href: '/POC/vendedores-batch.html' },
-    ]},
-    { grupo: 'Comercial', items: [
-      { id: 'cotizaciones', label: 'Cotizaciones', icon: 'receipt',   href: '/cotizaciones/index.html' },
-      { id: 'contratos',    label: 'Contratos',    icon: 'file-text', href: '/contratos/index.html' },
-      { id: 'clientes',     label: 'Clientes',     icon: 'users',     href: '/clientes/index.html' },
-    ]},
-    { grupo: 'Almacén · finanzas', items: [
-      { id: 'almacen',     label: 'Almacén',     icon: 'warehouse',    href: '/almacen/index.html' },
-      { id: 'facturacion', label: 'Finanzas',    icon: 'calculator',   href: '/inventario/modelos.html' },
-    ]},
-  ];
-
-  const _ROL_LABELS = {
-    administrador: 'Administración', gerente: 'Gerencia', recepcion: 'Recepción',
-    jefe_taller: 'Jefe de taller', tecnico: 'Técnico', tecnico_operativo: 'Técnico operativo',
-    vendedor: 'Ventas', inventario: 'Inventario', contabilidad: 'Contabilidad', vista: 'Solo lectura',
-  };
+  // Fuente única: MODULOS.CATALOGO (auditoría A9). El "espejo de emergencia"
+  // que vivía aquí ya se había desincronizado (le faltaban centro y
+  // facturacion_bandeja) y se borró (auditoría UX 2026-09-28): modulos.js va
+  // versionado junto con este archivo. Se lee al pintar, no al cargar.
+  const _catalogo = () => (window.MODULOS && MODULOS.CATALOGO) || [];
+  const _rolLabel = (rol) => (window.MODULOS && MODULOS.rolLabel) ? MODULOS.rolLabel(rol) : (rol || '');
 
   /* Rail solo (sin topbar) — para páginas HÍBRIDAS que conservan su
      topbar/estilos de ceco-ui y solo suman la navegación lateral (cargan
@@ -232,7 +225,7 @@ const Layout = (() => {
     const { active = '', rol = '', userName = '' } = opts;
 
     const visibles = (window.MODULOS && MODULOS.deRol(rol)) || [];
-    const grupos = _RAIL_CATALOGO.map(g => {
+    const grupos = _catalogo().map(g => {
       const items = g.items.filter(it => visibles.includes(it.id));
       if (!items.length) return '';
       return `<div class="rail__group">${g.grupo}</div>` + items.map(it => `
@@ -253,10 +246,11 @@ const Layout = (() => {
 <aside class="rail" id="ccRail">
   <div class="rail__brand">
     ${BRAND_MARK}
-    <div class="wm"><b>CECOMUNICA</b><span>Centro de gestión</span></div>
+    <div class="wm"><b>CECOMUNICA</b><span>Plataforma</span></div>
   </div>
   <nav class="rail__nav">
     <a class="rail__link${active === 'inicio' ? ' is-active' : ''}" href="/index.html" title="Inicio"><i data-lucide="layout-grid"></i> <span class="rail__txt">Inicio</span></a>
+    <button type="button" class="rail__link rail__search" data-cc-buscar title="Buscar (${_ATAJO})"><i data-lucide="search"></i> <span class="rail__txt">Buscar</span> <kbd class="rail__kbd">${_ATAJO}</kbd></button>
     ${grupos}
     ${adminLink}
   </nav>
@@ -265,7 +259,7 @@ const Layout = (() => {
   </button>
   <div class="rail__foot">
     <div class="rail__avatar">${iniciales}</div>
-    <div class="rail__who"><b>${userName || ''}</b><span>${_ROL_LABELS[rol] || rol || ''}</span></div>
+    <div class="rail__who"><b>${userName || ''}</b><span>${_rolLabel(rol)}</span></div>
   </div>
 </aside>
 <div class="rail-scrim" id="ccRailScrim"></div>`;
@@ -307,33 +301,60 @@ const Layout = (() => {
     // #ccRailToggle (exclusivo del renderShell que ninguna usa) y las 56
     // híbridas quedaban SIN navegación móvil. Ahora, si falta el botón, se
     // inyecta un flotante (.rail-fab, visible solo ≤1024px por CSS) — salvo
-    // en páginas con navegación móvil propia (bottom-nav de órdenes).
+    // en páginas con navegación móvil propia (bottom-nav de órdenes)… pero solo
+    // si esa barra SE VE: entre 769 y 1024 px el bottom-nav está oculto y la
+    // página quedaba sin drawer ni FAB (auditoría UX 2026-09-28, P0 #4). El
+    // FAB mismo es visible solo ≤1024 px por CSS; aquí se decide por la
+    // visibilidad real de la barra y se revisa al cambiar el ancho.
     const scrim = document.getElementById('ccRailScrim');
-    let toggle = document.getElementById('ccRailToggle');
-    if (!toggle && !document.querySelector('.bottom-nav, .mobile-bottom-nav, #mobileBottomNav')) {
-      toggle = document.createElement('button');
-      toggle.id = 'ccRailToggle';
-      toggle.type = 'button';
-      toggle.className = 'rail-fab';
-      toggle.setAttribute('aria-label', 'Menú de navegación');
-      toggle.innerHTML = '<i data-lucide="menu"></i>';
-      document.body.appendChild(toggle);
+    const SEL_NAV = '.bottom-nav, .mobile-bottom-nav, #mobileBottomNav';
+    const navPropia = document.querySelector(SEL_NAV);
+    const _navPropiaVisible = () => Array.from(document.querySelectorAll(SEL_NAV))
+      .some(el => { try { return getComputedStyle(el).display !== 'none'; } catch { return true; } });
+    const _crearFab = (id) => {
+      const b = document.createElement('button');
+      b.id = id;
+      b.type = 'button';
+      b.className = 'rail-fab';
+      b.setAttribute('aria-label', 'Menú de navegación');
+      b.innerHTML = '<i data-lucide="menu"></i>';
+      document.body.appendChild(b);
       if (typeof lucide !== 'undefined') lucide.createIcons();
+      return b;
+    };
+    const toggles = [];
+    let toggle = document.getElementById('ccRailToggle');
+    if (toggle) toggles.push(toggle);
+    if (navPropia) {
+      // Con bottom-nav (órdenes) el FAB va APARTE (#ccRailFab): el botón
+      // "Menú" de la barra puede ser el #ccRailToggle y ocultarse con ella.
+      // El FAB solo se muestra cuando la barra no se ve.
+      let fab = document.getElementById('ccRailFab');
+      if (!fab) {
+        fab = _crearFab('ccRailFab');
+        const sync = () => { fab.hidden = _navPropiaVisible(); };
+        sync();
+        window.addEventListener('resize', sync, { passive: true });
+      }
+      toggles.push(fab);
+    } else if (!toggle) {
+      toggles.push(_crearFab('ccRailToggle'));
     }
     // El rail se REEMPLAZA en cada render (pintado optimista → real): el
     // listener del toggle se ata UNA vez y resuelve el rail al momento del
     // click — cerrarlo sobre la variable dejaría el handler apuntando a un
     // nodo muerto tras el re-render (toggle que abre y no cierra).
-    if (toggle && !toggle.dataset.wired) {
-      toggle.dataset.wired = '1';
-      toggle.addEventListener('click', () => {
+    toggles.forEach((t) => {
+      if (t.dataset.wired) return;
+      t.dataset.wired = '1';
+      t.addEventListener('click', () => {
         const r = document.getElementById('ccRail');
         const s = document.getElementById('ccRailScrim');
         if (!r) return;
         r.classList.toggle('is-open');
         s?.classList.toggle('is-open', r.classList.contains('is-open'));
       });
-    }
+    });
     // El scrim sí es nuevo en cada render: listener directo.
     scrim?.addEventListener('click', () => {
       scrim.classList.remove('is-open');
@@ -447,7 +468,7 @@ const Layout = (() => {
   const asegurarPalette = () => {
     if (window.SearchPalette && window.BusquedaGlobalService) return Promise.resolve();
     if (!cargando) {
-      _css('/css/search-palette.css?v=sp1');
+      _css('/css/search-palette.css?v=sp2');
       cargando = (async () => {
         // OrdenesService es opcional para el palette (guard interno), pero
         // sin él no salen órdenes en los resultados — se trae también.
@@ -455,24 +476,55 @@ const Layout = (() => {
           try { await _script('/js/services/ordenesService.js?v=sp1'); }
           catch (_) { /* palette sin resultados de órdenes */ }
         }
-        if (!window.BusquedaGlobalService) await _script('/js/services/busquedaGlobalService.js?v=sp1');
-        if (!window.SearchPalette) await _script('/js/ui/searchPalette.js?v=sp1');
+        if (!window.BusquedaGlobalService) await _script('/js/services/busquedaGlobalService.js?v=sp2');
+        if (!window.SearchPalette) await _script('/js/ui/searchPalette.js?v=sp2');
       })();
     }
     return cargando;
   };
-  document.addEventListener('keydown', async (e) => {
-    if (!(e.metaKey || e.ctrlKey) || (e.key !== 'k' && e.key !== 'K')) return;
+  // Abre el palette (y, si llega texto, lo busca de una vez). Público como
+  // Layout.abrirBusqueda: el buscador del home, el botón del topbar y el ítem
+  // del rail pasan por aquí (auditoría UX 2026-09-28, T6).
+  const abrir = async (texto) => {
     // Sin Firebase montado no hay qué buscar (páginas públicas/impresión).
     if (typeof firebase === 'undefined' || !firebase.auth) return;
-    e.preventDefault();
     try {
       await asegurarPalette();
-      const abierto = document.querySelector('.search-palette-overlay.is-open');
-      if (abierto) window.SearchPalette.close();
-      else window.SearchPalette.open();
+      // Cerrar el drawer móvil si la búsqueda salió del rail.
+      document.getElementById('ccRail')?.classList.remove('is-open');
+      document.getElementById('ccRailScrim')?.classList.remove('is-open');
+      window.SearchPalette.open(typeof texto === 'string' ? texto : '');
     } catch (err) { console.warn('[palette] no se pudo abrir:', err); }
-  });
+  };
+  const alternar = async () => {
+    if (typeof firebase === 'undefined' || !firebase.auth) return;
+    const abierto = document.querySelector('.search-palette-overlay.is-open');
+    if (abierto && window.SearchPalette) window.SearchPalette.close();
+    else abrir('');
+  };
+
+  let iniciado = false;
+  // Idempotente: el atajo y el clic delegado se registran UNA vez aunque la
+  // página lo llame de nuevo (el home lo llama explícito; el resto al cargar).
+  const initBusquedaGlobal = () => {
+    if (iniciado) return;
+    iniciado = true;
+    document.addEventListener('keydown', (e) => {
+      if (!(e.metaKey || e.ctrlKey) || (e.key !== 'k' && e.key !== 'K')) return;
+      if (typeof firebase === 'undefined' || !firebase.auth) return;
+      e.preventDefault();
+      alternar();
+    });
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest && e.target.closest('[data-cc-buscar]');
+      if (!b) return;
+      e.preventDefault();
+      abrir('');
+    });
+  };
+  initBusquedaGlobal();
+  Layout.abrirBusqueda = abrir;
+  Layout.initBusquedaGlobal = initBusquedaGlobal;
 })();
 
 // --- Puente window (F1, docs/plans/PLAN_MIGRACION_MODULAR.md) ---

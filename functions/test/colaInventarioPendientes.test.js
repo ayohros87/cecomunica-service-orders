@@ -236,9 +236,13 @@ test("inventario ve el espacio Almacén pero no el módulo de contratos", () => 
   assert.ok(!M.puedeVer("contabilidad", "almacen"));
 
   // El rail necesita la entrada o el módulo visible no lleva a ningún lado.
-  const layout = leer("public", "js", "core", "layout.js");
-  assert.ok(layout.includes("id: 'almacen'"), "el rail no tiene la entrada Almacén");
-  assert.ok(layout.includes("/almacen/index.html"), "la entrada del rail no apunta al espacio");
+  // Auditoría UX 2026-09-28: el rail lee SOLO MODULOS.CATALOGO (se borró el
+  // espejo de layout.js, que ya estaba desincronizado).
+  const entrada = (M.CATALOGO || []).flatMap((g) => g.items || []).find((it) => it.id === "almacen");
+  assert.ok(entrada, "el rail no tiene la entrada Almacén");
+  assert.equal(entrada.href, "/almacen/index.html", "la entrada del rail no apunta al espacio");
+  assert.ok(leer("public", "js", "core", "layout.js").includes("MODULOS.CATALOGO"),
+    "el rail dejó de pintarse desde MODULOS.CATALOGO");
 });
 
 test("la señal del home y la tarjeta apuntan al mismo módulo que existe", () => {
@@ -263,9 +267,12 @@ test("la señal del home y la tarjeta apuntan al mismo módulo que existe", () =
   assert.ok(leer("public", "js", "services", "senalesService.js").includes("countSerialesPorAsignar()"),
     "senalesService no expone el conteo que usa S15");
 
-  // La tarjeta del home usa un módulo visible para inventario.
-  assert.ok(leer("public", "index.html").includes('data-mod="almacen"'),
-    "el home no tiene la tarjeta del espacio Almacén");
+  // La tarjeta del home usa un módulo visible para inventario. Desde la
+  // auditoría UX 2026-09-28 las tarjetas se generan de MODULOS.CATALOGO.
+  const idsCatalogo = (M.CATALOGO || []).flatMap((g) => g.items || []).map((it) => it.id);
+  assert.ok(idsCatalogo.includes("almacen"), "el home no tiene la tarjeta del espacio Almacén");
+  assert.ok(leer("public", "index.html").includes("MODULOS.CATALOGO"),
+    "el home dejó de generar sus tarjetas desde MODULOS.CATALOGO");
 });
 
 // ── Render de la bandeja (Almacén · Hoy) ───────────────────────────────────

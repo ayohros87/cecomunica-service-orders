@@ -38,7 +38,7 @@
         <rect x="18.5" y="18.5" width="3" height="3" fill="#00B4D8"/>
       </svg>
       <h1>Verificación de Contrato</h1>
-      <p>CeComunica · Sistema de autenticidad</p>
+      <p>Cecomunica · Sistema de autenticidad</p>
     </div>
 
     <div id="resultado">
@@ -55,10 +55,29 @@
   </div>
 
   <script>
+    // Escapa datos de Firestore antes de inyectarlos en innerHTML: la página es
+    // pública y no carga core/formatting.js (auditoría UX 2026-09-28).
+    function esc(v) {
+      return String(v == null ? "" : v)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    // Timestamp de Firestore (o Date/ms) → fecha legible en hora de Panamá.
+    function fmtFecha(ts) {
+      if (!ts) return "";
+      const d = ts.toDate ? ts.toDate() : new Date(ts.seconds ? ts.seconds * 1000 : ts);
+      if (isNaN(d.getTime())) return "";
+      return d.toLocaleString("es-PA", { timeZone: "America/Panama", dateStyle: "medium", timeStyle: "short" });
+    }
+
     async function verificar() {
       const params = new URLSearchParams(location.search);
       const pathParts = location.pathname.split("/c/");
-      const contratoId = pathParts[1] ? pathParts[1].split("?")[0] : null;
+      // /c/{id}?v=CODE (QR) o ?id=…&v=… (enlaces viejos de verificar-contrato.html).
+      let contratoId = pathParts[1] ? pathParts[1].split("?")[0].replace(/\/+$/, "") : null;
+      if (contratoId) { try { contratoId = decodeURIComponent(contratoId); } catch (_) { /* se usa tal cual */ } }
+      if (!contratoId) contratoId = params.get("id");
       const codigoUrl = params.get("v");
       const el = document.getElementById("resultado");
 
@@ -104,31 +123,51 @@
           return;
         }
 
-        const fecha = data.fecha_aprobacion?.toDate
-          ? data.fecha_aprobacion.toDate().toLocaleString("es-PA")
-          : "-";
+        const fecha = fmtFecha(data.fecha_aprobacion) || "—";
 
         const total = typeof data.total_con_itbms === "number"
           ? data.total_con_itbms.toFixed(2)
           : "0.00";
 
+        // Auditoría UX 2026-09-28 (P0 #1): el código correcto NO basta; el
+        // veredicto sale del estado que onContratoActivado propaga a
+        // verificaciones/ (antes decía "válido y activo" aunque estuviera anulado).
+        const estado = String(data.estado || "").toLowerCase();
+        let banner;
+        if (estado === "activo" || estado === "aprobado") {
+          banner = { cls: "alert-success", icon: "shield-check", titulo: "Contrato válido y vigente",
+            texto: "La firma digital y el código coinciden con el documento original emitido por Cecomunica." };
+        } else if (estado === "anulado") {
+          const f = fmtFecha(data.anulado_fecha);
+          banner = { cls: "alert-error", icon: "shield-x", titulo: f ? `Contrato ANULADO el ${f}` : "Contrato ANULADO",
+            texto: "El documento es auténtico, pero el contrato fue anulado y ya no tiene validez." };
+        } else if (estado === "vencido") {
+          const f = fmtFecha(data.vencido_fecha);
+          banner = { cls: "alert-warning", icon: "shield-alert", titulo: "Contrato vencido",
+            texto: f ? `El documento es auténtico, pero el contrato venció el ${f}.` : "El documento es auténtico, pero el contrato ya venció." };
+        } else {
+          banner = { cls: "alert-warning", icon: "shield-alert", titulo: "Contrato no vigente",
+            texto: "El documento es auténtico, pero el contrato no está vigente. Consulta con Cecomunica." };
+        }
+
+        // Solo nombre y fecha del aprobador: correo y rol no son para una página pública.
         el.innerHTML = `
-          <div class="alert-banner alert-success" style="margin-bottom:var(--sp-4);">
-            <span class="alert-banner-icon"><i data-lucide="shield-check"></i></span>
+          <div class="alert-banner ${banner.cls}" style="margin-bottom:var(--sp-4);">
+            <span class="alert-banner-icon"><i data-lucide="${banner.icon}"></i></span>
             <div class="alert-banner-body">
-              <strong>Contrato válido y activo</strong>
-              La firma digital y el código coinciden con el documento original.
+              <strong>${esc(banner.titulo)}</strong>
+              ${esc(banner.texto)}
             </div>
           </div>
 
           <div class="ds-card ds-card-padded">
             <p class="form-section-title" style="margin-bottom:var(--sp-3);"><i data-lucide="file-text"></i> Datos del contrato</p>
             <dl style="display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); font-size:13px; margin:0;">
-              <div><dt style="color:var(--fg-3); margin-bottom:2px;">Contrato</dt><dd style="margin:0; font-weight:500; font-family:var(--font-mono);">${data.contrato_id || contratoId}</dd></div>
-              <div><dt style="color:var(--fg-3); margin-bottom:2px;">Total c/ ITBMS</dt><dd style="margin:0; font-family:var(--font-mono);">$${total}</dd></div>
-              <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Cliente</dt><dd style="margin:0;">${data.cliente_nombre || "—"}</dd></div>
-              <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Firmado por</dt><dd style="margin:0;">${data.aprobado_por_nombre || "—"} · ${data.aprobado_por_email || "—"} · ${data.aprobado_por_rol || "—"}</dd></div>
-              <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Fecha de firma</dt><dd style="margin:0;">${fecha}</dd></div>
+              <div><dt style="color:var(--fg-3); margin-bottom:2px;">Contrato</dt><dd style="margin:0; font-weight:500; font-family:var(--font-mono);">${esc(data.contrato_id || contratoId)}</dd></div>
+              <div><dt style="color:var(--fg-3); margin-bottom:2px;">Total c/ ITBMS</dt><dd style="margin:0; font-family:var(--font-mono);">$${esc(total)}</dd></div>
+              <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Cliente</dt><dd style="margin:0;">${esc(data.cliente_nombre || "—")}</dd></div>
+              <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Aprobado por</dt><dd style="margin:0;">${esc(data.aprobado_por_nombre || "—")}</dd></div>
+              <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Fecha de aprobación</dt><dd style="margin:0;">${esc(fecha)}</dd></div>
             </dl>
           </div>
         `;

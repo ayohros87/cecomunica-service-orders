@@ -119,6 +119,12 @@ window.HomeSignals = (() => {
       modulo: 'ordenes', icon: 'hourglass', moreIsBad: true,
       label: 'Órdenes sin movimiento', sub: 'abiertas y paradas',
       href: 'ordenes/index.html',
+      // "Abrir en su módulo" lleva las órdenes EXACTAS del panel (?ids=, el
+      // mismo deep-link de los correos): son viejas y no salen en las 40
+      // recientes de la lista (auditoría UX 2026-09-28, 4.1 #9).
+      hrefDe: (rows) => rows.length
+        ? `ordenes/index.html?ids=${rows.slice(0, 60).map(r => encodeURIComponent(r.id)).join(',')}`
+        : 'ordenes/index.html',
       count: () => SenalesService.countEstancadas(),
       items: () => SenalesService.listEstancadas(),
       posponer: true, curso: true,
@@ -177,7 +183,7 @@ window.HomeSignals = (() => {
     SAP: {
       modulo: 'cotizaciones', icon: 'file-check', moreIsBad: true,
       label: 'Cotizaciones por aprobar', sub: 'fuera de política, esperando visto bueno',
-      href: 'cotizaciones/index.html?estado=borrador',
+      href: 'cotizaciones/index.html?estado=borrador&aprobar=1', // solo requiere_aprobacion (auditoría UX 2026-09-28, P0 #20)
       count: () => SenalesService.countCotizacionesPorAprobar(),
     },
     // Nota: "cotizaciones fuera de umbral por aprobar" NO es contable
@@ -187,7 +193,7 @@ window.HomeSignals = (() => {
     S9: {
       modulo: 'piezas', icon: 'puzzle',
       label: 'Piezas sin stock', sub: 'reponer inventario',
-      href: 'inventario/piezas.html',
+      href: 'inventario/piezas.html?filtro=sin_stock', // aterriza filtrada (auditoría UX 2026-09-28)
       count: () => SenalesService.countPiezasSinStock(),
     },
     // Pool de equipos serializados (PLAN_CICLO_VIDA_EQUIPOS.md, Fase A). Los
@@ -266,7 +272,8 @@ window.HomeSignals = (() => {
     },
   };
 
-  // Rol efectivo → señales (máx. 4). Cada señal pasa ADEMÁS por el gate de
+  // Rol efectivo → señales (hasta 8; la rejilla se ajusta con data-n, ver
+  // render). Cada señal pasa ADEMÁS por el gate de
   // módulo, así un error en esta lista nunca muestra datos de un módulo
   // que el rol no ve.
   // admin y jefe_taller ven S4Q (esperando QC) en lugar de S4 (completadas):
@@ -297,7 +304,7 @@ window.HomeSignals = (() => {
     // S12 sigue accesible desde Equipos por serial (filtro "sin verificar").
     // S15 (seriales por asignar) desplaza a S11 (equipos en bodega): S11 es un
     // dato de estado —ya está en los KPI de Inventario— y S15 es una cola con
-    // gente esperando. El tope de la fila son 4 señales.
+    // gente esperando. (La fila ya no tiene tope fijo de 4: se ajusta a data-n.)
     inventario:        ['S15', 'S13', 'S14', 'S9'],
     vista:             ['S1', 'S3', 'S4'],
     contabilidad:      [],
@@ -311,7 +318,7 @@ window.HomeSignals = (() => {
       if (!raw) return null;
       const data = JSON.parse(raw);
       if (Date.now() - data.t > TTL_MS) return null;
-      return data.counts || null;
+      return data.counts ? data : null;
     } catch { return null; }
   }
 
@@ -500,7 +507,8 @@ window.HomeSignals = (() => {
     const visibles = activas.slice(0, MAX_FILAS_PANEL);
     const resto = activas.length - visibles.length;
 
-    panel.innerHTML = Bandeja.panelHead({ titulo: sig.label, n: activas.length, href: sig.href, hrefLabel: sig.hrefLabel })
+    const hrefPanel = typeof sig.hrefDe === 'function' ? sig.hrefDe(activas) : sig.href;
+    panel.innerHTML = Bandeja.panelHead({ titulo: sig.label, n: activas.length, href: hrefPanel, hrefLabel: sig.hrefLabel })
       + (visibles.length
         ? visibles.map(r => _filaHtml(id, sig, r)).join('')
         : Bandeja.listaVacia(sig.vacio || 'Nada pendiente.'))
@@ -671,7 +679,12 @@ window.HomeSignals = (() => {
       _sincronizarN(mount);
     };
 
-    const cached = _readCache(uid, rolEfectivo);
+    // Opciones guardadas para recontar al volver (pageshow/visibilidad) o con
+    // el botón "Actualizar" sin repintar la fila (auditoría UX 2026-09-28).
+    mount._renderOpts = { rolEfectivo, uid, user };
+
+    const cacheHit = _readCache(uid, rolEfectivo);
+    const cached = cacheHit && cacheHit.counts;
     if (cached) {
       ids.forEach(id => {
         if (SIGNALS[id].fresh) return;
@@ -680,6 +693,7 @@ window.HomeSignals = (() => {
         else dropTile(id);
       });
       _applyDeltas(mount, ids, cached, _rotateSnapshot(uid, rolEfectivo, cached));
+      _pintaActualizado(mount, cacheHit.t);
       await _refrescarAprobaciones(mount);
       return;
     }
@@ -699,6 +713,76 @@ window.HomeSignals = (() => {
     }));
     _writeCache(uid, rolEfectivo, counts);
     _applyDeltas(mount, ids, counts, _rotateSnapshot(uid, rolEfectivo, counts));
+    _pintaActualizado(mount, Date.now());
+  }
+
+  /* ── Frescura de los conteos (auditoría UX 2026-09-28, 4.1 #8) ──────────
+     Los conteos salen de una caché de 5 min: asignabas una orden, volvías y
+     "por asignar" seguía igual. Ahora (1) la fila dice de cuándo es el
+     número, con un botón para actualizar, y (2) al volver a la pestaña o
+     desde el bfcache se recuenta solo si el número tiene más de un minuto
+     (cambiar de pestaña a cada rato no dispara consultas). */
+  const RECUENTO_MIN_MS = 60 * 1000;
+
+  function _haceTexto(t) {
+    const min = Math.floor((Date.now() - t) / 60000);
+    if (min < 1) return 'Actualizado hace un momento';
+    return `Actualizado hace ${min} min`;
+  }
+
+  function _pintaActualizado(mount, t) {
+    mount._renderT = t;
+    let meta = mount.querySelector('.kpis-meta');
+    if (!meta) {
+      meta = document.createElement('div');
+      meta.className = 'kpis-meta';
+      meta.innerHTML = '<span class="kpis-meta__t"></span>'
+        + '<button type="button" class="kpis-meta__btn" data-signals-refresh title="Volver a contar ahora">'
+        + '<i data-lucide="refresh-cw"></i> Actualizar</button>';
+      mount.appendChild(meta);
+      meta.querySelector('[data-signals-refresh]').addEventListener('click', () => _recontar(mount, true));
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    meta.querySelector('.kpis-meta__t').textContent = _haceTexto(t);
+    meta.title = new Date(t).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // Recuenta las señales que siguen en pantalla SIN repintar la fila (un
+  // panel abierto se queda abierto). Lo que falle conserva el número viejo.
+  async function _recontar(mount, forzar = false) {
+    const o = mount._renderOpts;
+    if (!o || mount._recontando) return;
+    if (!forzar && mount._renderT && Date.now() - mount._renderT < RECUENTO_MIN_MS) {
+      _pintaActualizado(mount, mount._renderT);
+      return;
+    }
+    mount._recontando = true;
+    const btn = mount.querySelector('[data-signals-refresh]');
+    if (btn) btn.disabled = true;
+    try {
+      if (window.SenalesService?.invalidarListas) SenalesService.invalidarListas();
+      const previos = (_readCache(o.uid, o.rolEfectivo) || {}).counts || {};
+      const counts = { ...previos };
+      // Las `fresh` (aprobaciones, órdenes por crear) las recuenta
+      // _refrescarAprobaciones: aquí solo con el botón, para no pagarlas dos veces.
+      const ids = (mount._signalOrder || [])
+        .filter(id => mount.querySelector(`[data-signal="${id}"]`) && !SIGNALS[id].fresh);
+      if (forzar) _refrescarAprobaciones(mount);
+      await Promise.all(ids.map(async (id) => {
+        try {
+          const n = await SIGNALS[id].count(o);
+          if (mount._renderOpts !== o) return;
+          counts[id] = n;
+          _pintaVal(mount, id, n);
+        } catch (e) { /* se queda el número anterior */ }
+      }));
+      if (mount._renderOpts !== o) return;
+      _writeCache(o.uid, o.rolEfectivo, counts);
+      _pintaActualizado(mount, Date.now());
+    } finally {
+      mount._recontando = false;
+      if (btn) btn.disabled = false;
+    }
   }
 
   // Aprobar en otra página/pestaña y volver (incluido bfcache) debe cambiar
@@ -726,9 +810,13 @@ window.HomeSignals = (() => {
     mount._aprobacionesCtx = ctx;
     if (mount._aprobacionesWired) return;
     mount._aprobacionesWired = true;
-    window.addEventListener('pageshow', e => { if (e.persisted) _refrescarAprobaciones(mount); });
+    // Además de las aprobaciones (siempre frescas), el resto se recuenta si
+    // el número ya tiene más de un minuto (ver _recontar).
+    window.addEventListener('pageshow', e => {
+      if (e.persisted) { _refrescarAprobaciones(mount); _recontar(mount); }
+    });
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) _refrescarAprobaciones(mount);
+      if (!document.hidden) { _refrescarAprobaciones(mount); _recontar(mount); }
     });
   }
 

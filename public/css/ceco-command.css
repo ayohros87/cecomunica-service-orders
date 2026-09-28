@@ -292,6 +292,14 @@ a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
   .kpis-zero__items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
   .kpis-zero .kpi{justify-content:space-between}
 }
+/* De cuándo es el número + botón de recontar (auditoría UX 2026-09-28): la
+   caché de 5 min contradecía la lista al volver de un módulo. */
+.kpis-meta{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:6px;font-size:12px;color:var(--fg-4)}
+.kpis-meta__btn{display:inline-flex;align-items:center;gap:4px;font:500 12px/1 var(--font-body);color:var(--accent-hover);background:none;border:0;padding:6px 4px;cursor:pointer;border-radius:6px}
+.kpis-meta__btn:hover{text-decoration:underline}
+.kpis-meta__btn:disabled{opacity:.5;cursor:default}
+.kpis-meta__btn svg{width:13px;height:13px}
+@media (pointer:coarse){.kpis-meta__btn{min-height:44px;padding:0 8px}}
 /* mientras carga el conteo */
 .kpi.is-loading .kpi__val{color:transparent;background:linear-gradient(90deg,var(--gray-100) 25%,var(--gray-150) 50%,var(--gray-100) 75%);background-size:200% 100%;animation:kpishimmer 1.2s infinite;border-radius:6px;min-width:44px}
 @keyframes kpishimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
@@ -383,6 +391,9 @@ a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
 .launch__search{max-width:1120px;margin:22px auto 26px;padding:0 28px;display:flex;gap:12px;align-items:center}
 .launch__search .hint-keys{font-size:12px;color:var(--fg-4);white-space:nowrap}
 .launch__search .hint-keys kbd{font:600 11px/1 var(--font-mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:2px 6px;background:var(--surface);color:var(--fg-3);margin:0 2px}
+/* Aviso bajo el buscador del home: qué hace Enter / que se abrirá la búsqueda global (auditoría UX 2026-09-28). */
+.launch__search-hint{max-width:1120px;margin:-18px auto 18px;padding:0 28px;font-size:12px;color:var(--fg-3)}
+.launch__search-hint[hidden]{display:none}
 .launch{max-width:1120px;margin:0 auto;padding:0 28px 64px}
 
 /* ---- Feed "Órdenes por crear" (home; recepción/admin) ---- */
@@ -501,7 +512,7 @@ a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
   .flow{overflow-x:auto;padding-bottom:6px}
   .flow__step{min-width:82px}
   .launch__hero{padding:18px 16px 58px}
-  .launch,.launch__signals,.launch__search,.feed-ordenes{padding-left:16px;padding-right:16px}
+  .launch,.launch__signals,.launch__search,.launch__search-hint,.feed-ordenes{padding-left:16px;padding-right:16px}
   .fo-head__hint{display:none}
 }
 @media (max-width:640px){

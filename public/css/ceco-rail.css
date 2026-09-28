@@ -189,3 +189,15 @@ html[data-cc-rail="mini"]{--cc-rail-cur:var(--cc-rail-mini-w)}
   .os-kpis.estado-chips-bar,
   .os-kpis{display:none}
 }
+
+/* ── Buscar (auditoría UX 2026-09-28, T6) ─────────────────────────────────
+   Ítem del rail y botón del topbar que abren el palette de Ctrl+K: el atajo
+   existía sin nada en pantalla que lo dijera, y en móvil no hay teclado. */
+.rail__search{width:100%;background:none;border:0;text-align:left}
+.rail__kbd{margin-left:auto;font:600 10px/1 var(--font-mono,"IBM Plex Mono",monospace);color:rgba(255,255,255,.45);border:1px solid rgba(255,255,255,.18);border-radius:4px;padding:2px 5px}
+.rail--mini .rail__kbd{display:none}
+.topbar-search__kbd{font:600 10.5px/1 var(--font-mono,"IBM Plex Mono",monospace);color:var(--fg-3,#64748b);border:1px solid var(--border-default,#d5dde6);border-bottom-width:2px;border-radius:4px;padding:2px 5px;margin-left:2px}
+@media (max-width:1024px),(pointer:coarse){.rail__kbd,.topbar-search__kbd{display:none}}
+@media (max-width:640px){.topbar-search__txt{display:none}}
+/* El FAB con bottom-nav se oculta con [hidden] mientras la barra se ve. */
+.rail-fab[hidden]{display:none !important}

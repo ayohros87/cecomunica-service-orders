@@ -94,6 +94,31 @@ function unidadesSerializables(contrato) {
   return Math.max(0, total - Number(contrato.baja_cancelado_total || 0));
 }
 
+// Lleva el estado no vigente (anulado, vencido, inactivo…) al doc público de
+// verificaciones/ con su fecha. update() falla con NOT_FOUND si no existe: así
+// no se crea una verificación nueva. Nunca lanza (no crítico para el contrato).
+async function propagarEstadoVerificacion(contratoId, contrato, estado) {
+  const patch = {
+    estado: estado || null,
+    estado_actualizado_at: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  if (estado === "anulado") {
+    patch.anulado_fecha = contrato.anulado_fecha || contrato.fecha_anulacion
+      || admin.firestore.FieldValue.serverTimestamp();
+  } else if (estado === "vencido") {
+    patch.vencido_fecha = contrato.vencido_at || contrato.fecha_fin
+      || contrato.fecha_vencimiento || admin.firestore.FieldValue.serverTimestamp();
+  }
+  try {
+    await db.collection("verificaciones").doc(contratoId).update(patch);
+    logger.info("[onContratoActivado] estado propagado a verificaciones", { contratoId, estado });
+  } catch (e) {
+    // 5 = NOT_FOUND: contrato sin verificación (nunca se aprobó) — nada que avisar.
+    if (e && (e.code === 5 || e.code === "not-found")) return;
+    logger.error("[onContratoActivado] no se pudo propagar el estado a verificaciones", { contratoId, estado, message: e.message });
+  }
+}
+
 const onContratoActivado = onDocumentUpdated(
   {
     document: "contratos/{docId}",
@@ -111,7 +136,17 @@ const onContratoActivado = onDocumentUpdated(
     const estadoBefore = before.estado || null;
     const estadoAfter  = after.estado  || null;
 
-    if (!["activo", "aprobado"].includes(estadoAfter)) return null;
+    if (!["activo", "aprobado"].includes(estadoAfter)) {
+      // Auditoría UX 2026-09-28 (P0 #1): la verificación pública (QR impreso)
+      // certificaba como vigente un contrato anulado o vencido porque este
+      // trigger salía aquí sin avisarle. Solo en el CAMBIO de estado, y solo si
+      // la verificación ya existe (no se crea una para un contrato que nunca
+      // se aprobó).
+      if (estadoBefore !== estadoAfter) {
+        await propagarEstadoVerificacion(event.params.docId, after, estadoAfter);
+      }
+      return null;
+    }
 
     const contratoId = event.params.docId;
     const verificRef = admin.firestore().collection("verificaciones").doc(contratoId);

@@ -3,5 +3,8 @@
 // archivo sigue publicando sus globales en window (puente F1), así que el
 // orden importa igual que antes. Vite lo empaqueta y le pone hash.
 import '/js/firebase-init.js';
+// Toast y Modal: aviso y confirmación del cambio de contraseña (auditoría UX 2026-09-28).
+import '/js/ui/toast.js';
+import '/js/ui/modal.js';
 import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';

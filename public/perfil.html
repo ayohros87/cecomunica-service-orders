@@ -63,6 +63,20 @@
       </div>
     </div>
 
+    <!-- Auditoría UX 2026-09-28 (4.1): el perfil era solo lectura y sin
+         salida a lo personal. Ahora lleva a la firma de correo y permite
+         pedir el cambio de contraseña al propio correo. -->
+    <div class="ds-card ds-card-padded" style="margin-top:var(--sp-4);">
+      <p class="form-section-title" style="margin-bottom:var(--sp-3);"><i data-lucide="settings-2"></i> Tu cuenta</p>
+      <div style="display:flex; flex-wrap:wrap; gap:var(--sp-3);">
+        <a class="btn btn-secondary" href="firma-correo.html"><i data-lucide="mail"></i> Mi firma de correo</a>
+        <button type="button" class="btn btn-secondary" id="btnCambiarClave"><i data-lucide="key"></i> Cambiar contraseña</button>
+      </div>
+      <p class="form-hint" style="font-size:12px; color:var(--fg-4); margin:var(--sp-3) 0 0;">
+        Para cambiar la contraseña te enviamos un enlace a tu correo; ábrelo y escribe la nueva.
+      </p>
+    </div>
+
   </div>
 
   <script>
@@ -78,7 +92,9 @@
         if (snap.exists) {
           const data = snap.data();
           document.getElementById("perfil-nombre").value = data.nombre || "";
-          document.getElementById("perfil-rol").value = data.rol || "";
+          // Rol legible ("Recepción", no "recepcion"): misma tabla del rail.
+          document.getElementById("perfil-rol").value = window.MODULOS
+            ? MODULOS.rolLabel(data.rol) : (data.rol || "");
         }
       } catch (e) {
         console.error("Error al cargar perfil:", e);
@@ -89,6 +105,36 @@
     function cerrarSesion() {
       firebase.auth().signOut().then(() => { location.href = "/login.html"; });
     }
+
+    // Cambio de contraseña: enlace de Firebase al PROPIO correo, con
+    // confirmación antes de enviarlo (no cierra la sesión actual).
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('btnCambiarClave');
+      if (!btn) return;
+      btn.addEventListener('click', async () => {
+        const user = firebase.auth().currentUser;
+        const email = user && user.email;
+        const avisar = (msg, tipo) => (window.Toast ? Toast.show(msg, tipo) : alert(msg));
+        if (!email) { avisar('Tu cuenta no tiene correo: pídele a administración que te restablezca la contraseña.', 'warn'); return; }
+        const texto = `Te enviaremos un enlace a ${email} para que escribas una contraseña nueva. ¿Lo enviamos?`;
+        const ok = window.Modal && Modal.confirm
+          ? await Modal.confirm({ title: 'Cambiar contraseña', message: texto, confirmLabel: 'Enviar enlace', cancelLabel: 'Cancelar' })
+          : confirm(texto);
+        if (!ok) return;
+        btn.disabled = true;
+        try {
+          await firebase.auth().sendPasswordResetEmail(email);
+          avisar(`Listo: revisa ${email} (también la carpeta de spam).`, 'ok');
+        } catch (e) {
+          console.error('[perfil] reset de contraseña:', e);
+          avisar(e && e.code === 'auth/too-many-requests'
+            ? 'Ya pediste varios enlaces seguidos. Espera unos minutos e intenta de nuevo.'
+            : 'No se pudo enviar el enlace. Revisa tu conexión e intenta de nuevo.', 'bad');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
   </script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->

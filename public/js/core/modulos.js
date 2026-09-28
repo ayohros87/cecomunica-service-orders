@@ -54,31 +54,63 @@ window.MODULOS = (() => {
   };
 
   // Catálogo de módulos navegables (auditoría A9): fuente ÚNICA de id, label,
-  // icono y href — la consumen el rail (Layout._RAIL_CATALOGO) y el buscador
-  // global (searchPalette.GROUP_META). Antes eran 3 copias a sincronizar a
-  // mano. Las tarjetas del home siguen siendo HTML estático en index.html
-  // (gateadas por deRol): si cambias un href/icono aquí, revisa esas tiles.
+  // icono y href — la consumen el rail (Layout.renderRail), el buscador
+  // global (searchPalette.GROUP_META) y, desde la auditoría UX 2026-09-28, las
+  // tarjetas del home (index.html las genera de aquí: antes eran HTML estático
+  // con etiquetas distintas a las del rail y una tarjeta muerta).
+  // `subtitulo` y `keywords` son de la tarjeta del home; `tecla` es el atajo
+  // de una tecla del home (index.html) y se pinta en la tarjeta.
   const CATALOGO = [
     { grupo: 'Operación', items: [
-      { id: 'ordenes',     label: 'Órdenes',           icon: 'settings-2',  href: '/ordenes/index.html' },
-      { id: 'poc',         label: 'Base PoC',          icon: 'radio-tower', href: '/POC/index.html' },
-      { id: 'vendedores',  label: 'Registro (Ventas)', icon: 'briefcase',   href: '/POC/vendedores-batch.html' },
+      { id: 'ordenes',     label: 'Órdenes',           icon: 'settings-2',  href: '/ordenes/index.html',
+        subtitulo: 'Recepción, técnicos, estados y equipos', tecla: 'O',
+        keywords: 'ordenes servicio reparaciones equipos tecnicos' },
+      { id: 'poc',         label: 'Base PoC',          icon: 'radio-tower', href: '/POC/index.html',
+        subtitulo: 'Radios, SIM, IP, grupos y notas', tecla: 'P',
+        keywords: 'poc base datos radios sim ip gps grupos' },
+      { id: 'vendedores',  label: 'Preparar lote (Ventas)', icon: 'briefcase', href: '/POC/vendedores-batch.html',
+        subtitulo: 'Prepara el archivo que recepción carga', tecla: 'V',
+        keywords: 'vendedores ventas preparar lote batch registro equipos radios' },
     ]},
     { grupo: 'Comercial', items: [
-      { id: 'centro',       label: 'Centro de gestión', icon: 'compass', href: '/clientes/centro.html' },
-      { id: 'cotizaciones', label: 'Cotizaciones', icon: 'receipt',   href: '/cotizaciones/index.html' },
-      { id: 'contratos',    label: 'Contratos',    icon: 'file-text', href: '/contratos/index.html' },
+      { id: 'centro',       label: 'Centro de gestión', icon: 'compass', href: '/clientes/centro.html',
+        subtitulo: 'La vista 360 del cliente', tecla: 'G',
+        keywords: 'centro gestion clientes cartera flota equipos gestiones reemplazo demo baja aumento renovacion' },
+      { id: 'cotizaciones', label: 'Cotizaciones', icon: 'receipt',   href: '/cotizaciones/index.html',
+        subtitulo: 'Crear, editar e imprimir', tecla: 'Q',
+        keywords: 'cotizaciones ventas proformas ofertas clientes' },
+      { id: 'contratos',    label: 'Contratos',    icon: 'file-text', href: '/contratos/index.html',
+        subtitulo: 'Altas, renovaciones y estados', tecla: 'C',
+        keywords: 'contratos clientes facturacion vigencia seriales' },
     ]},
     { grupo: 'Almacén · finanzas', items: [
-      { id: 'almacen',     label: 'Almacén',  icon: 'warehouse',  href: '/almacen/index.html' },
+      { id: 'almacen',     label: 'Almacén',  icon: 'warehouse',  href: '/almacen/index.html',
+        subtitulo: 'Hoy · Existencias · Piezas', tecla: 'I',
+        keywords: 'almacen inventario bodega radios stock equipos serial pool kardex pendientes bandeja seriales piezas repuestos conteo' },
       // "piezas" NO es un módulo del rail (Alberto 2026-09-10): el repuesto se
       // trabaja DENTRO del espacio Almacén, en su pestaña (js/ui/almacen-nav.js).
       // El id sigue vivo en visiblesPorRol porque gatea la señal S9 del home
       // ("Piezas sin stock"), que aterriza directo en la página.
-      { id: 'facturacion_bandeja', label: 'Facturación pendiente', icon: 'inbox', href: '/facturacion/bandeja.html' },
-      { id: 'facturacion', label: 'Finanzas', icon: 'calculator', href: '/inventario/modelos.html' },
+      { id: 'facturacion_bandeja', label: 'Facturación pendiente', icon: 'inbox', href: '/facturacion/bandeja.html',
+        subtitulo: 'Qué facturar en QuickBooks y activar en POC',
+        keywords: 'facturacion pendiente bandeja quickbooks poc recepcion avisos' },
+      { id: 'facturacion', label: 'Finanzas', icon: 'calculator', href: '/facturacion/bandeja.html',
+        subtitulo: 'Catálogo · QuickBooks · Emisión',
+        keywords: 'finanzas facturacion contabilidad tarifas alquiler cargos modelos quickbooks activacion' },
     ]},
   ];
+
+  // Rol → nombre legible (auditoría UX 2026-09-28): una sola tabla para el
+  // pie del rail, el saludo y el banner "Ver como" del home y el perfil.
+  const ROL_LABELS = {
+    administrador: 'Administración', gerente: 'Gerencia', recepcion: 'Recepción',
+    jefe_taller: 'Jefe de taller', tecnico: 'Técnico', tecnico_operativo: 'Técnico operativo',
+    vendedor: 'Ventas', inventario: 'Inventario', contabilidad: 'Contabilidad', vista: 'Solo lectura',
+  };
+
+  function rolLabel(rol) {
+    return ROL_LABELS[rol] || rol || '';
+  }
 
   function deRol(rol) {
     return visiblesPorRol[rol] || [];
@@ -97,5 +129,5 @@ window.MODULOS = (() => {
     return ok ? asParam : rolReal;
   }
 
-  return { visiblesPorRol, CATALOGO, deRol, puedeVer, rolEfectivo };
+  return { visiblesPorRol, CATALOGO, ROL_LABELS, rolLabel, deRol, puedeVer, rolEfectivo };
 })();

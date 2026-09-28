@@ -140,6 +140,17 @@ const BusquedaGlobalService = {
     return hits.slice(0, this.MAX_PER_COLLECTION);
   },
 
+  // PoC busca por campo (serial, unit_id, sim…), no por docId: el enlace lleva
+  // el campo que coincidió + su valor para que poc-list.js filtre, y el docId
+  // para resaltar la fila exacta (auditoría UX 2026-09-28, P0 #5).
+  _linkPoc(docId, p, q) {
+    const campos = ['serial', 'unit_id', 'sim_number', 'sim_phone', 'ip', 'radio_name'];
+    let campo = campos.find(c => this._match(p[c], q));
+    if (!campo) campo = p.serial ? 'serial' : (p.unit_id ? 'unit_id' : 'serial');
+    const valor = String(p[campo] ?? docId);
+    return `/POC/index.html?focus=${encodeURIComponent(valor)}&campo=${encodeURIComponent(campo)}&id=${encodeURIComponent(docId)}`;
+  },
+
   async _searchPoc(q) {
     const db = firebase.firestore();
     const snap = await db.collection('poc_devices')
@@ -161,7 +172,7 @@ const BusquedaGlobalService = {
           id: d.id,
           title: p.radio_name || p.unit_id || p.serial || d.id,
           subtitle: [p.serial, p.sim_number, p.cliente].filter(Boolean).join(' · '),
-          link: `/POC/index.html?focus=${encodeURIComponent(d.id)}`,
+          link: this._linkPoc(d.id, p, q),
         });
       }
     });

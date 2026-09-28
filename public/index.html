@@ -50,15 +50,15 @@
   <!-- ============ FRANJA DE MARCA (única zona navy) ============ -->
   <div class="launch__hero">
     <div class="launch__hero-top">
-      <img src="brand/cecomunica-monogram.svg" alt="CeComunica">
-      <div class="wm"><b>CECOMUNICA</b><span>Centro de gestión</span></div>
+      <img src="brand/cecomunica-monogram.svg" alt="Cecomunica">
+      <div class="wm"><b>CECOMUNICA</b><span>Plataforma</span></div>
       <div class="launch__hi">
         <div class="who">
           <b id="saludoNombre">&nbsp;</b>
           <span id="saludoMeta">&nbsp;</span>
         </div>
         <a class="btn btn--inverse btn--icon" href="perfil.html" title="Mi perfil" aria-label="Mi perfil"><i data-lucide="user"></i></a>
-        <a class="btn btn--inverse btn--icon" href="admin/index.html" id="btnAdminPanel" title="Panel de Administración" aria-label="Panel de Administración" style="display:none"><i data-lucide="shield"></i></a>
+        <a class="btn btn--inverse btn--icon" href="admin/index.html" id="btnAdminPanel" title="Panel admin" aria-label="Panel admin" style="display:none"><i data-lucide="shield"></i></a>
         <button class="btn btn--inverse btn--icon" onclick="cerrarSesion()" title="Cerrar sesión" aria-label="Cerrar sesión"><i data-lucide="log-out"></i></button>
       </div>
     </div>
@@ -74,12 +74,16 @@
   <div class="launch__search">
     <div class="input-group search">
       <i data-lucide="search"></i>
-      <input id="buscador" class="cc-input" type="search" placeholder="Buscar módulo (ej: inventario, poc, órdenes)..." oninput="filtrarModulos()">
+      <!-- Auditoría UX 2026-09-28 (T6): el buscador del home solo filtraba
+           tarjetas. Ahora filtra si el texto es un módulo y, si no, abre el
+           buscador global (Ctrl+K) con lo tecleado; Enter lo abre siempre. -->
+      <input id="buscador" class="cc-input" type="search" placeholder="Buscar cliente, orden, contrato, serial… (Ctrl+K)" aria-label="Buscar cliente, orden, contrato o serial" aria-describedby="buscadorHint" autocomplete="off" oninput="alTeclearBuscador()" onkeydown="if(event.key==='Enter'){event.preventDefault();abrirBusquedaGlobal();}">
     </div>
     <div class="hint-keys desktop-only" id="hintKeys" style="display:none">
-      Atajos: <kbd>O</kbd> Órdenes <kbd>Q</kbd> Cotizaciones <kbd>C</kbd> Contratos <kbd>P</kbd> PoC
+      Atajos: <kbd>O</kbd> Órdenes <kbd>Q</kbd> Cotizaciones <kbd>C</kbd> Contratos <kbd>P</kbd> PoC <kbd>Ctrl</kbd><kbd>K</kbd> Buscar
     </div>
   </div>
+  <div class="launch__search-hint" id="buscadorHint" aria-live="polite" hidden></div>
 
   <!-- ============ MÓDULOS POR ÁREA ============ -->
   <div class="launch">
@@ -93,103 +97,35 @@
 
     <div id="gridModulos" class="module-groups" style="display:none">
 
-      <section class="mgroup">
-        <h2 class="mgroup__t">Operación</h2>
-        <div class="mgrid">
-          <a class="mcard" data-keywords="ordenes servicio reparaciones equipos tecnicos" data-mod="ordenes" data-visible="false" href="ordenes/index.html">
-            <span class="mcard__ico"><i data-lucide="settings-2"></i></span>
-            <span class="mcard__meta">
-              <span class="mcard__t">Órdenes de Servicio</span>
-              <span class="mcard__s">Recepción, técnicos, estados y equipos</span>
-            </span>
-            <span class="mcard__key">O</span>
-          </a>
-          <a class="mcard" data-keywords="poc base datos radios sim ip gps grupos" data-mod="poc" data-visible="false" href="POC/index.html">
-            <span class="mcard__ico"><i data-lucide="radio-tower"></i></span>
-            <span class="mcard__meta">
-              <span class="mcard__t">Base de Datos PoC</span>
-              <span class="mcard__s">Radios, SIM, IP, grupos y notas</span>
-            </span>
-            <span class="mcard__key">P</span>
-          </a>
-          <a class="mcard" data-keywords="vendedores ventas carga batch equipos radios" data-mod="vendedores" data-visible="false" href="POC/vendedores-batch.html">
-            <span class="mcard__ico"><i data-lucide="briefcase"></i></span>
-            <span class="mcard__meta">
-              <span class="mcard__t">Registro de Equipos (Ventas)</span>
-              <span class="mcard__s">Carga rápida por vendedor</span>
-            </span>
-            <span class="mcard__key">V</span>
-          </a>
-        </div>
-      </section>
-
-      <section class="mgroup">
-        <h2 class="mgroup__t">Comercial</h2>
-        <div class="mgrid">
-          <a class="mcard" data-keywords="centro gestion clientes cartera flota equipos gestiones reemplazo demo baja aumento renovacion" data-mod="centro" data-visible="false" href="clientes/centro.html">
-            <span class="mcard__ico"><i data-lucide="compass"></i></span>
-            <span class="mcard__meta">
-              <span class="mcard__t">Centro de gestión</span>
-              <span class="mcard__s">La vista 360 del cliente</span>
-            </span>
-            <span class="mcard__key">G</span>
-          </a>
-          <a class="mcard" data-keywords="cotizaciones ventas proformas ofertas clientes" data-mod="cotizaciones" data-visible="false" href="cotizaciones/index.html">
-            <span class="mcard__ico"><i data-lucide="receipt"></i></span>
-            <span class="mcard__meta">
-              <span class="mcard__t">Cotizaciones</span>
-              <span class="mcard__s">Crear, editar e imprimir</span>
-            </span>
-            <span class="mcard__key">Q</span>
-          </a>
-          <a class="mcard" data-keywords="contratos clientes facturacion vigencia seriales" data-mod="contratos" data-visible="false" href="contratos/index.html">
-            <span class="mcard__ico"><i data-lucide="file-text"></i></span>
-            <span class="mcard__meta">
-              <span class="mcard__t">Contratos</span>
-              <span class="mcard__s">Altas, renovaciones y estados</span>
-            </span>
-            <span class="mcard__key">C</span>
-          </a>
-          <a class="mcard" data-keywords="clientes ruc cedula contactos cuentas empresas" data-mod="clientes" data-visible="false" href="clientes/index.html">
-            <span class="mcard__ico"><i data-lucide="users"></i></span>
-            <span class="mcard__meta">
-              <span class="mcard__t">Clientes</span>
-              <span class="mcard__s">Listado y edición masiva</span>
-            </span>
-          </a>
-        </div>
-      </section>
-
-      <!-- Consolidación 2026-08 (propuesta Almacén/Finanzas): las 5 tarjetas
-           del grupo pasaron a 2 espacios. Las páginas viejas siguen vivas y
-           accesibles desde dentro de cada espacio durante la migración. -->
-      <section class="mgroup">
-        <h2 class="mgroup__t">Almacén y finanzas</h2>
-        <div class="mgrid">
-          <a class="mcard" data-keywords="almacen inventario bodega radios stock equipos serial pool kardex pendientes bandeja seriales piezas repuestos conteo" data-mod="almacen" data-visible="false" href="almacen/index.html">
-            <span class="mcard__ico"><i data-lucide="warehouse"></i></span>
-            <span class="mcard__meta">
-              <span class="mcard__t">Almacén</span>
-              <span class="mcard__s">Hoy · Existencias · Piezas</span>
-            </span>
-            <span class="mcard__key">I</span>
-          </a>
-          <a class="mcard" data-keywords="facturacion pendiente bandeja quickbooks poc recepcion avisos" data-mod="facturacion_bandeja" data-visible="false" href="facturacion/bandeja.html">
-            <span class="mcard__ico"><i data-lucide="inbox"></i></span>
-            <span class="mcard__meta">
-              <span class="mcard__t">Facturación pendiente</span>
-              <span class="mcard__s">Qué facturar en QuickBooks y activar en POC</span>
-            </span>
-          </a>
-          <a class="mcard" data-keywords="finanzas facturacion contabilidad tarifas alquiler cargos modelos quickbooks activacion" data-mod="facturacion" data-visible="false" href="inventario/modelos.html">
-            <span class="mcard__ico"><i data-lucide="calculator"></i></span>
-            <span class="mcard__meta">
-              <span class="mcard__t">Finanzas</span>
-              <span class="mcard__s">Catálogo · QuickBooks · Emisión</span>
-            </span>
-          </a>
-        </div>
-      </section>
+      <!-- Las tarjetas de módulo se generan de MODULOS.CATALOGO (js/core/
+           modulos.js): misma etiqueta, icono y destino que el rail. Antes eran
+           HTML estático, con nombres distintos a los del rail y una tarjeta
+           "Clientes" que ningún rol veía (auditoría UX 2026-09-28, T2).
+           modulos.js es síncrono en el <head>: esto corre en el parse, antes
+           de la visibilidad por rol y de los atajos. -->
+      <script>
+        (function () {
+          var esc = function (v) {
+            return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+          };
+          var html = ((window.MODULOS && MODULOS.CATALOGO) || []).map(function (g) {
+            var cards = (g.items || []).map(function (it) {
+              var href = String(it.href || '').replace(/^\//, '');
+              return '<a class="mcard" data-keywords="' + esc(it.keywords || it.label) + '" data-mod="' + esc(it.id) + '" data-visible="false" href="' + esc(href) + '">'
+                + '<span class="mcard__ico"><i data-lucide="' + esc(it.icon) + '"></i></span>'
+                + '<span class="mcard__meta"><span class="mcard__t">' + esc(it.label) + '</span>'
+                + (it.subtitulo ? '<span class="mcard__s">' + esc(it.subtitulo) + '</span>' : '')
+                + '</span>'
+                + (it.tecla ? '<span class="mcard__key">' + esc(it.tecla) + '</span>' : '')
+                + '</a>';
+            }).join('');
+            return '<section class="mgroup"><h2 class="mgroup__t">' + esc(g.grupo) + '</h2><div class="mgrid">' + cards + '</div></section>';
+          }).join('');
+          var s = document.currentScript;
+          if (s) s.insertAdjacentHTML('beforebegin', html);
+        })();
+      </script>
 
       <section class="mgroup">
         <h2 class="mgroup__t">Personal</h2>
@@ -212,7 +148,7 @@
           <a class="mcard" data-keywords="admin administracion panel usuarios config auditoria" data-mod="admin" data-visible="false" href="admin/index.html">
             <span class="mcard__ico"><i data-lucide="shield"></i></span>
             <span class="mcard__meta">
-              <span class="mcard__t">Panel de Administración</span>
+              <span class="mcard__t">Panel admin</span>
               <span class="mcard__s">Solo administradores</span>
             </span>
           </a>
@@ -224,11 +160,8 @@
 
   <script>
     // === VISIBILIDAD POR ROL (fuente única: js/core/modulos.js) ===
-    const ROL_LABELS = {
-      administrador: 'Administración', gerente: 'Gerencia', recepcion: 'Recepción',
-      jefe_taller: 'Jefe de taller', tecnico: 'Técnico', tecnico_operativo: 'Técnico operativo',
-      vendedor: 'Ventas', inventario: 'Inventario', contabilidad: 'Contabilidad', vista: 'Solo lectura',
-    };
+    // Nombres de rol: MODULOS.rolLabel (una sola tabla con el rail y el
+    // perfil; antes esta página tenía su copia, auditoría UX 2026-09-28).
 
     // Los scripts de Firebase cargan con defer: registrar tras DOMContentLoaded.
     document.addEventListener('DOMContentLoaded', () => {
@@ -248,7 +181,7 @@
             banner.style.display = '';
             banner.innerHTML = `
               <span style="margin-right:8px;">👁️</span>
-              MODO VISUAL — viendo el home como <strong>${effectiveRol}</strong>.
+              MODO VISUAL — viendo el home como <strong>${MODULOS.rolLabel(effectiveRol)}</strong>.
               Solo afecta qué tarjetas y señales se muestran; no cambia permisos reales ni datos.
               <a href="${location.pathname}" style="margin-left:12px;color:#78350f;text-decoration:underline;font-weight:700;">Salir del modo visual</a>
             `;
@@ -268,7 +201,7 @@
         pintaSaludo(nombreCache || user.displayName || (user.email || '').split('@')[0]);
         if (!nombreCache && window.Sesion) Sesion.nombre(user).then(pintaSaludo).catch(() => {});
         const fecha = new Date().toLocaleDateString('es-PA', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
-        document.getElementById('saludoMeta').textContent = `${ROL_LABELS[effectiveRol] || effectiveRol || ''} · ${fecha}`;
+        document.getElementById('saludoMeta').textContent = `${MODULOS.rolLabel(effectiveRol)} · ${fecha}`;
 
         // Visibilidad de tarjetas. 'perfil' visible para todos; 'admin' solo
         // si el rol EFECTIVO es admin (en "Ver como" se oculta para simular).
@@ -313,11 +246,42 @@
 
     function cerrarSesion() {
       firebase.auth().signOut().then(() => {
-        window.location.href = "/login.html"; // relativo (no uses "/login.html")
+        window.location.href = "/login.html"; // absoluto: funciona desde cualquier carpeta
       });
     }
 
-    // === BUSCADOR DE MÓDULOS ===
+    // === BUSCADOR: módulos + búsqueda global (auditoría UX 2026-09-28, T6) ===
+    // Si lo tecleado coincide con un módulo, filtra las tarjetas como antes.
+    // Si no coincide con ninguno, es un cliente/orden/serial: se abre el
+    // buscador global (Ctrl+K) con ese texto. Enter lo abre siempre.
+    let _timerBuscador = null;
+    function alTeclearBuscador() {
+      const hay = filtrarModulos();
+      const q = (document.getElementById("buscador").value || "").trim();
+      const hint = document.getElementById("buscadorHint");
+      clearTimeout(_timerBuscador);
+      if (hint) {
+        hint.hidden = q.length < 2;
+        hint.textContent = q.length < 2 ? "" : (hay
+          ? `Enter: buscar «${q}» en clientes, órdenes, contratos y seriales.`
+          : `Ningún módulo se llama así. Buscando «${q}» en todo el sistema…`);
+      }
+      if (!hay && q.length >= 3) _timerBuscador = setTimeout(abrirBusquedaGlobal, 450);
+    }
+    function abrirBusquedaGlobal() {
+      clearTimeout(_timerBuscador);
+      const input = document.getElementById("buscador");
+      const q = (input.value || "").trim();
+      if (!window.Layout || !Layout.abrirBusqueda) return;
+      Layout.abrirBusqueda(q);
+      // El texto pasa al palette: el buscador del home vuelve a mostrar todo.
+      input.value = "";
+      filtrarModulos();
+      const hint = document.getElementById("buscadorHint");
+      if (hint) { hint.hidden = true; hint.textContent = ""; }
+    }
+
+    // Devuelve true si quedó al menos una tarjeta visible.
     function filtrarModulos() {
       const q = (document.getElementById("buscador").value || "").toLowerCase().trim();
       document.querySelectorAll("#gridModulos .mcard").forEach(card => {
@@ -334,6 +298,8 @@
           .some(c => c.getAttribute("data-visible") === "true" && c.style.display !== "none");
         group.setAttribute("data-empty", hayVisible ? "false" : "true");
       });
+      return Array.from(document.querySelectorAll("#gridModulos .mcard"))
+        .some(c => c.getAttribute("data-visible") === "true" && c.style.display !== "none");
     }
   </script>
   <script>
@@ -347,14 +313,14 @@
         const el = document.querySelector(`.mcard[data-mod='${sel}'][data-visible='true']`);
         if (el) el.click();
       };
-      if (e.key === "o") go("ordenes");
-      if (e.key === "p") go("poc");
-      if (e.key === "i") go("almacen");
-      if (e.key === "c") go("contratos");
-      if (e.key === "v") go("vendedores");
-      if (e.key === "q") go("cotizaciones");
-      if (e.key === "f") go("firma");
-      if (e.key === "g") go("centro");
+      // Teclas desde MODULOS.CATALOGO (`tecla`, la misma que pinta la tarjeta)
+      // + la de "Mi firma", que no es un módulo del catálogo.
+      const TECLAS = { f: "firma" };
+      ((window.MODULOS && MODULOS.CATALOGO) || []).forEach(g => (g.items || []).forEach(it => {
+        if (it.tecla) TECLAS[String(it.tecla).toLowerCase()] = it.id;
+      }));
+      // Solo minúscula, como antes: Shift+letra no navega.
+      if (e.key && Object.prototype.hasOwnProperty.call(TECLAS, e.key)) go(TECLAS[e.key]);
     });
     if (typeof lucide !== 'undefined') lucide.createIcons();
   </script>

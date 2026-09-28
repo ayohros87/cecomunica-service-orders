@@ -329,15 +329,25 @@ body{
 }
 
 /* DS App Kit button variants — BEM modifier style (Phase 2). */
-.btn-primary   { background:var(--accent);  color:#fff; border-color:var(--accent); }
-.btn-primary:hover  { background:var(--accent-hover); box-shadow: var(--shadow-md); }
+/* Primario en #0074AC (auditoría UX 2026-09-28, T7): blanco sobre #0091D7
+   daba ~3,5:1 en texto de 14 px (no pasa AA); sobre #0074AC da ~5,1:1. El
+   hover baja un tono más (#005781). El token --accent no cambia: links,
+   foco y chips siguen en el cian de marca. */
+.btn-primary   { background:var(--accent-hover);  color:#fff; border-color:var(--accent-hover); }
+.btn-primary:hover  { background:var(--accent-press); border-color:var(--accent-press); box-shadow: var(--shadow-md); }
 /* Alias `.btn.primary` — es la convención que usa Layout.renderTopbar({actions:[{cls:'primary'}]})
    en ~11 páginas (Nuevo cliente, Nuevo Contrato, Nueva cotización, Recibir equipos, Nuevo cargo…).
    Nunca existió la regla, así que TODOS esos botones "primarios" se pintaban como uno más de la
    fila: la barra de acciones no tenía jerarquía y la acción principal se perdía entre Volver /
    Más / Menú principal / Cerrar sesión. */
-.btn.primary   { background:var(--accent);  color:#fff; border-color:var(--accent); }
-.btn.primary:hover  { background:var(--accent-hover); color:#fff; box-shadow: var(--shadow-md); }
+.btn.primary   { background:var(--accent-hover);  color:#fff; border-color:var(--accent-hover); }
+.btn.primary:hover  { background:var(--accent-press); border-color:var(--accent-press); color:#fff; box-shadow: var(--shadow-md); }
+/* Objetivo táctil de 44 px en pantallas de dedo (auditoría UX 2026-09-28, T7). */
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  /* Un <a> inline ignora min-height: los enlaces-botón pasan a inline-flex. */
+  a.btn { display: inline-flex; align-items: center; justify-content: center; gap: .35em; }
+}
 .btn-secondary { background:#f1f5f9; color:var(--text); border-color:#cbd5e1; }
 .btn-secondary:hover{ background:var(--line); }
 .btn-ghost     { background:transparent; border-color: transparent; }

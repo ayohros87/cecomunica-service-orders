@@ -3,6 +3,10 @@
 // archivo sigue publicando sus globales en window (puente F1), así que el
 // orden importa igual que antes. Vite lo empaqueta y le pone hash.
 import '/js/firebase-init.js';
+// Shell compartido SOLO por el buscador global (Ctrl+K, Layout.abrirBusqueda):
+// el home no tiene #rail-mount ni #topbar-mount, así que no pinta rail ni
+// topbar (auditoría UX 2026-09-28, T6: el Ctrl+K no existía en el home).
+import '/js/core/layout.js';
 import '/js/firebase-aggregates.js';
 import '/js/services/usuariosService.js';
 import '/js/domain/pendientes.js';
