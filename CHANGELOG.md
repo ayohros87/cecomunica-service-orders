@@ -1,5 +1,30 @@
 # Changelog
 
+## [Remates de la auditoría UX: 7 chips en Órdenes, Alquiler/Propio/Mixto y política en el servidor] — 2026-09-28
+
+> Tercera tanda del día, a partir del recorrido de Alberto por lo desplegado:
+>
+> - **De 12 chips a 7 en Órdenes.** Los seis estados cerrados (entregado,
+>   visita, devolución, entrada, sin retirar, anulada) viven en un solo chip
+>   "Cerradas" con menú y conteos; la barra queda con las colas de trabajo.
+> - **Alquiler / Propio / Mixto vuelve a leerse de un vistazo.** Como un mismo
+>   contrato lleva equipos en alquiler y propios, la vieja nomenclatura ALQ/PROP
+>   ya no aplicaba. Ahora una etiqueta derivada de las líneas ("Mixto · 12 alq /
+>   3 prop") aparece en el archivo, en el Centro y en el correo de activación,
+>   con chips de filtro y sinónimos "alq"/"prop" en el buscador.
+> - **La política de aprobación se valida en el servidor.** Una Function
+>   recalcula si la cotización requiere aprobación y devuelve a borrador
+>   cualquier envío que la salte, avisando al aprobador; el detalle lo muestra
+>   y ofrece "Solicitar aprobación".
+> - **Un solo camino para cerrar una cotización:** "Validez vencida" entra en
+>   "Cerrar cotización" y desaparece del panel "Cambiar estado".
+> - **Menores:** "Cecomunica" en todos los impresos y correos; los enlaces
+>   viejos a la página de equipos van directo a Almacén; la señal "Mis
+>   cotizaciones activas" cuenta también las aprobadas; quitar un adjunto lo
+>   borra de inmediato; la verificación pública marca vencido también cuando el
+>   contrato vence por fecha; la carga de piezas por CSV ya no exige precio (lo
+>   pone Finanzas); el documento de arquitectura describe el sistema real.
+
 ## [Segunda ola de la auditoría UX: los proyectos de fondo] — 2026-09-28
 
 > Mismo día, después de desplegar los 31 P0 y los quick wins, se ejecutaron
