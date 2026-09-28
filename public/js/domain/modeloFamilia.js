@@ -34,7 +34,7 @@
   // en R de fábrica.
   const SUFIJO_R = /[\s-]R$/i;
   const tight = (s) => String(s == null ? "" : s).normalize("NFD")
-    .replace(/[^\x00-\x7f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    .replace(/[\u0080-￿]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   const sinR = (s) => String(s == null ? "" : s).trim().replace(SUFIJO_R, "");
   const esTextoR = (s) => SUFIJO_R.test(String(s == null ? "" : s).trim());
   const num = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null; };

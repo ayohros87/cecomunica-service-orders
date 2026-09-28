@@ -195,7 +195,7 @@ test("K9 · F4: sin confirm/prompt/alert nativos, sin CSS muerto, modales oculto
     const nativos = src.match(/(^|[^.\w])(window\.)?(confirm|prompt|alert)\(/g) || [];
     assert.equal(nativos.length, 0, `${path2.relative(RAIZ, f)}: quedan diálogos nativos (${nativos.length}) — usa Modal.confirm/prompt/alert`);
   }
-  assert.match(leer("public", "js", "ui", "modal.js"), /\n  alert\(\{/, "modal.js debe ofrecer Modal.alert");
+  assert.match(leer("public", "js", "ui", "modal.js"), /\n {2}alert\(\{/, "modal.js debe ofrecer Modal.alert");
   // CSS muerto fuera; .badge una sola vez; modal-backdrop oculto por defecto.
   const cmd = leer("public", "css", "ceco-command.css").replace(/\/\*[\s\S]*?\*\//g, "");
   assert.ok(!/\.sig--/.test(cmd), ".sig--* no tenía consumidores y debe estar fuera");

@@ -59,7 +59,7 @@ function texto(v) {
 function parseCSV(t) {
   const filas = [];
   let campo = "", fila = [], enComillas = false;
-  const s = t.replace(/^﻿/, "");
+  const s = t.replace(/^\uFEFF/, ""); // BOM (antes iba el carácter literal, invisible)
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
     if (enComillas) {

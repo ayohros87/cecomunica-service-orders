@@ -81,15 +81,15 @@ function parseControles(html) {
 
   for (const m of resto.matchAll(/<input([^>]*)>/g)) {
     const attrs = m[1];
-    const cls = (attrs.match(/class="([^"]*)"/) || [, ""])[1];
+    const cls = (attrs.match(/class="([^"]*)"/) || [undefined, ""])[1];
     const el = new FakeEl(cls.split(/\s+/).filter(Boolean));
-    el.value = (attrs.match(/value="([^"]*)"/) || [, ""])[1];
+    el.value = (attrs.match(/value="([^"]*)"/) || [undefined, ""])[1];
     el.checked = /\schecked(\s|$|>)/.test(attrs);
     els.push(el);
   }
 
   for (const m of resto.matchAll(/<(?:td|span|button|div|label)([^>]*)>/g)) {
-    const cls = (m[1].match(/class="([^"]*)"/) || [, ""])[1];
+    const cls = (m[1].match(/class="([^"]*)"/) || [undefined, ""])[1];
     if (cls) els.push(new FakeEl(cls.split(/\s+/).filter(Boolean)));
   }
   return els;
