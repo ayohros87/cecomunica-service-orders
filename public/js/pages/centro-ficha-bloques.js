@@ -305,6 +305,17 @@ Object.assign(window.Centro, {
     return Math.max(0, total - Number(c.baja_cancelado_total || 0));
   },
 
+  // Composición del contrato (2026-09-28): desde septiembre todo contrato
+  // nuevo es "Servicio" y la propiedad va por línea, así que el tipo ya no
+  // dice si es alquiler o propio. Chip pequeño junto al número: Alquiler /
+  // Propio / Mixto · N alq / M prop; DEMO/TEMP/REEMP conservan su nombre.
+  // Regla en js/domain/contratoComposicion.js.
+  _compChipHtml(c) {
+    const CC = (typeof ContratoComposicion !== 'undefined') ? ContratoComposicion : null;
+    if (!CC || !c) return this.esc(c?.tipo_contrato || c?.codigo_tipo || '—');
+    return `<span class="${CC.chipClass(c)}" title="${this.esc(CC.resumen(c))}">${this.esc(CC.etiqueta(c))}</span>`;
+  },
+
   // Fila estándar de un contrato operativo (la comparten la tabla principal
   // y el pliegue de "menores"). SIN acciones por contrato (decisión
   // 2026-08-28): renovar/aumentar/terminar son actos de la CUENTA y viven en
@@ -315,7 +326,7 @@ Object.assign(window.Centro, {
   _filaContrato(c) {
     return `<tr>
       <td class="cg-mono"><a href="#" onclick="Centro.verContrato('${this.esc(c.id)}'); return false;">${this.esc(c.contrato_id || c.id)}</a></td>
-      <td>${this.esc(c.tipo_contrato || c.codigo_tipo || '—')}</td>
+      <td>${this._compChipHtml(c)}</td>
       <td>${this.esc(this._estadoLabel(c))}${c.cancelacion_pendiente && this._esVigente(c)
         ? ` <span class="cg-venc por_vencer" title="El equipo ya volvió y el contrato sigue vigente — hay que cerrarlo">por cerrar</span>` : ''}</td>
       <td style="text-align:right;">${this._unidadesActivas(c)}</td>
@@ -371,7 +382,7 @@ Object.assign(window.Centro, {
     const reg = c.regularizacion;
     this._abrirModalA({
       titulo: `<span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>
-        <span style="font-weight:400; color:var(--fg-3); font-size:13.5px;"> · ${this.esc(c.tipo_contrato || c.codigo_tipo || '')} · ${this.esc(this._estadoLabel(c))}</span>`,
+        <span style="font-weight:400; color:var(--fg-3); font-size:13.5px;"> · ${this._compChipHtml(c)} · ${this.esc(this._estadoLabel(c))}</span>`,
       cuerpo: `
       <div style="margin:0 0 10px;">${this._vidaHtml(c)}</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 24px; margin-bottom:10px;">

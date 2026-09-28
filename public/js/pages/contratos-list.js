@@ -19,6 +19,33 @@ window.ContratosLista = {
     else if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
+  // ── Composición (2026-09-28) ─────────────────────────────────────
+  // Desde septiembre todo contrato nuevo es "Servicio" y la propiedad va por
+  // línea, así que "Tipo" decía Servicio en todos. La columna muestra la
+  // composición derivada de las líneas (Alquiler / Propio / Mixto) para SERV y
+  // ALQ/PROP viejos; DEMO/TEMP/REEMP conservan su nombre. Regla en
+  // js/domain/contratoComposicion.js.
+  _CC() { return (typeof ContratoComposicion !== 'undefined') ? ContratoComposicion : null; },
+  tipoTexto(data) {
+    const CC = this._CC();
+    return CC ? CC.etiqueta(data) : (data.tipo_contrato || '-');
+  },
+  tipoHtml(data) {
+    const CC = this._CC();
+    if (!CC) return CS.esc(data.tipo_contrato || '-');
+    const grupo = CC.grupo(data);
+    // Sin grupo (DEMO/TEMP/REEMP, o sin líneas): texto plano, como antes.
+    if (!grupo) return CS.esc(CC.etiqueta(data));
+    return `<span class="${CC.chipClass(data)}" title="${CS.esc(CC.resumen(data))}">${CS.esc(CC.etiqueta(data))}</span>`;
+  },
+  composicionSel() {
+    return document.querySelector('#filtroComposicionChips .filter-chip.active')?.dataset.comp || '';
+  },
+  setComposicion(grupo) {
+    document.querySelectorAll('#filtroComposicionChips .filter-chip').forEach(ch =>
+      ch.classList.toggle('active', (ch.dataset.comp || '') === (grupo || '')));
+  },
+
   // Chip de seriales — INFORMATIVO (archivo, 2026-09-09). Antes era un botón
   // que llevaba a completar seriales; asignar seriales es trabajo y el trabajo
   // vive en el Centro. Aquí solo dice cuántos quedaron registrados. La única
@@ -108,7 +135,7 @@ window.ContratosLista = {
       // Dos causas distintas, las dos verificadas contra el pool — no es un
       // "no sé" disfrazado, por eso no lleva el borde punteado del gris.
       title = data.devolucion_no_aplica_motivo === 'sin_unidades'
-        ? 'Se revisó el pool al entregarse la renovación: no queda ningún equipo de CeComunica por recuperar'
+        ? 'Se revisó el pool al entregarse la renovación: no queda ningún equipo de Cecomunica por recuperar'
         : 'Contrato Propio — los equipos son del cliente, no hay nada que recuperar';
     } else { // sin_registro
       css = 'background:#F8FAFC;color:#6B7884;border:1px dashed #C2CCD6;';
@@ -237,7 +264,7 @@ window.ContratosLista = {
         d.contrato_id || d.id,
         d.cliente_nombre || '',
         d.cliente_rucdv || d.cliente_ruc || '',
-        d.tipo_contrato || '',
+        this.tipoTexto(d),
         d.accion || '',
         (d.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0),
         d.estado || '',
@@ -326,7 +353,7 @@ window.ContratosLista = {
       <td style="width:34px;">${ArchivoExpediente.botonHtml('contrato', id)}</td>
       <td class="td-primary"><span class="contrato-id">${data.contrato_id || '-'}</span> ${iconoComision}</td>
       <td><strong style="color:var(--fg-1); font-weight:600;">${esc(data.cliente_nombre || '-')}</strong></td>
-      <td>${esc(data.tipo_contrato || '-')}</td>
+      <td>${ContratosLista.tipoHtml(data)}</td>
       <td>${esc(data.accion || '-')}</td>
       <td style="text-align:center;" data-contrato-equipos="${id}"><span style="opacity:0.3;"><i data-lucide="loader"></i></span></td>
       <td class="estado-cell">
@@ -390,7 +417,7 @@ window.ContratosLista = {
         </div>
       </div>
       <div class="row">
-        <div class="t2">${esc(data.tipo_contrato || '-')} · ${esc(data.accion || '-')}</div>
+        <div class="t2">${ContratosLista.tipoHtml(data)} · ${esc(data.accion || '-')}</div>
         ${ContratosLista.verMontos() ? `<div class="t1">${totalStr}</div>` : ''}
       </div>
       <div class="acciones">${accionesMovilHtml}</div>
@@ -403,8 +430,14 @@ window.ContratosLista = {
     const mostrarInactivos = document.getElementById('chkMostrarInactivos')?.checked;
     const estadoSel        = document.getElementById('filtroEstado')?.value || '';
     const soloDevolucion   = document.getElementById('chkSoloDevolucion')?.checked;
+    const composicion      = this.composicionSel();
+    const CC               = this._CC();
 
     return data.filter(doc => {
+      // Composición (Alquiler / Propio / Mixto): se lee de las líneas, así que
+      // corre sobre lo YA CARGADO, como el de devolución — Firestore no puede
+      // consultar "todas las líneas son propio".
+      if (composicion && CC && !CC.coincide(doc, composicion)) return false;
       if (soloDevolucion) {
         // Los anulados son justo donde más duele un equipo olvidado, así que
         // este filtro ignora "Mostrar inactivos": esconderlos vaciaría la
@@ -431,6 +464,7 @@ window.ContratosLista = {
         estado: document.getElementById('filtroEstado')?.value || '',
         inactivos: !!document.getElementById('chkMostrarInactivos')?.checked,
         devolucion: !!document.getElementById('chkSoloDevolucion')?.checked,
+        composicion: this.composicionSel(),
       }));
     } catch (_) { /* sin persistencia */ }
   },
@@ -450,14 +484,16 @@ window.ContratosLista = {
     if (chkIna) chkIna.checked = !!f.inactivos;
     const chkDev = document.getElementById('chkSoloDevolucion');
     if (chkDev) chkDev.checked = !!f.devolucion;
+    if (['alquiler', 'propio', 'mixto'].includes(f.composicion)) this.setComposicion(f.composicion);
   },
 
-  // El filtro de devolución corre sobre lo YA CARGADO, no sobre la colección:
-  // "sin registro" es la AUSENCIA de devolucion_estado, y Firestore no puede
-  // consultar por un campo que no existe. Decirlo evita que la bandeja se lea
-  // como "estos son todos" cuando solo son los de las páginas cargadas.
+  // Los filtros de devolución y de composición corren sobre lo YA CARGADO, no
+  // sobre la colección: "sin registro" es la AUSENCIA de devolucion_estado y
+  // la composición se lee de las líneas — Firestore no puede consultar ninguna
+  // de las dos. Decirlo evita que la bandeja se lea como "estos son todos"
+  // cuando solo son los de las páginas cargadas.
   avisoAlcanceDevolucion() {
-    if (!document.getElementById('chkSoloDevolucion')?.checked) return '';
+    if (!document.getElementById('chkSoloDevolucion')?.checked && !this.composicionSel()) return '';
     return ` · <span class="td-muted" title="El filtro se aplica a los contratos ya cargados. Usa «Cargar más» para ampliar el alcance.">de ${CS.contratos.length} cargado(s)</span>`;
   },
 
@@ -515,7 +551,17 @@ window.ContratosLista = {
       const tabla      = document.getElementById('tablaContratos');
       const listaMovil = document.getElementById('listaContratosMovil');
       const estadoSel  = document.getElementById('filtroEstado')?.value || '';
-      const clienteSearch      = document.getElementById('filtroCliente')?.value.trim() || '';
+      // "alq" / "prop" / "mixto" en el buscador son el filtro de composición,
+      // no una búsqueda (nadie se llama así): se enciende el chip y el texto
+      // se retira para que la pantalla diga lo que está filtrando.
+      const inpBusqueda = document.getElementById('filtroCliente');
+      const sinonimo = reset ? this._CC()?.sinonimoFiltro(inpBusqueda?.value) : '';
+      if (sinonimo) {
+        this.setComposicion(sinonimo);
+        if (inpBusqueda) inpBusqueda.value = '';
+        this.guardarFiltros();
+      }
+      const clienteSearch      = inpBusqueda?.value.trim() || '';
       const clienteSearchLower = clienteSearch.toLowerCase();
       const matchesCliente     = c => {
         if (!clienteSearchLower) return true;
@@ -841,9 +887,18 @@ window.ContratosLista = {
         if (chkPnd) chkPnd.checked = false;
         if (chkIna) chkIna.checked = false;
         if (chkDev) chkDev.checked = false;
+        self.setComposicion('');
         self.cargar(true);
       });
     }
+
+    // Filtro "Composición" (Todas / Alquiler / Propio / Mixto), sobre lo cargado.
+    document.querySelectorAll('#filtroComposicionChips .filter-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        self.setComposicion(chip.dataset.comp || '');
+        self.cargar(true);
+      });
+    });
 
     const chkMostrarInactivos = document.getElementById('chkMostrarInactivos');
     if (chkMostrarInactivos) {

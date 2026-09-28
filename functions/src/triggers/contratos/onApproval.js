@@ -348,12 +348,20 @@ const onContratoActivado = onDocumentUpdated(
         } catch (e) { /* best-effort */ }
       }
       const contratoFecha = after.creado_en?.toDate ? after.creado_en.toDate().toISOString().slice(0, 10) : null;
+      // Composición junto al tipo (2026-09-28): "Servicio" ya no dice si es
+      // alquiler o propio — eso va por línea. Misma lectura que
+      // public/js/domain/contratoComposicion.js (alquiler = la línea sin modalidad).
+      const nAlqF = (after.equipos || []).filter(e => e.modalidad !== "propio").reduce((s, e) => s + Number(e.cantidad || 0), 0);
+      const nProF = (after.equipos || []).filter(e => e.modalidad === "propio").reduce((s, e) => s + Number(e.cantidad || 0), 0);
+      const composicion = nAlqF && nProF ? ` · mixto: ${nAlqF} en alquiler / ${nProF} propio${nProF === 1 ? "" : "s"}`
+        : nProF ? ` · ${nProF} equipo${nProF === 1 ? "" : "s"} propio${nProF === 1 ? "" : "s"} del cliente`
+          : nAlqF ? ` · ${nAlqF} equipo${nAlqF === 1 ? "" : "s"} en alquiler` : "";
       await G.avisoFacturacion({
         subject: `FACTURACIÓN: ${esRenov ? "renovación" : "contrato"} ACTIVO — ${after.cliente_nombre || "Cliente"} (${after.contrato_id || contratoId})`,
         titulo: `${esRenov ? "Renovación activa" : "Contrato activo"} — alta de facturación y servicio`,
         cuerpo: `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
             El contrato <b>${escapeHtml(after.contrato_id || contratoId)}</b>
-            (${escapeHtml(after.tipo_contrato || "—")} · ${escapeHtml(after.duracion || "—")}) de
+            (${escapeHtml(after.tipo_contrato || "—")}${escapeHtml(composicion)} · ${escapeHtml(after.duracion || "—")}) de
             <b>${escapeHtml(after.cliente_nombre || "—")}</b> quedó <b>activo</b>${after.firmado_tipo === "digital" ? " con firma digital" : ""}.
             ${esperando
               ? "Lleva equipo por entregar: <b>la facturación arranca en la fecha de entrega</b> (te avisaremos cuando se entregue)."

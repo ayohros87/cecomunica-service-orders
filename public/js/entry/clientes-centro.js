@@ -36,6 +36,8 @@ import '/js/domain/regularizacion.js';
 import '/js/domain/pendientes.js';
 import '/js/domain/gestionAutorizacion.js';
 import '/js/domain/contratoFirma.js';
+// Chip de composición (Alquiler / Propio / Mixto) junto al número del contrato (2026-09-28).
+import '/js/domain/contratoComposicion.js';
 // "Documento completo" abre el papel correcto (v2 o clásico) — auditoría UX 2026-09-28.
 import '/js/domain/documentoContrato.js';
 import '/js/vendor/lucide.min.js';

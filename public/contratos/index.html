@@ -192,6 +192,18 @@
             <button type="button" class="filter-chip" data-estado="anulado">Anulado</button>
           </div>
 
+          <!-- Composición (2026-09-28): Alquiler / Propio / Mixto leído de las
+               líneas del contrato. Corre sobre lo YA CARGADO (como Devolución
+               pendiente): la composición no es un campo consultable. Teclear
+               "alq" / "prop" en el buscador enciende estos chips. -->
+          <div class="filter-chips" id="filtroComposicionChips" role="tablist" aria-label="Filtrar por composición"
+               title="Alquiler, propio o mixto, según las líneas del contrato. Se aplica a los contratos ya cargados.">
+            <button type="button" class="filter-chip active" data-comp="">Todas</button>
+            <button type="button" class="filter-chip" data-comp="alquiler">Alquiler</button>
+            <button type="button" class="filter-chip" data-comp="propio">Propio</button>
+            <button type="button" class="filter-chip" data-comp="mixto">Mixto</button>
+          </div>
+
           <div style="flex:1;"></div>
 
           <label class="toggle-pill" title="Contratos con equipos que el cliente todavía no devuelve, o sin registro de devolución. Incluye anulados aunque «Mostrar inactivos» esté apagado."><input type="checkbox" id="chkSoloDevolucion"> <i data-lucide="package-minus" style="width:14px;height:14px;"></i> Devolución pendiente</label>
@@ -239,7 +251,7 @@
               <th style="width:34px;" aria-label="Abrir el expediente"></th>
               <th class="sortable" onclick="ContratosLista.ordenarPor('contrato_id')" style="width:120px;">ID</th>
               <th class="sortable" onclick="ContratosLista.ordenarPor('cliente_nombre')">Cliente</th>
-              <th>Tipo</th>
+              <th title="Composición del contrato: alquiler, propio o mixto según sus líneas. Demo, Temporal y Reemplazo conservan su tipo.">Tipo</th>
               <th>Acción</th>
               <th style="width:72px; text-align:center;">Equipos</th>
               <th class="sortable" onclick="ContratosLista.ordenarPor('estado')" style="width:170px;">Estado</th>

@@ -567,7 +567,7 @@ Object.assign(window.Centro, {
         : this.esc(this._estadoLabel(c));
       return `<tr style="color:var(--fg-3);">
         <td class="cg-mono"><a href="#" onclick="Centro.verContrato('${this.esc(c.id)}'); return false;">${this.esc(c.contrato_id || c.id)}</a></td>
-        <td>${this.esc(c.tipo_contrato || c.codigo_tipo || '—')}</td>
+        <td>${this._compChipHtml(c)}</td>
         <td>${estadoTxt}</td>
         <td style="text-align:right;">${this._unidadesActivas(c)}</td></tr>`;
     }).join('');

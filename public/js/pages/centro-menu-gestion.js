@@ -173,7 +173,7 @@ Object.assign(window.Centro, {
     const bloques = [...grupos.entries()].map(([k, items]) => {
       const c = this.contratos.find(x => x.id === k);
       const titulo = c
-        ? `Contrato ${esc(c.contrato_id || '—')}${c.tipo_contrato ? ` · ${esc(c.tipo_contrato)}` : ''}`
+        ? `Contrato ${esc(c.contrato_id || '—')} · ${this._compChipHtml(c)}`
         : 'Equipos sin contrato registrado';
       const filas = items
         .sort((a, b) => String(a.serial || '').localeCompare(String(b.serial || '')))

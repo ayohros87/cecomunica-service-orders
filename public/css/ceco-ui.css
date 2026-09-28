@@ -437,6 +437,27 @@ body{
 .chip-estado.chip-espera     { background: var(--chip-espera-bg);     color: var(--chip-espera-fg);     border-color: var(--chip-espera-bd); }
 .chip-estado.chip-porasignar { background: var(--chip-porasignar-bg); color: var(--chip-porasignar-fg); border-color: var(--chip-porasignar-bd); }
 
+/* Composición del contrato (2026-09-28, js/domain/contratoComposicion.js):
+   Alquiler / Propio / Mixto leído de las líneas; DEMO/TEMP/REEMP salen neutros.
+   Tintes suaves a propósito: el estado sigue siendo la única voz fuerte. */
+.chip-comp {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: var(--fs-caption, 12px);
+  font-weight: 600;
+  line-height: 18px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  vertical-align: middle;
+  font-family: var(--font-body);
+}
+.chip-comp-alquiler { background: #EFF6FF; color: #1D4ED8; border-color: #BFDBFE; }
+.chip-comp-propio   { background: #F0FDF4; color: #15803D; border-color: #BBF7D0; }
+.chip-comp-mixto    { background: #FAF5FF; color: #7E22CE; border-color: #E9D5FF; }
+.chip-comp-otro     { background: var(--gray-100); color: var(--gray-600); border-color: var(--gray-200); }
+
 /* Priority chips */
 .chip-prioridad {
   display: inline-flex;
