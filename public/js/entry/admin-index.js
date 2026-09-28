@@ -4,6 +4,9 @@
 // orden importa igual que antes. Vite lo empaqueta y le pone hash.
 import '/js/firebase-init.js';
 import '/js/ui/toast.js';
+// Ver como abre con Modal.sheet: sin esto el botón quedaba muerto (auditoría UX 2026-09-28).
+import '/js/ui/modal.js';
+import '/js/ui/busy.js';
 import '/js/services/ordenesService.js';
 import '/js/services/contratosService.js';
 import '/js/services/cotizacionesService.js';
