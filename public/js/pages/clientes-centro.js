@@ -128,14 +128,48 @@ window.Centro = {
 
   setSoloActivos(on) {
     this.soloActivos = !!on;
+    this._carteraCache = null;
     try { localStorage.setItem('cg_solo_activos', on ? '1' : '0'); } catch (e) { /* sin persistencia */ }
     this.cargarLista(true);
+  },
+
+  // "Mi cartera" desde el servidor (auditoría UX 2026-09-28, P0 #15): antes
+  // se filtraba en el navegador sobre páginas de 30 clientes de toda la base
+  // y la vista principal del vendedor podía salir en blanco.
+  async _cargarCartera() {
+    const clave = this.soloActivos ? 'act' : 'todos';
+    // Caché corta: la búsqueda filtra aquí sin volver a pedir la cartera por tecla.
+    if (!this._carteraCache || this._carteraCache.clave !== clave || Date.now() - this._carteraCache.at > 60000) {
+      const docs = await ClientesService.listClientesPorVendedor(this.uid, { onlyActive: this.soloActivos });
+      this._carteraCache = { clave, docs, at: Date.now() };
+    }
+    const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const words = norm(this.term).split(/\s+/).filter(Boolean);
+    const visibles = words.length
+      ? this._carteraCache.docs.filter(c => {
+          const txt = norm([c.nombre, c.rucdv_norm, c.ruc, c.telefono, c.email].filter(Boolean).join(' '));
+          return words.every(w => txt.includes(w));
+        })
+      : this._carteraCache.docs;
+    const cont = document.getElementById('cgLista');
+    cont.innerHTML = visibles.length
+      ? visibles.map(c => this._filaCliente(c)).join('')
+      : `<div class="cg-empty">${this.term ? 'Ningún cliente de tu cartera coincide con la búsqueda.' : 'No tienes clientes asignados todavía.'}</div>`;
+    document.getElementById('btnMas').classList.add('hidden');
+    const n = visibles.length;
+    document.getElementById('cgResumen').textContent =
+      `${n} cliente${n === 1 ? '' : 's'}${this.soloActivos ? ' activos' : ''} en tu cartera`;
+    if (window.lucide?.createIcons) lucide.createIcons();
   },
 
   async cargarLista(reset) {
     if (reset) { this.cursor = null; document.getElementById('cgLista').innerHTML = ''; }
     document.getElementById('segMios').classList.toggle('is-on', this.cartera === 'mios');
     document.getElementById('segTodos').classList.toggle('is-on', this.cartera === 'todos');
+    if (this.cartera === 'mios' && typeof ClientesService.listClientesPorVendedor === 'function') {
+      try { await this._cargarCartera(); return; }
+      catch (e) { console.warn('[centro] cartera desde el servidor no disponible, se pagina:', e?.message || e); }
+    }
     try {
       // "Solo activos" filtra EN EL SERVIDOR con la misma semántica del módulo
       // de clientes (where activo == true): antes se filtraba en cliente con
@@ -152,12 +186,19 @@ window.Centro = {
         ? docs.filter(c => c.vendedor_asignado === this.uid)
         : docs;
       const cont = document.getElementById('cgLista');
+      cont.querySelector('.cg-empty')?.remove();
       if (reset && !visibles.length && !lastDoc) {
         cont.innerHTML = `<div class="cg-empty">${this.term
           ? 'Ningún cliente coincide con la búsqueda.'
           : (this.cartera === 'mios' ? 'No tienes clientes asignados todavía.' : 'Sin clientes registrados.')}</div>`;
       } else {
         cont.insertAdjacentHTML('beforeend', visibles.map(c => this._filaCliente(c)).join(''));
+        // Página sin clientes de la cartera pero con más por traer: se dice,
+        // en vez de dejar el directorio en blanco (auditoría UX 2026-09-28).
+        if (!cont.querySelector('.cg-row') && lastDoc) {
+          cont.innerHTML = `<div class="cg-empty">Todavía no aparecen clientes de tu cartera en lo cargado.
+            <div class="cta"><button class="btn btn-ghost cg-act" onclick="Centro.cargarLista(false)">Cargar más</button></div></div>`;
+        }
       }
       document.getElementById('btnMas').classList.toggle('hidden', !lastDoc);
       const n = cont.querySelectorAll('.cg-row').length;
@@ -301,16 +342,8 @@ window.Centro = {
     const st = (typeof Regularizacion !== 'undefined') ? Regularizacion.estampa(this._reg()) : null;
     return st ? { cuenta_regularizacion: st } : {};
   },
-  _pintarChipReg(c) {
-    const el = document.getElementById('fRegChip');
-    if (!el) return;
-    const chip = (typeof Regularizacion !== 'undefined') ? Regularizacion.chip(c?.regularizacion) : null;
-    if (!chip) { el.innerHTML = ''; return; }
-    const cls = chip.tono === 'bad' ? 'cg-chip--bad' : chip.tono === 'warn' ? 'cg-chip--warn' : 'cg-chip--muted';
-    el.innerHTML = `<button type="button" class="cg-chip ${cls}" onclick="Centro.verRegularizacion()"
-        style="border:0; cursor:pointer; font:inherit; font-size:12px;" title="Qué le falta a esta cuenta para estar bien registrada">
-        ${this.esc(chip.texto)}</button>`;
-  },
+  // _pintarChipReg vive más abajo (chips de la cabecera): había dos y el
+  // objeto literal se quedaba con el segundo (auditoría UX 2026-09-28).
   // Panel "Qué falta": una fila por componente con la acción que lo cierra.
   verRegularizacion() {
     const r = this._reg();
@@ -507,6 +540,67 @@ window.Centro = {
 
   // 'aprobado' también opera (la mayoría del histórico nunca pasa a 'activo').
   _esVigente(c) { return ['activo', 'aprobado'].includes(c?.estado); },
+  // Candado de las acciones que se disparan desde onclick en texto (Ahora,
+  // menú ⋯, pie del expediente): el mismo gesto sale de varios botones, así
+  // que el candado va por CLAVE y el botón que se tocó solo muestra el
+  // "Guardando…" (auditoría UX 2026-09-28, T3).
+  _candado(key, fn, label = 'Guardando…') {
+    const ae = document.activeElement;
+    const btn = ae && ae.tagName === 'BUTTON' ? ae : null;
+    return withBusy(null, () => (btn ? withBusy(btn, fn, { label, rethrow: false }) : fn()),
+      { key, rethrow: false });
+  },
+
+  // ¿Bodega ya asignó los seriales? Sin eso el Anexo A del enlace de firma
+  // sale VACÍO (auditoría UX 2026-09-28, P0 #11). 'legacy' es el histórico
+  // que no pasa por bodega; la renovación sin equipo y el contrato sin
+  // unidades no piden seriales (onApproval los da por asignados solo).
+  _serialesListos(c) {
+    if (!c) return false;
+    if (['asignados', 'legacy'].includes(c.seriales_estado)) return true;
+    if (c.accion === 'Renovación' && c.renovacion_sin_equipo) return true;
+    return !(c.equipos || []).some(l => Number(l.cantidad || 0) > 0);
+  },
+  // Etiqueta legible del estado del contrato: la clave cruda
+  // (pendiente_aprobacion) salía en títulos e Histórico (auditoría UX
+  // 2026-09-28, T1). 'aprobado' sin activar ni firmar es el que espera firma.
+  _estadoLabel(c) {
+    const e = c?.estado || '';
+    if (e === 'aprobado') return (c.fecha_activacion || c.firmado) ? 'Aprobado' : 'Aprobado (sin firma)';
+    return ({ pendiente_aprobacion: 'Pendiente de aprobación', activo: 'Activo', vencido: 'Vencido',
+      anulado: 'Anulado', inactivo: 'Inactivo' })[e] || e || '—';
+  },
+  // Toast con un botón (Toast.show solo pinta texto): para ofrecer el paso
+  // siguiente sin un confirm que corta el flujo (auditoría UX 2026-09-28).
+  _toastAccion(msg, label, onClick, tipo = 'ok', ms = 9000) {
+    if (!window.Toast?.persist) { Toast.show(msg, tipo); return; }
+    const el = Toast.persist(msg, tipo);
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn btn-ghost cg-act'; b.textContent = label;
+    b.style.marginLeft = '10px';
+    b.addEventListener('click', () => { el.remove(); onClick(); });
+    el.appendChild(b);
+    setTimeout(() => el.remove(), ms);
+  },
+  // "Documento completo" respeta el papel del contrato (v2 o clásico).
+  _urlDocumento(c) {
+    return window.DocumentoContrato
+      ? DocumentoContrato.urlDocumento(c.id, c, { base: '../contratos/' })
+      : `../contratos/documento.html?id=${encodeURIComponent(c.id)}`;
+  },
+
+  // Contratos en trámite que todavía NO operan (pendiente de aprobación o
+  // aprobados sin firmar): una renovación ya ACTIVA sigue en _tramitesContrato
+  // por su regularización, pero opera — no va aquí.
+  _idsEnTramite() {
+    return new Set(this._tramitesContrato().filter(c => c.estado !== 'activo').map(c => c.id));
+  },
+  // Operativo = vigente, no renovado y fuera del trámite. Una sola regla para
+  // la franja, los chips, la tabla y el estado de la cuenta (auditoría UX
+  // 2026-09-28, P0 #9: la franja contaba la renovación sin firmar).
+  _esOperativo(c, enTramite = this._idsEnTramite()) {
+    return this._esVigente(c) && !enTramite.has(c.id) && !this._renovadoPor(c);
+  },
 
   // Duración legible: duracion_dias MANDA sobre el texto (2026-09-02, caso
   // FANLYC: el formulario viejo pisó "4 días" con "1 meses" — su select no
@@ -528,11 +622,18 @@ window.Centro = {
   _aplicaVenc(c) { return ['SERV', 'ALQ', 'PROP', 'REEMP'].includes(this._codigoTipo(c)); },
   // Renovación REAL vigente que ya cubre a este contrato (un REEMP amarrado
   // como origen NO cuenta: solo sustituye equipos, no renueva el período).
+  // Auditoría UX 2026-09-28 (P0 #9): una renovación EN TRÁMITE (pendiente de
+  // aprobación, o aprobada y sin firmar) todavía NO renueva: renovado_por_ids
+  // se escribe al crearla, y contarla ya marcaba "renovado ✓" a los orígenes y
+  // dejaba la ficha en "Sin contratos operativos" antes de que el cliente
+  // firmara. Solo consume a sus orígenes cuando sale del trámite (firmada,
+  // activa, o un aprobado viejo del histórico que opera sin firma).
   _renovadoPor(c) {
+    const enTramite = this._idsEnTramite();
     for (const id of (c?.renovado_por_ids || [])) {
       const r = this.contratos.find(x => x.id === id);
       if (!r || r.deleted || this._codigoTipo(r) === 'REEMP') continue;
-      if (this._esVigente(r)) return r;
+      if (this._esVigente(r) && !enTramite.has(r.id)) return r;
       // 2026-08-31 (caso C COMUNICA): la renovación TERMINÓ (vencido tras la
       // terminación total) y su origen 'aprobado' de junio RESUCITÓ como
       // operativo. Una renovación que llegó a vivir consume a sus orígenes
@@ -610,12 +711,17 @@ window.Centro = {
         if (esAprobador) it('warn', `Aprobar el contrato ${id}`,
           `${tipoTxt} · ${unid} unid. · $${Number(c.total_mensual || 0).toFixed(2)}/mes — revisa el detalle antes de aprobar`,
           B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`) + B('Aprobar', `Centro.aprobarContrato('${this.esc(c.id)}')`, true));
-        else it('info', `El contrato ${id} espera aprobación de ventas`, tipoTxt,
+        else it('info', `El contrato ${id} espera aprobación de administración`, tipoTxt,
           B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`));
       } else if (c.firmado_pendiente_validacion) {
         if (esAprobador) it('warn', `Validar al firmante del contrato ${id}`,
           'Firmó una persona distinta al representante registrado — revisa la cédula, el selfie y la firma',
           B('Validar firmante…', `Centro.aceptarFirmante('${this.esc(c.id)}')`, true));
+      } else if (ContratoFirma.esperando(c) && !this._serialesListos(c) && !c.firma_solicitud_id) {
+        // Sin seriales no se firma: el anexo saldría vacío (auditoría UX 2026-09-28).
+        it('info', `El contrato ${id} espera que bodega asigne los seriales`,
+          'Se asignan en Almacén · Asignar; al quedar asignados se habilita el envío para firma',
+          B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`));
       } else if (ContratoFirma.esperando(c) && this.puedeCrearGestion()) {
         it('warn', `El contrato ${id} espera la firma del cliente`,
           c.firma_solicitud_estado === 'pendiente' ? 'El enlace de firma ya se envió — se puede reenviar' : 'Envíale el enlace de firma digital, o imprime el contrato y sube el firmado desde el expediente',
@@ -659,6 +765,22 @@ window.Centro = {
         B('Validar firmante…', `Centro.aceptarFirmante('${this.esc(c.id)}')`, true));
     }
 
+    // Aprobado y sin firmar pasados los 45 días: salía del trámite sin aviso
+    // (auditoría UX 2026-09-28). Solo contratos del flujo nuevo (con
+    // seriales_estado y no 'legacy'): el histórico 'aprobado' opera sin firma.
+    for (const c of (this.contratos || [])) {
+      if (vistos.has(c.id) || c.deleted || !ContratoFirma.esperando(c)) continue;
+      if (!c.seriales_estado || c.seriales_estado === 'legacy') continue;
+      const ref = c.fecha_aprobacion || c.fecha_creacion;
+      const d = ref?.toDate ? ref.toDate() : (ref ? new Date(ref) : null);
+      const n = d && !isNaN(d) ? Math.floor((Date.now() - d) / 86400000) : null;
+      if (n == null || n < 45) continue;
+      it('warn', `El contrato <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span> fue aprobado hace ${n} días y sigue sin firma`,
+        'Envíale el enlace de firma o sube el firmado; si ya no va, anúlalo',
+        B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`)
+        + (this.puedeCrearGestion() ? B('Enviar para firma', `Centro.enviarFirma('${this.esc(c.id)}')`, true) : ''));
+    }
+
     // Gestiones con trabajo pendiente.
     for (const g of (this.gestiones || [])) {
       const gid = `<span class="cg-mono">${this.esc(g.id)}</span>`;
@@ -672,7 +794,7 @@ window.Centro = {
           const sinCarta = esBaja && !g.carta_path;
           const esTaller = g.origen?.tipo === 'taller';
           const esDano = GestionesService.esReposicionDano(g);
-          it('warn', `Aprobar ${esBaja ? (g.terminacion_total_de?.length ? 'la TERMINACIÓN de la cuenta' : 'la baja de equipos') : esAum ? 'el aumento (enmienda)' : esDano ? 'el reemplazo POR DAÑO (con o sin cargo)' : esTaller ? 'el reemplazo que propuso el taller' : 'la excepción de garantía'} ${gid}`,
+          it('warn', `Aprobar ${esBaja ? (g.terminacion_total_de?.length ? 'la TERMINACIÓN de la cuenta' : 'la baja de equipos') : esAum ? 'el aumento (anexo)' : esDano ? 'el reemplazo POR DAÑO (con o sin cargo)' : esTaller ? 'el reemplazo que propuso el taller' : 'la excepción de garantía'} ${gid}`,
             sinCarta ? 'FALTA la carta del cliente — la aprobación está bloqueada hasta adjuntarla'
               : esTaller ? `Diagnóstico del taller (orden ${this.esc(g.origen?.orden_id || '—')}): ${this.esc(g.origen?.diagnostico || '—')}`
               : `${(g.items || []).length || (g.aumento?.lineas || []).length} renglón(es) — revisa la evidencia antes de aprobar`,
@@ -719,9 +841,10 @@ window.Centro = {
   // "Le toca a" — quién destraba la fila (derivado del texto de la acción).
   _tocaA(t) {
     const s = String(t || '').toLowerCase();
-    if (/espera aprobación de ventas/.test(s)) return 'ventas';
+    if (/espera aprobación de administración/.test(s)) return 'administración';
+    if (/espera que bodega/.test(s)) return 'bodega';
     if (/^aprobar|^validar|resolver|revisar/.test(s)) return 'ti';
-    if (/espera la firma/.test(s)) return 'el cliente · tú envías el enlace';
+    if (/espera la firma|sigue sin firma/.test(s)) return 'el cliente · tú envías el enlace';
     if (/necesita la carta/.test(s)) return 'ti · el cliente firma la carta';
     if (/bodega/.test(s)) return 'bodega';
     if (/venció|vence en|regulariz|sin contrato/.test(s)) return 'ti';
@@ -756,7 +879,8 @@ window.Centro = {
   pintarResumen() {
     const cont = document.getElementById('fResumen');
     if (!cont) return;
-    const vig = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c));
+    const enTram = this._idsEnTramite();
+    const vig = this.contratos.filter(c => this._esOperativo(c, enTram));
     const mensual = vig.reduce((s, c) => s + Number(c.total_mensual ?? c.total_con_itbms ?? 0), 0);
     const enContrato = this.equipos.filter(e => ['en_cliente', 'asignado_contrato'].includes(e.estado) && e.asignacion?.contrato_doc_id).length;
     const sinContrato = this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id).length;
@@ -813,7 +937,8 @@ window.Centro = {
     const el = document.getElementById('fRegChip');
     if (!el) return;
     const chips = [];
-    const vig = (this.contratos || []).filter(x => this._esVigente(x) && !this._renovadoPor(x));
+    const enTram = this._idsEnTramite();
+    const vig = (this.contratos || []).filter(x => this._esOperativo(x, enTram));
     const vencidos = vig.filter(x => this._vencInfo(x)?.estado === 'vencido').length;
     if (vencidos) chips.push(`<button type="button" class="cg-chip cg-chip--bad" style="border:0; cursor:pointer; font:inherit; font-size:12px;" onclick="Centro.abrirBloque('blkContratos')">${vencidos} contrato${vencidos === 1 ? '' : 's'} vencido${vencidos === 1 ? '' : 's'}</button>`);
     const chip = (typeof Regularizacion !== 'undefined') ? Regularizacion.chip(c?.regularizacion) : null;
@@ -1025,7 +1150,7 @@ window.Centro = {
     return `<tr>
       <td class="cg-mono"><a href="#" onclick="Centro.verContrato('${this.esc(c.id)}'); return false;">${this.esc(c.contrato_id || c.id)}</a></td>
       <td>${this.esc(c.tipo_contrato || c.codigo_tipo || '—')}</td>
-      <td>${this.esc(c.estado || '—')}${c.cancelacion_pendiente && this._esVigente(c)
+      <td>${this.esc(this._estadoLabel(c))}${c.cancelacion_pendiente && this._esVigente(c)
         ? ` <span class="cg-venc por_vencer" title="El equipo ya volvió y el contrato sigue vigente — hay que cerrarlo">por cerrar</span>` : ''}</td>
       <td style="text-align:right;">${this._unidadesActivas(c)}</td>
       <td>${this._vidaHtml(c)}</td>
@@ -1080,7 +1205,7 @@ window.Centro = {
     const reg = c.regularizacion;
     this._abrirModalA({
       titulo: `<span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>
-        <span style="font-weight:400; color:var(--fg-3); font-size:13.5px;"> · ${this.esc(c.tipo_contrato || c.codigo_tipo || '')} · ${this.esc(c.estado || '')}</span>`,
+        <span style="font-weight:400; color:var(--fg-3); font-size:13.5px;"> · ${this.esc(c.tipo_contrato || c.codigo_tipo || '')} · ${this.esc(this._estadoLabel(c))}</span>`,
       cuerpo: `
       <div style="margin:0 0 10px;">${this._vidaHtml(c)}</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 24px; margin-bottom:10px;">
@@ -1367,9 +1492,12 @@ window.Centro = {
     this.abrirGestion(`ct-${c.id}`);
   },
 
-  async subirFirmadoContrato(id, fileList) {
+  subirFirmadoContrato(id, fileList) {
     const files = [...(fileList || [])];
-    if (!files.length) return;
+    if (!files.length) return undefined;
+    return withBusy(null, () => this._subirFirmadoContrato(id, files), { key: 'subirFirmado:' + id, rethrow: false });
+  },
+  async _subirFirmadoContrato(id, files) {
     if (!this._puedeSubirFirmado()) { Toast.show('Solo administración o el vendedor suben el contrato firmado', 'warn'); return; }
     const c = this.contratos.find(x => x.id === id);
     if (!c) { Toast.show('Contrato no encontrado', 'bad'); return; }
@@ -1399,6 +1527,16 @@ window.Centro = {
         file = new File([blob], `firmado_${files.length}fotos.pdf`, { type: 'application/pdf' });
       } else { Toast.show('Sube UN PDF, o solo fotos (varias a la vez) — no mezclados', 'warn'); return; }
     } catch (e) { console.error(e); Toast.show('No se pudo preparar el archivo: ' + (e?.message || e), 'bad'); return; }
+    // Subir el firmado activa el contrato EN EL MISMO write, y la activación
+    // dispara facturación y comisión: se confirma con el nombre del archivo
+    // (auditoría UX 2026-09-28, P1).
+    if (modo === 'activacion' && !(await Modal.confirm({
+      title: 'Subir el firmado y activar', confirmLabel: 'Subir y activar',
+      message: `Archivo: <b>${this.esc(file.name)}</b> para el contrato <b class="cg-mono">${this.esc(legible)}</b>.
+        <br><br><b>Esto ACTIVA el contrato y arranca la facturación y la comisión.</b>
+        ${this._serialesListos(c) ? '' : '<br><br>Ojo: bodega todavía no asignó los seriales de este contrato.'}
+        Revisa que sea el documento firmado correcto antes de seguir.`,
+    }))) return;
     try {
       Toast.show('Subiendo contrato firmado…', '');
       const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
@@ -1438,7 +1576,10 @@ window.Centro = {
     }
   },
 
-  async aprobarContrato(id) {
+  aprobarContrato(id) {
+    return this._candado('aprobarContrato:' + id, () => this._aprobarContrato(id), 'Aprobando…');
+  },
+  async _aprobarContrato(id) {
     const c = this.contratos.find(x => x.id === id);
     if (!c || c.estado !== 'pendiente_aprobacion') { Toast.show('El contrato no está pendiente de aprobación', 'warn'); return; }
     try {
@@ -1449,7 +1590,7 @@ window.Centro = {
         fecha_modificacion: new Date(),
       });
       this._cerrarModal();
-      Toast.show(`Contrato ${c.contrato_id || id} aprobado — sigue la firma del cliente`, 'ok');
+      Toast.show(`Contrato ${c.contrato_id || id} aprobado — ${ContratoFirma.lleva(c) ? 'bodega asigna los seriales y luego sigue la firma del cliente' : 'sigue la entrega de los equipos'}`, 'ok');
       await this.abrir(this.cliente.id, { push: false });
     } catch (e) { console.error(e); Toast.show('No se pudo aprobar el contrato', 'bad'); }
   },
@@ -1464,8 +1605,15 @@ window.Centro = {
     if (!c || c.estado !== 'aprobado') { Toast.show('Solo contratos APROBADOS se envían a firma', 'warn'); return; }
     // Candado, no solo el botón escondido: un reemplazo no se manda a firmar.
     if (!ContratoFirma.lleva(c)) { Toast.show(`Este contrato no lleva firma: ${ContratoFirma.porQue(c)}`, 'warn'); return; }
-    this._cerrarModal();
     let sid = (c.firma_solicitud_id && c.firma_solicitud_estado === 'pendiente') ? c.firma_solicitud_id : null;
+    // El enlace congela el Anexo A con lo que haya en el pool: sin seriales
+    // asignados el cliente firmaría un contrato sin equipos (auditoría UX
+    // 2026-09-28, P0 #11). Un enlace ya enviado se deja ver/reenviar.
+    if (!sid && !this._serialesListos(c)) {
+      Toast.show('Bodega todavía no asignó los seriales; el anexo saldría vacío. Se habilita al quedar asignados en Almacén · Asignar.', 'warn', 7000);
+      return;
+    }
+    this._cerrarModal();
     try {
       if (!sid) {
         const t = (window.ContractTotals?.fromDoc) ? ContractTotals.fromDoc(c) : {};
@@ -1546,7 +1694,7 @@ window.Centro = {
           habilita después de abrir el documento.
           Debe firmarlo <b>${this.esc(rep)}</b> (representante legal) — el enlace se puede <b>reenviar</b>
           por WhatsApp si te lo recibe otro contacto. Si firma otra persona, la firma queda registrada
-          y ventas valida al firmante antes de activar. Al coincidir, el contrato se <b>activa solo</b>.</p>
+          y administración valida al firmante antes de activar. Al coincidir, el contrato se <b>activa solo</b>.</p>
         <div style="display:flex; gap:8px; margin-bottom:12px;">
           <input class="form-input" id="wfLink" value="${this.esc(url)}" readonly style="flex:1; font-size:12.5px;">
           <button class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('wfLink').value).then(()=>Toast.show('Enlace copiado — pégalo en WhatsApp','ok'))">Copiar</button>
@@ -1795,7 +1943,7 @@ window.Centro = {
             : a.es_regularizacion
             ? `Anexo de regularización ${gid} — contrato ${a.contrato_id || ''}`
             : a.contrato_papel && !a.contrato_doc_id
-            ? `Adenda de aumento ${gid} — contrato en papel ${a.contrato_id || ''}`
+            ? `Anexo de aumento ${gid} — contrato en papel ${a.contrato_id || ''}`
             : `Anexo de aumento ${gid} — contrato ${a.contrato_id || ''}`,
           declaracion: a.es_ajuste
             ? `Declaro que acepto ${[
@@ -1951,8 +2099,8 @@ window.Centro = {
     // Solo los trámites NO activos salen de la tabla: una renovación ya
     // ACTIVA es un contrato andando (va en la tabla) aunque su pipeline siga
     // visible en Gestiones hasta regularizar.
-    const tramiteIds = new Set(this._tramitesContrato().filter(c => c.estado !== 'activo').map(c => c.id));
-    const operativos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c) && !tramiteIds.has(c.id));
+    const tramiteIds = this._idsEnTramite();
+    const operativos = this.contratos.filter(c => this._esOperativo(c, tramiteIds));
     const historico = this.contratos.filter(c => !operativos.includes(c) && !tramiteIds.has(c.id));
     const mensualDe = (c) => Number(c.total_mensual ?? c.total_con_itbms ?? 0);
     const esMenor = (c) => mensualDe(c) <= 0 && !this._wcEnVentana(c);
@@ -2007,7 +2155,7 @@ window.Centro = {
       const renovador = this._renovadoPor(c);
       const estadoTxt = renovador
         ? `renovado por <span class="cg-mono">${this.esc(renovador.contrato_id || renovador.id)}</span>`
-        : this.esc(c.estado || '—');
+        : this.esc(this._estadoLabel(c));
       return `<tr style="color:var(--fg-3);">
         <td class="cg-mono"><a href="#" onclick="Centro.verContrato('${this.esc(c.id)}'); return false;">${this.esc(c.contrato_id || c.id)}</a></td>
         <td>${this.esc(c.tipo_contrato || c.codigo_tipo || '—')}</td>
@@ -2020,7 +2168,7 @@ window.Centro = {
     cont.innerHTML = `
       ${cuenta}
       ${tramiteIds.size ? `<p style="font-size:12px; color:var(--fg-4); margin:0 0 8px;">
-        ${tramiteIds.size} contrato(s) <b>en trámite</b> (aprobación/firma) — atiéndelos arriba en “Requiere tu acción” o en Gestiones.</p>` : ''}
+        ${tramiteIds.size} contrato(s) <b>en trámite</b> (aprobación, seriales o firma) — atiéndelos arriba en “Ahora” o en Gestiones.</p>` : ''}
       ${principales.length ? `<table class="cg-tabla">${THEAD}<tbody>${filas}</tbody></table>`
         : operativos.length ? '' : '<div class="cg-empty">Sin contratos operativos.</div>'}
       ${menores.length ? `<details style="margin-top:10px;">
@@ -2050,7 +2198,7 @@ window.Centro = {
         if (dias !== null) {
           const cls = dias < 0 ? 'vencido' : (dias <= this.AVISO_DIAS ? 'por_vencer' : 'vigente');
           const label = dias < 0 ? `vencido ${-dias} d` : `${dias} d`;
-          const refPapel = e.vigencia?.contrato_papel_ref ? `adenda al contrato en papel ${this.esc(e.vigencia.contrato_papel_ref)} · ` : '';
+          const refPapel = e.vigencia?.contrato_papel_ref ? `anexo al contrato en papel ${this.esc(e.vigencia.contrato_papel_ref)} · ` : '';
           return `<span class="cg-venc ${cls} num" title="Vence ${this._fmtFecha(fvU)} · ${refPapel}período estampado desde la orden de entrega — sin contrato formal (regularizar al renovar)">${label} *</span>`;
         }
       }
@@ -2441,7 +2589,7 @@ window.Centro = {
   // Contratos EN TRÁMITE (renovación de cuenta / contrato nuevo) como
   // expedientes de esta sección (pedido 2026-08-28: la renovación no aparecía
   // en Gestiones y solo se podía aprobar en el módulo viejo). El contrato ES
-  // el expediente: pipeline aprobación → firma → activación → regularización,
+  // el expediente: pipeline aprobación → seriales → firma → activación → regularización,
   // con las acciones aquí mismo.
   _tramitesContrato() {
     const dias = (t) => { const d = t?.toDate ? t.toDate() : (t ? new Date(t) : null); return d && !isNaN(d) ? (Date.now() - d) / 86400000 : null; };
@@ -2493,18 +2641,25 @@ window.Centro = {
     // orden de devolución (ContratoCierre / la ENTRADA).
     const llevaFirma = ContratoFirma.lleva(c);
     const pasos = llevaFirma ? [
-      ['Aprobación comercial', c.estado !== 'pendiente_aprobacion', 'llega a ventas@cecomunica.com'],
+      // Paso de bodega (auditoría UX 2026-09-28): el wizard y el expediente
+      // prometían "aprobación → seriales → firma" y la línea no lo pintaba.
+      ['Aprobación de administración', c.estado !== 'pendiente_aprobacion', 'la aprueba administración o gerencia'],
+      ['Seriales de bodega', c.estado !== 'pendiente_aprobacion' && this._serialesListos(c),
+        c.seriales_estado === 'asignados' ? 'bodega asignó los seriales'
+          : this._serialesListos(c) ? 'no hay equipo que asignar'
+          : 'bodega los asigna en Almacén · Asignar — sin eso no se envía a firma'],
       ['Firma del cliente', !!c.firmado, c.firma_solicitud_estado === 'pendiente' ? 'enlace de firma enviado — esperando' : 'enlace digital, o subir el firmado'],
       ['Activación', c.estado === 'activo', 'automática al validarse la firma'],
       ['Regularización de la cuenta', c.estado === 'activo' && !reg, regSub],
     ] : [
-      ['Aprobación de administración', c.estado !== 'pendiente_aprobacion', 'llega a ventas@cecomunica.com'],
+      ['Aprobación de administración', c.estado !== 'pendiente_aprobacion', 'la aprueba administración o gerencia'],
       ['Programación de los equipos', c.estado !== 'pendiente_aprobacion', 'la orden de servicio sale con la aprobación'],
       ['Entrega al cliente', c.entrega_confirmada === true, ContratoFirma.porQue(c)],
     ];
     const done = pasos.filter(p => p[1]).length;
     const [chipCls, chipTxt] = c.estado === 'pendiente_aprobacion' ? ['cg-chip--warn', 'Esperando aprobación']
       : !llevaFirma ? (c.entrega_confirmada === true ? ['cg-chip--ok', 'Entregado'] : ['cg-chip--info', 'Aprobado — por entregar'])
+      : !c.firmado && !this._serialesListos(c) ? ['cg-chip--info', 'Esperando seriales']
       : !c.firmado ? ['cg-chip--warn', 'Esperando firma']
       : c.estado === 'activo' && reg?.motivo === 'sobrantes' ? ['cg-chip--warn', 'Activo — regularización parcial']
       : c.estado === 'activo' && reg ? ['cg-chip--info', 'Activo — regularización pendiente']
@@ -2528,7 +2683,7 @@ window.Centro = {
            onkeydown="if(event.key==='Enter')this.click()" style="${abierta ? 'border-color:var(--accent);' : ''}">
         <div style="min-width:0; flex:1;"><div class="n cg-mono" style="font-size:13px;">${this.esc(c.contrato_id || c.id)}</div>
           <div class="s">${esRenov ? 'Renovación de cuenta' : 'Contrato nuevo'} · ${unid} unid. · $${Number(c.total_mensual || 0).toFixed(2)}/mes</div></div>
-        <span class="num" style="font-size:12px; color:var(--fg-3); flex:none;">${done}/4</span>
+        <span class="num" style="font-size:12px; color:var(--fg-3); flex:none;">${done}/${pasos.length}</span>
         <span class="cg-chip ${chipCls}" style="flex:none;">${chipTxt}</span>
         ${this._masFila('ct-' + c.id, this._accionesContrato(c), c.contrato_id || c.id)}
         <span class="arr" style="margin-left:0;">${abierta ? '▾' : '›'}</span>
@@ -2538,7 +2693,7 @@ window.Centro = {
           <div>
             <p style="font-size:13px; margin:0 0 8px;">${esRenov
               ? `Renueva y <b>consolida la cuenta</b>: sus orígenes quedan marcados como renovados al activarse.`
-              : `Contrato nuevo pendiente del ciclo aprobación → firma → activo.`}
+              : `Contrato nuevo pendiente del ciclo aprobación → seriales de bodega → firma → activo.`}
               <b>Duración:</b> ${this.esc(this._durTxt(c) || '—')}</p>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">${acciones}</div>
             ${this._osTramiteHtml(c)}
@@ -2662,7 +2817,7 @@ window.Centro = {
         <div style="min-width:0; flex:1;"><div class="n cg-mono" style="font-size:13px;${g.estado === 'anulada' ? ' text-decoration:line-through; color:var(--fg-3);' : ''}">${this.esc(g.id)}</div>
           <div class="s">${g.tipo === 'aumento' && g.aumento?.es_regularizacion ? 'Regularización por anexo'
             : g.tipo === 'aumento' && g.aumento?.es_ajuste ? 'Ajuste de tarifa / servicios'
-            : g.tipo === 'aumento' && g.aumento?.contrato_papel && !g.aumento?.contrato_doc_id ? `Adenda a contrato en papel <span class="cg-mono">${this.esc(g.aumento.contrato_id || '')}</span>`
+            : g.tipo === 'aumento' && g.aumento?.contrato_papel && !g.aumento?.contrato_doc_id ? `Anexo a contrato en papel <span class="cg-mono">${this.esc(g.aumento.contrato_id || '')}</span>`
             : this.esc(GestionesService.tipoLabel(g.tipo))} · ${g.tipo === 'demo'
             ? this.esc((g.demo?.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`).join(', ') || '—')
             : g.tipo === 'aumento'
@@ -2672,7 +2827,11 @@ window.Centro = {
         ${atenuada ? '' : `<span class="num" style="font-size:12px; color:var(--fg-3); flex:none;">${done}/${defsG.length}</span>`}
         ${g.regularizacion_bloqueada ? `<span class="cg-chip cg-chip--bad" style="flex:none;" title="Las cantidades del anexo no coinciden con los seriales — no se aplicó">No aplicado</span>` : ''}
         ${this._chipCobro(g)}
-        <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}" style="flex:none;">${this.esc(GestionesService.estadoLabel(g.estado))}</span>
+        <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}" style="flex:none;">${this.esc(
+          // Las actualizaciones de seriales ya no se firman (2026-09-09): no
+          // "esperan firma" (auditoría UX 2026-09-28).
+          g.estado === 'pendiente_firma' && g.tipo === 'aumento' && g.aumento?.es_regularizacion
+            ? 'Por aplicar (sin firma)' : GestionesService.estadoLabel(g.estado))}</span>
         ${this._masFila(g.id, this._accionesGestion(g), g.id)}
         <span class="arr" style="margin-left:0;">${abierta ? '▾' : '›'}</span>
       </div>
@@ -2771,8 +2930,8 @@ window.Centro = {
     // contrato interno al que aplicarle líneas — el tramo va a cada equipo.
     else if (g.tipo === 'aumento' && g.aumento?.contrato_papel && !g.aumento?.contrato_doc_id) defs = [
       ['aprobacion', 'Aprobación comercial', 'Administración / gerencia'],
-      ['firma', 'Adenda firmada por el cliente', 'Cita el número del contrato en papel'],
-      ['derivacion', 'Adenda registrada', 'Sin contrato en el sistema: nada que aplicar — la cuenta sigue por regularizar'],
+      ['firma', 'Anexo firmado por el cliente', 'Cita el número del contrato en papel'],
+      ['derivacion', 'Anexo registrado', 'Sin contrato en el sistema: nada que aplicar — la cuenta sigue por regularizar'],
       ['asignacion', 'Asignación de seriales', 'Bodega'],
       ['programacion', 'Programación', 'OS de programación confirmada'],
       ['entrega', 'Entrega al cliente', 'El tramo se estampa en cada equipo (custodia con vigencia propia)'],
@@ -2870,7 +3029,7 @@ window.Centro = {
           (<span class="cg-mono">${(a.regulariza_seriales || []).map(s => this.esc(s.serial)).join(', ')}</span>);
           al firmarse se aplica y cierra solo, sin bodega ni entrega.</p>` : ''}
         ${a.contrato_papel && !a.contrato_doc_id ? `<div class="cg-senal warn" style="margin:0 0 8px;">
-          <span><b>Adenda a contrato en papel</b> — el contrato marco <span class="cg-mono">${this.esc(a.contrato_id || '—')}</span>
+          <span><b>Anexo a contrato en papel</b> — el contrato marco <span class="cg-mono">${this.esc(a.contrato_id || '—')}</span>
           no está en el sistema. Al entregarse, cada equipo queda en <b>custodia con su tramo propio</b>;
           la cuenta sigue <b>pendiente de regularizar</b> (contrato nuevo cuando se pueda).</span></div>` : ''}
         <p style="font-size:13px; margin:0 0 8px;"><b>${a.contrato_papel && !a.contrato_doc_id ? 'Contrato en papel' : 'Contrato destino'}:</b>
@@ -3070,7 +3229,7 @@ window.Centro = {
              : esActSeriales
                ? 'Actualización de seriales esperando aprobación — al aprobar se aplica de una vez: el contrato gana las líneas, los seriales se amarran y no se le envía nada al cliente.'
              : esAumento
-               ? 'Aumento esperando aprobación comercial — al aprobar, se imprime el anexo para la firma del cliente.'
+               ? 'Aumento esperando aprobación de administración — al aprobar, se imprime el anexo para la firma del cliente.'
                : GestionesService.esReposicionDano(g)
                  ? 'El taller reporta DAÑO CAUSADO POR EL CLIENTE. Decide en Acciones: con cargo (fijas el monto; se arma la cotización y Bodega espera a que el cliente acepte), sin cargo como cortesía (con motivo), o anular para rechazar.'
                : g.origen?.tipo === 'taller'
@@ -3127,7 +3286,10 @@ window.Centro = {
   // Reemplazo por DAÑO — con cargo: el monto parte del valor de reposición del
   // catálogo (decisión de Alberto, 2026-09-25) y administración lo puede
   // ajustar. Sin precio en el catálogo, lo escribe.
-  async aprobarConCargoGestion(gid) {
+  aprobarConCargoGestion(gid) {
+    return this._candado('aprobarConCargoGestion:' + gid, () => this._aprobarConCargoGestion(gid), 'Aprobando…');
+  },
+  async _aprobarConCargoGestion(gid) {
     const g = (this.gestiones || []).find(x => x.id === gid) || await GestionesService.get(gid);
     const ref = Number(g?.cobro?.monto_referencia || 0);
     const it = (g?.items || [])[0] || {};
@@ -3150,7 +3312,10 @@ window.Centro = {
     } catch (e) { console.error(e); Toast.show('No se pudo aprobar: ' + (e?.message || e), 'bad'); }
   },
 
-  async aprobarSinCargoGestion(gid) {
+  aprobarSinCargoGestion(gid) {
+    return this._candado('aprobarSinCargoGestion:' + gid, () => this._aprobarSinCargoGestion(gid), 'Aprobando…');
+  },
+  async _aprobarSinCargoGestion(gid) {
     const motivo = await Modal.prompt({
       title: 'Aprobar sin cargo (cortesía)',
       message: 'El radio se repone GRATIS aunque el daño lo causó el cliente. ¿Por qué? Queda en el expediente.',
@@ -3197,7 +3362,10 @@ window.Centro = {
     } catch (e) { console.error(e); Toast.show('No se pudo: ' + (e?.message || e), 'bad'); }
   },
 
-  async aprobarGestion(gid) {
+  aprobarGestion(gid) {
+    return this._candado('aprobarGestion:' + gid, () => this._aprobarGestion(gid), 'Aprobando…');
+  },
+  async _aprobarGestion(gid) {
     try {
       await GestionesService.aprobar(gid);
       Toast.show('Aprobada — Bodega recibirá el aviso para asignar', 'ok');
@@ -3224,7 +3392,10 @@ window.Centro = {
 
   // Aprobar la ACTUALIZACIÓN DE SERIALES = aplicarla. No hay paso de firma
   // (2026-09-09): se dice qué va a pasar y se hace.
-  async aprobarActualizacionSeriales(gid) {
+  aprobarActualizacionSeriales(gid) {
+    return this._candado('aprobarActualizacionSeriales:' + gid, () => this._aprobarActualizacionSeriales(gid), 'Aprobando…');
+  },
+  async _aprobarActualizacionSeriales(gid) {
     const g = (this.gestiones || []).find(x => x.id === gid);
     const a = g?.aumento || {};
     if (!g || a.es_regularizacion !== true) { Toast.show('Esta gestión no es una actualización de seriales', 'warn'); return; }
@@ -3245,7 +3416,23 @@ window.Centro = {
     } catch (e) { console.error(e); Toast.show('No se pudo aprobar: ' + (e.message || e), 'bad'); }
   },
 
-  async aprobarAumentoGestion(gid) {
+  aprobarAumentoGestion(gid) {
+    return this._candado('aprobarAumentoGestion:' + gid, () => this._aprobarAumentoGestion(gid), 'Aprobando…');
+  },
+  async _aprobarAumentoGestion(gid) {
+    // Resumen antes de aprobar, con la misma plantilla que la actualización
+    // de seriales (auditoría UX 2026-09-28): aprobar compromete precio y plazo.
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    const a = g?.aumento || {};
+    const unid = (a.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
+    const mensual = Number(a.totales?.total_mensual ?? a.totales?.totalMensual ?? 0);
+    const ok = await Modal.confirm({
+      title: 'Aprobar el aumento', confirmLabel: 'Aprobar aumento',
+      message: `Al contrato <b class="cg-mono">${this.esc(a.contrato_id || '—')}</b> se le agregan
+        <b>${(a.lineas || []).length} línea(s)</b> (${unid} unid.)${mensual ? ` por <b>$${mensual.toFixed(2)}/mes</b>` : ''}${a.duracion_meses ? ` a ${Number(a.duracion_meses)} mes(es)` : ''}.
+        <br><br>Después se imprime el anexo y el cliente lo firma; al firmarse, el sistema aplica las líneas y avisa a bodega.`,
+    });
+    if (!ok) { this.abrirGestion(gid); return; }
     try {
       await GestionesService.aprobarAumento(gid);
       Toast.show('Aumento aprobado — imprime el anexo y recoge la firma del cliente', 'ok');
@@ -3311,7 +3498,26 @@ window.Centro = {
     this.abrirGestion(gid);
   },
 
-  async aprobarBajaGestion(gid) {
+  aprobarBajaGestion(gid) {
+    return this._candado('aprobarBajaGestion:' + gid, () => this._aprobarBajaGestion(gid), 'Aprobando…');
+  },
+  async _aprobarBajaGestion(gid) {
+    // Resumen antes de aprobar (auditoría UX 2026-09-28): la aprobación deriva
+    // la facturación y crea la orden de DEVOLUCIÓN; antes salía de un click.
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    const esTerm = Array.isArray(g?.terminacion_total_de) && g.terminacion_total_de.length;
+    const nSer = (g?.items || []).length;
+    const pen = Number(g?.penalidad_estimada?.total || 0);
+    const contratos = [...new Set((g?.items || []).map(it => it.contrato_id).filter(Boolean))];
+    const ok = await Modal.confirm({
+      title: esTerm ? 'Aprobar la terminación' : 'Aprobar la baja', danger: !!esTerm,
+      confirmLabel: esTerm ? 'Aprobar terminación' : 'Aprobar baja',
+      message: `${esTerm ? '<b>TERMINACIÓN TOTAL</b>: se desconectan todos los seriales del contrato. ' : ''}Salen
+        <b>${nSer} serial(es)</b>${contratos.length ? ` de <b class="cg-mono">${this.esc(contratos.join(', '))}</b>` : ''}${g?.fecha_fin_facturacion ? `; la facturación termina el <b>${this.esc(g.fecha_fin_facturacion)}</b>` : ''}.
+        ${pen ? `<br>Liquidación estimada: <b>$${pen.toFixed(2)}</b>.` : ''}
+        <br><br>Al aprobar, el sistema deriva la facturación y crea la <b>orden de DEVOLUCIÓN</b> por serial para recoger los equipos.`,
+    });
+    if (!ok) { this.abrirGestion(gid); return; }
     try {
       await GestionesService.aprobarBaja(gid);
       Toast.show('Baja aprobada — el sistema deriva la facturación y crea la devolución por serial', 'ok');
@@ -3319,14 +3525,20 @@ window.Centro = {
     } catch (e) { console.error(e); Toast.show('No se pudo aprobar la baja', 'bad'); }
   },
 
-  async anularGestion(gid) {
+  anularGestion(gid) {
+    return this._candado('anularGestion:' + gid, () => this._anularGestion(gid), 'Anulando…');
+  },
+  async _anularGestion(gid) {
     const g = (this.gestiones || []).find(x => x.id === gid);
     const perm = GestionesService.puedeAnularse(g, { rol: this.rol, uid: firebase.auth().currentUser?.uid });
     if (!perm.ok) { Toast.show(perm.motivo, 'warn'); return; }
     const enlaceVivo = g?.firma_solicitud_estado === 'pendiente' && !!g?.firma_solicitud_id;
     const motivo = await Modal.prompt({ title: 'Anular gestión', confirmLabel: 'Anular', multiline: true,
-      message: `${enlaceVivo ? 'El <b>enlace de firma</b> que tiene el cliente se retira con la anulación: verá “enlace no válido”.<br><br>' : ''}Motivo de la anulación (queda en el expediente):` });
-    if (motivo === null) return;
+      message: `${enlaceVivo ? 'El <b>enlace de firma</b> que tiene el cliente se retira con la anulación: verá “enlace no válido”.<br><br>' : ''}Motivo de la anulación (obligatorio, queda en el expediente):` });
+    if (motivo === null || motivo === undefined) return;
+    // Motivo obligatorio, igual que al anular un contrato (auditoría UX
+    // 2026-09-28): antes se guardaba '' y el expediente no decía por qué.
+    if (!String(motivo).trim()) { Toast.show('Debes indicar un motivo.', 'bad'); return; }
     try {
       // El enlace vivo se retira ANTES: una gestión anulada con el enlace en
       // la calle se puede firmar igual, y el cliente recibiría la constancia
@@ -3870,7 +4082,8 @@ window.Centro = {
     if (esperaFirma) {
       A.push(this._acc({ id: 'firma', label: conEnlace ? 'Ver o reenviar el enlace de firma' : 'Enviar para firma',
         primaria: !conEnlace, hint: conEnlace ? 'el cliente ya lo tiene — se puede reenviar' : 'el cliente firma con el dedo, desde el celular',
-        onclick: `Centro.enviarFirma('${id}')`, ok: puedeG, motivo: 'tu rol no mueve contratos' }));
+        onclick: `Centro.enviarFirma('${id}')`, ok: puedeG && (conEnlace || this._serialesListos(c)),
+        motivo: !puedeG ? 'tu rol no mueve contratos' : 'Bodega todavía no asignó los seriales; el anexo saldría vacío' }));
     }
     // "Subir el contrato firmado" ya NO cuelga de esperaFirma (2026-09-10): la
     // rama `activo && !firmado_url` de _aceptaFirmado() era inalcanzable, así
@@ -3904,7 +4117,7 @@ window.Centro = {
       onclick: `Centro.verContrato('${id}')` }));
     A.push(this._acc({ id: 'documento', grupo: 'Documentos', label: 'Documento completo', blank: true,
       hint: esperaFirma ? 'para imprimirlo y recoger la firma en papel' : '',
-      href: `../contratos/documento.html?id=${encodeURIComponent(c.id)}` }));
+      href: this._urlDocumento(c) }));
     // El firmado. El enlace vivía SOLO en el archivo /contratos/ y por eso
     // "dentro de la gestión del cliente no aparece el contrato firmado"
     // (Zuleika, 2026-09-10): el PDF estaba en Storage desde siempre, lo que
@@ -3938,7 +4151,7 @@ window.Centro = {
       hint: 'pide el motivo y queda en el historial',
       onclick: `Centro.anularContrato('${id}')`,
       ok: anulable && mando,
-      motivo: !anulable ? `un contrato ${this.esc(c.estado || '')} ya no se anula desde aquí` : 'lo anula administración o gerencia' }));
+      motivo: !anulable ? `un contrato ${this.esc(this._estadoLabel(c).toLowerCase())} ya no se anula desde aquí` : 'lo anula administración o gerencia' }));
     return A;
   },
 
@@ -4063,8 +4276,6 @@ window.Centro = {
     const tram = this._renovacionEnTramite();
     const hayRadios = this.equipos.some(e => ['en_cliente', 'asignado_contrato'].includes(e.estado));
     const hayContrato = est.renovables.length > 0;
-    const reg = this._reg();
-    const deuda = !!(reg && reg.puntos > 0);
     const item = (onclick, label, hint, cls = '') =>
       `<button type="button" class="${cls}" onclick="${onclick}">${label}${hint ? `<span class="cg-menu-hint">${hint}</span>` : ''}</button>`;
     const grupo = (hd, items) => { const xs = items.filter(Boolean); return xs.length ? `<div class="hd">${hd}</div>${xs.join('')}` : ''; };
@@ -4075,8 +4286,6 @@ window.Centro = {
     const top = P ? item(P.onclick, P.label, P.hint, 'top') : '';
     // Renovar cuenta ya es el destacado cuando aplica: no se repite en "Cambiar".
     const n = est.renovables.length;
-    const renovar = '';
-    void deuda; void reg;
 
     // "Poner la cuenta al día" (Alberto 2026-09-09): estaba escondido dentro
     // de "Qué falta" y entraba por un contrato elegido a dedo. Es una gestión
@@ -4111,7 +4320,6 @@ window.Centro = {
         'el cliente tiene otro radio del que dice el sistema — no mueve equipo') : '',
       hayContrato ? item(est.tipo === 'consolidada' ? `Centro.wizAjuste('${this.esc(est.maestro.id)}')` : 'Centro.wizAjuste()',
         'Ajustar tarifa / servicios', 'cargos como GPS, amarrados por serial') : '',
-      renovar,
     ]);
     const retirar = grupo('Retirar', [
       hayRadios ? item('Centro.wizBaja()', 'Baja parcial por serial') : '',
@@ -4123,7 +4331,7 @@ window.Centro = {
     // Solo donde tiene sentido: cuenta sin contrato en el sistema.
     const pie = [
       (est.tipo === 'nueva' || est.tipo === 'sin_contrato')
-        ? item('Centro.wizAumento(null,{papel:true})', '¿Contrato en papel? Adenda de aumento', '', 'pie') : '',
+        ? item('Centro.wizAumento(null,{papel:true})', '¿Contrato en papel? Anexo de aumento', '', 'pie') : '',
       this._puedeMasiva() ? `<a class="pie" href="./index.html">Edición masiva de clientes</a>` : '',
     ].filter(Boolean).join('');
 
@@ -4378,7 +4586,8 @@ window.Centro = {
   // su propia devolución); lo que define la cuenta son los renovables
   // (ALQ/PROP/REEMP operativos) y la custodia sin contrato.
   _cuentaEstado() {
-    const operativos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c));
+    // La renovación en trámite no es un renovable (auditoría UX 2026-09-28).
+    const operativos = this.contratos.filter(c => this._esOperativo(c));
     const renovables = operativos.filter(c => this._aplicaVenc(c));
     const custodia = this._wcCustodia().length;
     if (!renovables.length && !custodia) return { tipo: 'nueva', renovables, custodia, maestro: null };
@@ -4618,7 +4827,7 @@ window.Centro = {
       <h3 style="margin:0 0 6px;">Nueva solicitud de reemplazo — ${this.esc(this.cliente.nombre)}</h3>
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
         Marca los seriales a reemplazar (pueden ser de contratos distintos) e indica motivo y modelo.
-        Al enviar, Bodega recibe el aviso; si hay un propio sin garantía, primero pasa por aprobación de administración.</p>
+        Todo reemplazo pasa por aprobación de administración antes de que bodega lo prepare.</p>
       <div class="cg-twrap" style="max-height:44vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
         <th style="width:34px;"></th><th>Serial</th><th>Modelo</th><th>Contrato</th><th>Elegibilidad</th>
         </tr></thead><tbody id="wrCuerpo">${filas}</tbody></table></div>
@@ -4633,7 +4842,7 @@ window.Centro = {
       </div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="Centro.crearReemplazo()">Enviar solicitud</button>
+        <button class="btn btn-primary" onclick="Centro.crearReemplazo(this)">Enviar solicitud</button>
       </div>`);
   },
 
@@ -4728,7 +4937,12 @@ window.Centro = {
     document.getElementById(`wcfg-${ix}`)?.classList.toggle('hidden', !on);
   },
 
-  async crearReemplazo() {
+  // Candado contra el doble submit (auditoría UX 2026-09-28, P0 #10): cada
+  // click consumía un correlativo y mandaba un correo de aprobación.
+  crearReemplazo(btn) {
+    return withBusy(btn || null, () => this._crearReemplazo(), { key: 'crearReemplazo', label: 'Enviando…', rethrow: false });
+  },
+  async _crearReemplazo() {
     const seleccion = [...document.querySelectorAll('input[data-wsel]:checked')].map(i => Number(i.dataset.wsel));
     if (!seleccion.length) { Toast.show('Marca al menos un serial', 'warn'); return; }
     const items = [];
@@ -4785,15 +4999,11 @@ window.Centro = {
         : `Solicitud ${gid} creada — administración la aprueba y ahí Bodega recibe el aviso`, 'ok');
       await this.recargarGestiones();
       // El JSON para recepción se ofrece AQUÍ, que es cuando el vendedor tiene
-      // el caso fresco y sabe a quién se lo va a mandar. Después queda siempre
-      // a mano en el expediente ("JSON para recepción").
-      if (await Modal.confirm({
-        title: 'JSON para recepción',
-        confirmLabel: 'Descargar', cancelLabel: 'Ahora no',
-        message: `¿Descargar el <b>nombre, los grupos y el GPS</b> de ${items.length === 1 ? 'el radio que sale' : `los ${items.length} radios que salen`}, `
-          + `para mandárselo a recepción?<br><br>Es lo que cada radio nuevo tiene que heredar. `
-          + `Recepción también puede jalarlo sola desde el lote de POC — queda en el expediente por si lo necesitas después.`,
-      })) await this.jsonReemplazoRecepcion(gid);
+      // el caso fresco. Era un confirm que cortaba el flujo justo al terminar
+      // (auditoría UX 2026-09-28): ahora es un botón en el aviso, y sigue a
+      // mano en el expediente ("JSON para recepción").
+      this._toastAccion(`JSON para recepción: nombre, grupos y GPS de ${items.length === 1 ? 'el radio que sale' : `los ${items.length} radios que salen`}.`,
+        'Descargar', () => this.jsonReemplazoRecepcion(gid), '', 12000);
     } catch (e) { console.error(e); Toast.show('No se pudo crear la solicitud', 'bad'); }
   },
 
@@ -4903,7 +5113,7 @@ window.Centro = {
         </tr></thead><tbody>${this._csFilasHtml(flota)}</tbody></table></div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="Centro.crearCambioSerial()">Enviar a bodega</button>
+        <button class="btn btn-primary" onclick="Centro.crearCambioSerial(this)">Enviar a bodega</button>
       </div>`);
   },
 
@@ -4960,7 +5170,12 @@ window.Centro = {
     document.getElementById(`cscfg-${ix}`)?.classList.toggle('hidden', !on);
   },
 
-  async crearCambioSerial() {
+  // Candado contra el doble submit (auditoría UX 2026-09-28, P0 #10): cada
+  // click consumía un correlativo y mandaba un correo de aprobación.
+  crearCambioSerial(btn) {
+    return withBusy(btn || null, () => this._crearCambioSerial(), { key: 'crearCambioSerial', label: 'Enviando…', rethrow: false });
+  },
+  async _crearCambioSerial() {
     const flota = this._flotaCorregible();
     const seleccion = [...document.querySelectorAll('input[data-cssel]:checked')].map(i => Number(i.dataset.cssel));
     if (!seleccion.length) { Toast.show('Marca al menos un serial', 'warn'); return; }
@@ -5076,11 +5291,16 @@ window.Centro = {
         al responsable sale a los 15 días de la salida; con fecha, al vencerse.</p>
       <div style="display:flex; gap:8px; justify-content:flex-end;">
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="Centro.crearDemo()">Enviar solicitud</button>
+        <button class="btn btn-primary" onclick="Centro.crearDemo(this)">Enviar solicitud</button>
       </div>`);
   },
 
-  async crearDemo() {
+  // Candado contra el doble submit (auditoría UX 2026-09-28, P0 #10): cada
+  // click consumía un correlativo y mandaba un correo de aprobación.
+  crearDemo(btn) {
+    return withBusy(btn || null, () => this._crearDemo(), { key: 'crearDemo', label: 'Enviando…', rethrow: false });
+  },
+  async _crearDemo() {
     const selects = [...document.querySelectorAll('select[data-wdl-modelo]')];
     const cants = [...document.querySelectorAll('input[data-wdl-cant]')];
     const lineas = selects.map((s, i) => {
@@ -5313,7 +5533,7 @@ window.Centro = {
           <input class="form-input cg-mono" id="waContratoPapel" maxlength="40" autocomplete="off"
             placeholder="p. ej. ALQ 2019-044 — tal cual está en el papel">
           <p style="margin:6px 0 0; font-size:12px; color:var(--fg-3);">Se escribe a mano porque el contrato marco
-            <b>no está en el sistema</b>. La adenda cita este número y no crea ningún contrato.</p>
+            <b>no está en el sistema</b>. El anexo cita este número y no crea ningún contrato.</p>
           <select id="waContrato" class="hidden"><option value="" selected></option></select></div>`
       : this._aumRegulariza
       ? `<div class="form-field" style="margin-bottom:10px;">
@@ -5374,12 +5594,12 @@ window.Centro = {
             de ${this._aumRegularizaTodos.length} entran al contrato. El modelo solo hace falta si el serial no está en el sistema.</div></div>` : '';
     const papelSenal = esPapel
       ? `<div class="cg-senal warn" style="margin-bottom:10px;">
-          <span><b>Salida para seguir sin regularizar hoy.</b> La adenda agrega equipos al contrato viejo
+          <span><b>Salida para seguir sin regularizar hoy.</b> El anexo agrega equipos al contrato viejo
           citando su número; no crea ningún contrato en el sistema. Al entregarse, cada equipo queda en
           <b>custodia con su tramo propio</b> y la cuenta sigue marcada <b>sin contrato formal</b>: hay que
           regularizarla con un contrato nuevo cuando se pueda.</span></div>` : '';
     this._abrirModalA({
-      titulo: `${this._aumRegulariza ? 'Actualizar seriales del cliente' : esPapel ? 'Adenda a contrato en papel' : 'Aumento de equipos (enmienda)'} — ${this.esc(this.cliente.nombre)}`,
+      titulo: `${this._aumRegulariza ? 'Actualizar seriales del cliente' : esPapel ? 'Anexo a contrato en papel' : 'Aumento de equipos (anexo)'} — ${this.esc(this.cliente.nombre)}`,
       cuerpo: `
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
         ${this._aumRegulariza
@@ -5387,10 +5607,10 @@ window.Centro = {
              contrato y las líneas entran con tarifa desde hoy. <b>Al cliente no se le envía nada a firmar</b> —
              si hiciera falta su firma, el camino es un contrato.`
           : esPapel
-          ? `La adenda agrega equipos <b>con vigencia propia</b> a un contrato que solo existe <b>en papel</b>:
+          ? `El anexo agrega equipos <b>con vigencia propia</b> a un contrato que solo existe <b>en papel</b>:
              el período corre desde la entrega, el documento cita el número del contrato viejo y
              <b>requiere la firma del cliente</b> antes de salir a bodega.`
-          : `La enmienda agrega líneas <b>con vigencia propia</b>: el período del equipo
+          : `El anexo agrega líneas <b>con vigencia propia</b>: el período del equipo
              nuevo corre desde su entrega y vence más tarde que el resto — el anexo lo deja explícito y
              <b>requiere la firma del cliente</b> antes de aplicarse.`}</p>
       ${regSenal}${papelSenal}${nudge}
@@ -5432,7 +5652,7 @@ window.Centro = {
       footer: `
         <span class="sep"></span>
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="Centro.crearAumento()">Enviar a aprobación</button>`,
+        <button class="btn btn-primary" onclick="Centro.crearAumento(this)">Enviar a aprobación</button>`,
     });
     this._aumPreview();
   },
@@ -5444,7 +5664,12 @@ window.Centro = {
     return String(texto == null ? '' : texto).replace(/["'`]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
   },
 
-  async crearAumento() {
+  // Candado contra el doble submit (auditoría UX 2026-09-28, P0 #10): cada
+  // click consumía un correlativo y mandaba un correo de aprobación.
+  crearAumento(btn) {
+    return withBusy(btn || null, () => this._crearAumento(), { key: 'crearAumento', label: 'Enviando…', rethrow: false });
+  },
+  async _crearAumento() {
     const esPapel = this._aumPapel === true;
     const contratoDocId = document.getElementById('waContrato')?.value || '';
     const contrato = esPapel ? null : this.contratos.find(c => c.id === contratoDocId);
@@ -5457,7 +5682,7 @@ window.Centro = {
     // por serial y el flujo cierra sin bodega. En papel no hay contrato que
     // ajustar: la adenda necesita al menos un equipo.
     if (!lineas.length && this._aumCargos().length) {
-      if (esPapel) { Toast.show('La adenda a contrato en papel necesita al menos un equipo — los cargos solos no tienen contrato al que aplicarse', 'warn'); return; }
+      if (esPapel) { Toast.show('El anexo a contrato en papel necesita al menos un equipo — los cargos solos no tienen contrato al que aplicarse', 'warn'); return; }
       Toast.show('Solo cargos, sin equipos — eso es un Ajuste de tarifa: te llevo al wizard correcto', 'ok');
       this.wizAjuste(contratoDocId);
       return;
@@ -5532,8 +5757,8 @@ window.Centro = {
       Toast.show(this._aumRegulariza
         ? `Actualización de seriales ${gid} enviada a aprobación — al aprobarse amarra ${this._aumRegulariza.length} equipo(s)${nNoTiene ? ` y suelta ${nNoTiene} de la cuenta` : ''}, sin firma del cliente`
         : esPapel
-        ? `Adenda ${gid} al contrato en papel ${refPapel} enviada a aprobación comercial — la cuenta sigue pendiente de regularizar`
-        : `Aumento ${gid} enviado a aprobación comercial`, 'ok');
+        ? `Anexo ${gid} al contrato en papel ${refPapel} enviado a aprobación de administración — la cuenta sigue pendiente de regularizar`
+        : `Aumento ${gid} enviado a aprobación de administración`, 'ok');
       this._aumRegulariza = null;
       this._aumRegularizaTodos = null;
       this._aumRegDestino = {};
@@ -5597,7 +5822,7 @@ window.Centro = {
       footer: `
         <span class="sep"></span>
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="Centro.crearAjuste()">Enviar a aprobación</button>`,
+        <button class="btn btn-primary" onclick="Centro.crearAjuste(this)">Enviar a aprobación</button>`,
     });
     this._wjSyncFlota();
     this._wjPreview();
@@ -5739,7 +5964,12 @@ window.Centro = {
         <span class="num" style="margin-left:auto; ${delta >= 0 ? '' : 'color:var(--warn-deep, #92400E);'}">${delta >= 0 ? '+' : '−'}$${Math.abs(delta).toFixed(2)}/mes</span></div>` : '')
       + this._tarifarioHtml(t);
   },
-  async crearAjuste() {
+  // Candado contra el doble submit (auditoría UX 2026-09-28, P0 #10): cada
+  // click consumía un correlativo y mandaba un correo de aprobación.
+  crearAjuste(btn) {
+    return withBusy(btn || null, () => this._crearAjuste(), { key: 'crearAjuste', label: 'Enviando…', rethrow: false });
+  },
+  async _crearAjuste() {
     const cid = document.getElementById('wjContrato')?.value || '';
     const contrato = this.contratos.find(c => c.id === cid);
     if (!contrato) { Toast.show('Elige el contrato destino', 'warn'); return; }
@@ -6896,7 +7126,11 @@ window.Centro = {
       } catch (e) { console.warn('No se pudo encolar el correo:', e); }
 
       this._cerrarModal();
-      Toast.show(`✅ Contrato ${contrato_id} creado — pendiente de aprobación`, 'ok');
+      // CTA "Ver documento" en el aviso (auditoría UX 2026-09-28): para
+      // revisarlo o imprimirlo sin buscar el contrato en la ficha.
+      const urlDoc = this._urlDocumento({ ...contrato, id: docRef.id, fecha_creacion: new Date() });
+      this._toastAccion(`✅ Contrato ${contrato_id} creado — pendiente de aprobación`, 'Ver documento',
+        () => window.open(urlDoc, '_blank', 'noopener'), 'ok', 10000);
       await this.abrir(this.cliente.id, { push: false });
     } catch (e) {
       console.error(e);
@@ -7095,8 +7329,12 @@ window.Centro = {
     if (!lineas.length) { Toast.show('⚠️ El contrato necesita al menos una línea de equipos', 'warn'); return; }
     if (this._lineasSinModalidad(lineas)) { Toast.show(`⚠️ ${this.MSG_SIN_MODALIDAD}`, 'warn'); return; }
 
-    const durN = Math.max(1, Number(document.getElementById('weMeses')?.value || 0));
-    if (!(durN > 0)) { Toast.show('⚠️ Indica la duración', 'warn'); return; }
+    // Se valida ANTES de redondear: el Math.max(1, …) convertía una duración
+    // vacía en "1 mes" sin avisar, en un documento legal (auditoría UX
+    // 2026-09-28, P0 #13 — el P0 #12 de agosto, reaparecido al editar).
+    const durRaw = Number(document.getElementById('weMeses')?.value || 0);
+    if (!(durRaw > 0)) { Toast.show('⚠️ Indica la duración del contrato (mayor que cero)', 'warn'); document.getElementById('weMeses')?.focus(); return; }
+    const durN = Math.max(1, durRaw);
     const durUnidad = document.getElementById('weDurUnidad')?.value === 'dias' ? 'dias' : 'meses';
     const meses = durUnidad === 'dias' ? Math.max(1, Math.round(durN / 30)) : durN;
 
@@ -7362,7 +7600,7 @@ window.Centro = {
       footer: `
         <span class="sep"></span>
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
-        <button class="${termCuenta || termDe ? 'btn-danger cg-act' : 'btn btn-primary'}" onclick="Centro.crearBaja()">Enviar a aprobación</button>`,
+        <button class="${termCuenta || termDe ? 'btn-danger cg-act' : 'btn btn-primary'}" onclick="Centro.crearBaja(this)">Enviar a aprobación</button>`,
     });
     if (esTerm) this._bajaPreview();
   },
@@ -7409,7 +7647,12 @@ window.Centro = {
         <b>Total estimado</b><b style="margin-left:auto;" class="num">$${pen.total.toFixed(2)}</b></div>` : '';
   },
 
-  async crearBaja() {
+  // Candado contra el doble submit (auditoría UX 2026-09-28, P0 #10): cada
+  // click consumía un correlativo y mandaba un correo de aprobación.
+  crearBaja(btn) {
+    return withBusy(btn || null, () => this._crearBaja(), { key: 'crearBaja', label: 'Enviando…', rethrow: false });
+  },
+  async _crearBaja() {
     const termIds = Array.isArray(this._wbTermIds) ? this._wbTermIds : [];
     const base = this._bajaItemsSeleccion();
     if (!base.length) { Toast.show('Marca al menos un serial', 'warn'); return; }

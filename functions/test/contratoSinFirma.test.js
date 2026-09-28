@@ -128,9 +128,15 @@ test("R4 · la cola Ahora pide la ENTREGA, no una firma, y lo llama por su nombr
     assert.ok(!/Enviar para firma/.test(textos), `${c.codigo_tipo}: sigue ofreciendo el botón de firma`);
     assert.ok(new RegExp(`El ${nombre} `).test(textos), `${c.codigo_tipo}: el aviso no lo llama "${nombre}": ${textos}`);
   }
-  // Y el contrato que sí la lleva no perdió su aviso.
-  C.contratos = [ALQ];
+  // Y el contrato que sí la lleva no perdió su aviso — una vez que bodega
+  // asignó los seriales (auditoría UX 2026-09-28: antes de eso el anexo
+  // saldría vacío y la cola pide a bodega, no la firma).
+  C.contratos = [{ ...ALQ, seriales_estado: "asignados" }];
   assert.ok(/espera la firma/.test(C._itemsAccion().map(i => i.t).join(" | ")), "el alquiler perdió su aviso de firma");
+  C.contratos = [{ ...ALQ, seriales_estado: "pendiente" }];
+  const sinSeriales = C._itemsAccion().map(i => `${i.t} ${i.s} ${i.btns}`).join(" | ");
+  assert.ok(/espera que bodega asigne/.test(sinSeriales), "sin seriales la cola debe pedirle a bodega");
+  assert.ok(!/Enviar para firma/.test(sinSeriales), "sin seriales no se ofrece enviar a firma");
 });
 
 test("R5 · el trámite sin firma se cierra con la entrega, no con la firma", () => {

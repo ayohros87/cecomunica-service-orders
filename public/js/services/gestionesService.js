@@ -358,10 +358,14 @@ const GestionesService = {
   // Anular el expediente (nunca se borra). Vale para rechazar una excepción o
   // cancelar una gestión que no avanzó.
   async anular(gestionId, motivo) {
+    // Motivo obligatorio, como al anular un contrato (auditoría UX
+    // 2026-09-28): se guardaba '' y el expediente no decía por qué.
+    motivo = String(motivo || '').trim();
+    if (!motivo) throw new Error('Indica el motivo de la anulación');
     const user = firebase.auth().currentUser;
     await firebase.firestore().collection(this.COL).doc(gestionId).update({
       estado: 'anulada',
-      anulada_motivo: motivo || '',
+      anulada_motivo: motivo,
       anulada_por_uid: user?.uid || null,
       anulada_at: firebase.firestore.FieldValue.serverTimestamp(),
     });

@@ -33,9 +33,12 @@ import '/js/domain/contratoEdicion.js';
 import '/js/domain/regularizacion.js';
 import '/js/domain/gestionAutorizacion.js';
 import '/js/domain/contratoFirma.js';
+// "Documento completo" abre el papel correcto (v2 o clásico) — auditoría UX 2026-09-28.
+import '/js/domain/documentoContrato.js';
 import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';
 import '/js/ui/toast.js';
+import '/js/ui/busy.js';
 import '/js/ui/modal.js';
 import '/js/pages/contratos-upload.js';
 import '/js/domain/garantiaEquipo.js';

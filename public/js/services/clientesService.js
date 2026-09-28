@@ -525,6 +525,24 @@ const ClientesService = {
       await batch.commit();
     }
   },
+
+  // Cartera de un vendedor, pedida AL SERVIDOR (auditoría UX 2026-09-28,
+  // Centro P0 #15): "Mi cartera" traía páginas de 30 clientes de toda la base
+  // y filtraba en el navegador; si en la primera página no había clientes
+  // suyos, el directorio quedaba en blanco. Solo igualdades y sin orderBy:
+  // Firestore las resuelve uniendo índices de un campo, sin índice
+  // compuesto; el orden por nombre se hace aquí (una cartera cabe en `limit`).
+  async listClientesPorVendedor(uid, { onlyActive = false, limit = 500 } = {}) {
+    if (!uid) return [];
+    const db = firebase.firestore();
+    let q = db.collection('clientes')
+      .where('vendedor_asignado', '==', uid)
+      .where('deleted', '==', false);
+    if (onlyActive) q = q.where('activo', '==', true);
+    const snap = await q.limit(limit).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }));
+  },
 };
 
 window.ClientesService = ClientesService;

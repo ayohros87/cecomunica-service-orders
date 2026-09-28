@@ -1,6 +1,6 @@
 # Guía rápida — Contratos y equipos, paso a paso
 
-**Para:** ventas, recepción, inventario y taller · **Fecha:** agosto 2026
+**Para:** ventas, recepción, inventario y taller · **Fecha:** agosto 2026 (pasos del contrato nuevo actualizados el 2026-09-28)
 **En una línea:** el contrato dice *cuántos* radios; la ficha de cada serial dice *cuál*, *dónde está* y *qué le ha pasado*. El trabajo de todos es que esas dos historias cuadren — y el sistema ahora ayuda en cada paso.
 
 ---
@@ -17,9 +17,10 @@
 
 | Paso | Quién | Qué hace |
 |---|---|---|
-| 1 | Vendedor | Crea el contrato en **Contratos · Nuevo**: cliente, modelos y cantidades. |
-| 2 | Gerencia | Aprueba. El sistema pide los seriales a inventario por correo. |
-| 3 | Inventario | En la página de seriales, botón **"Tomar del pool (bodega)"** → escoge las unidades reales (o selección automática). **No teclear a mano lo que está en bodega.** Confirmar y enviar. |
+| 1 | Vendedor | Abre el cliente en el **Centro de gestión** → **Nuevo contrato**: modelos, cantidades y, en cada línea, si el equipo es alquiler o del cliente. |
+| 2 | Administración o gerencia | Aprueba desde el Centro (cola "Ahora" o el expediente del contrato). El sistema pide los seriales a bodega por correo. |
+| 3 | Inventario | En **Almacén · Asignar** escoge las unidades reales del estante (o selección automática). **No teclear a mano lo que está en bodega.** Confirmar. |
+| 3b | Vendedor | Con los seriales asignados, **Enviar para firma** desde el Centro (o imprimir y subir el firmado). Antes de eso el botón está bloqueado: el anexo saldría sin equipos. Al firmarse, el contrato queda **activo**. |
 | 4 | Recepción | Crea la **orden de PROGRAMACIÓN** (la lista de contratos se lo sugiere con un botón). Los seriales se jalan del contrato — tampoco se teclean. |
 | 5 | Taller | Programa, marca **COMPLETADO**, pasa QC. |
 | 6 | Recepción | Cuando el cliente recibe: **marcar la orden ENTREGADO AL CLIENTE**. |
@@ -41,7 +42,7 @@ Igual que un contrato nuevo, con **dos preguntas más al crearlo** — y las res
 **¿No sabes los seriales exactos?** Marca **"No sé los seriales — decidir por cantidades"** y anota cuántos continúan / se devuelven / se reemplazan por modelo. Recepción resuelve cuáles contra ese plan.
 
 Después:
-- En la página de seriales aparece el botón **"Traer del original (N continúan)"** — llena los seriales que siguen **sin re-teclear nada**.
+- En **Almacén · Asignar** bodega asigna solo lo que entra (radios nuevos o de reemplazo). Los que continúan **no se vuelven a teclear**: se amarran al contrato nuevo cuando se entrega la orden.
 - Al marcar la entrega, el sistema **solo** reclama los que dijiste que se devuelven, y abre el tiquete de recuperación con el correo a quien corresponde.
 
 > **Renovación parcial** (renuevas 6 de 10): es exactamente esto — 6 "continúa", 4 "se devuelve". Ya no hay que explicarlo en observaciones.

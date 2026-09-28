@@ -281,23 +281,33 @@ window.ContratosLista = {
       .forEach(m => m.classList.remove('open'));
   },
 
+  // Etiqueta y clase del estado, UNA para escritorio y móvil (auditoría UX
+  // 2026-09-28, T1): 'vencido' se mostraba "Inactivo" aunque hay chip
+  // "Vencido", y el móvil decía "Pendiente" donde el escritorio decía
+  // "Pendiente Aprobación".
+  estadoChip(data) {
+    const e = data?.estado;
+    const clase =
+      e === 'activo'               ? 'chip-aprobada'    :  // verde
+      e === 'aprobado'             ? 'chip-recibida'    :  // azul
+      e === 'pendiente_aprobacion' ? 'chip-diagnostico' :
+      e === 'anulado'              ? 'chip-cancelada'   :
+      'chip-espera';
+    const texto =
+      e === 'pendiente_aprobacion' ? 'Pendiente aprobación' :
+      e === 'aprobado'             ? 'Aprobado'             :
+      e === 'activo'               ? 'Activo'               :
+      e === 'anulado'              ? 'Anulado'              :
+      e === 'vencido'              ? 'Vencido'              :
+      'Inactivo';
+    return { clase, texto };
+  },
+
   // ── Row / card builders ──────────────────────────────────────────
   crearFila(id, data, indice = 0) {
     const esc = CS.esc.bind(CS);
 
-    const estadoClase =
-      data.estado === 'activo'               ? 'chip-aprobada'    :  // verde
-      data.estado === 'aprobado'             ? 'chip-recibida'    :  // azul
-      data.estado === 'pendiente_aprobacion' ? 'chip-diagnostico' :
-      data.estado === 'anulado'              ? 'chip-cancelada'   :
-      'chip-espera';
-
-    const estadoTexto =
-      data.estado === 'pendiente_aprobacion' ? 'Pendiente Aprobación' :
-      data.estado === 'aprobado'             ? 'Aprobado'             :
-      data.estado === 'activo'               ? 'Activo'               :
-      data.estado === 'anulado'              ? 'Anulado'              :
-      'Inactivo';
+    const { clase: estadoClase, texto: estadoTexto } = ContratosLista.estadoChip(data);
 
     const iconoComision = data.listo_para_comision
       ? `<span title="Listo para Comisión" aria-label="Listo para comisión" style="margin-left:6px;"><i data-lucide="check"></i></span>`
@@ -354,19 +364,7 @@ window.ContratosLista = {
     const tot = ContractTotals.fromDoc(data);
     const totalStr = FMT.money(tot.totalConITBMS);
 
-    const estadoClase =
-      data.estado === 'activo'               ? 'chip-aprobada'    :  // verde
-      data.estado === 'aprobado'             ? 'chip-recibida'    :  // azul
-      data.estado === 'pendiente_aprobacion' ? 'chip-diagnostico' :
-      data.estado === 'anulado'              ? 'chip-cancelada'   :
-      'chip-espera';
-
-    const estadoTexto =
-      data.estado === 'pendiente_aprobacion' ? 'Pendiente' :
-      data.estado === 'aprobado'             ? 'Aprobado'  :
-      data.estado === 'activo'               ? 'Activo'    :
-      data.estado === 'anulado'              ? 'Anulado'   :
-      'Inactivo';
+    const { clase: estadoClase, texto: estadoTexto } = ContratosLista.estadoChip(data);
 
     const accionesMovilHtml = ContratosLista.buildAcciones(data.id, data, { movil: true });
 
@@ -403,6 +401,7 @@ window.ContratosLista = {
   // ── Filtering / sorting helpers ──────────────────────────────────
   filtrarLocal(data) {
     const mostrarInactivos = document.getElementById('chkMostrarInactivos')?.checked;
+    const estadoSel        = document.getElementById('filtroEstado')?.value || '';
     const soloDevolucion   = document.getElementById('chkSoloDevolucion')?.checked;
 
     return data.filter(doc => {
@@ -415,8 +414,42 @@ window.ContratosLista = {
             || estado === 'cerrada_con_faltantes'
             || estado === 'sin_registro';
       }
+      // Si el chip de estado pide anulados/inactivos, se muestran aunque el
+      // toggle esté apagado: el servidor ya los trajo y "no hay anulados"
+      // era falso (auditoría UX 2026-09-28, P0 #14).
+      if (['inactivo', 'anulado'].includes(estadoSel)) return true;
       return mostrarInactivos ? true : !['inactivo','anulado'].includes(doc.estado);
     });
+  },
+
+  // Filtros del archivo persistentes, como en Clientes (auditoría UX
+  // 2026-09-28): volver al archivo dejaba todo en blanco.
+  FILTROS_KEY: 'contratos_filtros',
+  guardarFiltros() {
+    try {
+      localStorage.setItem(this.FILTROS_KEY, JSON.stringify({
+        estado: document.getElementById('filtroEstado')?.value || '',
+        inactivos: !!document.getElementById('chkMostrarInactivos')?.checked,
+        devolucion: !!document.getElementById('chkSoloDevolucion')?.checked,
+      }));
+    } catch (_) { /* sin persistencia */ }
+  },
+  restaurarFiltros() {
+    let f = null;
+    try { f = JSON.parse(localStorage.getItem(this.FILTROS_KEY) || 'null'); } catch (_) { f = null; }
+    if (!f || typeof f !== 'object') return;
+    const sel = document.getElementById('filtroEstado');
+    if (sel && typeof f.estado === 'string' && [...sel.options].some(o => o.value === f.estado)) {
+      sel.value = f.estado;
+      document.querySelectorAll('#filtroEstadoChips .filter-chip').forEach(ch =>
+        ch.classList.toggle('active', (ch.dataset.estado || '') === f.estado));
+      const chkPnd = document.getElementById('chkSoloPendientes');
+      if (chkPnd) chkPnd.checked = (f.estado === 'pendiente_aprobacion');
+    }
+    const chkIna = document.getElementById('chkMostrarInactivos');
+    if (chkIna) chkIna.checked = !!f.inactivos;
+    const chkDev = document.getElementById('chkSoloDevolucion');
+    if (chkDev) chkDev.checked = !!f.devolucion;
   },
 
   // El filtro de devolución corre sobre lo YA CARGADO, no sobre la colección:
@@ -476,6 +509,7 @@ window.ContratosLista = {
     CS.isLoading  = true;
     CS.lastQueryAt = now;
     this.updateBtnCargarMas(false);
+    if (reset) this.guardarFiltros();
 
     try {
       const tabla      = document.getElementById('tablaContratos');

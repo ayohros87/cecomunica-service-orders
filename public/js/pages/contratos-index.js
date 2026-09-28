@@ -149,6 +149,10 @@ auth.onAuthStateChanged(async (user) => {
     if (inp) inp.value = buscar;
   }
 
+  // Filtros guardados de la última visita (auditoría UX 2026-09-28); el
+  // deep-link ?estado= de abajo manda sobre ellos.
+  ContratosLista.restaurarFiltros?.();
+
   // Deep-link ?estado= (señales del home S8/S10).
   const estadoParam = params.get('estado');
   if (estadoParam) {

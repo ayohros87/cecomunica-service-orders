@@ -25,7 +25,8 @@
   // Enseña "Documentos del cliente ›" cuando el usuario puede verlos. Espera
   // a que la sesión resuelva; si el rol no aplica, el enlace se queda oculto.
   function mostrarEnlaceDocs(clienteId) {
-    const PERMITIDOS = ['administrador', 'recepcion'];
+    // Mismos roles que el Centro (_puedeVerDocs): faltaba gerente (auditoría UX 2026-09-28).
+    const PERMITIDOS = ['administrador', 'recepcion', 'gerente'];
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) return;
       try {
