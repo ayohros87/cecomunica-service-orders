@@ -26,8 +26,11 @@
 //   · public/js/domain/gestionAutorizacion.js      (navegador, window.GestionAutorizacion)
 // functions/test/gestionAutorizacion.test.js exige que sean byte a byte iguales.
 (function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory();
-  else root.GestionAutorizacion = factory();
+  // Publicar en window SIEMPRE: al empaquetar, Rolldown envuelve el archivo
+  // como CommonJS por el `module.exports` y el `else` nunca corría.
+  const api = factory();
+  root.GestionAutorizacion = api;
+  if (typeof module === "object" && module.exports) module.exports = api;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 

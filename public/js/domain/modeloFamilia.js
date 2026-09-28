@@ -21,8 +21,11 @@
 // unidades del plan). `modalidad` opcional ('alquiler' | 'propio'); una
 // ficha con propiedad 'cliente' es 'propio'.
 (function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory();
-  else root.ModeloFamilia = factory();
+  // Publicar en window SIEMPRE: al empaquetar, Rolldown envuelve el archivo
+  // como CommonJS por el `module.exports` y el `else` nunca corría.
+  const api = factory();
+  root.ModeloFamilia = api;
+  if (typeof module === "object" && module.exports) module.exports = api;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 

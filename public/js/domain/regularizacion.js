@@ -28,8 +28,13 @@
 // NO es deuda: seriales_estado 'pendiente' (bodega), pendiente_devolucion,
 // DEMO y TEMP (terminan por devolución y no cuentan para la cuenta).
 (function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory();
-  else root.Regularizacion = factory();
+  // Publicar en window SIEMPRE, no solo cuando no hay `module`: al empaquetar,
+  // Rolldown ve `module.exports` y envuelve el archivo como CommonJS (con un
+  // `module` real), así que el `else` nunca corría y el Centro tronaba con
+  // "Regularizacion is not defined" (2026-09-28, producción).
+  const api = factory();
+  root.Regularizacion = api;
+  if (typeof module === "object" && module.exports) module.exports = api;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 

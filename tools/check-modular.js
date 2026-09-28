@@ -226,6 +226,12 @@ for (const ruta of archivosJs) {
     catch (e) { noCompilaComoModulo.push(`${ruta}: ${e.message}`); }
   }
   r.usaCompat = /\bfirebase\.(firestore|auth|functions|storage|app)\b/.test(src);
+  // UMD que publica en window SOLO si no hay `module`: al empaquetar, Rolldown
+  // ve `module.exports`, envuelve el archivo como CommonJS (con un `module`
+  // real) y la rama de window nunca corre → "X is not defined" en producción
+  // (regularizacion.js, 2026-09-28). La publicación en window debe ser
+  // incondicional; module.exports puede ir aparte.
+  r.umdCondicional = /module\.exports[^\n]*\n\s*else\s+[\w$]+\.[\w$]+\s*=|module\.exports\s*=\s*[^;:]+:\s*[\w$]+\.[\w$]+\s*=/.test(src);
   // Handlers inline GENERADOS desde JS (innerHTML con onclick="fn(...)" o
   // setAttribute('onclick', …)). Se resuelven en el ámbito global, no en el
   // del archivo: cada nombre que citan necesita puente, aunque lo defina el
@@ -389,6 +395,7 @@ const escriturasAjenas = []; // { quien, nombre, declaradoEn }
 const sinProveedor = new Map(); // nombre -> usos
 const thisTop = [];
 const mutacionesAjenas = [];
+const umdCondicional = [...JS].filter(([, r]) => r.umdCondicional).map(([ruta]) => ruta);
 
 for (const [ruta, r] of JS) {
   if (r.thisTop.length) thisTop.push({ ruta, lineas: r.thisTop });
@@ -440,6 +447,7 @@ console.log(`Estado mutable compartido: ${mutableCompartido.length} variables en
 console.log(`Escrituras ajenas (truenan en módulo): ${escriturasAjenas.length}`);
 console.log(`No compilan como módulo: ${noCompilaComoModulo.length}`);
 console.log(`this de nivel superior: ${thisTop.length} archivos`);
+console.log(`UMD que publica en window solo sin module (Rolldown lo rompe): ${umdCondicional.length}`);
 console.log(`Mutación de namespace ajeno (window.X.y = …): ${mutacionesAjenas.length}`);
 console.log(`Handlers inline: ${totalHandlersHtml} en HTML + ${totalHandlersJs} en JS`);
 console.log(`Etiquetas <script>/<link> locales sin ?v=: ${totalSinVersion}`);
@@ -461,6 +469,7 @@ seccion('Escrituras ajenas (arreglo a mano)', escriturasAjenas, (x) =>
   `${x.quien}: escribe "${x.nombre}"${x.declaradoEn.length ? ' declarada en ' + x.declaradoEn.join(', ') : ' (sin declarar en ningún lado)'}`);
 seccion('No compilan como módulo', noCompilaComoModulo, (x) => x);
 seccion('this de nivel superior', thisTop, (x) => `${x.ruta}: líneas ${x.lineas.join(', ')}`);
+seccion('UMD condicional (publicar en window SIEMPRE; module.exports aparte)', umdCondicional, (x) => x);
 seccion('Mutación de namespace ajeno', mutacionesAjenas, (x) => `${x.ruta}:${x.linea} window.${x.nombre}.…`);
 seccion('Errores de parseo', errores, (x) => x);
 
@@ -483,6 +492,6 @@ if (jsonOut) {
   console.log(`\nJSON escrito en ${jsonOut}`);
 }
 
-if (estricto && (puentes.length || mutableCompartido.length || escriturasAjenas.length || noCompilaComoModulo.length || errores.length)) {
+if (estricto && (puentes.length || mutableCompartido.length || escriturasAjenas.length || noCompilaComoModulo.length || errores.length || umdCondicional.length)) {
   process.exit(1);
 }
