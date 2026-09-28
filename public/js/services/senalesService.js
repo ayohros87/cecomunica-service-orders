@@ -243,6 +243,18 @@ const SenalesService = {
     );
   },
 
+  // Lotes PoC que ventas preparó y recepción todavía no cargó
+  // (poc_lotes_preparados — list solo recepción/admin/gerente; el vendedor
+  // no debe llamar esto: le rebotaría en rules). Auditoría UX 2026-09-28 §4.7 #9.
+  countLotesPocPorCargar() {
+    const db = firebase.firestore();
+    return this._count(
+      db.collection('poc_lotes_preparados').where('estado', '==', 'pendiente'),
+      null,
+      { col: 'poc_lotes_preparados', wheres: [['estado', '==', 'pendiente']] }
+    );
+  },
+
   // Pool de equipos serializados (equipos_pool — read isSignedIn()).
   countEquiposPoolPorEstado(estado) {
     const db = firebase.firestore();

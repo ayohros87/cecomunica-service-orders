@@ -199,6 +199,14 @@ window.HomeSignals = (() => {
       href: 'inventario/piezas.html?filtro=sin_stock', // aterriza filtrada (auditoría UX 2026-09-28)
       count: () => SenalesService.countPiezasSinStock(),
     },
+    // Lotes PoC preparados por ventas que recepción no ha cargado (el
+    // traspaso ya viaja dentro del app; auditoría UX 2026-09-28 §4.7 #9).
+    LPC: {
+      modulo: 'poc', icon: 'inbox',
+      label: 'Lotes PoC por cargar', sub: 'preparados por ventas',
+      href: 'POC/nuevo-batch.html',
+      count: () => SenalesService.countLotesPocPorCargar(),
+    },
     // Pool de equipos serializados (PLAN_CICLO_VIDA_EQUIPOS.md, Fase A). Los
     // href aterrizan en la pestaña/filtro EXACTOS de la señal (deep-links).
     S11: {
@@ -294,10 +302,10 @@ window.HomeSignals = (() => {
     // desde la lista de órdenes (chips por estado).
     // REGV/REGG (cuentas por regularizar, plan 2026-09-08): el vendedor ve su
     // cartera; admin y gerencia ven todas, con las sin vendedor primero.
-    administrador:     ['SAG', 'S10', 'OPC', 'S1', 'EST', 'S4Q', 'SAP', 'REGG'],
+    administrador:     ['SAG', 'S10', 'OPC', 'S1', 'EST', 'S4Q', 'SAP', 'REGG', 'LPC'],
     gerente:           ['S1', 'S10', 'SAP', 'S8', 'REGG'],
     jefe_taller:       ['S1', 'EST', 'S4Q', 'SAP'],
-    recepcion:         ['OPC', 'S1', 'S2', 'ENT', 'S8'],
+    recepcion:         ['OPC', 'S1', 'S2', 'ENT', 'S8', 'LPC'],
     vendedor:          ['S7', 'S8', 'S1', 'REGV'],
     tecnico:           ['S5', 'S4P'],
     tecnico_operativo: ['S5', 'S4P'],
