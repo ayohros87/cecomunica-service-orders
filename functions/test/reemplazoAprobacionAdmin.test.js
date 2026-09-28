@@ -36,6 +36,7 @@ const vm = require("node:vm");
 
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
+const { fuenteCentro } = require("./_helpers/centro");
 
 function montar(rol = "administrador", uid = "adm") {
   const ctx = {
@@ -55,7 +56,7 @@ function montar(rol = "administrador", uid = "adm") {
   Object.assign(ctx, { FMT: ctx.window.FMT, ContractTotals: ctx.window.ContractTotals,
     ContratoTarifario: ctx.window.ContratoTarifario, ContratoAnulacion: ctx.window.ContratoAnulacion,
     ContratoEdicion: ctx.window.ContratoEdicion, GestionesService: ctx.window.GestionesService });
-  vm.runInContext(leer("public", "js", "pages", "clientes-centro.js"), ctx);
+  vm.runInContext(fuenteCentro(), ctx);
   const C = ctx.window.Centro;
   C.rol = rol; C.uid = uid;
   C.cliente = { id: "cli1", nombre: "CLIENTE DE PRUEBA, S.A." };

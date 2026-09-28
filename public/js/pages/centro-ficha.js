@@ -1,0 +1,116 @@
+// @ts-nocheck
+// Centro de gestión de clientes — Ficha 360.
+// Sección de clientes-centro.js (partido el 2026-09-28, auditoría UX §4.3 #13).
+// centro-core.js define window.Centro; aquí se le suman estos métodos. El
+// orden de carga lo fija js/entry/clientes-centro.js.
+Object.assign(window.Centro, {
+  /* ═════════ Ficha 360 ═════════ */
+
+  volver({ push = true } = {}) {
+    this._pararEscucha();
+    this.cliente = null;
+    document.getElementById('vistaFicha').classList.add('hidden');
+    document.getElementById('vistaLista').classList.remove('hidden');
+    const cola = window.CentroAprobaciones?.tipo;
+    // El filtro de regularización sobrevive al ir y volver de una ficha.
+    const qs = this.filtroReg ? '?filtro=regularizacion' : (cola ? `?aprobaciones=${cola}` : '');
+    if (push) history.pushState({}, '', location.pathname + qs);
+    window.CentroAprobaciones?.refrescar();
+    if (!document.querySelector('#cgLista .cg-row')) this.cargarLista(true);
+  },
+
+  async abrir(clienteId, { push = true } = {}) {
+    try {
+      window.AprobacionesService?.invalidarHome();
+      const c = await ClientesService.getCliente(clienteId);
+      if (!c || c.deleted) { Toast.show('Cliente no encontrado', 'bad'); return; }
+      // Candado de cartera: un vendedor no abre clientes ajenos ni por deep-link.
+      if (this.esVendedor() && c.vendedor_asignado !== this.uid) {
+        Toast.show('Este cliente no está en tu cartera', 'bad');
+        this.volver({ push: true });
+        return;
+      }
+      this.cliente = c;
+      if (push) history.pushState({}, '', `?id=${encodeURIComponent(clienteId)}`);
+      document.getElementById('vistaLista').classList.add('hidden');
+      document.getElementById('vistaFicha').classList.remove('hidden');
+      window.scrollTo(0, 0);
+
+      this._pintarEncabezado(c);
+
+      // Skeletons mientras cargan contratos/flota/gestiones (la ficha antes
+      // aparecía a saltos, sección por sección).
+      const skel = (n, h) => Array.from({ length: n }, () =>
+        `<div class="cg-skel" style="height:${h}px; margin-bottom:8px;"></div>`).join('');
+      document.getElementById('fAhora').innerHTML = skel(1, 64);
+      document.getElementById('fResumen').innerHTML = '';
+      document.getElementById('fContratos').innerHTML = skel(3, 38);
+      document.getElementById('fEquipos').innerHTML = skel(3, 38);
+      document.getElementById('fGestiones').innerHTML = skel(2, 46);
+
+      // Carga en paralelo: contratos + flota + gestiones. Las gestiones NO
+      // tumban la ficha si fallan (p. ej. reglas aún sin desplegar en un
+      // entorno): el cliente completo vale más que esa sección.
+      const db = firebase.firestore();
+      const [conSnap, equipos, , gestiones] = await Promise.all([
+        db.collection('contratos').where('cliente_id', '==', clienteId).get(),
+        EquiposPoolService.listarPorCliente(clienteId),
+        // Catálogo → ModeloFamilia: el pareo equipo↔línea (tarifa, vencimiento,
+        // Anexo A) se decide por familia N/R, no por texto.
+        (window.ModelosService?.catalogo ? ModelosService.catalogo().catch(e => { console.warn('[centro] catálogo no disponible:', e?.message || e); return null; }) : null),
+        GestionesService.listarPorCliente(clienteId).catch(e => {
+          console.warn('[centro] gestiones no disponibles:', e?.message || e);
+          return [];
+        }),
+      ]);
+      this.contratos = this._mapContratos(conSnap);
+      this.equipos = Array.isArray(equipos) ? equipos : [];
+      this.gestiones = gestiones;
+
+      this.pintarKpis();
+      this.pintarSenales();
+      this.pintarAcciones();
+      this.pintarContratos();
+      this.pintarEquipos();
+      this.pintarGestiones();
+      this.armarMenu();
+      // No bloquea la ficha: se pinta sola cuando llega (repinta "Ahora").
+      this.ordenesPorDecidir = [];
+      this._cargarOrdenesPorDecidir().catch(e => console.warn('[centro] ordenes por decidir:', e?.message || e));
+      this._abrirBloques(clienteId);
+      if (window.lucide?.createIcons) lucide.createIcons();
+      if (this.cSel) {
+        const cid = this.cSel; this.cSel = null;
+        history.replaceState({}, '', `?id=${encodeURIComponent(clienteId)}`);
+        if (this.contratos.some(x => x.id === cid)) this.verContrato(cid);
+      }
+      // Escucha en vivo: los triggers escriben el avance ~1-2s después de
+      // cada acción y la página lo adivinaba con setTimeout — ahora el
+      // expediente se repinta cuando el dato REAL llega.
+      this._escucharGestiones(clienteId);
+      this._escucharCliente(clienteId);
+      // Con la persistencia multi-pestaña, la pestaña que abre el deep-link
+      // del correo entra como SECUNDARIA: si la primaria está congelada por
+      // el navegador, estos get() resuelven del caché de IndexedDB y la
+      // ficha sale vieja hasta el F5 (reporte 2026-09-02). Si este pintado
+      // salió del caché, se relee del servidor en background y se repinta.
+      if (conSnap.metadata && conSnap.metadata.fromCache) this._revalidarFicha(clienteId);
+      // Deep-link desde correo (?g=): aterrizar EN el expediente, no arriba
+      // de la página (pedido 2026-08-27).
+      if (this.gSel) {
+        setTimeout(() => document.getElementById(`grow-${this.gSel}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+      }
+    } catch (e) { console.error(e); Toast.show('No se pudo abrir el cliente', 'bad'); }
+  },
+
+  _pintarEncabezado(c) {
+    document.getElementById('fAvatar').textContent = this._iniciales(c.nombre);
+    document.getElementById('fNombre').textContent = c.nombre || '(sin nombre)';
+    document.getElementById('fMeta').textContent = [
+      c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null, c.telefono || null, c.email || null,
+      c.vendedor_email ? `Vendedor: ${c.vendedor_email}` : null,
+    ].filter(Boolean).join(' · ') || '—';
+    this._pintarChipReg(c);
+  },
+});

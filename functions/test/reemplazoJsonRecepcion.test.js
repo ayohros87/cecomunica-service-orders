@@ -22,6 +22,7 @@ const vm = require("node:vm");
 
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
+const { fuenteCentro } = require("./_helpers/centro");
 
 const GR = {
   id: "GR20260910-01", tipo: "reemplazo", estado: "pendiente_bodega",
@@ -75,7 +76,7 @@ function montarCentro({ gestion = GR, config = CONFIG, confirmar = true } = {}) 
     ContractTotals: ctx.window.ContractTotals, ContratoTarifario: ctx.window.ContratoTarifario });
   vm.runInContext(leer("public", "js", "services", "gestionesService.js"), ctx);
   ctx.GestionesService = ctx.window.GestionesService;
-  vm.runInContext(leer("public", "js", "pages", "clientes-centro.js"), ctx);
+  vm.runInContext(fuenteCentro(), ctx);
 
   const Centro = ctx.window.Centro;
   Centro.rol = "vendedor";

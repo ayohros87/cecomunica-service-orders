@@ -24,6 +24,7 @@ const vm = require("node:vm");
 
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
+const { fuenteCentro } = require("./_helpers/centro");
 
 function cargarServicio() {
   const ctx = { window: {}, console };
@@ -86,7 +87,7 @@ function montarCentro({ nodos = {}, selectores = {}, gestiones = [], contratos =
   // La escritura real la cubren las reglas (test-emulator/rules.js); aquí
   // interesa el PARCHE que arma la página.
   ctx.GestionesService.editar = async (gid, cambios, resumen) => { escrito.gid = gid; escrito.cambios = cambios; escrito.resumen = resumen; };
-  vm.runInContext(leer("public", "js", "pages", "clientes-centro.js"), ctx);
+  vm.runInContext(fuenteCentro(), ctx);
   const Centro = ctx.window.Centro;
   Centro.rol = "vendedor";
   Centro.gestiones = gestiones;

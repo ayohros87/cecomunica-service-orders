@@ -1,7 +1,7 @@
 // Ficha del cliente — edición individual (piloto del kit de formularios,
-// 2026-09-03). Sustituye al modo edición de contratos/nuevo-cliente.html en
-// los caminos cotidianos (menú del Centro y buscador global); el formulario
-// viejo queda para el alta y para el bloque IP.
+// 2026-09-03). Es el ÚNICO formulario de cliente: alta (?nuevo=1), edición,
+// bloque IP y, desde la auditoría UX 2026-09-28 (T9), los documentos del
+// cliente (?seccion=documentos). contratos/nuevo-cliente.html solo redirige aquí.
 //
 // Patrón (ver formKit.js): guardado explícito con barra pegajosa, validación
 // de formato al salir del campo, guardia de salida, campos auditados con
@@ -85,7 +85,128 @@ window.FichaCliente = {
     this.armarKit();
     this.cargarChips();
     await this.cargarIPs(this.cliente.ip || '');
+    this.montarDocumentos();
     if (window.lucide?.createIcons) lucide.createIcons();
+  },
+
+  // ── Documentos del cliente (PII) ──────────────────────────────────────
+  // Vivían en contratos/nuevo-cliente.html?id= (cliente-documentos.js): se
+  // trajeron aquí para que haya UN formulario de cliente (auditoría UX
+  // 2026-09-28, T9). Mismos roles que antes: esa página solo la abrían
+  // admin/gerencia/recepción, y la callable getClienteDocUrl solo les firma
+  // la URL a ellos — al vendedor la sección ni se le pinta.
+  _puedeVerDocs() { return [ROLES.ADMIN, 'admin', ROLES.RECEPCION, ROLES.GERENTE].includes(this.rol); },
+
+  montarDocumentos() {
+    const sec = document.getElementById('seccionDocumentos');
+    if (!sec || this.esNuevo || !this.cliente?.id || !this._puedeVerDocs() || !window.ClienteDocumentosService) return;
+    sec.style.display = '';
+    const $tipo = document.getElementById('docTipo');
+    if (!$tipo.options.length) {
+      ClienteDocumentosService.TIPOS.forEach(t => $tipo.appendChild(new Option(t.label, t.value)));
+    }
+    if (!this._docsWired) {
+      this._docsWired = true;
+      document.getElementById('docBtnSubir').addEventListener('click', () => this.subirDocumento());
+    }
+    this.cargarDocumentos();
+    // ?seccion=documentos: el Centro ("Cargar un documento") aterriza aquí.
+    if (new URLSearchParams(location.search).get('seccion') === 'documentos') {
+      setTimeout(() => sec.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+    }
+  },
+
+  _docFmtSize(bytes) {
+    if (!bytes) return '';
+    const kb = bytes / 1024;
+    return kb < 1024 ? `${Math.round(kb)} KB` : `${(kb / 1024).toFixed(1)} MB`;
+  },
+
+  async cargarDocumentos() {
+    const $list = document.getElementById('docList');
+    if (!$list) return;
+    $list.innerHTML = '<div style="color:var(--fg-3); font-size:13px;">Cargando…</div>';
+    let docs = [];
+    try { docs = await ClienteDocumentosService.list(this.cliente.id); }
+    catch (err) {
+      console.error('[ficha] documentos:', err);
+      $list.innerHTML = '<div style="color:#A03030; font-size:13px;">No se pudieron cargar los documentos.</div>';
+      return;
+    }
+    this._docs = docs;
+    if (!docs.length) {
+      $list.innerHTML = '<div style="color:var(--fg-3); font-size:13px;">No hay documentos cargados.</div>';
+      return;
+    }
+    // 'image' NO está en el vendor a medida de lucide: por eso 'camera'.
+    $list.innerHTML = docs.map(d => {
+      const f = d.subido_en?.toDate ? d.subido_en.toDate().toLocaleString('es-PA', { hour12: false }) : '';
+      const meta = [this.esc(d.nombre_archivo || ''), this._docFmtSize(d.size), this.esc(f)].filter(Boolean).join(' · ');
+      return `<div class="doc-row" style="display:flex; align-items:center; gap:var(--sp-3); padding:var(--sp-2) 0; border-bottom:1px solid var(--border-subtle);">
+        <i data-lucide="${(d.content_type || '').includes('pdf') ? 'file-text' : 'camera'}" style="width:18px; height:18px; color:var(--fg-3); flex:none;"></i>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:600; font-size:13.5px;">${this.esc(ClienteDocumentosService.labelFor(d.tipo))}</div>
+          <div style="font-size:12px; color:var(--fg-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${meta}</div>
+        </div>
+        <button type="button" class="btn btn-ghost" onclick="FichaCliente.verDocumento('${this.esc(d.id)}', this)"><i data-lucide="eye"></i> Ver</button>
+        <button type="button" class="btn btn-ghost" style="color:#A03030;" aria-label="Eliminar documento"
+                onclick="FichaCliente.borrarDocumento('${this.esc(d.id)}')"><i data-lucide="trash-2"></i></button>
+      </div>`;
+    }).join('');
+    if (window.lucide?.createIcons) lucide.createIcons();
+  },
+
+  // La pestaña se abre con el CLIC y recibe la URL firmada después: abrirla
+  // ya firmada tras el await la trataría como popup (patrón del Centro).
+  async verDocumento(docId, btn) {
+    const tab = window.open('about:blank', '_blank');
+    if (tab) { try { tab.opener = null; } catch (_) {} }
+    if (btn) btn.disabled = true;
+    try {
+      const url = await ClienteDocumentosService.getViewUrl(this.cliente.id, docId);
+      if (tab) tab.location.href = url; else window.open(url, '_blank', 'noopener');
+    } catch (err) {
+      if (tab) tab.close();
+      Toast.show(err?.message || 'No se pudo abrir el documento.', 'bad');
+    } finally { if (btn) btn.disabled = false; }
+  },
+
+  async borrarDocumento(docId) {
+    const d = (this._docs || []).find(x => x.id === docId);
+    const ok = await Modal.confirm({
+      title: 'Eliminar documento',
+      message: `¿Eliminar el documento "${this.esc(d?.nombre_archivo || '')}"? Sale del expediente; el archivo queda guardado para auditoría.`,
+      confirmLabel: 'Eliminar', danger: true,
+    });
+    if (!ok) return;
+    try {
+      await ClienteDocumentosService.softDelete(this.cliente.id, docId);
+      Toast.show('Documento eliminado.', 'ok');
+      this.cargarDocumentos();
+    } catch (err) { Toast.show('No se pudo eliminar: ' + (err?.message || err), 'bad'); }
+  },
+
+  subirDocumento() {
+    const $file = document.getElementById('docFile');
+    const $tipo = document.getElementById('docTipo');
+    const $btn = document.getElementById('docBtnSubir');
+    const $status = document.getElementById('docUploadStatus');
+    const $pct = document.getElementById('docUploadPct');
+    if ($btn.disabled) return; // candado contra el doble clic mientras sube
+    const file = $file.files[0];
+    if (!file) { Toast.show('Selecciona un archivo.', 'warn'); return; }
+    const okType = file.type === 'application/pdf' || file.type.startsWith('image/');
+    if (!okType) { Toast.show('Solo PDF o imágenes.', 'warn'); return; }
+    if (file.size > 10 * 1024 * 1024) { Toast.show('El archivo supera 10 MB.', 'warn'); return; }
+    const busy = (on) => { $btn.disabled = on; $tipo.disabled = on; $file.disabled = on; $status.style.display = on ? 'inline' : 'none'; };
+    busy(true);
+    $pct.textContent = '0%';
+    ClienteDocumentosService.upload({
+      clienteId: this.cliente.id, tipo: $tipo.value, file,
+      onProgress: (p) => { $pct.textContent = p + '%'; },
+      onError: (err) => { console.error('[ficha] subir documento:', err); Toast.show('Error al subir: ' + (err?.message || err), 'bad'); busy(false); },
+      onDone: () => { Toast.show('Documento subido.', 'ok'); $file.value = ''; busy(false); this.cargarDocumentos(); },
+    });
   },
 
   // ── Bloque IP (empresa/IPs) ───────────────────────────────────────────
@@ -239,7 +360,10 @@ window.FichaCliente = {
       ClienteDocumentosService.upload({
         clienteId: this.cliente.id, tipo: 'otro', file: f,
         onProgress: (p) => { prog.textContent = p + '%'; },
-        onDone: () => { prog.textContent = ''; file.value = ''; Toast.show('Evidencia adjuntada a los documentos del cliente.', 'ok'); },
+        onDone: () => {
+          prog.textContent = ''; file.value = ''; Toast.show('Evidencia adjuntada a los documentos del cliente.', 'ok');
+          if (document.getElementById('seccionDocumentos')?.style.display !== 'none') this.cargarDocumentos();
+        },
         onError: (e) => { prog.textContent = ''; Toast.show('No se pudo subir: ' + (e?.message || e), 'bad'); },
       });
     });

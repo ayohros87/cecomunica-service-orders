@@ -21,6 +21,7 @@ const vm = require("node:vm");
 
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
+const { fuenteCentro } = require("./_helpers/centro");
 
 const { propiedadDeUnidad } = require("../src/domain/propiedadUnidad");
 const ModeloFamilia = require("../src/domain/modeloFamilia");
@@ -142,7 +143,7 @@ test("P6 el front tiene UNA sola voz para la propiedad", () => {
 });
 
 test("P6 las pantallas del Centro muestran de quién es cada equipo", () => {
-  const src = leer("public", "js", "pages", "clientes-centro.js");
+  const src = fuenteCentro();
   // Ver contrato: columna en las líneas y tabla de seriales con su propiedad.
   assert.match(src, /<th>De quién es<\/th>/, "la tabla de líneas declara la columna");
   assert.match(src, /chipPropiedadHtml/, "los seriales llevan el chip de propiedad");
@@ -175,7 +176,7 @@ test("P7 los documentos y correos también dicen de quién es cada equipo", () =
   // Propiedad, y el congelado de la solicitud la guarda.
   const firmar = leer("public", "firmar", "index.html");
   assert.match(firmar, /<th>Propiedad<\/th>/);
-  assert.match(leer("public", "js", "pages", "clientes-centro.js"),
+  assert.match(fuenteCentro(),
     /s\.modalidad \? \{ modalidad: s\.modalidad \} : \{\}/,
     "la modalidad viaja en el congelado de la firma");
 

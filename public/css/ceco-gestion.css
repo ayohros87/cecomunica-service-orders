@@ -103,6 +103,8 @@
 .cg-tl-t { font-size: 13px; }
 .cg-tl-t b { display: block; }
 .cg-tl-t .s { color: var(--fg-3); font-size: 12px; }
+/* "le toca a X" en el paso que sigue: mismo peso que en la fila de "Ahora" (centro.html). */
+.cg-tl-t .s .toca { color: var(--fg-2); font-weight: 600; }
 
 .cg-os { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .cg-os a {

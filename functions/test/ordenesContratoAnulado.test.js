@@ -46,6 +46,7 @@ const { planOrdenes, estaViva, TERMINALES, ANULADA } =
 
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
+const { fuenteCentro } = require("./_helpers/centro");
 
 const orden = (id, estado, extra = {}) => ({ id, data: { estado_reparacion: estado, ...extra } });
 const equipos = (n) => Array.from({ length: n }, (_, i) => ({ serial: `S${i}`, eliminado: false }));
@@ -197,7 +198,7 @@ test("A10 · al anular, los radios que nunca salieron vuelven a bodega", () => {
 });
 
 test("A11 · el Centro recuerda las órdenes que quedaron sin contrato", () => {
-  const centro = leer("public", "js", "pages", "clientes-centro.js");
+  const centro = fuenteCentro();
   assert.ok(/_cargarOrdenesPorDecidir/.test(centro), "el Centro no busca las órdenes señaladas");
   assert.ok(/ordenesPorDecidir/.test(centro), "no hay cola de órdenes por decidir");
   // El deep-link tiene que TRAER la orden: son viejas y no caben en la primera

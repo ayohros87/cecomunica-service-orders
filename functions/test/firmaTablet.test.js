@@ -17,6 +17,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+const { textoScripts } = require("./_helpers/entryScripts");
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
 
@@ -248,9 +249,10 @@ test("corregir el correo de la copia no puede tocar nada más", async () => {
 test("firmaTablet.js se carga en la página de órdenes", () => {
   // ordenes-flujo.js NO es diferido: si el módulo no está en el HTML, el
   // botón de tablet revienta con ReferenceError en el primer clic.
-  const html = leer("public", "ordenes", "index.html");
-  assert.match(html, /js\/ui\/firmaTablet\.js/);
-  const iTablet = html.indexOf("js/ui/firmaTablet.js");
-  const iFlujo = html.indexOf("js/pages/ordenes-flujo.js");
-  assert.ok(iTablet < iFlujo, "firmaTablet debe cargarse antes que ordenes-flujo");
+  // Desde Vite el orden lo da el entry de la página, no las etiquetas del HTML.
+  const scripts = textoScripts("ordenes/index.html");
+  assert.match(scripts, /js\/ui\/firmaTablet\.js/);
+  const iTablet = scripts.indexOf("js/ui/firmaTablet.js");
+  const iFlujo = scripts.indexOf("js/pages/ordenes-flujo.js");
+  assert.ok(iFlujo >= 0 && iTablet < iFlujo, "firmaTablet debe cargarse antes que ordenes-flujo");
 });

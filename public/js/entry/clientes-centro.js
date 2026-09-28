@@ -31,6 +31,9 @@ import '/js/domain/contratoAnulacion.js';
 import '/js/domain/contratoCierre.js';
 import '/js/domain/contratoEdicion.js';
 import '/js/domain/regularizacion.js';
+// ?filtro=regularizacion excluye las cuentas pospuestas con el MISMO criterio
+// que la tarjeta REGV del home (PendientesDomain.estaPospuesto).
+import '/js/domain/pendientes.js';
 import '/js/domain/gestionAutorizacion.js';
 import '/js/domain/contratoFirma.js';
 // "Documento completo" abre el papel correcto (v2 o clásico) — auditoría UX 2026-09-28.
@@ -43,4 +46,25 @@ import '/js/ui/modal.js';
 import '/js/pages/contratos-upload.js';
 import '/js/domain/garantiaEquipo.js';
 import '/js/services/pocService.js';
-import '/js/pages/clientes-centro.js';
+// El Centro, partido por secciones (2026-09-28, auditoría UX §4.3 #13): el
+// núcleo define window.Centro; cada sección le suma sus métodos con
+// Object.assign. El init lo dispara centro.html en DOMContentLoaded.
+// functions/test/_helpers/centro.js lee ESTA lista para montar el mismo
+// conjunto en los tests: un archivo nuevo se anota aquí y solo aquí.
+import '/js/pages/centro-core.js';
+import '/js/pages/centro-directorio.js';
+import '/js/pages/centro-ficha.js';
+import '/js/pages/centro-regularizacion.js';
+import '/js/pages/centro-ficha-bloques.js';
+import '/js/pages/centro-firma.js';
+import '/js/pages/centro-gestiones.js';
+import '/js/pages/centro-acciones.js';
+import '/js/pages/centro-menu-gestion.js';
+import '/js/pages/centro-wiz-reemplazo-demo.js';
+import '/js/pages/centro-cambio-serial.js';
+import '/js/pages/centro-wiz-aumento.js';
+import '/js/pages/centro-wiz-ajuste.js';
+import '/js/pages/centro-wiz-contrato.js';
+import '/js/pages/centro-plan-seriales-renovacion.js';
+import '/js/pages/centro-editor-contrato.js';
+import '/js/pages/centro-wiz-baja.js';

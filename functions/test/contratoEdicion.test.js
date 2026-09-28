@@ -12,6 +12,8 @@ const vm = require("node:vm");
 
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
+const { fuenteCentro } = require("./_helpers/centro");
+const { textoScripts } = require("./_helpers/entryScripts");
 
 function cargar() {
   const ctx = { console, window: {} };
@@ -79,17 +81,17 @@ test("nadie vuelve a tener su propia copia del criterio", () => {
   ];
   // editar-contrato.js quedó RETIRADO (su HTML es un reenvío): el único dueño
   // vivo del criterio es el Centro.
-  for (const f of [
-    ["public", "js", "pages", "clientes-centro.js"],
-  ]) {
-    const src = leer(...f).replace(/\/\/.*$/gm, "");   // sin comentarios
+  // El Centro vive en centro-core.js + centro-*.js (2026-09-28): se revisa el conjunto.
+  for (const [nombre, fuente] of [["centro-*.js", fuenteCentro()]]) {
+    const src = fuente.replace(/\/\/.*$/gm, "");   // sin comentarios
     assert.ok(src.includes("ContratoEdicion."),
-      `${f.at(-1)} dejó de usar el criterio compartido`);
+      `${nombre} dejó de usar el criterio compartido`);
     for (const re of COPIAS) {
-      assert.ok(!re.test(src), `${f.at(-1)} volvió a inlinear el criterio de edición (${re})`);
+      assert.ok(!re.test(src), `${nombre} volvió a inlinear el criterio de edición (${re})`);
     }
   }
-  // Y la página tiene que cargarlo, o truena en runtime.
-  assert.ok(leer("public", "clientes", "centro.html").includes("domain/contratoEdicion.js"),
+  // Y la página tiene que cargarlo, o truena en runtime. Desde Vite los
+  // scripts llegan por el entry: se mira la lista real, no el <script src>.
+  assert.match(textoScripts("clientes/centro.html"), /domain\/contratoEdicion\.js/,
     "clientes/centro.html no carga js/domain/contratoEdicion.js");
 });

@@ -15,6 +15,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
+const { textoScripts } = require("./_helpers/entryScripts");
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
 const D = require("../../public/js/domain/docIdentidad.js");
@@ -74,14 +75,20 @@ test("el vacío deja la raya para llenar a mano en el contrato", () => {
 
 // ── Espejo de sincronía: las puntas que dependen de esta lógica ──
 test("los formularios PREGUNTAN el tipo de documento", () => {
-  for (const p of ["public/clientes/ficha.html", "public/contratos/nuevo-cliente.html"]) {
+  // Un solo formulario de cliente (auditoría UX 2026-09-28, T9): el viejo
+  // contratos/nuevo-cliente.html solo redirige a la ficha, conservando ?id=.
+  const viejo = leer("public", "contratos", "nuevo-cliente.html");
+  assert.match(viejo, /clientes\/ficha\.html\?/, "contratos/nuevo-cliente.html debe redirigir a la ficha");
+  assert.doesNotMatch(viejo, /id="representante_cedula"/, "volvió el segundo formulario de cliente");
+  for (const p of ["public/clientes/ficha.html"]) {
     const html = leer(...p.split("/"));
     assert.match(html, /<select[^>]*id="representante_doc_tipo"/,
       `${p}: se fue el selector y el tipo volvería a adivinarse`);
     assert.match(html, /value="pasaporte"/, `${p}: el selector perdió la opción pasaporte`);
     assert.match(html, /id="representante_cedula"[^>]*data-fk-valida="documento"/,
       `${p}: la casilla volvió a exigir cédula`);
-    assert.match(html, /domain\/docIdentidad\.js/, `${p}: falta cargar docIdentidad.js`);
+    // El script llega por el entry de la página (Vite), no por <script src>.
+    assert.match(textoScripts(p.replace(/^public\//, "")), /domain\/docIdentidad\.js/, `${p}: falta cargar docIdentidad.js`);
   }
   // Y la respuesta viaja: ficha → cliente → contrato → documento.
   assert.match(leer("public", "js", "pages", "clientes-ficha.js"),

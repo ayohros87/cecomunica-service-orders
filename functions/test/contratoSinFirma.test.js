@@ -32,8 +32,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+const { textoScripts } = require("./_helpers/entryScripts");
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
+const { fuenteCentro } = require("./_helpers/centro");
 const back = require("../src/domain/contratoFirma");
 
 function montar(rol = "administrador", uid = "adm") {
@@ -56,7 +58,7 @@ function montar(rol = "administrador", uid = "adm") {
     ContratoTarifario: ctx.window.ContratoTarifario, ContratoAnulacion: ctx.window.ContratoAnulacion,
     ContratoCierre: ctx.window.ContratoCierre, ContratoEdicion: ctx.window.ContratoEdicion,
     ContratoFirma: ctx.window.ContratoFirma, GestionesService: ctx.window.GestionesService });
-  vm.runInContext(leer("public", "js", "pages", "clientes-centro.js"), ctx);
+  vm.runInContext(fuenteCentro(), ctx);
   const C = ctx.window.Centro;
   C.rol = rol; C.uid = uid;
   C.cliente = { id: "cli1", nombre: "MACELLO, S.A." };
@@ -166,9 +168,9 @@ test("R6 · el candado de la entrega exime a los tipos sin firma en rules y en e
   }
   const flujo = leer("public", "js", "pages", "ordenes-flujo.js");
   assert.ok(/ContratoFirma\.lleva/.test(flujo), "ordenes-flujo: el espejo del candado no consulta ContratoFirma");
-  assert.ok(/domain\/contratoFirma\.js/.test(leer("public", "ordenes", "index.html")),
+  assert.ok(/domain\/contratoFirma\.js/.test(textoScripts("ordenes/index.html")),
     "ordenes/index.html no carga el módulo del que depende el candado");
-  assert.ok(/domain\/contratoFirma\.js/.test(leer("public", "clientes", "centro.html")),
+  assert.ok(/domain\/contratoFirma\.js/.test(textoScripts("clientes/centro.html")),
     "clientes/centro.html no carga el módulo del que depende el Centro");
 });
 

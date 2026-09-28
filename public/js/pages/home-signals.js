@@ -249,7 +249,7 @@ window.HomeSignals = (() => {
     REGV: {
       modulo: 'centro', icon: 'clipboard-list', alert: true, moreIsBad: true,
       label: 'Mis cuentas por regularizar', sub: 'operan, pero les faltan seriales o contratos',
-      href: 'clientes/centro.html',
+      href: 'clientes/centro.html?filtro=regularizacion',
       count: (ctx) => SenalesService.countCuentasPorRegularizar({ uid: ctx.uid }),
       // items() se llama sin ctx: la cartera sale del usuario autenticado.
       items: () => SenalesService.listCuentasPorRegularizar({ uid: firebase.auth().currentUser?.uid || null }),

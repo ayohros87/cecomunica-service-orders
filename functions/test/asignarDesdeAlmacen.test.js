@@ -23,8 +23,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+const { textoScripts } = require("./_helpers/entryScripts");
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
+const { fuenteCentro } = require("./_helpers/centro");
 const sinComentarios = (s) => s.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
 const ALMACEN_ASIGNAR = /almacen\/index\.html\?tab=asignar&(contrato|g)=/;
@@ -73,11 +75,13 @@ test("G3 · la bandeja Hoy no manda la asignación fuera de /almacen/", () => {
   assert.ok(/id: 'asignar'/.test(leer("public", "js", "ui", "almacen-nav.js")),
     "almacen-nav.js: falta la pestaña Asignar en la tira del espacio");
   assert.ok(/id="tab-asignar"/.test(html), "almacen/index.html: falta la sección de Asignar");
-  assert.ok(/asignador-seriales\.js/.test(html) && /almacen-asignar\.js/.test(html), "almacen/index.html: faltan los scripts de Asignar");
+  // Los scripts viajan en el entry de la página desde la migración a Vite.
+  const scripts = textoScripts("almacen/index.html");
+  assert.ok(/asignador-seriales\.js/.test(scripts) && /almacen-asignar\.js/.test(scripts), "almacen/index.html: faltan los scripts de Asignar");
 });
 
 test("G4 · el Centro muestra la asignación de bodega, no la captura", () => {
-  const centro = sinComentarios(leer("public", "js", "pages", "clientes-centro.js"));
+  const centro = sinComentarios(fuenteCentro());
   for (const marca of ["data-gaum", "data-gdemo", "data-gitem", "_validarSerialBodega", "_decorarAsignacion", "guardarAsignacionAumento", "guardarAsignacionDemo"]) {
     assert.ok(!centro.includes(marca), `clientes-centro.js todavía contiene ${marca}`);
   }

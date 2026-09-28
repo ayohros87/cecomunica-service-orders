@@ -16,8 +16,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+const { textoScripts } = require("./_helpers/entryScripts");
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
+const { fuenteCentro } = require("./_helpers/centro");
 
 function cargarRepValidacion() {
   const ctx = { console, window: {} };
@@ -133,7 +135,7 @@ test("construir: arma el objeto que viaja al contrato y a la ficha", () => {
 test("espejo: vista previa, segundo candado y campo del doc siguen cableados", () => {
   // El candado se mudó al wizard del Centro (2026-09-09): nuevo-contrato.html
   // se retiró y con él nc-preview/nc-guardar. Las tres puntas son las mismas.
-  const centro = leer("public", "js", "pages", "clientes-centro.js");
+  const centro = fuenteCentro();
   assert.match(centro, /wcRepValidado/, "el wizard debe renderizar el check");
   assert.match(centro, /RepValidacion\.resumen/, "el wizard debe pintar la línea de contexto");
   assert.match(centro, /_wcRepGate/, "el wizard debe deshabilitar Guardar sin el check");
@@ -143,6 +145,6 @@ test("espejo: vista previa, segundo candado y campo del doc siguen cableados", (
   const tarifario = leer("public", "js", "domain", "contratoTarifario.js");
   assert.match(tarifario, /representante_validacion/, "construirDoc debe aceptar el campo opcional");
 
-  const html = leer("public", "clientes", "centro.html");
-  assert.match(html, /repValidacion\.js/, "clientes/centro.html debe cargar el módulo de dominio");
+  // El módulo llega por el entry de la página (Vite), no por <script src>.
+  assert.match(textoScripts("clientes/centro.html"), /repValidacion\.js/, "clientes/centro.html debe cargar el módulo de dominio");
 });

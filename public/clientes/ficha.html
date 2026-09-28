@@ -209,6 +209,31 @@
         </div>
       </div>
 
+      <!-- Documentos del cliente (auditoría UX 2026-09-28, T9): vivían en el
+           formulario viejo contratos/nuevo-cliente.html?id=. Son PII: se ven
+           con URL firmada (getClienteDocUrl) y solo los roles que editan la
+           ficha los ven y los suben. La pinta FichaCliente.montarDocumentos. -->
+      <div class="fk-seccion" id="seccionDocumentos" style="display:none;">
+        <div class="fk-cab"><h3>Documentos</h3><span class="fk-auditado">confidencial</span></div>
+        <p class="fk-desc">Registro público, cédula del representante, comprobante de dirección, poderes.
+          Cada archivo se abre con un enlace que vence a los 5 minutos y queda registrado en la auditoría.</p>
+        <div class="form-grid-2" style="align-items:end;">
+          <div class="form-field">
+            <label class="form-label" for="docTipo">Tipo de documento</label>
+            <select class="form-select" id="docTipo"></select>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="docFile">Archivo (PDF o imagen, máx. 10 MB)</label>
+            <input class="form-input" type="file" id="docFile" accept="application/pdf,image/*">
+          </div>
+        </div>
+        <div style="display:flex; gap:var(--sp-3); align-items:center; flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary" id="docBtnSubir"><i data-lucide="upload"></i> Subir documento</button>
+          <span id="docUploadStatus" style="display:none; font-size:13px; color:var(--fg-3);">Subiendo <strong id="docUploadPct">0%</strong></span>
+        </div>
+        <div id="docList" style="margin-top:var(--sp-4);"></div>
+      </div>
+
       <!-- Expediente (solo lectura) -->
       <div class="fk-seccion" id="seccionExpediente">
         <div class="fk-cab"><h3>Del expediente</h3></div>

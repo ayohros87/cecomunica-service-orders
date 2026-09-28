@@ -15,6 +15,7 @@ const vm = require("node:vm");
 
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
+const { fuenteCentro } = require("./_helpers/centro");
 
 // DOM de mentira: solo lo que el editor toca. Los campos se declaran por id y
 // las líneas/cargos por los data-attrs que lee _lineasModelo/_aumCargos.
@@ -90,7 +91,7 @@ function montar({ contrato, dom }) {
   Object.assign(ctx, { FMT: ctx.window.FMT, ContractTotals: ctx.window.ContractTotals,
     ContratoTarifario: ctx.window.ContratoTarifario, ContratoAnulacion: ctx.window.ContratoAnulacion,
     ContratoEdicion: ctx.window.ContratoEdicion, GestionesService: ctx.window.GestionesService });
-  vm.runInContext(leer("public", "js", "pages", "clientes-centro.js"), ctx);
+  vm.runInContext(fuenteCentro(), ctx);
   const C = ctx.window.Centro;
   C.rol = "administrador"; C.uid = "adm"; C.email = "x@c.com";
   C.cliente = { id: "cli1", nombre: "CLIENTE DEMO" };
@@ -211,7 +212,7 @@ test("la duración en días se guarda como días, no como meses", async () => {
 
 // ── Cableado ──────────────────────────────────────────────────────────────
 test("el Centro dejó de mandar a la página vieja para editar", () => {
-  const centro = leer("public", "js", "pages", "clientes-centro.js");
+  const centro = fuenteCentro();
   assert.ok(centro.includes("Centro.editarContrato("),
     "la acción Editar… debe abrir el editor del Centro");
   // Sin comentarios: el bloque del editor MENCIONA la página vieja para decir

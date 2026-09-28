@@ -21,8 +21,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+const { textoScripts } = require("./_helpers/entryScripts");
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
+const { fuenteCentro } = require("./_helpers/centro");
 const sinComentarios = (s) => s.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
 function cargarBandeja() {
@@ -110,7 +112,7 @@ test("K6 · el home (panel de señales y feeds) pinta con el kit: sin CSS inyect
     assert.ok(!/fo-skel/.test(src), `${f}: esqueleto del kit`);
   }
   const html = leer("public", "index.html");
-  assert.ok(/bandeja\.css/.test(html) && /ui\/bandeja\.js/.test(html), "index.html carga el kit");
+  assert.ok(/bandeja\.css/.test(html) && /ui\/bandeja\.js/.test(textoScripts("index.html")), "index.html carga el kit");
   const css = leer("public", "css", "ceco-command.css");
   assert.ok(!/\.fo-row\s*\{/.test(css) && !/\.fo-skel\s*\{/.test(css), "ceco-command.css ya no define la fila ni el esqueleto del feed");
 });
@@ -125,7 +127,7 @@ test("K7 · la cola de Conflictos vive una sola vez (ConflictosPoolService)", ()
     assert.ok(!/conflicto_revisado:\s*(true|valor)/.test(src), `${f.at(-1)}: la marca la escribe solo el servicio`);
   }
   for (const h of [["public", "almacen", "index.html"], ["public", "inventario", "equipos.html"]]) {
-    assert.ok(/conflictosPoolService\.js/.test(leer(...h)), `${h.at(-1)} carga el servicio`);
+    assert.ok(/conflictosPoolService\.js/.test(textoScripts(h.slice(1).join("/"))), `${h.at(-1)} carga el servicio`);
   }
 });
 
@@ -242,7 +244,7 @@ test("K10 · los overlays construidos a mano se fueron a Modal.sheet (salvo ligh
   // formKit ya no tiene respaldo nativo y la única página que lo cargaba sin
   // modal.js ahora lo carga.
   assert.ok(!/window\.confirm/.test(sinComentarios(leer("public", "js", "ui", "formKit.js"))), "formKit sin window.confirm");
-  assert.match(leer("public", "ordenes", "editar-orden.html"), /ui\/modal\.js/, "editar-orden.html carga modal.js");
+  assert.match(textoScripts("ordenes/editar-orden.html"), /ui\/modal\.js/, "editar-orden.html carga modal.js");
   // La página pública de firma valida inline, sin alert().
   const firmar = sinComentarios(leer("public", "firmar", "index.html"));
   assert.ok(!/[^.\w]alert\(/.test(firmar), "firmar/index.html sin alert()");
@@ -297,7 +299,7 @@ test("K11 · ninguna página se declara su propio backdrop ni arma diálogos a m
   }
   // El Centro quedó sobre el kit: sus dos helpers son hojas y el div estático
   // con su CSS suelto ya no existe.
-  const centro = leer("public", "js", "pages", "clientes-centro.js");
+  const centro = fuenteCentro();
   assert.match(centro, /Modal\.sheet\(\{/, "clientes-centro.js debe abrir sus modales con Modal.sheet");
   assert.ok(!/cg-modal|cg-overlay/.test(sinComentarios(centro)), "clientes-centro.js sin la familia .cg-modal");
   assert.ok(!/cg-overlay/.test(leer("public", "clientes", "centro.html")), "centro.html sin el overlay propio");
@@ -358,7 +360,7 @@ test("K11 · ninguna página se declara su propio backdrop ni arma diálogos a m
     const src = fs2.readFileSync(f, "utf8");
     const fondos = (src.match(/<div[^>]*class="[^"]*modal-backdrop[^"]*"[^>]*>/g) || []);
     if (!fondos.length) continue;
-    assert.match(src, /ui\/modal\.js/, `${rel}: tiene modales del kit pero no carga ui/modal.js`);
+    assert.match(textoScripts(rel), /ui\/modal\.js/, `${rel}: tiene modales del kit pero no carga ui/modal.js`);
     for (const tag of fondos) {
       const id = (tag.match(/id="([^"]+)"/) || [])[1];
       assert.ok(id, `${rel}: fondo sin id, no se puede abrir con Modal.open`);

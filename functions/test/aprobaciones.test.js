@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const leer = file => fs.readFileSync(path.join(__dirname, '../../public/js', file), 'utf8');
+const { fuenteCentro } = require('./_helpers/centro');
 
 function servicio(registros, agg) {
   const consultas = [];
@@ -96,7 +97,7 @@ test('la carga inicial de ficha recibe gestiones, aunque el catálogo devuelva u
     ROLES: { VENDEDOR: 'vendedor' },
   });
   ctx.window.ModelosService = ctx.ModelosService;
-  vm.runInContext(leer('pages/clientes-centro.js'), ctx);
+  vm.runInContext(fuenteCentro(), ctx);
   const C = ctx.window.Centro;
   for (const fn of ['_pintarEncabezado', 'pintarKpis', 'pintarSenales', 'pintarAcciones', 'pintarContratos',
     'pintarEquipos', 'pintarGestiones', 'armarMenu', '_abrirBloques', '_escucharGestiones', '_escucharCliente']) C[fn] = () => {};

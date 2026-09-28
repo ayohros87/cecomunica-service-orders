@@ -23,6 +23,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+const { textoScripts } = require("./_helpers/entryScripts");
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (...p) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
 const noop = () => {};
@@ -216,7 +217,7 @@ test("el predicado de transición es el compartido de js/domain", () => {
     "contratos-list.js volvió a inlinear el criterio de transición");
   // Y quien sí lo usa tiene que cargarlo, o el CTA truena en runtime.
   // Quien lo usa hoy es la bandeja "Pendientes de inventario" del almacén.
-  assert.ok(leer("public", "almacen", "index.html").includes("domain/transicionPendiente.js"),
+  assert.ok(textoScripts("almacen/index.html").includes("domain/transicionPendiente.js"),
     "almacen/index.html no carga js/domain/transicionPendiente.js");
 });
 
