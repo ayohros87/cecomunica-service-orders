@@ -9,6 +9,8 @@
  *  - contratos firmado_historial[] — REEMPLAZAR_FIRMADO (sustitución del PDF
  *    firmado sobre un contrato ya activo)
  *  - PII purges — identificacion_purged_at + identificacion_purged_by
+ *  - admin_audit — guardados de Configuración, fusiones de clientes y
+ *    migraciones de datos (auditoría UX 2026-09-28)
  *
  * Returned events shape:
  *   { ts, type, action, by, refType, refId, refLabel, link }
@@ -137,9 +139,11 @@ const AuditoriaService = {
           by: e.actor_uid || null,
           refType: 'usuario',
           refId: e.target_uid || doc.id,
-          refLabel: e.target_uid ? e.target_uid.slice(0, 8) + '…' : doc.id,
+          // El correo identifica a la persona; el uid recortado no decía nada.
+          refLabel: (e.after?.email) || (e.before?.email) || (e.meta?.email)
+            || (e.target_uid ? e.target_uid.slice(0, 8) + '…' : doc.id),
           link: 'usuarios.html',
-          cliente: (e.after?.email) || (e.before?.email) || (e.meta?.email) || '',
+          cliente: '',
           meta: e.before && e.after
             ? `${JSON.stringify(e.before)} → ${JSON.stringify(e.after)}`
             : (e.meta ? JSON.stringify(e.meta) : ''),
@@ -149,10 +153,72 @@ const AuditoriaService = {
       console.warn('[auditoria] usuarios:', err);
     }
 
+    // ── PANEL ADMIN: configuración, fusiones, migraciones (admin_audit) ──
+    // Auditoría UX 2026-09-28: antes no quedaba rastro de quién cambió la
+    // configuración ni de qué fusionó.
+    try {
+      const snap = await db.collection('admin_audit')
+        .orderBy('fecha', 'desc')
+        .limit(limitPerSource)
+        .get();
+      snap.forEach(doc => {
+        const e = doc.data();
+        const ev = adminAuditEvento(doc.id, e);
+        if (ev) events.push(ev);
+      });
+    } catch (err) {
+      console.warn('[auditoria] admin_audit:', err);
+    }
+
     events.sort((a, b) => (b.ts || 0) - (a.ts || 0));
     return events;
   },
 };
+
+// Evento de la línea de tiempo a partir de un doc de admin_audit.
+function adminAuditEvento(id, e) {
+  const por = e.por || {};
+  const base = {
+    ts: toMs(e.fecha),
+    by: por.uid || null,
+    byNombre: por.nombre || por.email || '',
+    byEmail: por.email || '',
+    refId: id,
+  };
+  const corto = (v) => {
+    const s = Array.isArray(v) ? v.join(', ') : (v == null || v === '' ? '(vacío)' : String(v));
+    return s.length > 60 ? s.slice(0, 57) + '…' : s;
+  };
+  if (e.tipo === 'config') {
+    const cambios = Array.isArray(e.cambios) ? e.cambios : [];
+    return {
+      ...base, type: 'config', action: 'CONFIG_GUARDAR', refType: 'config',
+      refLabel: e.origen === 'alertas' ? 'Alertas' : e.origen === 'privacidad' ? 'Privacidad' : e.origen === 'grupos' ? 'Grupos PoC' : 'Configuración',
+      link: e.origen === 'alertas' ? 'alertas.html' : e.origen === 'privacidad' ? 'pii.html' : 'config.html',
+      cliente: '',
+      meta: cambios.map(c => `${c.campo}: ${corto(c.antes)} → ${corto(c.despues)}`).join(' · '),
+    };
+  }
+  if (e.tipo === 'fusion') {
+    const fus = Array.isArray(e.fusionados) ? e.fusionados : [];
+    const refs = Array.isArray(e.refs) ? e.refs.length : 0;
+    return {
+      ...base, type: 'datos', action: 'FUSION_CLIENTES', refType: 'cliente',
+      refLabel: e.conservado?.nombre || e.conservado?.id || '—',
+      link: e.conservado?.id ? `../clientes/centro.html?id=${encodeURIComponent(e.conservado.id)}` : null,
+      cliente: fus.map(f => f.nombre || f.id).join(', '),
+      meta: `${fus.length} ficha(s) fusionada(s) · ${refs} enlace(s) re-apuntado(s)${e.estado === 'fallida' ? ' · FALLÓ A MEDIAS' : ''}`,
+    };
+  }
+  if (e.tipo === 'backfill') {
+    return {
+      ...base, type: 'datos', action: 'BACKFILL', refType: 'backfill',
+      refLabel: e.nombre || e.backfill || '—', link: 'backfills.html', cliente: '',
+      meta: e.resumen || '',
+    };
+  }
+  return null;
+}
 
 // Map an os_log action to the corresponding parent-doc timestamp field.
 function pickTsForAction(orden, action) {

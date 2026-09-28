@@ -75,7 +75,10 @@
       <div>
         Detecta clientes <strong>duplicados</strong> (mismo RUC, o mismo nombre con/sin RUC) y los
         <strong>fusiona</strong> en un solo registro: re-apunta sus contratos, órdenes y equipos,
-        rellena los datos que falten y marca los duplicados como eliminados (soft-delete, reversible).
+        rellena los datos que falten y marca los duplicados como eliminados.
+        <strong>No se deshace con un clic:</strong> antes de escribir queda en Auditoría un registro
+        con el valor anterior de cada cambio. En los grupos "por similitud" solo se re-apunta lo que
+        está enlazado a la ficha, no lo que coincide por nombre.
         <strong>Revisa cada grupo antes de fusionar.</strong>
       </div>
     </div>

@@ -59,7 +59,7 @@
       <button id="btnSave" class="btn btn-primary btn-sm">
         <i data-lucide="save"></i> Guardar
       </button>
-      <button id="btnExport" class="btn btn-ghost btn-sm" title="Descargar snapshot JSON de empresa/config + operadores">
+      <button id="btnExport" class="btn btn-ghost btn-sm" title="Descargar una copia de la configuración (archivo JSON)">
         <i data-lucide="download"></i> Snapshot JSON
       </button>
       <span class="spacer"></span>
@@ -69,9 +69,10 @@
     <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
       <i data-lucide="info"></i>
       <div>
-        Parámetros admin-tuneables que sobre-escriben los defaults hardcoded del
-        código. Si Firestore no responde, los consumidores siguen funcionando con
-        los defaults — ningún cambio aquí puede dejar la app sin servicio.
+        Valores que ajusta administración; si un campo está vacío se usa el
+        valor de fábrica. Si la base de datos no responde, el sistema sigue
+        trabajando con los valores de fábrica: nada de lo que cambies aquí puede
+        dejarlo sin servicio. Cada guardado queda en el historial de Auditoría.
         <span id="configMeta" style="display:block;margin-top:6px;color:var(--fg-3);"></span>
       </div>
     </div>

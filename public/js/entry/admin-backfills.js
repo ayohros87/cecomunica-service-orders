@@ -5,6 +5,7 @@
 import '/js/firebase-init.js';
 import '/js/ui/toast.js';
 import '/js/ui/modal.js';
+import '/js/services/empresaService.js';
 import '/js/pages/admin-backfills.js';
 import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';

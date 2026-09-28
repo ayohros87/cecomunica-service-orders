@@ -84,12 +84,60 @@ const EmpresaService = {
    */
   async setConfig(patch) {
     const db = firebase.firestore();
-    const uid = firebase.auth().currentUser?.uid || null;
+    const quien = await this._quien();
     return db.collection('empresa').doc('config').set({
       ...patch,
       updated_at: firebase.firestore.FieldValue.serverTimestamp(),
-      updated_by: uid,
+      updated_by: quien.uid,
+      // Nombre y correo además del uid (auditoría UX 2026-09-28): la pantalla
+      // mostraba "Última edición por <uid>".
+      editado_por_nombre: quien.nombre,
+      editado_por_email: quien.email,
     }, { merge: true });
+  },
+
+  // Quién es el usuario actual, para sellar registros. Nunca lanza.
+  async _quien() {
+    const u = firebase.auth().currentUser;
+    if (!u) return { uid: null, nombre: null, email: null };
+    let nombre = null;
+    try { nombre = window.Sesion?.nombre ? await window.Sesion.nombre(u) : null; } catch (_) { /* sin nombre */ }
+    return { uid: u.uid, nombre: nombre || u.displayName || null, email: u.email || null };
+  },
+
+  // ── Registro de acciones del panel (auditoría UX 2026-09-28) ───────────────
+  // Colección `admin_audit`: {tipo, cambios|detalle, por{uid,nombre,email}, fecha}.
+  // tipo: 'config' (guardado de Configuración/Alertas/PII), 'fusion' (clientes
+  // duplicados), 'backfill'. Lo lee admin/auditoria.html. Requiere la regla
+  // `match /admin_audit/{id}` (create/read solo admin, sin update/delete).
+  async registrarAdminAudit(tipo, data) {
+    const db = firebase.firestore();
+    const quien = await this._quien();
+    return db.collection('admin_audit').add({
+      ...(data || {}),
+      tipo,
+      por: quien,
+      fecha: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  },
+
+  async listAdminAudit({ limit = 300 } = {}) {
+    const db = firebase.firestore();
+    const snap = await db.collection('admin_audit').orderBy('fecha', 'desc').limit(limit).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  // Diff superficial para el registro y el confirm de Configuración: solo los
+  // campos cuyo valor cambió, con antes → después.
+  diffConfig(antes, despues) {
+    const cambios = [];
+    const norm = (v) => JSON.stringify(v === undefined ? null : v);
+    for (const k of Object.keys(despues || {})) {
+      if (norm((antes || {})[k]) !== norm(despues[k])) {
+        cambios.push({ campo: k, antes: (antes || {})[k] === undefined ? null : antes[k], despues: despues[k] });
+      }
+    }
+    return cambios;
   },
 
   CONFIG_DEFAULTS: EMPRESA_CONFIG_DEFAULTS,

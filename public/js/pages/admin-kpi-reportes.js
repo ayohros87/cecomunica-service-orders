@@ -111,16 +111,18 @@
       const ok = await Modal.confirm({
         title: publicar ? 'Publicar mes' : 'Volver a borrador',
         message: publicar
-          ? `¿Marcar ${K().labelLargo(mes)} como publicado? Se abrirá el reporte para archivar el PDF (snapshot de lo presentado a la junta).`
+          ? `¿Publicar ${K().labelLargo(mes)}? Se abrirá el reporte y se archivará el PDF de lo presentado a la junta. El mes queda publicado solo si el PDF se archiva bien.`
           : `¿Regresar ${K().labelLargo(mes)} a borrador?`,
       });
       if (!ok) return;
-      await KpiReportsService.setEstado(mes, publicar ? 'publicado' : 'borrador');
       if (publicar) {
-        // El snapshot se genera desde la página del reporte (dueña del render).
-        location.href = `kpi-reporte-print.html?mes=${mes}&archivar=1`;
+        // El estado "publicado" lo pone la página del reporte DESPUÉS de
+        // archivar el PDF (auditoría UX 2026-09-28): antes se marcaba aquí y,
+        // si el PDF fallaba, quedaba un mes publicado sin su PDF.
+        location.href = `kpi-reporte-print.html?mes=${mes}&archivar=1&publicar=1`;
         return;
       }
+      await KpiReportsService.setEstado(mes, 'borrador');
       Toast.show('Mes en borrador.', 'ok');
       loadAll();
     }

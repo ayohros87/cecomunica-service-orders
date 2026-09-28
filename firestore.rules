@@ -761,7 +761,11 @@ service cloud.firestore {
             && (!('unit_id_num' in d) || d.unit_id_num == null || d.unit_id_num is int);
       }
       allow read: if isSignedIn();
-      allow create, update: if isSignedIn() && pocTiposOk();
+      // Alta solo admin/recepción (auditoría UX 2026-09-28, T4): son los únicos
+      // que cargan lotes y consolas (nuevo-batch, nueva-consola). El update
+      // sigue abierto: bajas, SIM y cierres los hacen otros flujos.
+      allow create: if isSignedIn() && userRole() in ["administrador", "recepcion"] && pocTiposOk();
+      allow update: if isSignedIn() && pocTiposOk();
       // El cliente solo hace soft-delete (update deleted:true); el hard-delete a
       // nivel doc queda para admin.
       allow delete: if isAdmin();
@@ -1259,19 +1263,18 @@ service cloud.firestore {
     // empresa/config guarda parámetros sensibles: umbrales de auto-envío de
     // cotizaciones (descuento_max_pct, total_max), seriales_editores_extra
     // (allowlist que salta el candado de seriales) e itbms_rate (tasa fiscal).
-    // Solo admin lo escribe. El resto de docs de empresa (estado_de_reparacion,
-    // operadores, emisor, tecnicos…) es config operativa que el staff edita
-    // desde las páginas de configuración, así que conserva write autenticado.
+    // Solo admin lo escribe. Auditoría UX 2026-09-28 (T4): el resto de docs de
+    // empresa (estado_de_reparacion, operadores, emisor, tecnicos,
+    // backfills_estado…) era escribible por cualquier autenticado; ahora solo
+    // admin. Excepciones: facturacion_config (admin/contabilidad, las páginas
+    // de Finanzas) e IPs, la lista de bloques IP que recepción y ventas amplían
+    // al crear clientes y lotes PoC (nuevo-cliente, ficha, nuevo-batch).
     match /empresa/{docId} {
       allow read:  if isSignedIn();
-      // facturacion_config (auto-activación, alertas, ítems QBO globales) era
-      // escribible por cualquier autenticado y sus toggles solo se gateaban en
-      // UI (H8) — ahora admin/contabilidad, igual que las páginas que lo editan.
       allow write: if isSignedIn()
-        && (docId == "config" ? isAdmin()
-            : (docId == "facturacion_config"
-                ? userRole() in ["administrador", "contabilidad"]
-                : true));
+        && (docId == "facturacion_config"
+              ? userRole() in ["administrador", "contabilidad"]
+              : (docId == "IPs" ? true : isAdmin()));
     }
     // Conteo de inventario: lo escriben SOLO las páginas de inventario
     // (cargar-inventario/inventario-index), gated a admin/inventario. Restringir
@@ -1361,6 +1364,20 @@ service cloud.firestore {
     match /admin_reportes/salud_catalogo {
       allow read: if isSignedIn() && userRole() in ["administrador", "contabilidad"];
       allow write: if false;
+    }
+
+    // ── Historial de administración (auditoría UX 2026-09-28, §4.9) ────────
+    // Cambios de configuración, alertas, privacidad, grupos PoC, fusiones de
+    // clientes y migraciones de datos, con el valor anterior de cada campo
+    // para poder deshacer. Lo escribe SOLO el admin desde el panel; una
+    // fusión pasa de `en_curso` a `completada`/`fallida` (por eso el update
+    // acotado). Nunca se borra: es el rastro.
+    match /admin_audit/{docId} {
+      allow read, create: if isAdmin();
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(["estado", "ops_aplicadas", "ops_total", "error"]);
+      allow delete: if false;
     }
 
     // ── Integración QuickBooks — SOLO Cloud Functions (admin SDK) ──────────

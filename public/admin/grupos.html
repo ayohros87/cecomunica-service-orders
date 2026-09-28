@@ -251,9 +251,9 @@
     <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
       <i data-lucide="info"></i>
       <div>
-        Cada empresa tiene un <strong>prefijo único de 3 letras</strong>
-        (<code>clientes/{id}.poc_grupo_prefix</code>) y su <strong>catálogo de grupos</strong>
-        (<code>poc_grupos</code>). Todos los grupos quedan como <code>PREFIJO-Nombre</code>.
+        Cada empresa tiene un <strong>prefijo de grupo</strong> único de 3 letras (se guarda en la
+        ficha del cliente) y su propio <strong>catálogo de grupos</strong>. Todos los grupos quedan
+        como <code>PREFIJO-Nombre</code>.
         Aquí puedes <strong>agregar</strong>, renombrar, fusionar y eliminar grupos — los
         cambios se aplican al catálogo y se propagan a los equipos PoC del cliente. Usa
         <strong>“Asignar prefijos y migrar”</strong> para prefijar todo en lote.
@@ -275,12 +275,12 @@
         <!-- Scan global de duplicados — busquedas separadas (no corren a la vez) -->
         <div class="gp-scan-toolbar">
           <button id="btnGpScanExactos" class="btn btn-secondary"
-                  title="Detecta nombres que solo difieren en mayúsculas, acentos o espacios — auto-mergeables">
-            <i data-lucide="search"></i> 🔴 Buscar exactos
+                  title="Detecta nombres que solo difieren en mayúsculas, acentos o espacios — se pueden fusionar directo">
+            <i data-lucide="search"></i> Buscar repetidos exactos
           </button>
           <button id="btnGpScanFuzzy" class="btn btn-ghost"
-                  title="Detecta nombres similares por distancia de edición — requiere revisión humana antes de fusionar">
-            <i data-lucide="scan-search"></i> 🟡 Buscar fuzzy
+                  title="Detecta nombres parecidos (una o dos letras de diferencia) — revísalos antes de fusionar">
+            <i data-lucide="scan-search"></i> Buscar parecidos (revisar)
           </button>
         </div>
 
@@ -446,7 +446,7 @@
       <div class="modal-body">
         <p class="gp-mig-intro">
           Estos son los chips de alta rápida que aparecen al agregar grupos. Uno por línea.
-          Se guardan en <code>empresa/config</code> y aplican a todas las empresas.
+          Se guardan en la configuración general y aplican a todas las empresas.
         </p>
         <textarea id="gpComunesText" class="form-input" rows="12"
                   style="width:100%; resize:vertical; font-size:13px;"

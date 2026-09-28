@@ -375,28 +375,54 @@ ${borrador ? '<div class="watermark"><span>BORRADOR</span></div>' : ''}
         location.href = data.url;
       } catch (err) {
         e.target.textContent = 'ver';
-        Modal.alert({ title: 'PDF', message: 'No pude obtener el PDF: ' + (err.message || err) });
+        avisarPdf('No pude obtener el PDF: ' + (err.message || err));
       }
     });
   }
 
-  async function archivarPdf() {
+  // Esta página no carga ceco-ui.css (CSS propio para impresión): el error se
+  // deja también escrito junto al botón, para que se vea aunque el diálogo
+  // salga sin estilo (auditoría UX 2026-09-28).
+  function avisarPdf(msg) {
+    const info = $('pdfInfo');
+    if (info) info.textContent = msg;
+    if (window.Modal?.alert) Modal.alert({ title: 'PDF', message: msg });
+  }
+
+  // publicar=true (flujo "Publicar" del archivo): el PDF se arma ya sin marca
+  // de agua y el mes se marca "publicado" SOLO si el PDF se archivó; si falla,
+  // queda en borrador y se avisa (auditoría UX 2026-09-28).
+  async function archivarPdf({ publicar = false } = {}) {
     const btn = $('btnSnapshot');
     btn.disabled = true;
     const prev = btn.textContent;
     btn.textContent = 'Generando…';
+    const doc = state.byId[state.mes];
+    const estadoPrevio = doc?.estado;
+    if (publicar && doc) { doc.estado = 'publicado'; render(state.mes); }
     try {
       const html = await buildStandaloneHtml();
       const { data } = await firebase.functions().httpsCallable('kpiReportSnapshot')({
         action: 'generate', mes: state.mes, html,
       });
       // Refresca el doc local para que pdfInfo muestre el nuevo snapshot.
-      state.byId[state.mes].pdf_path = data.path;
-      state.byId[state.mes].pdf_generated_at = null;
-      $('pdfInfo').innerHTML = `PDF archivado ✓ · <a href="${data.url}" target="_blank" rel="noopener">descargar</a>`;
+      doc.pdf_path = data.path;
+      doc.pdf_generated_at = null;
+      if (publicar) {
+        try {
+          await KpiReportsService.setEstado(state.mes, 'publicado');
+        } catch (e) {
+          doc.estado = estadoPrevio; render(state.mes);
+          throw new Error('el PDF se archivó, pero no se pudo marcar el mes como publicado (' + (e.message || e) + '). Vuelve a intentar desde el archivo de KPIs.');
+        }
+      }
+      $('pdfInfo').innerHTML = `PDF archivado ✓${publicar ? ' · mes publicado' : ''} · <a href="${data.url}" target="_blank" rel="noopener">descargar</a>`;
     } catch (err) {
       console.error(err);
-      Modal.alert({ title: 'PDF', message: 'Error al archivar el PDF: ' + (err.message || err) });
+      if (publicar && doc && doc.estado !== estadoPrevio) { doc.estado = estadoPrevio; render(state.mes); }
+      avisarPdf(publicar
+        ? 'No se publicó: ' + (err.message || err) + ' El mes sigue en borrador.'
+        : 'Error al archivar el PDF: ' + (err.message || err));
     } finally {
       btn.disabled = false;
       btn.textContent = prev;
@@ -443,13 +469,14 @@ ${borrador ? '<div class="watermark"><span>BORRADOR</span></div>' : ''}
       $('chkComentarios').addEventListener('change', (e) => {
         document.body.classList.toggle('sin-comentarios', !e.target.checked);
       });
-      $('btnSnapshot').addEventListener('click', archivarPdf);
+      $('btnSnapshot').addEventListener('click', () => archivarPdf());
 
       // ?archivar=1: llega del flujo "Publicar" del archivo — genera el
-      // snapshot del mes recién publicado sin clic adicional.
-      if (new URLSearchParams(location.search).get('archivar') === '1') {
+      // snapshot sin clic adicional; con publicar=1 lo publica al terminar.
+      const qs = new URLSearchParams(location.search);
+      if (qs.get('archivar') === '1') {
         history.replaceState(null, '', `?mes=${state.mes}`);
-        archivarPdf();
+        archivarPdf({ publicar: qs.get('publicar') === '1' });
       }
     });
   });

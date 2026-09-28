@@ -63,7 +63,7 @@
       // parámetro se mandaba y esta página lo ignoraba: al entrar por la
       // pestaña, el "Volver" iba al Panel y el rail saltaba a Admin.
       back: new URLSearchParams(location.search).get('volver') === 'finanzas'
-        ? { href: '../inventario/modelos.html', label: '<i data-lucide="arrow-left"></i> Finanzas' }
+        ? { href: '../facturacion/bandeja.html', label: '<i data-lucide="arrow-left"></i> Finanzas' }
         : { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
       showHome: true, homeHref: '../index.html', showLogout: true
     });

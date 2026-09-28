@@ -169,8 +169,8 @@
     if (label) label.textContent = state.purgeEnabled ? 'Habilitada' : 'Deshabilitada';
     if (hint) {
       hint.innerHTML = state.purgeEnabled
-        ? 'Las purgas pueden ejecutarse. <strong>Preview siempre está disponible</strong>, incluso si la deshabilitas.'
-        : '<strong style="color:#b91c1c;">Las purgas están bloqueadas.</strong> El botón "Purgar ahora" no funcionará y el servidor también rechaza con <code>failed-precondition</code>.';
+        ? 'Se pueden borrar fotos. <strong>Buscar candidatos siempre funciona</strong>, aunque la deshabilites.'
+        : '<strong style="color:#b91c1c;">El borrado está bloqueado.</strong> "Purgar ahora" no funcionará y el servidor también lo rechaza.';
     }
     refreshExecuteEnabled();
   }
@@ -181,7 +181,7 @@
     const noCandidates = !state.lastPreview || state.lastPreview.candidates === 0;
     exec.disabled = noCandidates || !state.purgeEnabled || state.busy;
     exec.title = !state.purgeEnabled
-      ? 'Purga deshabilitada en empresa/config'
+      ? 'La purga está deshabilitada (interruptor de arriba)'
       : (noCandidates ? 'Sin candidatos para purgar' : 'Ejecutar purga');
   }
 
@@ -198,17 +198,32 @@
 
   async function togglePurgeEnabled() {
     const next = !state.purgeEnabled;
-    const ok = next || await Modal.confirm({
-      title: 'Deshabilitar purga',
-      message: 'Ningún admin podrá ejecutar purgas hasta que se reactive (preview seguirá funcionando). ¿Continuar?',
-      danger: true,
-      confirmLabel: 'Deshabilitar',
-    });
+    // Se confirma en los DOS sentidos (auditoría UX 2026-09-28): activar es lo
+    // que abre la puerta a borrar fotos, y antes pasaba con un solo clic.
+    const ok = next
+      ? await Modal.confirm({
+          title: 'Habilitar la purga',
+          message: 'Con la purga habilitada, un administrador puede <strong>borrar para siempre</strong> las fotos de cédula más viejas que la retención. Las fotos borradas no se recuperan. ¿Habilitarla?',
+          danger: true,
+          confirmLabel: 'Habilitar',
+        })
+      : await Modal.confirm({
+          title: 'Deshabilitar la purga',
+          message: 'Nadie podrá borrar fotos de cédula hasta que se vuelva a habilitar (la búsqueda de candidatos sigue funcionando). ¿Continuar?',
+          danger: true,
+          confirmLabel: 'Deshabilitar',
+        });
     if (!ok) return;
     const btn = $('btnToggleEnabled');
     if (btn) btn.disabled = true;
     try {
       await EmpresaService.setConfig({ pii_purge_enabled: next });
+      try {
+        await EmpresaService.registrarAdminAudit('config', {
+          origen: 'privacidad',
+          cambios: [{ campo: 'pii_purge_enabled', antes: !next, despues: next }],
+        });
+      } catch (e) { console.warn('[admin/pii] admin_audit:', e); }
       state.purgeEnabled = next;
       applyToggleVisual();
       if (window.Toast) Toast.show(next ? 'Purga habilitada.' : 'Purga deshabilitada.', 'ok');

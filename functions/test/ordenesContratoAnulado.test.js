@@ -119,9 +119,15 @@ test("A5 · ANULADA es terminal en todas partes, no solo aquí", () => {
   assert.ok(/ANULADA: 'ANULADA'/.test(leer("public", "js", "pages", "ordenes-state.js")),
     "ordenes-state.js: ANULADA no es un estado canónico");
   // admin/operacion la contaba como 'sin asignar' y la sacaba en las alertas.
+  // Desde la auditoría UX 2026-09-28 la lista vive en domain/adminMetrics.js
+  // (fuente única del panel) y admin-operacion arma su ESTADOS_TERMINAL con
+  // ESTADOS_CERRADOS de ahí.
   const oper = leer("public", "js", "pages", "admin-operacion.js");
-  const set = oper.slice(oper.indexOf("ESTADOS_TERMINAL"), oper.indexOf("ESTADOS_TERMINAL") + 600);
-  assert.ok(/'ANULADA'/.test(set), "admin-operacion.js: ANULADA fuera de ESTADOS_TERMINAL");
+  const set = oper.slice(oper.indexOf("const ESTADOS_TERMINAL"), oper.indexOf("const ESTADOS_TERMINAL") + 200);
+  assert.ok(/AdminMetrics\.ESTADOS_CERRADOS/.test(set), "admin-operacion.js: ESTADOS_TERMINAL no sale de AdminMetrics.ESTADOS_CERRADOS");
+  const am = leer("public", "js", "domain", "adminMetrics.js");
+  const cerr = am.slice(am.indexOf("const ESTADOS_CERRADOS"), am.indexOf("const ESTADOS_CERRADOS") + 300);
+  assert.ok(/'ANULADA'/.test(cerr), "adminMetrics.js: ANULADA fuera de ESTADOS_CERRADOS");
   // La conciliación del pool ya la conocía desde antes: que siga.
   assert.ok(/"ANULADA"/.test(leer("functions", "src", "domain", "conciliacionPool.js")),
     "conciliacionPool.js: ANULADA fuera de los terminales");

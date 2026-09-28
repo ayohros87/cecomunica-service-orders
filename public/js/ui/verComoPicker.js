@@ -21,6 +21,8 @@
     { key: 'inventario',        label: 'Inventario',        desc: 'Solo inventario y piezas' },
     { key: 'jefe_taller',       label: 'Jefe de taller',    desc: 'Supervisión taller' },
     { key: 'gerente',           label: 'Gerente',           desc: 'Lectura amplia para reportes' },
+    // Faltaba (auditoría UX 2026-09-28): contabilidad tiene su propio home.
+    { key: 'contabilidad',      label: 'Contabilidad',      desc: 'Finanzas y facturación' },
     { key: 'vista',             label: 'Vista',             desc: 'Solo lectura general' },
   ];
 

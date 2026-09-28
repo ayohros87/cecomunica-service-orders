@@ -12,11 +12,12 @@
  * Cada clúster de 2+ miembros es un duplicado candidato (se revisa antes de fusionar).
  *
  * Fusión: elige el registro canónico (el más completo), rellena lo que le falte
- * desde los duplicados, re-apunta las referencias y hace soft-delete de los
- * duplicados. Referencias:
+ * desde los duplicados, re-apunta las referencias y marca los duplicados como
+ * eliminados. Deja un registro en admin_audit con los valores anteriores.
+ * Referencias:
  *   - contratos:            campo `cliente_id`  (por id)
- *   - ordenes_de_servicio:  campo `cliente`     (por NOMBRE)
- *   - poc_devices:          campo `cliente`     (por NOMBRE)
+ *   - ordenes_de_servicio:  `cliente_id`; por NOMBRE solo en grupos exactos
+ *   - poc_devices:          `cliente_id`; por NOMBRE solo en grupos exactos
  */
 
 function _dnorm(s){
@@ -256,85 +257,162 @@ const ClientesDedupService = {
   },
 
   // ── Fusión (Firestore, escribe) ──────────────────────────────────────
-  // Re-apunta referencias al canónico, rellena sus huecos y hace soft-delete de
-  // los duplicados. Devuelve conteos de lo afectado.
+  // Auditoría UX 2026-09-28: la fusión NO es reversible por sí sola (antes el
+  // texto decía "soft-delete, reversible"). Ahora se hace en dos pasos:
+  //   1. planFusion (solo lee): arma la lista exacta de cambios con el valor
+  //      ANTERIOR de cada campo. Con eso el confirm muestra conteos reales.
+  //   2. ejecutarFusion: guarda el plan en `admin_audit` {tipo:'fusion'} ANTES
+  //      de escribir nada (si no se puede guardar, no se fusiona) y aplica los
+  //      cambios con db.batch() en tandas de 400.
+  // Qué se toca:
   //   - Contratos: solo se re-enlaza `cliente_id` (el snapshot histórico —
   //     nombre/RUC/dirección— se conserva tal como se emitió).
-  //   - Órdenes y POC: se re-apunta el campo `cliente` (nombre) por coincidencia
-  //     NORMALIZADA (ignora mayúsculas/acentos/espacios) contra cualquier
-  //     variante de nombre del grupo, y se unifica al nombre exacto del canónico.
-  async mergeCluster({ canonical, dups, fill = {} }){
+  //   - Órdenes y POC: se re-apunta `cliente_id` y se unifica el nombre
+  //     denormalizado. Por id siempre; por NOMBRE normalizado solo si el grupo
+  //     es "exacto" (porNombre). En grupos "por similitud" el nombre parecido
+  //     no prueba que la orden sea de ese cliente, así que no se re-apunta.
+  async planFusion({ canonical, dups, fill = {}, porNombre = false }){
     const db = firebase.firestore();
-    const uid = firebase.auth().currentUser?.uid || null;
-    const ahora = firebase.firestore.FieldValue.serverTimestamp();
-    let contratosRepointed = 0, ordenesRepointed = 0, pocRepointed = 0;
+    const refs = [];   // { col, id, antes:{campo:valor|null}, despues:{campo:valor}, via:'id'|'nombre' }
+    const cuenta = { contratos: 0, ordenes: 0, poc: 0, ordenesPorNombre: 0, pocPorNombre: 0 };
+    const antesDe = (d, campos) => Object.fromEntries(campos.map(k => [k, k in d ? d[k] : null]));
 
-    // 1) Contratos por cliente_id (solo re-enlazar).
+    // 1) Contratos por cliente_id.
     for (const dup of dups){
       const cSnap = await db.collection("contratos").where("cliente_id", "==", dup.id).get();
       for (const doc of cSnap.docs){
-        await doc.ref.update({ cliente_id: canonical.id, updated_at: ahora });
-        contratosRepointed++;
+        refs.push({ col: "contratos", id: doc.id, via: "id",
+          antes: { cliente_id: dup.id }, despues: { cliente_id: canonical.id } });
+        cuenta.contratos++;
       }
     }
 
-    // 2) Órdenes y POC: re-apuntar al canónico por id Y por nombre normalizado.
-    //    Un doc pertenece al grupo si su `cliente_id` es uno de los duplicados, o
-    //    si su nombre (`cliente`/`cliente_nombre`) coincide con cualquier variante.
-    //    Se re-apunta `cliente_id` al canónico (y se rellena si faltaba) y se
-    //    unifica el nombre denormalizado. Así no quedan refs a un cliente borrado.
-    {
-      const dupIds = new Set(dups.map(d => d.id));
-      const variantes = new Set([canonical, ...dups].map(c => _dnorm(c.nombre)).filter(Boolean));
-      for (const col of ["ordenes_de_servicio", "poc_devices"]){
-        const all = await db.collection(col).get();
-        for (const doc of all.docs){
-          const d = doc.data();
-          const porId = d.cliente_id && dupIds.has(d.cliente_id);
-          const porNombre =
-            (d.cliente && variantes.has(_dnorm(d.cliente))) ||
-            (d.cliente_nombre && variantes.has(_dnorm(d.cliente_nombre)));
-          if (!porId && !porNombre) continue;
+    // 2) Órdenes y POC.
+    const dupIds = new Set(dups.map(d => d.id));
+    const variantes = new Set([canonical, ...dups].map(c => _dnorm(c.nombre)).filter(Boolean));
+    for (const col of ["ordenes_de_servicio", "poc_devices"]){
+      const all = await db.collection(col).get();
+      for (const doc of all.docs){
+        const d = doc.data();
+        const porId = !!(d.cliente_id && dupIds.has(d.cliente_id));
+        // Sin cliente_id (legacy) o apuntando al canónico: el nombre decide,
+        // solo en grupos exactos. Un doc con cliente_id de OTRO cliente nunca
+        // se toca por nombre.
+        const idLibre = !d.cliente_id || d.cliente_id === canonical.id;
+        const coincideNombre =
+          (d.cliente && variantes.has(_dnorm(d.cliente))) ||
+          (d.cliente_nombre && variantes.has(_dnorm(d.cliente_nombre)));
+        const viaNombre = !porId && porNombre && idLibre && coincideNombre;
+        if (!porId && !viaNombre) continue;
 
-          const update = {};
-          if (d.cliente_id !== canonical.id) update.cliente_id = canonical.id;
-          if (canonical.nombre){
-            if ("cliente" in d && d.cliente !== canonical.nombre) update.cliente = canonical.nombre;
-            if ("cliente_nombre" in d && d.cliente_nombre !== canonical.nombre) update.cliente_nombre = canonical.nombre;
-          }
-          if (!Object.keys(update).length) continue; // ya apunta al canónico
-          await doc.ref.update(update);
-          if (col === "ordenes_de_servicio") ordenesRepointed++; else pocRepointed++;
+        const despues = {};
+        if (d.cliente_id !== canonical.id) despues.cliente_id = canonical.id;
+        if (canonical.nombre){
+          if ("cliente" in d && d.cliente !== canonical.nombre) despues.cliente = canonical.nombre;
+          if ("cliente_nombre" in d && d.cliente_nombre !== canonical.nombre) despues.cliente_nombre = canonical.nombre;
         }
+        if (!Object.keys(despues).length) continue; // ya apunta al canónico
+        refs.push({ col, id: doc.id, via: porId ? "id" : "nombre", antes: antesDe(d, Object.keys(despues)), despues });
+        if (col === "ordenes_de_servicio"){ cuenta.ordenes++; if (!porId) cuenta.ordenesPorNombre++; }
+        else { cuenta.poc++; if (!porId) cuenta.pocPorNombre++; }
       }
     }
 
-    // 3) Soft-delete de los duplicados.
-    for (const dup of dups){
-      await db.collection("clientes").doc(dup.id).update({
-        deleted: true,
-        merged_into: canonical.id,
-        merged_at: ahora,
-        merged_by: uid,
-        updated_at: ahora,
-        updated_by: uid,
-      });
-    }
+    // 3) Soft-delete de los duplicados (con su estado anterior).
+    const bajas = dups.map(dup => ({ id: dup.id, nombre: dup.nombre || "",
+      antes: antesDe(dup, ["deleted", "merged_into", "merged_at", "merged_by"]) }));
 
-    // 4) Rellenar huecos del canónico (vía buildClientePayload si está, para
-    // mantener derivados/tokens consistentes).
+    // 4) Relleno del canónico (vía buildClientePayload si está, para mantener
+    // derivados/tokens consistentes).
+    let relleno = null;
     if (Object.keys(fill).length){
       const base = { ...canonical, ...fill };
       let payload;
       if (window.ClientesService && ClientesService.buildClientePayload){
         payload = ClientesService.buildClientePayload(base, { user: firebase.auth().currentUser, isCreate: false });
       } else {
-        payload = { ...fill, updated_at: ahora, updated_by: uid };
+        payload = { ...fill };
       }
-      await db.collection("clientes").doc(canonical.id).update(payload);
+      relleno = { payload, antes: antesDe(canonical, Object.keys(payload)) };
     }
 
-    return { contratosRepointed, ordenesRepointed, pocRepointed, eliminados: dups.length };
+    return { canonical, dups, fill, porNombre, refs, bajas, relleno, cuenta };
+  },
+
+  async ejecutarFusion(plan){
+    const db = firebase.firestore();
+    const FV = firebase.firestore.FieldValue;
+    const uid = firebase.auth().currentUser?.uid || null;
+    const ahora = FV.serverTimestamp();
+    const { canonical, refs, bajas, relleno } = plan;
+
+    // Firestore no guarda `undefined`; FieldValue (serverTimestamp) en el
+    // payload tampoco sirve como "valor anterior": se limpia para el registro.
+    const limpio = (o) => JSON.parse(JSON.stringify(o ?? null, (k, v) =>
+      (v && typeof v === "object" && typeof v.toMillis === "function") ? { _ts: v.toMillis() } : (v === undefined ? null : v)));
+
+    // Registro previo: sin él no se fusiona (es la única vía para deshacer).
+    // Las refs van en tandas de 1,500 por doc para no pasar el 1 MB por doc.
+    const TANDA_REG = 1500;
+    const principal = {
+      estado: "en_curso",
+      conservado: { id: canonical.id, nombre: canonical.nombre || "" },
+      fusionados: bajas.map(b => ({ id: b.id, nombre: b.nombre, antes: limpio(b.antes) })),
+      por_nombre: !!plan.porNombre,
+      cuenta: plan.cuenta,
+      refs: limpio(refs.slice(0, TANDA_REG)),
+      refs_partes: Math.max(1, Math.ceil(refs.length / TANDA_REG)),
+      relleno: relleno ? { antes: limpio(relleno.antes), campos: Object.keys(relleno.payload) } : null,
+    };
+    let auditRef;
+    try {
+      auditRef = await EmpresaService.registrarAdminAudit("fusion", principal);
+      for (let i = TANDA_REG, parte = 2; i < refs.length; i += TANDA_REG, parte++){
+        await EmpresaService.registrarAdminAudit("fusion_refs", {
+          fusion_id: auditRef.id, parte, refs: limpio(refs.slice(i, i + TANDA_REG)),
+        });
+      }
+    } catch (e){
+      throw new Error("no se pudo guardar el registro previo de la fusión (" + (e.message || e.code || e) + "). No se cambió nada.");
+    }
+
+    // Escrituras en lotes de 400 (tope de Firestore: 500 por batch).
+    const ops = [];
+    for (const r of refs){
+      const extra = r.col === "contratos" ? { updated_at: ahora } : {};
+      ops.push([db.collection(r.col).doc(r.id), { ...r.despues, ...extra }]);
+    }
+    for (const b of bajas){
+      ops.push([db.collection("clientes").doc(b.id), {
+        deleted: true, merged_into: canonical.id, merged_at: ahora, merged_by: uid,
+        merged_audit_id: auditRef.id, updated_at: ahora, updated_by: uid,
+      }]);
+    }
+    if (relleno) ops.push([db.collection("clientes").doc(canonical.id), relleno.payload]);
+
+    let hechas = 0;
+    try {
+      for (let i = 0; i < ops.length; i += 400){
+        const batch = db.batch();
+        for (const [ref, data] of ops.slice(i, i + 400)) batch.update(ref, data);
+        await batch.commit();
+        hechas += Math.min(400, ops.length - i);
+      }
+    } catch (e){
+      await auditRef.update({ estado: "fallida", ops_aplicadas: hechas, ops_total: ops.length, error: String(e.message || e) }).catch(() => {});
+      throw new Error(`la fusión quedó a medias (${hechas} de ${ops.length} cambios aplicados). El registro en Auditoría tiene los valores anteriores. ` + (e.message || e));
+    }
+    await auditRef.update({ estado: "completada", ops_aplicadas: hechas, ops_total: ops.length }).catch(() => {});
+
+    const c = plan.cuenta;
+    return { contratosRepointed: c.contratos, ordenesRepointed: c.ordenes, pocRepointed: c.poc,
+             eliminados: bajas.length, auditId: auditRef.id };
+  },
+
+  // Compatibilidad: plan + ejecución en un paso.
+  async mergeCluster({ canonical, dups, fill = {}, porNombre = false }){
+    const plan = await this.planFusion({ canonical, dups, fill, porNombre });
+    return this.ejecutarFusion(plan);
   },
 };
 

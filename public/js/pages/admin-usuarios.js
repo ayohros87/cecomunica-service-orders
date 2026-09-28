@@ -38,14 +38,23 @@
 
   function escapeHtml(s) { return FMT.esc(s); } // helper canónico (core/formatting.js)
 
-  function rolBadge(rol) {
-    return `<span class="pill" data-rol="${rol}">${escapeHtml(rol || '—')}</span>`;
+  // Nombre legible y qué ve cada rol (auditoría UX 2026-09-28: antes se
+  // mostraban las claves crudas, "tecnico_operativo").
+  const rolLabel = (r) => AdminMetrics.rolLabel(r);
+  const rolDesc = (r) => AdminMetrics.ROL_DESCRIPCIONES[r] || '';
+  const FILTRO_SIN_ROL = '__sinrol__';
+  const tieneRolValido = (u) => !!u.rol && ROL_OPTIONS.includes(u.rol);
+
+  function rolOptions(sel) {
+    return ROL_OPTIONS.map(r =>
+      `<option value="${r}" title="${escapeHtml(rolDesc(r))}"${sel === r ? ' selected' : ''}>${escapeHtml(rolLabel(r))}</option>`).join('');
   }
 
   function applyFilters() {
     const q = state.search.toLowerCase();
     state.filtered = state.all.filter(u => {
-      if (state.filterRol && u.rol !== state.filterRol) return false;
+      if (state.filterRol === FILTRO_SIN_ROL) { if (tieneRolValido(u)) return false; }
+      else if (state.filterRol && u.rol !== state.filterRol) return false;
       if (!q) return true;
       return (u.nombre || '').toLowerCase().includes(q) ||
              (u.email  || '').toLowerCase().includes(q) ||
@@ -65,8 +74,13 @@
     const rows = state.filtered.map(u => {
       const isSelf = u.uid === state.callerUid;
       const activo = u.activo !== false;
-      const rolDropdown = `<select class="form-input form-input-sm" data-action="rol" data-uid="${u.uid}" style="font-size:12px;padding:3px 6px;">
-        ${ROL_OPTIONS.map(r => `<option value="${r}"${u.rol === r ? ' selected' : ''}>${r}</option>`).join('')}
+      // Sin rol (o con uno que no existe): opción vacía seleccionada. Antes el
+      // navegador marcaba la primera opción y el usuario se veía como
+      // "administrador" (auditoría UX 2026-09-28).
+      const sinRol = !tieneRolValido(u);
+      const rolDropdown = `<select class="form-input form-input-sm" data-action="rol" data-uid="${u.uid}" style="font-size:12px;padding:3px 6px;${sinRol ? 'border-color:var(--warning,#d97706);' : ''}" title="${escapeHtml(rolDesc(u.rol))}">
+        ${sinRol ? `<option value="" selected>— sin rol —${u.rol ? ` (${escapeHtml(u.rol)})` : ''}</option>` : ''}
+        ${rolOptions(u.rol)}
       </select>`;
       const actBtn = activo
         ? `<button class="btn btn-ghost btn-sm" data-action="deactivate" data-uid="${u.uid}" ${isSelf ? 'disabled title="No puedes desactivarte a ti mismo"' : 'title="Desactivar"'}><i data-lucide="user-x"></i></button>`
@@ -84,10 +98,10 @@
           <td style="text-align:right;white-space:nowrap;">${resetBtn} ${actBtn}</td>
         </tr>`;
     }).join('');
-    el.innerHTML = `<table class="admin-table">
+    el.innerHTML = `<div class="admin-table-wrap"><table class="admin-table">
       <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Cargo (firma)</th><th>Estado</th><th>UID</th><th style="text-align:right;">Acciones</th></tr></thead>
       <tbody>${rows}</tbody>
-    </table>`;
+    </table></div>`;
     setText('countShowing', `${state.filtered.length} de ${state.all.length}`);
     if (window.lucide) lucide.createIcons();
     wireRowActions();
@@ -100,20 +114,24 @@
         const newRol = sel.value;
         const u = state.all.find(x => x.uid === uid);
         const oldRol = u?.rol;
-        if (newRol === oldRol) return;
+        // El valor visible del select cuando no tenía rol es '' (la opción
+        // "— sin rol —"), no el rol crudo inválido.
+        const oldSel = tieneRolValido(u) ? oldRol : '';
+        if (!newRol || newRol === oldRol) { sel.value = oldSel; return; }
         const ok = await Modal.confirm({
           title: 'Cambiar rol',
-          message: `Cambiar rol de <strong>${escapeHtml(u.nombre || u.email)}</strong> de <code>${oldRol}</code> a <code>${newRol}</code>.`,
+          message: `Cambiar el rol de <strong>${escapeHtml(u.nombre || u.email)}</strong> de <strong>${escapeHtml(rolLabel(oldRol))}</strong> a <strong>${escapeHtml(rolLabel(newRol))}</strong>.<br><span style="color:var(--fg-3);font-size:13px;">${escapeHtml(rolLabel(newRol))} ve: ${escapeHtml(rolDesc(newRol))}</span>`,
           confirmLabel: 'Cambiar',
         });
-        if (!ok) { sel.value = oldRol; return; }
+        if (!ok) { sel.value = oldSel; return; }
         try {
           await UsuariosAdminService.updateRol(uid, newRol);
           u.rol = newRol;
           Toast.show('Rol actualizado.', 'ok');
+          renderTable();
         } catch (err) {
           Toast.show('Error: ' + (err.message || err.code), 'bad');
-          sel.value = oldRol;
+          sel.value = oldSel;
         }
       });
     });
@@ -226,12 +244,20 @@
         <div class="form-field">
           <label class="form-label">Rol</label>
           <select id="nu-rol" class="form-input">
-            ${ROL_OPTIONS.map(r => `<option value="${r}"${r === ROLES.VENDEDOR ? ' selected' : ''}>${r}</option>`).join('')}
+            ${rolOptions(ROLES.VENDEDOR)}
           </select>
+          <div id="nu-rol-desc" class="ts" style="margin-top:4px;color:var(--fg-3);">${escapeHtml(rolDesc(ROLES.VENDEDOR))}</div>
         </div>
         <div id="nu-err" style="color:#b91c1c;font-size:13px;margin-top:8px;display:none;"></div>`,
       buttons: [{ action: 'cancel', label: 'Cancelar' }, { action: 'crear', label: 'Crear', primary: true, icon: 'user-plus' }],
-      onMount: (root) => root.querySelector('#nu-nombre')?.focus(),
+      onMount: (root) => {
+        root.querySelector('#nu-nombre')?.focus();
+        const selRol = root.querySelector('#nu-rol');
+        selRol?.addEventListener('change', () => {
+          const d = root.querySelector('#nu-rol-desc');
+          if (d) d.textContent = rolDesc(selRol.value);
+        });
+      },
       onAction: async (a, root) => {
         if (a !== 'crear') return null;
         const nombre = root.querySelector('#nu-nombre').value.trim();
@@ -287,7 +313,12 @@
     const sel = $('filterRol');
     if (sel) {
       sel.innerHTML = `<option value="">Todos los roles</option>` +
-        ROL_OPTIONS.map(r => `<option value="${r}">${r}</option>`).join('');
+        `<option value="${FILTRO_SIN_ROL}">— Sin rol —</option>` +
+        ROL_OPTIONS.map(r => `<option value="${r}">${escapeHtml(rolLabel(r))}</option>`).join('');
+      // ?filtro=sinrol llega desde el aviso de la portada y desde Salud
+      // (auditoría UX 2026-09-28).
+      const filtro = new URLSearchParams(location.search).get('filtro');
+      if (filtro === 'sinrol') { sel.value = FILTRO_SIN_ROL; state.filterRol = FILTRO_SIN_ROL; }
     }
 
     const search = $('searchInput');

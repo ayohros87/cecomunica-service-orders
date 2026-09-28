@@ -6,6 +6,7 @@ import '/js/firebase-init.js';
 import '/js/ui/toast.js';
 import '/js/services/usuariosService.js';
 import '/js/services/clientesService.js';
+import '/js/services/empresaService.js';
 import '/js/services/clientesDedupService.js';
 import '/js/pages/admin-clientes-duplicados.js';
 import '/js/vendor/lucide.min.js';

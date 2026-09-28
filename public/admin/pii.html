@@ -17,7 +17,7 @@
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin · Retención PII — Cecomunica</title>
+  <title>Admin · Privacidad de fotos de cédula — Cecomunica</title>
 
   <link rel="stylesheet" href="../css/ceco-ui.css?v=bf320539">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
@@ -43,7 +43,7 @@
   <div id="topbar-mount"></div>
   <script>
     Layout.renderTopbar({
-      title: '<i data-lucide="shield-alert"></i> Retención PII',
+      title: '<i data-lucide="shield-alert"></i> Privacidad de fotos de cédula',
       back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
       showHome: true, homeHref: '../index.html', showLogout: true
     });
@@ -54,17 +54,14 @@
     <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
       <i data-lucide="info"></i>
       <div>
-        Purga manual de fotos de identificación (rutas
-        <code>ordenes_identificacion/</code> y <code>entregas_identificacion/</code>)
-        con antigüedad mayor a N días. Las firmas en <code>ordenes_firmas/</code>
-        <strong>no</strong> se purgan — son evidencia legal de entrega.
-        Cada purga limpia <code>identificacion_url</code> en el doc de la orden y
-        estampa <code>identificacion_purged_at</code> + <code>identificacion_purged_by</code>
-        para el audit trail.
+        Borrado manual de las fotos de cédula tomadas al recibir y al entregar
+        equipos, cuando tienen más días que la retención. Las <strong>firmas no se
+        borran</strong>: son la prueba legal de la entrega. Cada orden purgada queda
+        marcada con quién y cuándo, y aparece en Auditoría.
       </div>
     </div>
 
-    <!-- Kill-switch: el server-side también lo respeta -->
+    <!-- Interruptor general: el servidor también lo respeta -->
     <div class="ds-card" style="padding:var(--sp-3); margin-bottom:var(--sp-4); display:flex; align-items:center; gap:var(--sp-3); flex-wrap:wrap;">
       <div style="flex:1; min-width:240px;">
         <div style="font-weight:700; font-size:14px;">Función de purga</div>

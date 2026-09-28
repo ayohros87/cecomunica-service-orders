@@ -156,8 +156,7 @@
     }
     State.scan = { mode: modo, porId, porNombreNorm, clientesAfectados, totalBuckets, at: new Date() };
     const dt = ((performance.now() - t0) / 1000).toFixed(2);
-    const tipo = modo === 'fuzzy' ? 'fuzzy' : 'exactos';
-    Toast.show(`Scan ${tipo}: ${clientesAfectados} clientes, ${totalBuckets} buckets · ${dt}s`, 'ok');
+    Toast.show(`Búsqueda de ${modo === 'fuzzy' ? 'parecidos' : 'exactos'}: ${clientesAfectados} clientes, ${totalBuckets} grupos repetidos · ${dt}s`, 'ok');
     renderClientes();
     // Re-render del banner derecho con el nuevo modo si hay cliente seleccionado.
     if (State.clienteSel) renderDupBanner();
@@ -204,11 +203,11 @@
     let scanRow = '';
     if (State.scan) {
       const pill = State.scan.mode === 'fuzzy'
-        ? '<span class="gp-badge gp-badge-fuzzy">fuzzy</span>'
+        ? '<span class="gp-badge gp-badge-fuzzy">parecidos</span>'
         : '<span class="gp-badge gp-badge-exactos">exactos</span>';
       scanRow = `
         <div style="padding:6px 12px;border-bottom:1px solid var(--border-subtle);font-size:11px;color:var(--fg-3);display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-sunken);">
-          <span>${pill} ${State.scan.clientesAfectados} clientes · ${State.scan.totalBuckets} buckets</span>
+          <span>${pill} ${State.scan.clientesAfectados} clientes · ${State.scan.totalBuckets} grupos repetidos</span>
           <button id="gpClearScan" class="btn btn-ghost btn-xs" style="font-size:10px;padding:2px 8px;">Limpiar</button>
         </div>`;
     }
@@ -225,7 +224,7 @@
 
     if (!visibles.length) {
       let emptyMsg = 'Sin coincidencias.';
-      if (!needle && State.scan) emptyMsg = `Ningún cliente con duplicados ${State.scan.mode === 'fuzzy' ? 'fuzzy' : 'exactos'} 🎉`;
+      if (!needle && State.scan) emptyMsg = `Ningún cliente con grupos ${State.scan.mode === 'fuzzy' ? 'parecidos' : 'repetidos exactos'}.`;
       else if (!needle) emptyMsg = 'Ningún cliente tiene grupos asignados.';
       cont.innerHTML = headerHtml +
         `<div style="padding:14px; color:var(--fg-3); font-size:13px;">${emptyMsg}</div>`;
@@ -239,7 +238,7 @@
         const n = bucketCountCliente(c);
         if (n > 0) {
           const cls = State.scan.mode === 'fuzzy' ? 'gp-badge-fuzzy' : 'gp-badge-exactos';
-          badge = `<span class="gp-badge ${cls}" title="${n} bucket${n === 1 ? '' : 's'} de duplicados ${State.scan.mode}">${n}</span>`;
+          badge = `<span class="gp-badge ${cls}" title="${n} grupo${n === 1 ? '' : 's'} ${State.scan.mode === 'fuzzy' ? 'parecido' : 'repetido'}${n === 1 ? '' : 's'}">${n}</span>`;
         }
       }
       const nuevoTag = (needle && !tieneGrupos(c)) ? '<span class="gp-cli-tag">nuevo</span>' : '';
@@ -482,7 +481,12 @@
     const btn = $('gpComunesGuardar');
     if (btn) btn.disabled = true;
     try {
+      const antes = State.comunes;
       await EmpresaService.setConfig({ poc_grupos_comunes: list });
+      // Historial en Auditoría (auditoría UX 2026-09-28). Best-effort.
+      EmpresaService.registrarAdminAudit('config', {
+        origen: 'grupos', cambios: [{ campo: 'poc_grupos_comunes', antes, despues: list }],
+      }).catch(e => console.warn('[admin/grupos] admin_audit:', e));
       State.comunes = list;
       Toast.show('Lista de grupos comunes guardada ✅', 'ok');
       cerrarComunes();
@@ -589,7 +593,7 @@
           <span class="gp-eq-serial" title="${esc(d.serial || '')}">${esc(d.serial || '—')}</span>
           <span class="gp-eq-unit">${esc(d.unit_id || '—')}</span>
           <span class="gp-eq-name" title="${esc(d.radio_name || '')}">${esc(d.radio_name || '—')}</span>
-          <span class="gp-eq-act" title="${d.activo !== false ? 'Activo' : 'Inactivo'}">${d.activo !== false ? '🟢' : '🔴'}</span>
+          <span class="gp-eq-act" title="${d.activo !== false ? 'Activo' : 'Inactivo'}">${d.activo !== false ? 'Activo' : 'Inactivo'}</span>
         </div>`).join('');
     } catch (e) {
       console.error('Error cargando equipos del grupo:', e);
@@ -639,9 +643,9 @@
       const nombres = first.map(g => `<strong>${esc(g.nombre)}</strong> (${g.count})`).join(', ');
       html += `
         <div class="gp-dup-banner gp-dup-exactos">
-          <strong>🔴 Duplicados exactos — auto-mergeable</strong>
+          <strong>Repetidos exactos — se pueden fusionar directo</strong>
           Estos grupos solo difieren en mayúsculas, acentos o espacios: ${nombres}.
-          ${dupsExactos.length > 1 ? `Hay ${dupsExactos.length - 1} bucket(s) más con la misma situación.` : ''}
+          ${dupsExactos.length > 1 ? `Hay ${dupsExactos.length - 1} caso(s) más con la misma situación.` : ''}
           <div>
             <button class="btn btn-secondary btn-sm" id="btnGpMergeSug">
               <i data-lucide="git-merge"></i> Fusionar en "${esc(target)}"
@@ -656,9 +660,9 @@
       const ids = first.map(g => g.nombre).join('|');
       html += `
         <div class="gp-dup-banner gp-dup-fuzzy">
-          <strong>🟡 Posibles fuzzy duplicates — revisa antes de fusionar</strong>
+          <strong>Posibles repetidos (nombres parecidos) — revisa antes de fusionar</strong>
           Estos nombres son similares pero podrían ser conceptos distintos: ${nombres}.
-          ${dupsFuzzy.length > 1 ? `Hay ${dupsFuzzy.length - 1} bucket(s) más con candidatos similares.` : ''}
+          ${dupsFuzzy.length > 1 ? `Hay ${dupsFuzzy.length - 1} caso(s) más con nombres parecidos.` : ''}
           <div>
             <button class="btn btn-ghost btn-sm" data-fuzzy-preselect="${esc(ids)}">
               <i data-lucide="check-square"></i> Preseleccionar para revisar
@@ -1143,7 +1147,9 @@
       await cargarClientes();
     } catch (e) {
       console.error('Error inicializando admin/grupos:', e);
-      window.location.href = 'index.html';
+      // A la Base PoC y no al panel admin (auditoría UX 2026-09-28):
+      // recepción no tiene acceso a admin/index y rebotaba dos veces.
+      window.location.href = '/POC/index.html';
     }
   });
 })();

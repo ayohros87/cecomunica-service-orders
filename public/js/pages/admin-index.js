@@ -4,7 +4,7 @@
  * Lifecycle:
  *  1. Auth gate: requires ROLES.ADMIN, redirects otherwise.
  *  2. First load: fires loadAll() to populate the 4 stat cards.
- *  3. Refresh: manual button + optional 60s auto-refresh (pauses on hidden tab).
+ *  3. Refresh: manual button + optional 5-min auto-refresh (pauses on hidden tab).
  *
  * Uses AdminMetrics for pure aggregation; all I/O via existing services.
  */
@@ -16,10 +16,8 @@
   // usuarios). A 60s eran ~240k lecturas/hora por pestaña abierta.
   const AUTO_REFRESH_MS = 300_000;
 
-  const ESTADOS_ABIERTOS = new Set([
-    'POR ASIGNAR', 'EN PROCESO', 'DIAGNÓSTICO', 'EN ESPERA', 'LISTA',
-    'PROGRAMACIÓN', 'ESTIMACIÓN', 'RECEPCIONADA',
-  ]);
+  // Los estados salen de AdminMetrics (auditoría UX 2026-09-28): el Set local
+  // traía estados que no existen y el KPI contaba solo POR ASIGNAR.
 
   const state = {
     autoOn: false,
@@ -87,14 +85,12 @@
       const live = all.filter(o => o.eliminado !== true);
       // Sin DEVOLUCION (2026-09-02): vive en "POR ASIGNAR" pero es un circuito
       // aparte (recuperación de equipos), no una orden de taller abierta.
-      const abiertas = AdminMetrics.countWhere(live, o =>
-        ESTADOS_ABIERTOS.has((o.estado_reparacion || '').toUpperCase())
-        && (o.tipo_de_servicio || '').toUpperCase() !== 'DEVOLUCION');
-      const completadas = AdminMetrics.countWhere(live, o => (o.estado_reparacion || '').toUpperCase() === 'COMPLETADA');
-      const entregadas = AdminMetrics.countWhere(live, o => (o.estado_reparacion || '').toUpperCase() === 'ENTREGADA');
+      const abiertas = AdminMetrics.contarOrdenesAbiertas(live);
+      const completadas = AdminMetrics.countWhere(live, AdminMetrics.esCompletadaSinEntregar);
+      const entregadas = AdminMetrics.countWhere(live, AdminMetrics.esEntregada);
       state.metrics.ordenes_abiertas = abiertas;
       setStat('kpiOrdenes', abiertas.toLocaleString('es-PA'),
-        `<span class="tag">${completadas}</span> completadas · <span class="tag">${entregadas}</span> entregadas`);
+        `<span class="tag">${completadas}</span> en oficina sin entregar · <span class="tag">${entregadas}</span> entregadas`);
     } catch (err) {
       console.error('[admin] ordenes KPI:', err);
       setStatError('kpiOrdenes');
@@ -121,18 +117,9 @@
     try {
       const result = await CotizacionesService.listCotizaciones({ limit: 500 });
       const items = (result?.docs || []).filter(c => c.deleted !== true);
-      const ahora = new Date();
-      let vencenPronto = 0; let vencidas = 0; let enviadas = 0;
-      for (const c of items) {
-        const estado = (c.estado || '').toLowerCase();
-        if (estado === 'enviada') enviadas++;
-        if (estado === 'enviada' || estado === 'aprobada') {
-          const d = AdminMetrics.daysUntilExpiry(c.fecha, c.validezDias || c.validez_dias || 15, ahora);
-          if (d == null) continue;
-          if (d < 0) vencidas++;
-          else if (d <= 7) vencenPronto++;
-        }
-      }
+      // Misma cuenta que "Probar" en alertas (auditoría UX 2026-09-28).
+      const { porVencer: vencenPronto, vencidas, enviadas } =
+        AdminMetrics.contarCotizacionesPorVencer(items, new Date());
       const venc = vencidas > 0
         ? `<span class="tag bad">${vencidas}</span> vencidas · <span class="tag warn">${vencenPronto}</span> en 7 días`
         : `<span class="tag warn">${vencenPronto}</span> en 7 días · <span class="tag">${enviadas}</span> enviadas`;
@@ -165,10 +152,17 @@
     try {
       const usuarios = await firebase.firestore().collection('usuarios').get();
       const sinRol = usuarios.docs.filter(d => !d.data().rol);
+      const badge = $('usuariosSinRolBadge');
+      if (badge) {
+        badge.textContent = sinRol.length ? `${sinRol.length} sin rol` : '';
+        badge.style.display = sinRol.length ? '' : 'none';
+      }
       if (sinRol.length > 0) {
+        // Enlace a Usuarios ya filtrado (auditoría UX 2026-09-28): antes
+        // mandaba a la consola de Firestore aunque la pantalla existe.
         renderBanner('warning',
           `<span class="alert-title">${sinRol.length} usuario(s) sin rol asignado.</span> ` +
-          `Edita estos documentos en la consola de Firestore (colección <code>usuarios</code>) para asignarles un rol.`);
+          `No pueden trabajar hasta tener uno. <a href="usuarios.html?filtro=sinrol">Asignarles un rol</a>.`);
       }
     } catch (err) {
       console.warn('[admin] banner usuarios:', err);

@@ -143,18 +143,10 @@
 
   function computeAtencion(d) {
     const now = new Date();
-    // Estados canónicos de APP.ESTADOS (2026-09-02): el Set traía 'ENTREGADA'
-    // y 'COMPLETADA', strings que NO existen en el sistema — el guard de
-    // terminal no filtraba nada y hasta las órdenes cerradas salían como
-    // "sin asignar".
-    const ESTADOS_TERMINAL = new Set([
-      'ENTREGADO AL CLIENTE', 'COMPLETADO (EN OFICINA)',
-      'CERRADA (VISITA)', 'CERRADA (DEVOLUCION)', 'CERRADA (ENTRADA)',
-      'CERRADA (SIN RETIRAR)',
-      // Su contrato se anuló: no hay entrega posible y no es trabajo pendiente
-      // de nadie (2026-09-15). Sin esto reaparecía como "sin asignar".
-      'ANULADA',
-    ]);
+    // Terminal para el taller = completada en oficina o cerrada/anulada. La
+    // lista vive en AdminMetrics (auditoría UX 2026-09-28; antes cada página
+    // tenía su Set y algunos traían 'ENTREGADA'/'COMPLETADA', que no existen).
+    const ESTADOS_TERMINAL = new Set([AdminMetrics.ESTADO_COMPLETADO, ...AdminMetrics.ESTADOS_CERRADOS]);
     // La DEVOLUCION nace "POR ASIGNAR" pero nunca se asigna (vida binaria:
     // abierta → cerrada) — fuera de las alertas de asignación/estancamiento.
     const fueraDeCola = (o) => (o.tipo_de_servicio || '').toUpperCase() === 'DEVOLUCION';
@@ -212,8 +204,9 @@
     // MEDIA — Órdenes COMPLETADAS sin entregar > N días
     const ctEntDias = completadaSinEntregarDias();
     const completadasSinEntregar = d.ordenes.filter(o => {
-      const est = (o.estado_reparacion || '').toUpperCase();
-      if (est !== 'COMPLETADA') return false;
+      // 'COMPLETADA' no existe: el estado real es COMPLETADO (EN OFICINA)
+      // (auditoría UX 2026-09-28; este panel siempre daba 0).
+      if (!AdminMetrics.esCompletadaSinEntregar(o)) return false;
       // Las ENTRADA no se entregan (terminal propio: CERRADA (ENTRADA));
       // sin este corte la alerta las perseguiría eternamente.
       if ((o.tipo_de_servicio || '').toUpperCase().includes('ENTRADA')) return false;
@@ -407,11 +400,11 @@
       rowsOrd);
 
     // Por técnico (top 10 abiertos)
-    const ESTADOS_TERMINAL = new Set(['ENTREGADA', 'COMPLETADA']);
+    // Solo abiertas de verdad (auditoría UX 2026-09-28): el Set viejo
+    // ('ENTREGADA','COMPLETADA') no excluía nada y contaba las cerradas.
     const byTec = Object.create(null);
     for (const o of d.ordenes) {
-      const est = (o.estado_reparacion || '').toUpperCase();
-      if (ESTADOS_TERMINAL.has(est)) continue;
+      if (o.eliminado === true || !AdminMetrics.esAbierta(o) || AdminMetrics.esDevolucion(o)) continue;
       const t = o.tecnico_asignado || 'Sin asignar';
       byTec[t] = (byTec[t] || 0) + 1;
     }

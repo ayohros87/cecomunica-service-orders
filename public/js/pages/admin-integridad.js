@@ -106,10 +106,10 @@
 
   async function checkOrdenesEntregadasSinFirma() {
     const all = await OrdenesService.listAll();
-    const bad = all.filter(o => {
-      const est = (o.estado_reparacion || '').toUpperCase();
-      return o.eliminado !== true && est === 'ENTREGADA' && !o.firma_url && !o.firma_storage_path;
-    });
+    // 'ENTREGADA' no existe (auditoría UX 2026-09-28): el chequeo nunca
+    // fallaba. El estado real sale de AdminMetrics.esEntregada.
+    const bad = all.filter(o =>
+      o.eliminado !== true && AdminMetrics.esEntregada(o) && !o.firma_url && !o.firma_storage_path);
     return {
       severity: 'warning',
       count: bad.length,

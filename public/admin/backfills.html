@@ -17,7 +17,7 @@
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin · Backfills — Cecomunica</title>
+  <title>Admin · Migraciones de datos — Cecomunica</title>
 
   <link rel="stylesheet" href="../css/ceco-ui.css?v=bf320539">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
@@ -44,7 +44,7 @@
   <div id="topbar-mount"></div>
   <script>
     Layout.renderTopbar({
-      title: '<i data-lucide="play-circle"></i> Backfills',
+      title: '<i data-lucide="play-circle"></i> Migraciones de datos',
       back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
       showHome: true, homeHref: '../index.html', showLogout: true
     });
@@ -55,18 +55,18 @@
     <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
       <i data-lucide="info"></i>
       <div>
-        Migraciones de datos one-shot (antes scripts CLI en <code>functions/scripts/backfill-*.js</code>).
-        Todas son <strong>idempotentes</strong>: re-ejecutarlas no causa daño — comparan estado
-        actual vs deseado antes de escribir. Cada acción soporta <strong>dry-run</strong>
-        para preview sin escribir.
+        Arreglos de datos que se corren una vez. Correrlas otra vez no duplica nada (comparan
+        lo que hay contra lo que debería haber antes de escribir), pero <strong>lo que escriben
+        no se puede deshacer</strong>. Corre siempre primero la <strong>vista previa</strong>:
+        muestra qué cambiaría sin escribir, y solo después se habilita "Ejecutar".
       </div>
     </div>
 
     <!-- Backfill: searchTokens -->
     <div class="ds-card" style="padding:var(--sp-4); margin-bottom:var(--sp-3);">
       <div class="admin-section-head" style="margin-bottom:var(--sp-2);">
-        <span class="title" style="font-size:15px;"><i data-lucide="search-code"></i> searchTokens en órdenes</span>
-        <span class="hint">Popula <code>searchTokens</code> en órdenes existentes</span>
+        <span class="title" style="font-size:15px;"><i data-lucide="search-code"></i> Índice de búsqueda en órdenes</span>
+        <span class="hint">Completa el índice de búsqueda en órdenes viejas</span>
       </div>
       <p class="ts" style="margin:0 0 var(--sp-3); line-height:1.5;">
         Habilita la búsqueda indexada de <code>OrdenesService.searchOrders</code> en órdenes
@@ -76,7 +76,7 @@
       </p>
       <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
         <button class="btn btn-ghost" data-bf-action="searchTokens" data-bf-mode="dry">
-          <i data-lucide="eye"></i> Dry-run (preview)
+          <i data-lucide="eye"></i> Vista previa (no escribe)
         </button>
         <button class="btn btn-primary" data-bf-action="searchTokens" data-bf-mode="run">
           <i data-lucide="play"></i> Ejecutar
@@ -100,7 +100,7 @@
       </p>
       <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
         <button class="btn btn-ghost" data-bf-action="normalizeGrupos" data-bf-mode="dry">
-          <i data-lucide="eye"></i> Dry-run (preview)
+          <i data-lucide="eye"></i> Vista previa (no escribe)
         </button>
         <button class="btn btn-primary" data-bf-action="normalizeGrupos" data-bf-mode="run">
           <i data-lucide="play"></i> Ejecutar
@@ -121,11 +121,11 @@
         match <strong>normalizado</strong> del nombre contra los clientes activos. Aditivo:
         no toca el nombre. Idempotente. Reporta <strong>ambiguos</strong> (nombre que mapea
         a 2+ clientes — resolver con dedup) y <strong>huérfanos</strong> (nombre sin cliente).
-        Usa <strong>Dry-run</strong> para revisar antes.
+        Usa la <strong>vista previa</strong> para revisar antes.
       </p>
       <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
         <button class="btn btn-ghost" data-bf-action="linkClienteId" data-bf-mode="dry">
-          <i data-lucide="eye"></i> Dry-run (preview)
+          <i data-lucide="eye"></i> Vista previa (no escribe)
         </button>
         <button class="btn btn-primary" data-bf-action="linkClienteId" data-bf-mode="run">
           <i data-lucide="play"></i> Ejecutar
@@ -147,11 +147,11 @@
         sobrescribe un IP existente. Reporta <strong>ambiguos</strong> (clientes con 2+ IPs
         distintos — se escribe el modo, revisar) y <strong>huérfanos</strong> (sin IP derivable;
         recepción debe buscarlo). Recomendado: ejecutar antes <strong>Enlazar por cliente_id</strong>
-        para máxima cobertura de equipos legacy. Usa <strong>Dry-run</strong> para revisar antes.
+        para máxima cobertura de equipos legacy. Usa la <strong>vista previa</strong> para revisar antes.
       </p>
       <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
         <button class="btn btn-ghost" data-bf-action="clienteIp" data-bf-mode="dry">
-          <i data-lucide="eye"></i> Dry-run (preview)
+          <i data-lucide="eye"></i> Vista previa (no escribe)
         </button>
         <button class="btn btn-primary" data-bf-action="clienteIp" data-bf-mode="run">
           <i data-lucide="play"></i> Ejecutar
@@ -172,12 +172,12 @@
         del nuevo flujo: la lista deja de mostrarlos como <strong>"Seriales pendientes"</strong>,
         el recordatorio diario los ignora y <strong>no se reenvían a activaciones</strong>. Solo
         los contratos generados de aquí en adelante entran al flujo. Idempotente: salta los que ya
-        tienen estado de seriales o no están en activo/aprobado. Usa <strong>Dry-run</strong> para
+        tienen estado de seriales o no están en activo/aprobado. Usa la <strong>vista previa</strong> para
         ver el conteo antes de escribir.
       </p>
       <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
         <button class="btn btn-ghost" data-bf-action="marcarSerialesLegacy" data-bf-mode="dry">
-          <i data-lucide="eye"></i> Dry-run (preview)
+          <i data-lucide="eye"></i> Vista previa (no escribe)
         </button>
         <button class="btn btn-primary" data-bf-action="marcarSerialesLegacy" data-bf-mode="run">
           <i data-lucide="play"></i> Ejecutar
@@ -202,11 +202,11 @@
         incluyendo modelos inactivos. Aditivo: <strong>no borra el texto viejo</strong>. Idempotente:
         salta los que ya tienen modelo. Reporta <strong>ambiguos</strong> (texto que mapea a 2+
         modelos) y <strong>huérfanos</strong> (texto sin modelo en el catálogo — crear/renombrar).
-        Usa <strong>Dry-run</strong> para ver los números y la muestra de huérfanos antes de escribir.
+        Usa la <strong>vista previa</strong> para ver los números y la muestra de huérfanos antes de escribir.
       </p>
       <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
         <button class="btn btn-ghost" data-bf-action="linkModeloIdPoc" data-bf-mode="dry">
-          <i data-lucide="eye"></i> Dry-run (preview)
+          <i data-lucide="eye"></i> Vista previa (no escribe)
         </button>
         <button class="btn btn-primary" data-bf-action="linkModeloIdPoc" data-bf-mode="run">
           <i data-lucide="play"></i> Ejecutar
@@ -231,11 +231,11 @@
         los serial+modelo ya presentes se saltan. Reporta <strong>colisiones</strong> (mismo serial
         en 2+ modelos — failsafe con doc sufijado) y <strong>sospechosos</strong> (mismo serial con
         grafía distinta entre fuentes). El stock físico de bodega NO sale de aquí: se captura con la
-        "toma física" en la página del pool. Usa <strong>Dry-run</strong> primero.
+        "toma física" en la página del pool. Usa la <strong>vista previa</strong> primero.
       </p>
       <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
         <button class="btn btn-ghost" data-bf-action="seedPoolEquipos" data-bf-mode="dry">
-          <i data-lucide="eye"></i> Dry-run (preview)
+          <i data-lucide="eye"></i> Vista previa (no escribe)
         </button>
         <button class="btn btn-primary" data-bf-action="seedPoolEquipos" data-bf-mode="run">
           <i data-lucide="play"></i> Ejecutar
@@ -260,11 +260,11 @@
         reporta <strong>ambiguos</strong> (serial que mapea a 2+ contratos) y
         <strong>sospechosos</strong> (el cliente del pool no coincide con el del PoC) sin
         escribirlos. Los batches nuevos ya nacen vinculados desde PoC · Nuevo batch. Aditivo e
-        idempotente. Usa <strong>Dry-run</strong> para revisar números y muestras antes de escribir.
+        idempotente. Usa la <strong>vista previa</strong> para revisar números y muestras antes de escribir.
       </p>
       <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
         <button class="btn btn-ghost" data-bf-action="linkContratoPoc" data-bf-mode="dry">
-          <i data-lucide="eye"></i> Dry-run (preview)
+          <i data-lucide="eye"></i> Vista previa (no escribe)
         </button>
         <button class="btn btn-primary" data-bf-action="linkContratoPoc" data-bf-mode="run">
           <i data-lucide="play"></i> Ejecutar

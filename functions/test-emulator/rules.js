@@ -793,6 +793,13 @@ async function main() {
   await assertSucceeds(as("recepcion").doc("poc_devices/d1").set({ x: 1 }));
   await assertSucceeds(as("vendedor").doc("clientes/cli1").set({ nombre: "X" }));
   ok("REGRESIÓN: inventario_piezas/analytics/poc_devices/clientes siguen abiertos");
+  // Alta de PoC solo admin/recepción (auditoría UX 2026-09-28, T4); el update sigue abierto.
+  for (const r of ["vendedor", "tecnico", "gerente", "vista"]) {
+    await assertFails(as(r).doc(`poc_devices/nuevo_${r}`).set({ x: 1 }));
+  }
+  await assertSucceeds(as("administrador").doc("poc_devices/nuevo_admin").set({ x: 1 }));
+  await assertSucceeds(as("tecnico").doc("poc_devices/d1").set({ x: 2 }, { merge: true }));
+  ok("poc_devices: create solo admin/recepción; update abierto");
 
   // ── H8 (propuesta Almacén/Finanzas 2026-08): candados de facturación ──────
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
@@ -821,8 +828,16 @@ async function main() {
   await assertSucceeds(as("contabilidad").doc("empresa/facturacion_config").set({ auto_activar: true }, { merge: true }));
   await assertSucceeds(as("administrador").doc("empresa/facturacion_config").set({ alertas_off: true }, { merge: true }));
   ok("empresa: facturacion_config solo admin/contabilidad");
-  await assertSucceeds(as("recepcion").doc("empresa/estado_de_reparacion").set({ x: 2 }, { merge: true }));
-  ok("empresa: el resto de docs de config operativa sigue abierto al staff");
+  // Auditoría UX 2026-09-28 (T4): el resto de empresa/* pasó a solo admin,
+  // salvo IPs (recepción/ventas amplían la lista al crear clientes y lotes).
+  await assertFails(as("recepcion").doc("empresa/estado_de_reparacion").set({ x: 2 }, { merge: true }));
+  await assertFails(as("vendedor").doc("empresa/config").set({ itbms_rate: 0 }, { merge: true }));
+  await assertFails(as("contabilidad").doc("empresa/backfills_estado").set({ x: 1 }, { merge: true }));
+  await assertSucceeds(as("administrador").doc("empresa/estado_de_reparacion").set({ x: 3 }, { merge: true }));
+  ok("empresa: el resto de docs solo lo escribe admin");
+  await assertSucceeds(as("recepcion").doc("empresa/IPs").set({ list: ["a.cecomunica.net"] }, { merge: true }));
+  await assertSucceeds(as("vendedor").doc("empresa/IPs").set({ list: ["b.cecomunica.net"] }, { merge: true }));
+  ok("empresa: IPs sigue abierto al staff (alta de clientes y lotes)");
 
   // clientes: el vínculo QBO decide a quién se factura.
   await assertFails(as("vendedor").doc("clientes/cliQbo").set({ qbo_customer_id: "99" }, { merge: true }));

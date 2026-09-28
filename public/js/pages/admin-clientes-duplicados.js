@@ -5,7 +5,8 @@
  * Escanea todos los clientes activos, los agrupa en clústeres de duplicados
  * (ver ClientesDedupService) y muestra cada grupo para revisión. Para cada
  * grupo eliges el registro a conservar (canónico) y cuáles incluir; al fusionar
- * se re-apuntan referencias y se hace soft-delete de los duplicados.
+ * se re-apuntan referencias y se marcan como eliminados los duplicados. Antes
+ * de escribir, el plan con los valores anteriores queda en admin_audit.
  */
 (function () {
   'use strict';
@@ -94,16 +95,16 @@
           <span class="ruc">RUC ${esc(rucComun)}</span>
           ${badge}
         </div>
-        <table class="dup-table">
+        <div class="admin-table-wrap"><table class="dup-table">
           <thead><tr>
             <th>Conservar</th><th>Incluir</th><th>Nombre</th><th>RUC</th><th>DV</th>
             <th>Representante</th><th>Contacto</th><th>Refs (C/O/P)</th><th>Similitud</th>
           </tr></thead>
           <tbody>${filas}</tbody>
-        </table>
+        </table></div>
         <div class="dup-actions">
           <button class="btn btn-primary btn-sm" data-fusionar="${cl.id}"><i data-lucide="git-merge"></i> Fusionar</button>
-          <span class="ts">El canónico conserva su nombre; los demás se marcan como eliminados.</span>
+          <span class="ts">El que conservas mantiene su nombre; los demás se marcan como eliminados.${esRevisar ? ' Grupo por similitud: solo se re-apunta lo enlazado por ficha, no por nombre.' : ''}</span>
         </div>
       </div>`;
   }
@@ -139,25 +140,41 @@
 
     const fill = Svc().proposeFill(canonical, dups);
     const fillTxt = Object.keys(fill).length
-      ? Object.entries(fill).map(([k, v]) => `${k}=${v}`).join(', ')
+      ? Object.entries(fill).map(([k, v]) => `${esc(k)}=${esc(v)}`).join(', ')
       : '(nada que rellenar)';
-    const totalRefs = dups.reduce((acc, d) => {
-      const r = cl.refs[d.id] || {}; return acc + (r.contratos || 0) + (r.ordenes || 0) + (r.poc || 0);
-    }, 0);
-
-    const ok = await Modal.confirm({ title: 'Fusionar clientes', confirmLabel: 'Fusionar', danger: true, message: (
-      `Fusionar en "${canonical.nombre}":\n\n` +
-      `• Se eliminarán (soft-delete) ${dups.length} duplicado(s): ${dups.map(d => '"' + d.nombre + '"').join(', ')}\n` +
-      `• Se re-apuntarán ~${totalRefs} referencia(s) (contratos/órdenes/equipos) al canónico\n` +
-      `• El canónico ganará: ${fillTxt}\n\n` +
-      `¿Continuar?`
-    ).replace(/\n/g, '<br>') });
-    if (!ok) return;
+    // Por nombre solo en grupos exactos (auditoría UX 2026-09-28).
+    const porNombre = cl.confianza === 'exacta';
 
     const btn = root.querySelector('[data-fusionar]');
-    btn.disabled = true; btn.innerHTML = 'Fusionando…';
+    btn.disabled = true; btn.innerHTML = 'Calculando cambios…';
+    let plan;
     try {
-      const r = await Svc().mergeCluster({ canonical, dups, fill });
+      // Conteo exacto antes del confirm (el "~N" de antes no contaba las
+      // referencias por nombre ni las órdenes enlazadas por ficha).
+      plan = await Svc().planFusion({ canonical, dups, fill, porNombre });
+    } catch (e) {
+      Toast.show('No se pudo calcular la fusión: ' + (e.message || e), 'bad');
+      btn.disabled = false; btn.innerHTML = '<i data-lucide="git-merge"></i> Fusionar';
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+      return;
+    }
+    const c = plan.cuenta;
+    const porNombreTxt = (c.ordenesPorNombre || c.pocPorNombre)
+      ? ` (de ellos, ${c.ordenesPorNombre} órdenes y ${c.pocPorNombre} equipos solo por coincidir el nombre)`
+      : '';
+
+    const ok = await Modal.confirm({ title: 'Fusionar clientes', confirmLabel: 'Fusionar', danger: true, message:
+      `Fusionar en "<strong>${esc(canonical.nombre)}</strong>":<br><br>` +
+      `• Se marcarán como eliminados ${dups.length} duplicado(s): ${dups.map(d => '"' + esc(d.nombre) + '"').join(', ')}<br>` +
+      `• Se re-apuntarán ${c.contratos} contrato(s), ${c.ordenes} orden(es) y ${c.poc} equipo(s) PoC${porNombreTxt}<br>` +
+      (porNombre ? '' : '• Grupo por similitud: lo que solo coincide por nombre <strong>no</strong> se toca<br>') +
+      `• El que conservas ganará: ${fillTxt}<br><br>` +
+      `<strong>No se deshace con un clic.</strong> Antes de escribir se guarda en Auditoría un registro con los valores anteriores de cada cambio. ¿Continuar?` });
+    if (!ok) { btn.disabled = false; btn.innerHTML = '<i data-lucide="git-merge"></i> Fusionar'; if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
+
+    btn.innerHTML = 'Fusionando…';
+    try {
+      const r = await Svc().ejecutarFusion(plan);
       Toast.show(
         `Fusionado ✅ — ${r.eliminados} duplicado(s), ` +
         `${r.contratosRepointed} contratos, ${r.ordenesRepointed} órdenes, ${r.pocRepointed} equipos re-apuntados.`,

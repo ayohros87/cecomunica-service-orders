@@ -7,6 +7,7 @@ import '/js/ui/toast.js';
 import '/js/ui/modal.js';
 import '/js/services/empresaService.js';
 import '/js/services/usuariosAdminService.js';
+import '/js/domain/adminMetrics.js';
 import '/js/pages/admin-config.js';
 import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';

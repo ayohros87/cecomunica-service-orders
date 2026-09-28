@@ -33,13 +33,15 @@
     { key: 'inventario',  label: 'Inventario y piezas',        icon: 'package' },
     { key: 'seriales',    label: 'Seriales',                   icon: 'hash' },
     { key: 'operacion',   label: 'Operación',                  icon: 'activity' },
-    { key: 'pii',         label: 'Privacidad (PII)',           icon: 'shield' },
+    { key: 'pii',         label: 'Privacidad (fotos de cédula)', icon: 'shield' },
   ];
 
   const FIELDS = [
-    { key: 'itbms_rate',                section: 'facturacion', label: 'Tasa ITBMS',
-      type: 'rate', min: 0,     max: 0.25,  step: 0.001,
-      hint: 'Rango 0–25% (0.07 = 7%). Cambia inmediatamente cálculos en cotizaciones, contratos y órdenes.' },
+    // ITBMS en porcentaje en la UI (7 = 7%) y fracción al guardar (0.07):
+    // auditoría UX 2026-09-28, antes se escribía 0.07 a mano.
+    { key: 'itbms_rate',                section: 'facturacion', label: 'Tasa ITBMS (%)',
+      type: 'rate', min: 0,     max: 0.25,  step: 0.1,
+      hint: 'Porcentaje entre 0 y 25 (escribe 7 para 7%). Cambia de inmediato los cálculos de cotizaciones, contratos y órdenes nuevas.' },
     { key: 'cotizacion_validez_dias',   section: 'facturacion', label: 'Validez por defecto de cotización (días)',
       type: 'int',  min: 1,     max: 365,
       hint: 'Aplicado a cotizaciones nuevas. No afecta las ya creadas.' },
@@ -120,7 +122,7 @@
       hint: 'Días antes de purgar fotos de identificación. Verifica con legal antes de bajar de 60.' },
     { key: 'pii_purge_enabled',         section: 'pii', label: 'Purga PII habilitada',
       type: 'bool',
-      hint: 'Kill-switch global: cuando está apagado, el callable purgePIIRetention rechaza ejecuciones reales (preview sigue funcionando). También editable desde admin/pii.html.' },
+      hint: 'Interruptor general: apagado, el sistema no borra ninguna foto de cédula (la vista previa sigue funcionando). También se cambia en Privacidad de fotos de cédula.' },
   ];
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -131,16 +133,30 @@
   // Cambios sin guardar: alimenta la barra sticky y el aviso al salir.
   let dirty = false;
 
-  const ROL_LABELS = {
-    administrador: 'Administrador', gerente: 'Gerente', vendedor: 'Vendedor',
-    recepcion: 'Recepción', tecnico: 'Técnico', tecnico_operativo: 'Técnico operativo',
-    jefe_taller: 'Jefe de taller', inventario: 'Inventario', contabilidad: 'Contabilidad', vista: 'Vista',
-  };
-  const rolLabel = (r) => ROL_LABELS[r] || (r || '—');
+  // Etiquetas de rol: fuente única en AdminMetrics (auditoría UX 2026-09-28).
+  const rolLabel = (r) => AdminMetrics.ROL_LABELS[r] || (r || '—');
+
+  // Valores tal como se cargaron: base del "antes → después" al guardar.
+  let _cargado = {};
 
   function $(id) { return document.getElementById(id); }
   function setText(id, txt) { const el = $(id); if (el) el.textContent = txt; }
   function esc(s) { return FMT.esc(s); } // helper canónico (core/formatting.js)
+
+  function etiquetaCampo(key) { return FIELDS.find(f => f.key === key)?.label || key; }
+  function nombreDeUid(uid) {
+    const u = uid && _users.find(x => x.uid === uid);
+    return u ? (u.nombre || u.email) : null;
+  }
+  // Valor legible para el "antes → después".
+  function fmtValor(key, v) {
+    const f = FIELDS.find(x => x.key === key);
+    if (v == null || v === '') return '(vacío)';
+    if (f?.type === 'rate') return `${Math.round(Number(v) * 100000) / 1000}%`;
+    if (f?.type === 'bool') return v ? 'Sí' : 'No';
+    if (Array.isArray(v)) return v.length ? v.join(', ') : '(vacío)';
+    return String(v);
+  }
 
   // ── Render: nav de secciones + tarjetas por sección ────────────────────────
   function renderForm(current) {
@@ -192,7 +208,9 @@
       const val = (typeof v === 'string' ? v : '');
       input = `<input type="email" id="fld-${f.key}" class="form-input" value="${esc(val)}" placeholder="recepcion@cecomunica.com" style="max-width:320px;">`;
     } else if (f.type === 'rate') {
-      input = `<input type="number" id="fld-${f.key}" class="form-input" min="${f.min}" max="${f.max}" step="${f.step}" value="${esc(v)}" style="width:140px;">`;
+      // Se muestra como % (0.07 → 7); readForm lo devuelve a fracción.
+      const pct = (v === '' || v == null || !Number.isFinite(Number(v))) ? '' : Math.round(Number(v) * 100000) / 1000;
+      input = `<span style="display:inline-flex;align-items:center;gap:6px;"><input type="number" id="fld-${f.key}" class="form-input" min="${f.min * 100}" max="${f.max * 100}" step="${f.step}" value="${esc(pct)}" style="width:120px;"> %</span>`;
     } else if (f.type === 'bool') {
       const checked = v === true ? 'checked' : '';
       input = `<label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="checkbox" id="fld-${f.key}" ${checked} style="width:18px;height:18px;"> Habilitada</label>`;
@@ -384,9 +402,10 @@
         if (val && !EMAIL_RE.test(val)) errors[f.key] = `Email inválido: ${val}`;
         out[f.key] = val;
       } else if (f.type === 'rate') {
-        const n = Number(raw);
-        if (!Number.isFinite(n) || n < f.min || n > f.max) errors[f.key] = `Debe estar entre ${f.min} y ${f.max}.`;
-        out[f.key] = Math.round(n * 1000) / 1000;
+        // La UI habla en %; se guarda como fracción (7 → 0.07).
+        const pct = Number(raw);
+        if (raw === '' || !Number.isFinite(pct) || pct < f.min * 100 || pct > f.max * 100) errors[f.key] = `Debe estar entre ${f.min * 100}% y ${f.max * 100}%.`;
+        out[f.key] = Math.round(pct * 10) / 1000;
       } else {
         const n = Number(raw);
         if (!Number.isInteger(n) || n < f.min || n > f.max) errors[f.key] = `Entero entre ${f.min} y ${f.max}.`;
@@ -427,16 +446,19 @@
         EmpresaService.getConfig(),
         (async () => { try { _users = await UsuariosAdminService.listAll(); } catch (e) { console.warn('[admin/config] no se pudieron cargar usuarios:', e); _users = []; } })(),
       ]);
+      _cargado = cfg;
       renderForm(cfg);
       wireUserPickers();
       clearDirty();
       const meta = $('configMeta');
       if (meta) {
         const ts = cfg.updated_at;
-        const who = cfg.updated_by;
+        // Nombre (o correo) de quien editó; el uid solo si es lo único que hay
+        // (ediciones anteriores al 2026-09-28).
+        const who = cfg.editado_por_nombre || cfg.editado_por_email || nombreDeUid(cfg.updated_by) || cfg.updated_by;
         meta.innerHTML = ts
-          ? `Última edición: ${new Date(ts.toMillis ? ts.toMillis() : ts).toLocaleString('es-PA', { hour12: false })} por <code>${esc(who || '—')}</code>`
-          : 'Sin ediciones registradas (usando valores por defecto).';
+          ? `Última edición: ${new Date(ts.toMillis ? ts.toMillis() : ts).toLocaleString('es-PA', { hour12: false })} por <strong>${esc(who || '—')}</strong>. <a href="auditoria.html?tipo=config">Ver historial de cambios</a>`
+          : 'Sin ediciones registradas (usando valores de fábrica).';
       }
       setText('lastUpdate', `Actualizado ${new Date().toLocaleTimeString('es-PA', { hour12: false })}`);
       if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -453,20 +475,45 @@
       if (window.Toast) Toast.show('Corrige los errores antes de guardar.', 'bad');
       return;
     }
+    // Solo los campos que cambiaron, con antes → después (auditoría UX
+    // 2026-09-28): el confirm genérico no decía qué se iba a tocar.
+    const cambios = EmpresaService.diffConfig(_cargado, values);
+    if (!cambios.length) {
+      clearDirty();
+      if (window.Toast) Toast.show('No hay cambios que guardar.', '');
+      return;
+    }
+    const lista = cambios.map(c =>
+      `<li><strong>${esc(etiquetaCampo(c.campo))}</strong>: ${esc(fmtValor(c.campo, c.antes))} → ${esc(fmtValor(c.campo, c.despues))}</li>`).join('');
     const ok = await Modal.confirm({
       title: 'Guardar configuración',
-      message: 'Los nuevos valores se aplicarán de inmediato a las nuevas operaciones. ¿Continuar?',
+      message: `Se ${cambios.length === 1 ? 'cambiará 1 valor' : `cambiarán ${cambios.length} valores`}:<ul style="margin:8px 0 8px 18px;padding:0;line-height:1.6;">${lista}</ul>Aplica de inmediato a las operaciones nuevas.`,
       confirmLabel: 'Guardar',
     });
     if (!ok) return;
     try {
-      await EmpresaService.setConfig(values);
+      // Solo se escriben los campos cambiados (merge): los que nadie tocó no
+      // se reescriben.
+      const patch = Object.fromEntries(cambios.map(c => [c.campo, c.despues]));
+      await EmpresaService.setConfig(patch);
+      await registrarCambios('configuracion', cambios);
       clearDirty();
       if (window.Toast) Toast.show('Configuración guardada.', 'ok');
       await load();
     } catch (err) {
       console.error('[admin/config] save:', err);
       if (window.Toast) Toast.show('Error guardando: ' + (err.message || err.code || err), 'bad');
+    }
+  }
+
+  // Deja el guardado en admin_audit (lo muestra Auditoría como "Configuración").
+  // Si falla (p. ej. falta la regla), el guardado ya ocurrió: solo se avisa.
+  async function registrarCambios(origen, cambios) {
+    try {
+      await EmpresaService.registrarAdminAudit('config', { origen, cambios });
+    } catch (e) {
+      console.warn('[admin/config] no se pudo registrar en admin_audit:', e);
+      if (window.Toast) Toast.show('Guardado, pero no quedó en el historial de cambios.', 'warn');
     }
   }
 

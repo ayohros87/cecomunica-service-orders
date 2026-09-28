@@ -28,7 +28,34 @@
       const cls = h.align === 'right' ? ' class="num"' : '';
       return `<td${cls}>${v == null ? '' : v}</td>`;
     }).join('') + '</tr>').join('');
-    el.innerHTML = `<table class="admin-table"><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+    el.innerHTML = `<div class="admin-table-wrap"><table class="admin-table"><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>`;
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // Error de carga visible en la sección, con "Reintentar" (auditoría UX
+  // 2026-09-28: antes solo quedaba en la consola y la sección se veía vacía,
+  // como si no hubiera nada que revisar).
+  function renderErrorSeccion(targetIds, err, reintentar) {
+    const msg = err?.message || err?.code || String(err);
+    targetIds.forEach((id, i) => {
+      const el = $(id);
+      if (!el) return;
+      el.innerHTML = i === 0
+        ? `<div class="alert-banner alert-error" style="margin:var(--sp-2);"><i data-lucide="alert-octagon"></i>
+             <div>No se pudo cargar esta sección: <code>${esc(msg)}</code>
+             <button type="button" class="btn btn-ghost btn-sm" data-reintentar style="margin-left:8px;"><i data-lucide="refresh-cw"></i> Reintentar</button></div></div>`
+        : '';
+      el.querySelector('[data-reintentar]')?.addEventListener('click', (e) => {
+        e.currentTarget.disabled = true;
+        reintentar();
+      });
+    });
+    if (window.lucide) lucide.createIcons();
   }
 
   function fmtTs(v) {
@@ -67,9 +94,9 @@
         stuck.map(m => ({
           createdAt: fmtTs(m.createdAt),
           ageHours: ageHours(m.createdAt) + ' h',
-          to: Array.isArray(m.to) ? m.to.join(', ') : (m.to || '—'),
-          template: m.template || '—',
-          subject: m.subject || '—',
+          to: esc(Array.isArray(m.to) ? m.to.join(', ') : (m.to || '—')),
+          template: esc(m.template || '—'),
+          subject: esc(m.subject || '—'),
         })),
         'No hay emails atascados (> 1 h sin procesar).');
 
@@ -129,7 +156,8 @@
       if (window.lucide) lucide.createIcons();
     } catch (err) {
       console.error('[admin/salud] mail:', err);
-      setText('mailSummary', 'Error consultando mail_queue: ' + (err.message || err.code || err));
+      setText('mailSummary', 'No se pudo consultar la cola de correos.');
+      renderErrorSeccion(['tblMailStuck', 'tblMailFailed'], err, loadMailQueue);
     }
   }
 
@@ -149,11 +177,16 @@
           { key: 'nombre', label: 'Nombre' },
         ],
         sinRol.map(u => ({
-          uid: `<code style="font-size:11px;">${u.uid}</code>`,
-          email: u.email || u.correo || '—',
-          nombre: u.nombre || '—',
+          uid: `<code style="font-size:11px;">${esc(u.uid)}</code>`,
+          email: esc(u.email || u.correo || '—'),
+          nombre: esc(u.nombre || '—'),
         })),
         'Todos los usuarios tienen rol asignado.');
+      // Salida directa: Usuarios ya filtrado (auditoría UX 2026-09-28).
+      const accSinRol = $('accSinRol');
+      if (accSinRol) accSinRol.style.display = sinRol.length ? '' : 'none';
+      const accRolInvalido = $('accRolInvalido');
+      if (accRolInvalido) accRolInvalido.style.display = rolNoCanonico.length ? '' : 'none';
 
       renderTable('tblUsuariosRolInvalido',
         [
@@ -162,17 +195,19 @@
           { key: 'rol', label: 'Rol almacenado' },
         ],
         rolNoCanonico.map(u => ({
-          uid: `<code style="font-size:11px;">${u.uid}</code>`,
-          email: u.email || u.correo || '—',
-          rol: `<code style="color:#991b1b;">${u.rol}</code>`,
+          uid: `<code style="font-size:11px;">${esc(u.uid)}</code>`,
+          email: esc(u.email || u.correo || '—'),
+          rol: `<code style="color:#991b1b;">${esc(u.rol)}</code>`,
         })),
-        'Todos los roles existentes están en el enum ROLES.');
+        'Todos los usuarios tienen un rol reconocido.');
 
       setText('countSinRol', String(sinRol.length));
       setText('countRolInvalido', String(rolNoCanonico.length));
       setText('totalUsuarios', `${all.length} usuarios registrados`);
     } catch (err) {
       console.error('[admin/salud] usuarios:', err);
+      setText('totalUsuarios', 'No se pudieron cargar los usuarios.');
+      renderErrorSeccion(['tblUsuariosSinRol', 'tblUsuariosRolInvalido'], err, loadUsuarios);
     }
   }
 
@@ -185,6 +220,8 @@
         o.eliminado !== true &&
         (!Array.isArray(o.searchTokens) || o.searchTokens.length === 0));
       setText('countSinTokens', String(sinTokens.length));
+      const accTokens = $('accSinTokens');
+      if (accTokens) accTokens.style.display = sinTokens.length ? '' : 'none';
 
       // Top órdenes por tamaño de os_logs (atención al cap de 1 MiB / ~20k entries).
       const withLogs = all
@@ -197,16 +234,17 @@
         [
           { key: 'numero', label: 'N° Orden' },
           { key: 'cliente', label: 'Cliente' },
-          { key: 'n', label: 'Entradas os_logs', align: 'right' },
+          { key: 'n', label: 'Entradas del historial', align: 'right' },
         ],
         withLogs.map(o => ({
-          numero: o.numero || `<code>${o.id}</code>`,
-          cliente: o.cliente,
+          numero: esc(o.numero) || `<code>${esc(o.id)}</code>`,
+          cliente: esc(o.cliente),
           n: o.n.toLocaleString('es-PA'),
         })),
-        'Sin órdenes con os_logs registrados.');
+        'Sin órdenes con historial registrado.');
     } catch (err) {
       console.error('[admin/salud] ordenes:', err);
+      renderErrorSeccion(['tblOrdenesGrandes'], err, loadOrdenesSalud);
     }
   }
 
@@ -240,15 +278,16 @@
       ].map(f => ({
         chequeo: f.chequeo,
         casos: String(f.n),
-        muestras: (f.m || []).slice(0, 6).map(x => x.serial || x.device || '').filter(Boolean).join(', ') || '—',
+        muestras: esc((f.m || []).slice(0, 6).map(x => x.serial || x.device || '').filter(Boolean).join(', ') || '—'),
       }));
       renderTable('tblConcPool', [
         { key: 'chequeo', label: 'Chequeo' },
         { key: 'casos', label: 'Casos', align: 'right' },
         { key: 'muestras', label: 'Muestras' },
-      ], filas, 'Sin drift detectado.');
+      ], filas, 'Sin diferencias detectadas.');
     } catch (err) {
       console.error('[admin/salud] conciliacion pool:', err);
+      renderErrorSeccion(['tblConcPool'], err, loadConciliacionPool);
     }
   }
 

@@ -17,7 +17,7 @@
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin · Integridad — Cecomunica</title>
+  <title>Admin · Chequeo de integridad — Cecomunica</title>
 
   <link rel="stylesheet" href="../css/ceco-ui.css?v=bf320539">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
@@ -45,7 +45,7 @@
   <div id="topbar-mount"></div>
   <script>
     Layout.renderTopbar({
-      title: '<i data-lucide="clipboard-check"></i> Integridad',
+      title: '<i data-lucide="clipboard-check"></i> Chequeo de integridad',
       back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
       showHome: true, homeHref: '../index.html', showLogout: true
     });
@@ -66,20 +66,20 @@
     <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
       <i data-lucide="info"></i>
       <div>
-        Cada check detecta inconsistencias entre datos relacionados. <strong>Sólo diagnóstico</strong> — la corrección se hace en la página del módulo correspondiente (botón "Abrir" en cada fila). Los checks se ejecutan en serie para no abrumar a Firestore.
+        Cada chequeo busca datos relacionados que no cuadran. <strong>Solo diagnóstico</strong>: nada aquí corrige registros; la corrección se hace en la página del módulo (botón "Abrir" en cada fila). Los chequeos corren uno tras otro para no saturar la base de datos.
       </div>
     </div>
 
     <!-- Tool: Recompute cache de contrato ─ útil cuando os_count y la subcol están desincronizadas -->
     <div class="ds-card" style="padding:var(--sp-3); margin-bottom:var(--sp-4);">
       <div class="admin-section-head" style="margin-bottom:var(--sp-2);">
-        <span class="title" style="font-size:14px;"><i data-lucide="wrench"></i> Reparar cache de contrato</span>
-        <span class="hint">Llama al callable <code>rebuildContractCache</code> que recalcula <code>os_count</code>, <code>os_linked</code>, <code>os_serials_preview</code>, etc. desde la subcolección actual</span>
+        <span class="title" style="font-size:14px;"><i data-lucide="wrench"></i> Recalcular resumen de un contrato</span>
+        <span class="hint">Vuelve a contar las órdenes y seriales vinculados al contrato a partir de sus órdenes. No cambia órdenes ni equipos; sirve cuando el contrato muestra un conteo que no cuadra.</span>
       </div>
       <div style="display:flex; gap:var(--sp-2); align-items:flex-start; flex-wrap:wrap;">
-        <input type="text" id="inputContratoId" class="form-input" placeholder="Doc ID del contrato (no contrato_id CT-YYYY-NNN). Para varios, sepáralos por coma o espacio." style="flex:1; min-width:320px;">
+        <input type="text" id="inputContratoId" class="form-input" placeholder="ID interno del contrato (no el número CT-AAAA-NNN). Para varios, sepáralos por coma o espacio." style="flex:1; min-width:320px;">
         <button id="btnRebuild" class="btn btn-primary">
-          <i data-lucide="wrench"></i> Recomputar
+          <i data-lucide="wrench"></i> Recalcular
         </button>
       </div>
       <div id="rebuildResult" style="margin-top:var(--sp-3);"></div>

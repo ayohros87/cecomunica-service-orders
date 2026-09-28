@@ -69,9 +69,22 @@
       <span style="font-size:12px;color:var(--fg-3);margin-right:6px;">Tipos:</span>
       <span class="chip is-active" data-type="orden"><i data-lucide="settings-2"></i> Órdenes</span>
       <span class="chip is-active" data-type="contrato"><i data-lucide="file-text"></i> Contratos</span>
-      <span class="chip is-active" data-type="pii"><i data-lucide="shield-x"></i> PII</span>
+      <span class="chip is-active" data-type="pii"><i data-lucide="shield-x"></i> Fotos de cédula</span>
       <span class="chip is-active" data-type="usuario"><i data-lucide="users-round"></i> Usuarios</span>
+      <span class="chip is-active" data-type="config"><i data-lucide="sliders-horizontal"></i> Configuración</span>
+      <span class="chip is-active" data-type="datos"><i data-lucide="database"></i> Fusiones y migraciones</span>
       <input type="search" id="searchInput" class="search-input" placeholder="Filtrar por ID, cliente, acción…" />
+    </div>
+    <div class="audit-toolbar">
+      <input type="search" id="personaInput" class="search-input" placeholder="Quién lo hizo: nombre o correo…" />
+      <label class="ts" style="display:inline-flex;align-items:center;gap:6px;">Desde <input type="date" id="fechaDesde" class="search-input" style="flex:0 0 auto;min-width:0;"></label>
+      <label class="ts" style="display:inline-flex;align-items:center;gap:6px;">Hasta <input type="date" id="fechaHasta" class="search-input" style="flex:0 0 auto;min-width:0;"></label>
+    </div>
+    <!-- Auditoría UX 2026-09-28: el alcance real de lo cargado, para que nadie
+         concluya "no pasó" por algo que simplemente no se trajo. -->
+    <div class="alert-banner alert-info" style="margin-bottom:var(--sp-3);">
+      <i data-lucide="info"></i>
+      <div>Se revisan las <strong>últimas 300 órdenes y 300 contratos por fecha de creación</strong>, más los últimos 300 registros de usuarios y del panel. Una entrega de hoy sobre una orden vieja puede no aparecer. Los filtros de persona y fecha trabajan sobre lo cargado.</div>
     </div>
 
     <div class="ds-card" style="padding:0;">

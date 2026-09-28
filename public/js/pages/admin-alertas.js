@@ -115,6 +115,7 @@
     try {
       const cfg = await EmpresaService.getConfig();
       state.alertas = Array.isArray(cfg.alertas) ? cfg.alertas.map(a => ({ ...a })) : [];
+      state.alertasGuardadas = state.alertas.map(a => ({ ...a }));
       state.dirty = false;
       renderTable();
     } catch (err) {
@@ -126,12 +127,22 @@
   async function save() {
     const ok = await Modal.confirm({
       title: 'Guardar alertas',
-      message: `Vas a sobrescribir <code>empresa/config.alertas</code> con ${state.alertas.length} reglas. Las nuevas se aplican en cuanto un admin recargue el panel. ¿Continuar?`,
+      message: `Se guardarán ${state.alertas.length} regla${state.alertas.length === 1 ? '' : 's'} de alerta (reemplazan a las actuales). Se aplican en cuanto un administrador recargue el panel. ¿Continuar?`,
       confirmLabel: 'Guardar',
     });
     if (!ok) return;
     try {
       await EmpresaService.setConfig({ alertas: state.alertas });
+      // Historial en Auditoría (auditoría UX 2026-09-28). Best-effort.
+      try {
+        await EmpresaService.registrarAdminAudit('config', {
+          origen: 'alertas',
+          cambios: [{ campo: 'alertas', antes: `${(state.alertasGuardadas || []).length} regla(s)`, despues: `${state.alertas.length} regla(s)` }],
+          alertas_antes: state.alertasGuardadas || [],
+          alertas_despues: state.alertas,
+        });
+      } catch (e) { console.warn('[admin/alertas] admin_audit:', e); }
+      state.alertasGuardadas = state.alertas.map(a => ({ ...a }));
       state.dirty = false;
       Toast.show('Alertas guardadas.', 'ok');
     } catch (err) {
@@ -152,20 +163,12 @@
         CotizacionesService.listCotizaciones({ limit: 500 }),
         PocService.getPocDevices(),
       ]);
-      const ESTADOS_ABIERTOS = new Set(['POR ASIGNAR','EN PROCESO','DIAGNÓSTICO','EN ESPERA','LISTA','PROGRAMACIÓN','ESTIMACIÓN','RECEPCIONADA']);
-      // Sin DEVOLUCION (2026-09-02) — mismo criterio que admin-index.
-      const ordenes_abiertas = (ordSnap || []).filter(o => o.eliminado !== true
-        && ESTADOS_ABIERTOS.has((o.estado_reparacion || '').toUpperCase())
-        && (o.tipo_de_servicio || '').toUpperCase() !== 'DEVOLUCION').length;
+      // Mismos criterios que la portada, desde AdminMetrics (auditoría UX
+      // 2026-09-28): antes el Set local traía estados inexistentes y "por
+      // vencer" incluía las ya vencidas.
+      const ordenes_abiertas = AdminMetrics.contarOrdenesAbiertas(ordSnap || []);
       const contratos_pendientes = (ctRes?.docs || []).filter(c => c.estado === 'pendiente_aprobacion').length;
-      const ahora = new Date();
-      const cotizaciones_vencen = (cotRes?.docs || []).filter(c => {
-        if (c.deleted === true) return false;
-        const e = (c.estado || '').toLowerCase();
-        if (e !== 'enviada' && e !== 'aprobada') return false;
-        const d = AdminMetrics.daysUntilExpiry(c.fecha, c.validezDias || c.validez_dias || 15, ahora);
-        return d != null && d <= 7;
-      }).length;
+      const cotizaciones_vencen = AdminMetrics.contarCotizacionesPorVencer(cotRes?.docs || [], new Date()).porVencer;
       const poc_activos = (pocAll || []).filter(d => d.activo === true && d.deleted !== true).length;
 
       const metrics = { ordenes_abiertas, contratos_pendientes, cotizaciones_vencen, poc_activos };
