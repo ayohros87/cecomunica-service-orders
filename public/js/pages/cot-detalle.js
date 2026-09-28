@@ -144,6 +144,16 @@
         meta: fmtFechaAny(cot.fecha_descarte) + (cot.cierre_motivo ? ' · ' + cot.cierre_motivo : ''),
       });
     }
+    // El servidor la regresó a borrador (onCotizacionPolitica): se marcó como
+    // enviada/aprobada fuera de política y sin aprobación. El motivo va en la
+    // línea, igual que un rechazo del aprobador.
+    const bp = rawDoc?.bloqueada_por_politica;
+    if (bp && cot.estado === 'borrador') {
+      h.push({
+        act: 'Devuelta a borrador por el sistema: requiere aprobación',
+        meta: fmtFechaAny(bp.at) + (bp.motivo ? ' · ' + bp.motivo : ''),
+      });
+    }
     if (cot.estado === 'vencida') {
       h.push({
         act: 'Validez vencida',
@@ -169,6 +179,28 @@
       return '<button class="btn btn-secondary" id="btnSolicitar"><i data-lucide="shield-check"></i> Solicitar aprobación</button>';
     }
     return '';
+  }
+
+  // Aviso de que el SERVIDOR devolvió la cotización a borrador
+  // (onCotizacionPolitica): pasó a enviada/aprobada fuera de política y sin
+  // aprobación registrada. Ofrece el mismo "Solicitar aprobación" del header;
+  // a un aprobador le basta "Aprobar y enviar".
+  function bloqueoPoliticaHtml() {
+    const bp = rawDoc?.bloqueada_por_politica;
+    if (!bp || cot.estado !== 'borrador') return '';
+    const motivos = Array.isArray(bp.motivos) && bp.motivos.length ? bp.motivos : [bp.motivo || 'fuera de la política de envío'];
+    const puedeSolicitar = !soloLectura && !puedeAprobarCotizacion(userRol, cot) && canRole(userRol, 'enviar-cotizacion');
+    return `
+      <div class="cc-panel" role="alert" style="margin-bottom:var(--sp-4); border-left:4px solid var(--warn-deep, #8A5A00);">
+        <div class="cc-panel-body" style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+          <div style="flex:1 1 320px; font-size:13px; line-height:1.5;">
+            <b>El servidor devolvió esta cotización a borrador: requiere aprobación.</b>
+            <div style="margin-top:4px; color:var(--fg-2);">Se marcó como <b>${esc(bp.estado_previo || 'enviada')}</b> sin aprobación registrada${bp.at ? ' el ' + esc(fmtFechaAny(bp.at)) : ''}. Motivo:</div>
+            <ul style="margin:4px 0 0; padding-left:18px;">${motivos.map(m => '<li>' + esc(m) + '</li>').join('')}</ul>
+          </div>
+          ${puedeSolicitar ? '<button class="btn btn-secondary" id="btnSolicitarBloqueo"><i data-lucide="shield-check"></i> Solicitar aprobación</button>' : ''}
+        </div>
+      </div>`;
   }
 
   // Importe para encabezados y avisos de una línea. Una cotización mixta no
@@ -218,6 +250,8 @@
           <button class="btn btn-primary" id="btnImprimir"><i data-lucide="printer"></i> Imprimir / PDF</button>
         </div>
       </div>
+
+      ${bloqueoPoliticaHtml()}
 
       ${esTaller() ? pasosTallerHtml() : ''}
 
@@ -384,6 +418,8 @@
     // Solicitar aprobación (cotización fuera de política).
     const btnSol = $('btnSolicitar');
     if (btnSol) btnSol.addEventListener('click', solicitarAprobacion);
+    const btnSolBloq = $('btnSolicitarBloqueo');
+    if (btnSolBloq) btnSolBloq.addEventListener('click', solicitarAprobacion);
     const btnEd = $('btnEditar');
     if (btnEd) btnEd.addEventListener('click', () => { location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(cot._docId); });
     $('btnImprimir').addEventListener('click', () => { window.open('imprimir-cotizacion.html?id=' + encodeURIComponent(cot._docId), '_blank'); });
@@ -424,10 +460,12 @@
   // el botón "Aprobar y enviar" del header (solo admin), que sí envía correo.
   // Aceptada/Rechazada ya NO se marcan desde aquí: el único camino es
   // "Cerrar cotización", que pide el desenlace y el motivo (auditoría UX 2026-09-28, T1/#12).
+  // "Vencida" tampoco se marca desde aquí: vive en "Cerrar cotización" como
+  // "Validez vencida" (remate de la auditoría: un solo camino para cerrar).
   const TRANSICIONES = {
     borrador:   [],
     aprobada:   ['enviada'],
-    enviada:    ['vencida'],
+    enviada:    [],
     rechazada:  ['borrador'],
     // 'descartada' no ofrece atajo a convertida/rechazada: el desenlace real
     // se marca con "Cerrar cotización" (que sí pide el motivo). Aquí solo se

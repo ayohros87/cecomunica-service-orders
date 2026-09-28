@@ -69,6 +69,8 @@ exports.markCotizacionesVencidas      = require("./src/triggers/scheduled/markCo
 exports.responderCotizacionPublica    = require("./src/callable/responderCotizacionPublica");
 // searchTokens de cotizaciones: un solo punto para los 3 escritores (editor, taller, reposición)
 exports.onCotizacionSearchTokens      = require("./src/triggers/cotizaciones/onSearchTokens");
+// Política de envío validada en el servidor: corrige requiere_aprobacion y devuelve a borrador el envío sin aprobación
+exports.onCotizacionPolitica          = require("./src/triggers/cotizaciones/onPolitica");
 // Semanal: borra de Storage los adjuntos de cotización que ningún doc referencia (dry-run por defecto)
 exports.purgeAdjuntosCotizacionHuerfanos = require("./src/triggers/scheduled/purgeAdjuntosCotizacionHuerfanos");
 exports.recordatorioSeriales          = require("./src/triggers/scheduled/recordatorioSeriales");
