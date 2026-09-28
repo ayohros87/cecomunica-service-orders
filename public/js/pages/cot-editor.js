@@ -7,6 +7,9 @@
   let dragId = null;
   let overId = null;
   let subiendo = [];        // adjuntos en curso: [{ tmpId, nombre, pct }]
+  // Rutas subidas en ESTA sesión del editor y todavía sin guardar: son las
+  // únicas que se pueden borrar de Storage al quitarlas (ver quitarAdjunto).
+  const subidosEnSesion = new Set();
   let userRol = null;       // rol del usuario actual (para política de envío)
   let policyCfg = null;     // { descuentoMaxPct, totalMax } desde empresa/config
   let dirty = false;        // hay cambios en pantalla que aún no se han guardado
@@ -661,11 +664,25 @@
     list.innerHTML = rowsGuardados + rowsSubiendo;
     list.querySelectorAll('.cc-adj-del').forEach(btn => {
       btn.addEventListener('click', () => {
-        const id = btn.closest('[data-adj-id]')?.dataset.adjId;
-        setAdjuntos((draft.adjuntos || []).filter(a => a.id !== id));
+        quitarAdjunto(btn.closest('[data-adj-id]')?.dataset.adjId);
       });
     });
     if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  // Quitar un adjunto (auditoría UX 2026-09-28 §4.5 #12): antes solo se
+  // desreferenciaba y el archivo quedaba en Storage para siempre. Si se subió
+  // en esta sesión, ningún documento guardado lo nombra y se borra ya. Uno que
+  // venía guardado NO: el cambio aún no se guardó y puede estar en una copia
+  // (Duplicar) o en un correo en cola; lo recoge el job semanal
+  // purgeAdjuntosCotizacionHuerfanos cuando nadie lo nombre.
+  function quitarAdjunto(id) {
+    const a = (draft.adjuntos || []).find(x => x.id === id);
+    setAdjuntos((draft.adjuntos || []).filter(x => x.id !== id));
+    if (a?.path && subidosEnSesion.has(a.path)) {
+      subidosEnSesion.delete(a.path);
+      CotizacionesService.borrarAdjunto(a.path);
+    }
   }
 
   function onAdjuntoSeleccionado(e) {
@@ -686,6 +703,7 @@
         },
         onDone: (meta) => {
           subiendo = subiendo.filter(x => x.tmpId !== tmpId);
+          if (meta.path) subidosEnSesion.add(meta.path);
           draft.adjuntos = [...(draft.adjuntos || []), meta];
           renderAdjuntos();
           Toast.show(`"${meta.nombre}" adjuntado`, 'ok');

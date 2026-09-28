@@ -177,22 +177,27 @@ test("B3 · las tres puertas a borrador deciden la aprobación con la misma regl
   const detalle = leer("public", "js", "pages", "cot-detalle.js");
   const indice = leer("public", "js", "pages", "cotizaciones-index.js");
 
-  // Nadie puede encolar la solicitud sin pasar antes por el predicado común.
+  // Duplicar es UNA sola implementación (CotState.duplicar, auditoría UX
+  // 2026-09-28 §4.5 #12): la lista y el detalle solo delegan. Nadie puede
+  // encolar la solicitud sin pasar antes por el predicado común.
+  const ini = estado.indexOf("async function duplicar(");
+  assert.ok(ini > 0, "cot-editor-state.js: debe tener la implementación de duplicar");
+  const dup = estado.slice(ini, estado.indexOf("// ── Bloque de totales", ini));
+  // El assert mira el predicado y su ARGUMENTO, no el formato: A10 partió la
+  // expresión en dos líneas para persistir `requiere_aprobacion` antes de
+  // escribir. Lo que de verdad protege esta prueba es el orden que se
+  // verifica abajo: consultar primero, notificar después.
+  assert.match(dup, /requiereAprobacionPara\(\{\s*doc: copia, rol, policy\s*\}\)/,
+    "cot-editor-state.js: duplicar debe consultar la política antes de notificar");
+  assert.match(dup, /requiere_aprobacion = pol\w*\.requiere/,
+    "cot-editor-state.js: la copia debe nacer con el flag persistido");
+  assert.ok(
+    dup.indexOf("requiereAprobacionPara") < dup.indexOf("enqueueAprobacionMail"),
+    "cot-editor-state.js: el correo va DENTRO del if, no antes");
+  assert.match(dup, /const copia = toDoc\(/, "la copia nace por toDoc (lista blanca), no por spread del doc crudo");
   for (const [nombre, src] of [["cot-detalle.js", detalle], ["cotizaciones-index.js", indice]]) {
-    const dup = src.slice(src.indexOf("async function duplicar"), src.indexOf("async function eliminar"));
-    // El assert mira el predicado y su ARGUMENTO, no el formato: A10 partió la
-    // expresión en dos líneas para persistir `requiere_aprobacion` antes de
-    // escribir, y el regex viejo —que exigía `…policyCfg }).requiere` de una
-    // sola pieza— llevaba fallando desde entonces sin que el comportamiento
-    // tuviera nada malo. Lo que de verdad protege esta prueba es el orden que
-    // se verifica abajo: consultar primero, notificar después.
-    assert.match(dup, /requiereAprobacionPara\(\{\s*doc: copia, rol: userRol, policy: policyCfg\s*\}\)/,
-      `${nombre}: duplicar debe consultar la política antes de notificar`);
-    assert.match(dup, /requiere_aprobacion = pol\w*\.requiere/,
-      `${nombre}: la copia debe nacer con el flag persistido`);
-    assert.ok(
-      dup.indexOf("requiereAprobacionPara") < dup.indexOf("enqueueAprobacionMail"),
-      `${nombre}: el correo va DENTRO del if, no antes`);
+    assert.ok(!/async function duplicar/.test(src), `${nombre}: no debe tener su propia copia de duplicar`);
+    assert.match(src, /CotState\.duplicar\(\{/, `${nombre}: duplicar delega en CotState.duplicar`);
   }
   assert.match(editor, /const pol = CotState\.requiereAprobacionPara\(\{ doc, rol: userRol, policy: policyCfg \}\)/,
     "Guardar debe usar el mismo predicado que Duplicar");

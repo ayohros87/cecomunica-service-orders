@@ -19,7 +19,18 @@
   <style>
     .cc-pt-meta { font-size: 11px; color: var(--fg-3); }
     /* El aviso de vigencia es para la pantalla; el PDF descargado no lo lleva. */
-    @media print { .cq-situacion { display: none !important; } }
+    @media print { .cq-situacion, .cq-resp { display: none !important; } }
+    /* Aceptar / declinar desde el enlace (auditoría UX 2026-09-28 §4.5 #12). */
+    .cq-resp { max-width: 816px; margin: 0 auto 12px; padding: 14px 16px; border-radius: 8px; border: 1px solid var(--border-subtle, #CBD5E1); background: var(--surface-card, #fff); font-size: 14px; line-height: 1.5; }
+    .cq-resp-hd { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+    .cq-resp-p { margin: 0 0 10px; color: var(--fg-3, #475569); }
+    .cq-resp-lbl { display: block; font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+    .cq-resp-lbl input, .cq-resp-lbl textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 3px; padding: 7px 9px; font: inherit; font-weight: 400; border: 1px solid var(--border-subtle, #CBD5E1); border-radius: 6px; }
+    .cq-resp-req { color: #B91C1C; }
+    .cq-resp-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+    .cq-resp-conf { flex: 1 1 100%; }
+    .cq-resp-msg { margin-top: 8px; font-size: 13px; }
+    .cq-resp-msg[data-tipo="bad"] { color: #991B1B; }
     .empty-card { max-width: 520px; margin: 80px auto; padding: 32px; background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); text-align: center; }
   </style>
   <script type="module" src="/js/entry/verify-cotizacion.js"></script>

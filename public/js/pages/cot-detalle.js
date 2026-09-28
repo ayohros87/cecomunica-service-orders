@@ -92,6 +92,10 @@
         meta: fmtFechaAny(cot.enviada_en) + ' · por correo a ' + dest,
       });
     }
+    // Respondida por el cliente desde el enlace (responderCotizacionPublica):
+    // quién firmó con su nombre es lo que más importa de esa línea.
+    const rc = cot.respuesta_cliente || null;
+    const porEnlace = rc ? ' · desde el enlace, por ' + rc.nombre : '';
     if (cot.fecha_conversion) {
       // En el taller no hay "venta": el cliente aceptó la reparación, y lo
       // que importa es CÓMO lo dijo (correo, teléfono…) y quién lo anotó.
@@ -106,7 +110,8 @@
         : {
             // "Orden de venta" no existe como documento (glosario T2, auditoría UX 2026-09-28).
             act: 'Aceptada por el cliente',
-            meta: fmtFechaAny(cot.fecha_conversion) + ' · venta cerrada',
+            meta: fmtFechaAny(cot.fecha_conversion) + (rc?.respuesta === 'aceptada'
+              ? porEnlace + (rc.comentario ? ' — ' + rc.comentario : '') : ' · venta cerrada'),
           });
     }
     if (cot.facturacion?.estado === 'facturada') {
@@ -125,7 +130,9 @@
           }
         : {
             act: 'Rechazada',
-            meta: fmtFechaAny(cot.fecha_rechazo) + ' · el cliente declinó' + (cot.cierre_motivo ? ' — ' + cot.cierre_motivo : ''),
+            meta: fmtFechaAny(cot.fecha_rechazo) + ' · el cliente declinó'
+              + (rc?.respuesta === 'rechazada' ? porEnlace : '')
+              + ((cot.rechazo_motivo || cot.cierre_motivo) ? ' — ' + (cot.rechazo_motivo || cot.cierre_motivo) : ''),
           });
     }
     if (cot.fecha_descarte || cot.estado === 'descartada') {
@@ -650,51 +657,10 @@
     }
   }
 
-  // Candado anti doble-click — mismo motivo que la lista: crea doc + consume
-  // correlativo + puede encolar correo al aprobador.
-  let duplicando = false;
-
-  async function duplicar() {
-    if (duplicando) return;
-    const okDup = await Modal.confirm({
-      title: 'Duplicar cotización',
-      message: `Se creará una copia de ${cot.cotizacion_id || 'esta cotización'} como nueva cotización en borrador (consume un número COT nuevo). ¿Continuar?`,
-      confirmLabel: 'Duplicar',
-    });
-    if (!okDup) return;
-    duplicando = true;
-    try {
-    const nuevoId = await CotState.nextCotizacionId();
-    const user = firebase.auth().currentUser;
-    const copia = CotState.toDoc(
-      { ...cot, id: nuevoId, estado: 'borrador', fecha: new Date().toISOString().slice(0, 10),
-        creado_por_uid: user?.uid || null, creado_por_email: user?.email || null },
-      { catalogos }
-    );
-    copia.fecha_creacion = firebase.firestore.FieldValue.serverTimestamp();
-    copia.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
-    // Flag persistido (A10) antes de escribir — misma evaluación que abajo.
-    const polCopia = CotState.requiereAprobacionPara({ doc: copia, rol: userRol, policy: policyCfg });
-    copia.requiere_aprobacion = polCopia.requiere;
-    const ref = await CotizacionesService.addCotizacion(copia);
-    // Duplicar nace en borrador, pero se rige por la MISMA política que una
-    // cotización nueva: si quien la copia puede enviarla y está dentro del
-    // umbral, no se molesta al aprobador. Antes se notificaba siempre, y por
-    // eso COT-2026-0042 ($160.50, sin descuento, copia de COT-2026-0035) pidió
-    // aprobación que nadie necesitaba.
-    if (polCopia.requiere) {
-      try { await CotState.enqueueAprobacionMail({ doc: copia, docId: ref.id, user }); }
-      catch (e) { console.warn('No se pudo encolar correo de aprobación al duplicar:', e); }
-      Toast.show('Cotización duplicada como ' + nuevoId + ' · solicitud de aprobación enviada', 'ok');
-    } else {
-      Toast.show('Cotización duplicada como ' + nuevoId + ' · lista para enviar al cliente', 'ok');
-    }
-    location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(ref.id);
-    } catch (err) {
-      console.error(err);
-      Toast.show('Error al duplicar: ' + (err?.message || err), 'bad');
-      duplicando = false;
-    }
+  // Duplicar: una sola implementación compartida con la lista (CotState.duplicar,
+  // auditoría UX 2026-09-28 §4.5 #12), con su candado anti doble-click.
+  function duplicar() {
+    return CotState.duplicar({ ui: cot, raw: rawDoc, rol: userRol, policy: policyCfg, catalogos });
   }
 
   firebase.auth().onAuthStateChanged(async (user) => {

@@ -505,6 +505,65 @@
     return { requiere: true, motivos: ['Tu rol no puede enviar cotizaciones al cliente.'] };
   }
 
+  // ── Duplicar (una sola implementación, auditoría UX 2026-09-28 §4.5 #12) ──
+  // La lista copiaba el documento crudo con spread y borraba a mano una lista
+  // de campos del ciclo de vida; el detalle pasaba por toDoc. Cada campo nuevo
+  // del ciclo (respuesta_cliente, rechazo_origen, searchTokens…) había que
+  // acordarse de borrarlo en la lista. toDoc es una lista BLANCA: la copia
+  // nace solo con el contenido de la propuesta.
+  //   ui  → forma UI (toUi). raw → doc crudo: de ahí salen los datos del
+  //         cliente cuando la página no cargó el catálogo (la lista no lo carga).
+  let _duplicando = false;
+  async function duplicar({ ui, raw = null, rol, policy, catalogos = null }) {
+    if (_duplicando) return null;
+    const src = ui || toUi(raw);
+    const ok = await Modal.confirm({
+      title: 'Duplicar cotización',
+      message: `Se creará una copia de ${src.id || 'esta cotización'} como nueva cotización en borrador (consume un número COT nuevo). ¿Continuar?`,
+      confirmLabel: 'Duplicar',
+    });
+    if (!ok) return null;
+    _duplicando = true;
+    try {
+      const nuevoId = await nextCotizacionId();
+      const user = firebase.auth().currentUser;
+      const copia = toDoc(
+        { ...src, id: nuevoId, estado: 'borrador', fecha: new Date().toISOString().slice(0, 10),
+          creado_por_uid: user?.uid || null, creado_por_email: user?.email || null, deleted: false },
+        { catalogos }
+      );
+      // Sin catálogo (o cliente que ya no está en él) toDoc deja el cliente en
+      // blanco: se conserva el que decía la cotización original.
+      if (!catalogos?.clientesById?.[src.clienteId] && raw) {
+        ['cliente_nombre', 'cliente_ruc', 'cliente_email', 'cliente_representante'].forEach((k) => { copia[k] = raw[k] || ''; });
+        copia.cliente_itbms_exento = !!raw.cliente_itbms_exento;
+        if (!copia.dirigido_a) copia.dirigido_a = raw.dirigido_a || raw.cliente_representante || '';
+        if (!copia.dirigido_email) copia.dirigido_email = raw.dirigido_email || raw.cliente_email || '';
+      }
+      copia.fecha_creacion = firebase.firestore.FieldValue.serverTimestamp();
+      copia.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
+      // Flag persistido (A10) y la MISMA política que una nueva: dentro de
+      // umbral y con rol que envía, no se molesta al aprobador (COT-2026-0042).
+      const pol = requiereAprobacionPara({ doc: copia, rol, policy });
+      copia.requiere_aprobacion = pol.requiere;
+      const ref = await CotizacionesService.addCotizacion(copia);
+      if (pol.requiere) {
+        try { await enqueueAprobacionMail({ doc: copia, docId: ref.id, user }); }
+        catch (e) { console.warn('No se pudo encolar correo de aprobación al duplicar:', e); }
+        Toast.show('Cotización duplicada como ' + nuevoId + ' · solicitud de aprobación enviada', 'ok');
+      } else {
+        Toast.show('Cotización duplicada como ' + nuevoId + ' · lista para enviar al cliente', 'ok');
+      }
+      location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(ref.id);
+      return ref.id;
+    } catch (err) {
+      console.error(err);
+      Toast.show('Error al duplicar: ' + (err?.message || err), 'bad');
+      _duplicando = false;
+      return null;
+    }
+  }
+
   // ── Bloque de totales (compartido) ───────────────────────────────────────
   // Lo pintan el editor, el detalle y la impresión. Vive aquí porque venta y
   // alquiler son dos totales que NO se suman, y tres copias del mismo markup
@@ -1138,5 +1197,6 @@
     CONDICIONES_TALLER: (window.CotizacionTaller?.CONDICIONES_TALLER) || [],
     enqueueAprobacionMail,
     adjuntosToAttachments,
+    duplicar,
   };
 })();

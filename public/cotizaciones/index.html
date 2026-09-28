@@ -98,6 +98,17 @@
           <span class="search-icon"><i data-lucide="search"></i></span>
           <input id="filtroTexto" type="search" placeholder="Buscar N°, cliente…" aria-label="Buscar cotizaciones">
         </div>
+        <!-- Rango de fecha de creación (auditoría UX 2026-09-28, §4.5 #12): se
+             consulta en el servidor con el mismo índice de la paginación.
+             Vacío = sin límite de fecha. -->
+        <label class="filter-toggle" title="Creada desde" style="gap:6px;">
+          <span class="toggle-label">Desde</span>
+          <input type="date" id="filtroDesde" aria-label="Creada desde" style="border:none;background:none;font:inherit;color:inherit;">
+        </label>
+        <label class="filter-toggle" title="Creada hasta" style="gap:6px;">
+          <span class="toggle-label">Hasta</span>
+          <input type="date" id="filtroHasta" aria-label="Creada hasta" style="border:none;background:none;font:inherit;color:inherit;">
+        </label>
         <label class="filter-toggle" id="wrapToggleMias" for="toggleMias" style="display:none;">
           <input type="checkbox" id="toggleMias" class="toggle-input">
           <span class="toggle-slider"></span>

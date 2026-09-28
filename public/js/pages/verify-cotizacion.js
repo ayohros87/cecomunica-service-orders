@@ -198,6 +198,9 @@
     const hoy = (FMT.hoyISOPanama && FMT.hoyISOPanama()) || new Date().toISOString().slice(0, 10);
     const e = String(data.estado || '');
     if (e === 'convertida') return { k: 'aceptada', vence };
+    // La declinó el propio cliente desde este enlace: se le dice eso, no
+    // "cerrada" como si la hubiera cerrado la empresa.
+    if (e === 'rechazada' && data.respuesta_cliente?.respuesta === 'rechazada') return { k: 'declinada', vence };
     if (e === 'descartada' || e === 'rechazada') return { k: 'cerrada', vence };
     if (e === 'vencida' || (vence && hoy > vence)) return { k: 'vencida', vence };
     return { k: 'vigente', vence };
@@ -206,8 +209,9 @@
   function avisoSituacion(sit) {
     const venceTxt = sit.vence ? fmtFechaCorta(sit.vence) : '';
     const conf = {
-      vigente:  { bg: '#ECFDF5', fg: '#065F46', bd: '#A7F3D0', t: 'Vigente' + (venceTxt ? ' hasta el ' + venceTxt : ''), d: 'Para aceptarla, responde el correo con el que la recibiste o escríbele a tu vendedor.' },
+      vigente:  { bg: '#ECFDF5', fg: '#065F46', bd: '#A7F3D0', t: 'Vigente' + (venceTxt ? ' hasta el ' + venceTxt : ''), d: 'Puedes aceptarla o declinarla aquí mismo (más abajo) o escribirle a tu vendedor.' },
       aceptada: { bg: '#ECFDF5', fg: '#065F46', bd: '#A7F3D0', t: 'Cotización aceptada', d: 'Ya registramos tu aceptación. Gracias.' },
+      declinada: { bg: '#F1F5F9', fg: '#334155', bd: '#CBD5E1', t: 'Cotización declinada', d: 'Respondiste que no la aceptas. Si cambias de opinión, escríbele a tu vendedor.' },
       vencida:  { bg: '#FFF7ED', fg: '#9A3412', bd: '#FED7AA', t: 'Cotización vencida' + (venceTxt ? ' el ' + venceTxt : ''), d: 'Los precios y la disponibilidad pueden haber cambiado. Pide a tu vendedor una cotización actualizada antes de aceptarla.' },
       cerrada:  { bg: '#F1F5F9', fg: '#334155', bd: '#CBD5E1', t: 'Cotización cerrada', d: 'Esta cotización ya no está vigente. Si la necesitas, pide una nueva a tu vendedor.' },
     }[sit.k];
@@ -278,6 +282,121 @@
     }
   }
 
+  // ── Aceptar / declinar desde el enlace (auditoría UX 2026-09-28 §4.5 #12) ──
+  // El aviso decía "responde el correo o escríbele a tu vendedor": el cliente
+  // abría, leía, y la respuesta viajaba por fuera del sistema. Ahora responde
+  // aquí y la registra responderCotizacionPublica (valida el código del
+  // enlace, escribe la cotización con la misma forma que "Respuesta del
+  // cliente" del detalle y avisa al vendedor). El navegador no escribe nada:
+  // las rules no dejan a un anónimo tocar `cotizaciones`.
+  function fmtFechaHora(v) {
+    const d = v?.toDate ? v.toDate() : (v ? new Date(v) : null);
+    if (!d || Number.isNaN(d.getTime())) return '';
+    return FMT.datetime ? FMT.datetime(d) : d.toLocaleString('es-PA');
+  }
+
+  function respuestaRegistradaHtml(r, { recien = false } = {}) {
+    const acepto = r.respuesta === 'aceptada';
+    const titulo = recien ? 'Tu respuesta quedó registrada'
+      : (acepto ? 'Aceptaste esta cotización' : 'Respondiste que no la aceptas');
+    const cuando = r.fecha ? ' el ' + esc(fmtFechaHora(r.fecha)) : '';
+    return `<b>${esc(titulo)}</b><br>
+      <span>${acepto ? 'Aceptada' : 'Declinada'} a nombre de <b>${esc(r.nombre || '—')}</b>${cuando}.
+      ${acepto ? 'Tu vendedor ya recibió el aviso y se comunicará contigo para lo que sigue.' : 'Tu vendedor ya recibió el aviso. Gracias por avisar.'}</span>`;
+  }
+
+  function panelRespuesta(data, sit, docId, vCode) {
+    const stage = $('cqPage')?.parentElement;
+    if (!stage) return;
+    const panel = document.createElement('div');
+    panel.id = 'cqRespuesta';
+    panel.className = 'cq-resp';
+    const ancla = $('cqSituacion');
+    stage.insertBefore(panel, ancla ? ancla.nextSibling : stage.firstChild);
+
+    const rc = data.respuesta_cliente || null;
+    if (rc && rc.respuesta) { panel.innerHTML = respuestaRegistradaHtml(rc); return; }
+    // Solo lo vigente se puede responder; lo demás ya lo explica el aviso.
+    if (sit.k !== 'vigente') { panel.remove(); return; }
+
+    const numero = data.cotizacion_id || data.snapshot?.id || 'esta cotización';
+    panel.innerHTML = `
+      <div class="cq-resp-hd">¿Aceptas esta cotización?</div>
+      <p class="cq-resp-p">Tu respuesta le llega directo a tu vendedor. Tu nombre queda como constancia de quién respondió.</p>
+      <label class="cq-resp-lbl">Nombre completo <span class="cq-resp-req" aria-hidden="true">*</span>
+        <input id="cqRespNombre" type="text" maxlength="120" autocomplete="name" required aria-required="true">
+      </label>
+      <label class="cq-resp-lbl">Comentario (opcional)
+        <textarea id="cqRespComentario" maxlength="500" rows="2" placeholder="Por ejemplo: para cuándo lo necesitas, o el motivo si no la aceptas"></textarea>
+      </label>
+      <div class="cq-resp-acts" id="cqRespActs">
+        <button type="button" class="btn btn-primary" data-resp="aceptada">Aceptar la cotización</button>
+        <button type="button" class="btn btn-secondary" data-resp="rechazada">No la acepto</button>
+      </div>
+      <div id="cqRespMsg" class="cq-resp-msg" role="alert" hidden></div>`;
+
+    const msg = (texto, tipo) => {
+      const el = $('cqRespMsg');
+      if (!el) return;
+      el.hidden = !texto;
+      el.textContent = texto || '';
+      el.dataset.tipo = tipo || '';
+    };
+    const acts = $('cqRespActs');
+    const botonesIniciales = acts.innerHTML;
+
+    acts.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-resp], button[data-confirmar], button[data-volver]');
+      if (!btn) return;
+      if (btn.dataset.volver !== undefined) { acts.innerHTML = botonesIniciales; msg(''); return; }
+
+      const nombre = ($('cqRespNombre').value || '').replace(/\s+/g, ' ').trim();
+      const comentario = ($('cqRespComentario').value || '').trim();
+      if (nombre.length < 3) {
+        msg('Escribe tu nombre completo: es la constancia de quién responde.', 'bad');
+        $('cqRespNombre').focus();
+        return;
+      }
+      msg('');
+
+      // Paso de confirmación en el mismo bloque: sin modal en esta página.
+      if (btn.dataset.resp) {
+        const acepta = btn.dataset.resp === 'aceptada';
+        acts.innerHTML = `
+          <span class="cq-resp-conf">Vas a <b>${acepta ? 'aceptar' : 'declinar'}</b> la cotización <b>${esc(numero)}</b> a nombre de <b>${esc(nombre)}</b>. ¿Confirmas?</span>
+          <button type="button" class="btn ${acepta ? 'btn-primary' : 'btn-secondary'}" data-confirmar="${btn.dataset.resp}">Sí, ${acepta ? 'aceptar' : 'declinar'}</button>
+          <button type="button" class="btn btn-ghost" data-volver>Volver</button>`;
+        return;
+      }
+
+      const respuesta = btn.dataset.confirmar;
+      acts.querySelectorAll('button').forEach(b => { b.disabled = true; });
+      btn.textContent = 'Registrando…';
+      try {
+        const fn = firebase.functions().httpsCallable('responderCotizacionPublica');
+        const { data: res } = await fn({ docId, token: vCode, respuesta, nombre, comentario });
+        if (res.status === 'registrada' || res.status === 'ya_respondida') {
+          panel.innerHTML = respuestaRegistradaHtml(
+            { respuesta: res.respuesta, nombre: res.nombre, fecha: res.fecha },
+            { recien: res.status === 'registrada' }
+          );
+          // El aviso de arriba pasa a decir lo mismo que la base.
+          $('cqSituacion')?.remove();
+          avisoSituacion(situacion({ ...data, estado: res.estado, respuesta_cliente: { respuesta: res.respuesta } }, data.snapshot));
+          return;
+        }
+        panel.innerHTML = `<b>${esc(res.status === 'vencida' ? 'Esta cotización ya venció' : 'Esta cotización ya no se puede responder')}</b><br>
+          <span>Pide a tu vendedor una cotización actualizada.</span>`;
+        $('cqSituacion')?.remove();
+        avisoSituacion(situacion({ ...data, estado: res.status === 'vencida' ? 'vencida' : (res.estado || 'descartada') }, data.snapshot));
+      } catch (err) {
+        console.error(err);
+        msg('No se pudo registrar tu respuesta: ' + (err?.message || 'inténtalo de nuevo o escríbele a tu vendedor.'), 'bad');
+        acts.innerHTML = botonesIniciales;
+      }
+    });
+  }
+
   (async () => {
     const params = new URLSearchParams(location.search);
     const docId = params.get('id');
@@ -298,7 +417,11 @@
 
       const emisor = data.emisor || {};
       render(data.snapshot, emisor, vCode, docId, data.lleva_carta === true);
-      if (data.snapshot) avisoSituacion(situacion(data, data.snapshot));
+      if (data.snapshot) {
+        const sit = situacion(data, data.snapshot);
+        avisoSituacion(sit);
+        panelRespuesta(data, sit, docId, vCode);
+      }
       // Log de apertura (asíncrono, no bloquea render).
       logOpen(docId, vCode, data.cotizacion_id);
     } catch (e) {

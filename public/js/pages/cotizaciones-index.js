@@ -46,7 +46,11 @@
     // (además de privacidad: docs ajenos en su navegador). El toggle de
     // admin/supervisor sigue siendo client-side sobre lo cargado.
     const uidFiltro = (userRol === ROLES.VENDEDOR && !esSupervisor) ? userUid : null;
-    const { docs, lastDoc: cursor } = await CotizacionesService.listCotizaciones({ lastDoc, limit: 30, creadoPorUid: uidFiltro });
+    // Rango de fechas (auditoría UX 2026-09-28 §4.5 #12): va al servidor sobre
+    // fecha_creacion, con el mismo índice que la paginación.
+    const { desde, hasta } = rangoFechas();
+    if (esInicial) { kpiSrv = null; _busqUltima = ''; }
+    const { docs, lastDoc: cursor } = await CotizacionesService.listCotizaciones({ lastDoc, limit: 30, creadoPorUid: uidFiltro, desde, hasta });
     if (docs.length) { lastDoc = cursor; cotizaciones.push(...docs); }
     render();
 
@@ -75,7 +79,18 @@
     // que abren fila en la bandeja al entregarse la orden.
     if (filtroEstado === 'por_facturar')      list = list.filter(c => facturacionEstado(c) === 'pendiente');
     else if (filtroEstado === 'facturadas')   list = list.filter(c => facturacionEstado(c) === 'facturada');
+    // 'activas' (señal S7 del home): lo que todavía está en juego.
+    else if (filtroEstado === 'activas')      list = list.filter(esActiva);
     else if (filtroEstado !== 'todas')        list = list.filter(c => (c.estado || 'borrador') === filtroEstado);
+    // El rango también se aplica aquí: lo que entra por la búsqueda por tokens
+    // o por "activas" no pasó por el filtro de fechas del servidor.
+    const { desde, hasta } = rangoFechas();
+    if (desde || hasta) {
+      list = list.filter(c => {
+        const t = c.fecha_creacion?.toDate ? c.fecha_creacion.toDate() : null;
+        return !!t && (!desde || t >= desde) && (!hasta || t < hasta);
+      });
+    }
     if (term) {
       list = list.filter(c => {
         const blob = (c.cotizacion_id || '') + ' ' + (c.cliente_nombre || '') + ' ' + (c.ejecutivo_nombre || '');
@@ -139,6 +154,9 @@
     const facturadas  = base.filter(c => facturacionEstado(c) === 'facturada').length;
     const segs = [
       { key: 'todas', label: 'Todas', count: counts.todas },
+      // Solo cuando se aterriza desde la señal S7 (?estado=activas): al elegir
+      // otro segmento desaparece, como el aviso de "por aprobar".
+      ...(filtroEstado === 'activas' ? [{ key: 'activas', label: 'Activas', count: base.filter(esActiva).length }] : []),
       // En la vista de Taller 'convertida' se lee "Aceptada" y 'aprobada' no
       // existe en la práctica (el taller aprueba y envía de una vez), así que
       // los segmentos vacíos que no significan nada ahí se esconden.
@@ -160,14 +178,76 @@
     `).join('');
   }
 
+  // ── KPIs del servidor (auditoría UX 2026-09-28 §4.5 #12) ─────────
+  // Antes salían de lo CARGADO (páginas de 30) y el subtítulo decía "de las
+  // N cargadas" para que el número no pareciera absoluto (P0 #20). Ahora son
+  // count()/sum() sobre TODAS las del alcance (CotAgg, puente modular del
+  // entry): el mismo alcance que la tabla (soloMias) y el mismo corte por tipo
+  // (Taller = origen 'orden'; Ventas = todas menos taller). Lo cargado sigue
+  // siendo el respaldo mientras llegan o si la agregación falla. El rango de
+  // fechas NO los recorta: son el histórico completo, y el subtítulo lo dice.
+  // Solo igualdades (deleted, creado_por_uid, estado, origen…): Firestore
+  // combina los índices de un campo y no hace falta un compuesto por
+  // combinación. `deleted` lo escriben las tres puertas desde el primer día
+  // del módulo (toDoc, cotizar-orden y lib/reposicionDano).
+  let kpiSrv = null;      // { key, datos|null }
+  let kpiSrvPend = null;
+  const kpiKey = () => (soloMias ? userUid : '') + '|' + filtroTipo;
+
+  async function cargarKpisServidor() {
+    if (!window.CotAgg) return;
+    const key = kpiKey();
+    if ((kpiSrv && kpiSrv.key === key) || kpiSrvPend === key) return;
+    kpiSrvPend = key;
+    const base = [['deleted', '==', false]];
+    if (soloMias) base.push(['creado_por_uid', '==', userUid]);
+    const bloque = async (extra) => {
+      const w = (...m) => [...base, ...extra, ...m];
+      const [enviada, aprobada, convertida, rechazada, rechAprob, vencida, porFacturar] = await Promise.all([
+        CotAgg.contar(w(['estado', '==', 'enviada'])),
+        CotAgg.contar(w(['estado', '==', 'aprobada'])),
+        CotAgg.contar(w(['estado', '==', 'convertida']), { conMonto: true }),
+        CotAgg.contar(w(['estado', '==', 'rechazada'])),
+        // Un rechazo del APROBADOR no es una oportunidad perdida (P0 #17).
+        CotAgg.contar(w(['estado', '==', 'rechazada'], ['rechazo_origen', '==', 'aprobador'])),
+        CotAgg.contar(w(['estado', '==', 'vencida'])),
+        CotAgg.contar(w(['facturacion.estado', '==', 'pendiente'])),
+      ]);
+      return {
+        enviadas: enviada.n, aprobadas: aprobada.n,
+        convertidas: convertida.n, montoCerrado: convertida.monto,
+        oportunidades: enviada.n + convertida.n + (rechazada.n - rechAprob.n) + vencida.n,
+        porFacturar: porFacturar.n,
+      };
+    };
+    try {
+      const [todas, taller] = await Promise.all([
+        filtroTipo !== 'taller' ? bloque([]) : null,
+        filtroTipo !== 'todas'  ? bloque([['origen', '==', 'orden']]) : null,
+      ]);
+      let datos = todas;
+      if (filtroTipo === 'taller') datos = taller;
+      else if (filtroTipo === 'ventas') {
+        datos = {};
+        Object.keys(todas).forEach(k => { datos[k] = todas[k] - taller[k]; });
+      }
+      kpiSrv = { key, datos };
+    } catch (e) {
+      console.warn('KPIs del servidor no disponibles; se muestran los de lo cargado:', e?.code || e);
+      kpiSrv = { key, datos: null };
+    } finally {
+      if (kpiSrvPend === key) kpiSrvPend = null;
+    }
+    if (kpiKey() === key) renderStats(getFiltradas());
+  }
+
   function renderStats(filtradas) {
     // Los KPIs de negocio (enviadas / monto cerrado / tasa) reflejan el alcance del
     // usuario (soloMias forzado para vendedores), no el de toda la empresa.
     const visibles = cotizaciones.filter(c => !c.deleted && (!soloMias || c.creado_por_uid === userUid));
-    // Los KPIs se calculan sobre lo CARGADO (páginas de 30), no sobre todo el
-    // histórico: el subtítulo lo dice para que el número no parezca absoluto
-    // (auditoría UX 2026-09-28, P0 #20).
-    const deCargadas = `de las ${cotizaciones.length} cargadas`;
+    const srv = (kpiSrv && kpiSrv.key === kpiKey()) ? kpiSrv.datos : null;
+    if (!srv && !(kpiSrv && kpiSrv.key === kpiKey())) cargarKpisServidor();
+    const alcance = srv ? 'todo el histórico' : `de las ${cotizaciones.length} cargadas`;
     // Un rechazo del APROBADOR no es una oportunidad perdida con el cliente:
     // la cotización nunca le llegó (auditoría UX 2026-09-28, P0 #17).
     const esOportunidad = (c) => ['enviada', 'convertida', 'rechazada', 'vencida'].includes(c.estado)
@@ -176,44 +256,47 @@
     // contesta, lo que se aceptó y cuánto de eso ya se facturó.
     if (filtroTipo === 'taller') {
       const taller = visibles.filter(esTallerC);
-      const esperando = taller.filter(c => c.estado === 'enviada' || c.estado === 'aprobada').length;
       const aceptadas = taller.filter(c => c.estado === 'convertida');
-      const oportunidadesT = taller.filter(esOportunidad).length;
-      const porFacturar = taller.filter(c => facturacionEstado(c) === 'pendiente').length;
+      const esperando = srv ? srv.enviadas + srv.aprobadas : taller.filter(c => c.estado === 'enviada' || c.estado === 'aprobada').length;
+      const nAceptadas = srv ? srv.convertidas : aceptadas.length;
+      const montoAceptado = srv ? srv.montoCerrado : aceptadas.reduce((s, c) => s + Number(c.total || 0), 0);
+      const oportunidadesT = srv ? srv.oportunidades : taller.filter(esOportunidad).length;
+      const porFacturar = srv ? srv.porFacturar : taller.filter(c => facturacionEstado(c) === 'pendiente').length;
       $('statTotal').textContent = filtradas.length;
       $('statPendientes').textContent = esperando;
       $('statPendSub').textContent = 'esperando la respuesta del cliente';
       $('statMontoLbl').textContent = 'Monto aceptado';
-      $('statMontoAprobado').textContent = FMT.money(aceptadas.reduce((s, c) => s + Number(c.total || 0), 0));
-      $('statMontoSub').textContent = (porFacturar ? `${porFacturar} por facturar` : 'todo lo aceptado ya se facturó') + ' · ' + deCargadas;
+      $('statMontoAprobado').textContent = FMT.money(montoAceptado);
+      $('statMontoSub').textContent = (porFacturar ? `${porFacturar} por facturar` : 'todo lo aceptado ya se facturó') + ' · ' + alcance;
       $('statTasaLbl').textContent = 'Tasa de aceptación';
-      $('statTasa').textContent = (oportunidadesT ? Math.round(aceptadas.length / oportunidadesT * 100) : 0) + '%';
-      $('statTasaSub').textContent = 'aceptadas / enviadas · ' + deCargadas;
+      $('statTasa').textContent = (oportunidadesT ? Math.round(nAceptadas / oportunidadesT * 100) : 0) + '%';
+      $('statTasaSub').textContent = 'aceptadas / enviadas · ' + alcance;
       return;
     }
     $('statPendSub').textContent = 'requieren seguimiento';
     $('statMontoLbl').textContent = 'Monto cerrado';
     $('statTasaLbl').textContent = 'Tasa de cierre';
-    $('statTasaSub').textContent = 'aceptadas / oportunidades · ' + deCargadas;
+    $('statTasaSub').textContent = 'aceptadas / oportunidades · ' + alcance;
     // Los números de VENTAS no cuentan las reparaciones del taller: una
     // reparación aceptada no es una venta cerrada del vendedor.
     const ventas = visibles.filter(c => !esTallerC(c));
-    const enviadas = ventas.filter(c => c.estado === 'enviada').length;
+    const enviadas = srv ? srv.enviadas : ventas.filter(c => c.estado === 'enviada').length;
     // "Monto cerrado": solo cotizaciones convertidas a venta efectiva.
     // `c.total` es el valor evaluado, así que una cotización de alquiler entra
     // con su primer año de renta — es la única forma de sumarla con las ventas
-    // de pago único. El subtítulo lo dice cuando hay alguna.
+    // de pago único. El subtítulo lo dice cuando hay alguna (eso sí se mira en
+    // lo cargado: un rango sobre total_mensual pediría un índice compuesto).
     const convertidasList = ventas.filter(c => c.estado === 'convertida');
-    const montoCerrado = convertidasList.reduce((s, c) => s + Number(c.total || 0), 0);
+    const montoCerrado = srv ? srv.montoCerrado : convertidasList.reduce((s, c) => s + Number(c.total || 0), 0);
     const hayRentaCerrada = convertidasList.some(c => Number(c.total_mensual || 0) > 0);
     // Tasa de cierre: convertidas / oportunidades activas (enviadas + convertidas + rechazadas + vencidas).
     // Excluye borrador (en proceso) y aprobada (aún no llegó al cliente), y
     // también 'descartada': esa cotización se cerró por otro motivo (típico:
     // se rehace con otra cantidad) y contarla como perdida castigaría al
     // vendedor dos veces por la misma oportunidad.
-    const convertidas = ventas.filter(c => c.estado === 'convertida').length;
+    const convertidas = srv ? srv.convertidas : convertidasList.length;
     // Sin los rechazos del aprobador (ver esOportunidad).
-    const oportunidades = ventas.filter(esOportunidad).length;
+    const oportunidades = srv ? srv.oportunidades : ventas.filter(esOportunidad).length;
     const tasa = oportunidades > 0 ? Math.round(convertidas / oportunidades * 100) : 0;
     // "Total emitidas" debe ser consonante con lo que el usuario ve: cuenta
     // exactamente las filas listadas (respeta filtros de estado/texto/eliminadas
@@ -222,7 +305,7 @@
     $('statPendientes').textContent = enviadas;
     $('statMontoAprobado').textContent = FMT.money(montoCerrado);
     const sub = $('statMontoSub');
-    if (sub) sub.textContent = (hayRentaCerrada ? 'aceptadas · alquiler a 12 meses' : 'solo aceptadas por el cliente') + ' · ' + deCargadas;
+    if (sub) sub.textContent = (hayRentaCerrada ? 'aceptadas · alquiler a 12 meses' : 'solo aceptadas por el cliente') + ' · ' + alcance;
     $('statTasa').textContent = tasa + '%';
   }
 
@@ -514,63 +597,11 @@
     }
   }
 
-  // Candado anti doble-click: Duplicar crea el doc, consume correlativo y puede
-  // encolar el correo al aprobador — dos clicks rápidos hacían todo eso dos veces.
-  let duplicando = false;
-
-  async function duplicar(src) {
-    if (duplicando) return;
-    // Confirmación (auditoría): era 1 click desde un icono de fila que creaba
-    // doc + consumía correlativo + podía encolar correo al aprobador. Aquí el
-    // click extra es deseable.
-    const okDup = await Modal.confirm({
-      title: 'Duplicar cotización',
-      message: `Se creará una copia de ${src.cotizacion_id || 'esta cotización'} como nueva cotización en borrador (consume un número COT nuevo). ¿Continuar?`,
-      confirmLabel: 'Duplicar',
-    });
-    if (!okDup) return;
-    duplicando = true;
-    try {
-    const nuevoId = await CotState.nextCotizacionId();
-    const user = firebase.auth().currentUser;
-    const copia = { ...src };
-    delete copia.id;
-    copia.cotizacion_id = nuevoId;
-    copia.estado = 'borrador';
-    copia.fecha = new Date().toISOString().slice(0, 10);
-    copia.deleted = false;
-    copia.fecha_creacion = firebase.firestore.FieldValue.serverTimestamp();
-    copia.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
-    // La copia es del usuario actual; el ejecutivo firmante se hereda.
-    copia.creado_por_uid = user?.uid || null;
-    copia.creado_por_email = user?.email || null;
-    // Reset de timestamps del ciclo de vida — la copia arranca limpia.
-    // `facturacion` y `aceptacion` son de la cotización ORIGINAL: una copia que
-    // los heredara nacería "Por facturar" sin que nadie la aceptara.
-    ['enviada_en', 'enviada_manual', 'fecha_aprobacion', 'fecha_conversion', 'fecha_rechazo',
-     'fecha_vencimiento', 'vencida_auto', 'vencida_manual',
-     'aprobado_por_uid', 'aprobado_por_email', 'convertida_por_uid', 'rechazado_por_uid',
-     'facturacion', 'aceptacion', 'resumen_bodega_at', 'fecha_descarte', 'descartada_por_uid', 'cierre_motivo']
-      .forEach(k => { delete copia[k]; });
-    // Flag persistido (A10) antes de escribir — misma evaluación que abajo.
-    const polCopia = CotState.requiereAprobacionPara({ doc: copia, rol: userRol, policy: policyCfg });
-    copia.requiere_aprobacion = polCopia.requiere;
-    const ref = await CotizacionesService.addCotizacion(copia);
-    // Misma política que una cotización nueva: dentro de umbral y con rol que
-    // pueda enviar, no se molesta al aprobador (ver requiereAprobacionPara).
-    if (polCopia.requiere) {
-      try { await CotState.enqueueAprobacionMail({ doc: copia, docId: ref.id, user }); }
-      catch (e) { console.warn('No se pudo encolar correo de aprobación al duplicar:', e); }
-      Toast.show('Cotización duplicada como ' + nuevoId + ' · solicitud de aprobación enviada', 'ok');
-    } else {
-      Toast.show('Cotización duplicada como ' + nuevoId + ' · lista para enviar al cliente', 'ok');
-    }
-    location.href = `editar-cotizacion.html?id=${encodeURIComponent(ref.id)}`;
-    } catch (err) {
-      console.error(err);
-      Toast.show('Error al duplicar: ' + (err?.message || err), 'bad');
-      duplicando = false;
-    }
+  // Duplicar: la MISMA implementación que el detalle (CotState.duplicar →
+  // toDoc, lista blanca de campos; auditoría UX 2026-09-28 §4.5 #12). Antes
+  // la lista copiaba el doc crudo y borraba a mano los campos del ciclo de vida.
+  function duplicar(src) {
+    return CotState.duplicar({ raw: src, rol: userRol, policy: policyCfg });
   }
 
   async function eliminar(cot) {
@@ -661,9 +692,76 @@
     } catch (e) { console.warn('Lookup por número COT falló:', e); }
   }
 
+  // Búsqueda EN EL SERVIDOR por searchTokens (auditoría UX 2026-09-28 T6 /
+  // §4.5 #12): la caja filtraba solo lo paginado, y una cotización vieja por
+  // cliente obligaba a martillar "Cargar más". Los tokens los estampa
+  // onCotizacionSearchTokens (prefijos de cliente y vendedor, número COT).
+  // Los hits entran a la lista en memoria (como el atajo por número) y
+  // getFiltradas los refina con includes(); si la query falla (índice o
+  // backfill pendientes), la búsqueda sobre lo cargado sigue funcionando.
+  let _busqTimer = null;
+  let _busqUltima = '';
+  function onBuscarInput() {
+    render();
+    lookupPorNumero();
+    clearTimeout(_busqTimer);
+    _busqTimer = setTimeout(buscarEnServidor, 300);
+  }
+  async function buscarEnServidor() {
+    const term = ($('filtroTexto').value || '').trim();
+    if (term.length < 2 || _busqUltima === term) return;
+    _busqUltima = term;
+    try {
+      const uidFiltro = (userRol === ROLES.VENDEDOR && !esSupervisor) ? userUid : null;
+      const hits = await CotizacionesService.searchByToken(term, { creadoPorUid: uidFiltro });
+      if (agregarALista(hits)) render();
+    } catch (e) { console.warn('Búsqueda por tokens no disponible aún (¿índice o backfill pendientes?):', e?.code || e); }
+  }
+
+  // ?estado=activas (señal S7 del home): borrador + enviada + aprobada, TODAS
+  // las del alcance y no solo las que caben en la primera página de 30.
+  const ESTADOS_ACTIVOS = ['borrador', 'enviada', 'aprobada'];
+  const esActiva = (c) => ESTADOS_ACTIVOS.includes(c.estado || 'borrador');
+  async function cargarActivas() {
+    try {
+      const uidFiltro = (userRol === ROLES.VENDEDOR && !esSupervisor) ? userUid : null;
+      const docs = await CotizacionesService.listPorEstados(ESTADOS_ACTIVOS, { creadoPorUid: uidFiltro });
+      if (agregarALista(docs)) render();
+    } catch (e) { console.warn('No se pudieron traer las cotizaciones activas:', e?.code || e); }
+  }
+
+  // Suma a la lista en memoria lo que no esté ya (por id). Devuelve si entró algo.
+  function agregarALista(docs) {
+    let nuevas = false;
+    (docs || []).forEach(d => {
+      if (!cotizaciones.some(c => c.id === d.id)) { cotizaciones.push(d); nuevas = true; }
+    });
+    return nuevas;
+  }
+
+  // Rango de fecha de creación. Un <input type="date"> da "AAAA-MM-DD" sin
+  // zona: se lee como día de Panamá (UTC-5 fijo). `hasta` es EXCLUSIVO (la
+  // medianoche del día siguiente) para que "hasta hoy" incluya la tarde.
+  function fechaDeInput(id, diasMas = 0) {
+    const v = ($(id)?.value || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+    const d = new Date(v + 'T00:00:00-05:00');
+    if (Number.isNaN(d.getTime())) return null;
+    d.setDate(d.getDate() + diasMas);
+    return d;
+  }
+  function rangoFechas() {
+    let desde = fechaDeInput('filtroDesde');
+    let hasta = fechaDeInput('filtroHasta', 1);
+    // Rango al revés = la persona invirtió los campos; se corrige, no se castiga.
+    if (desde && hasta && desde >= hasta) { desde = fechaDeInput('filtroHasta'); hasta = fechaDeInput('filtroDesde', 1); }
+    return { desde, hasta };
+  }
+
   // ── Eventos ───────────────────────────────────────────────────
   function bindEvents() {
-    $('filtroTexto').addEventListener('input', () => { render(); lookupPorNumero(); });
+    $('filtroTexto').addEventListener('input', onBuscarInput);
+    ['filtroDesde', 'filtroHasta'].forEach(id => $(id)?.addEventListener('change', () => cargarCotizaciones(true)));
     $('toggleEliminadas').addEventListener('change', render);
     $('toggleMias').addEventListener('change', (e) => { soloMias = e.target.checked; render(); });
     $('btnCargarMas').addEventListener('click', () => cargarCotizaciones(false));
@@ -767,12 +865,14 @@
         : rol === ROLES.VENDEDOR ? 'ventas' : 'todas';
 
       const estadoParam = new URLSearchParams(location.search).get('estado');
-      if (estadoParam && (estadoParam === 'todas' || CotState.ESTADO_ORDEN.includes(estadoParam))) {
+      if (estadoParam && (estadoParam === 'todas' || estadoParam === 'activas' || CotState.ESTADO_ORDEN.includes(estadoParam))) {
         filtroEstado = estadoParam;
       }
 
       bindEvents();
       await cargarCotizaciones(true);
+      // La señal S7 promete TODAS las activas: se completan tras la primera página.
+      if (filtroEstado === 'activas') await cargarActivas();
 
       // Manejo de ?aprobar=<docId> (CTA desde correo de solicitud). El permiso se
       // valida dentro de openAprobacion según el tipo de cotización (servicio vs

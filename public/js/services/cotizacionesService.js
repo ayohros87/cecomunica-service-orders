@@ -94,15 +94,63 @@ const CotizacionesService = {
   // las cotizaciones de TODA la empresa y filtraba en cliente — cada página de
   // 30 le mostraba 3-4 suyas (y los docs ajenos llegaban a su navegador).
   // Índice compuesto: cotizaciones(creado_por_uid ASC, fecha_creacion DESC).
-  async listCotizaciones({ lastDoc = null, limit = 30, creadoPorUid = null } = {}) {
+  // desde/hasta (Date, auditoría UX 2026-09-28 §4.5 #12): rango sobre
+  // fecha_creacion, `hasta` exclusivo. Con creadoPorUid usa el MISMO índice
+  // compuesto (la desigualdad va sobre el campo del orderBy).
+  async listCotizaciones({ lastDoc = null, limit = 30, creadoPorUid = null, desde = null, hasta = null } = {}) {
     const db = firebase.firestore();
     let q = db.collection('cotizaciones');
     if (creadoPorUid) q = q.where('creado_por_uid', '==', creadoPorUid);
+    if (desde) q = q.where('fecha_creacion', '>=', desde);
+    if (hasta) q = q.where('fecha_creacion', '<', hasta);
     q = q.orderBy('fecha_creacion', 'desc').limit(limit);
     if (lastDoc) q = q.startAfter(lastDoc);
     const snap = await q.get();
     const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     return { docs, lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1] };
+  },
+
+  // Búsqueda en el servidor por searchTokens (auditoría UX 2026-09-28 T6):
+  // antes la búsqueda por cliente filtraba solo las páginas cargadas. Los
+  // tokens los estampa onCotizacionSearchTokens (prefijos de cliente y
+  // vendedor, número COT y correlativo). Se consulta el PRIMER token del
+  // término; el refinado multi-palabra lo hace la lista con includes() sobre
+  // los hits. Índice: cotizaciones(searchTokens CONTAINS, creado_por_uid ASC).
+  async searchByToken(term, { creadoPorUid = null, limit = 80 } = {}) {
+    const tok = String(term || '').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .split(/[^a-z0-9]+/).filter(Boolean)[0];
+    if (!tok || tok.length < 2) return [];
+    let q = firebase.firestore().collection('cotizaciones').where('searchTokens', 'array-contains', tok);
+    if (creadoPorUid) q = q.where('creado_por_uid', '==', creadoPorUid);
+    const snap = await q.limit(limit).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  // Todas las de ciertos estados (p. ej. "activas" de la señal S7), no solo
+  // las de la primera página. Sin orderBy: igualdad/in sobre índices simples.
+  async listPorEstados(estados, { creadoPorUid = null, limit = 200 } = {}) {
+    let q = firebase.firestore().collection('cotizaciones').where('estado', 'in', estados);
+    if (creadoPorUid) q = q.where('creado_por_uid', '==', creadoPorUid);
+    const snap = await q.limit(limit).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  // Borra de Storage un adjunto que se quitó en el editor (auditoría UX
+  // 2026-09-28 §4.5 #12). Best-effort: si las reglas de Storage no lo
+  // permiten o falla la red, lo recoge el job semanal
+  // purgeAdjuntosCotizacionHuerfanos. Solo se llama para archivos subidos en
+  // la MISMA sesión del editor y que el documento guardado no nombra: uno ya
+  // guardado puede estar en la copia de un Duplicar o en un correo en cola.
+  async borrarAdjunto(path) {
+    if (!path || !String(path).startsWith('cotizaciones_adjuntos/')) return false;
+    try {
+      await firebase.storage().ref(path).delete();
+      return true;
+    } catch (e) {
+      console.info('[cotizaciones] el adjunto quedará para la limpieza semanal:', e?.code || e?.message || e);
+      return false;
+    }
   },
 
   // Marca la cotización como eliminada (soft delete). El listado oculta por defecto.

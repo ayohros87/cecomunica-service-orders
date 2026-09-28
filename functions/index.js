@@ -65,6 +65,12 @@ exports.purgePIIRetention             = require("./src/triggers/scheduled/purgeP
 exports.onCotizacionOpened            = require("./src/triggers/cotizaciones/onOpened");
 exports.onCotizacionEstadoChange      = require("./src/triggers/cotizaciones/onEstadoChange");
 exports.markCotizacionesVencidas      = require("./src/triggers/scheduled/markCotizacionesVencidas");
+// El cliente acepta o rechaza desde el enlace público (auditoría UX 2026-09-28 §4.5 #12)
+exports.responderCotizacionPublica    = require("./src/callable/responderCotizacionPublica");
+// searchTokens de cotizaciones: un solo punto para los 3 escritores (editor, taller, reposición)
+exports.onCotizacionSearchTokens      = require("./src/triggers/cotizaciones/onSearchTokens");
+// Semanal: borra de Storage los adjuntos de cotización que ningún doc referencia (dry-run por defecto)
+exports.purgeAdjuntosCotizacionHuerfanos = require("./src/triggers/scheduled/purgeAdjuntosCotizacionHuerfanos");
 exports.recordatorioSeriales          = require("./src/triggers/scheduled/recordatorioSeriales");
 // recordatorioTransiciones (semanal de unidades pendiente_devolucion) retirado
 // 2026-07-20: lo reemplaza la sección C de recordatorioOperativo — órdenes de
