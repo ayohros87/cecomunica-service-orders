@@ -695,10 +695,19 @@ async function main() {
       .set({ revocado: true, revocado_motivo: "sí servía" }, { merge: true }));
   }
   ok("descartados: recepción/técnicos registran (cierre de ENTRADA) pero NO revocan ni omiten revocado");
-  for (const r of ["inventario", "vendedor", "vista"]) {
+  // Bodega (inventario) registra descartes desde Almacén · Descartados
+  // (auditoría UX 2026-09-28: antes se le mandaba a una página sin alta),
+  // con la misma condición que recepción/técnicos: nunca revoca.
+  await assertSucceeds(as("inventario").doc("equipos_descartados/ent_inventario")
+    .set({ serial_norm: "INV1", revocado: false }));
+  await assertFails(as("inventario").doc("equipos_descartados/bad_inventario").set({ serial_norm: "X" }));
+  await assertFails(as("inventario").doc("equipos_descartados/ent_inventario")
+    .set({ serial_norm: "INV1", revocado: true }, { merge: true }));
+  ok("descartados: inventario registra (Almacén · Descartados) pero NO revoca");
+  for (const r of ["vendedor", "vista"]) {
     await assertFails(as(r).doc("equipos_descartados/bad_" + r).set({ serial_norm: "X", revocado: false }));
   }
-  ok("descartados: inventario/vendedor/vista siguen sin poder descartar");
+  ok("descartados: vendedor/vista siguen sin poder descartar");
   // Bodega (rol inventario) es la que MÁS necesita leerlo antes de recibir.
   for (const r of ["inventario", "tecnico", "recepcion", "vista"]) {
     await assertSucceeds(as(r).doc("equipos_descartados/ABC123").get());

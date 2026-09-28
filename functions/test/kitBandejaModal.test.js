@@ -161,8 +161,9 @@ test("K8 · F3: una identidad de serial, un picker, un combo y un select filtrad
     assert.ok(/EntityPicker\.abrir\(/.test(src), `${f.at(-1)}: usa EntityPicker`);
     assert.ok(!/pp-check|scmb-check/.test(src), `${f.at(-1)}: no debe pintar su propia lista de checkboxes`);
   }
-  // EntityCombo: cuatro combos de cliente sobre uno.
-  for (const f of [["public", "js", "pages", "cot-editor-state.js"], ["public", "js", "pages", "nc-combo.js"],
+  // EntityCombo: tres combos de cliente sobre uno (nc-combo.js se fue con el
+  // módulo viejo de contratos, 2026-09-28).
+  for (const f of [["public", "js", "pages", "cot-editor-state.js"],
     ["public", "js", "ui", "asistente-venta.js"], ["public", "js", "pages", "vendedores-batch.js"]]) {
     const src = sinComentarios(leer(...f));
     assert.ok(/EntityCombo\.(montar|filtrar)\(/.test(src), `${f.at(-1)}: usa EntityCombo`);
