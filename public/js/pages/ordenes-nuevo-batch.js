@@ -1,19 +1,29 @@
 // @ts-nocheck
-// Nuevo batch de equipos — página dedicada para cargar muchos equipos a una
-// orden de una sola vez. Siempre va asociada a una orden (?orden_id=…).
+// Nuevo batch de equipos — LA captura de equipos de una orden (auditoría UX
+// 2026-09-28, 4.2 #16): antes había dos pantallas para lo mismo
+// (agregar-equipo.html, un fieldset por radio, y este batch en tabla) con
+// reglas distintas de dedup, aterrizaje y autocompletado. agregar-equipo.html
+// quedó como redirección a esta página con los mismos parámetros.
+// Siempre va asociada a una orden (?orden_id=…).
 //
 // Flujo:
 //   • "Jalar desde POC" trae los seriales del cliente Y su modelo reconocido
 //     automáticamente, una fila por equipo.
 //   • "Agregar a la tabla" suma filas desde seriales pegados.
-//   • Cada fila es editable (serial · modelo · accesorios · observaciones).
-//   • "Guardar todos" agrega los equipos a la orden.
+//   • Cada fila es editable (serial · modelo · accesorios con "Todos" ·
+//     observaciones) y se puede duplicar N veces con el mismo modelo.
+//   • Teclear o escanear un serial autocompleta el modelo desde el pool.
+//   • "Guardar todos" agrega los equipos a la orden y aterriza en ella;
+//     "Guardar y recibir" abre además el acuse de recepción (?recibir=1).
 
 let modelos = [];
 
 let ordenId = "";
 let clienteId = "";
 let clienteNombre = "";
+// Estado + tipo de la orden: deciden si se ofrece "Guardar y recibir".
+let ordenEstado = "";
+let ordenTipo = "";
 let contratoDocId = "";      // contrato vinculado a la orden (si aplica)
 let contratoIdVisible = "";
 // serialLower -> { serial, modelo, modelo_id } del contrato. Es la verdad del
@@ -54,6 +64,30 @@ const escHtml = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt
 const normName = (s) => String(s ?? "").trim().toLowerCase().normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "").replace(/\s+/g, " ");
 
 const $ = (id) => document.getElementById(id);
+
+// Tipos cuya recepción NO pasa por el mostrador (no se ofrece "Guardar y recibir").
+function sinMostrador(tipo) {
+  const t = String(tipo || "").toUpperCase().normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "");
+  return ["PROGRAMACION", "ENTRADA", "VISITA", "DEVOLUCION"].some(x => t.includes(x));
+}
+
+const ACCESORIOS = ["bateria", "clip", "cargador", "fuente", "antena", "cubrepolvo"];
+
+// Accesorios marcados en una fila, como objeto {bateria:true, …}.
+function accesoriosDeFila(tr) {
+  const acc = {};
+  ACCESORIOS.forEach(a => { acc[a] = !!tr.querySelector(`.${a}`)?.checked; });
+  return acc;
+}
+
+// Modelo del pool para un serial reconocido (por id del catálogo o, si el
+// pool solo trae la etiqueta, por nombre normalizado). Null si es ambiguo.
+function modeloDelPool({ docs, unidad }) {
+  const u = unidad || (Array.isArray(docs) && docs.length === 1 ? docs[0] : null);
+  if (!u) return null;
+  const porId = modelos.find(m => m.id === u.modelo_id);
+  return porId || modelos.find(m => normName(m.nombre) === normName(u.modelo_label || u.modelo || "")) || null;
+}
 
 async function cargarModelos() {
   const raw = await ModelosService.getModelos();
@@ -98,7 +132,16 @@ async function cargarOrden() {
   clienteNombre = nombreCliente;
   clienteId = data.cliente_id || "";
   $("cliente").value = nombreCliente || "—";
-  $("tipo").value = data.tipo_de_servicio || data.tipo || "";
+  ordenTipo = data.tipo_de_servicio || data.tipo || "";
+  ordenEstado = String(data.estado_reparacion || "POR ASIGNAR").toUpperCase();
+  $("tipo").value = ordenTipo;
+
+  // "Guardar y recibir" (auditoría UX 2026-09-28, 4.2 #13) solo donde existe
+  // el paso de recepción en mostrador: POR ASIGNAR y tipo que no arranca en
+  // Asignar (PROGRAMACIÓN, ENTRADA, VISITA) ni es DEVOLUCIÓN (su recepción es
+  // el check-in por serial). Misma regla que ?recibir=1 en ordenes-index.js.
+  const btnRecibir = $("btnGuardarRecibir");
+  if (btnRecibir) btnRecibir.hidden = sinMostrador(ordenTipo) || ordenEstado !== "POR ASIGNAR";
 
   // Orden con contrato vinculado (PROGRAMACIÓN) → ofrecer "Jalar del contrato".
   contratoDocId = (data.contrato?.aplica && data.contrato?.contrato_doc_id) ? data.contrato.contrato_doc_id : "";
@@ -160,6 +203,7 @@ function addRow({ serial = "", modeloId = "", accesorios = {}, observaciones = "
     <td class="contrato-cell"></td>
     <td>
       <div class="batch-acc">
+        <label title="Marcar o desmarcar todos los accesorios de esta fila"><input type="checkbox" class="todos-accesorios" ${ACCESORIOS.every(a => acc[a]) ? 'checked' : ''}> <b>Todos</b></label>
         <label title="Batería"><input type="checkbox" class="bateria" ${acc.bateria ? 'checked' : ''}> Bat</label>
         <label title="Clip"><input type="checkbox" class="clip" ${acc.clip ? 'checked' : ''}> Clip</label>
         <label title="Cargador"><input type="checkbox" class="cargador" ${acc.cargador ? 'checked' : ''}> Carg</label>
@@ -169,19 +213,34 @@ function addRow({ serial = "", modeloId = "", accesorios = {}, observaciones = "
       </div>
     </td>
     <td><input type="text" class="observaciones table-input sm" value="${escAttr(observaciones)}" placeholder="Observaciones"></td>
-    <td class="batch-acciones"><button type="button" class="btn btn-ghost btn-sm" title="Eliminar fila" onclick="eliminarFila(this)"><i data-lucide="trash-2"></i></button></td>
+    <td class="batch-acciones">
+      <button type="button" class="btn btn-ghost btn-sm" title="Duplicar esta fila (mismo modelo, accesorios y observación)" onclick="duplicarFila(this)"><i data-lucide="copy"></i></button>
+      <button type="button" class="btn btn-ghost btn-sm" title="Eliminar fila" onclick="eliminarFila(this)"><i data-lucide="trash-2"></i></button>
+    </td>
   `;
   $("filasBatch").appendChild(tr);
   if (obsComun && observaciones) {
     const obsInput = tr.querySelector(".observaciones");
     if (obsInput) obsInput.dataset.comun = "1";
   }
+  // "Todos" por fila (venía de agregar-equipo): marca/desmarca los seis y se
+  // mantiene en sync cuando se toca uno suelto.
+  const todos = tr.querySelector(".todos-accesorios");
+  if (todos) {
+    todos.addEventListener("change", function () {
+      ACCESORIOS.forEach(a => { const c = tr.querySelector(`.${a}`); if (c) c.checked = this.checked; });
+    });
+    ACCESORIOS.forEach(a => tr.querySelector(`.${a}`)?.addEventListener("change", () => {
+      todos.checked = ACCESORIOS.every(x => !!tr.querySelector(`.${x}`)?.checked);
+    }));
+  }
   if (typeof lucide !== 'undefined') lucide.createIcons();
   renumber();
   const serieInput = tr.querySelector(".serie");
   // SerialField: la validación viva de esta página era solo CONTRA EL CONTRATO;
   // el chip agrega la dimensión que faltaba — el estado en el pool (un serial
-  // de otro cliente pasaba de largo aquí).
+  // de otro cliente pasaba de largo aquí). onInfo autocompleta el modelo si la
+  // fila no lo tiene (PLAN_CICLO_VIDA_EQUIPOS.md D.3; venía de agregar-equipo).
   if (serieInput && typeof SerialField !== 'undefined' && typeof EquiposPoolService !== 'undefined') {
     SerialField.adjuntar(serieInput, {
       clienteId: () => clienteId || null,
@@ -190,11 +249,86 @@ function addRow({ serial = "", modeloId = "", accesorios = {}, observaciones = "
         const opt = sel?.selectedOptions?.[0];
         return (sel?.value && opt) ? { modelo_id: sel.value, modelo_label: opt.textContent || '' } : null;
       },
+      onInfo: (info) => {
+        const sel = tr.querySelector(".modelo");
+        if (!sel || sel.value) return;
+        const m = modeloDelPool(info || {});
+        if (!m) return;
+        sel.value = m.id;
+        refrescarContrato();
+        Toast.show(`Serial reconocido en el pool: ${m.nombre}.`, "ok");
+      },
     });
   }
   if (focus) serieInput?.focus();
   return tr;
 }
+
+// ── Duplicar N filas del mismo modelo (venía de agregar-equipo) ───────────
+// Toma modelo + accesorios + observación de UNA fila (la del botón, o la
+// última) y crea una fila por serial pegado; sin seriales, crea N filas
+// vacías con esos mismos valores para escanear uno por uno.
+let _filaReferencia = null;
+
+function abrirDuplicar(tr) {
+  if (!tr) { Toast.show("Primero agrega y llena una fila para duplicar.", "warn"); return; }
+  _filaReferencia = tr;
+  const modeloId = tr.querySelector(".modelo")?.value || "";
+  const nombre = modelos.find(m => m.id === modeloId)?.nombre || "sin modelo";
+  const n = tr.querySelector(".batch-num .num")?.textContent || "";
+  const info = $("dupInfo");
+  if (info) info.textContent = `Se copiará el modelo (${nombre}), los accesorios y la observación de la fila ${n || "elegida"}. Pega un serial por línea, o indica cuántas filas vacías crear.`;
+  const ta = $("dupSeriales");
+  if (ta) ta.value = "";
+  const cant = $("dupCantidad");
+  if (cant) cant.value = "";
+  if (typeof Modal !== "undefined" && Modal.open) Modal.open("overlayDuplicar");
+  setTimeout(() => ta?.focus(), 50);
+}
+
+window.duplicarFila = (btn) => abrirDuplicar(btn?.closest("tr"));
+
+window.abrirDuplicarMultiples = () => {
+  const filas = document.querySelectorAll("#filasBatch tr");
+  abrirDuplicar(filas.length ? filas[filas.length - 1] : null);
+};
+
+window.cerrarDuplicarMultiples = () => {
+  if (typeof Modal !== "undefined" && Modal.close) Modal.close("overlayDuplicar");
+  _filaReferencia = null;
+};
+
+window.aplicarDuplicarMultiples = () => {
+  const ref = _filaReferencia;
+  if (!ref) { Toast.show("No hay fila de referencia para duplicar.", "warn"); return; }
+  const modeloId = ref.querySelector(".modelo")?.value || "";
+  const accesorios = accesoriosDeFila(ref);
+  const observaciones = (ref.querySelector(".observaciones")?.value || "").trim();
+
+  const lineas = ($("dupSeriales")?.value || "").split("\n").map(s => s.trim()).filter(Boolean);
+  const cantidad = Math.max(0, Math.min(200, parseInt($("dupCantidad")?.value || "0", 10) || 0));
+  if (!lineas.length && !cantidad) { Toast.show("Pega al menos un serial o indica cuántas filas crear.", "warn"); return; }
+
+  let agregados = 0, duplicados = 0;
+  if (lineas.length) {
+    const presentes = serialesActuales();
+    lineas.forEach(serial => {
+      const k = serial.toLowerCase();
+      if (presentes.has(k)) { duplicados++; return; }
+      presentes.add(k);
+      addRow({ serial, modeloId, accesorios, observaciones });
+      agregados++;
+    });
+  } else {
+    for (let i = 0; i < cantidad; i++) addRow({ modeloId, accesorios, observaciones, focus: i === 0 });
+    agregados = cantidad;
+  }
+
+  window.cerrarDuplicarMultiples();
+  let msg = `${agregados} fila(s) duplicada(s).`;
+  if (duplicados) msg += ` ${duplicados} serial(es) ya estaban en la tabla.`;
+  Toast.show(msg, agregados ? "ok" : "warn");
+};
 
 window.eliminarFila = (btn) => {
   btn.closest("tr")?.remove();
@@ -676,8 +810,16 @@ window.aplicarComunes = () => {
   Toast.show(partes.join(" "), "ok");
 };
 
-window.guardarBatch = async () => {
+// Guard contra doble clic: guardar hace dos viajes a Firestore (leer la orden
+// + escribir); cada clic extra en esa ventana re-anexaba las mismas filas
+// (caso 2026071706 en agregar-equipo: 5 radios → 115 filas).
+let guardandoBatch = false;
+
+// `recibir` = "Guardar y recibir": aterriza en la bandeja con el acuse de
+// recepción abierto (index.html?orden=<id>&recibir=1, ordenes-index.js).
+window.guardarBatch = async ({ recibir = false } = {}) => {
   if (!ordenId) { Toast.show("Falta el número de orden.", "bad"); return; }
+  if (guardandoBatch) return;
 
   // Con contrato vinculado, el modelo del contrato manda por serial: corrige en
   // la tabla cualquier modelo que no coincida y avisa de seriales ajenos ANTES
@@ -731,11 +873,14 @@ window.guardarBatch = async () => {
 
   if (!nuevosEquipos.length) { Toast.show("Agrega al menos un equipo con serial.", "warn"); return; }
 
-  const btn = $("btnGuardar");
-  if (btn) btn.disabled = true;
+  // Los dos botones de guardar se trancan juntos.
+  const botones = [$("btnGuardar"), $("btnGuardarRecibir")].filter(Boolean);
+  const soltar = () => { guardandoBatch = false; botones.forEach(b => { b.disabled = false; }); };
+  guardandoBatch = true;
+  botones.forEach(b => { b.disabled = true; });
   try {
     const ordenData = await OrdenesService.getOrder(ordenId);
-    if (!ordenData) { Toast.show("No se encontró la orden.", "bad"); if (btn) btn.disabled = false; return; }
+    if (!ordenData) { Toast.show("No se encontró la orden.", "bad"); soltar(); return; }
     const equiposExistentes = ordenData.equipos || [];
 
     // La tabla deduplica contra sí misma, pero no contra lo YA guardado en la
@@ -751,7 +896,7 @@ window.guardarBatch = async () => {
 
     if (!aGuardar.length) {
       Toast.show(`Esos ${omitidos} serial(es) ya están guardados en la orden — nada que agregar.`, "warn");
-      if (btn) btn.disabled = false;
+      soltar();
       return;
     }
 
@@ -760,11 +905,15 @@ window.guardarBatch = async () => {
     let msg = `✅ Se guardaron ${aGuardar.length} equipo(s) en la orden.`;
     if (omitidos) msg += ` ${omitidos} ya estaban guardados.`;
     Toast.show(msg, "ok");
-    setTimeout(() => { window.location.href = "index.html"; }, 1200);
+    // Aterrizaje CON la orden a la vista (auditoría órdenes P1.9): ?orden= la
+    // deja filtrada en la bandeja; &recibir=1 abre el acuse de recepción.
+    const destino = `index.html?orden=${encodeURIComponent(ordenId)}` + (recibir ? "&recibir=1" : "");
+    // Tras guardar la página redirige: los botones se quedan trancados.
+    setTimeout(() => { window.location.href = destino; }, 600);
   } catch (e) {
     console.error("Error guardando batch:", e);
     Toast.show("No se pudieron guardar los equipos.", "bad");
-    if (btn) btn.disabled = false;
+    soltar();
   }
 };
 
@@ -801,6 +950,14 @@ async function init() {
     const jalar = new URLSearchParams(window.location.search).get("jalar");
     if (jalar === "contrato" && contratoDocId) {
       await window.jalarSerialesDesdeContrato({ auto: true });
+    }
+
+    // Captura manual (lo que era agregar-equipo): sin contrato ni gestión de
+    // donde jalar, la tabla abre con una fila lista para escanear el primer
+    // serial. Con fuente de seriales se deja vacía para no estorbar al jalado.
+    const hayFuente = !!contratoDocId || serialesDeGestion(gestionOrden).length > 0;
+    if (!jalar && !hayFuente && !document.querySelectorAll("#filasBatch tr").length) {
+      addRow({ focus: true });
     }
   } catch (error) {
     console.error("Error al iniciar la página:", error);

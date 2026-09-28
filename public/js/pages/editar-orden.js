@@ -31,7 +31,24 @@
     function esProgramacion(tipo) {
       return normalizarTipo(tipo) === "PROGRAMACION";
     }
-    
+
+    function esEntrada(tipo) {
+      return normalizarTipo(tipo) === "ENTRADA";
+    }
+
+    // Espejo de nueva-orden.js (auditoría UX 2026-09-28, 4.2 #16): la ENTRADA
+    // también va amarrada a un contrato (es el contrato del que vuelve el
+    // equipo). Aquí faltaba: una ENTRADA creada sin contrato o con el contrato
+    // equivocado no se podía corregir sin rehacer la orden. Se edita mientras
+    // la orden esté en POR ASIGNAR (la página entera está gateada a ese estado).
+    function requiereContrato(tipo) {
+      return esProgramacion(tipo) || esEntrada(tipo);
+    }
+
+    function etiquetaTipoContrato(tipo) {
+      return esEntrada(tipo) ? "ENTRADA" : "PROGRAMACIÓN";
+    }
+
     // Función para eliminar caché de contrato si ya no aplica
     async function deleteContratoCacheIfExists(ordenId, contratoDocId) {
       if (!contratoDocId) return;
@@ -85,9 +102,9 @@
     // Event listener para cambio de tipo de servicio
     tipoSelect.addEventListener("change", async function() {
       const tipo = tipoSelect.value;
-      
-      if (esProgramacion(tipo)) {
-        // Mostrar bloque de contrato
+
+      if (requiereContrato(tipo)) {
+        // Mostrar bloque de contrato (PROGRAMACIÓN y ENTRADA)
         contratoBlock.style.display = "block";
         
         // Por defecto: aplica contrato (checkbox desmarcado)
@@ -247,8 +264,8 @@
         const chipTipo = document.getElementById("fxChipTipo");
         if (chipTipo && d.tipo_de_servicio) { chipTipo.textContent = d.tipo_de_servicio; chipTipo.style.display = ""; }
         
-        // Manejar bloque de contrato si el tipo es PROGRAMACION
-        if (esProgramacion(d.tipo_de_servicio)) {
+        // Bloque de contrato para PROGRAMACIÓN y ENTRADA (como nueva-orden)
+        if (requiereContrato(d.tipo_de_servicio)) {
           contratoBlock.style.display = "block";
           
           // Cargar contratos del cliente
@@ -303,7 +320,7 @@
         document.getElementById("observaciones").value = d.observaciones || "";
 
         // Bloque "Equipos de la orden" (P5): resumen + puertas a donde SÍ viven
-        // (la lista expandible y agregar-equipo) — esta página no los edita.
+        // (la lista expandible y nuevo-batch) — esta página no los edita.
         const eqs = (Array.isArray(d.equipos) ? d.equipos : []).filter(e => e && !e.eliminado);
         const conSerial = eqs.filter(e => ((e.numero_de_serie || e.serial || '') + '').trim()).length;
         const resumenEl = document.getElementById("equiposResumen");
@@ -315,7 +332,7 @@
         const lnkVer = document.getElementById("lnkVerEquipos");
         if (lnkVer) lnkVer.href = `index.html?orden=${encodeURIComponent(ordenId)}`;
         const lnkAdd = document.getElementById("lnkAgregarEquipos");
-        if (lnkAdd) lnkAdd.href = `agregar-equipo.html?orden_id=${encodeURIComponent(ordenId)}`;
+        if (lnkAdd) lnkAdd.href = `nuevo-batch.html?orden_id=${encodeURIComponent(ordenId)}`;
       } else {
         mostrarToast("Orden no encontrada.", "error");
       }
@@ -339,13 +356,13 @@
       wrapSel?.classList.remove("has-error");
       wrapMot?.classList.remove("has-error");
 
-      // Validación específica para PROGRAMACIÓN
-      if (esProgramacion(tipoServicio)) {
+      // Validación para los tipos amarrados a contrato (PROGRAMACIÓN y ENTRADA)
+      if (requiereContrato(tipoServicio)) {
         if (!contratoNoAplica.checked && !contratoSelect.value) {
           wrapSel?.classList.add("has-error");
           contratoSelect.focus();
           contratoSelect.scrollIntoView({ block: "center", behavior: "smooth" });
-          throw new Error("Para PROGRAMACIÓN selecciona un contrato o marca 'No aplica'.");
+          throw new Error(`Para ${etiquetaTipoContrato(tipoServicio)} selecciona un contrato o marca 'No aplica'.`);
         }
         // Motivo REAL (≥10 chars) — mismo umbral que nueva-orden (auditoría
         // órdenes P2): sin él se colaban "n/a" y puntos.
@@ -371,7 +388,7 @@
       };
       
       // Agregar o remover contrato según el tipo de servicio
-      if (esProgramacion(tipoServicio)) {
+      if (requiereContrato(tipoServicio)) {
         if (contratoNoAplica.checked) {
           // No aplica contrato
           data.contrato = {
@@ -402,7 +419,7 @@
           };
         }
       } else {
-        // Si no es PROGRAMACION, eliminar el campo contrato
+        // Si no es PROGRAMACIÓN ni ENTRADA, eliminar el campo contrato
         data.contrato = firebase.firestore.FieldValue.delete();
       }
 
@@ -422,7 +439,7 @@
         const contratoAnterior = datosActuales?.contrato;
         if (contratoAnterior?.contrato_doc_id) {
           // Si ya no aplica o cambió de contrato, eliminar el caché anterior
-          if (!esProgramacion(tipoServicio) || 
+          if (!requiereContrato(tipoServicio) ||
               (data.contrato && !data.contrato.aplica) ||
               (data.contrato && data.contrato.contrato_doc_id !== contratoAnterior.contrato_doc_id)) {
             await deleteContratoCacheIfExists(ordenId, contratoAnterior.contrato_doc_id);

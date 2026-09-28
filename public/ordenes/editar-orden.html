@@ -147,11 +147,14 @@
           </div>
         </div>
 
-        <!-- Bloque de Contrato (solo para PROGRAMACIÓN) -->
+        <!-- Bloque de Contrato (PROGRAMACIÓN y ENTRADA, como nueva-orden;
+             editable mientras la orden esté en POR ASIGNAR) -->
         <div id="contratoBlock" class="contrato-block" style="display: none; margin-top:var(--sp-4);">
           <div class="contrato-hint">
             <i data-lucide="info" style="width:14px;height:14px;"></i>
-            <span><strong>Obligatorio para PROGRAMACIÓN.</strong> Marca "No aplica" solo si corresponde.</span>
+            <span><strong>Obligatorio para PROGRAMACIÓN y ENTRADA.</strong> En una ENTRADA es el contrato
+            del que vuelve el equipo — es lo que permite cerrar el ciclo y avisar que falta cancelarlo.
+            Marca "No aplica" solo si corresponde.</span>
           </div>
 
           <div class="form-field">
@@ -161,7 +164,7 @@
             <select class="form-select" id="contratoSelect" data-fk="Contrato">
               <option value="">Seleccione contrato</option>
             </select>
-            <span class="form-error-msg">Para PROGRAMACIÓN selecciona un contrato o marca 'No aplica'.</span>
+            <span class="form-error-msg">Selecciona un contrato o marca 'No aplica'.</span>
           </div>
 
           <label class="form-check" style="margin-top:var(--sp-2);">

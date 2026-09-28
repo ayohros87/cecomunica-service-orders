@@ -1155,141 +1155,158 @@ const OrdenesService = {
   },
 
   /**
-   * Search orders by filters (orden, cliente, serial).
+   * Búsqueda de órdenes en el servidor (auditoría UX 2026-09-28, T6 / 4.2 #16).
    *
-   * Primary path: `where('searchTokens', 'array-contains-any', [...])`.
-   * Tokens are maintained per-order by the `onOrdenWriteSearchTokens`
-   * Cloud Function (functions/src/triggers/ordenes/onWriteSearchTokens.js)
-   * and seeded for legacy orders by `functions/scripts/backfill-search-tokens.js`.
-   * ORDENES_INDEX_IMPROVEMENTS.md §1.1.
+   * Sirve para órdenes de CUALQUIER antigüedad y combina texto + estado +
+   * rango de fecha_creacion + paginación:
+   *   · Texto → `searchTokens array-contains-any` con UNA palabra ancla (la
+   *     más larga = la más selectiva). El índice guarda prefijos 3..8 de
+   *     número/cliente/técnico (functions/src/lib/searchTokens.js), así que
+   *     "hospi" o "202609" encuentran. Palabras de más de 8 letras se
+   *     consultan por sus primeros 8 (y por sus últimos 8, que es el sufijo
+   *     de serial más largo) y se verifican contra el texto.
+   *   · Todas las palabras se verifican contra el texto crudo de la orden
+   *     (AND): "hospital santo" ya no trae todo lo que tenga "santo".
+   *   · Estado y fechas van al servidor cuando hay índice (ver
+   *     firestore.indexes.json: searchTokens+fecha_creacion y
+   *     searchTokens+estado_reparacion+fecha_creacion). Si el índice todavía
+   *     no está (failed-precondition) se repite sin ellos y se filtra aquí.
+   *   · Sin texto: estado y/o fechas solos, con los índices de siempre.
    *
-   * Fallback path: full-collection scan with the legacy substring logic.
-   * Kicks in when the indexed query throws (failed-precondition / no
-   * index yet) OR returns zero results. The zero-result fallback covers
-   * the transition window before backfill completes — without it, users
-   * would see false-negative blanks during migration.
-   *
-   * Cost: indexed path is O(matching docs), bounded by limit(100).
-   * Scan fallback remains O(collection), so its trigger conditions
-   * matter — once backfill is done, zero-result fallbacks should be
-   * rare and reflect a true "no matches" state.
-   *
-   * @param {Object} filters
-   * @param {string} filters.filtroOrden - Order ID filter
-   * @param {string} filters.filtroCliente - Client name filter
-   * @param {string} filters.filtroSerial - Serial number filter
-   * @param {boolean} filters.quickSearch - true → OR logic, false → AND
-   * @returns {Promise<Array>}
+   * @param {Object} p
+   * @param {string} [p.filtroOrden]
+   * @param {string} [p.filtroCliente]
+   * @param {string} [p.filtroSerial]
+   * @param {boolean} [p.quickSearch] - true: el mismo texto en todos los campos
+   * @param {string} [p.estado] - estado_reparacion exacto
+   * @param {Date|null} [p.desde] - fecha_creacion >= desde
+   * @param {Date|null} [p.hasta] - fecha_creacion <= hasta
+   * @param {number} [p.limit=100] - tamaño de página del servidor
+   * @param {*} [p.cursor] - último doc de la página anterior (Cargar más)
+   * @returns {Promise<{orders: Array, hayMas: boolean, cursor: *, filtradoEnCliente: boolean}>}
    */
-  async searchOrders({ filtroOrden = "", filtroCliente = "", filtroSerial = "", quickSearch = false } = {}) {
+  async buscarOrdenes({ filtroOrden = "", filtroCliente = "", filtroSerial = "", quickSearch = false,
+                        estado = "", desde = null, hasta = null, limit = 100, cursor = null } = {}) {
     const db = firebase.firestore();
 
-    // Normalize: must mirror functions/src/lib/searchTokens.js so query
-    // tokens match what the CF/backfill writes.
+    // Espejo de functions/src/lib/searchTokens.js (normalize / prefijoConsulta).
+    const PREFIX_MAX = 8;
     const normalize = (s) => String(s || "")
       .toLowerCase()
       .normalize("NFD")
       .replace(/[̀-ͯ]/g, "")
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
+    const palabras = (s) => normalize(s).split(/\s+/).filter(w => w.length >= 2);
 
-    const tokenSetOf = (s) => normalize(s).split(/\s+/).filter(w => w.length >= 2);
+    const campos = quickSearch
+      ? { todo: palabras(filtroOrden || filtroCliente || filtroSerial) }
+      : { orden: palabras(filtroOrden), cliente: palabras(filtroCliente), serial: palabras(filtroSerial) };
+    const todas = [...new Set(Object.values(campos).flat())];
+    const ancla = todas.slice().sort((a, b) => b.length - a.length)[0] || "";
+    const valoresAncla = ancla
+      ? [...new Set([ancla, ancla.slice(0, PREFIX_MAX), ancla.slice(-PREFIX_MAX)])]
+      : [];
 
-    const ordenWords   = tokenSetOf(filtroOrden);
-    const clienteWords = tokenSetOf(filtroCliente);
-    const serialWords  = tokenSetOf(filtroSerial);
+    const ms = (v) => {
+      if (!v) return null;
+      if (typeof v.toMillis === "function") return v.toMillis();
+      if (v instanceof Date) return v.getTime();
+      if (typeof v.seconds === "number") return v.seconds * 1000;
+      const t = Date.parse(v);
+      return Number.isNaN(t) ? null : t;
+    };
+    const desdeMs = desde ? desde.getTime() : null;
+    const hastaMs = hasta ? hasta.getTime() : null;
 
-    const allQueryTokens = Array.from(new Set([...ordenWords, ...clienteWords, ...serialWords]));
-    if (allQueryTokens.length === 0) return [];
-
-    // array-contains-any caps at 30; cap at 10 ourselves to keep the
-    // read budget bounded even if a user types a long phrase.
-    const tokenArr = allQueryTokens.slice(0, 10);
-
-    // Post-filter shared by indexed + fallback paths. For the indexed
-    // path we re-check against searchTokens; for the fallback we use
-    // substring matching on the raw fields.
-    const buildMatch = ({ useTokens }) => (doc) => {
-      const data = doc.data ? doc.data() : doc;
-      if (data.eliminado === true) return null;
-
-      let coincideOrden, coincideCliente, coincideSerial;
-
-      if (useTokens) {
-        const tokens = new Set(Array.isArray(data.searchTokens) ? data.searchTokens : []);
-        const anyIn = (arr) => arr.some(t => tokens.has(t));
-        coincideOrden   = ordenWords.length   ? anyIn(ordenWords)   : false;
-        coincideCliente = clienteWords.length ? anyIn(clienteWords) : false;
-        coincideSerial  = serialWords.length  ? anyIn(serialWords)  : false;
-      } else {
-        const ordenId = normalize(doc.id || data.ordenId || "");
-        const cliente = normalize(data.cliente_nombre || data.cliente || "");
-        const equipos = data.equipos || [];
-        const ordenNorm   = normalize(filtroOrden);
-        const clienteNorm = normalize(filtroCliente);
-        const serialNorm  = normalize(filtroSerial);
-
-        coincideOrden   = ordenNorm   ? ordenId.includes(ordenNorm)     : false;
-        coincideCliente = clienteNorm ? cliente.includes(clienteNorm)   : false;
-        coincideSerial  = serialNorm
-          ? equipos.some(eq => normalize(eq.numero_de_serie || eq.serial || eq.SERIAL || "").includes(serialNorm))
-          : false;
-      }
-
-      if (quickSearch) {
-        if (coincideOrden || coincideCliente || coincideSerial) {
-          return { ordenId: doc.id || data.ordenId, ...data };
+    // Verificación contra el texto crudo: el índice solo propone candidatos.
+    const cumple = (data, id, { conEstadoYFecha }) => {
+      if (data.eliminado === true) return false;
+      if (ancla) {
+        const txtOrden   = normalize(id);
+        const txtCliente = normalize(data.cliente_nombre || data.cliente || "");
+        const txtTecnico = normalize(data.tecnico_asignado || "");
+        const txtTipo    = normalize(data.tipo_de_servicio || "");
+        const seriales   = (data.equipos || []).filter(e => !e?.eliminado)
+          .map(e => normalize(e?.numero_de_serie || e?.serial || e?.SERIAL || ""));
+        const enSerial = (w) => seriales.some(s => s.includes(w));
+        if (quickSearch) {
+          const ok = campos.todo.every(w => txtOrden.includes(w) || txtCliente.includes(w)
+            || txtTecnico.includes(w) || txtTipo.includes(w) || enSerial(w));
+          if (!ok) return false;
+        } else {
+          if (!campos.orden.every(w => txtOrden.includes(w))) return false;
+          if (!campos.cliente.every(w => txtCliente.includes(w))) return false;
+          if (!campos.serial.every(enSerial)) return false;
         }
-        return null;
       }
-      const pasaOrden   = (useTokens ? ordenWords.length   : normalize(filtroOrden))   ? coincideOrden   : true;
-      const pasaCliente = (useTokens ? clienteWords.length : normalize(filtroCliente)) ? coincideCliente : true;
-      const pasaSerial  = (useTokens ? serialWords.length  : normalize(filtroSerial))  ? coincideSerial  : true;
-      if (pasaOrden && pasaCliente && pasaSerial) {
-        return { ordenId: doc.id || data.ordenId, ...data };
+      if (conEstadoYFecha) {
+        if (estado && String(data.estado_reparacion || "POR ASIGNAR").trim().toUpperCase() !== estado) return false;
+        const f = ms(data.fecha_creacion);
+        if (desdeMs != null && (f == null || f < desdeMs)) return false;
+        if (hastaMs != null && (f == null || f > hastaMs)) return false;
       }
-      return null;
+      return true;
     };
 
-    // ── Primary: indexed query ───────────────────────────────────
-    try {
-      const snap = await db.collection("ordenes_de_servicio")
-        .where("searchTokens", "array-contains-any", tokenArr)
-        .limit(100)
-        .get();
+    const armar = ({ servidor }) => {
+      let q = db.collection("ordenes_de_servicio");
+      if (valoresAncla.length) q = q.where("searchTokens", "array-contains-any", valoresAncla);
+      if (servidor) {
+        if (estado) q = q.where("estado_reparacion", "==", estado);
+        if (desde) q = q.where("fecha_creacion", ">=", desde);
+        if (hasta) q = q.where("fecha_creacion", "<=", hasta);
+        q = q.orderBy("fecha_creacion", "desc");
+      }
+      q = q.limit(limit);
+      if (cursor) q = q.startAfter(cursor);
+      return q;
+    };
 
-      const matchIndexed = buildMatch({ useTokens: true });
-      const results = [];
+    const correr = async (servidor) => {
+      const snap = await armar({ servidor }).get();
+      const orders = [];
       snap.forEach(doc => {
-        const m = matchIndexed(doc);
-        if (m) results.push(m);
+        const data = doc.data();
+        // Aun con filtro en servidor se re-verifica estado/fecha: es barato y
+        // cubre docs legacy con fecha_creacion en otro tipo.
+        if (cumple(data, doc.id, { conEstadoYFecha: true })) orders.push({ ordenId: doc.id, ...data });
       });
+      const ultimo = snap.docs[snap.docs.length - 1] || null;
+      return {
+        orders: estado ? this._sinDevolucionSiPorAsignar(estado, orders) : orders,
+        hayMas: snap.size >= limit,
+        cursor: ultimo,
+        filtradoEnCliente: !servidor,
+      };
+    };
 
-      // Cero resultados = cero resultados (auditoría órdenes 2026-08-17).
-      // El fall-through a full-scan era una red para la migración de
-      // searchTokens, que YA terminó — y convertía cada búsqueda sin
-      // coincidencias (un typo bastaba) en la descarga de la COLECCIÓN
-      // COMPLETA de órdenes filtrada en el navegador.
-      return results;
+    try {
+      return await correr(true);
     } catch (err) {
-      console.warn("[searchOrders] indexed query failed, falling back to bounded scan:",
-        err?.code || err?.message);
+      // Índice compuesto aún no desplegado: misma consulta sin estado/fecha
+      // en el servidor. Las páginas quedan sin orden por fecha, pero nadie se
+      // queda sin resultados mientras se construye el índice.
+      if (err?.code !== "failed-precondition" || !valoresAncla.length) throw err;
+      console.warn("[buscarOrdenes] falta índice compuesto, filtro estado/fecha en cliente:", err?.message);
+      return await correr(false);
     }
+  },
 
-    // ── Fallback ACOTADO: solo si la query indexada FALLÓ (índice caído,
-    // sin red a mitad) — nunca por 0 resultados. Últimas 300 órdenes, no
-    // toda la colección.
-    const snapshot = await db.collection("ordenes_de_servicio")
-      .orderBy("fecha_creacion", "desc")
-      .limit(300)
-      .get();
-    const matchScan = buildMatch({ useTokens: false });
-    const resultados = [];
-    snapshot.forEach(doc => {
-      const m = matchScan(doc);
-      if (m) resultados.push(m);
-    });
-    return resultados;
+  /**
+   * Compatibilidad: búsqueda de una sola página (la usa el palette Ctrl+K,
+   * busquedaGlobalService). Devuelve solo el arreglo.
+   * @returns {Promise<Array>}
+   */
+  async searchOrders({ filtroOrden = "", filtroCliente = "", filtroSerial = "", quickSearch = false } = {}) {
+    if (![filtroOrden, filtroCliente, filtroSerial].some(s => String(s || "").trim())) return [];
+    try {
+      const r = await this.buscarOrdenes({ filtroOrden, filtroCliente, filtroSerial, quickSearch });
+      return r.orders;
+    } catch (err) {
+      console.warn("[searchOrders] búsqueda indexada falló:", err?.code || err?.message);
+      return [];
+    }
   },
 
   // Memo de 60s por estado (2026-09-02, factura de agosto): los chips de la
@@ -1594,63 +1611,189 @@ const OrdenesService = {
     return equiposAll;
   },
 
-  /**
-   * Append a photo entry to an equipo inside an order.
-   * Photo is stored inline on equipos[i].fotos = [...]
-   */
-  async addEquipoFoto({ ordenId, equipoId, foto }) {
-    const db = firebase.firestore();
-    const ordenRef = db.collection("ordenes_de_servicio").doc(ordenId);
-    const snap = await ordenRef.get();
-    if (!snap.exists) throw new Error("Orden no encontrada");
+  // ── Fotos de la orden: UNA galería, dos orígenes históricos ──────────────
+  // (auditoría UX 2026-09-28, 4.2 #16). Había dos juegos de fotos que no se
+  // veían entre sí: fotos_taller[] en la orden (galería del menú ⋯, con tipo
+  // antes/después/detalle) y equipos[i].fotos[] (modal de intervención por
+  // equipo), con permisos distintos y dos contadores. Desde ahora:
+  //   · LECTURA: fotosDeOrden() junta los dos orígenes; la foto de un equipo
+  //     trae equipo_id/equipo_serial como etiqueta.
+  //   · ESCRITURA: siempre en fotos_taller[] (addFotoOrden), con la etiqueta
+  //     de equipo opcional. equipos[i].fotos[] no recibe fotos nuevas; las
+  //     viejas se siguen leyendo y se pueden dar de baja (softDeleteFotoOrden
+  //     busca en los dos orígenes).
+  //   · CONTADOR: fotos_taller_count = activas de AMBOS orígenes.
+  //   · PERMISOS: puedeEliminarFoto() — un solo criterio para las dos vistas.
 
-    const data = snap.data() || {};
-    const equiposAll = Array.isArray(data.equipos) ? data.equipos : [];
-    const realIndex = equiposAll.findIndex(e => !e?.eliminado && e?.id === equipoId);
-    if (realIndex === -1) throw new Error("Equipo no encontrado");
-
-    const fotosPrev = Array.isArray(equiposAll[realIndex].fotos) ? equiposAll[realIndex].fotos : [];
-    equiposAll[realIndex].fotos = [...fotosPrev, foto];
-    equiposAll[realIndex].fotos_updated_at = firebase.firestore.Timestamp.now();
-
-    await ordenRef.update({ equipos: equiposAll });
-    return equiposAll;
+  _normSerialFoto(s) {
+    return String(s || "").trim().toUpperCase().replace(/[\s-]+/g, "");
   },
 
   /**
-   * Soft-delete a photo from an equipo (keeps history).
+   * Todas las fotos de la orden (activas y borradas), normalizadas y con su
+   * origen. Las de equipos[i].fotos[] salen etiquetadas con el equipo.
+   * @param {Object} data - documento de la orden
+   * @returns {Array<Object>}
    */
-  async softDeleteEquipoFoto({ ordenId, equipoId, fotoId, uid, email }) {
+  fotosDeOrden(data) {
+    const norm = (f, extra) => ({
+      id: f.id || "",
+      url: f.url || "",
+      path: f.path || "",
+      tipo: f.tipo || "detalle",
+      equipo_id: f.equipo_id || extra.equipo_id || null,
+      equipo_serial: f.equipo_serial || extra.equipo_serial || null,
+      nota: f.nota || "",
+      uploaded_by_uid: f.uploaded_by_uid || "",
+      uploaded_by_email: f.uploaded_by_email || "",
+      uploaded_at: f.uploaded_at || null,
+      deleted: f.deleted === true,
+      deleted_by_uid: f.deleted_by_uid || null,
+      deleted_by_email: f.deleted_by_email || null,
+      deleted_at: f.deleted_at || null,
+      origen: extra.origen,
+    });
+    const out = [];
+    const deOrden = Array.isArray(data?.fotos_taller) ? data.fotos_taller : [];
+    deOrden.forEach(f => { if (f) out.push(norm(f, { origen: "orden" })); });
+    const equipos = Array.isArray(data?.equipos) ? data.equipos : [];
+    equipos.forEach(e => {
+      if (!e || e.eliminado) return;
+      const fotos = Array.isArray(e.fotos) ? e.fotos : [];
+      const serial = String(e.numero_de_serie || e.serial || e.SERIAL || "").trim() || null;
+      fotos.forEach(f => { if (f) out.push(norm(f, { origen: "equipo", equipo_id: e.id || null, equipo_serial: serial })); });
+    });
+    return out;
+  },
+
+  /** Fotos vivas (no borradas, con URL) de los dos orígenes. */
+  fotosActivasDeOrden(data) {
+    return this.fotosDeOrden(data).filter(f => f.deleted !== true && !!f.url);
+  },
+
+  /**
+   * Fotos vivas etiquetadas con un equipo (por id o, si la etiqueta vieja solo
+   * trae serial, por serial normalizado).
+   */
+  fotosDeEquipo(data, equipo) {
+    if (!equipo) return [];
+    const id = equipo.id || null;
+    const serial = this._normSerialFoto(equipo.numero_de_serie || equipo.serial || equipo.SERIAL || "");
+    return this.fotosActivasDeOrden(data).filter(f =>
+      (id && f.equipo_id === id) || (serial && this._normSerialFoto(f.equipo_serial) === serial));
+  },
+
+  /** Contador único de la orden (lo que muestra el badge de la fila). */
+  contarFotosOrden(data) {
+    return this.fotosActivasDeOrden(data).length;
+  },
+
+  /**
+   * ¿Puede este usuario dar de baja esta foto? Un solo criterio para la
+   * galería de la orden y el modal del equipo (antes eran dos listas
+   * distintas): administración, jefatura y técnicos de taller, o quien la
+   * subió.
+   * @param {Object} foto
+   * @param {{rol?: string, uid?: string}} quien
+   */
+  puedeEliminarFoto(foto, { rol = "", uid = "" } = {}) {
+    const R = (typeof ROLES !== "undefined" && ROLES) || {};
+    const r = String(rol || "").toLowerCase();
+    const permitidos = [R.ADMIN || "administrador", R.JEFE_TALLER || "jefe_taller",
+      R.TECNICO || "tecnico", R.TECNICO_OPERATIVO || "tecnico_operativo"]
+      .map(x => String(x || "").toLowerCase());
+    if (permitidos.includes(r)) return true;
+    return !!(uid && foto?.uploaded_by_uid && foto.uploaded_by_uid === uid);
+  },
+
+  /**
+   * Sube el registro de una foto a la orden (el archivo ya está en Storage).
+   * Escribe SIEMPRE en fotos_taller[]; `equipo` (opcional) la etiqueta.
+   * Devuelve la orden fresca, con el contador ya actualizado.
+   * @param {{ordenId:string, foto:Object, equipo?:{id?:string, serial?:string}|null, user?:{uid?:string, email?:string}}} p
+   */
+  async addFotoOrden({ ordenId, foto, equipo = null, user = null }) {
+    const db = firebase.firestore();
+    const ordenRef = db.collection("ordenes_de_servicio").doc(ordenId);
+    const ahora = firebase.firestore.Timestamp.now();
+    const meta = {
+      id: foto.id || `ft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+      url: foto.url || "",
+      path: foto.path || "",
+      tipo: foto.tipo || "detalle",
+      equipo_id: equipo?.id || foto.equipo_id || null,
+      equipo_serial: equipo?.serial || foto.equipo_serial || null,
+      nota: foto.nota || "",
+      uploaded_by_uid: user?.uid || foto.uploaded_by_uid || "",
+      uploaded_by_email: user?.email || foto.uploaded_by_email || "",
+      uploaded_at: foto.uploaded_at || ahora,
+      deleted: false,
+    };
+    await ordenRef.update({
+      fotos_taller: firebase.firestore.FieldValue.arrayUnion(meta),
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: "SUBIR_FOTO_TALLER", by: meta.uploaded_by_uid, email: meta.uploaded_by_email,
+        tipo: meta.tipo, equipo_serial: meta.equipo_serial, ts: ahora,
+      }),
+      fotos_taller_updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    // Recuento sobre lectura fresca: arrayUnion no sabe cuántas quedaron.
+    const fresh = await ordenRef.get();
+    const data = fresh.exists ? (fresh.data() || {}) : {};
+    const count = this.contarFotosOrden(data);
+    await ordenRef.update({ fotos_taller_count: count });
+    return { ordenId, ...data, fotos_taller_count: count };
+  },
+
+  /**
+   * Da de baja (soft-delete) una foto, esté en fotos_taller[] o en
+   * equipos[i].fotos[] (histórico). Devuelve la orden fresca.
+   */
+  async softDeleteFotoOrden({ ordenId, fotoId, uid = "", email = "" }) {
     const db = firebase.firestore();
     const ordenRef = db.collection("ordenes_de_servicio").doc(ordenId);
     const snap = await ordenRef.get();
     if (!snap.exists) throw new Error("Orden no encontrada");
-
     const data = snap.data() || {};
-    const equiposAll = Array.isArray(data.equipos) ? data.equipos : [];
-    const realIndex = equiposAll.findIndex(e => !e?.eliminado && e?.id === equipoId);
-    if (realIndex === -1) throw new Error("Equipo no encontrado");
+    const ahora = firebase.firestore.Timestamp.now();
+    const baja = (f) => ({ ...f, deleted: true, deleted_by_uid: uid || "", deleted_by_email: email || "", deleted_at: ahora });
 
-    const fotos = Array.isArray(equiposAll[realIndex].fotos) ? equiposAll[realIndex].fotos : [];
+    let tipo = "";
     let found = false;
-    const updated = fotos.map(f => {
-      if (f?.id !== fotoId || f?.deleted === true) return f;
-      found = true;
-      return {
-        ...f,
-        deleted: true,
-        deleted_by_uid: uid || "",
-        deleted_by_email: email || "",
-        deleted_at: firebase.firestore.Timestamp.now()
-      };
+    const cambios = {};
+
+    const deOrden = Array.isArray(data.fotos_taller) ? data.fotos_taller : [];
+    const fotosOrden = deOrden.map(f => {
+      if (!f || f.id !== fotoId || f.deleted === true) return f;
+      found = true; tipo = f.tipo || "";
+      return baja(f);
     });
+    if (found) cambios.fotos_taller = fotosOrden;
+
+    let equiposAll = Array.isArray(data.equipos) ? data.equipos : [];
+    if (!found) {
+      equiposAll = equiposAll.map(e => {
+        if (!e || e.eliminado || !Array.isArray(e.fotos)) return e;
+        let hit = false;
+        const fotos = e.fotos.map(f => {
+          if (!f || f.id !== fotoId || f.deleted === true) return f;
+          hit = true; found = true; tipo = f.tipo || "";
+          return baja(f);
+        });
+        return hit ? { ...e, fotos, fotos_updated_at: ahora } : e;
+      });
+      if (found) cambios.equipos = equiposAll;
+    }
     if (!found) throw new Error("Foto no encontrada");
 
-    equiposAll[realIndex].fotos = updated;
-    equiposAll[realIndex].fotos_updated_at = firebase.firestore.Timestamp.now();
-
-    await ordenRef.update({ equipos: equiposAll });
-    return equiposAll;
+    const nuevo = { ...data, ...cambios };
+    cambios.fotos_taller_count = this.contarFotosOrden(nuevo);
+    cambios.fotos_taller_updated_at = firebase.firestore.FieldValue.serverTimestamp();
+    cambios.os_logs = firebase.firestore.FieldValue.arrayUnion({
+      action: "ELIMINAR_FOTO_TALLER", by: uid || "", email: email || "", tipo, ts: ahora,
+    });
+    await ordenRef.update(cambios);
+    return { ordenId, ...nuevo, fotos_taller_count: cambios.fotos_taller_count };
   },
 
   /**

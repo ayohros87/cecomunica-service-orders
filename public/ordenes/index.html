@@ -359,6 +359,10 @@
         <input type="text" id="filtroOrden" placeholder="Orden" />
         <input type="text" id="filtroCliente" placeholder="Cliente" />
         <input type="text" id="filtroSerial" placeholder="Serial" />
+        <!-- Rango de fecha de creación (auditoría UX 2026-09-28, T6): se cruza
+             con el texto y el chip de estado en el servidor. Busca al cambiar. -->
+        <label class="filtro-fecha">Desde <input type="date" id="filtroDesde" data-action="filtrar-fechas" aria-label="Creada desde" /></label>
+        <label class="filtro-fecha">Hasta <input type="date" id="filtroHasta" data-action="filtrar-fechas" aria-label="Creada hasta" /></label>
         <button class="btn btn-primary" data-action="filtrar">Buscar</button>
         <button class="btn btn-ghost" id="btnAdminEquiposCliente" data-action="go-admin-equipos-cliente" style="display:none;"><i data-lucide="shield"></i> Equipos por cliente (Admin)</button>
       </div>
@@ -721,6 +725,12 @@
       <input id="mobileFiltroOrden" class="minput" type="text" placeholder="Orden" />
       <input id="mobileFiltroCliente" class="minput" type="text" placeholder="Cliente" />
       <input id="mobileFiltroSerial" class="minput" type="text" placeholder="Serial" />
+      <div class="mrow">
+        <label class="mlabel" for="mobileFiltroDesde" style="margin:0;">Desde</label>
+        <input id="mobileFiltroDesde" class="minput" type="date" aria-label="Creada desde" />
+        <label class="mlabel" for="mobileFiltroHasta" style="margin:0;">Hasta</label>
+        <input id="mobileFiltroHasta" class="minput" type="date" aria-label="Creada hasta" />
+      </div>
       <select id="mobileFiltroTipo" class="minput">
         <option value="">Tipo (todos)</option>
       </select>
@@ -886,6 +896,12 @@
           <span>Fotos del equipo</span>
           <span class="equipo-fotos-count" id="equipoFotosCount">0</span>
         </div>
+        <!-- Una sola galería por orden (auditoría UX 2026-09-28, 4.2 #16): las
+             fotos que se suben aquí van a la galería de la orden etiquetadas
+             con este equipo; "Ver galería" abre esa galería filtrada. -->
+        <button type="button" class="btn btn-ghost btn-sm" data-action="ver-galeria-equipo" title="Todas las fotos de la orden, filtradas por este equipo">
+          <i data-lucide="camera"></i> Ver galería
+        </button>
         <button type="button" class="btn btn-secondary equipo-fotos-add" data-action="agregar-foto-equipo">
           <i data-lucide="plus"></i> Agregar foto
         </button>

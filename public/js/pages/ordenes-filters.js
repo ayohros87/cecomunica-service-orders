@@ -45,10 +45,171 @@ function entrarModoServidor(resultados) {
 
 function salirModoServidor() {
   _resultadoServidor = null;
+  _busq = null;
   APP.state.busquedaServidor = false;
   APP.state.origenServidor = null;
   _ocultarAvisoChip();
 }
+
+// ── Búsqueda en servidor: texto + estado + fechas + Cargar más ─────────────
+// Auditoría UX 2026-09-28 (T6, 4.2 #16): la búsqueda cortaba en 100 sin avisar,
+// no combinaba con el chip ni con fechas y no encontraba palabras a medias.
+// Ahora una sola función arma la consulta (OrdenesService.buscarOrdenes) con
+// todo lo que haya en pantalla y recuerda el cursor para "Cargar más".
+const BUSQ_PAGINA = 100;
+let _busq = null;   // { modo, cursor, acumulado, hayMas, filtradoEnCliente }
+
+// Un <input type="date"> da "AAAA-MM-DD" sin zona: se lee como día de Panamá
+// (UTC-5 fijo, sin horario de verano) para que "hasta hoy" incluya la tarde.
+function _fechaDeInput(id, finDelDia) {
+  const v = (document.getElementById(id)?.value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const d = new Date(`${v}T${finDelDia ? "23:59:59.999" : "00:00:00.000"}-05:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+function _rangoFechas() {
+  let desde = _fechaDeInput("filtroDesde", false);
+  let hasta = _fechaDeInput("filtroHasta", true);
+  // Rango al revés = la persona invirtió los campos; se corrige, no se castiga.
+  if (desde && hasta && desde > hasta) {
+    desde = _fechaDeInput("filtroHasta", false);
+    hasta = _fechaDeInput("filtroDesde", true);
+  }
+  return { desde, hasta };
+}
+function _hayFechas() {
+  const { desde, hasta } = _rangoFechas();
+  return !!(desde || hasta);
+}
+function _msFecha(v) {
+  if (!v) return null;
+  if (typeof v.toMillis === "function") return v.toMillis();
+  if (v instanceof Date) return v.getTime();
+  if (typeof v.seconds === "number") return v.seconds * 1000;
+  const t = Date.parse(v);
+  return Number.isNaN(t) ? null : t;
+}
+function _modoInferido() {
+  return (document.getElementById("filtroRapido")?.value || "").trim() ? "rapido" : "avanzado";
+}
+function _hayTextoAvanzado() {
+  return ["filtroOrden", "filtroCliente", "filtroSerial"]
+    .some(id => (document.getElementById(id)?.value || "").trim());
+}
+
+function _mostrarAvisoBusqueda() {
+  const box = document.getElementById("chipMasBox");
+  if (!box || !_busq) return;
+  if (!_busq.hayMas) { box.style.display = "none"; return; }
+  const fmt = (n) => Number(n).toLocaleString("es-PA");
+  const n = _busq.acumulado.length;
+  const nota = _busq.filtradoEnCliente
+    ? ' <span title="El índice de estado/fecha aún se está construyendo">(estado y fecha filtrados en esta página)</span>'
+    : "";
+  box.innerHTML = `<span>${n ? `Mostrando <b>${fmt(n)}</b> resultados` : "Ninguna coincidencia en lo revisado"}; hay más órdenes por revisar.${nota}</span>
+    <button type="button" class="btn btn-secondary btn-sm" id="btnBusqMas"><i data-lucide="chevron-down"></i> Cargar más</button>`;
+  box.style.display = "flex";
+  const b = box.querySelector("#btnBusqMas");
+  if (b) b.onclick = () => {
+    b.disabled = true;
+    b.textContent = "Cargando…";
+    _buscarEnServidor(_busq?.modo || _modoInferido(), { anexar: true });
+  };
+  if (window.lucide?.createIcons) { try { lucide.createIcons({ nodes: [box] }); } catch (_) {} }
+}
+
+/**
+ * Corre la búsqueda en el servidor con TODO lo que hay en pantalla: texto
+ * (rápido o avanzado), chip de estado y rango de fechas.
+ * @param {"rapido"|"avanzado"} modo
+ * @param {{anexar?: boolean}} [opts] - anexar=true: siguiente página (Cargar más)
+ */
+async function _buscarEnServidor(modo, { anexar = false } = {}) {
+  const valorRapido = (document.getElementById("filtroRapido")?.value || "").trim();
+  const texto = modo === "rapido"
+    ? { filtroOrden: valorRapido, filtroCliente: valorRapido, filtroSerial: valorRapido, quickSearch: true }
+    : {
+        filtroOrden: (document.getElementById("filtroOrden")?.value || "").trim(),
+        filtroCliente: (document.getElementById("filtroCliente")?.value || "").trim(),
+        filtroSerial: (document.getElementById("filtroSerial")?.value || "").trim(),
+        quickSearch: false,
+      };
+  const hayTexto = !!(texto.filtroOrden || texto.filtroCliente || texto.filtroSerial);
+  const estado = (document.getElementById("filtroEstado")?.value || "").trim().toUpperCase();
+  const { desde, hasta } = _rangoFechas();
+  _syncFiltersToURL();
+
+  // Sin texto ni fechas no hay nada que buscar: el chip o la bandeja viva.
+  if (!hayTexto && !desde && !hasta) {
+    salirModoServidor();
+    if (estado) { filtrarPorEstado(estado); return; }
+    cargarOrdenesYEquipos(true);
+    return;
+  }
+
+  if (!anexar) {
+    invalidarFirmaLista();
+    if (typeof renderSkeletonRows === "function") renderSkeletonRows(6);
+  }
+
+  let r;
+  try {
+    r = await OrdenesService.buscarOrdenes({
+      ...texto, estado, desde, hasta,
+      limit: BUSQ_PAGINA,
+      cursor: anexar ? _busq?.cursor : null,
+    });
+  } catch (e) {
+    console.error("❌ Error al buscar:", e);
+    salirModoServidor();
+    renderEmptyState("Error al buscar", { icon: "alert-triangle", sublabel: "Por favor, recarga la página." });
+    return;
+  }
+
+  let nuevos = r.orders;
+  // El avanzado respeta tipo/técnico/mis órdenes desde el primer pintado (el
+  // rápido nunca los aplicó: busca en toda la colección).
+  if (modo === "avanzado") {
+    const filters = getActiveFilters();
+    if (hasActiveFilters(filters)) nuevos = applyActiveFiltersToOrders(nuevos, filters);
+  }
+  const previos = anexar && _busq ? _busq.acumulado : [];
+  const vistos = new Set(previos.map(o => o.ordenId));
+  const acumulado = [...previos, ...nuevos.filter(o => !vistos.has(o.ordenId))];
+
+  _mergeIntoOrdersCache(acumulado);
+  entrarModoServidor(acumulado);
+  APP.state.origenServidor = "busqueda";
+  _busq = { modo, cursor: r.cursor, acumulado, hayMas: r.hayMas, filtradoEnCliente: r.filtradoEnCliente };
+
+  if (!acumulado.length) {
+    renderEmptyState("No se encontraron coincidencias", {
+      icon: "search-x",
+      sublabel: r.hayMas ? "Aún hay órdenes por revisar: usa «Cargar más»." : "Prueba ajustar los filtros, las fechas o limpiar la búsqueda.",
+    });
+    actualizarResumen(acumulado);
+  } else {
+    renderOrdersList(acumulado);
+  }
+  _mostrarAvisoBusqueda();
+  aplicarRestriccionesPorRol(APP.state.userRole);
+}
+window.buscarEnServidor = _buscarEnServidor;
+
+// Cambio en Desde/Hasta: re-consulta con el texto y el chip actuales.
+window.filtrarPorFechas = function () {
+  _buscarEnServidor(_busq?.modo || _modoInferido());
+};
+
+// ?desde=/?hasta= en la URL (un enlace copiado): la bandeja viva no sabe de
+// fechas, así que se consulta al servidor al cargar.
+window.asegurarBusquedaDeURL = function () {
+  if (_hayFechas()) {
+    const bloque = document.getElementById("filtrosAvanzados");
+    if (bloque) bloque.style.display = "block";
+    _buscarEnServidor(_modoInferido());
+  }
+};
 
 // ── "Mostrando N de M" del chip de estado (auditoría UX 2026-09-28, 4.2 #6)
 // El chip trae las 200 más recientes de ese estado y "Cargar más" se ocultaba
@@ -169,8 +330,10 @@ function getActiveFilters() {
   const soloMias = !!document.getElementById("toggleMisOrdenes")?.checked;
   const soloQcPendiente = !!document.getElementById("filtroQcPendiente")?.checked;
 
+  const { desde, hasta } = _rangoFechas();
+
   return { filtroOrden, filtroCliente, filtroSerial, filtroTipo, filtroEstado, filtroTecnico, soloMias, soloQcPendiente,
-           idsCorreo: _idsCorreo };
+           idsCorreo: _idsCorreo, desdeMs: desde ? desde.getTime() : null, hastaMs: hasta ? hasta.getTime() : null };
 }
 
 function hasActiveFilters(filters) {
@@ -183,6 +346,7 @@ function hasActiveFilters(filters) {
     filters.filtroTecnico ||
     filters.soloMias ||
     filters.soloQcPendiente ||
+    filters.desdeMs != null || filters.hastaMs != null ||
     (filters.idsCorreo && filters.idsCorreo.size)
   );
 }
@@ -217,6 +381,14 @@ function matchesAdvancedFilters(order, filters) {
   if (filters.idsCorreo && filters.idsCorreo.size && !filters.idsCorreo.has(order.ordenId)) return false;
 
   if (filters.filtroEstado && estado !== filters.filtroEstado) return false;
+  // Rango de fechas (auditoría UX 2026-09-28, T6): el mismo criterio que el
+  // servidor, para que el repintado vivo no muestre lo que la consulta excluyó.
+  if (filters.desdeMs != null || filters.hastaMs != null) {
+    const f = _msFecha(order.fecha_creacion);
+    if (f == null) return false;
+    if (filters.desdeMs != null && f < filters.desdeMs) return false;
+    if (filters.hastaMs != null && f > filters.hastaMs) return false;
+  }
   // Filtrar por "POR ASIGNAR" es la cola de ASIGNACIÓN de taller (2026-09-02,
   // pedido del dueño): las DEVOLUCIÓN viven en ese estado pero jamás llevan
   // técnico — aquí solo estorban. Se encuentran por el filtro de tipo o sin
@@ -550,6 +722,8 @@ const _URL_FILTER_KEYS = {
   tipo:    'filtroTipo',
   estado:  'filtroEstado',
   tecnico: 'filtroTecnico',
+  desde:   'filtroDesde',
+  hasta:   'filtroHasta',
   // booleans + sort live below
 };
 
@@ -632,6 +806,8 @@ function _applyURLToFilters() {
   mirror('filtroSerial',  'mobileFiltroSerial');
   mirror('filtroTipo',    'mobileFiltroTipo');
   mirror('filtroTecnico', 'mobileFiltroTecnico');
+  mirror('filtroDesde',   'mobileFiltroDesde');
+  mirror('filtroHasta',   'mobileFiltroHasta');
 
   return touched;
 }
@@ -681,133 +857,21 @@ function syncMobileAdvancedFiltersToDesktop() {
   if (dTipo) dTipo.value = tipo;
   if (dTecnico) dTecnico.value = tecnico;
   if (dSoloMias) dSoloMias.checked = soloMias;
+  const dDesde = document.getElementById("filtroDesde");
+  const dHasta = document.getElementById("filtroHasta");
+  if (dDesde) dDesde.value = document.getElementById("mobileFiltroDesde")?.value || "";
+  if (dHasta) dHasta.value = document.getElementById("mobileFiltroHasta")?.value || "";
 }
 
+// Buscar (avanzado) y Buscar (rápido) comparten _buscarEnServidor: la misma
+// consulta con el chip de estado y las fechas que haya en pantalla.
 window.filtrarOrdenes = async function () {
-  const filtroOrden = normTxt(document.getElementById("filtroOrden").value);
-  const filtroCliente = normTxt(document.getElementById("filtroCliente").value);
-  const filtroSerial = normTxt(document.getElementById("filtroSerial").value);
-  const filtroTipo = normTxt(document.getElementById("filtroTipo").value);
-  const ordersTable = document.getElementById("ordersTable");
-  const cardsWrap = document.getElementById("ordersCards");
-
-  // Skeleton durante el roundtrip (auditoría órdenes P0): antes la tabla
-  // quedaba EN BLANCO sin ninguna señal mientras respondía el servidor —
-  // la sensación de "lenta" más frecuente de la bandeja.
-  invalidarFirmaLista();
-  if (typeof renderSkeletonRows === 'function') renderSkeletonRows(6);
-  else { if (ordersTable) ordersTable.innerHTML = ""; if (cardsWrap) cardsWrap.innerHTML = ""; }
-
-  _syncFiltersToURL();
-
-  if (!filtroOrden && !filtroCliente && !filtroSerial && !filtroTipo) {
-    salirModoServidor();
-    cargarOrdenesYEquipos(true);
-    return;
-  }
-
-  let resultados = [];
-  try {
-    resultados = await OrdenesService.searchOrders({
-      filtroOrden,
-      filtroCliente,
-      filtroSerial,
-      quickSearch: false
-    });
-
-    const filters = getActiveFilters();
-    resultados = hasActiveFilters(filters)
-      ? applyActiveFiltersToOrders(resultados, filters)
-      : resultados;
-
-    // Search results may include orders outside the live-listener slice
-    // (older orders matched by client / serial). Merge into APP.state.orders
-    // so the delegated row-expand handler can resolve them — otherwise the
-    // expand spinner hangs silently. See ordenes-render.js:_toggleOrdenRow.
-    _mergeIntoOrdersCache(resultados);
-
-    if (resultados.length === 0) {
-      salirModoServidor();
-      renderEmptyState("No se encontraron coincidencias", {
-        icon: 'search-x',
-        sublabel: 'Prueba ajustar los filtros o limpiar la búsqueda.'
-      });
-      actualizarResumen(resultados);
-      return;
-    }
-
-    // El resultado queda ANOTADO antes de pintarlo: de ahí en adelante el
-    // listener vivo repinta esto y no la bandeja completa, y la paginación
-    // automática queda apagada hasta que se limpie la búsqueda.
-    entrarModoServidor(resultados);
-    APP.state.origenServidor = "busqueda";
-    renderOrdersList(resultados);
-    return;
-
-  } catch (e) {
-    console.error("❌ Error al filtrar:", e);
-    salirModoServidor();
-    renderEmptyState("Error al filtrar datos", { icon: 'alert-triangle', sublabel: 'Por favor, recarga la página.' });
-  }
-
-  actualizarResumen(resultados);
-  aplicarRestriccionesPorRol(APP.state.userRole);
+  await _buscarEnServidor("avanzado");
 };
 
 window.filtrarRapido = async function () {
-  const filtroRapido = document.getElementById("filtroRapido");
-  if (!filtroRapido) return;
-
-  const valor = normTxt(filtroRapido.value);
-  const ordersTable = document.getElementById("ordersTable");
-  const cardsWrap = document.getElementById("ordersCards");
-
-  // Skeleton durante el roundtrip — ver nota en filtrarOrdenes.
-  invalidarFirmaLista();
-  if (typeof renderSkeletonRows === 'function') renderSkeletonRows(6);
-  else { if (ordersTable) ordersTable.innerHTML = ""; if (cardsWrap) cardsWrap.innerHTML = ""; }
-
-  if (!valor) {
-    salirModoServidor();
-    cargarOrdenesYEquipos(true);
-    return;
-  }
-
-  let resultados = [];
-  try {
-    resultados = await OrdenesService.searchOrders({
-      filtroOrden: valor,
-      filtroCliente: valor,
-      filtroSerial: valor,
-      quickSearch: true
-    });
-
-    _mergeIntoOrdersCache(resultados);
-
-    if (resultados.length === 0) {
-      salirModoServidor();
-      renderEmptyState("No se encontraron coincidencias", {
-        icon: 'search-x',
-        sublabel: 'Prueba ajustar los filtros o limpiar la búsqueda.'
-      });
-      actualizarResumen(resultados);
-      return;
-    }
-
-    // Ver la nota de filtrarOrdenes: el resultado se anota antes de pintarlo.
-    entrarModoServidor(resultados);
-    APP.state.origenServidor = "busqueda";
-    renderOrdersList(resultados);
-    return;
-
-  } catch (e) {
-    console.error("❌ Error al filtrar:", e);
-    salirModoServidor();
-    renderEmptyState("Error al filtrar datos", { icon: 'alert-triangle', sublabel: 'Por favor, recarga la página.' });
-  }
-
-  actualizarResumen(resultados);
-  aplicarRestriccionesPorRol(APP.state.userRole);
+  if (!document.getElementById("filtroRapido")) return;
+  await _buscarEnServidor("rapido");
 };
 
 window.toggleFiltrosAvanzados = function () {
@@ -840,6 +904,10 @@ window.limpiarFiltros = function () {
   if (sel) sel.value = "";
   const toggleMisOrdenes = document.getElementById("toggleMisOrdenes");
   if (toggleMisOrdenes) toggleMisOrdenes.checked = false;
+  ["filtroDesde", "filtroHasta", "mobileFiltroDesde", "mobileFiltroHasta"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
 
   const mOrden = document.getElementById("mobileFiltroOrden");
   const mCliente = document.getElementById("mobileFiltroCliente");
@@ -964,12 +1032,11 @@ window.filtrarPorChipEstado = function (el) {
     chip.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
 
-  // Con una BÚSQUEDA en pantalla el chip filtra dentro de ese resultado en
-  // vez de tirarlo (auditoría UX 2026-09-28, 4.2 #6): así se puede pedir
-  // "cliente X, entregadas". El texto de búsqueda no se toca.
+  // Con una BÚSQUEDA en pantalla el chip no la tira (auditoría UX 2026-09-28,
+  // 4.2 #6) y ahora re-consulta EN EL SERVIDOR con el estado (4.2 #16): antes
+  // filtraba solo la página traída y "cliente X, entregadas" se quedaba corto.
   if (APP.state.busquedaServidor && APP.state.origenServidor === 'busqueda') {
-    _syncFiltersToURL();
-    aplicarFiltrosCombinados();
+    _buscarEnServidor(_busq?.modo || _modoInferido());
     return;
   }
 
@@ -997,14 +1064,17 @@ window.filtrarPorEstado = async function (estado, { limite = CHIP_PAGINA } = {})
   const btnCargarMas = document.getElementById("btnCargarMas");
   const loader = document.getElementById("loader");
 
-  // Los filtros de texto YA NO se borran al tocar un chip (auditoría UX
-  // 2026-09-28, 4.2 #6): se conservan y se aplican sobre lo que trae el
-  // estado. Si hay texto, se avisa que el cruce es sobre esa página.
-  const hayTexto = ["filtroOrden", "filtroCliente", "filtroSerial"]
-    .some(id => (document.getElementById(id)?.value || "").trim());
   // Keep #filtroEstado in sync so the URL serializer sees the active estado.
   const filtroEstadoSel = document.getElementById("filtroEstado");
   if (filtroEstadoSel) filtroEstadoSel.value = estado || "";
+
+  // Con texto avanzado o fechas, el chip se cruza EN EL SERVIDOR (auditoría UX
+  // 2026-09-28, 4.2 #16): antes era un cruce sobre las 200 del estado con un
+  // aviso. _buscarEnServidor vuelve aquí solo si no hay texto ni fechas.
+  if (_hayTextoAvanzado() || _hayFechas()) {
+    _buscarEnServidor("avanzado");
+    return;
+  }
   _syncFiltersToURL();
 
   if (ordersTable) ordersTable.innerHTML = "";
@@ -1046,13 +1116,7 @@ window.filtrarPorEstado = async function (estado, { limite = CHIP_PAGINA } = {})
     // repintado del listener vivo mientras el chip siga encendido.
     entrarModoServidor(resultados);
     APP.state.origenServidor = "estado";
-    // Con texto en los filtros avanzados se pinta el cruce (estado + texto).
-    if (hayTexto) {
-      aplicarFiltrosCombinados();
-      if (window.Toast) Toast.show("El filtro de texto se aplica sobre las órdenes cargadas de este estado.", "");
-    } else {
-      renderOrdersList(resultados);
-    }
+    renderOrdersList(resultados);
     _mostrarAvisoChip(estado, resultados.length, limite);
     return;   // el `finally` de abajo apaga el loader
 

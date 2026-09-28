@@ -444,7 +444,7 @@ window.abrirEquiposMobile = function(ordenId) {
           : `<div class="trabajo-card trabajo-card--empty">Sin intervención registrada</div>`
         );
 
-      const fotosCount = (Array.isArray(e.fotos) ? e.fotos : []).filter(f => f && f.deleted !== true && !!f.url).length;
+      const fotosCount = _activeFotosDe(e, o).length;
       const fotosBadge = fotosCount > 0
         ? `<span class="equipo-fotos-badge" title="Fotos del equipo"><i data-lucide="camera"></i> ${fotosCount}</span>`
         : '';
@@ -622,17 +622,32 @@ let _fotoViewerId = null;
 // que le pasa su propia lista y su nombre base para la descarga.
 let _fotoViewerCtx = null;   // { fotos:[], serial:'', soloLectura:true } | null
 
-function _activeFotosDe(equipo) {
-  const fotos = Array.isArray(equipo?.fotos) ? equipo.fotos : [];
-  return fotos.filter(f => f && f.deleted !== true && !!f.url);
+// Fotos vivas del equipo, de LOS DOS orígenes (auditoría UX 2026-09-28,
+// 4.2 #16): las históricas en equipos[i].fotos[] y las de la galería de la
+// orden (fotos_taller[]) etiquetadas con este equipo. Ver OrdenesService.
+function _activeFotosDe(equipo, orden) {
+  const o = orden || (equipo ? { equipos: [equipo] } : null);
+  return o ? OrdenesService.fotosDeEquipo(o, equipo) : [];
 }
 
-function _puedeEliminarFotos() {
-  const rol = String(APP.state.userRole || "").toLowerCase();
-  const permitidos = [ROLES.ADMIN, ROLES.TECNICO, ROLES.TECNICO_OPERATIVO]
-    .map(r => String(r || "").toLowerCase());
-  return permitidos.includes(rol);
+// Mismo criterio que la galería de la orden (OrdenesService.puedeEliminarFoto).
+function _puedeEliminarFoto(foto) {
+  return OrdenesService.puedeEliminarFoto(foto, {
+    rol: APP.state.userRole || "",
+    uid: firebase.auth().currentUser?.uid || "",
+  });
 }
+
+// Abre la galería única de la orden filtrada por el equipo del modal.
+window.abrirGaleriaDelEquipoActual = function() {
+  const ordenId = _trabajoOrdenId;
+  const equipoId = _trabajoEquipoId;
+  if (!ordenId) return;
+  const abrir = () => abrirFotosOrden(ordenId, { equipoId: equipoId || "" });
+  if (typeof abrirFotosOrden === "function") { abrir(); return; }
+  CargaDiferida.fotos().then(abrir)
+    .catch(() => Toast.show("Sin conexión — no se pudo abrir la galería.", "bad"));
+};
 
 function _formatFotoTimestamp(ts) {
   if (!ts) return "";
@@ -689,8 +704,12 @@ async function _compressFoto(file, maxWidth = 1600, quality = 0.75) {
   });
 }
 
+function _resolveOrdenActual() {
+  return APP.state.orders.find(x => x.ordenId === _trabajoOrdenId) || null;
+}
+
 function _resolveEquipoActual() {
-  const o = APP.state.orders.find(x => x.ordenId === _trabajoOrdenId);
+  const o = _resolveOrdenActual();
   if (!o) return null;
   const equipos = (o.equipos || []).filter(e => !e.eliminado);
   return equipos[_trabajoEquipoIdx] || null;
@@ -702,7 +721,7 @@ function _renderEquipoFotos() {
   if (!grid || !countEl) return;
 
   const equipo = _resolveEquipoActual();
-  const fotos = _activeFotosDe(equipo);
+  const fotos = _activeFotosDe(equipo, _resolveOrdenActual());
   countEl.textContent = String(fotos.length);
 
   if (!fotos.length) {
@@ -1008,21 +1027,17 @@ window.onEquipoFotoInputChange = async function(ev) {
     await ref.put(blob, { contentType: "image/jpeg" });
     const url = await ref.getDownloadURL();
 
-    const foto = {
-      id: _genFotoId(),
-      url,
-      path,
-      nota: "",
-      uploaded_by_uid: user.uid || "",
-      uploaded_by_email: user.email || "",
-      uploaded_at: firebase.firestore.Timestamp.now(),
-      deleted: false
-    };
-
-    const equiposAll = await OrdenesService.addEquipoFoto({ ordenId, equipoId, foto });
-
-    const cache = APP.state.orders.find(x => x.ordenId === ordenId);
-    if (cache) cache.equipos = equiposAll;
+    // Misma escritura que la galería de la orden (fotos_taller[]), etiquetada
+    // con este equipo — ya no se escribe en equipos[i].fotos[].
+    const equipoAct = _resolveEquipoActual();
+    const serialAct = String(equipoAct?.numero_de_serie || equipoAct?.serial || equipoAct?.SERIAL || "").trim() || null;
+    const data = await OrdenesService.addFotoOrden({
+      ordenId,
+      foto: { id: _genFotoId(), url, path, tipo: "detalle", nota: "" },
+      equipo: { id: equipoId, serial: serialAct },
+      user: { uid: user.uid || "", email: user.email || "" },
+    });
+    _sincronizarFotosEnCache(ordenId, data);
 
     _setFotoStatus("Foto subida ✓");
     _renderEquipoFotos();
@@ -1077,7 +1092,16 @@ function _fotoViewerFotos() {
   if (_fotoViewerCtx) return { fotos: _fotoViewerCtx.fotos || [], serial: _fotoViewerCtx.serial || "", soloLectura: true };
   const equipo = _resolveEquipoActual();
   const serial = (equipo?.numero_de_serie || equipo?.serial || equipo?.SERIAL || "").toString();
-  return { fotos: _activeFotosDe(equipo), serial, soloLectura: false };
+  return { fotos: _activeFotosDe(equipo, _resolveOrdenActual()), serial, soloLectura: false };
+}
+
+// Deja la orden fresca (fotos de los dos orígenes + contador) en la bandeja.
+function _sincronizarFotosEnCache(ordenId, data) {
+  const cache = APP.state.orders.find(x => x.ordenId === ordenId);
+  if (!cache || !data) return;
+  cache.fotos_taller = data.fotos_taller;
+  cache.fotos_taller_count = data.fotos_taller_count;
+  if (Array.isArray(data.equipos)) cache.equipos = data.equipos;
 }
 
 window.verFotoEquipo = function(fotoId) {
@@ -1099,7 +1123,7 @@ window.verFotoEquipo = function(fotoId) {
   }
   // En solo lectura no hay borrado, aunque el rol pudiera: la ficha no está
   // editando nada y _trabajoEquipoId no apunta a este equipo.
-  if (btnDel) btnDel.classList.toggle("hidden", soloLectura || !_puedeEliminarFotos());
+  if (btnDel) btnDel.classList.toggle("hidden", soloLectura || !_puedeEliminarFoto(foto));
 
   if (viewer) {
     viewer.classList.remove("hidden");
@@ -1150,13 +1174,14 @@ window.cerrarFotoEquipoViewer = function() {
 
 window.eliminarFotoEquipoViewer = async function() {
   if (!_fotoViewerId) return;
-  if (!_puedeEliminarFotos()) { Toast.show("No tienes permisos para eliminar fotos", "bad"); return; }
+  const { fotos } = _fotoViewerFotos();
+  const foto = fotos.find(f => f.id === _fotoViewerId);
+  if (!_puedeEliminarFoto(foto)) { Toast.show("No tienes permisos para eliminar fotos", "bad"); return; }
   if (!_trabajoOrdenId || !_trabajoEquipoId) return;
 
   // Capture state before any await — closing the viewer (or another action)
   // would otherwise clear these globals mid-flow.
   const ordenId = _trabajoOrdenId;
-  const equipoId = _trabajoEquipoId;
   const fotoId = _fotoViewerId;
 
   // Close the viewer first so the confirm dialog (z-index 1500) isn't
@@ -1167,15 +1192,15 @@ window.eliminarFotoEquipoViewer = async function() {
 
   const user = firebase.auth().currentUser;
   try {
-    const equiposAll = await OrdenesService.softDeleteEquipoFoto({
+    // Busca la foto en los dos orígenes (galería de la orden o histórico del
+    // equipo) y la da de baja donde esté.
+    const data = await OrdenesService.softDeleteFotoOrden({
       ordenId,
-      equipoId,
       fotoId,
       uid: user?.uid || "",
       email: user?.email || ""
     });
-    const cache = APP.state.orders.find(x => x.ordenId === ordenId);
-    if (cache) cache.equipos = equiposAll;
+    _sincronizarFotosEnCache(ordenId, data);
 
     _renderEquipoFotos();
     refrescarEquiposDeOrden(ordenId);
@@ -1223,7 +1248,7 @@ window.verIntervencionEquipo = async function(ordenId, idx) {
   const motivoDesc = (e.descarte_motivo || "").toString().trim();
   const condicion = !!e.condicion_especial;
   const textoCond = (e.condicion_texto || "").toString().trim();
-  const fotos = _activeFotosDe(e);
+  const fotos = _activeFotosDe(e, o);
   const quien = (e.trabajo_tecnico_nombre || "").toString();
   const cuando = _formatFotoTimestamp(e.trabajo_tecnico_updated_at);
 

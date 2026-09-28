@@ -81,9 +81,11 @@
   <div id="topbar-mount"></div>
   <script>
     var _ordenIdQS = new URLSearchParams(window.location.search).get('orden_id') || '';
+    // Única captura de equipos (auditoría UX 2026-09-28, 4.2 #16): "Volver"
+    // regresa a la orden en la bandeja (agregar-equipo.html ya no existe).
     Layout.renderTopbar({
-      title: '<i data-lucide="layers"></i> Nuevo batch de equipos',
-      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: _ordenIdQS ? ('agregar-equipo.html?orden_id=' + encodeURIComponent(_ordenIdQS)) : 'index.html' },
+      title: '<i data-lucide="monitor"></i> Agregar equipos a la orden',
+      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: _ordenIdQS ? ('index.html?orden=' + encodeURIComponent(_ordenIdQS)) : 'index.html' },
       showHome: false, showLogout: true
     });
   </script>
@@ -118,6 +120,7 @@
     <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3);">
         Jala los seriales del cliente desde POC — te deja elegir el último batch importado (trae también el modelo automáticamente) — o pega seriales manualmente.
+        Para uno o pocos radios, agrega una fila y escanea el serial: el modelo se completa solo si el equipo está en el pool.
       </p>
 
       <div class="form-actions" style="margin-bottom:var(--sp-4);">
@@ -133,6 +136,7 @@
           <i data-lucide="download"></i> Jalar desde POC
         </button>
         <button type="button" class="btn btn-ghost" onclick="agregarFila()"><i data-lucide="plus"></i> Agregar fila</button>
+        <button type="button" class="btn btn-ghost" onclick="abrirDuplicarMultiples()" title="Crear varias filas con el modelo, accesorios y observación de la última fila"><i data-lucide="copy"></i> Duplicar múltiples</button>
       </div>
 
       <div class="form-field" style="margin-bottom:var(--sp-3);">
@@ -209,9 +213,9 @@
               <th style="min-width:160px;">Serial</th>
               <th style="min-width:200px;">Modelo</th>
               <th style="min-width:190px;">Según el contrato</th>
-              <th style="min-width:220px;">Accesorios</th>
+              <th style="min-width:260px;">Accesorios</th>
               <th style="min-width:200px;">Observaciones</th>
-              <th style="width:52px;"></th>
+              <th style="width:84px;"></th>
             </tr>
           </thead>
           <tbody id="filasBatch"></tbody>
@@ -221,9 +225,45 @@
 
     <div class="form-actions">
       <button type="button" id="btnGuardar" class="btn btn-primary btn-lg" onclick="guardarBatch()"><i data-lucide="save"></i> Guardar todos</button>
-      <button type="button" class="btn btn-ghost" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
+      <!-- Guardar y recibir (auditoría UX 2026-09-28, 4.2 #13): con el cliente
+           en el mostrador, guardar y aterrizar ya en el acuse de recepción
+           (index.html?orden=<id>&recibir=1). Solo se muestra si la orden se
+           recibe en mostrador (ordenes-nuevo-batch.js lo decide al cargar). -->
+      <button type="button" id="btnGuardarRecibir" class="btn btn-secondary btn-lg" onclick="guardarBatch({ recibir: true })" hidden><i data-lucide="package-plus"></i> Guardar y recibir</button>
+      <button type="button" class="btn btn-ghost" onclick="window.location.href=(_ordenIdQS ? 'index.html?orden=' + encodeURIComponent(_ordenIdQS) : 'index.html')"><i data-lucide="arrow-left"></i> Cancelar</button>
     </div>
 
+  </div>
+
+  <!-- Duplicar N filas del mismo modelo (venía de agregar-equipo.html) -->
+  <div id="overlayDuplicar" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="copy"></i> Duplicar filas</h3>
+        <button class="modal-close" type="button" onclick="cerrarDuplicarMultiples()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3);" id="dupInfo">
+          Se copiará el modelo, los accesorios y la observación de la fila elegida. Pega un serial por línea, o indica cuántas filas vacías crear.
+        </p>
+        <div class="form-field">
+          <label class="form-label" for="dupSeriales">Seriales</label>
+          <textarea class="form-input form-textarea" id="dupSeriales" rows="6"
+            style="font-family:var(--font-mono); font-size:13px;"
+            placeholder="HYT-PNC-00500&#10;HYT-PNC-00501&#10;HYT-PNC-00502&#10;…"></textarea>
+          <span class="form-hint">Un serial por línea. Cada serial crea una fila. Líneas en blanco y repetidos se ignoran.</span>
+        </div>
+        <div class="form-field" style="margin-top:var(--sp-2);">
+          <label class="form-label" for="dupCantidad">…o crear N filas vacías</label>
+          <input class="form-input" type="number" id="dupCantidad" min="1" max="200" step="1" placeholder="Ej. 10" style="max-width:140px;">
+          <span class="form-hint">Para escanear los seriales uno por uno con el mismo modelo. Solo se usa si no pegaste seriales.</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" type="button" onclick="cerrarDuplicarMultiples()">Cancelar</button>
+        <button class="btn btn-primary" type="button" onclick="aplicarDuplicarMultiples()"><i data-lucide="copy-plus"></i> Duplicar</button>
+      </div>
+    </div>
   </div>
 
   </div> <!-- /cc-work -->

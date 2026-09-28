@@ -86,6 +86,8 @@
     'filtrar-tipo': () => aplicarFiltrosCombinados(),
     'filtrar-tecnico': () => aplicarFiltrosCombinados(),
     'filtrar-mias': () => aplicarFiltrosCombinados(),
+    // Desde/Hasta (auditoría UX 2026-09-28, T6): re-consulta al servidor.
+    'filtrar-fechas': () => filtrarPorFechas(),
     'filtrar-estado-chip': (el) => filtrarPorChipEstado(el),
     'set-view-cards': () => setOrdersView('cards'),
     'set-view-table': () => setOrdersView('table'),
@@ -382,6 +384,11 @@
     },
     'agregar-foto-equipo': () => agregarFotoEquipo(),
     'equipo-foto-input-change': (_el, ev) => onEquipoFotoInputChange(ev),
+    // Galería única de la orden, abierta desde el modal del equipo con ese
+    // equipo filtrado y propuesto como etiqueta (auditoría UX 2026-09-28).
+    'ver-galeria-equipo': () => {
+      if (typeof abrirGaleriaDelEquipoActual === 'function') abrirGaleriaDelEquipoActual();
+    },
     'ver-foto-equipo': (el) => {
       const fotoId = el.dataset.fotoId;
       if (fotoId) verFotoEquipo(fotoId);
@@ -502,6 +509,11 @@
     }
 
     if (target.tagName === 'SELECT' && (target.dataset.action === 'filtrar-estado' || target.dataset.action === 'filtrar-tipo')) {
+      return;
+    }
+    // Los <input type=date> buscan al CAMBIAR (handleChange), no al hacer
+    // clic para abrir el calendario.
+    if (target.tagName === 'INPUT' && target.dataset.action === 'filtrar-fechas') {
       return;
     }
     

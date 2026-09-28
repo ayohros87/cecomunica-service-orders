@@ -5,9 +5,16 @@
 // storage en ordenes_taller_fotos/{ordenId}/, os_logs SUBIR_FOTO_TALLER /
 // ELIMINAR_FOTO_TALLER y mantenimiento de fotos_taller_count — así que las
 // fotos históricas se ven igual y el badge de la fila sigue funcionando.
-// Las fotos son a NIVEL DE ORDEN: sirve igual con o sin equipos (visitas
-// técnicas de campo). Se abre con abrirFotosOrden(ordenId) desde el menú ⋯,
-// el badge de la fila y el aviso del informe de visita.
+//
+// UNA galería por orden (auditoría UX 2026-09-28, 4.2 #16): antes las fotos
+// que el técnico subía desde el modal de intervención (equipos[i].fotos[])
+// no aparecían aquí ni contaban en el badge, y al revés. Ahora esta galería
+// lee los DOS orígenes (OrdenesService.fotosDeOrden), cada foto puede llevar
+// la etiqueta de un equipo (opcional, se elige al subir), se puede filtrar
+// por equipo, y la escritura es una sola (OrdenesService.addFotoOrden →
+// fotos_taller[]). Sirve igual con o sin equipos (visitas técnicas de campo).
+// Se abre con abrirFotosOrden(ordenId, { equipoId? }) desde el menú ⋯, el
+// badge de la fila, el modal de intervención y el aviso del informe de visita.
 (() => {
   const TIPOS = [
     { key: "antes",   label: "Antes" },
@@ -18,7 +25,10 @@
   let _ordenId = "";
   let _orden = null;
   let _fotos = [];
-  let _pending = null; // { file, tipo, previewUrl }
+  let _equipos = [];            // equipos vivos de la orden (para etiquetar / filtrar)
+  let _filtroEquipo = "";       // "" = toda la orden; si no, id del equipo
+  let _equipoPreseleccion = ""; // id del equipo con que se abrió (modal de intervención)
+  let _pending = null;          // { file, tipo, previewUrl }
 
   const esc = (v) => (typeof FMT !== "undefined" && FMT.esc) ? FMT.esc(v)
     : String(v ?? "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]));
@@ -27,32 +37,19 @@
 
   const genPhotoId = () => `ft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
-  function normalizeFotos(arr) {
-    if (!Array.isArray(arr)) return [];
-    return arr.filter(Boolean).map(f => ({
-      id: f.id || genPhotoId(),
-      url: f.url || "",
-      path: f.path || "",
-      tipo: f.tipo || "detalle",
-      equipo_serial: f.equipo_serial || null,
-      nota: f.nota || "",
-      uploaded_by_uid: f.uploaded_by_uid || "",
-      uploaded_by_email: f.uploaded_by_email || "",
-      uploaded_at: f.uploaded_at || null,
-      deleted: f.deleted === true,
-      deleted_by_uid: f.deleted_by_uid || null,
-      deleted_by_email: f.deleted_by_email || null,
-      deleted_at: f.deleted_at || null,
-    }));
-  }
+  const serialDe = (e) => String(e?.numero_de_serie || e?.serial || e?.SERIAL || "").trim();
+  const etiquetaEquipo = (e) => {
+    const s = serialDe(e) || "(sin serial)";
+    const m = String(e?.modelo || e?.MODEL || e?.modelo_nombre || "").trim();
+    return m ? `${s} · ${m}` : s;
+  };
 
-  // Puede eliminar: admin, jefe de taller, o quien subió la foto (mismo
-  // criterio que la página retirada).
+  // Un solo criterio de permisos para las dos vistas (ver OrdenesService).
   function canSoftDelete(foto) {
-    const rol = String(APP.state.userRole || "").toLowerCase();
-    if ([ROLES.ADMIN, ROLES.JEFE_TALLER].map(r => String(r || "").toLowerCase()).includes(rol)) return true;
-    const uid = firebase.auth().currentUser?.uid || "";
-    return !!(foto?.uploaded_by_uid && uid && foto.uploaded_by_uid === uid);
+    return OrdenesService.puedeEliminarFoto(foto, {
+      rol: APP.state.userRole || "",
+      uid: firebase.auth().currentUser?.uid || "",
+    });
   }
 
   // ── Compresión (portada de fotos-taller.js): 1600px máx, JPEG 0.75 ──
@@ -122,7 +119,8 @@
     const fecha = formatTs(foto.uploaded_at);
     viewer.querySelector(".fotos-viewer__meta").innerHTML =
       `${esc(prettyTipo(foto.tipo))}${foto.equipo_serial ? ` · ${esc(foto.equipo_serial)}` : ""}` +
-      `${foto.nota ? `<br>${esc(foto.nota)}` : ""}${fecha ? `<br>${esc(fecha)}` : ""}`;
+      `${foto.nota ? `<br>${esc(foto.nota)}` : ""}${fecha ? `<br>${esc(fecha)}` : ""}` +
+      `${foto.uploaded_by_email ? `<br>${esc(foto.uploaded_by_email)}` : ""}`;
     viewer.classList.add("show");
   }
   function closeViewer() {
@@ -139,14 +137,62 @@
     card.style.display = "block";
     card.querySelector("img").src = _pending.previewUrl;
     card.querySelector(".fotos-pending__tipo").textContent = prettyTipo(_pending.tipo);
+    // El equipo se propone según el filtro activo (o el equipo con que se
+    // abrió la galería); siempre se puede cambiar o dejar "toda la orden".
+    const sel = card.querySelector(".fotos-pending__equipo");
+    if (sel && !sel.value) sel.value = _filtroEquipo || _equipoPreseleccion || "";
+  }
+
+  // Selects de equipo (filtro arriba, etiqueta al subir): solo si la orden
+  // tiene equipos; en una visita de campo no aparecen.
+  function renderSelectsEquipo() {
+    const ov = overlayEl();
+    if (!ov) return;
+    const opciones = `<option value="">Toda la orden</option>` +
+      _equipos.map(e => `<option value="${esc(e.id || "")}">${esc(etiquetaEquipo(e))}</option>`).join("");
+    const filtro = ov.querySelector(".fotos-filtro");
+    if (filtro) {
+      filtro.style.display = _equipos.length ? "" : "none";
+      const sel = filtro.querySelector("select");
+      if (sel) {
+        sel.innerHTML = `<option value="">Todas las fotos</option>` +
+          _equipos.map(e => `<option value="${esc(e.id || "")}">${esc(etiquetaEquipo(e))}</option>`).join("");
+        sel.value = _filtroEquipo && _equipos.some(e => e.id === _filtroEquipo) ? _filtroEquipo : "";
+        _filtroEquipo = sel.value;
+      }
+    }
+    const wrapEq = ov.querySelector(".fotos-pending__equipo-wrap");
+    if (wrapEq) {
+      wrapEq.style.display = _equipos.length ? "" : "none";
+      const sel = wrapEq.querySelector("select");
+      if (sel) {
+        const previo = sel.value;
+        sel.innerHTML = opciones;
+        sel.value = _equipos.some(e => e.id === previo) ? previo : (_equipoPreseleccion || "");
+      }
+    }
+  }
+
+  function fotosVisibles() {
+    const activas = _fotos.filter(f => f.deleted !== true && !!f.url);
+    if (!_filtroEquipo) return activas;
+    const eq = _equipos.find(e => e.id === _filtroEquipo);
+    return eq ? OrdenesService.fotosDeEquipo(_orden, eq) : activas;
   }
 
   function renderGaleria() {
-    const wrap = overlayEl()?.querySelector(".fotos-galeria");
+    const ov = overlayEl();
+    const wrap = ov?.querySelector(".fotos-galeria");
     if (!wrap) return;
-    const activas = _fotos.filter(f => f.deleted !== true && !!f.url);
+    const total = _fotos.filter(f => f.deleted !== true && !!f.url).length;
+    const cnt = ov.querySelector(".fotos-total");
+    if (cnt) cnt.textContent = total ? `(${total})` : "";
+
+    const activas = fotosVisibles();
     if (!activas.length) {
-      wrap.innerHTML = `<div class="fotos-empty">Sin fotos todavía. Usa los botones de arriba para capturar o subir la primera.</div>`;
+      wrap.innerHTML = `<div class="fotos-empty">${_filtroEquipo
+        ? "Este equipo no tiene fotos todavía. Sube una y etiquétala con él."
+        : "Sin fotos todavía. Usa los botones de arriba para capturar o subir la primera."}</div>`;
       return;
     }
     wrap.innerHTML = TIPOS.map(t => {
@@ -159,6 +205,7 @@
             ${lista.map(f => `
               <figure class="fotos-item">
                 <img src="${esc(f.url)}" alt="Foto ${esc(t.label)}" loading="lazy" data-foto-ver="${esc(f.id)}">
+                ${f.equipo_serial ? `<span class="fotos-item__equipo" title="Equipo ${esc(f.equipo_serial)}"><i data-lucide="radio"></i> ${esc(f.equipo_serial)}</span>` : ""}
                 ${f.nota ? `<figcaption class="fotos-item__nota" title="${esc(f.nota)}">${esc(f.nota.slice(0, 60))}</figcaption>` : ""}
                 ${canSoftDelete(f) ? `<button type="button" class="fotos-item__del" title="Eliminar foto" data-foto-borrar="${esc(f.id)}"><i data-lucide="trash-2"></i></button>` : ""}
               </figure>`).join("")}
@@ -168,21 +215,38 @@
     if (APP.utils?.lucideRefresh) APP.utils.lucideRefresh(wrap);
   }
 
+  // Deja la orden fresca en la bandeja (badges y modal del equipo leen de ahí).
+  function sincronizarCache(data) {
+    const cache = (APP.state.orders || []).find(x => x.ordenId === _ordenId);
+    if (!cache || !data) return;
+    cache.fotos_taller = data.fotos_taller;
+    cache.fotos_taller_count = data.fotos_taller_count;
+    if (Array.isArray(data.equipos)) cache.equipos = data.equipos;
+    if (typeof refrescarEquiposDeOrden === "function") { try { refrescarEquiposDeOrden(_ordenId); } catch (_) {} }
+  }
+
+  function aplicarOrden(data) {
+    _orden = data;
+    _fotos = OrdenesService.fotosDeOrden(data);
+    _equipos = (Array.isArray(data.equipos) ? data.equipos : []).filter(e => e && !e.eliminado);
+    const sub = overlayEl()?.querySelector(".fotos-sub");
+    if (sub) sub.textContent = `${data.cliente_nombre || "—"} · ${data.estado_reparacion || "—"}`;
+    renderSelectsEquipo();
+    renderGaleria();
+  }
+
   async function recargar() {
     const data = await OrdenesService.getOrder(_ordenId);
     if (!data) { Toast.show("Orden no encontrada.", "bad"); cerrar(); return; }
-    _orden = data;
-    _fotos = normalizeFotos(data.fotos_taller || []);
-    const sub = overlayEl()?.querySelector(".fotos-sub");
-    if (sub) sub.textContent = `${data.cliente_nombre || "—"} · ${data.estado_reparacion || "—"}`;
-    renderGaleria();
+    aplicarOrden(data);
   }
 
   async function subirPendiente() {
     if (!_pending) return;
     const user = firebase.auth().currentUser;
     if (!user) { Toast.show("Usuario no autenticado.", "bad"); return; }
-    const btn = overlayEl()?.querySelector('[data-foto-accion="subir"]');
+    const ov = overlayEl();
+    const btn = ov?.querySelector('[data-foto-accion="subir"]');
     if (btn) { btn.disabled = true; btn.textContent = "Subiendo…"; }
     try {
       const compressed = await compressImage(_pending.file);
@@ -190,41 +254,29 @@
       const safeName = String(_pending.file.name || "foto.jpg").toLowerCase()
         .replace(/\s+/g, "-").replace(/[^a-z0-9._-]/g, "").replace(/\.[a-z0-9]+$/i, "") || "foto";
       const path = `ordenes_taller_fotos/${_ordenId}/${_pending.tipo}_${ts}_${safeName}.jpg`;
+      if (typeof CargaDiferida !== "undefined" && CargaDiferida.storage) await CargaDiferida.storage();
       const ref = firebase.storage().ref(path);
       await ref.put(compressed, { contentType: "image/jpeg" });
       const url = await ref.getDownloadURL();
 
-      const nota = (overlayEl()?.querySelector(".fotos-pending__nota")?.value || "").trim();
-      const photoMeta = {
-        id: genPhotoId(), url, path, tipo: _pending.tipo,
-        equipo_serial: null, nota,
-        uploaded_by_uid: user.uid || "", uploaded_by_email: user.email || "",
-        uploaded_at: firebase.firestore.Timestamp.now(), deleted: false,
-      };
-      await OrdenesService.updateOrder(_ordenId, {
-        fotos_taller: firebase.firestore.FieldValue.arrayUnion(photoMeta),
-        os_logs: firebase.firestore.FieldValue.arrayUnion({
-          action: "SUBIR_FOTO_TALLER", by: user.uid || "", email: user.email || "",
-          tipo: _pending.tipo, ts: firebase.firestore.Timestamp.now(),
-        }),
-        fotos_taller_updated_at: firebase.firestore.FieldValue.serverTimestamp(),
-      });
-      // Recuento sobre lectura fresca (mismo patrón que la página retirada:
-      // arrayUnion no sabe cuántas quedaron).
-      const fresh = await OrdenesService.getOrder(_ordenId);
-      const count = normalizeFotos(fresh?.fotos_taller || []).filter(f => f.deleted !== true).length;
-      await OrdenesService.updateOrder(_ordenId, {
-        fotos_taller_count: count,
-        fotos_taller_updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      const nota = (ov?.querySelector(".fotos-pending__nota")?.value || "").trim();
+      const equipoId = ov?.querySelector(".fotos-pending__equipo")?.value || "";
+      const equipo = _equipos.find(e => e.id === equipoId) || null;
+      const data = await OrdenesService.addFotoOrden({
+        ordenId: _ordenId,
+        foto: { id: genPhotoId(), url, path, tipo: _pending.tipo, nota },
+        equipo: equipo ? { id: equipo.id, serial: serialDe(equipo) || null } : null,
+        user: { uid: user.uid || "", email: user.email || "" },
       });
 
       if (_pending.previewUrl) URL.revokeObjectURL(_pending.previewUrl);
       _pending = null;
-      const notaEl = overlayEl()?.querySelector(".fotos-pending__nota");
+      const notaEl = ov?.querySelector(".fotos-pending__nota");
       if (notaEl) notaEl.value = "";
       renderPending();
       Toast.show("✅ Foto subida", "ok");
-      await recargar();
+      sincronizarCache(data);
+      aplicarOrden(data);
     } catch (err) {
       console.error("Error subiendo foto:", err);
       Toast.show("No se pudo subir la foto. Intenta de nuevo.", "bad");
@@ -236,30 +288,17 @@
   async function borrarFoto(photoId) {
     const foto = _fotos.find(f => f.id === photoId);
     if (!canSoftDelete(foto)) {
-      Toast.show("Solo un administrador, el jefe de taller o quien subió la foto puede eliminarla.", "bad");
+      Toast.show("Solo administración, el taller o quien subió la foto puede eliminarla.", "bad");
       return;
     }
     if (!await Modal.confirm({ message: "¿Marcar esta foto como eliminada?", danger: true })) return;
     const user = firebase.auth().currentUser;
     try {
-      const data = await OrdenesService.getOrder(_ordenId);
-      const fotos = normalizeFotos(data?.fotos_taller || []);
-      let tipo = "";
-      const updated = fotos.map(f => {
-        if (f.id !== photoId || f.deleted === true) return f;
-        tipo = f.tipo || "";
-        return { ...f, deleted: true, deleted_by_uid: user?.uid || "", deleted_by_email: user?.email || "", deleted_at: firebase.firestore.Timestamp.now() };
+      const data = await OrdenesService.softDeleteFotoOrden({
+        ordenId: _ordenId, fotoId: photoId, uid: user?.uid || "", email: user?.email || "",
       });
-      await OrdenesService.updateOrder(_ordenId, {
-        fotos_taller: updated,
-        fotos_taller_count: updated.filter(f => f.deleted !== true).length,
-        fotos_taller_updated_at: firebase.firestore.FieldValue.serverTimestamp(),
-        os_logs: firebase.firestore.FieldValue.arrayUnion({
-          action: "ELIMINAR_FOTO_TALLER", by: user?.uid || "", email: user?.email || "",
-          tipo, ts: firebase.firestore.Timestamp.now(),
-        }),
-      });
-      await recargar();
+      sincronizarCache(data);
+      aplicarOrden(data);
     } catch (err) {
       console.error("Error eliminando foto:", err);
       Toast.show("No se pudo eliminar la foto.", "bad");
@@ -274,12 +313,22 @@
     renderPending();
   }
 
-  window.abrirFotosOrden = async function (ordenId) {
+  /**
+   * Abre la galería de la orden.
+   * @param {string} ordenId
+   * @param {{equipoId?: string}} [opts] - equipo con que se abre: filtra sus
+   *   fotos y lo propone como etiqueta al subir (modal de intervención).
+   */
+  window.abrirFotosOrden = async function (ordenId, { equipoId = "" } = {}) {
     if (!ordenId) return;
     cerrar(); // por si quedó una instancia abierta de otra orden
     _ordenId = ordenId;
+    _orden = null;
     _fotos = [];
+    _equipos = [];
     _pending = null;
+    _equipoPreseleccion = equipoId || "";
+    _filtroEquipo = equipoId || "";
 
     const o = (APP.state.orders || []).find(x => x.ordenId === ordenId) || {};
     const esVisita = typeof esOrdenVisita === "function" && esOrdenVisita(o);
@@ -291,7 +340,7 @@
     overlay.innerHTML = `
       <div class="modal fotos-modal">
         <div class="sheet-header">
-          <h3 class="sheet-title"><i data-lucide="camera"></i> ${esVisita ? "Fotos de la visita" : "Fotos de taller"} · ${esc(ordenId)}</h3>
+          <h3 class="sheet-title"><i data-lucide="camera"></i> ${esVisita ? "Fotos de la visita" : "Fotos de la orden"} · ${esc(ordenId)} <span class="fotos-total muted"></span></h3>
           <button class="btn btn-ghost" data-close title="Cerrar"><i data-lucide="x"></i></button>
         </div>
         <div class="sheet-body">
@@ -307,6 +356,10 @@
             <img alt="Vista previa">
             <div class="fotos-pending__body">
               <div>Tipo: <strong class="fotos-pending__tipo">—</strong></div>
+              <label class="fotos-pending__equipo-wrap" style="display:none;">
+                <span class="muted">Equipo (opcional)</span>
+                <select class="input fotos-pending__equipo"></select>
+              </label>
               <input type="text" class="input fotos-pending__nota" maxlength="140" placeholder="Nota (opcional)">
               <div class="fotos-pending__acciones">
                 <button type="button" class="btn btn-primary" data-foto-accion="subir">Subir foto</button>
@@ -314,6 +367,10 @@
               </div>
             </div>
           </div>
+          <label class="fotos-filtro" style="display:none;">
+            <span class="muted">Ver</span>
+            <select class="input" data-foto-filtro></select>
+          </label>
           <div class="fotos-galeria"></div>
         </div>
         <div class="fotos-viewer" id="fotosOrdenViewer">
@@ -349,6 +406,11 @@
       if (viewer && e.target === viewer) closeViewer();
     });
     overlay.addEventListener("change", (e) => {
+      if (e.target?.hasAttribute?.("data-foto-filtro")) {
+        _filtroEquipo = e.target.value || "";
+        renderGaleria();
+        return;
+      }
       const tipo = e.target?.dataset?.fotoInput;
       if (!tipo) return;
       onFileSelected(e.target.files && e.target.files[0], tipo);

@@ -84,7 +84,12 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   }
 
   const estado = (ordenData.estado_reparacion || "POR ASIGNAR").toUpperCase();
-  const fotosTallerCount = Number(ordenData.fotos_taller_count || 0);
+  // Contador único de fotos (auditoría UX 2026-09-28, 4.2 #16): se calcula
+  // sobre el doc (galería de la orden + histórico por equipo), así una orden
+  // vieja con fotos solo en equipos[i].fotos[] también muestra el badge.
+  const fotosTallerCount = (typeof OrdenesService !== "undefined" && OrdenesService.contarFotosOrden)
+    ? OrdenesService.contarFotosOrden(ordenData)
+    : Number(ordenData.fotos_taller_count || 0);
 
   if (!isMobile) {
   const filaOrden = document.createElement("tr");
@@ -514,7 +519,11 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
             const noDisponible = !!e.intervencion_no_disponible;
             const motivoNoDisponible = (e.motivo_no_disponible || "").toString();
             const tieneIntervencion = !!(e.trabajo_tecnico || "").trim();
-            const fotosActivas = (Array.isArray(e.fotos) ? e.fotos : []).filter(f => f && f.deleted !== true && !!f.url).length;
+            // Fotos del equipo de los DOS orígenes (histórico por equipo +
+            // galería de la orden etiquetada con este equipo).
+            const fotosActivas = (typeof OrdenesService !== "undefined" && OrdenesService.fotosDeEquipo)
+              ? OrdenesService.fotosDeEquipo(ordenData, e).length
+              : (Array.isArray(e.fotos) ? e.fotos : []).filter(f => f && f.deleted !== true && !!f.url).length;
             // El badge de fotos abre la ficha de SOLO LECTURA (fotos + texto +
             // materiales): era el único indicio de que había fotos y no se
             // podía hacer clic (Solangel 2026-09-10).
@@ -1781,11 +1790,11 @@ function _crearFilaDetalle(ordenId, ordenData, equiposNormalizados) {
           </div>
 
           <div class="header-col-der">
-            <button class="btn-header-compact" data-action="agregar-equipo" data-stop-propagation="true" data-orden-id="${ordenId}" title="Agregar equipo">
+            <!-- Una sola captura de equipos (auditoría UX 2026-09-28, 4.2 #16):
+                 el "+" (agregar-equipo) y el batch eran dos pantallas para lo
+                 mismo; queda nuevo-batch para uno o cien radios. -->
+            <button class="btn-header-compact btn-agregar-equipo" data-action="nuevo-batch" data-stop-propagation="true" data-orden-id="${ordenId}" title="Agregar equipos a la orden">
               <i data-lucide="plus"></i>
-            </button>
-            <button class="btn-header-compact" data-action="nuevo-batch" data-stop-propagation="true" data-orden-id="${ordenId}" title="Nuevo batch de equipos">
-              <i data-lucide="layers"></i>
             </button>
             <div class="overflow-menu mini-menu">
               <button class="btn-header-compact" data-action="toggle-order-actions" data-stop-propagation="true" data-orden-id="${ordenId}" title="Más acciones">

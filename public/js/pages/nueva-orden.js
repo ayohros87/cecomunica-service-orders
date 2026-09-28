@@ -830,7 +830,10 @@ ${enlaceOrden}
             ? "Orden guardada. Abriendo la carga de equipos con los seriales del contrato…"
             : "Orden guardada. Abriendo la carga de equipos…";
         } else if (!prefillVenta && !esVisita(tipoSelect.value)) {
-          destino = `agregar-equipo.html?orden_id=${encodeURIComponent(id)}`;
+          // Una sola captura (auditoría UX 2026-09-28, 4.2 #16): antes
+          // aterrizaba en agregar-equipo.html; ahora en el batch, que abre
+          // con una fila lista para el primer serial.
+          destino = `nuevo-batch.html?orden_id=${encodeURIComponent(id)}`;
           aviso = "Orden guardada. Abriendo la captura de equipos…";
         } else {
           destino = `index.html?orden=${encodeURIComponent(id)}`;

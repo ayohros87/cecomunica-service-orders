@@ -890,12 +890,15 @@ window.eliminarOrden = async function (ordenId) {
   }
 };
 
-window.agregarEquipo = function (ordenId) {
-  window.location.href = `agregar-equipo.html?orden_id=${ordenId}`;
+// Una sola captura de equipos (auditoría UX 2026-09-28, 4.2 #16):
+// agregar-equipo.html quedó como redirección a nuevo-batch, así que las dos
+// entradas llevan al mismo sitio. `agregarEquipo` se conserva como alias.
+window.nuevoBatch = function (ordenId) {
+  window.location.href = `nuevo-batch.html?orden_id=${encodeURIComponent(ordenId)}`;
 };
 
-window.nuevoBatch = function (ordenId) {
-  window.location.href = `nuevo-batch.html?orden_id=${ordenId}`;
+window.agregarEquipo = function (ordenId) {
+  window.nuevoBatch(ordenId);
 };
 
 // Leyenda de QC para las notas de entrega: solo cuando el control de

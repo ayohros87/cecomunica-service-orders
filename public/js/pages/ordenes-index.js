@@ -131,11 +131,14 @@ document.addEventListener("DOMContentLoaded", function () {
       // las órdenes concretas que el correo enumeraba. Mismo motivo que la cola
       // de QC — son viejas y no caben en la primera página.
       if (typeof asegurarOrdenesDeCorreo === 'function') asegurarOrdenesDeCorreo();
+      // ?desde=/?hasta= (enlace copiado con rango de fechas): la bandeja viva
+      // no filtra por fecha en el servidor, así que se consulta aparte.
+      if (typeof asegurarBusquedaDeURL === 'function') asegurarBusquedaDeURL();
       // Deep-link desde los correos: ?entrega=<ordenId> abre el modal de
       // Entrega/Recepción (firma + receptor). Es el destino de los links
       // generados en onComplete.js.
       _abrirEntregaDeepLink();
-      // ?orden=<id>&recibir=1 — "Guardar y recibir" de agregar-equipo.
+      // ?orden=<id>&recibir=1 — "Guardar y recibir" de nuevo-batch.
       _abrirRecepcionDeepLink();
     } catch (e) {
       console.error("Error obteniendo rol del usuario:", e);
@@ -405,7 +408,7 @@ async function _abrirEntregaDeepLink() {
 window._abrirEntregaDeepLink = _abrirEntregaDeepLink;
 
 // Deep-link `?orden=<id>&recibir=1` (auditoría UX 2026-09-28, 4.2 #13): lo
-// usa "Guardar y recibir" de agregar-equipo para aterrizar directo en el
+// usa "Guardar y recibir" de nuevo-batch para aterrizar directo en el
 // acuse de recepción, con el cliente todavía en el mostrador. Mismo patrón
 // que ?entrega=: la orden se trae por id si no está en la primera página.
 // Se lee al CARGAR el script: _syncFiltersToURL reescribe la URL con solo
