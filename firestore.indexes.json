@@ -15,6 +15,20 @@
       ]
     },
     {
+      "collectionGroup": "cotizaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "searchTokens",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "creado_por_uid",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "contratos",
       "queryScope": "COLLECTION",
       "fields": [
@@ -323,6 +337,38 @@
         {
           "fieldPath": "venta.orden_programacion_id",
           "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "ordenes_de_servicio",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "searchTokens",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "fecha_creacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "ordenes_de_servicio",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "searchTokens",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "estado_reparacion",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha_creacion",
+          "order": "DESCENDING"
         }
       ]
     },
@@ -1373,6 +1419,20 @@
         {
           "fieldPath": "estado",
           "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "poc_lotes_preparados",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "creado_por_uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "creado_at",
+          "order": "DESCENDING"
         }
       ]
     }
