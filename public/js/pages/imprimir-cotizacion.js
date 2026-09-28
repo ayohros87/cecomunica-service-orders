@@ -179,9 +179,18 @@
     // Toolbar
     $('ptTitle').textContent = cot.id || '—';
     $('ptEstado').innerHTML = estadoChipHtml(cot.estado, doc || cot);
-    $('btnEditarPt').addEventListener('click', () => {
-      location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(cot._docId);
-    });
+    // "Editar" solo si la cotización sigue en borrador: el editor rebota las
+    // demás al detalle (auditoría UX 2026-09-28, #19).
+    const btnEditarPt = $('btnEditarPt');
+    if (btnEditarPt) {
+      if (CotState.esEditable(cot.estado)) {
+        btnEditarPt.addEventListener('click', () => {
+          location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(cot._docId);
+        });
+      } else {
+        btnEditarPt.style.display = 'none';
+      }
+    }
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
