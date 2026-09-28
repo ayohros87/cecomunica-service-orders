@@ -13,6 +13,7 @@ import '/js/domain/cotizacionesTotales.js';
 import '/js/domain/cotizacionTaller.js';
 import '/js/domain/cartaPresentacion.js';
 import '/js/ui/entity-combo.js';
+import '/js/ui/modal.js'; // cot-editor-state usa Modal en rutas compartidas (auditoría UX 2026-09-28)
 import '/js/pages/cot-editor-state.js';
 import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';
