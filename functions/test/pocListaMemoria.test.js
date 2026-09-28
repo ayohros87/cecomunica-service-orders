@@ -150,8 +150,10 @@ test("M4 · marcar una casilla mientras buscas no vuelve a bajar las fichas", as
   const { P, llamadas, el } = montar();
   el("filtroValor").value = "ab";
   P.filtrar(); await esperar();
-  el("soloActivos").checked = true;
-  P.manejarCambioActivos(); await esperar();
+  // Segmento Todos/Activos/Inactivos (auditoría UX 2026-09-28) en vez de las
+  // dos casillas excluyentes: el filtro sigue siendo en memoria.
+  P.cambiarEstadoActivo("activos"); await esperar();
+  assert.equal(el("soloActivos").checked, true, "el segmento prende la casilla oculta que lee la lista");
   el("soloIncompletos").checked = true;
   P.manejarCambioIncompletos(); await esperar();
   assert.equal(llamadas.getAll, 1, "las casillas filtran en memoria");

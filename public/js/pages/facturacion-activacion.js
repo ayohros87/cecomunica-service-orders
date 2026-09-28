@@ -204,9 +204,11 @@ function filaContrato(c){
   const r = readiness(c);
   const act = activosDe(c);
   const total = (c.equipos||[]).reduce((s,e)=>s+Number(e.cantidad||0),0);
+  // Fecha en hora de Panamá: toISOString() da la fecha UTC y después de las
+  // 7:00 pm proponía "mañana" (auditoría UX 2026-09-28, T8).
   const defDate = c.fecha_entrega_ultima?.toDate
-    ? c.fecha_entrega_ultima.toDate().toISOString().slice(0,10)
-    : new Date().toISOString().slice(0,10);
+    ? FMT.fechaISOPanama(c.fecha_entrega_ultima)
+    : FMT.hoyISOPanama();
 
   const fechaCol = vista==='activos'
     ? `<span style="color:var(--status-online);">${fdate(c.facturacion_fecha_inicio)}</span>`
@@ -247,22 +249,74 @@ function filaContrato(c){
 // gestionarFacturacion (y la tabla congelada sin señal mientras recarga).
 let _accionEnVuelo = false;
 
+// "YYYY-MM-DD" → ISO de la medianoche de Panamá (UTC-5, sin DST), o null si
+// no es una fecha real. Antes `new Date(texto)` con "28/09/2026" lanzaba
+// RangeError antes del try y el click "no hacía nada" (auditoría UX 2026-09-28, P0 #25).
+function isoDesdeFechaPanama(d){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))) return null;
+  const dt = new Date(d+'T00:00:00-05:00');
+  return isNaN(dt) ? null : dt.toISOString();
+}
+
+// Hoja con un input type=date prellenado con hoy (Panamá). Resuelve con el
+// ISO elegido o null si se cierra.
+function pedirFechaEntrega(contrato){
+  return Modal.sheet({
+    title: 'Confirmar entrega', icon: 'truck', size: 'sm',
+    html: `<p style="margin:0 0 10px;font-size:14px;">Contrato <b>${esc(contrato?.contrato_id||'')}</b>${contrato?.cliente_nombre?` · ${esc(contrato.cliente_nombre)}`:''}</p>
+      <label class="form-label" for="fechaEntregaInput">Fecha de entrega</label>
+      <input type="date" id="fechaEntregaInput" class="form-input" value="${FMT.hoyISOPanama()}">
+      <p id="fechaEntregaErr" style="display:none;margin:6px 0 0;color:var(--status-offline,#b91c1c);font-size:13px;">Escoge una fecha válida.</p>`,
+    buttons: [{ action:'cancelar', label:'Cancelar' }, { action:'ok', label:'Confirmar entrega', primary:true }],
+    onAction: (action, root) => {
+      if(action!=='ok') return null;
+      const iso = isoDesdeFechaPanama(root.querySelector('#fechaEntregaInput')?.value);
+      if(!iso){ root.querySelector('#fechaEntregaErr').style.display='block'; return false; }
+      return iso;
+    }
+  });
+}
+
+// Un solo modal con el motivo en vez de confirm + prompt encadenados.
+// Resuelve con {motivo} o null si se cancela.
+function pedirNoFacturable(contrato){
+  return Modal.sheet({
+    title: 'Marcar como no facturable', icon: 'ban', size: 'sm',
+    html: `<p style="margin:0 0 10px;font-size:14px;line-height:1.5;">El contrato <b>${esc(contrato?.contrato_id||'')}</b>${contrato?.cliente_nombre?` (${esc(contrato.cliente_nombre)})`:''} saldrá del ciclo de facturación (demo, cortesía, etc.). Se puede revertir con "Sí factura".</p>
+      <label class="form-label" for="motivoNoFact">Motivo (opcional)</label>
+      <input type="text" id="motivoNoFact" class="form-input" maxlength="200" placeholder="Ej.: demo de 30 días">`,
+    buttons: [{ action:'cancelar', label:'Cancelar' }, { action:'ok', label:'Marcar no facturable', primary:true }],
+    onMount: (root) => setTimeout(()=>root.querySelector('#motivoNoFact')?.focus(), 30),
+    onAction: (action, root) => action==='ok' ? { motivo: (root.querySelector('#motivoNoFact')?.value||'').trim() } : null
+  });
+}
+
 async function accion(id, acc){
   if(_accionEnVuelo) return;
+  const c = contratos.find(x=>x.id===id) || { id };
+  const nombre = `<b>${esc(c.contrato_id||id)}</b>${c.cliente_nombre?` (${esc(c.cliente_nombre)})`:''}`;
   const payload={};
   if(acc==='activar'){
     const d=document.getElementById('fi-'+id)?.value;
-    payload.fecha_inicio = d ? new Date(d+'T00:00:00').toISOString() : null;
-    if(!await Modal.confirm({ title: 'Activar facturación', confirmLabel: 'Activar', message: '¿Activar facturación de este contrato?' })) return;
+    if(d){
+      payload.fecha_inicio = isoDesdeFechaPanama(d);
+      if(!payload.fecha_inicio){ Toast.show('La fecha de inicio no es válida.','bad'); return; }
+    } else payload.fecha_inicio = null;
+    if(!await Modal.confirm({ title: 'Facturará la app', confirmLabel: 'Activar', message: `¿Activar la facturación de ${nombre}${d?` desde el ${esc(d.split('-').reverse().join('/'))}`:''}?` })) return;
   } else if(acc==='confirmar_entrega'){
-    const d=await Modal.prompt({ title: 'Confirmar entrega', message: 'Fecha de entrega (YYYY-MM-DD), vacío = hoy:', placeholder: 'YYYY-MM-DD' });
-    if(d===null) return;
-    payload.fecha = d ? new Date(d+'T00:00:00').toISOString() : null;
+    const iso = await pedirFechaEntrega(c);
+    if(!iso) return;
+    payload.fecha = iso;
   } else if(acc==='no_facturable'){
-    if(!await Modal.confirm({ title: 'No facturable', confirmLabel: 'Marcar', message: '¿Marcar como NO facturable (demo, etc.)?' })) return;
-    payload.motivo = (await Modal.prompt({ title: 'Motivo', message: 'Motivo (opcional):' }))||'';
+    const r = await pedirNoFacturable(c);
+    if(!r) return;
+    payload.motivo = r.motivo;
   } else if(acc==='en_espera'){
-    if(!await Modal.confirm({ title: 'Poner en espera', confirmLabel: 'Poner en espera', message: '¿Poner en espera (excluir del ciclo de facturación)?' })) return;
+    if(!await Modal.confirm({ title: 'Poner en espera', confirmLabel: 'Poner en espera', message: `¿Poner en espera ${nombre}? Sale del ciclo de facturación hasta que lo reactives.` })) return;
+  } else if(acc==='reactivar'){
+    if(!await Modal.confirm({ title: 'Reactivar', confirmLabel: 'Reactivar', message: `¿Reactivar la facturación de ${nombre}?` })) return;
+  } else if(acc==='facturable'){
+    if(!await Modal.confirm({ title: 'Sí factura', confirmLabel: 'Sí factura', message: `¿Devolver ${nombre} al ciclo de facturación?` })) return;
   }
   _accionEnVuelo = true;
   try{

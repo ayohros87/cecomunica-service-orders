@@ -198,7 +198,7 @@
   </script>
   <p class="fb-intro">
     Cada vez que un contrato, renovación, aumento, ajuste o baja se vuelve efectivo, aparece aquí (y llega el correo a activaciones@).
-    Marca <b>QBO</b> cuando lo hayas facturado en QuickBooks y <b>POC</b> cuando el servicio esté al día. Lo más viejo va arriba.
+    Marca <b>QBO</b> cuando lo hayas facturado en QuickBooks y <b>Plataforma PoC</b> cuando el servicio esté al día en la plataforma. Lo más viejo va arriba.
   </p>
 
   <div id="fbAviso" class="fb-aviso" hidden></div>
@@ -208,10 +208,10 @@
     <button type="button" class="fb-chip fb-chip--arranca" data-f="arranca" role="tab"><span class="dot"></span>Arranca cobro <span class="cnt" data-cnt="arranca">0</span></button>
     <button type="button" class="fb-chip fb-chip--cambia" data-f="cambia" role="tab"><span class="dot"></span>Cambia cobro <span class="cnt" data-cnt="cambia">0</span></button>
     <button type="button" class="fb-chip fb-chip--termina" data-f="termina" role="tab"><span class="dot"></span>Termina cobro <span class="cnt" data-cnt="termina">0</span></button>
-    <button type="button" class="fb-chip fb-chip--espera" data-f="espera" role="tab"><span class="dot"></span>Esperando entrega <span class="cnt" data-cnt="espera">0</span></button>
+    <button type="button" class="fb-chip fb-chip--espera" data-f="espera" role="tab" title="Esperando la entrega de los equipos: todavía no hay nada que facturar"><span class="dot"></span>En espera <span class="cnt" data-cnt="espera">0</span></button>
     <span class="push"></span>
     <input type="search" id="fbBuscar" class="form-input" placeholder="Buscar cliente o contrato…" style="max-width:220px;" autocomplete="off">
-    <label class="fb-toggle"><input type="checkbox" id="fbVerHechos"> Ver hechos y descartados</label>
+    <label class="fb-toggle"><input type="checkbox" id="fbVerHechos"> Ver hechos y no aplica</label>
   </div>
 
   <div id="fbRows" class="fb-rows"><div class="fb-vacio">Cargando…</div></div>

@@ -210,6 +210,18 @@ window.PocEdit = {
         if (!await Modal.confirm({ title: 'Quitar todos los grupos', confirmLabel: 'Continuar', danger: true,
           message: `Este equipo tenía ${gruposAntes} grupos y este guardado los quita TODOS.<br><br>¿Seguro que quieres continuar?` })) return;
       }
+      // Unit ID repetido en el mismo cliente: solo se valida si cambió, para no
+      // trancar la edición de otros campos en equipos con choques viejos
+      // (auditoría UX 2026-09-28, 4.7 #4).
+      const unitNuevo = (document.getElementById('drawer-unit-id').value || '').trim();
+      if (unitNuevo && unitNuevo !== String(originalData?.unit_id ?? '').trim()) {
+        const choques = await PocState.choquesUnitId([{ id: docId, unit_id: unitNuevo,
+          cliente_id: originalData?.cliente_id || null, cliente: originalData?.cliente || null }]);
+        if (choques.length) {
+          Toast.show(`No se guardó: el Unit ID ${unitNuevo} ya lo usa ${PocState.etiquetaEquipo(choques[0].otro)} de este cliente.`, 'bad');
+          return;
+        }
+      }
       const user   = firebase.auth().currentUser;
 
       // Modelo is now picked from a dropdown — write the canonical FK and a

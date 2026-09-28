@@ -11,6 +11,7 @@ import '/js/services/empresaService.js';
 import '/js/services/simCardsService.js';
 import '/js/core/xlsx-loader.js';
 import '/js/ui/toast.js';
+import '/js/ui/busy.js'; // withBusy de la edición masiva (auditoría UX 2026-09-28)
 import '/js/ui/modal.js';
 import '/js/services/equiposPoolService.js';
 import '/js/services/equiposDescartadosService.js';

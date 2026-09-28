@@ -6,6 +6,7 @@ import '/js/firebase-init.js';
 import '/js/services/usuariosService.js';
 import '/js/services/facturacionAvisosService.js';
 import '/js/ui/toast.js';
+import '/js/ui/busy.js'; // withBusy del cierre en lote (auditoría UX 2026-09-28)
 import '/js/ui/modal.js';
 import '/js/pages/facturacion-comisiones.js';
 import '/js/vendor/lucide.min.js';

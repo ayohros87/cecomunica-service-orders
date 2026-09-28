@@ -1,7 +1,8 @@
 # Cómo funciona el módulo de Facturación
 
 > Guía legible (no técnica) del ciclo de facturación y su conexión con QuickBooks.
-> Para administración, contabilidad y operaciones. Última actualización: 2026-06-24.
+> Para administración, contabilidad y operaciones. Última actualización: 2026-09-28
+> (se agregó §13 Bandeja y Comisiones; antes, 2026-06-24).
 
 ---
 
@@ -201,3 +202,47 @@ cuadre, se prende la **emisión automática el 1.º de cada mes**.
 - **Prorrateo ÷30:** cobrar solo los días activos del mes (día = 1/30 de la mensualidad).
 - **ITBMS:** impuesto; 7% o exento según el cliente.
 - **Readiness:** la lista de verificación que dice si un contrato está listo para facturar.
+
+---
+
+## 13. Bandeja de facturación y Comisiones (2026-09-28)
+
+Lo que **sí se usa hoy** mientras la emisión desde la app no existe. El espacio
+**Finanzas** abre en la **Bandeja** (primera pestaña; `facturacion/index.html` redirige ahí).
+
+**Bandeja "Facturación pendiente"** (`facturacion/bandeja.html`). Cada vez que un contrato,
+renovación, aumento, ajuste o baja se vuelve efectivo, el servidor crea un **aviso**
+(`facturacion_avisos`) y manda el correo a activaciones@. Recepción lo trabaja a mano en
+QuickBooks y marca dos pasos:
+- **QBO** — facturado en QuickBooks, con la fecha ("Facturar desde"; en una baja dice
+  **"Deja de cobrarse el"**) y el **N.° de factura** (con él el sistema confirma el pago solo).
+- **Plataforma PoC** — el servicio quedó al día en la plataforma (activar, ajustar o apagar
+  radios). No confundir con la Base PoC del app.
+
+Estados del aviso: **Pendiente** (hay pasos por marcar) · **En espera** (espera la entrega de
+los equipos; no hay nada que facturar todavía) · **Hecho** (todos los pasos que aplican) ·
+**No aplica** (se sacó de la cola con motivo: ya estaba en QBO, demo/interno, duplicado u
+otro). El chip "Pendientes" y el número de la pestaña cuentan lo mismo: solo los pendientes;
+los que esperan la entrega tienen su propio chip "En espera". "Ver hechos y no aplica"
+trae los 200 cerrados más recientes.
+
+Quién la ve: recepción (por su módulo propio), administración y contabilidad (por la pestaña).
+Recepción ve montos por línea e ITBMS, que es lo que necesita para facturar; nada más.
+
+**Comisiones** (`facturacion/comisiones.html`, solo administración y contabilidad). Un renglón
+por hecho comisionable (contrato nuevo, adición, renovación, aumento entregado o venta con
+contrato Propio), derivado del mismo aviso. El estado **Listo para pago** no lo prende nadie:
+sale solo cuando están escritos los tres requisitos —**firma** del cliente, **entrega** (cuando
+aplica) y **primer pago** (factura en cero, que se confirma con el número de factura)—.
+Lo único que se decide aquí es **cerrar el período** en que se paga:
+- Uno por uno, desde el detalle de la comisión; o
+- **En lote**: en la vista "Listas para pago" se marcan las casillas (o "Seleccionar sus N"
+  por vendedor), se elige **un** período y "Cerrar seleccionadas". La confirmación dice cuántas,
+  de cuántos vendedores y la base total.
+
+Cada cierre deja quién y cuándo, y se puede **reabrir** si fue un error. El **CSV** de la vista
+es lo que se usa para pagar la planilla. Estados: Esperando · Listo · Pagada · No aplica (el
+evento no paga comisión).
+
+Fechas: todo lo que se prellena (fecha de pago, período, entrega en Activación) sale en
+**hora de Panamá**, no en UTC.

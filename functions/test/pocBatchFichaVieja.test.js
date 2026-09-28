@@ -104,6 +104,8 @@ function montar({ existentes = FICHAS_VIEJAS, confirmar = () => true } = {}) {
     document: doc,
     Option: class { constructor(v, t) { this.value = v; this.textContent = t ?? v; this.dataset = {}; } },
     Toast: { show: (msg, tipo) => registro.toasts.push({ msg, tipo }) },
+    // Guard de rol de nuevo-batch (auditoría UX 2026-09-28): recepción escribe.
+    Sesion: { rol: async () => "recepcion" },
     Modal: {
       confirm: async (opts) => { registro.modales.push(opts); return confirmar(opts); },
       prompt: async () => null,
@@ -126,6 +128,12 @@ function montar({ existentes = FICHAS_VIEJAS, confirmar = () => true } = {}) {
       getRecent: async () => [],
       getByCliente: async () => existentes,
       addPocDevice: async (data) => { registro.creados.push(data); },
+      // Lote en WriteBatch (auditoría UX 2026-09-28): mismo registro que addPocDevice.
+      addPocDevicesBatch: async (items, { onProgress } = {}) => {
+        items.forEach(d => registro.creados.push(d));
+        if (onProgress) onProgress(items.length, items.length);
+        return items.map((_, i) => "nuevo" + i);
+      },
       softDeletePocDevice: async (id, opts) => { registro.cerrados.push({ id, ...opts }); },
       addLog: async (entrada) => { registro.logs.push(entrada); },
       stripSentinels: (o) => o,

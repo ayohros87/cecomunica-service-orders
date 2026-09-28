@@ -495,15 +495,43 @@ async function guardarModelo(){
   }catch(e){ console.error(e); Toast.show('Error al guardar','bad'); }
 }
 
+// Cuántos documentos apuntan a este modelo por modelo_id (tope 500 por
+// colección: basta para decidir). null = no se pudo leer (rules o red).
+async function contarReferenciasModelo(id){
+  const TOPE = 500;
+  const contar = async (col, label) => {
+    try {
+      const snap = await firebase.firestore().collection(col).where('modelo_id', '==', id).limit(TOPE).get();
+      return { label, n: snap.size, tope: snap.size >= TOPE };
+    } catch (e) { console.warn('[modelos] no se pudo contar', col, e); return { label, n: null }; }
+  };
+  const [pool, poc] = await Promise.all([
+    contar('equipos_pool', 'equipo(s) en Almacén'),
+    contar('poc_devices', 'ficha(s) en la Base PoC'),
+  ]);
+  const variantes = (listaModelos || []).filter(x => x.variante_de === id).length;
+  return [pool, poc, { label: 'modelo(s) del catálogo que lo tienen como base (variantes)', n: variantes }];
+}
+
 // Eliminar (permanente) — pensado para consolidar duplicados del catálogo.
 async function eliminarModelo(){
   if (modeloEditId===null) return;
   const m = listaModelos.find(x=>x.id===modeloEditId);
   const nombre = m ? `${(m.marca||'').trim()} ${(m.modelo||'').trim()}`.trim() : 'este modelo';
+  // Contar las referencias ANTES de confirmar: "si está en uso" sin decir
+  // cuánto obligaba a adivinar cuál de los duplicados borrar (auditoría UX
+  // 2026-09-28). Los contratos guardan el modelo dentro del arreglo `equipos`
+  // y no se pueden contar con una consulta: se advierte aparte.
+  const refs = await contarReferenciasModelo(modeloEditId);
+  const refsHtml = refs.map(r => `<li>${r.n === null ? 'no se pudo contar' : `<b>${r.n}${r.tope ? '+' : ''}</b>`} ${r.label}</li>`).join('');
+  const enUso = refs.some(r => r.n);
   const ok = await Modal.confirm({
     title: 'Eliminar modelo',
-    message: `Vas a eliminar <b>${nombre}</b> del catálogo de forma permanente. Úsalo para consolidar duplicados. Si el modelo está en uso (contratos/equipos), esas referencias quedarán sin catálogo — deja la fila que esté en uso y borra la repetida.`,
-    confirmLabel: 'Eliminar',
+    message: `Vas a eliminar <b>${esc(nombre)}</b> del catálogo de forma permanente. Úsalo para consolidar duplicados.<br><br>`
+      + `Referencias a este modelo:<ul style="margin:6px 0 0 18px;">${refsHtml}</ul>`
+      + `<p style="margin:8px 0 0;">Los contratos también pueden usarlo (va dentro de sus líneas de equipo y no se cuenta aquí).</p>`
+      + (enUso ? `<p style="margin:8px 0 0;color:var(--status-critical,#b91c1c);"><b>Está en uso:</b> esas referencias quedarán sin catálogo. Deja la fila que esté en uso y borra la repetida.</p>` : ''),
+    confirmLabel: enUso ? 'Eliminar de todos modos' : 'Eliminar',
     danger: true,
   });
   if (!ok) return;

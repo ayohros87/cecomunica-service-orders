@@ -211,25 +211,21 @@ async function importarRevisadas() {
   const filas = _revision.nuevas;
   let contador = 0;
   try {
-    for (const fila of filas) {
-      const serialValue = String(fila['SERIAL']).trim();
-
+    // Las celdas numéricas del Excel llegan como number — se fuerzan a string
+    // (los unit_id numéricos rompían el orden en Firestore: ordena por tipo).
+    const txt = v => (v ?? '').toString().trim();
+    const docs = filas.map(fila => {
       const grupos = Object.keys(fila)
         .filter(k => k.startsWith('GRUPO ') && fila[k])
         .map(k => fila[k].toString().trim())
         .filter(g => g.length > 0);
-
-      // Las celdas numéricas del Excel llegan como number — se fuerzan a string
-      // (los unit_id numéricos rompían el orden en Firestore: ordena por tipo).
-      const txt = v => (v ?? '').toString().trim();
       const unitId = txt(fila['UNIT ID']);
-
-      const nuevoRef = await PocService.addPocDevice({
+      return {
         cliente: txt(fila['CLIENTE']),
         operador: txt(fila['OPERADOR']),
         sim_number: txt(fila['# SIMCARD']),
         sim_phone: txt(fila['# TEL SIMCARD']),
-        serial: serialValue,
+        serial: String(fila['SERIAL']).trim(),
         gps: (fila['GPS'] || '').toString().toLowerCase().includes('true'),
         activo: (fila['ACTIVO'] || '').toString().toUpperCase() !== 'NO',
         ip: txt(fila['IP del Servidor']),
@@ -241,27 +237,50 @@ async function importarRevisadas() {
         deleted: false,
         created_at: firebase.firestore.FieldValue.serverTimestamp(),
         updated_at: firebase.firestore.FieldValue.serverTimestamp()
+      };
+    });
+
+    // WriteBatch en tandas de 400 en vez de un .add() por fila: cada tanda
+    // entra entera o no entra (auditoría UX 2026-09-28, 4.7 #8).
+    let ids;
+    try {
+      ids = await PocService.addPocDevicesBatch(docs, {
+        onProgress: (hechos, total) => setEstado(`Importando… ${Math.min(total, hechos + 400)}/${total}`, 'info'),
       });
+    } catch (e) {
+      contador = e.guardados || 0;
+      throw e;
+    }
+    contador = ids.length;
 
-      // Si el SIM importado existe disponible en el pool, marcarlo asignado
-      // (consistencia con POC → SIM cards). Best-effort, no frena el import.
-      if (fila['# SIMCARD']) {
-        SimCardsService.marcarAsignadoSiExiste(fila['# SIMCARD'], {
-          id: nuevoRef.id, serial: serialValue, cliente_nombre: fila['CLIENTE'] || '',
-        }, firebase.auth().currentUser);
-      }
-
-      contador++;
-      if (contador % 5 === 0 || contador === filas.length) {
-        setEstado(`Importando… ${contador}/${filas.length}`, 'info');
+    // Si el SIM importado existe disponible en el pool, marcarlo asignado
+    // (consistencia con POC → SIM cards). Se espera cada uno (antes quedaban
+    // colgando y la página decía "completada" con marcas pendientes); un
+    // fallo no frena el resto.
+    const user = firebase.auth().currentUser;
+    let simFallidos = 0;
+    for (let k = 0; k < filas.length; k++) {
+      const fila = filas[k];
+      if (!fila['# SIMCARD']) continue;
+      try {
+        await SimCardsService.marcarAsignadoSiExiste(fila['# SIMCARD'], {
+          id: ids[k], serial: docs[k].serial, cliente_nombre: fila['CLIENTE'] || '',
+        }, user);
+      } catch (e) {
+        console.warn('[importar-poc] no se pudo marcar el SIM', fila['# SIMCARD'], e);
+        simFallidos++;
       }
     }
-    setEstado(`Importación completada: ${contador} dispositivos nuevos.`, 'success');
+    setEstado(`Importación completada: ${contador} dispositivos nuevos.` +
+      (simFallidos ? ` ${simFallidos} SIM no se pudieron marcar como asignados en el pool; revísalos en SIM cards.` : ''),
+      simFallidos ? 'warning' : 'success');
   } catch (e) {
-    // Import PARCIAL visible (antes un fallo a mitad quedaba en silencio):
-    // lo ya escrito queda; re-revisar el archivo lo detecta como existente.
+    // Import PARCIAL visible: solo puede quedar a medias por tandas completas
+    // (lotes de más de 400); re-revisar el archivo omite lo ya importado.
     console.error('Error importando:', e);
-    setEstado(`Importación PARCIAL: entraron ${contador} de ${filas.length}. Vuelve a "Revisar archivo" — lo ya importado se omitirá. Detalle: ${e.message || e}`, 'error');
+    setEstado(contador
+      ? `Importación PARCIAL: entraron ${contador} de ${filas.length}. Vuelve a "Revisar archivo" — lo ya importado se omitirá. Detalle: ${e.message || e}`
+      : `No se importó nada: ${e.message || e}. Puedes reintentar.`, 'error');
   } finally {
     _ocupado = false;
     btnR.disabled = false;

@@ -2,6 +2,7 @@
 // Mismo orden que tenían las etiquetas <script defer> que reemplaza: cada
 // archivo sigue publicando sus globales en window (puente F1), así que el
 // orden importa igual que antes. Vite lo empaqueta y le pone hash.
+import '/js/core/formatting.js'; // FMT.esc en la hoja (auditoría UX 2026-09-28)
 import '/js/firebase-init.js';
 import '/js/services/pocService.js';
 import '/js/services/clientesService.js';

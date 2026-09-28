@@ -1104,6 +1104,17 @@ async function autoJalarContrato(cantidadEsperada) {
       firebase.auth().onAuthStateChanged(async user => {
         if (!user) return window.location.href = "/login.html";
 
+        // Solo administrador y recepción cargan lotes (mismo criterio que
+        // PocState.esLectura en la lista). La página no tenía guard y
+        // cualquier rol logueado podía escribir poc_devices (auditoría UX
+        // 2026-09-28, 4.7 #3). roles.js no se carga aquí: literales.
+        const rolNB = await Sesion.rol(user.uid).catch(() => null);
+        if (!["administrador", "recepcion"].includes(rolNB)) {
+          Toast.show("Solo recepción o administración cargan lotes PoC. Te llevamos a la Base PoC.", "warn");
+          setTimeout(() => { window.location.href = "/POC/index.html"; }, 1200);
+          return;
+        }
+
         await cargarClientes();
         await cargarListaSelect("empresa/IPs", "ip");
         await mostrarUltimosUnitIDs();
@@ -1219,7 +1230,9 @@ document.getElementById("addCliente").onclick = async () => {
         // IP asignado del cliente al cargar la página (para decidir write-back).
         const ipOriginalCliente = (clienteSelect.selectedOptions[0]?.dataset.ip || "").trim();
         const ipElegido = document.getElementById("ip").value.trim();
-        await registrarCliente(clienteSelect.selectedOptions[0].textContent);
+        // registrarCliente va DESPUÉS de todas las validaciones y confirmaciones
+        // (antes corría aquí y un lote cancelado dejaba un cliente creado;
+        // auditoría UX 2026-09-28, 4.7 #5).
 
         if ((detallesBatch || []).length > 0 && detallesBatch.length !== seriales.length) {
           // Última red: si el sobrante son justo los modelos que el archivo no
@@ -1471,13 +1484,13 @@ document.getElementById("addCliente").onclick = async () => {
           }
         }
 
+        let loteGuardado = false, totalLote = 0;
         try {
+        await registrarCliente(clienteSelect.selectedOptions[0].textContent);
         const btnSubmitRef = document.querySelector('#batchForm [type="submit"]');
         const btnLabelOriginal = btnSubmitRef ? btnSubmitRef.innerHTML : '';
+        const nuevos = [];
         for (let i = 0; i < serialesFinal.length; i++) {
-         // Progreso visible: la creación es secuencial y con 30+ devices el
-         // botón deshabilitado a secas parecía cuelgue.
-         if (btnSubmitRef) btnSubmitRef.textContent = `Guardando ${i + 1}/${serialesFinal.length}…`;
          const detalle = normalizarDetalleBatch(detallesBatch?.[i] || {});
          const modeloResuelto = resolverModeloSerial(serialesFinal[i], detalle);
          const data = {
@@ -1505,8 +1518,17 @@ document.getElementById("addCliente").onclick = async () => {
         activo: true,
         deleted: false
         };
-          await PocService.addPocDevice(data);
+          nuevos.push(data);
         }
+        // WriteBatch en tandas de 400: el lote entra entero o no entra
+        // (auditoría UX 2026-09-28, 4.7 #8). Progreso visible por tanda.
+        totalLote = nuevos.length;
+        await PocService.addPocDevicesBatch(nuevos, {
+          onProgress: (hechos, total) => {
+            if (btnSubmitRef) btnSubmitRef.textContent = `Guardando ${Math.min(total, hechos + 400)}/${total}…`;
+          },
+        });
+        loteGuardado = true;
 
         // Fichas viejas: se cierran DESPUÉS de crear el lote nuevo — si la
         // creación falla a medias, el cliente no se queda sin ningún
@@ -1567,7 +1589,12 @@ document.getElementById("addCliente").onclick = async () => {
         window.location.href = "index.html";
         } catch (err) {
           console.error('[nuevo-batch] error creando equipos:', err);
-          Toast.show('Error al crear los equipos. Revisa la lista antes de reintentar (puede haber quedado un lote parcial).', 'bad');
+          const parciales = err?.guardados || 0;
+          Toast.show(loteGuardado
+            ? 'Los equipos se crearon, pero falló un paso posterior. Revisa la lista antes de reintentar.'
+            : (parciales
+              ? `Error al crear los equipos: se guardaron ${parciales} de ${totalLote} antes del fallo. Revisa la lista antes de reintentar.`
+              : 'Error al crear los equipos. No se guardó ninguno del lote; puedes reintentar.'), 'bad');
           const b = document.querySelector('#batchForm [type="submit"]');
           if (b && b.textContent.startsWith('Guardando')) b.textContent = 'Crear equipos';
           bloquear(false);

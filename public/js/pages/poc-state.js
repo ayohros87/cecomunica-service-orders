@@ -21,10 +21,12 @@ window.PocState = {
     acciones:   11
   },
 
+  // Solo administrador y recepción escriben en la Base PoC; cualquier otro rol
+  // con acceso (técnico, vista, jefe de taller, gerente) la ve en solo lectura.
+  // Lista blanca en vez de negra para que un rol nuevo no herede escritura
+  // (auditoría UX 2026-09-28, P0 #24).
   esLectura() {
-    return this.rolActual === ROLES.TECNICO
-        || this.rolActual === ROLES.VISTA
-        || this.rolActual === ROLES.JEFE_TALLER;
+    return this.rolActual !== ROLES.ADMIN && this.rolActual !== ROLES.RECEPCION;
   },
 
   obtenerModeloTexto(d = {}) {
@@ -64,6 +66,47 @@ window.PocState = {
       '<option value="">— Selecciona modelo —</option>',
       ...lista.map(m => `<option value="${m.id}"${m.id === currentId ? ' selected' : ''}>${m.label}</option>`)
     ].join('');
+  },
+
+  // Choques de Unit ID contra la colección, con la misma regla que el lote y
+  // la consola (poc-nueva-consola.js unitIdEnUso): un Unit ID no se repite
+  // entre equipos NO cerrados del mismo cliente. `items` = [{ id, unit_id,
+  // cliente_id, cliente }] con el Unit ID NUEVO; solo se pasan los que
+  // cambiaron. Devuelve [{ item, otro }] (otro = doc que ya lo usa o el otro
+  // item del mismo guardado). Antes el cajón y la masiva no validaban
+  // (auditoría UX 2026-09-28, 4.7 #4).
+  async choquesUnitId(items = []) {
+    const norm = v => String(v ?? '').trim().toUpperCase();
+    const grupos = new Map();
+    for (const it of items) {
+      if (!norm(it.unit_id)) continue;
+      const k = it.cliente_id ? 'id:' + it.cliente_id : 'n:' + (it.cliente || '');
+      if (!grupos.has(k)) grupos.set(k, []);
+      grupos.get(k).push(it);
+    }
+    const choques = [];
+    for (const lista of grupos.values()) {
+      const ref = lista[0];
+      const devs = await PocService.getByCliente({ clienteId: ref.cliente_id || null, clienteNombre: ref.cliente || null, fresh: true });
+      const propios = new Set(lista.map(i => i.id));
+      const enUso = new Map();
+      devs.forEach(d => {
+        if (d.deleted === true || propios.has(d.id)) return;
+        const u = norm(d.unit_id);
+        if (u && !enUso.has(u)) enUso.set(u, d);
+      });
+      for (const it of lista) {
+        const u = norm(it.unit_id);
+        if (enUso.has(u)) choques.push({ item: it, otro: enUso.get(u) });
+        else enUso.set(u, it);
+      }
+    }
+    return choques;
+  },
+
+  // Texto corto para nombrar un equipo en avisos.
+  etiquetaEquipo(d = {}) {
+    return d.radio_name || (d.serial ? 'serial ' + d.serial : '') || d.id || 'otro equipo';
   },
 
   nombreClienteDe(d) {
@@ -176,6 +219,10 @@ window.PocState = {
       document.getElementById('btnSim')?.remove();
       document.getElementById('btnSimPool')?.remove();
       document.getElementById('btnImportar')?.remove();
+      // Nueva consola y Preparar lote tienen guard propio que rebota a los
+      // roles de lectura: no mostrar entradas que terminan en "No autorizado".
+      document.getElementById('btnNuevaConsola')?.remove();
+      document.getElementById('btnVendedoresBatch')?.remove();
       document.getElementById('btnAdminGrupos')?.remove();  // solo admin/recepcion administran grupos
       document.querySelector('.check-all')?.setAttribute('disabled', 'disabled');
       document.getElementById('pocContratosWrap')?.remove(); // selección masiva por contrato: mismo criterio que el check-all

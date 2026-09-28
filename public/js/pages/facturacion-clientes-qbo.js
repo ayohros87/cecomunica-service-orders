@@ -24,6 +24,12 @@ firebase.auth().onAuthStateChanged(async (user)=>{
     if(!u || (rol!==ROLES.ADMIN && rol!==ROLES.CONTABILIDAD)){
       document.body.innerHTML="<h3 style='color:red;text-align:center;margin-top:100px;'>Acceso restringido</h3>"; return;
     }
+    const lista = document.getElementById('lista');
+    if(lista && !lista._qboWired){
+      lista.addEventListener('click', onListaClick);
+      lista.addEventListener('focusin', onListaFocus);
+      lista._qboWired = true;
+    }
     await cargar();
     render();
   }catch(e){ console.error(e); Toast.show('Error al iniciar','bad'); }
@@ -131,6 +137,9 @@ function render(){
   if(window.lucide) lucide.createIcons();
 }
 
+// Botones con data-attributes + un listener delegado en #lista (auditoría UX
+// 2026-09-28, 4.8 #4): el onclick inline con el nombre del Customer se rompía
+// con un apóstrofe ("O'Neill") y el botón no hacía nada.
 function filaCliente(cl){
   const nombre = esc(cl.empresa || cl.nombre || '—');
   const tax = cl.ruc || cl.cedula || '';
@@ -139,38 +148,79 @@ function filaCliente(cl){
   if(cl.qbo_customer_id){
     return `<tr>${cli}
       <td><span class="r-chip r-ok">✓ ${esc(cl.qbo_customer_name||'vinculado')}</span></td>
-      <td style="text-align:right; white-space:nowrap;"><button class="btn btn-sm btn-ghost" onclick="desvincular('${cl.id}')"><i data-lucide="unlink"></i> Desvincular</button></td></tr>`;
+      <td style="text-align:right; white-space:nowrap;"><button class="btn btn-sm btn-ghost" data-act="desvincular" data-cliente="${esc(cl.id)}"><i data-lucide="unlink"></i> Desvincular</button></td></tr>`;
   }
   const mi = matchInfo(cl);
   const cands = mi.custs;
   if(!cands.length){
-    // "Sin match" era un callejón sin salida (auditoría): si el matcher
-    // fallaba por RUC errado no había override. Select nativo = buscable
-    // tecleando; el vínculo manual SIEMPRE pide confirmación.
-    const opciones = custTop
-      .slice()
-      .sort((a,b)=>norm(a.display_name).localeCompare(norm(b.display_name)))
-      .map(c=>`<option value="${esc(c.qbo_customer_id)}">${esc(c.display_name)}${c.ruc?(' · '+esc(c.ruc)):''}</option>`).join('');
+    // "Sin match": combo con búsqueda (FilteredSelect) sobre los ~500
+    // Customers top-level. Las opciones se pintan al enfocar la fila, no al
+    // renderizar: con cientos de filas sin match eran decenas de miles de
+    // <option>. El vínculo manual SIEMPRE pide confirmación.
     return `<tr>${cli}
       <td><span class="r-chip r-bad">sin match en QBO</span>
-        <div style="display:flex; gap:6px; margin-top:6px; align-items:center;">
-          <select class="form-select" id="qbo-man-${esc(cl.id)}" style="max-width:280px; height:30px; font-size:12.5px;">
-            <option value="">Vincular manualmente…</option>${opciones}
+        <div style="display:flex; gap:6px; margin-top:6px; align-items:center; flex-wrap:wrap;">
+          <input type="search" class="form-input" id="qbo-fil-${esc(cl.id)}" data-qbo-filtro="${esc(cl.id)}" placeholder="Buscar Customer…" autocomplete="off" style="max-width:180px; height:30px; font-size:12.5px;">
+          <select class="form-select" id="qbo-man-${esc(cl.id)}" data-qbo-select="${esc(cl.id)}" style="max-width:280px; height:30px; font-size:12.5px;">
+            <option value="">Vincular manualmente…</option>
           </select>
-          <button class="btn btn-sm btn-ghost" onclick="vincularManual('${cl.id}')" title="Vincular con el Customer elegido"><i data-lucide="link"></i></button>
+          <button class="btn btn-sm btn-ghost" data-act="vincular-manual" data-cliente="${esc(cl.id)}" title="Vincular con el Customer elegido"><i data-lucide="link"></i></button>
         </div>
       </td><td></td></tr>`;
   }
-  const riesgoDe = (c)=> (cands.length>1 || (mi.via==='ruc' && !c._parecido)) ? 'true' : 'false';
+  const riesgoDe = (c)=> (cands.length>1 || (mi.via==='ruc' && !c._parecido)) ? '1' : '0';
   const lista = cands.map(c=>`
     <div style="display:flex; align-items:center; gap:8px; margin:3px 0;">
-      <button class="btn btn-sm btn-primary" onclick="vincular('${cl.id}','${c.qbo_customer_id}','${esc(c.display_name).replace(/'/g,"\\'")}', ${riesgoDe(c)})"><i data-lucide="link"></i> Vincular</button>
-      <span style="font-size:13px;">${esc(c.display_name)}<span style="color:var(--fg-3); font-size:12px;">${c.ruc?(' · '+esc(c.ruc)):''} · saldo ${money(c.balance)}</span>${(mi.via==='ruc'&&!c._parecido)?' <span class="r-chip r-bad" title="RUC coincide pero el nombre no se parece — posible RUC errado en QBO">⚠ nombre distinto</span>':''}</span>
+      <button class="btn btn-sm btn-primary" data-act="vincular" data-cliente="${esc(cl.id)}" data-qbo="${esc(c.qbo_customer_id)}" data-riesgo="${riesgoDe(c)}"><i data-lucide="link"></i> Vincular</button>
+      <span style="font-size:13px;">${esc(c.display_name)}<span style="color:var(--fg-3); font-size:12px;">${c.ruc?(' · '+esc(c.ruc)):''} · saldo ${money(c.balance)}</span>${(mi.via==='ruc'&&!c._parecido)?' <span class="r-chip r-bad" title="RUC coincide pero el nombre no se parece — posible RUC errado en QBO">⚠ nombre distinto</span>':''}${(()=>{ const o=vinculadoA(c.qbo_customer_id, cl.id); return o?` <span class="r-chip r-warn" title="Un Customer se vincula a un solo cliente">ya vinculado a ${esc(o.empresa||o.nombre||o.id)}</span>`:''; })()}</span>
     </div>`).join('');
   let badge='';
   if(cands.length>1) badge += '<span class="r-chip r-warn">múltiples</span> ';
   if(mi.nombreDistinto) badge += '<span class="r-chip r-bad">verificar</span>';
   return `<tr>${cli}<td>${lista}</td><td style="text-align:right; white-space:nowrap;">${badge}</td></tr>`;
+}
+
+// Cliente del app que ya tiene este Customer (regla 1 a 1), excluyendo al
+// propio cliente. Sobre la lista cargada; vincular() revalida contra Firestore.
+function vinculadoA(qboId, excluirClienteId){
+  if(!qboId) return null;
+  return clientes.find(x => x.id !== excluirClienteId && String(x.qbo_customer_id||'') === String(qboId)) || null;
+}
+
+// Monta el combo con búsqueda de una fila "Sin match" la primera vez que se usa.
+function montarComboManual(clienteId){
+  const sel = document.getElementById('qbo-man-'+clienteId);
+  if(!sel || sel._qboMontado || !window.FilteredSelect) return;
+  sel._qboMontado = true;
+  const items = custTop.slice().sort((a,b)=>norm(a.display_name).localeCompare(norm(b.display_name)));
+  FilteredSelect.montar({
+    select: sel, filtro: document.getElementById('qbo-fil-'+clienteId), items,
+    id: c => c.qbo_customer_id,
+    label: c => {
+      const otro = vinculadoA(c.qbo_customer_id, clienteId);
+      return `${c.display_name||''}${c.ruc?(' · '+c.ruc):''}${otro?(' — ya vinculado a '+(otro.empresa||otro.nombre||otro.id)):''}`;
+    },
+    placeholder: 'Vincular manualmente…',
+  });
+}
+
+function onListaClick(ev){
+  const b = ev.target.closest('[data-act]');
+  if(!b) return;
+  const act = b.getAttribute('data-act');
+  const clienteId = b.getAttribute('data-cliente');
+  if(act==='vincular'){
+    const qboId = b.getAttribute('data-qbo');
+    const c = custTop.find(x=>String(x.qbo_customer_id)===String(qboId));
+    return vincular(clienteId, qboId, (c && c.display_name) || '', b.getAttribute('data-riesgo')==='1', b);
+  }
+  if(act==='vincular-manual') return vincularManual(clienteId, b);
+  if(act==='desvincular') return desvincular(clienteId);
+}
+function onListaFocus(ev){
+  const t = ev.target;
+  const id = t && (t.getAttribute('data-qbo-filtro') || t.getAttribute('data-qbo-select'));
+  if(id) montarComboManual(id);
 }
 
 function renderDupes(){
@@ -185,8 +235,31 @@ function renderDupes(){
       </div>`).join('');
 }
 
-async function vincular(clienteId, qboId, qboName, riesgo){
+async function vincular(clienteId, qboId, qboName, riesgo, btn){
+  if(btn && btn.disabled) return;
   const cl = clientes.find(x=>x.id===clienteId);
+  // Regla 1 a 1 (auditoría UX 2026-09-28, 4.8 #4): un Customer de QBO es UN
+  // cliente del app. Se revisa la lista cargada y Firestore (otra pestaña u
+  // otra persona pudo vincularlo después de cargar).
+  let otro = vinculadoA(qboId, clienteId);
+  if(!otro){
+    try{
+      const snap = await firebase.firestore().collection('clientes').where('qbo_customer_id','==',qboId).limit(5).get();
+      const d = snap.docs.find(x => x.id !== clienteId && x.data().deleted !== true);
+      if(d) otro = { id: d.id, ...d.data() };
+    }catch(e){
+      console.error(e);
+      Toast.show('No se pudo verificar si ese Customer ya está vinculado. Intenta de nuevo.','bad');
+      return;
+    }
+  }
+  if(otro){
+    await Modal.alert({
+      title: 'Customer ya vinculado', icon: 'alert-triangle',
+      message: `El Customer «${esc(qboName)}» ya está vinculado a <b>${esc(otro.empresa||otro.nombre||otro.id)}</b>. Un Customer de QuickBooks se vincula a un solo cliente: si es el mismo cliente duplicado, consolídalo; si no, quita primero ese vínculo (vista Vinculados).`,
+    });
+    return;
+  }
   // Confirmación proporcional (auditoría): con Customer=cliente y la
   // facturación arrancando al entregar, un vínculo errado factura a OTRA
   // empresa — y era 1 click sin pregunta. Solo pregunta en los casos con
@@ -194,11 +267,12 @@ async function vincular(clienteId, qboId, qboName, riesgo){
   if (riesgo && window.Modal) {
     const ok = await Modal.confirm({
       title: 'Confirmar vínculo con QuickBooks',
-      message: `App: «${cl?.empresa || cl?.nombre || clienteId}» → QBO: «${qboName}». La facturación de sus contratos saldrá a ese Customer. ¿Vincular?`,
+      message: `App: «${esc(cl?.empresa || cl?.nombre || clienteId)}» → QBO: «${esc(qboName)}». La facturación de sus contratos saldrá a ese Customer. ¿Vincular?`,
       confirmLabel: 'Vincular',
     });
     if (!ok) return;
   }
+  if(btn) btn.disabled = true;
   try{
     const user = firebase.auth().currentUser;
     await ClientesService.updateCliente(clienteId, {
@@ -209,17 +283,17 @@ async function vincular(clienteId, qboId, qboName, riesgo){
     });
     if(cl){ cl.qbo_customer_id=qboId; cl.qbo_customer_name=qboName; }
     Toast.show('Cliente vinculado','ok'); render();
-  }catch(e){ console.error(e); Toast.show('No se pudo vincular','bad'); }
+  }catch(e){ console.error(e); Toast.show('No se pudo vincular','bad'); if(btn) btn.disabled = false; }
 }
 
-// Vínculo manual desde "Sin match": el select trae TODOS los Customers
+// Vínculo manual desde "Sin match": el combo trae TODOS los Customers
 // top-level; la confirmación es obligatoria (riesgo=true).
-function vincularManual(clienteId){
+function vincularManual(clienteId, btn){
   const sel = document.getElementById('qbo-man-'+clienteId);
   const qboId = sel && sel.value;
-  if(!qboId){ Toast.show('Elige el Customer de QuickBooks en la lista.','warn'); return; }
-  const c = custTop.find(x=>x.qbo_customer_id===qboId);
-  vincular(clienteId, qboId, (c && c.display_name) || '', true);
+  if(!qboId){ Toast.show('Busca y elige el Customer de QuickBooks en la lista.','warn'); return; }
+  const c = custTop.find(x=>String(x.qbo_customer_id)===String(qboId));
+  vincular(clienteId, qboId, (c && c.display_name) || '', true, btn);
 }
 
 async function desvincular(clienteId){

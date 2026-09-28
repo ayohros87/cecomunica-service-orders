@@ -196,12 +196,10 @@
     const cuerpoTabla = document.getElementById("cuerpoTabla");
 
     async function cargarEquipos() {
-      const datos = [];
-
-      for (const id of ids) {
-        const doc = await PocService.getPocDevice(id, { source: 'server' });
-        if (doc) datos.push(doc);
-      }
+      // En paralelo: antes eran N lecturas en serie (auditoría UX 2026-09-28, 4.7 #7).
+      const docs = await Promise.all(ids.map(id =>
+        PocService.getPocDevice(id, { source: 'server' }).catch(e => { console.warn('[imprimir] equipo', id, e); return null; })));
+      const datos = docs.filter(Boolean);
 
       datos.sort((a, b) => {
         const ua = (a.unit_id || "").toString().padStart(10, '0');
@@ -215,20 +213,23 @@
       document.getElementById("fechaHoy").textContent = new Date().toLocaleDateString("es-PA");
       document.getElementById("cantidadEquipos").textContent = datos.length;
 
+      // Todo texto de la ficha va escapado: un nombre o nota con "<" rompía la
+      // hoja (auditoría UX 2026-09-28, 4.7 #7).
+      const esc = v => FMT.esc(v);
       for (const d of datos) {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>${nombreClienteDe(d)}</td>
-          <td>${d.serial || ""}</td>
-          <td>${d.operador || ""}</td>
-          <td>${d.ip || ""}</td>
+          <td>${esc(nombreClienteDe(d))}</td>
+          <td>${esc(d.serial || "")}</td>
+          <td>${esc(d.operador || "")}</td>
+          <td>${esc(d.ip || "")}</td>
           <td>${d.gps ? "Sí" : "No"}</td>
           <td>${d.activo ? "Activo" : "Inactivo"}</td>
-          <td>${d.unit_id || ""}</td>
-          <td>${d.radio_name || ""}</td>
-          <td>${modeloDe(d)}</td>
-          <td>${(d.grupos || []).join(", ")}</td>
-          <td>${d.notas || ""}</td>
+          <td>${esc(d.unit_id || "")}</td>
+          <td>${esc(d.radio_name || "")}</td>
+          <td>${esc(modeloDe(d))}</td>
+          <td>${esc((d.grupos || []).join(", "))}</td>
+          <td>${esc(d.notas || "")}</td>
         `;
         cuerpoTabla.appendChild(tr);
       }

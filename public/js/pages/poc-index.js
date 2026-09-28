@@ -14,7 +14,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // background); en frío una sola lectura compartida con initRail.
     PocState.rolActual = (await Sesion.rol(user.uid)) || ROLES.VISTA;
 
-    const permitidos = [ROLES.ADMIN, ROLES.RECEPCION, ROLES.TECNICO, ROLES.VISTA, ROLES.JEFE_TALLER];
+    // GERENTE entra en solo lectura: modulos.js le muestra la tarjeta PoC y
+    // antes lo rebotaba con "No autorizado" (auditoría UX 2026-09-28, P0 #24).
+    const permitidos = [ROLES.ADMIN, ROLES.RECEPCION, ROLES.TECNICO, ROLES.VISTA, ROLES.JEFE_TALLER, ROLES.GERENTE];
     if (!permitidos.includes(PocState.rolActual)) {
       Toast.show('No autorizado. Tu rol no tiene acceso a este módulo.', 'bad');
       window.location.href = '/index.html';

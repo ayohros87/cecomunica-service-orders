@@ -203,6 +203,8 @@ function montarLote({ gestion = GESTION_GR, config = null } = {}) {
     document: doc,
     Option: class { constructor(v, t) { this.value = v; this.textContent = t ?? v; this.dataset = {}; } },
     Toast: { show: (msg, tipo) => registro.toasts.push({ msg, tipo }) },
+    // Guard de rol de nuevo-batch (auditoría UX 2026-09-28): recepción escribe.
+    Sesion: { rol: async () => "recepcion" },
     Modal: { confirm: async (o) => { registro.modales.push(o); return true; }, prompt: async () => null },
     FMT: { normalize: (s) => String(s || "").trim().toLowerCase(), normalizeGrupo: (s) => s, dedupGrupos: (a) => a, esc: (s) => s },
     ModelosService: { getModelos: async () => [{ id: "mPNC370", marca: "HYTERA", modelo: "PNC370-R" }] },
@@ -222,6 +224,12 @@ function montarLote({ gestion = GESTION_GR, config = null } = {}) {
       getRecent: async () => [],
       getByCliente: async () => [],
       addPocDevice: async (data) => { registro.creados.push(data); },
+      // Lote en WriteBatch (auditoría UX 2026-09-28): mismo registro que addPocDevice.
+      addPocDevicesBatch: async (items, { onProgress } = {}) => {
+        items.forEach(d => registro.creados.push(d));
+        if (onProgress) onProgress(items.length, items.length);
+        return items.map((_, i) => "nuevo" + i);
+      },
       softDeletePocDevice: async () => {},
       addLog: async () => {},
       stripSentinels: (o) => o,

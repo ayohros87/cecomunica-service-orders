@@ -50,7 +50,8 @@
 <script>
   Layout.renderTopbar({
     title: '<i data-lucide="file-output"></i> Emisión de facturas',
-    back: { href: '../inventario/modelos.html', label: '<i data-lucide="arrow-left"></i> Finanzas' },
+    // "Finanzas" = la Bandeja, portada del espacio (auditoría UX 2026-09-28).
+    back: { href: '../facturacion/bandeja.html', label: '<i data-lucide="arrow-left"></i> Finanzas' },
     showHome: true, homeHref: '../index.html', showLogout: true
   });
 </script>
@@ -71,7 +72,7 @@
       Lo que sí funciona hoy: los catálogos con mapeo QBO, el match de clientes, la
       <a href="./activacion.html">activación de facturación</a> (explícita y auditada) y la
       <b>vista previa del cálculo por contrato</b> (prorrateo ÷30, desglose, ITBMS) — está en
-      la pestaña Activación, contratos "Activos" → <i>Vista previa</i>. La emisión real es el
+      la pestaña <i>Facturará la app</i>, contratos "Activos" → <i>Vista previa</i>. La emisión real es el
       siguiente paso del plan QBO; mientras tanto la facturación se sigue haciendo directo en
       QuickBooks.
     </p>

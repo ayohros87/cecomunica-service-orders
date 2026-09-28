@@ -279,9 +279,11 @@ window.PocList = {
     const tdEstado = document.createElement('td');
     tdEstado.dataset.activo = d.activo ? 'true' : 'false';
     tdEstado.className = 'poc-estado-cell';
+    // El punto solo no se entendía (auditoría UX 2026-09-28, T1): va con texto.
     tdEstado.innerHTML = d.activo
-      ? '<span class="status-dot status-activo"></span>'
-      : '<span class="status-dot status-inactivo"></span>';
+      ? '<span class="status-dot status-activo" aria-hidden="true"></span> <span class="poc-estado-txt">Activo</span>'
+      : '<span class="status-dot status-inactivo" aria-hidden="true"></span> <span class="poc-estado-txt">Inactivo</span>';
+    tdEstado.title = d.activo ? 'Activo: el equipo está en servicio con el cliente' : 'Inactivo: la ficha sigue abierta pero el equipo no está en servicio';
     row.appendChild(tdEstado);
 
     // serial (4), ip (5), unit_id (6), radio_name (7)
@@ -337,20 +339,15 @@ window.PocList = {
       editBtn.onclick = () => PocEdit.abrir(row, docId, d);
       actionCell.appendChild(editBtn);
 
+      // "Eliminar" producía una ficha "Cerrada" reabrible: se llama por lo que
+      // hace (auditoría UX 2026-09-28, T1 y 4.7 #6).
       const delBtn = document.createElement('button');
       delBtn.className = 'btn btn-danger btn-icon btn-sm';
-      delBtn.title = 'Eliminar equipo';
-      delBtn.setAttribute('aria-label', 'Eliminar equipo');
-      delBtn.innerHTML = '<i data-lucide="trash-2"></i>';
+      delBtn.title = 'Cerrar ficha (el equipo ya no está con el cliente)';
+      delBtn.setAttribute('aria-label', 'Cerrar ficha');
+      delBtn.innerHTML = '<i data-lucide="archive"></i>';
       delBtn.onclick = async () => {
-        if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true })) {
-          await PocService.softDeletePocDevice(docId, {
-            antes: d, user: firebase.auth().currentUser, origen: 'poc-lista',
-          });
-          // Equipo eliminado con SIM → ofrecer devolver el SIM al pool.
-          await SimLiberar.procesarDesactivados([{ id: docId, antes: d, despues: { ...d, deleted: true } }]);
-          this.refresh();
-        }
+        if (await this.cerrarFicha(docId, d)) this.refresh();
       };
       actionCell.appendChild(delBtn);
       // (el "Reabrir" de una ficha cerrada va en la rama de arriba)
@@ -360,9 +357,54 @@ window.PocList = {
   },
 
   // ── Main loader (paginated) ──────────────────────────────────────
+  // ?focus=<valor>&campo=<campo>&id=<docId> (lo manda el Ctrl+K): la primera
+  // carga se convierte en la búsqueda de ese equipo y la fila queda resaltada.
+  // Antes el palette mandaba ?focus= y nadie lo leía (auditoría UX 2026-09-28,
+  // P0 #5). Devuelve true si tomó el control de la carga.
+  _focusLeido:     false,
+  _focusPendiente: false,
+  _focusId:        null,
+  _tomarFocusDeUrl() {
+    if (this._focusLeido) return false;
+    this._focusLeido = true;
+    let p;
+    try { p = new URLSearchParams(location.search); } catch (_) { return false; }
+    const valor = (p.get('focus') || '').trim();
+    if (!valor) return false;
+    const inCampo = document.getElementById('filtroCampo');
+    const inValor = document.getElementById('filtroValor');
+    if (!inCampo || !inValor) return false;
+    const campo = p.get('campo') || 'serial';
+    const valido = Array.from(inCampo.options || []).some(o => o.value === campo);
+    inCampo.value = valido ? campo : 'serial';
+    inValor.value = valor;
+    this._focusId = p.get('id') || null;
+    this._focusPendiente = true;
+    this.filtrar();
+    return true;
+  },
+
+  // Tras pintar la búsqueda del ?focus=: resalta la fila (por docId; si no,
+  // la única coincidencia) y la trae a la vista. Una sola vez.
+  _aplicarFocus(tbody) {
+    if (!this._focusPendiente) return;
+    this._focusPendiente = false;
+    const filas = Array.from(tbody.querySelectorAll('tr[data-id]'));
+    const fila = (this._focusId && filas.find(r => r.dataset.id === this._focusId))
+      || (filas.length === 1 ? filas[0] : null);
+    if (!fila) return;
+    fila.style.outline = '2px solid var(--accent, #0074AC)';
+    fila.style.outlineOffset = '-2px';
+    fila.style.background = 'var(--accent-soft, #e0f2fe)';
+    fila.setAttribute('tabindex', '-1');
+    try { fila.scrollIntoView({ block: 'center' }); fila.focus({ preventScroll: true }); } catch (_) { /* navegador viejo */ }
+  },
+
   cargar(reset = false) {
     const tbody      = document.getElementById('devicesTable');
     const btnCargar  = document.getElementById('btnCargarMas');
+
+    if (this._tomarFocusDeUrl()) return;
 
     // Guard en vuelo: el botón "Cargar más" tenía doble wiring (onclick del
     // HTML + addEventListener) y un clic disparaba DOS listPage con el mismo
@@ -614,6 +656,7 @@ window.PocList = {
         // clavada en created_at desc y "ordenar por Unit ID" no hacía nada).
         this._ordenarDocs(coincidencias);
         coincidencias.forEach(d => tbody.appendChild(this._buildRow(d.id, d)));
+        this._aplicarFocus(tbody);
         PocState.actualizarResumen({ total, activos, incompletos });
         // "No se encontraron resultados" se leía como "este equipo nunca estuvo
         // en POC", y muchas veces es al revés: la devolución CERRÓ la ficha
@@ -702,22 +745,39 @@ window.PocList = {
     });
   },
 
-  manejarCambioActivos() {
-    // Mutuamente excluyente con "Solo inactivos" (juntos = lista vacía).
-    if (document.getElementById('soloActivos')?.checked) {
-      const inactivos = document.getElementById('soloInactivos');
-      if (inactivos) inactivos.checked = false;
+  // "Cerrar ficha" (antes "Eliminar", que producía una ficha Cerrada
+  // reabrible; auditoría UX 2026-09-28, T1 y 4.7 #6). Explica qué pasa y qué
+  // se hace con el SIM; devuelve true si se cerró.
+  async cerrarFicha(docId, d) {
+    const sim = ((d.sim_number || d.sim || '') + '').trim();
+    const msg = 'La ficha pasa al histórico: deja de salir en la lista y en los conteos, y su Unit ID queda libre. '
+      + 'No se borra: se ve con "Incluir cerradas" y se puede <b>reabrir</b> si se cerró por error.'
+      + (sim ? `<br><br>Tiene el SIM <b>${FMT.esc(sim)}</b>: al cerrar te preguntamos si lo pones disponible en el pool de SIM o lo conservas en la ficha.` : '');
+    if (!await Modal.confirm({ title: 'Cerrar ficha', confirmLabel: 'Cerrar ficha', message: msg, danger: true })) return false;
+    try {
+      await PocService.softDeletePocDevice(docId, {
+        antes: d, user: firebase.auth().currentUser, origen: 'poc-lista',
+      });
+    } catch (e) {
+      console.error('[PocList] cerrar ficha', docId, e);
+      Toast.show('No se pudo cerrar la ficha: ' + (e.message || e), 'bad');
+      return false;
     }
-    const valorFiltro = document.getElementById('filtroValor').value.trim();
-    if (valorFiltro) this.filtrar(); else this.cargar(true);
+    // Ficha cerrada con SIM → ofrecer devolver el SIM al pool. Las filas de
+    // duplicados traen el SIM como `sim`, no `sim_number`.
+    const antes = { ...d, sim_number: d.sim_number || d.sim || '' };
+    await SimLiberar.procesarDesactivados([{ id: docId, antes, despues: { ...antes, deleted: true } }]);
+    return true;
   },
 
-  manejarCambioInactivos() {
-    // Mutuamente excluyente con "Solo activos".
-    if (document.getElementById('soloInactivos')?.checked) {
-      const activos = document.getElementById('soloActivos');
-      if (activos) activos.checked = false;
-    }
+  // Segmento único Todos/Activos/Inactivos (auditoría UX 2026-09-28, 4.7 #6).
+  // Reemplaza las dos casillas excluyentes; conserva #soloActivos y
+  // #soloInactivos (ocultas) porque el resto del archivo filtra con ellas.
+  cambiarEstadoActivo(valor) {
+    const a = document.getElementById('soloActivos');
+    const i = document.getElementById('soloInactivos');
+    if (a) a.checked = valor === 'activos';
+    if (i) i.checked = valor === 'inactivos';
     const valorFiltro = document.getElementById('filtroValor').value.trim();
     if (valorFiltro) this.filtrar(); else this.cargar(true);
   },
@@ -836,8 +896,8 @@ window.PocList = {
       tdEstado.dataset.activo = d.activo ? 'true' : 'false';
       tdEstado.className = 'poc-estado-cell';
       tdEstado.innerHTML = d.activo
-        ? '<span class="status-dot status-activo"></span>'
-        : '<span class="status-dot status-inactivo"></span>';
+        ? '<span class="status-dot status-activo" aria-hidden="true"></span> <span class="poc-estado-txt">Activo</span>'
+        : '<span class="status-dot status-inactivo" aria-hidden="true"></span> <span class="poc-estado-txt">Inactivo</span>';
       row.appendChild(tdEstado);
       if (d.activo) activos++;
 
@@ -868,18 +928,11 @@ window.PocList = {
 
         const btnElim = document.createElement('button');
         btnElim.className = 'btn btn-danger btn-icon btn-sm';
-        btnElim.title = 'Eliminar';
-        btnElim.setAttribute('aria-label', 'Eliminar equipo');
-        btnElim.innerHTML = '<i data-lucide="trash-2"></i>';
+        btnElim.title = 'Cerrar ficha (el equipo ya no está con el cliente)';
+        btnElim.setAttribute('aria-label', 'Cerrar ficha');
+        btnElim.innerHTML = '<i data-lucide="archive"></i>';
         btnElim.onclick = async () => {
-          if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true })) {
-            await PocService.softDeletePocDevice(d.id, {
-              antes: d, user: firebase.auth().currentUser, origen: 'poc-lista',
-            });
-            // Equipo eliminado con SIM → ofrecer devolver el SIM al pool.
-            await SimLiberar.procesarDesactivados([{ id: d.id, antes: d, despues: { ...d, deleted: true } }]);
-            this.cargar(true);
-          }
+          if (await this.cerrarFicha(d.id, d)) this.cargar(true);
         };
         acciones.appendChild(btnElim);
 
@@ -921,6 +974,23 @@ window.PocList = {
         created_at: d.created_at, updated_at: d.updated_at
       });
     });
+
+    // Unit ID: se repite solo DENTRO del mismo cliente (misma regla que el
+    // lote, la consola y el cajón), así que la clave lleva el cliente
+    // (auditoría UX 2026-09-28, 4.7 #4).
+    if (tipo === 'unit_id') {
+      const grupos = {};
+      equipos.forEach(e => {
+        const u = (e.unit_id ?? '').toString().trim().toUpperCase();
+        if (!u) return;
+        const k = (e.cliente_id || ('n:' + (e.cliente || '').toLowerCase())) + '|' + u;
+        (grupos[k] = grupos[k] || []).push(e);
+      });
+      const rep = Object.values(grupos).filter(arr => arr.length > 1).flat();
+      if (!rep.length) Toast.show('No hay Unit ID repetidos dentro de un mismo cliente.', 'ok');
+      this.mostrarResultadosFiltrados(rep);
+      return;
+    }
 
     const campoClave = tipo === 'serial' ? 'serial' : 'sim';
     const duplicados = equipos

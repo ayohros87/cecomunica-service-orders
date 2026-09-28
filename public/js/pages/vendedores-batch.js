@@ -190,7 +190,9 @@ window.VB = {
         found = Array.from(gruposSet);
       }
       found = found.sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
-      if (!found.length) Toast.show('Este cliente aún no tiene grupos. Agrégalos con “+ Grupo”.', 'warn');
+      // "+ Grupo" no existe en esta página: los grupos los crea recepción o el
+      // admin en Administrar grupos (auditoría UX 2026-09-28, P0 #26).
+      if (!found.length) Toast.show(VB._rol === ROLES.VENDEDOR ? 'Este cliente aún no tiene grupos. Pídele a recepción que los cree.' : 'Este cliente aún no tiene grupos. Créalos en Base PoC → Administrar grupos.', 'warn');
       this.gruposClienteCache.set(cacheKey, found);
       this.lsSet(lsKey, found);
       this._pintarGrupos(found);
@@ -693,8 +695,19 @@ window.VB = {
     const ws = XLSX.utils.json_to_sheet(datos);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Equipos');
-    XLSX.writeFile(wb, 'equipos-vendedores.xlsx');
+    XLSX.writeFile(wb, this._nombreArchivo('xlsx'));
     this.setStep('exp');
+  },
+
+  // lote-poc-<cliente>-<YYYYMMDD>.<ext>: con el nombre fijo
+  // "equipos-vendedores.json" recepción confundía lotes de clientes distintos
+  // en el mismo correo o chat (auditoría UX 2026-09-28, 4.7 #7).
+  _nombreArchivo(ext, clienteNombre) {
+    const cli = (clienteNombre || this.clienteNombreSeleccionado || document.getElementById('clienteGlobal')?.value || 'sin-cliente')
+      .toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'sin-cliente';
+    const fecha = (window.FMT?.hoyISOPanama ? FMT.hoyISOPanama() : new Date().toISOString().slice(0, 10)).replace(/-/g, '');
+    return `lote-poc-${cli}-${fecha}.${ext}`;
   },
 
   async descargarJSON() {
@@ -719,7 +732,7 @@ window.VB = {
     const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    a.href = url; a.download = 'equipos-vendedores.json';
+    a.href = url; a.download = this._nombreArchivo('json', datos[0]?.cliente_nombre);
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
     this.setStep('exp');
@@ -894,6 +907,7 @@ firebase.auth().onAuthStateChanged(async user => {
     VB.poblarDropdownModeloGlobal();
     const userDoc = await UsuariosService.getUsuario(user.uid);
     const rol     = userDoc ? userDoc.rol : null;
+    VB._rol = rol;
     if (![ROLES.ADMIN, ROLES.VENDEDOR, ROLES.RECEPCION].includes(rol)) {
       Toast.show('Acceso restringido.', 'bad');
       window.location.href = '../index.html';

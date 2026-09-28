@@ -49,6 +49,38 @@ const PocService = {
     return db.collection('poc_devices').add(this._conUnitIdNormalizado(data, true));
   },
 
+  // Alta de un lote con WriteBatch en tandas de 400 (tope de Firestore: 500
+  // escrituras por batch). Un lote normal (<400) queda TODO o NADA; antes
+  // eran N .add() en serie y un fallo a la mitad dejaba un lote parcial
+  // (auditoría UX 2026-09-28, 4.7 #8). `onProgress(hechos, total)` se llama
+  // antes de cada tanda y al final. Devuelve los ids creados; si una tanda
+  // falla, el error lleva `guardados` = cuántos quedaron escritos.
+  async addPocDevicesBatch(items, { onProgress = null, tanda = 400 } = {}) {
+    const db = firebase.firestore();
+    const col = db.collection('poc_devices');
+    const ids = [];
+    const total = (items || []).length;
+    for (let i = 0; i < total; i += tanda) {
+      if (onProgress) onProgress(i, total);
+      const batch = db.batch();
+      const idsTanda = [];
+      items.slice(i, i + tanda).forEach(data => {
+        const ref = col.doc();
+        batch.set(ref, this._conUnitIdNormalizado(data, true));
+        idsTanda.push(ref.id);
+      });
+      try {
+        await batch.commit();
+      } catch (e) {
+        e.guardados = ids.length;
+        throw e;
+      }
+      ids.push(...idsTanda);
+    }
+    if (onProgress) onProgress(total, total);
+    return ids;
+  },
+
   async updatePocDevice(id, fields) {
     const db = firebase.firestore();
     return db.collection('poc_devices').doc(id).update(this._conUnitIdNormalizado(fields, false));

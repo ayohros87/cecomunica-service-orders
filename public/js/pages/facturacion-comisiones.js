@@ -28,6 +28,9 @@ window.FacturacionComisiones = (() => {
   let busqueda = '';
   let abierto = null;
   let enVuelo = false;
+  // Cierre en lote (auditoría UX 2026-09-28, 4.8 #8): ids elegidos en la vista
+  // "Listas para pago". Antes eran 5-6 clics POR comisión al pagar la planilla.
+  const seleccion = new Set();
 
   const toDate = (v) => (v?.toDate ? v.toDate() : (v ? new Date(v) : null));
   const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -46,11 +49,11 @@ window.FacturacionComisiones = (() => {
     const [a, m] = ym.split('-');
     return `${MESES_LARGO[Number(m) - 1] || m} ${a}`;
   }
-  // Mes en curso, en hora local (no UTC: un cierre del día 1 caería al mes
-  // anterior — la misma trampa del correlativo de contratos).
+  // Mes en curso en hora de Panamá (no UTC: un cierre del día 1 caería al mes
+  // anterior — la misma trampa del correlativo de contratos; T8 de la
+  // auditoría UX 2026-09-28).
   function mesHoy() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return FMT.hoyISOPanama().slice(0, 7);
   }
 
   const REQ_LABEL = { firma: 'firma', entrega: 'entrega', pago: 'pago' };
@@ -108,9 +111,13 @@ window.FacturacionComisiones = (() => {
     const abiertaFila = abierto === a.id;
     const ref = a.contrato_id || a.gestion_id || a.id;
     const estTxt = { listo: 'Listo', esperando: 'Esperando', pagada: 'Pagada', no_aplica: 'No aplica' }[e] || e;
+    const conSel = modoLote();
+    const sel = conSel && e === 'listo'
+      ? `<label class="cm-sel" onclick="event.stopPropagation()" title="Incluir en el cierre en lote"><input type="checkbox" data-sel="${esc(a.id)}" ${seleccion.has(a.id) ? 'checked' : ''} aria-label="Seleccionar para cerrar"></label>`
+      : (conSel ? '<span></span>' : '');
     return `<div class="cm-row ${abiertaFila ? 'is-open' : ''} ${e === 'pagada' ? 'is-pagada' : ''}" data-row="${esc(a.id)}">
-      <div class="cm-main" onclick="FacturacionComisiones.toggle('${esc(a.id)}')">
-        <span class="cm-est cm-est--${e}">${estTxt}</span>
+      <div class="cm-main${conSel ? ' cm-main--sel' : ''}" onclick="FacturacionComisiones.toggle('${esc(a.id)}')">
+        ${sel}<span class="cm-est cm-est--${e}">${estTxt}</span>
         <div class="cm-txt">
           <div class="cm-t1"><b>${esc(a.cliente_nombre || '—')}</b>
             <span class="id">${esc(ref)}</span>
@@ -210,9 +217,68 @@ window.FacturacionComisiones = (() => {
           esc(sin ? 'SIN VENDEDOR ASIGNADO' : vendedorCorto(vendedor))}</span>
         <span class="meta">${filas.length} evento${filas.length === 1 ? '' : 's'}${listas ? ` · ${listas} lista${listas === 1 ? '' : 's'} para pago` : ''}</span>
         ${abiertas.length ? `<span class="tot">${money(total)} en base abierta</span>` : ''}
+        ${modoLote() && !sin && listas ? `<button type="button" class="btn btn-ghost btn-sm" data-sel-vendedor="${esc(vendedor)}">Seleccionar sus ${listas}</button>` : ''}
       </div>
       <div class="cm-rows">${filas.map(filaHtml).join('')}</div>
     </div>`;
+  }
+
+  // El lote solo existe en "Listas para pago" y para quien puede liberar.
+  function modoLote() { return filtro === 'listo' && S().puedeComisionar(rol); }
+
+  function pintarLote() {
+    const box = document.getElementById('cmLote');
+    if (!box) return;
+    if (!modoLote()) { box.hidden = true; box.innerHTML = ''; return; }
+    const elegidas = todas.filter(a => seleccion.has(a.id));
+    const base = elegidas.reduce((s, a) => s + Number(a.comision?.base || 0), 0);
+    const meses = [...new Set([mesHoy(), ...elegidas.map(a => mesDe(a.fecha_efectiva)).filter(Boolean)])].sort().reverse();
+    const pAnterior = document.getElementById('cmLoteP')?.value;
+    const nAnterior = document.getElementById('cmLoteN')?.value || '';
+    box.hidden = false;
+    box.innerHTML = `
+      <span class="cm-lote-n"><b>${elegidas.length}</b> seleccionada${elegidas.length === 1 ? '' : 's'}${elegidas.length ? ` · base ${money(base)}` : ''}</span>
+      <button type="button" class="btn btn-ghost btn-sm" data-lote="todas">Todas las visibles</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-lote="ninguna" ${elegidas.length ? '' : 'disabled'}>Ninguna</button>
+      <span class="sep"></span>
+      <label for="cmLoteP">Período</label>
+      <select id="cmLoteP" class="form-select" style="width:160px;">
+        ${meses.map(m => `<option value="${m}" ${m === pAnterior ? 'selected' : ''}>${mesLabel(m)}</option>`).join('')}
+      </select>
+      <input id="cmLoteN" class="form-input" placeholder="Nota (planilla, quincena…)" autocomplete="off" style="width:200px;" value="${esc(nAnterior)}">
+      <button type="button" class="btn btn-primary btn-sm" id="cmLoteBtn" ${elegidas.length ? '' : 'disabled'}>
+        <i data-lucide="badge-dollar-sign"></i> Cerrar seleccionadas</button>`;
+  }
+
+  async function cerrarLote() {
+    const elegidas = todas.filter(a => seleccion.has(a.id) && est(a) === 'listo');
+    if (!elegidas.length) { Toast.show('Selecciona al menos una comisión lista para pago.', 'warn'); return; }
+    const p = document.getElementById('cmLoteP')?.value || mesHoy();
+    const nota = document.getElementById('cmLoteN')?.value || '';
+    const base = elegidas.reduce((s, a) => s + Number(a.comision?.base || 0), 0);
+    const vendedores = new Set(elegidas.map(a => a.comision?.vendedor_email || '')).size;
+    const ok = await Modal.confirm({
+      title: 'Cerrar comisiones en lote', confirmLabel: `Cerrar ${elegidas.length}`,
+      message: `Vas a cerrar <b>${elegidas.length}</b> comisión(es) de <b>${vendedores}</b> vendedor(es), base total <b>${money(base)}</b>, en el período <b>${esc(mesLabel(p))}</b>.<br><br>Queda registrado que tú las liberaste y cuándo. Cada una se puede reabrir si fue un error.`,
+    });
+    if (!ok) return;
+    const btn = document.getElementById('cmLoteBtn');
+    await withBusy(btn, async () => {
+      enVuelo = true;
+      const errores = [];
+      let hechas = 0;
+      try {
+        for (const a of elegidas) {
+          if (btn) btn.lastChild.textContent = ` Cerrando ${hechas + errores.length + 1}/${elegidas.length}…`;
+          try { await S().cerrarPeriodo(a, p, nota); hechas++; seleccion.delete(a.id); }
+          catch (e) { console.error('[comisiones] lote', a.id, e); errores.push({ a, msg: e.message || String(e) }); }
+        }
+      } finally { enVuelo = false; }
+      await cargar();
+      if (!errores.length) { Toast.show(`${hechas} comisión(es) liberada(s) en ${mesLabel(p)}`, 'ok'); return; }
+      await Modal.alert({ title: 'Cierre en lote incompleto', icon: 'alert-triangle',
+        message: `Se cerraron ${hechas} de ${elegidas.length}. Estas no se cerraron (siguen seleccionadas):<ul style="margin:8px 0 0 18px;">${errores.map(({ a, msg }) => `<li><b>${esc(a.cliente_nombre || a.id)}</b>: ${esc(msg)}</li>`).join('')}</ul>` });
+    }, { label: 'Cerrando…', rethrow: false });
   }
 
   function render() {
@@ -251,6 +317,11 @@ window.FacturacionComisiones = (() => {
       grupos.get(v).sort((a, b) => (toDate(a.fecha_efectiva) || 0) - (toDate(b.fecha_efectiva) || 0));
     }
 
+    // La selección solo guarda lo que sigue visible y listo.
+    const idsListos = new Set(filas.filter(a => est(a) === 'listo').map(a => a.id));
+    [...seleccion].forEach(id => { if (!modoLote() || !idsListos.has(id)) seleccion.delete(id); });
+    pintarLote();
+
     const cont = document.getElementById('cmRows');
     cont.innerHTML = filas.length
       ? orden.map(v => grupoHtml(v, grupos.get(v))).join('')
@@ -261,7 +332,7 @@ window.FacturacionComisiones = (() => {
   // ── Formularios ─────────────────────────────────────────────────────────
   function formPago(id) {
     const a = todas.find(x => x.id === id); if (!a) return;
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = FMT.hoyISOPanama(); // hora de Panamá, no UTC (T8)
     const el = document.getElementById(`cmForm-${id}`); if (!el) return;
     el.innerHTML = `<div class="cm-form">
       <div><label for="pgF-${esc(id)}">Factura (QuickBooks)</label>
@@ -394,7 +465,7 @@ window.FacturacionComisiones = (() => {
       return [
         c.vendedor_email || 'SIN VENDEDOR', est(a), a.cliente_nombre || '',
         a.contrato_id || a.gestion_id || a.id, a.titulo || a.tipo || '',
-        d && !isNaN(d) ? d.toISOString().slice(0, 10) : '',
+        d && !isNaN(d) ? FMT.fechaISOPanama(d) : '',
         c.base == null ? '' : Number(c.base).toFixed(2), c.base_de || '',
         req(r.firma), req(r.entrega), req(r.pago),
         r.pago?.factura || '', c.periodo || '', c.liberada_por || '',
@@ -406,7 +477,7 @@ window.FacturacionComisiones = (() => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `comisiones_${filtro}${periodo ? '_' + periodo : ''}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `comisiones_${filtro}${periodo ? '_' + periodo : ''}_${FMT.hoyISOPanama()}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   }
@@ -472,6 +543,27 @@ window.FacturacionComisiones = (() => {
       periodo = ev.target.value; abierto = null; render();
     });
     document.getElementById('cmCsv')?.addEventListener('click', csv);
+    // Cierre en lote: casillas por fila, "seleccionar las del vendedor" y la barra.
+    document.getElementById('cmRows')?.addEventListener('change', (ev) => {
+      const cb = ev.target.closest('input[data-sel]'); if (!cb) return;
+      const id = cb.getAttribute('data-sel');
+      if (cb.checked) seleccion.add(id); else seleccion.delete(id);
+      pintarLote(); if (window.lucide?.createIcons) lucide.createIcons();
+    });
+    document.getElementById('cmRows')?.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-sel-vendedor]'); if (!b) return;
+      const v = b.getAttribute('data-sel-vendedor');
+      visibles().filter(a => est(a) === 'listo' && (a.comision.vendedor_email || '') === v).forEach(a => seleccion.add(a.id));
+      render();
+    });
+    document.getElementById('cmLote')?.addEventListener('click', (ev) => {
+      const b = ev.target.closest('button'); if (!b) return;
+      if (b.id === 'cmLoteBtn') { cerrarLote(); return; }
+      const q = b.getAttribute('data-lote');
+      if (q === 'todas') visibles().filter(a => est(a) === 'listo').forEach(a => seleccion.add(a.id));
+      if (q === 'ninguna') seleccion.clear();
+      if (q) render();
+    });
   }
 
   function init() {

@@ -44,9 +44,29 @@ window.FacturacionAvisosService = {
     const snap = await this._col().where('estado', 'in', ['pendiente', 'esperando']).get();
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
+  // Los `limite` cerrados MÁS RECIENTES (por updated_at desc). Antes era
+  // where+limit sin orderBy: al pasar de 200 "Ver hechos" habría mostrado un
+  // subconjunto arbitrario (auditoría UX 2026-09-28, 4.8 #5). where(estado in)
+  // + orderBy(updated_at) pediría un índice compuesto que no existe; en su
+  // lugar se pagina sobre el índice simple de updated_at y se filtra el
+  // estado aquí (los abiertos son decenas, así que casi siempre es 1 página).
+  // Todo aviso nace con updated_at (lib/facturacionAvisos) y cada marca lo toca.
   async listCerrados(limite = 200) {
-    const snap = await this._col().where('estado', 'in', ['hecho', 'descartado']).limit(limite).get();
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const CERRADOS = ['hecho', 'descartado'];
+    const out = [];
+    let cursor = null;
+    for (let vuelta = 0; vuelta < 20 && out.length < limite; vuelta++) {
+      let q = this._col().orderBy('updated_at', 'desc').limit(limite);
+      if (cursor) q = q.startAfter(cursor);
+      const snap = await q.get();
+      snap.docs.forEach(d => {
+        const x = d.data();
+        if (CERRADOS.includes(x.estado) && out.length < limite) out.push({ id: d.id, ...x });
+      });
+      if (snap.size < limite) break;
+      cursor = snap.docs[snap.docs.length - 1];
+    }
+    return out;
   },
 
   // ── Comisiones (docs/plans/PLAN_COMISIONES.md F2) ─────────────────────────

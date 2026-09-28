@@ -328,6 +328,15 @@ document.addEventListener("DOMContentLoaded", () => {
   firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) return void (window.location.href = "/login.html");
 
+    // Solo administrador y recepción dan de alta consolas (mismo criterio que
+    // PocState.esLectura). Antes no había guard (auditoría UX 2026-09-28, 4.7 #3).
+    const rolNC = await Sesion.rol(user.uid).catch(() => null);
+    if (!["administrador", "recepcion"].includes(rolNC)) {
+      Toast.show("Solo recepción o administración crean consolas PoC. Te llevamos a la Base PoC.", "warn");
+      setTimeout(() => { window.location.href = "/POC/index.html"; }, 1200);
+      return;
+    }
+
     await cargarIPs();
     await cargarClientes();
     renderGrupos();

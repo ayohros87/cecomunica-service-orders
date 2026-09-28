@@ -15,6 +15,9 @@ window.FacturacionBandeja = (() => {
   const S = () => window.FacturacionAvisosService;
   const esc = (s) => FMT.esc(s);
   const money = (n) => `$${Number(n || 0).toFixed(2)}`;
+  // Un solo nombre por paso en toda la pantalla (auditoría UX 2026-09-28, T1):
+  // "POC" solo se confundía con la Base PoC; el paso es la plataforma.
+  const PASO_LABEL = { qbo: 'QBO', poc: 'Plataforma PoC' };
 
   let rol = null;
   let pendientes = [];
@@ -99,7 +102,7 @@ window.FacturacionBandeja = (() => {
         else if (!a.pasos?.qbo?.hecho) partes.push('cobro único, pendiente de facturar');
         break;
       case 'terminacion_completada':
-        partes.push(`Flota recuperada <b>${fCorta(a.fecha_efectiva)}</b>${c.orden ? ` (devolución ${esc(c.orden)})` : ''} · cerrar en QuickBooks y apagar en POC`);
+        partes.push(`Flota recuperada <b>${fCorta(a.fecha_efectiva)}</b>${c.orden ? ` (devolución ${esc(c.orden)})` : ''} · cerrar en QuickBooks y apagar en la Plataforma PoC`);
         break;
       default:
         partes.push(`Efectivo <b>${fCorta(a.fecha_efectiva)}</b>`);
@@ -209,7 +212,7 @@ window.FacturacionBandeja = (() => {
       // 10429.". El número es el dato que consulta la verificación del pago.
       return `<div class="fb-pop show" data-pop="${esc(a.id)}">
         <h6>Hecho en QuickBooks</h6>
-        <label>Facturar desde</label>
+        <label>${a.efecto === 'termina' ? 'Deja de cobrarse el' : 'Facturar desde'}</label>
         <input type="date" class="form-input" data-f="desde" value="${esc(def)}">
         <div class="hint">${a.efecto === 'termina' ? 'Fecha en que deja de cobrarse.' : `Prellenada con la fecha efectiva.${c.contrato_fecha ? ` Cámbiala si acordaron otra (por ejemplo, la del contrato: ${fLarga(c.contrato_fecha)}).` : ''}`}</div>
         <label>N.° de factura</label>
@@ -225,7 +228,7 @@ window.FacturacionBandeja = (() => {
       </div>`;
     }
     return `<div class="fb-pop show" data-pop="${esc(a.id)}">
-      <h6>Hecho en POC</h6>
+      <h6>Hecho en la Plataforma PoC</h6>
       <label>Nota (opcional)</label>
       <input type="text" class="form-input" data-f="nota" maxlength="140" placeholder="Qué se activó o ajustó">
       <div class="err" data-f="err"></div>
@@ -312,19 +315,19 @@ window.FacturacionBandeja = (() => {
     let pie = '';
     if (a.estado === 'descartado') {
       const ds = a.descarte || {};
-      pie = `<div class="fb-detfoot"><span class="fb-descartado">Descartado: <b>${esc(S().motivoLabel(ds.motivo))}</b>${ds.nota ? ` · ${esc(ds.nota)}` : ''} — ${esc((ds.por_email || '').split('@')[0])} · ${fHora(ds.at)}</span>
+      pie = `<div class="fb-detfoot"><span class="fb-descartado">No aplica: <b>${esc(S().motivoLabel(ds.motivo))}</b>${ds.nota ? ` · ${esc(ds.nota)}` : ''} — ${esc((ds.por_email || '').split('@')[0])} · ${fHora(ds.at)}</span>
         <span class="push"></span><button type="button" class="btn btn-sm" data-act="reactivar" data-id="${esc(a.id)}"><i data-lucide="undo-2"></i> Reactivar</button></div>`;
     } else if (descartando === a.id) {
       const opts = S().MOTIVOS_DESCARTE.map(m => `<option value="${esc(m.codigo)}">${esc(m.label)}</option>`).join('');
       pie = `<div class="fb-desc" data-desc="${esc(a.id)}"><div class="t">¿Por qué no aplica este aviso?</div>
         <select class="form-input" data-f="motivo" style="max-width:280px"><option value="">Selecciona el motivo…</option>${opts}</select>
         <input class="form-input" data-f="nota" type="text" maxlength="140" placeholder="Nota (opcional; obligatoria si es 'Otro')" style="flex:1;min-width:200px">
-        <button type="button" class="btn btn-sm btn-danger" data-act="desc-ok" data-id="${esc(a.id)}">Descartar</button>
+        <button type="button" class="btn btn-sm btn-danger" data-act="desc-ok" data-id="${esc(a.id)}">Marcar no aplica</button>
         <button type="button" class="btn btn-sm btn-ghost" data-act="desc-cancel">Cancelar</button>
         <div class="err" data-f="err"></div></div>`;
     } else {
       const deshacer = ['qbo', 'poc'].filter(k => a.pasos?.[k]?.hecho)
-        .map(k => `<button type="button" class="btn btn-sm btn-ghost" data-act="deshacer" data-id="${esc(a.id)}" data-paso="${k}" title="Vuelve a pendiente; el historial conserva quién lo había marcado"><i data-lucide="rotate-ccw"></i> Deshacer ${k.toUpperCase()}</button>`).join('');
+        .map(k => `<button type="button" class="btn btn-sm btn-ghost" data-act="deshacer" data-id="${esc(a.id)}" data-paso="${k}" title="Vuelve a pendiente; el historial conserva quién lo había marcado"><i data-lucide="rotate-ccw"></i> Deshacer ${PASO_LABEL[k]}</button>`).join('');
       pie = `<div class="fb-detfoot">${deshacer}<span class="push"></span>
         ${a.estado !== 'hecho' ? `<button type="button" class="btn btn-sm btn-ghost" data-act="descartar" data-id="${esc(a.id)}" style="color:#991B1B">No aplica…</button>` : ''}</div>`;
     }
@@ -346,7 +349,7 @@ window.FacturacionBandeja = (() => {
         </div>
         ${montoHtml(a)}
         ${ageHtml(a)}
-        <div class="fb-pasos">${pasoHtml(a, 'qbo', 'QBO')}${pasoHtml(a, 'poc', 'POC')}<span class="fb-more" aria-hidden="true">···</span></div>
+        <div class="fb-pasos">${pasoHtml(a, 'qbo', PASO_LABEL.qbo)}${pasoHtml(a, 'poc', PASO_LABEL.poc)}<span class="fb-more" aria-hidden="true">···</span></div>
       </div>
       ${abierto === a.id ? detalleHtml(a) : ''}
     </div>`;
@@ -368,32 +371,40 @@ window.FacturacionBandeja = (() => {
       a.contexto?.cotizacion_id, a.orden_id, a.pasos?.qbo?.factura,
     ].some(v => String(v || '').toLowerCase().includes(q));
   }
+  // "Pendientes" = estado pendiente, el mismo número del badge de la pestaña;
+  // los que esperan la entrega van en su propio chip "En espera" (antes el
+  // chip los sumaba y el badge no: dos números para lo mismo; auditoría UX
+  // 2026-09-28, T1).
   function pasaFiltro(a) {
-    if (filtro === 'all') return true;
+    if (filtro === 'all') return a.estado !== 'esperando';
     if (filtro === 'espera') return a.estado === 'esperando';
     return a.estado !== 'esperando' && a.efecto === filtro;
   }
 
   function render() {
     // Conteos (sobre pendientes, sin la búsqueda)
-    const cnt = { all: pendientes.length, arranca: 0, cambia: 0, termina: 0, espera: 0 };
-    pendientes.forEach(a => { if (a.estado === 'esperando') cnt.espera++; else if (cnt[a.efecto] != null) cnt[a.efecto]++; });
+    const cnt = { all: 0, arranca: 0, cambia: 0, termina: 0, espera: 0 };
+    pendientes.forEach(a => {
+      if (a.estado === 'esperando') { cnt.espera++; return; }
+      cnt.all++;
+      if (cnt[a.efecto] != null) cnt[a.efecto]++;
+    });
     document.querySelectorAll('#fbChips [data-cnt]').forEach(el => { el.textContent = cnt[el.getAttribute('data-cnt')] ?? 0; });
     document.querySelectorAll('#fbChips .fb-chip').forEach(el => {
       const on = el.getAttribute('data-f') === filtro;
       el.classList.toggle('active', on); el.setAttribute('aria-selected', on ? 'true' : 'false');
     });
-    const activos = pendientes.filter(a => a.estado === 'pendiente').length;
-    if (window.WorkspaceTabs) WorkspaceTabs.setBadge('bandeja', activos);
+    if (window.WorkspaceTabs) WorkspaceTabs.setBadge('bandeja', cnt.all);
 
     const lista = pendientes.filter(pasaFiltro).filter(coincide).sort(orden);
     let html = lista.map(filaHtml).join('');
     if (!lista.length) {
-      html = `<div class="fb-vacio"><i data-lucide="check-circle-2"></i><div>${busqueda ? 'Nada coincide con la búsqueda.' : 'Nada pendiente de facturar. Los avisos nuevos aparecen aquí y por correo a activaciones@.'}</div></div>`;
+      const enEspera = filtro === 'all' && cnt.espera ? ` Hay ${cnt.espera} en espera de la entrega (chip "En espera").` : '';
+      html = `<div class="fb-vacio"><i data-lucide="check-circle-2"></i><div>${busqueda ? 'Nada coincide con la búsqueda.' : 'Nada pendiente de facturar. Los avisos nuevos aparecen aquí y por correo a activaciones@.'}${enEspera}</div></div>`;
     }
     if (verCerrados) {
       const cl = cerrados.filter(coincide).sort((a, b) => (toDate(b.updated_at)?.getTime() || 0) - (toDate(a.updated_at)?.getTime() || 0));
-      html += `<div class="fb-sep">Hechos y descartados <span style="font-weight:500;letter-spacing:0">(${cl.length})</span></div>` +
+      html += `<div class="fb-sep">Hechos y no aplica <span style="font-weight:500;letter-spacing:0">(${cl.length})</span></div>` +
         (cl.length ? cl.map(filaHtml).join('') : `<div class="fb-vacio">Todavía no hay avisos cerrados.</div>`);
     }
     const mount = document.getElementById('fbRows');
@@ -493,12 +504,12 @@ window.FacturacionBandeja = (() => {
         try {
           const r = await S().marcarPaso(a, paso, datos);
           a.pasos[paso] = r.paso; a.estado = r.estado;
-          a.historial = (a.historial || []).concat([{ accion: `${paso}_hecho`, detalle: paso === 'qbo' ? `QuickBooks hecho · facturar desde ${datos.facturar_desde}` : 'POC hecho', fecha_iso: new Date().toISOString(), por_email: firebase.auth().currentUser?.email }]);
+          a.historial = (a.historial || []).concat([{ accion: `${paso}_hecho`, detalle: paso === 'qbo' ? `QuickBooks hecho · ${a.efecto === 'termina' ? 'deja de cobrarse el' : 'facturar desde'} ${datos.facturar_desde}` : 'Plataforma PoC hecha', fecha_iso: new Date().toISOString(), por_email: firebase.auth().currentUser?.email }]);
           popAbierto = null;
           if (a.estado === 'hecho') {
             pendientes = pendientes.filter(x => x.id !== a.id); cerrados.unshift(a);
             Toast.show(`${a.cliente_nombre}: listo. Sale de la bandeja.`, 'ok');
-          } else Toast.show(`${paso.toUpperCase()} marcado.`, 'ok');
+          } else Toast.show(`${PASO_LABEL[paso] || paso} marcado.`, 'ok');
           render();
         } catch (e) {
           const err = pop.querySelector('[data-f="err"]'); if (err) err.textContent = e.message || 'Error';
@@ -509,7 +520,7 @@ window.FacturacionBandeja = (() => {
     }
     if (act === 'deshacer') {
       const paso = t.getAttribute('data-paso');
-      const ok = await Modal.confirm({ title: `Deshacer ${paso.toUpperCase()}`, message: 'El paso vuelve a pendiente. El historial conserva quién lo había marcado.', confirmLabel: 'Deshacer' });
+      const ok = await Modal.confirm({ title: `Deshacer ${PASO_LABEL[paso] || paso}`, message: 'El paso vuelve a pendiente. El historial conserva quién lo había marcado.', confirmLabel: 'Deshacer' });
       if (!ok) return;
       await conCandado(async () => {
         const r = await S().deshacerPaso(a, paso);
@@ -528,7 +539,7 @@ window.FacturacionBandeja = (() => {
       await conCandado(async () => {
         try {
           await S().descartar(a, { motivo, nota });
-          descartando = null; Toast.show('Descartado.', 'ok'); await cargar();
+          descartando = null; Toast.show('Marcado como no aplica. Sale de la bandeja.', 'ok'); await cargar();
           if (verCerrados) cerrados = await S().listCerrados();
           render();
         } catch (e) { box.querySelector('[data-f="err"]').textContent = e.message || 'Error'; throw e; }
@@ -576,6 +587,9 @@ window.FacturacionBandeja = (() => {
         cerrados = await S().listCerrados();
       }
     }
+    // Un aviso en espera ya no sale en "Pendientes": el deep-link cambia de chip.
+    const av = porId(id);
+    if (av && av.estado === 'esperando') filtro = 'espera';
     abierto = id; render();
     const row = document.querySelector(`[data-row="${CSS.escape(id)}"]`);
     if (row) row.scrollIntoView({ block: 'center' });

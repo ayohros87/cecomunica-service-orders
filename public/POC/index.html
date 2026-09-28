@@ -25,7 +25,7 @@
        el cajón de editar salía como un panel de 500px sobre una plana
        diminuta (visto con el emulador, 2026-09-10). -->
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Equipos PoC - Cecomunica</title>
+  <title>Base PoC - Cecomunica</title>
   <link rel="stylesheet" href="../css/ceco-ui.css?v=bf320539">
   <!-- Rediseño Command Center F4: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=dc265958">
@@ -69,6 +69,16 @@
     .status-dot       { display:inline-block; width:12px; height:12px; border-radius:50%; }
     .status-activo    { background:#22c55e; }
     .status-inactivo  { background:#ef4444; }
+    .poc-estado-cell  { white-space: nowrap; }
+    .poc-estado-txt   { font-size: 12px; color: var(--fg-3); vertical-align: 1px; }
+    /* Segmento Todos/Activos/Inactivos */
+    .poc-seg { display:inline-flex; border:1px solid var(--border-default); border-radius:var(--radius-pill); overflow:hidden; background:var(--surface-sunken); }
+    .poc-seg label { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; font-size:12px; font-weight:500; color:var(--fg-2); cursor:pointer; white-space:nowrap; }
+    .poc-seg label + label { border-left:1px solid var(--border-default); }
+    .poc-seg input { position:absolute; opacity:0; pointer-events:none; }
+    .poc-seg label:has(input:checked) { background:var(--accent-soft, rgba(0,180,216,0.10)); color:var(--accent); }
+    .poc-seg label:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:-2px; }
+    .poc-seg .status-dot { width:8px; height:8px; }
 
     /* Resumen badge (count of devices) */
     .resumen-badge {
@@ -175,14 +185,14 @@
   <div id="topbar-mount"></div>
   <script>
     Layout.renderTopbar({
-      title: '<i data-lucide="radio-tower"></i> Equipos PoC',
-      actions: [{ label: '<i data-lucide="plus"></i> Nuevo equipo', href: 'nuevo-batch.html', cls: 'primary', id: 'btnBatch' }],
+      title: '<i data-lucide="radio-tower"></i> Base PoC',
+      actions: [{ label: '<i data-lucide="plus"></i> Nuevo lote', href: 'nuevo-batch.html', cls: 'primary', id: 'btnBatch' }],
       menu: [
         // Las consolas no salen del batch: no tienen serial (van como CARGO del
         // contrato, no como equipo), así que tienen su propia alta.
         { label: '<i data-lucide="monitor"></i> Nueva consola', href: 'nueva-consola.html', id: 'btnNuevaConsola' },
         { label: '<i data-lucide="download"></i> Importar', href: 'importar-poc.html', id: 'btnImportar' },
-        { label: '<i data-lucide="briefcase"></i> Vendedores (batch)', href: 'vendedores-batch.html' },
+        { label: '<i data-lucide="briefcase"></i> Preparar lote (Ventas)', href: 'vendedores-batch.html', id: 'btnVendedoresBatch' },
         { label: '<i data-lucide="credit-card"></i> SIM cards', href: 'sim-cards.html', id: 'btnSimCards' }
       ],
       showHome: true, homeHref: '../index.html', showLogout: true
@@ -245,8 +255,15 @@
           <button class="btn btn-ghost btn-icon btn-sm" onclick="PocList.limpiarFiltro()" aria-label="Limpiar filtro"><i data-lucide="rotate-ccw"></i></button>
         </div>
 
-        <label class="toggle-pill"><input type="checkbox" id="soloActivos" onchange="PocList.manejarCambioActivos()"> <i data-lucide="check-circle" style="width:14px;height:14px;"></i> Solo activos</label>
-        <label class="toggle-pill"><input type="checkbox" id="soloInactivos" onchange="PocList.manejarCambioInactivos()"> <i data-lucide="x-circle" style="width:14px;height:14px;"></i> Solo inactivos</label>
+        <!-- Un solo segmento en vez de dos casillas excluyentes (auditoría UX
+             2026-09-28). Las casillas ocultas siguen siendo lo que lee poc-list. -->
+        <div class="poc-seg" role="radiogroup" aria-label="Estado del equipo">
+          <label><input type="radio" name="pocEstadoActivo" value="todos" checked onchange="PocList.cambiarEstadoActivo(this.value)"> Todos</label>
+          <label><input type="radio" name="pocEstadoActivo" value="activos" onchange="PocList.cambiarEstadoActivo(this.value)"><span class="status-dot status-activo" aria-hidden="true"></span> Activos</label>
+          <label><input type="radio" name="pocEstadoActivo" value="inactivos" onchange="PocList.cambiarEstadoActivo(this.value)"><span class="status-dot status-inactivo" aria-hidden="true"></span> Inactivos</label>
+        </div>
+        <input type="checkbox" id="soloActivos" hidden aria-hidden="true">
+        <input type="checkbox" id="soloInactivos" hidden aria-hidden="true">
         <label class="toggle-pill"><input type="checkbox" id="soloIncompletos" onchange="PocList.manejarCambioIncompletos()"> <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> Solo incompletos</label>
         <label class="toggle-pill" title="Equipos sin contrato vinculado"><input type="checkbox" id="soloSinContrato" onchange="PocList.manejarCambioSinContrato()"> <i data-lucide="file-x" style="width:14px;height:14px;"></i> Sin contrato</label>
         <!-- Histórico: una devolución CIERRA la ficha de POC (el radio ya no está
@@ -276,6 +293,7 @@
           <div class="overflow-menu-dropdown" id="pocDupDrop">
             <button class="overflow-menu-item" onclick="PocList.filtrarDuplicados('serial')"><i data-lucide="copy"></i> Seriales duplicados</button>
             <button class="overflow-menu-item" onclick="PocList.filtrarDuplicados('sim')"><i data-lucide="smartphone"></i> SIMs duplicados</button>
+            <button class="overflow-menu-item" onclick="PocList.filtrarDuplicados('unit_id')" title="Unit ID repetidos dentro de un mismo cliente"><i data-lucide="hash"></i> Unit IDs duplicados</button>
             <button class="overflow-menu-item" onclick="PocList.buscarGruposInvalidos()" title="Busca equipos cuyo campo grupos contiene '...' o '🔍'"><i data-lucide="alert-triangle"></i> Grupos inválidos</button>
           </div>
         </div>
@@ -283,7 +301,7 @@
 
       <!-- Devices table -->
       <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
-        <table class="app-table" aria-label="Equipos PoC">
+        <table class="app-table" aria-label="Base PoC">
           <thead>
             <tr id="encabezadoTabla">
               <th style="width:36px;"><input type="checkbox" onclick="PocList.toggleSeleccionMasiva(this)" class="check-all" aria-label="Seleccionar todos"></th>

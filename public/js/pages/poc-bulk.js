@@ -101,91 +101,147 @@ window.PocBulk = {
     if (btnCancelar) btnCancelar.style.display = 'inline-block';
   },
 
+  // withBusy + try/catch por fila (auditoría UX 2026-09-28, T3 y 4.7 #5-6):
+  // antes un fallo a la mitad abortaba el bucle sin aviso, dejaba la página en
+  // modo edición y un doble click guardaba dos veces.
   async guardar() {
+    const btn = document.getElementById('btnGuardarMasivo');
+    return withBusy(btn, () => this._guardar(), { label: 'Guardando…', rethrow: false });
+  },
+
+  async _guardar() {
     const seleccionados = PocList.obtenerSeleccionados();
     if (seleccionados.length === 0) { Toast.show('Selecciona al menos un equipo.', 'bad'); return; }
     if (seleccionados.length > this.MAX_BULK) {
       Toast.show(`No puedes guardar más de ${this.MAX_BULK} equipos en una sola operación.`, 'bad');
       return;
     }
-    if (!await Modal.confirm({ message: `Vas a actualizar ${seleccionados.length} equipos. ¿Confirmas continuar?` })) return;
 
     const user = firebase.auth().currentUser;
     const COL  = PocState.COL;
-    let actualizados = 0;
-    const cambiosParaLiberar = [];   // equipos que pasaron a inactivo con SIM
 
-    for (const { id, fila } of seleccionados) {
+    // 1) Leer lo tecleado y el doc actual de cada fila ANTES de escribir nada.
+    const filas = seleccionados.map(({ id, fila }) => {
       const celdas    = fila.querySelectorAll('td');
-      const operador  = celdas[COL.operador].querySelector('select.bulk-operador')?.value || '';
-      const activo    = celdas[COL.activo].querySelector('input')?.checked  || false;
-      const serial    = celdas[COL.serial].querySelector('input')?.value    || '';
-      const ip        = celdas[COL.ip].querySelector('input')?.value        || '';
-      const unit_id   = celdas[COL.unit_id].querySelector('input')?.value   || '';
-      const radio_name = celdas[COL.radio_name].querySelector('input')?.value || '';
-      const modelo_id  = celdas[COL.modelo].querySelector('select.bulk-modelo')?.value || '';
-      const modelo_label = modelo_id ? (PocState.modelosMap[modelo_id] || '') : '';
-      const modelo_id_orig = celdas[COL.modelo].dataset.modeloId || '';
-      const modeloEditado  = modelo_id !== modelo_id_orig;
-      const grupos    = FMT.dedupGrupos(
-        (celdas[COL.grupos].querySelector('input')?.value || '').split(',')
-      );
-      const sim_number = celdas[COL.sim_tel].querySelector('.sim-number')?.value || '';
-      const sim_phone  = celdas[COL.sim_tel].querySelector('.sim-phone')?.value  || '';
-
-      const newData = {
-        operador, activo, serial, ip, radio_name, grupos, sim_number, sim_phone,
-        unit_id: unit_id.trim(),
-        unit_id_num: PocService.unitIdNum(unit_id),
-        modelo_id:    modelo_id || firebase.firestore.FieldValue.delete(),
-        modelo_label,
-        updated_at:       firebase.firestore.FieldValue.serverTimestamp(),
-        updated_by:       user?.uid   || null,
-        updated_by_email: user?.email || null
+      const modelo_id = celdas[COL.modelo].querySelector('select.bulk-modelo')?.value || '';
+      return {
+        id, fila,
+        operador:   celdas[COL.operador].querySelector('select.bulk-operador')?.value || '',
+        activo:     celdas[COL.activo].querySelector('input')?.checked  || false,
+        serial:     celdas[COL.serial].querySelector('input')?.value    || '',
+        ip:         celdas[COL.ip].querySelector('input')?.value        || '',
+        unit_id:    (celdas[COL.unit_id].querySelector('input')?.value || '').trim(),
+        radio_name: celdas[COL.radio_name].querySelector('input')?.value || '',
+        modelo_id,
+        modelo_label: modelo_id ? (PocState.modelosMap[modelo_id] || '') : '',
+        modeloEditado: modelo_id !== (celdas[COL.modelo].dataset.modeloId || ''),
+        grupos: FMT.dedupGrupos((celdas[COL.grupos].querySelector('input')?.value || '').split(',')),
+        sim_number: celdas[COL.sim_tel].querySelector('.sim-number')?.value || '',
+        sim_phone:  celdas[COL.sim_tel].querySelector('.sim-phone')?.value  || '',
       };
-      const prevData = (await PocService.getPocDevice(id)) || {};
-      if (modeloEditado) {
-        this.MODEL_ALIAS_KEYS_TO_CLEAR.forEach(k => {
-          if (k in prevData) newData[k] = firebase.firestore.FieldValue.delete();
-        });
+    });
+    let prevs;
+    try {
+      prevs = await Promise.all(filas.map(f => PocService.getPocDevice(f.id).then(d => d || {})));
+    } catch (e) {
+      console.error('[PocBulk] no se pudieron leer los equipos:', e);
+      Toast.show('No se pudieron leer los equipos. Revisa tu conexión e intenta de nuevo.', 'bad');
+      return;
+    }
+    filas.forEach((f, k) => { f.prev = prevs[k]; });
+
+    // 2) Unit IDs que cambiaron: no pueden chocar con otro equipo del mismo
+    //    cliente ni entre sí (misma regla que el lote y la consola).
+    const cambiados = filas.filter(f => f.unit_id && f.unit_id !== String(f.prev.unit_id ?? '').trim())
+      .map(f => ({ id: f.id, unit_id: f.unit_id, cliente_id: f.prev.cliente_id || null, cliente: f.prev.cliente || null }));
+    if (cambiados.length) {
+      let choques;
+      try { choques = await PocState.choquesUnitId(cambiados); }
+      catch (e) {
+        console.error('[PocBulk] validación de Unit ID falló:', e);
+        Toast.show('No se pudo validar los Unit ID. Revisa tu conexión e intenta de nuevo.', 'bad');
+        return;
       }
-      await PocService.updatePocDevice(id, newData);
-
-      // FieldValue sentinels (delete/serverTimestamp) can only appear at the
-      // top level of an update — strip them before embedding newData in the
-      // audit log, otherwise the addLog .add() throws and the loop aborts
-      // before Toast/refresh run (page stays in edit mode).
-      const cleanFields = PocService.stripSentinels(newData);
-
-      PocService.addLog({
-        equipo_id: id,
-        fecha:     firebase.firestore.FieldValue.serverTimestamp(),
-        usuario:   user?.email,
-        cambios:   { antes: prevData, despues: { ...prevData, ...cleanFields } }
-      }).catch(e => console.warn('poc_log write failed (non-critical):', e));
-
-      cambiosParaLiberar.push({ id, antes: prevData, despues: { ...prevData, ...cleanFields } });
-
-      // SIM tecleado a mano en un equipo que sigue activo y que existe
-      // disponible en el pool → marcarlo asignado. Best-effort.
-      if (activo && sim_number &&
-          SimCardsService.normalizarSim(sim_number) !== SimCardsService.normalizarSim(prevData.sim_number)) {
-        SimCardsService.marcarAsignadoSiExiste(sim_number, {
-          id, serial, cliente_nombre: PocState.nombreClienteDe(prevData),
-        }, user);
+      if (choques.length) {
+        const lista = choques.map(c => `<li>Unit ID <b>${FMT.esc(c.item.unit_id)}</b> ya lo usa ${FMT.esc(PocState.etiquetaEquipo(c.otro))}</li>`).join('');
+        await Modal.alert({ title: 'Unit ID repetidos', icon: 'alert-triangle',
+          message: `No se guardó nada. Corrige estos Unit ID (no se repiten dentro del mismo cliente):<ul style="margin:8px 0 0 18px;">${lista}</ul>` });
+        return;
       }
-
-      fila.style.backgroundColor = '#d4edda';
-      setTimeout(() => { fila.style.backgroundColor = 'transparent'; }, 1000);
-      actualizados++;
     }
 
-    Toast.show(`${actualizados} equipos actualizados.`, 'ok');
+    if (!await Modal.confirm({ message: `Vas a actualizar ${filas.length} equipos. ¿Confirmas continuar?` })) return;
+
+    // 3) Escribir fila por fila; un fallo no aborta las demás.
+    let actualizados = 0;
+    const errores = [];
+    const cambiosParaLiberar = [];   // equipos que pasaron a inactivo con SIM
+
+    for (const f of filas) {
+      const prevData = f.prev;
+      try {
+        const newData = {
+          operador: f.operador, activo: f.activo, serial: f.serial, ip: f.ip,
+          radio_name: f.radio_name, grupos: f.grupos, sim_number: f.sim_number, sim_phone: f.sim_phone,
+          unit_id: f.unit_id,
+          unit_id_num: PocService.unitIdNum(f.unit_id),
+          modelo_id:    f.modelo_id || firebase.firestore.FieldValue.delete(),
+          modelo_label: f.modelo_label,
+          updated_at:       firebase.firestore.FieldValue.serverTimestamp(),
+          updated_by:       user?.uid   || null,
+          updated_by_email: user?.email || null
+        };
+        if (f.modeloEditado) {
+          this.MODEL_ALIAS_KEYS_TO_CLEAR.forEach(k => {
+            if (k in prevData) newData[k] = firebase.firestore.FieldValue.delete();
+          });
+        }
+        await PocService.updatePocDevice(f.id, newData);
+
+        // FieldValue sentinels (delete/serverTimestamp) can only appear at the
+        // top level of an update — strip them before embedding newData in the
+        // audit log.
+        const cleanFields = PocService.stripSentinels(newData);
+
+        PocService.addLog({
+          equipo_id: f.id,
+          fecha:     firebase.firestore.FieldValue.serverTimestamp(),
+          usuario:   user?.email,
+          cambios:   { antes: prevData, despues: { ...prevData, ...cleanFields } }
+        }).catch(e => console.warn('poc_log write failed (non-critical):', e));
+
+        cambiosParaLiberar.push({ id: f.id, antes: prevData, despues: { ...prevData, ...cleanFields } });
+
+        // SIM tecleado a mano en un equipo que sigue activo y que existe
+        // disponible en el pool → marcarlo asignado. Best-effort.
+        if (f.activo && f.sim_number &&
+            SimCardsService.normalizarSim(f.sim_number) !== SimCardsService.normalizarSim(prevData.sim_number)) {
+          SimCardsService.marcarAsignadoSiExiste(f.sim_number, {
+            id: f.id, serial: f.serial, cliente_nombre: PocState.nombreClienteDe(prevData),
+          }, user);
+        }
+        actualizados++;
+      } catch (e) {
+        console.error('[PocBulk] fila', f.id, e);
+        errores.push({ f, msg: (e && e.message) || String(e) });
+      }
+    }
+
     // Equipos que quedaron inactivos con SIM → ofrecer devolverlos al pool.
-    await SimLiberar.procesarDesactivados(cambiosParaLiberar);
+    try { await SimLiberar.procesarDesactivados(cambiosParaLiberar); }
+    catch (e) { console.warn('[PocBulk] liberar SIM falló (no crítico):', e); }
     this._resetButtons();
     this._modo = false;
     PocList.refresh();
+
+    if (!errores.length) {
+      Toast.show(`${actualizados} equipos actualizados.`, 'ok');
+      return;
+    }
+    const lista = errores.map(({ f, msg }) =>
+      `<li><b>${FMT.esc(f.radio_name || f.serial || f.id)}</b>${f.unit_id ? ` (Unit ID ${FMT.esc(f.unit_id)})` : ''}: ${FMT.esc(msg)}</li>`).join('');
+    await Modal.alert({ title: 'Edición masiva incompleta', icon: 'alert-triangle',
+      message: `Se guardaron ${actualizados} de ${filas.length}. Estos no se guardaron; vuelve a editarlos:<ul style="margin:8px 0 0 18px;">${lista}</ul>` });
   },
 
   cancelar() {
