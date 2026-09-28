@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cotización · CeComunica</title>
+  <title>Cotización · Cecomunica</title>
   <link rel="stylesheet" href="/css/ceco-ui.css?v=bf320539">
   <link rel="stylesheet" href="/css/cotizaciones-kit.css?v=5e0fb984">
   <link rel="stylesheet" href="/css/print-cotizacion.css?v=4f4ee126">
@@ -18,6 +18,8 @@
           
   <style>
     .cc-pt-meta { font-size: 11px; color: var(--fg-3); }
+    /* El aviso de vigencia es para la pantalla; el PDF descargado no lo lleva. */
+    @media print { .cq-situacion { display: none !important; } }
     .empty-card { max-width: 520px; margin: 80px auto; padding: 32px; background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); text-align: center; }
   </style>
   <script type="module" src="/js/entry/verify-cotizacion.js"></script>

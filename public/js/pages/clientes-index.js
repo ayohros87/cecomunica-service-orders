@@ -63,37 +63,28 @@ function setRowStatus(id, state){
   }
 }
 
-function confirmDialog({ title = 'Confirmar', message = '', confirmText = 'Aceptar' }){
-  return new Promise(resolve=>{
-    const overlay = document.getElementById('overlay');
-    const $title = document.getElementById('confirmTitle');
-    const $msg = document.getElementById('confirmMsg');
-    const $ok = document.getElementById('btnOk');
-    const $cancel = document.getElementById('btnCancel');
+// El overlay propio de confirmación (con el banner "soft-delete") se retiró:
+// "No se puede eliminar" usa Modal.alert y el borrado Modal.confirm (auditoría UX 2026-09-28, #14).
 
-    function cleanup(result){
-      Modal.close('overlay');
-      $ok.onclick = $cancel.onclick = overlay.onclick = null;
-      document.removeEventListener('keydown', onKey);
-      resolve(result);
-    }
-    function onKey(e){ if(e.key === 'Escape') cleanup(false); }
+// Candado estándar (js/ui/busy.js) para las acciones masivas; si no cargó,
+// corre igual. Los errores se muestran aquí (toast:false en withBusy).
+async function conCandado(btn, fn, label){
+  const run = async ()=>{
+    try { return await fn(); }
+    catch(e){ console.error(e); Toast.show('No se pudo completar: ' + (e?.message || e), 'bad'); }
+  };
+  if (typeof window.withBusy === 'function') return window.withBusy(btn, run, { label: label || 'Guardando…', toast: false });
+  return run();
+}
 
-    $title.textContent = title;
-    $msg.innerHTML = message;          // message viene controlado por nosotros (escapeHtml)
-    $ok.textContent = confirmText;
-
-    // onEscape:false — el Escape lo maneja onKey, que además resuelve la
-    // promesa en false. El foco va al botón de confirmar, después del que
-    // pone el kit en el primer elemento enfocable.
-    Modal.open('overlay', { onEscape: false });
-    setTimeout(()=> $ok.focus(), 60);
-
-    $ok.onclick = ()=> cleanup(true);
-    $cancel.onclick = ()=> cleanup(false);
-    overlay.onclick = (e)=> { if(e.target === overlay) cleanup(false); };
-    document.addEventListener('keydown', onKey);
-  });
+// ¿Otro cliente vivo (≠ id) ya usa este valor normalizado? Mismo criterio que
+// la ficha (clientes-ficha.js _duplicado): consulta exacta sobre el campo _norm.
+async function duplicadoDe(campo, valor, id){
+  if(!valor) return null;
+  const snap = await firebase.firestore().collection('clientes')
+    .where(campo, '==', valor).where('deleted', '==', false).limit(3).get();
+  const otro = snap.docs.find(d => d.id !== id);
+  return otro ? { id: otro.id, nombre: otro.data().nombre || '' } : null;
 }
 
   // --------- UI refs ----------
@@ -101,7 +92,6 @@ function confirmDialog({ title = 'Confirmar', message = '', confirmText = 'Acept
   const $soloActivos = document.getElementById('soloActivos');
   const $btnBuscar = document.getElementById('btnBuscar');
   const $btnLimpiar = document.getElementById('btnLimpiar');
-  const $btnMas = document.getElementById('btnMas');
   const $btnNuevo = document.getElementById('btnNuevo');
   const $tbody = document.getElementById('tbody');
   const $resumen = document.getElementById('resumen');
@@ -125,8 +115,13 @@ const selectedIds = new Set();
 
 
   $btnNuevo.onclick = ()=> location.href = '../clientes/ficha.html?nuevo=1&from=clientes';
-$btnBuscar.onclick = ()=> { resetPagination(); gotoPage(1); updateTotalPages();
-};
+const buscar = ()=> { resetPagination(); gotoPage(1); updateTotalPages(); };
+$btnBuscar.onclick = buscar;
+// Búsqueda en vivo (auditoría UX 2026-09-28, #17): antes pedía Enter o el
+// botón, mientras cotizaciones filtra al teclear. Debounce para no pedir una
+// página por tecla.
+const buscarEnVivo = debounce(buscar, 450);
+$q.addEventListener('input', buscarEnVivo);
 $btnLimpiar.onclick = ()=>{
   // Solo limpia la búsqueda; no toca los toggles (Solo activos / Compacta).
   $q.value='';
@@ -153,13 +148,13 @@ $vistaCompacta.onchange = () => {
   localStorage.setItem('clientes_compacta', $vistaCompacta.checked ? '1' : '0');
 };
 
-// Enter en el buscador:
+// Enter en el buscador: busca ya, sin esperar el debounce.
 document.getElementById('q').addEventListener('keydown', (e)=>{
-  if(e.key==='Enter'){ resetPagination(); gotoPage(1); updateTotalPages();
-}
+  if(e.key==='Enter'){ buscar(); }
 });
 
-  $btnMas.onclick = ()=> gotoPage(currentPage + 1);
+  // "Cargar más" se retiró: era "página siguiente" disfrazado (reemplazaba las
+  // filas) y duplicaba "Siguiente" del paginador (auditoría UX 2026-09-28, #14).
   $btnPrev.onclick = ()=> gotoPage(currentPage - 1);
 $btnNext.onclick = ()=> gotoPage(currentPage + 1);
 
@@ -177,7 +172,7 @@ $btnTodo.onclick = async ()=>{
   if(!await Modal.confirm({ message: '¿Cargar todos los resultados? Puede tardar si hay muchos registros.' })) return;
 
   loadingAll = true;
-  $btnTodo.disabled = true; $btnMas.disabled = true;
+  $btnTodo.disabled = true;
   try{
     $tbody.innerHTML = '<tr><td colspan="14" class="loader-center"><div class="loader"></div></td></tr>'; $resumen.innerHTML = '<div class="loader" style="width: 20px; height: 20px; border-width: 2px; display: inline-block; vertical-align: middle; margin-right: 8px;"></div>Cargando...';
     selectedIds.clear(); $selectAll.checked = false; updateBulkBar();
@@ -200,7 +195,7 @@ $btnTodo.onclick = async ()=>{
     if (typeof lucide !== 'undefined') lucide.createIcons();
   } finally {
     loadingAll = false;
-    $btnTodo.disabled = false; $btnMas.disabled = false;
+    $btnTodo.disabled = false;
   }
 };
 
@@ -273,6 +268,7 @@ function updateBulkBar(){
 $bulkActivar.onclick = async ()=>{
   if(asReadonly() || selectedIds.size===0) return;
   if(!await Modal.confirm({ message: `¿Activar ${selectedIds.size} cliente(s)?` })) return;
+  await conCandado($bulkActivar, async ()=>{
   await ClientesService.batchUpdate(Array.from(selectedIds), { activo: true });
   selectedIds.forEach(id=>{
     const selEl = $tbody.querySelector(`.rowSel[data-id="${id}"]`);
@@ -285,6 +281,7 @@ $bulkActivar.onclick = async ()=>{
     }
   });
   Toast.show('Clientes activados', 'ok');
+  });
 };
 
 // Desactivar CIERRA los contratos vigentes de cada cuenta (regla 2026-09-14,
@@ -294,19 +291,25 @@ $bulkDesactivar.onclick = async ()=>{
   if(asReadonly() || selectedIds.size===0) return;
   const ids = Array.from(selectedIds);
   let vig = 0, conVig = 0, campo = 0;
-  try {
-    for (const id of ids) {
-      const c = await ClientesService.consecuenciasDesactivar(id);
+  // Consecuencias en paralelo (antes una por una: 20 clientes = 20 esperas en fila).
+  await conCandado($bulkDesactivar, async ()=>{
+    const res = await Promise.all(ids.map(id =>
+      ClientesService.consecuenciasDesactivar(id).catch(e => {
+        console.warn('[clientes] no se pudo calcular el efecto de desactivar', id, e); return null;
+      })));
+    res.forEach(c => {
+      if (!c) return;
       if (c.contratos.length) { conVig++; vig += c.contratos.length; }
       campo += c.enCampo;
-    }
-  } catch (e) { console.warn('[clientes] no se pudo calcular el efecto de desactivar', e); }
+    });
+  }, 'Revisando…');
   const detalle = vig
     ? `<br><br>Se <b>cerrarán ${vig} contrato(s) vigente(s)</b> de ${conVig} de ellos.`
       + (campo ? ` Y quedan <b>${campo} equipo(s) nuestros en campo</b>: cerrar el contrato no los recupera.` : '')
     : campo ? `<br><br>Quedan <b>${campo} equipo(s) nuestros en campo</b> con esos clientes.` : '';
   if(!await Modal.confirm({ message: `¿Desactivar ${selectedIds.size} cliente(s)?${detalle}`,
       confirmLabel: vig ? `Desactivar y cerrar ${vig} contrato(s)` : 'Desactivar', danger: true })) return;
+  await conCandado($bulkDesactivar, async ()=>{
   await ClientesService.batchUpdate(Array.from(selectedIds), { activo: false });
   selectedIds.forEach(id=>{
     const selEl = $tbody.querySelector(`.rowSel[data-id="${id}"]`);
@@ -319,6 +322,7 @@ $bulkDesactivar.onclick = async ()=>{
     }
   });
   Toast.show('Clientes desactivados', 'ok');
+  });
 };
 
 // Llena el select de vendedores de la bulk-bar (una sola vez, tras cargarVendedores).
@@ -337,6 +341,7 @@ $bulkAsignarVend && ($bulkAsignarVend.onclick = async ()=>{
   const vend = listaVendedores.find(v => v.id === $bulkVendedor.value);
   if(!vend){ Toast.show('Elige un vendedor', 'warn'); return; }
   if(!await Modal.confirm({ message:`¿Asignar ${selectedIds.size} cliente(s) a ${vend.nombre || vend.email}?` })) return;
+  await conCandado($bulkAsignarVend, async ()=>{
   await ClientesService.batchUpdate(Array.from(selectedIds), {
     vendedor_asignado: vend.id,
     vendedor_email: vend.email,
@@ -347,11 +352,13 @@ $bulkAsignarVend && ($bulkAsignarVend.onclick = async ()=>{
     if(s) s.value = vend.id;
   });
   Toast.show('Vendedor asignado', 'ok');
+  });
 });
 
 async function bulkSetExento(exento){
   if(asReadonly() || selectedIds.size===0) return;
   if(!await Modal.confirm({ message:`¿Marcar ${selectedIds.size} cliente(s) como ${exento ? 'EXENTO de ITBMS' : 'que PAGA ITBMS'}?` })) return;
+  await conCandado(exento ? $bulkExento : $bulkPaga, async ()=>{
   const patch = { itbms_exento: exento };
   if(!exento) patch.itbms_motivo_exencion = '';
   await ClientesService.batchUpdate(Array.from(selectedIds), patch);
@@ -369,6 +376,7 @@ async function bulkSetExento(exento){
     }
   });
   Toast.show(exento ? 'Marcados como exentos' : 'Marcados como paga', 'ok');
+  });
 }
 $bulkExento && ($bulkExento.onclick = ()=> bulkSetExento(true));
 $bulkPaga   && ($bulkPaga.onclick   = ()=> bulkSetExento(false));
@@ -552,21 +560,11 @@ const _guardarInline = async (id, partial)=>{
   }
 };
 
-// Guardado inline: un temporizador POR CLIENTE con merge de campos. Antes era
-// un único debounce global compartido por todas las filas: editar otra celda
-// en <700 ms cancelaba el guardado anterior CON SUS ARGUMENTOS — el dot
-// quedaba en "saving" ámbar para siempre y el dato nunca se persistía
-// (escenario probable navegando con Enter fila abajo).
-const _inlinePendientes = new Map(); // id → { timer, partial }
+// Guardado inline: se guarda al CONFIRMAR la celda (change = blur o Enter),
+// no a los 700 ms de pausa. El temporizador escribía valores a medio teclear
+// y dejaba una línea de historial por cada pausa (auditoría UX 2026-09-28, #14).
 function onInlineUpdate(id, partial){
-  const prev   = _inlinePendientes.get(id);
-  const merged = Object.assign(prev ? prev.partial : {}, partial);
-  if (prev) clearTimeout(prev.timer);
-  const timer = setTimeout(()=>{
-    _inlinePendientes.delete(id);
-    _guardarInline(id, merged);
-  }, 700);
-  _inlinePendientes.set(id, { timer, partial: merged });
+  return _guardarInline(id, partial);
 }
 function renderRow(id, c){
   const tr = document.createElement('tr');
@@ -688,13 +686,30 @@ if (selectVend) {
 
   // Listeners inline (texto/email/tel/etc.)
   tr.querySelectorAll('input[type="text"], input[type="email"], input[type="tel"]').forEach(inp=>{
-    inp.addEventListener('input', ()=>{
-      if(asReadonly()) return;
-      setRowStatus(id, 'saving');
+    inp.dataset.orig = inp.value.trim();
+    inp.addEventListener('change', async ()=>{
+      if(asReadonly() || inp.readOnly) return;
       const field = inp.dataset.field;
-      let value = inp.value.trim();
-
-      onInlineUpdate(id, { [field]: value });
+      const value = inp.value.trim();
+      if (value === inp.dataset.orig) return; // sin cambio real: no escribe ni ensucia el historial
+      // Renombrar no puede chocar con otro cliente (misma consulta que la ficha).
+      if (field === 'nombre') {
+        if (!value) { inp.value = inp.dataset.orig; Toast.show('El nombre no puede quedar vacío.', 'warn'); return; }
+        if (value.includes('/')) { inp.value = inp.dataset.orig; Toast.show("El nombre no puede contener '/'.", 'warn'); return; }
+        setRowStatus(id, 'saving');
+        let dup = null;
+        try { dup = await duplicadoDe('nombre_norm', ClientesService.norm(value), id); }
+        catch (e) { console.warn('[clientes] no se pudo revisar duplicados', e); }
+        if (dup) {
+          inp.value = inp.dataset.orig;
+          setRowStatus(id, 'error');
+          Toast.show(`Ya existe otro cliente con ese nombre (${dup.nombre}). No se renombró.`, 'bad');
+          return;
+        }
+      }
+      setRowStatus(id, 'saving');
+      await onInlineUpdate(id, { [field]: value });
+      inp.dataset.orig = value;
     });
   });
 
@@ -744,8 +759,9 @@ tr.querySelector('[data-equipos]').onclick = ()=>{
   if(window.EquiposCliente) EquiposCliente.abrir(id, c.nombre || '');
 };
 
-// Editar (lleva al mismo formulario de nuevo-cliente, pero con id)
-tr.querySelector('[data-edit]').onclick = ()=> location.href = `../contratos/nuevo-cliente.html?id=${id}&from=clientes`;
+// Editar → la ficha (formulario único con historial). El formulario viejo
+// borraba correos/etiquetas y reactivaba inactivos (auditoría UX 2026-09-28, P0 #16).
+tr.querySelector('[data-edit]').onclick = ()=> location.href = `./ficha.html?id=${encodeURIComponent(id)}&from=clientes`;
 
 
 // Eliminar (soft-delete con advertencia)
@@ -774,22 +790,24 @@ tr.querySelector('[data-delete]').onclick = async ()=>{
   } catch (e) { console.warn('Pre-check de borrado falló (se sigue con la advertencia):', e); }
 
   if (contratosVivos > 0 || unidadesPool > 0) {
-    await confirmDialog({
+    // Aviso de un solo botón (sin banner de borrado ni "Cancelar").
+    await Modal.alert({
       title: 'No se puede eliminar',
+      icon: 'alert-triangle',
       message: `<strong>${nombre}</strong> tiene <strong>${contratosVivos}</strong> contrato(s) no anulados y
-                <strong>${unidadesPool}</strong> equipo(s) del pool asociados.<br>
-                Eliminarlo dejaría esos registros colgantes. Si es un duplicado,
+                <strong>${unidadesPool}</strong> equipo(s) asociados.<br>
+                Eliminarlo dejaría esos registros sin cliente. Si es un duplicado,
                 fusiónalo desde <strong>Admin · Clientes duplicados</strong> (re-apunta contratos y equipos).`,
-      confirmText: 'Entendido'
     });
     return;
   }
 
-  const ok = await confirmDialog({
+  const ok = await Modal.confirm({
     title: 'Eliminar cliente',
     message: `¿Seguro que deseas eliminar a <strong>${nombre}</strong>?<br>
-              Se marcará como <code>deleted: true</code> y ya no aparecerá en la lista.`,
-    confirmText: 'Sí, eliminar'
+              Dejará de aparecer en las listas; su historial se conserva.`,
+    confirmLabel: 'Sí, eliminar',
+    danger: true,
   });
   if(!ok) return;
 

@@ -50,6 +50,11 @@
     .rg-side label { font-size: 12px; color: var(--fg-3); }
     .rg-vacio { color: var(--fg-3); font-size: 13px; padding: 20px; text-align: center; }
     .rg-res { font-size: 12.5px; color: var(--fg-3); margin: 0 0 8px; }
+    /* Encabezados de columna (auditoría UX 2026-09-28): misma grilla que la fila. */
+    .rg-head { cursor: default; padding-top: 2px; padding-bottom: 2px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-4); }
+    .rg-head:hover { background: transparent; }
+    @media (max-width: 760px) { .rg-head { display: none; } }
+    .rg-glosario { margin: 0 0 12px; padding: 0 0 0 18px; font-size: 12.5px; color: var(--fg-3); line-height: 1.5; }
   </style>
           <script src="../js/core/modulos.js?v=1838cd29"></script>
   <script src="../js/core/layout.js?v=68295191"></script>
@@ -70,11 +75,17 @@
 </script>
 <div class="app-wrap app-wrap--full">
   <p class="rg-intro">
-    Cuentas que siguen operando pero tienen radios en campo sin contrato interno, contratos sin seriales declarados u otros
+    Clientes que siguen operando pero tienen radios en campo sin contrato interno, contratos sin seriales declarados u otros
     huecos del registro. Ninguna gestión se frena por esto: el vendedor sigue atendiendo y cada gestión que declara seriales
     baja la deuda. Lo que se calcula aquí lo escribe el sistema una vez al día (y a los pocos minutos de cada cambio);
-    lo que se puede hacer desde esta bandeja es <b>darle dueño</b> a la cuenta y abrir su ficha.
+    lo que se puede hacer desde esta bandeja es <b>darle dueño</b> al cliente (se guarda al elegir el vendedor) y abrir su ficha.
   </p>
+  <!-- Glosario (auditoría UX 2026-09-28, #16): "puntos", "margen" y "asistida" no se explicaban. -->
+  <ul class="rg-glosario">
+    <li><b>Puntos de deuda:</b> cada hueco del registro suma uno: un radio en campo sin contrato, un contrato sin seriales declarados, un contrato o adenda en papel, un reemplazo sin serial saliente…</li>
+    <li><b>Excede el margen:</b> el cliente lleva más gestiones puntuales o más días con deuda de los que se toleran; hay que regularizarlo ya, no en la próxima gestión.</li>
+    <li><b>Asistida:</b> la regulariza administración con el script de custodia por órdenes, no el vendedor a mano.</li>
+  </ul>
   <div class="rg-chips" id="rgChips" role="tablist" aria-label="Filtrar">
     <button type="button" class="rg-chip rg-chip--all active" data-f="all" role="tab">Todas <span class="cnt" data-cnt="all">0</span></button>
     <button type="button" class="rg-chip rg-chip--critica" data-f="critica" role="tab">Críticas <span class="cnt" data-cnt="critica">0</span></button>
@@ -86,7 +97,7 @@
     <button type="button" class="rg-chip rg-chip--leve" data-f="inactivas" role="tab">Inactivas <span class="cnt" data-cnt="inactivas">0</span></button>
     <span class="push"></span>
     <select class="form-select" id="rgVendedor" style="max-width:200px;" aria-label="Filtrar por vendedor"><option value="">Todos los vendedores</option></select>
-    <input type="search" id="rgBuscar" class="form-input" placeholder="Buscar cuenta…" style="max-width:200px;" autocomplete="off">
+    <input type="search" id="rgBuscar" class="form-input" placeholder="Buscar cliente…" style="max-width:200px;" autocomplete="off">
   </div>
   <p class="rg-res" id="rgResumen"></p>
   <div id="rgRows" class="rg-rows"><div class="rg-vacio">Cargando…</div></div>

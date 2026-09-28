@@ -279,3 +279,38 @@
 .cc-timeline li:last-child::after { display: none; }
 .cc-tl-act { font-size: 13px; font-weight: 600; color: var(--fg-1); }
 .cc-tl-meta { font-size: 11.5px; color: var(--fg-3); margin-top: 1px; }
+
+/* ── Colores de estado de cotización (auditoría UX 2026-09-28, T1) ──────────
+   ceco-ui.css:164-171 tiene los tokens de chip de ÓRDENES y no se toca desde
+   este módulo; aquí van clases propias que el mapa CotState.ESTADOS usa.
+   Regla: el éxito (Aceptada) es VERDE; Aprobada (paso interno) es morado;
+   Descartada gris; Taller y Por facturar con chip propio (antes azul = borrador
+   y naranja = vencida). */
+.chip-estado.chip-cot-convertida { background: #ECFDF5; color: #047857; border-color: #6EE7B7; }
+.chip-estado.chip-cot-aprobada   { background: #F5F3FF; color: #6D28D9; border-color: #DDD6FE; }
+.chip-estado.chip-cot-descartada { background: var(--gray-100, #EEF2F6); color: var(--gray-600, #4A5560); border-color: var(--gray-200, #DDE4EB); }
+.chip-estado.chip-cot-descartada::before { display: none; }
+.chip-estado.chip-cot-taller     { background: #ECFEFF; color: #0E7490; border-color: #A5F3FC; }
+.chip-estado.chip-cot-porfacturar{ background: #FDF2F8; color: #9D174D; border-color: #FBCFE8; }
+.chip-estado.chip-cot-eliminada  { background: transparent; color: var(--gray-600, #4A5560); border-color: var(--gray-300, #C2CCD6); border-style: dashed; }
+.chip-estado.chip-cot-eliminada::before { display: none; }
+
+/* Fila eliminada (toggle "Mostrar eliminadas"): atenuada pero legible. */
+tr.cc-row-eliminada > td, .responsive-card.cc-row-eliminada { opacity: .6; }
+tr.cc-row-eliminada > td.td-actions { opacity: 1; }
+tr.cc-row-eliminada .cc-cell-num { text-decoration: line-through; }
+
+/* Aviso de filtro activo (?aprobar=1 desde el home). */
+.cc-aviso-filtro {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  margin-bottom: var(--sp-3); padding: 8px 12px; border-radius: var(--radius-md);
+  background: #F5F3FF; color: #4C1D95; border: 1px solid #DDD6FE; font-size: 13px;
+}
+.cc-aviso-filtro i[data-lucide], .cc-aviso-filtro svg { width: 16px; height: 16px; }
+.cc-aviso-filtro .btn { margin-left: auto; }
+
+/* withBusy (js/ui/busy.js) en botones de icono: el icono gira mientras corre. */
+.btn.is-busy { cursor: progress; }
+.btn.btn-icon.is-busy svg, .btn.btn-icon.is-busy i[data-lucide] { animation: cc-busy-spin 1s linear infinite; }
+@keyframes cc-busy-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .btn.btn-icon.is-busy svg { animation: none; } }

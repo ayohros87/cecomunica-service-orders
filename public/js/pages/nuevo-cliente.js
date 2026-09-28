@@ -84,16 +84,59 @@ auth.onAuthStateChanged(async user => {
   if (!user) { window.location.href = "/login.html"; return; }
   if (!(await _guardEdicion(user))) return;
 
-  document.getElementById("formCliente").addEventListener("submit", async e => {
+  const form = document.getElementById("formCliente");
+  form.addEventListener("submit", async e => {
     e.preventDefault();
+    // Candado contra el doble submit + try/catch (auditoría UX 2026-09-28, T3):
+    // antes un error de red dejaba el formulario mudo y un doble click grababa dos veces.
+    const btn = e.submitter || form.querySelector('[type="submit"]');
+    try {
+      await _conCandado(btn, () => _guardarCliente());
+    } catch (err) {
+      console.error("[nuevo-cliente] no se pudo guardar", err);
+      mostrarMensaje("No se pudo guardar: " + (err?.message || err), "red");
+    }
+  });
+});
 
+// withBusy vive en js/ui/busy.js; si el entry aún no lo carga, candado mínimo local.
+async function _conCandado(btn, fn) {
+  if (typeof window.withBusy === "function") {
+    return window.withBusy(btn, fn, { label: "Guardando…", toast: false });
+  }
+  if (btn && btn.disabled) return;
+  if (btn) btn.disabled = true;
+  try { return await fn(); } finally { if (btn) btn.disabled = false; }
+}
+
+// ¿Otro cliente vivo (distinto de `propioId`) ya usa este valor normalizado?
+// Mismo criterio que la ficha (clientes-ficha.js _duplicado).
+async function _duplicadoOtro(campo, valor, propioId) {
+  if (!valor) return false;
+  const snap = await firebase.firestore().collection("clientes")
+    .where(campo, "==", valor).where("deleted", "==", false).limit(2).get();
+  return snap.docs.some(d => d.id !== propioId);
+}
+
+async function _guardarCliente() {
     const params = new URLSearchParams(window.location.search);
     const clienteId = params.get("id");
     const currentUser = firebase.auth().currentUser;
 
-    // 1) Recolectar valores crudos del form
+    // Al editar, `raw` PARTE del documento cargado (como clientes-ficha.js):
+    // este formulario no muestra representante_email, email_acuses, activo ni
+    // tags, y buildClientePayload los rellenaba con ""/true/[] — borraba los
+    // correos y reactivaba clientes inactivos (auditoría UX 2026-09-28, P0 #16).
+    const base = clienteId ? window._clienteCargado : {};
+    if (clienteId && !base) {
+      mostrarMensaje("El cliente aún no termina de cargar; espera un momento y vuelve a guardar.", "red");
+      return;
+    }
+
+    // 1) Recolectar valores crudos del form (encima de lo que ya tenía la ficha)
     const raw = {
-      nombre: document.getElementById("nombre").value,
+      ...base,
+      nombre:document.getElementById("nombre").value,
       ruc: document.getElementById("ruc").value,
       ruc_tipo: document.getElementById("ruc_tipo").value,
       dv: document.getElementById("dv").value,
@@ -128,7 +171,21 @@ auth.onAuthStateChanged(async user => {
     // 3) Payload normalizado (single source of truth en el service)
     const cliente = ClientesService.buildClientePayload(raw, { user: currentUser, isCreate: !clienteId });
 
-    // 4) Unicidad (SOLO al crear) — ignora soft-deleted para no bloquear reactivaciones
+    // 4) Unicidad — ignora soft-deleted para no bloquear reactivaciones.
+    //    Al editar también, contra OTROS ids y solo si el valor cambió (igual
+    //    que la ficha; auditoría UX 2026-09-28: aquí no había dedup al editar).
+    if (clienteId) {
+      if (cliente.nombre_norm !== base.nombre_norm && await _duplicadoOtro("nombre_norm", cliente.nombre_norm, clienteId)) {
+        mostrarMensaje("Ya existe otro cliente con ese nombre.", "red"); return;
+      }
+      if (cliente.ruc_norm && cliente.ruc_norm !== base.ruc_norm && await _duplicadoOtro("ruc_norm", cliente.ruc_norm, clienteId)) {
+        mostrarMensaje("Ya existe otro cliente con ese RUC/Cédula.", "red"); return;
+      }
+      if (cliente.rucdv_norm && cliente.dv_norm && cliente.rucdv_norm !== base.rucdv_norm
+          && await _duplicadoOtro("rucdv_norm", cliente.rucdv_norm, clienteId)) {
+        mostrarMensaje("Ya existe otro cliente con ese RUC + DV.", "red"); return;
+      }
+    }
     if (!clienteId) {
       if (cliente.rucdv_norm && cliente.dv_norm) {
         if (await ClientesService.existsActiveByNorm("rucdv_norm", cliente.rucdv_norm)) {
@@ -169,8 +226,7 @@ auth.onAuthStateChanged(async user => {
         window.location.href = `../clientes/centro.html?id=${targetId}`;
       }
     }, 800);
-  });
-});
+}
 
 window.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
@@ -218,6 +274,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     const d = await ClientesService.getCliente(clienteId);
     if (!d) return;
+    // Documento completo: el guardado parte de aquí para no pisar lo que el
+    // formulario no muestra (auditoría UX 2026-09-28, P0 #16).
+    window._clienteCargado = d;
 
     document.getElementById("nombre").value = d.nombre || "";
     if (window._rucW) window._rucW.cargar(d.ruc, d.ruc_tipo, d.dv);

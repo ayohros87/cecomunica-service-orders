@@ -3,18 +3,23 @@
 // Expuesto como window.CotState.
 (() => {
   // ── Estados (ciclo de vida) ───────────────────────────────────────────────
+  // Colores (auditoría UX 2026-09-28, T1): el éxito ('convertida', que en
+  // pantalla se lee "Aceptada") es VERDE; 'aprobada' es un paso interno y va
+  // en morado; descartada gris. Las clases chip-cot-* viven en
+  // css/cotizaciones-kit.css (ceco-ui.css no se toca desde este módulo).
   const ESTADOS = {
     borrador:   { label: 'Borrador',   chip: 'chip-recibida'  },
     enviada:    { label: 'Enviada',    chip: 'chip-cotizada'  },
-    aprobada:   { label: 'Aprobada',   chip: 'chip-aprobada'  },
+    aprobada:   { label: 'Aprobada',   chip: 'chip-cot-aprobada' },
     rechazada:  { label: 'Rechazada',  chip: 'chip-cancelada' },
     // 'descartada' NO es un rechazo del cliente: es el cierre por cualquier
     // otro motivo que el vendedor escribe a mano (típico: se rehace la
     // cotización con otra cantidad de equipos). Chip gris a propósito — ni
     // ganada ni perdida — y fuera de las oportunidades de la tasa de cierre.
-    descartada: { label: 'Descartada', chip: 'chip-entregada' },
+    descartada: { label: 'Descartada', chip: 'chip-cot-descartada' },
     vencida:    { label: 'Vencida',    chip: 'chip-reparacion' },
-    convertida: { label: 'Convertida', chip: 'chip-entregada' },
+    // Clave 'convertida' (datos), etiqueta "Aceptada" (glosario T2).
+    convertida: { label: 'Aceptada',   chip: 'chip-cot-convertida' },
   };
   const ESTADO_ORDEN = ['borrador', 'enviada', 'aprobada', 'rechazada', 'descartada', 'vencida', 'convertida'];
 
@@ -39,6 +44,8 @@
   // Etiqueta del estado según el tipo: en el taller 'convertida' se lee
   // "Aceptada" (ver CotizacionTaller.estadoLabel).
   function estadoLabel(estado, doc) {
+    // Rechazo del aprobador ≠ cliente declinó (auditoría UX 2026-09-28, P0 #17).
+    if (estado === 'rechazada' && doc?.rechazo_origen === 'aprobador') return 'Rechazada · aprobador';
     const base = ESTADOS[estado]?.label || estado;
     return window.CotizacionTaller ? CotizacionTaller.estadoLabel(estado, doc, base) : base;
   }
@@ -54,7 +61,7 @@
     { k: 'Tiempo de entrega',   v: '4 – 6 semanas tras orden de compra' },
     { k: 'Garantía',            v: '12 meses contra defectos de fábrica' },
     { k: 'Forma de pago',       v: '50% anticipo · 50% contra entrega' },
-    { k: 'Validez de la oferta', v: '15 días calendario' },
+    { k: 'Validez de la cotización', v: '15 días calendario' },
     { k: 'Instalación',         v: 'No incluida (cotizable aparte)' },
   ];
 
@@ -65,7 +72,7 @@
         { k: 'Tiempo de entrega', v: '6 – 8 semanas tras orden de compra' },
         { k: 'Garantía', v: '24 meses contra defectos de fábrica' },
         { k: 'Forma de pago', v: 'Contra entrega · crédito 30 días' },
-        { k: 'Validez de la oferta', v: '30 días calendario' },
+        { k: 'Validez de la cotización', v: '30 días calendario' },
         { k: 'Instalación', v: 'Incluida en sitio' },
       ],
     },
@@ -74,7 +81,7 @@
         { k: 'Tiempo de respuesta', v: '24 h hábiles' },
         { k: 'Vigencia del contrato', v: '12 meses renovables' },
         { k: 'Forma de pago', v: 'Mensual · transferencia bancaria' },
-        { k: 'Validez de la oferta', v: '15 días calendario' },
+        { k: 'Validez de la cotización', v: '15 días calendario' },
         { k: 'Cobertura', v: 'Área metropolitana de Panamá' },
       ],
     },
@@ -619,12 +626,12 @@
           <button type="button" class="btn btn-secondary" data-act="convertida"
                   style="background:#065F46; color:#fff; border-color:#065F46; justify-content:flex-start; text-align:left;">
             <i data-lucide="trophy"></i>
-            <span style="margin-left:8px;"><b>Convertida a venta</b> — el cliente aceptó y se cerró el negocio</span>
+            <span style="margin-left:8px;"><b>Aceptada por el cliente</b> — el cliente aceptó y se cerró el negocio</span>
           </button>
           <button type="button" class="btn btn-secondary" data-act="rechazada"
                   style="background:#991B1B; color:#fff; border-color:#991B1B; justify-content:flex-start; text-align:left;">
             <i data-lucide="x-circle"></i>
-            <span style="margin-left:8px;"><b>Rechazada</b> — el cliente declinó la propuesta</span>
+            <span style="margin-left:8px;"><b>Rechazada</b> — el cliente declinó la cotización</span>
           </button>
           <button type="button" class="btn btn-secondary" data-act="otros"
                   style="justify-content:flex-start; text-align:left;">
@@ -819,7 +826,7 @@
   function cierreToast(estado, { taller = false } = {}) {
     if (taller && estado === 'convertida') return '✅ Aceptada — Recepción la recibe en Facturación pendiente';
     if (taller && estado === 'rechazada') return 'Registrado: el cliente no aceptó';
-    if (estado === 'convertida') return '🏆 Convertida a venta';
+    if (estado === 'convertida') return '🏆 Aceptada por el cliente';
     if (estado === 'descartada') return 'Cotización descartada — el motivo queda en el historial';
     return 'Cotización rechazada';
   }
@@ -1078,10 +1085,11 @@
     await MailService.enqueue({
       to: aprobacionTo,
       cc: aprobacionCc,
-      subject: `Nueva cotización: ${doc.cotizacion_id} – ${doc.cliente_nombre}`,
+      // Es una SOLICITUD, no un aviso de alta (auditoría UX 2026-09-28, #19).
+      subject: `Solicitud de aprobación: ${doc.cotizacion_id} – ${doc.cliente_nombre}`,
       preheader: `Cotización pendiente de aprobación: ${doc.cliente_nombre}`,
       bodyContent: `
-        <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Nueva cotización creada</h2>
+        <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Solicitud de aprobación</h2>
         <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
           Se registró la cotización <b>${doc.cotizacion_id}</b> en estado borrador y requiere aprobación.
         </p>
@@ -1090,7 +1098,7 @@
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Cliente</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.cliente_nombre || '-'}</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Dirigido a</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.dirigido_a || '-'}</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Email destinatario</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.dirigido_email || '-'}</td></tr>
-          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Ejecutivo</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.ejecutivo_nombre || '-'}</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Vendedor</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.ejecutivo_nombre || '-'}</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Validez</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.validezDias} días</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Introducción</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${obsEsc}</td></tr>
           ${filaMail(t.venta, t.hayAlquiler ? 'Total venta' : 'Total', '', t.hayAlquiler && t.hayVenta, doc)}

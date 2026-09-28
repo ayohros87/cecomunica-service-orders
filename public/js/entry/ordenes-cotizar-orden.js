@@ -4,6 +4,7 @@
 // orden importa igual que antes. Vite lo empaqueta y le pone hash.
 import '/js/firebase-init.js';
 import '/js/ui/toast.js';
+import '/js/ui/busy.js';
 import '/js/ui/modal.js';
 import '/js/services/ordenesService.js';
 import '/js/services/clientesService.js';

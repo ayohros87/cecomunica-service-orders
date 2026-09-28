@@ -12,6 +12,7 @@ import '/js/ui/equipo-ficha.js';
 import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';
 import '/js/ui/toast.js';
+import '/js/ui/busy.js';
 import '/js/ui/modal.js';
 import '/js/domain/docIdentidad.js';
 import '/js/domain/rucPanama.js';

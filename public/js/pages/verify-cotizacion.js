@@ -88,7 +88,7 @@
           ${logoSvg()}
           <div class="cq-divider"></div>
           <div>
-            <div class="cq-wm">CeComunica</div>
+            <div class="cq-wm">Cecomunica</div>
             <div class="cq-tag">Soluciones en Comunicaciones</div>
           </div>
         </div>
@@ -187,6 +187,43 @@
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
+  // Estado a la vista del cliente (auditoría UX 2026-09-28, #20): un link de
+  // una cotización vencida o cerrada se veía vigente. El estado lo espeja
+  // CotizacionesService.updateCotizacion en el mirror; los espejos viejos no lo
+  // traen y caen al cálculo por fecha + validez.
+  function situacion(data, snap) {
+    const fecha = data.fecha || snap?.fecha || '';
+    const dias = Number(data.validezDias || snap?.validezDias || 0);
+    const vence = fecha && dias ? T.addDays(fecha, dias) : '';
+    const hoy = (FMT.hoyISOPanama && FMT.hoyISOPanama()) || new Date().toISOString().slice(0, 10);
+    const e = String(data.estado || '');
+    if (e === 'convertida') return { k: 'aceptada', vence };
+    if (e === 'descartada' || e === 'rechazada') return { k: 'cerrada', vence };
+    if (e === 'vencida' || (vence && hoy > vence)) return { k: 'vencida', vence };
+    return { k: 'vigente', vence };
+  }
+
+  function avisoSituacion(sit) {
+    const venceTxt = sit.vence ? fmtFechaCorta(sit.vence) : '';
+    const conf = {
+      vigente:  { bg: '#ECFDF5', fg: '#065F46', bd: '#A7F3D0', t: 'Vigente' + (venceTxt ? ' hasta el ' + venceTxt : ''), d: 'Para aceptarla, responde el correo con el que la recibiste o escríbele a tu vendedor.' },
+      aceptada: { bg: '#ECFDF5', fg: '#065F46', bd: '#A7F3D0', t: 'Cotización aceptada', d: 'Ya registramos tu aceptación. Gracias.' },
+      vencida:  { bg: '#FFF7ED', fg: '#9A3412', bd: '#FED7AA', t: 'Cotización vencida' + (venceTxt ? ' el ' + venceTxt : ''), d: 'Los precios y la disponibilidad pueden haber cambiado. Pide a tu vendedor una cotización actualizada antes de aceptarla.' },
+      cerrada:  { bg: '#F1F5F9', fg: '#334155', bd: '#CBD5E1', t: 'Cotización cerrada', d: 'Esta cotización ya no está vigente. Si la necesitas, pide una nueva a tu vendedor.' },
+    }[sit.k];
+    const stage = $('cqPage')?.parentElement;
+    if (!stage || !conf) return;
+    const div = document.createElement('div');
+    div.id = 'cqSituacion';
+    div.className = 'cq-situacion';
+    div.setAttribute('role', sit.k === 'vigente' ? 'status' : 'alert');
+    div.style.cssText = `max-width:816px; margin:0 auto 12px; padding:12px 16px; border-radius:8px; border:1px solid ${conf.bd}; background:${conf.bg}; color:${conf.fg}; font-size:14px; line-height:1.5;`;
+    div.innerHTML = `<b>${esc(conf.t)}</b><br><span>${esc(conf.d)}</span>`;
+    stage.insertBefore(div, stage.firstChild);
+    const meta = $('ptMeta');
+    if (meta) meta.textContent = (meta.textContent || '') + ' · ' + conf.t;
+  }
+
   // Registra apertura. Solo lo hace una vez por sesión por cotización (sessionStorage flag).
   // ¿Quien abre es de la casa? El vendedor va en CC del MISMO correo que recibe
   // el cliente (y supervisión en BCC), así que su copia trae el mismo link. Sin
@@ -261,6 +298,7 @@
 
       const emisor = data.emisor || {};
       render(data.snapshot, emisor, vCode, docId, data.lleva_carta === true);
+      if (data.snapshot) avisoSituacion(situacion(data, data.snapshot));
       // Log de apertura (asíncrono, no bloquea render).
       logOpen(docId, vCode, data.cotizacion_id);
     } catch (e) {

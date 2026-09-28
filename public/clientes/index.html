@@ -21,16 +21,13 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8" />
-  <title>Clientes – Cecomunica</title>
+  <title>Clientes · edición masiva – Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Firebase (compat) -->
           <script src="../js/core/modulos.js?v=1838cd29"></script>
   <script src="../js/core/layout.js?v=68295191"></script>
   <script src="../js/core/roles.js?v=7a4f1b6f"></script>
   <script src="../js/core/formatting.js?v=b2dcba44"></script>
-      <!-- Toast/Modal: clientes-index.js los usa en la bulk-bar, "Mostrar todo" y el
-       guard de acceso; sin estos dos scripts esos botones morían en ReferenceError. -->
       <script src="../js/core/auth.js?v=5bb0cc34"></script>
 
   <link rel="stylesheet" href="../css/ceco-ui.css?v=bf320539">
@@ -96,7 +93,7 @@
   <div id="rail-mount"></div>
   <div class="cc-work">
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '<i data-lucide="users"></i> Clientes', actions: [{ label: '<i data-lucide="plus"></i> Nuevo cliente', cls: 'primary', id: 'btnNuevo' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
+  <script>Layout.renderTopbar({ title: '<i data-lucide="users"></i> Clientes · edición masiva (avanzada)', actions: [{ label: '<i data-lucide="plus"></i> Nuevo cliente', cls: 'primary', id: 'btnNuevo' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
 
   <div class="app-wrap app-wrap--full">
 
@@ -104,7 +101,7 @@
       <div class="filter-bar">
         <div class="filter-search">
           <span class="search-icon"><i data-lucide="search"></i></span>
-          <input id="q" type="search" placeholder="Buscar por nombre o representante…" aria-label="Buscar clientes">
+          <input id="q" type="search" placeholder="Nombre, representante, RUC o dirección" aria-label="Buscar clientes">
         </div>
         <label class="toggle-wrap">
           <span class="toggle-switch">
@@ -178,7 +175,6 @@
 
       <div class="app-table-footer">
         <div style="display:flex; gap:var(--sp-2); align-items:center;">
-          <button id="btnMas" class="btn btn-ghost btn-sm"><i data-lucide="chevron-down"></i> Cargar más</button>
           <button id="btnTodo" class="btn btn-secondary btn-sm"><i data-lucide="list"></i> Mostrar todo</button>
         </div>
         <div id="pagerBar" style="display:flex; gap:var(--sp-3); align-items:center;">
@@ -193,29 +189,6 @@
       </div>
     </div>
 
-  </div>
-
-  <!-- Modal de confirmación de eliminación -->
-  <div id="overlay" class="modal-backdrop" role="dialog" aria-modal="true">
-    <div class="modal" id="confirmModal">
-      <div class="modal-header">
-        <h3 class="modal-title" id="confirmTitle">Confirmar eliminación</h3>
-      </div>
-      <div class="modal-body">
-        <div class="alert-banner alert-warning">
-          <span class="alert-banner-icon"><i data-lucide="alert-triangle"></i></span>
-          <div class="alert-banner-body">
-            Vas a <strong>eliminar (soft-delete)</strong> este cliente. No se pierde información,
-            pero dejará de mostrarse en listados.
-          </div>
-        </div>
-        <p id="confirmMsg" class="resumen" style="margin:8px 0 0"></p>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" id="btnCancel">Cancelar</button>
-        <button class="btn btn-danger" id="btnOk">Eliminar</button>
-      </div>
-    </div>
   </div>
 
       <!-- Flota del cliente (informe tracking 2026-08-12, P4.1): pool + ficha universal -->

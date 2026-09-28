@@ -4,6 +4,7 @@
 // orden importa igual que antes. Vite lo empaqueta y le pone hash.
 import '/js/firebase-init.js';
 import '/js/ui/toast.js';
+import '/js/ui/busy.js';
 import '/js/ui/modal.js';
 import '/js/services/cotizacionesService.js';
 import '/js/services/clientesService.js';
@@ -15,6 +16,8 @@ import '/js/domain/cotizacionesTotales.js';
 import '/js/domain/cotizacionTaller.js';
 import '/js/ui/entity-combo.js';
 import '/js/pages/cot-editor-state.js';
+// Modal de aprobación compartido lista/detalle (auditoría UX 2026-09-28, #11).
+import '/js/pages/cot-aprobacion.js';
 import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';
 import '/js/pages/cotizaciones-index.js';

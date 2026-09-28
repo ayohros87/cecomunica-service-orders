@@ -53,7 +53,16 @@ const CotizacionesService = {
 
   async updateCotizacion(id, fields) {
     const db = firebase.firestore();
-    return db.collection('cotizaciones').doc(id).update(fields);
+    const r = await db.collection('cotizaciones').doc(id).update(fields);
+    // El estado viaja al espejo público para que el link del cliente diga si
+    // la cotización sigue vigente, se aceptó o se cerró (auditoría UX
+    // 2026-09-28, #20). Best-effort: sin espejo (aún no enviada) no pasa nada.
+    if (fields && typeof fields.estado === 'string') {
+      db.collection('cotizacion_verificaciones').doc(id)
+        .update({ estado: fields.estado, estado_at: firebase.firestore.FieldValue.serverTimestamp() })
+        .catch(() => { /* espejo inexistente o sin permiso: no bloquea */ });
+    }
+    return r;
   },
 
   // Fetch cotizaciones in a date window (newest first) — used for max-ID sequential generation.
@@ -110,7 +119,9 @@ const CotizacionesService = {
     const db = firebase.firestore();
     return db.collection('cotizaciones').doc(id).update({
       deleted: false,
-      deleted_at: firebase.firestore.FieldValue.deleteField(),
+      // `delete()` es la API compat; `deleteField()` es del SDK modular y aquí
+      // no existe (restore lanzaba TypeError y nadie lo notó porque nadie lo llamaba).
+      deleted_at: firebase.firestore.FieldValue.delete(),
     });
   },
 

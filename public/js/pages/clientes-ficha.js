@@ -222,6 +222,7 @@ window.FichaCliente = {
     document.getElementById('itbms_exento').addEventListener('change', () => this._syncMotivo());
     document.getElementById('itbms_exento').addEventListener('fk:restaurado', () => this._syncMotivo());
     document.getElementById('addIP')?.addEventListener('click', () => this.agregarIP());
+    if (this.esNuevo || this._puedeEditar()) this._montarAvisosDuplicado();
 
     // Evidencia del representante → documentos del cliente (PII, URL firmada).
     // En alta no hay cliente al que colgarla: la zona está oculta.
@@ -250,11 +251,64 @@ window.FichaCliente = {
   },
 
   // ¿Otro cliente vivo ya usa este valor normalizado? (excluyendo al propio)
+  // Devuelve { id, nombre } del otro (o null) para poder enlazarlo
+  // (auditoría UX 2026-09-28, #15: el banner no decía cuál era).
   async _duplicado(campo, valor) {
-    if (!valor) return false;
+    if (!valor) return null;
     const snap = await firebase.firestore().collection('clientes')
-      .where(campo, '==', valor).where('deleted', '==', false).limit(2).get();
-    return snap.docs.some(d => d.id !== this.cliente.id);
+      .where(campo, '==', valor).where('deleted', '==', false).limit(3).get();
+    const otro = snap.docs.find(d => d.id !== this.cliente.id);
+    return otro ? { id: otro.id, nombre: otro.data().nombre || '' } : null;
+  },
+
+  _linkExistente(dup) {
+    if (!dup) return '';
+    return ` <a href="./centro.html?id=${encodeURIComponent(dup.id)}" target="_blank" rel="noopener"
+      style="color:inherit; text-decoration:underline;">Abrir el existente${dup.nombre ? ' (' + this.esc(dup.nombre) + ')' : ''}</a>`;
+  },
+
+  // Aviso NO bloqueante al salir del nombre o del RUC: el duplicado se ve
+  // mientras se captura, no recién al guardar con 3 consultas (auditoría UX
+  // 2026-09-28, #15). Consulta exacta sobre el valor normalizado.
+  async _avisarDuplicado(tipo) {
+    const g = (id) => document.getElementById(id);
+    const cont = g(tipo === 'nombre' ? 'avisoDupNombre' : 'avisoDupRuc');
+    if (!cont) return;
+    let dup = null;
+    try {
+      if (tipo === 'nombre') {
+        const n = ClientesService.norm(g('nombre').value || '');
+        if (n && n !== this.cliente.nombre_norm) dup = await this._duplicado('nombre_norm', n);
+      } else {
+        const rn = ClientesService.rucNorm((g('ruc').value || '').trim());
+        if (rn && rn !== this.cliente.ruc_norm) dup = await this._duplicado('ruc_norm', rn);
+      }
+    } catch (e) { console.warn('[ficha] no se pudo revisar duplicados', e); }
+    if (!dup) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
+    cont.innerHTML = `Ya existe otro cliente con ${tipo === 'nombre' ? 'este nombre' : 'este RUC'}.` + this._linkExistente(dup)
+      + ' Revisa antes de guardar: no se puede repetir.';
+    cont.style.display = '';
+  },
+
+  _montarAvisosDuplicado() {
+    if (this._avisosMontados) return;
+    this._avisosMontados = true;
+    const mk = (id, despuesDe) => {
+      if (!despuesDe || document.getElementById(id)) return;
+      const d = document.createElement('div');
+      d.id = id;
+      d.setAttribute('role', 'status');
+      d.style.cssText = 'display:none; margin:6px 0 10px; padding:8px 10px; border-radius:6px; background:#FFF7E6; color:#8A5A00; font-size:13px;';
+      despuesDe.insertAdjacentElement('afterend', d);
+    };
+    mk('avisoDupNombre', document.getElementById('nombre')?.closest('.form-field'));
+    mk('avisoDupRuc', document.getElementById('rucBloque'));
+    document.getElementById('nombre')?.addEventListener('blur', () => this._avisarDuplicado('nombre'));
+    // El RUC son varias casillas: se revisa al salir del bloque entero.
+    document.getElementById('rucBloque')?.addEventListener('focusout', (e) => {
+      if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return;
+      this._avisarDuplicado('ruc');
+    });
   },
 
   async guardar(cambios) {
@@ -288,22 +342,27 @@ window.FichaCliente = {
     if (probRuc) errores.push(probRuc);
     if (!payload.nombre) errores.push('El nombre no puede quedar vacío.');
     if (payload.nombre.includes('/')) errores.push("El nombre no puede contener '/'.");
-    if (payload.nombre_norm !== this.cliente.nombre_norm && await this._duplicado('nombre_norm', payload.nombre_norm)) {
-      errores.push('Ya existe otro cliente con ese nombre.');
+    // Cada error lleva, si aplica, el cliente con el que choca: el banner
+    // enlaza "Abrir el existente" (auditoría UX 2026-09-28, #15).
+    let dup = null;
+    if (payload.nombre_norm !== this.cliente.nombre_norm && (dup = await this._duplicado('nombre_norm', payload.nombre_norm))) {
+      errores.push({ t: 'Ya existe otro cliente con ese nombre.', dup });
     }
-    if (payload.ruc_norm && payload.ruc_norm !== this.cliente.ruc_norm && await this._duplicado('ruc_norm', payload.ruc_norm)) {
-      errores.push('Ya existe otro cliente con ese RUC.');
+    if (payload.ruc_norm && payload.ruc_norm !== this.cliente.ruc_norm && (dup = await this._duplicado('ruc_norm', payload.ruc_norm))) {
+      errores.push({ t: 'Ya existe otro cliente con ese RUC.', dup });
     }
     if (payload.rucdv_norm && payload.dv_norm && payload.rucdv_norm !== this.cliente.rucdv_norm
-        && await this._duplicado('rucdv_norm', payload.rucdv_norm)) {
-      errores.push('Ya existe otro cliente con ese RUC + DV.');
+        && (dup = await this._duplicado('rucdv_norm', payload.rucdv_norm))) {
+      errores.push({ t: 'Ya existe otro cliente con ese RUC + DV.', dup });
     }
     const banner = document.getElementById('bannerErrores');
     if (errores.length) {
-      banner.innerHTML = errores.map(e => this.esc(e)).join('<br>');
+      banner.innerHTML = errores.map(e => typeof e === 'string'
+        ? this.esc(e)
+        : this.esc(e.t) + this._linkExistente(e.dup)).join('<br>');
       banner.style.display = '';
       banner.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      throw new Error(errores[0]);
+      throw new Error(typeof errores[0] === 'string' ? errores[0] : errores[0].t);
     }
     banner.style.display = 'none';
 

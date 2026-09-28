@@ -103,10 +103,12 @@ test("T · condiciones: la de taller trae la garantía de 30 días y ninguna de 
   assert.ok(S.PLANTILLAS_COND.some((p) => p.id === "taller"), "plantilla de taller en el editor");
 });
 
-test("T · en el taller 'convertida' se lee Aceptada; en ventas sigue Convertida", () => {
+// Desde la auditoría UX 2026-09-28 (glosario T2) 'convertida' se lee
+// "Aceptada" también en ventas: "orden de venta" no es un documento del sistema.
+test("T · 'convertida' se lee Aceptada en taller y en ventas", () => {
   const S = montarCotState();
   assert.equal(S.estadoLabel("convertida", TALLER), "Aceptada");
-  assert.equal(S.estadoLabel("convertida", VENTA), "Convertida");
+  assert.equal(S.estadoLabel("convertida", VENTA), "Aceptada");
   const p = CT.pasos({ ...TALLER, estado: "convertida", enviada_en: 1, facturacion: { estado: "facturada", factura: "F-88" } });
   assert.deepEqual(p.map((x) => x.done), [true, true, true, true]);
   assert.equal(p[3].t, "Facturada · F-88");
@@ -136,7 +138,8 @@ test("E · un solo correo al cliente: taller nombra la orden y pide responder pa
   assert.equal(v.subject, "Cotización COT-2026-0102 · RIBA SMITH · CeComunica");
   assert.doesNotMatch(v.html, /Orden de servicio/);
   // La copia que vivía en "Aprobar y enviar" le decía "aprobada" al cliente.
-  const idx = leer("public", "js", "pages", "cotizaciones-index.js");
+  // "Aprobar y enviar" vive en cot-aprobacion.js desde la auditoría UX 2026-09-28.
+  const idx = leer("public", "js", "pages", "cot-aprobacion.js");
   assert.doesNotMatch(idx, /aprobada\$\{clienteNom/, "el asunto al cliente ya no dice 'aprobada'");
   assert.match(idx, /CotState\.correoCliente\(/);
 });

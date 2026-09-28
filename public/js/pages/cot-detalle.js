@@ -104,7 +104,8 @@
               + (ac?.por_email ? ' · anotado por ' + ac.por_email : ''),
           }
         : {
-            act: 'Convertida a orden de venta',
+            // "Orden de venta" no existe como documento (glosario T2, auditoría UX 2026-09-28).
+            act: 'Aceptada por el cliente',
             meta: fmtFechaAny(cot.fecha_conversion) + ' · venta cerrada',
           });
     }
@@ -115,10 +116,17 @@
       });
     }
     if (cot.fecha_rechazo) {
-      h.push({
-        act: 'Rechazada',
-        meta: fmtFechaAny(cot.fecha_rechazo) + ' · cliente declinó',
-      });
+      // El rechazo del APROBADOR no es el cliente declinando (auditoría UX
+      // 2026-09-28, P0 #17): se dice quién y por qué.
+      h.push(cot.rechazo_origen === 'aprobador'
+        ? {
+            act: 'Rechazada por ' + (cot.rechazado_por_email || 'el aprobador') + (cot.rechazo_motivo ? ': ' + cot.rechazo_motivo : ''),
+            meta: fmtFechaAny(cot.fecha_rechazo) + ' · no se envió al cliente',
+          }
+        : {
+            act: 'Rechazada',
+            meta: fmtFechaAny(cot.fecha_rechazo) + ' · el cliente declinó' + (cot.cierre_motivo ? ' — ' + cot.cierre_motivo : ''),
+          });
     }
     if (cot.fecha_descarte || cot.estado === 'descartada') {
       // El motivo lo escribió el vendedor al cerrar (cerrarPrompt → 'Otro
@@ -288,7 +296,7 @@
                       : esc(a.nombre)}
                   </li>`).join('')}
               </ul>
-              <p style="font-size:11.5px; color:var(--fg-3); margin:12px 0 0;">Estos archivos se envían junto con la propuesta al cliente.</p>
+              <p style="font-size:11.5px; color:var(--fg-3); margin:12px 0 0;">Estos archivos se envían junto con la cotización al cliente.</p>
             </div>
           </div>` : ''}
         </div>
@@ -302,7 +310,7 @@
               <dl class="cc-kv" style="margin-top:18px; gap:8px 14px;">
                 <dt>Emitida</dt><dd>${esc(fmtFechaCorta(cot.fecha))}</dd>
                 <dt>Vence</dt><dd>${esc(fmtFechaCorta(vence))}</dd>
-                <dt>${esTaller() ? 'Firma' : 'Ejecutivo'}</dt><dd>${esc(ej.nombre)}<div style="font-size:12px; color:var(--fg-3);">${esc(CotizacionTaller.cargoFirmante(cot, ej))}</div></dd>
+                <dt>${esTaller() ? 'Firma' : 'Vendedor'}</dt><dd>${esc(ej.nombre)}<div style="font-size:12px; color:var(--fg-3);">${esc(CotizacionTaller.cargoFirmante(cot, ej))}</div></dd>
               </dl>
             </div>
           </div>
@@ -356,18 +364,16 @@
     const btnDup = $('btnDuplicar');
     if (btnDup) btnDup.addEventListener('click', duplicar);
     const btnEnv = $('btnEnviar');
-    if (btnEnv) btnEnv.addEventListener('click', () => enviarPorCorreo(cli, ej));
+    if (btnEnv) btnEnv.addEventListener('click', () => enviarPorCorreo(cli, ej, btnEnv));
     const btnCer = $('btnCerrar');
     if (btnCer) btnCer.addEventListener('click', () => cerrarCotizacion(cli));
-    // "Aprobar y enviar" (admin + borrador): la lógica vive en el listado
-    // — redirigimos con ?aprobar=<docId> y allí se abre el panel de aprobación.
+    // "Aprobar y enviar": el panel compartido (cot-aprobacion.js) se abre EN
+    // SITIO — antes redirigía a la lista y cargaba 30 docs (auditoría UX 2026-09-28, #11).
     const btnAp = $('btnAprobar');
-    if (btnAp) btnAp.addEventListener('click', () => {
-      location.href = 'index.html?aprobar=' + encodeURIComponent(cot._docId);
-    });
+    if (btnAp) btnAp.addEventListener('click', abrirAprobacion);
     // Envío directo del vendedor (cotización dentro de política).
     const btnDir = $('btnEnviarDirecto');
-    if (btnDir) btnDir.addEventListener('click', () => enviarPorCorreo(cli, ej));
+    if (btnDir) btnDir.addEventListener('click', () => enviarPorCorreo(cli, ej, btnDir));
     // Solicitar aprobación (cotización fuera de política).
     const btnSol = $('btnSolicitar');
     if (btnSol) btnSol.addEventListener('click', solicitarAprobacion);
@@ -379,16 +385,42 @@
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
+  // Relee el documento y repinta (tras aprobar/rechazar en sitio).
+  async function recargar() {
+    const doc = await CotizacionesService.getCotizacion(cot._docId);
+    if (!doc) return;
+    rawDoc = doc;
+    cot = CotState.toUi(doc);
+    render();
+  }
+
+  function abrirAprobacion() {
+    return CotAprobacion.abrir(cot._docId, {
+      rol: userRol,
+      uid: firebase.auth().currentUser?.uid || null,
+      policy: policyCfg,
+      onDone: recargar,
+    });
+  }
+
+  // Candado estándar (js/ui/busy.js); sin él, la acción corre igual.
+  function conCandado(btn, fn, opts = {}) {
+    if (typeof window.withBusy === 'function') return window.withBusy(btn, fn, { toast: false, rethrow: false, ...opts });
+    return fn();
+  }
+
   // ── Transiciones de estado ────────────────────────────────────
   // borrador → aprobada (admin aprueba) → enviada (auto al cliente) → convertida
   // Borrador YA NO tiene salto directo a "enviada": antes ese atajo permitía
   // marcar como enviada sin pasar por aprobación y luego el admin no podía
   // aprobar (estado ya no era borrador). La salida correcta de borrador es
   // el botón "Aprobar y enviar" del header (solo admin), que sí envía correo.
+  // Aceptada/Rechazada ya NO se marcan desde aquí: el único camino es
+  // "Cerrar cotización", que pide el desenlace y el motivo (auditoría UX 2026-09-28, T1/#12).
   const TRANSICIONES = {
     borrador:   [],
-    aprobada:   ['enviada', 'convertida', 'rechazada'],
-    enviada:    ['convertida', 'rechazada', 'vencida'],
+    aprobada:   ['enviada'],
+    enviada:    ['vencida'],
     rechazada:  ['borrador'],
     // 'descartada' no ofrece atajo a convertida/rechazada: el desenlace real
     // se marca con "Cerrar cotización" (que sí pide el motivo). Aquí solo se
@@ -494,6 +526,7 @@
       if (nuevo === 'borrador') {
         const del = firebase.firestore.FieldValue.delete();
         patch.fecha_rechazo = del; patch.rechazado_por_uid = del;
+        patch.rechazado_por_email = del; patch.rechazo_origen = del; patch.rechazo_motivo = del;
         patch.fecha_vencimiento = del; patch.vencida_auto = del; patch.vencida_manual = del;
       }
       await CotizacionesService.updateCotizacion(cot._docId, patch);
@@ -502,7 +535,7 @@
       if (nuevo === 'rechazada')  { cot.fecha_rechazo = now; }
       if (nuevo === 'vencida')    { cot.fecha_vencimiento = now; }
       if (nuevo === 'enviada')    { cot.enviada_en = now; }
-      if (nuevo === 'borrador')   { delete cot.fecha_rechazo; delete cot.fecha_vencimiento; delete cot.vencida_auto; delete cot.vencida_manual; }
+      if (nuevo === 'borrador')   { ['fecha_rechazo', 'rechazado_por_email', 'rechazo_origen', 'rechazo_motivo', 'fecha_vencimiento', 'vencida_auto', 'vencida_manual'].forEach(k => { delete cot[k]; }); }
       Toast.show('Estado actualizado', 'ok');
       render();
     } catch (err) {
@@ -511,7 +544,12 @@
   }
 
   // ── Enviar por correo (panel con preview) ─────────────────────
-  async function enviarPorCorreo(cli, ej) {
+  // Candado + "Preparando…" mientras se genera el link (auditoría UX 2026-09-28, #8).
+  function enviarPorCorreo(cli, ej, btn) {
+    return conCandado(btn, () => _enviarPorCorreo(cli, ej), { label: 'Preparando envío…' });
+  }
+
+  async function _enviarPorCorreo(cli, ej) {
     const t = T.calcTotales(cot);
     // Escribe (o reescribe) el espejo público con la decisión de carta VIGENTE.
     // Se llama otra vez si el panel de envío cambia la casilla: el link es el
@@ -696,6 +734,17 @@
       catch (e) { policyCfg = T.POLICY_DEFAULT; }
       cot = CotState.toUi(doc);
       render();
+
+      // ?enviar=1 (el editor lo pone al guardar dentro de política, auditoría
+      // UX 2026-09-28 #10): abrir el envío de una vez y limpiar la URL para que
+      // un recargar no lo vuelva a abrir.
+      if (params.get('enviar') === '1') {
+        const url = new URL(window.location);
+        url.searchParams.delete('enviar');
+        window.history.replaceState({}, document.title, url.toString());
+        const b = $('btnEnviarDirecto') || $('btnAprobar') || $('btnEnviar');
+        if (b) b.click();
+      }
     });
   });
 })();

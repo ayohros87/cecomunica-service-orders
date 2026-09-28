@@ -15,6 +15,8 @@ window.ClientesRegularizacion = (() => {
   let vendedorSel = '';
   let busqueda = '';
   let abierto = null;
+  let cortada = false;   // ¿la consulta llegó al tope de 500?
+  const TOPE = 500;
 
   const NIVEL_CLS = { critica: 'cg-chip--bad', por_regularizar: 'cg-chip--warn', leve: 'cg-chip--muted', al_dia: 'cg-chip--ok' };
   const toDate = (v) => (v?.toDate ? v.toDate() : (v ? new Date(v) : null));
@@ -29,7 +31,7 @@ window.ClientesRegularizacion = (() => {
       // vendedor a las cuentas sin dueño. Sin montos: no es información
       // financiera. El vendedor ve las suyas en el inicio y en cada ficha.
       if (![ROLES.ADMIN, ROLES.GERENTE, ROLES.RECEPCION].includes(rol)) {
-        document.getElementById('rgRows').innerHTML = '<div class="rg-vacio">Esta bandeja es de administración, gerencia y recepción. El vendedor ve sus cuentas por regularizar en el inicio y en cada ficha.</div>';
+        document.getElementById('rgRows').innerHTML = '<div class="rg-vacio">Esta bandeja es de administración, gerencia y recepción. El vendedor ve sus clientes por regularizar en el inicio y en cada ficha.</div>';
         document.getElementById('rgChips').style.display = 'none';
         return;
       }
@@ -51,13 +53,33 @@ window.ClientesRegularizacion = (() => {
       clearTimeout(t); t = setTimeout(() => { busqueda = String(e.target.value || '').trim().toLowerCase(); render(); }, 150);
     });
     document.getElementById('rgRows').addEventListener('click', onRowsClick);
+    // Asignar al ELEGIR en el select, sin botón aparte (auditoría UX 2026-09-28, #16).
+    document.getElementById('rgRows').addEventListener('change', (e) => {
+      const sel = e.target.closest('select[data-asignar-sel]');
+      if (sel) asignarVendedor(sel.dataset.asignarSel);
+    });
   }
 
+  // Sin try/catch la bandeja quedaba en "Cargando…" para siempre ante un
+  // error de red o de índice (auditoría UX 2026-09-28, #16).
   async function cargar() {
-    const [snap, vs] = await Promise.all([
-      db().collection('clientes').where('regularizacion.puntos', '>', 0).limit(500).get(),
-      UsuariosService.getUsuariosByRol([ROLES.VENDEDOR, ROLES.ADMIN, ROLES.GERENTE]).catch(() => []),
-    ]);
+    const cont = document.getElementById('rgRows');
+    cont.innerHTML = '<div class="rg-vacio">Cargando…</div>';
+    let snap, vs;
+    try {
+      [snap, vs] = await Promise.all([
+        db().collection('clientes').where('regularizacion.puntos', '>', 0).limit(TOPE).get(),
+        UsuariosService.getUsuariosByRol([ROLES.VENDEDOR, ROLES.ADMIN, ROLES.GERENTE]).catch(() => []),
+      ]);
+    } catch (err) {
+      console.error('[regularizacion] no se pudo cargar', err);
+      cont.innerHTML = `<div class="rg-vacio">No se pudo cargar la bandeja (${esc(err?.code || err?.message || 'error de red')}).
+        <br><button type="button" class="btn btn-secondary btn-sm" id="rgReintentar" style="margin-top:8px;"><i data-lucide="rotate-cw"></i> Reintentar</button></div>`;
+      document.getElementById('rgReintentar')?.addEventListener('click', cargar);
+      if (window.lucide?.createIcons) lucide.createIcons();
+      return;
+    }
+    cortada = snap.size >= TOPE;
     cuentas = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.deleted && c.regularizacion?.puntos > 0);
     vendedores = (vs || []).filter(v => v.email && !/@sin\.email$/i.test(v.email))
       .map(v => ({ uid: v.id || v.uid, email: v.email, nombre: v.nombre || v.email.split('@')[0] }))
@@ -112,12 +134,19 @@ window.ClientesRegularizacion = (() => {
 
     const vis = cuentas.filter(pasa).sort(orden);
     const puntos = vis.reduce((s, c) => s + (c.regularizacion.puntos || 0), 0);
-    document.getElementById('rgResumen').textContent = vis.length
-      ? `${vis.length} cuenta${vis.length === 1 ? '' : 's'} · ${puntos} punto${puntos === 1 ? '' : 's'} de deuda · ${vis.reduce((s, c) => s + (c.regularizacion.d1 || 0), 0)} radios sin contrato · ${vis.reduce((s, c) => s + (c.regularizacion.d2 || 0), 0)} contratos sin seriales`
-      : '';
+    document.getElementById('rgResumen').textContent = (vis.length
+      ? `${vis.length} cliente${vis.length === 1 ? '' : 's'} · ${puntos} punto${puntos === 1 ? '' : 's'} de deuda · ${vis.reduce((s, c) => s + (c.regularizacion.d1 || 0), 0)} radios sin contrato · ${vis.reduce((s, c) => s + (c.regularizacion.d2 || 0), 0)} contratos sin seriales`
+      : '')
+      // Tope de la consulta a la vista: antes cortaba en 500 sin decirlo.
+      + (cortada ? ` · Se cargaron solo los primeros ${TOPE} clientes: puede haber más.` : '');
     const cont = document.getElementById('rgRows');
-    if (!vis.length) { cont.innerHTML = '<div class="rg-vacio">Ninguna cuenta con este filtro.</div>'; return; }
-    cont.innerHTML = vis.map(fila).join('');
+    if (!vis.length) { cont.innerHTML = '<div class="rg-vacio">Ningún cliente con este filtro.</div>'; return; }
+    // Encabezados de columna (auditoría UX 2026-09-28, #16): la fila tenía 5
+    // columnas sin nombre ("12", "34 d").
+    cont.innerHTML = `<div class="rg-main rg-head" aria-hidden="true">
+        <span>Nivel</span><span>Cliente · qué le falta</span><span>Vendedor</span>
+        <span class="rg-num">Puntos</span><span class="rg-num">Desde</span>
+      </div>` + vis.map(fila).join('');
     if (window.lucide?.createIcons) lucide.createIcons();
   }
 
@@ -160,13 +189,10 @@ window.ClientesRegularizacion = (() => {
       <div class="rg-side">
         <a class="btn btn-primary" href="./centro.html?id=${encodeURIComponent(c.id)}"><i data-lucide="compass"></i> Abrir ficha</a>
         <label for="rgAs-${esc(c.id)}">Vendedor responsable</label>
-        <div style="display:flex; gap:6px;">
-          <select class="form-select" id="rgAs-${esc(c.id)}" style="flex:1;">
-            <option value="">— sin vendedor —</option>
-            ${vendedores.map(v => `<option value="${esc(v.uid)}" ${v.uid === c.vendedor_asignado ? 'selected' : ''}>${esc(v.nombre)}</option>`).join('')}
-          </select>
-          <button type="button" class="btn btn-ghost" data-asignar="${esc(c.id)}">Asignar</button>
-        </div>
+        <select class="form-select" id="rgAs-${esc(c.id)}" data-asignar-sel="${esc(c.id)}" title="Se guarda al elegir">
+          <option value="">— sin vendedor —</option>
+          ${vendedores.map(v => `<option value="${esc(v.uid)}" ${v.uid === c.vendedor_asignado ? 'selected' : ''}>${esc(v.nombre)}</option>`).join('')}
+        </select>
         <label class="cg-toggle" style="font-size:12.5px;">
           <input type="checkbox" data-asistida="${esc(c.id)}" ${c.regularizacion_asistida ? 'checked' : ''}> Regularización asistida por administración
         </label>
@@ -175,8 +201,6 @@ window.ClientesRegularizacion = (() => {
   }
 
   async function onRowsClick(e) {
-    const asignar = e.target.closest('[data-asignar]');
-    if (asignar) { await asignarVendedor(asignar.dataset.asignar); return; }
     const asistida = e.target.closest('[data-asistida]');
     if (asistida) { await marcarAsistida(asistida.dataset.asistida, asistida.checked); return; }
     if (e.target.closest('a, select, label, input, button')) return;
@@ -190,6 +214,7 @@ window.ClientesRegularizacion = (() => {
     const sel = document.getElementById(`rgAs-${id}`);
     const v = vendedores.find(x => x.uid === sel?.value) || null;
     const c = cuentas.find(x => x.id === id); if (!c) return;
+    if (sel) sel.disabled = true;
     try {
       await db().collection('clientes').doc(id).update({
         vendedor_asignado: v ? v.uid : null,
@@ -203,7 +228,11 @@ window.ClientesRegularizacion = (() => {
       c.regularizacion.vendedor_uid = c.vendedor_asignado; c.regularizacion.vendedor_email = c.vendedor_email;
       Toast.show(v ? `${c.nombre}: ahora la lleva ${v.nombre}` : `${c.nombre}: sin vendedor`, 'ok');
       render();
-    } catch (err) { console.error(err); Toast.show('No se pudo asignar el vendedor', 'bad'); }
+    } catch (err) {
+      console.error(err);
+      if (sel) { sel.value = c.vendedor_asignado || ''; sel.disabled = false; }
+      Toast.show('No se pudo asignar el vendedor', 'bad');
+    }
   }
 
   async function marcarAsistida(id, on) {

@@ -17,6 +17,10 @@
   // contrato o una venta) y mezclarlas hacía que las reparaciones del taller
   // contaran en la tasa de cierre de los vendedores.
   let filtroTipo = 'todas';
+  // ?aprobar=1 (señal SAP del home): solo los borradores que esperan
+  // aprobación (requiere_aprobacion == true). Antes la señal contaba esos y
+  // aterrizaba en TODOS los borradores (auditoría UX 2026-09-28, P0 #20).
+  let soloPorAprobar = false;
   const esTallerC = (c) => CotizacionTaller.esTaller(c);
   const pasaTipo = (c) => filtroTipo === 'todas' || (filtroTipo === 'taller' ? esTallerC(c) : !esTallerC(c));
 
@@ -63,6 +67,7 @@
     if (!mostrarEliminadas) list = list.filter(c => !c.deleted);
     // Vendedor solo ve las propias (forzado). Admin con toggle.
     if (soloMias) list = list.filter(c => c.creado_por_uid === userUid);
+    if (soloPorAprobar) list = list.filter(c => c.requiere_aprobacion === true && (c.estado || 'borrador') === 'borrador');
     list = list.filter(pasaTipo);
     // Los dos últimos segmentos no filtran por estado sino por FACTURACIÓN: es
     // el control que el taller llevaba a mano ("cuáles ya se facturaron y
@@ -98,6 +103,8 @@
     renderTabla(filtradas);
     renderCards(filtradas);
     renderSortIcons();
+    const avisoPA = $('avisoPorAprobar');
+    if (avisoPA) avisoPA.style.display = soloPorAprobar ? '' : 'none';
     $('emptyState').style.display = filtradas.length ? 'none' : '';
     $('footerResumen').textContent = filtradas.length + ' de ' + cotizaciones.length + ' cotizaciones';
     $('headerSubtitle').textContent = cotizaciones.length + ' cotizaciones cargadas';
@@ -157,29 +164,37 @@
     // Los KPIs de negocio (enviadas / monto cerrado / tasa) reflejan el alcance del
     // usuario (soloMias forzado para vendedores), no el de toda la empresa.
     const visibles = cotizaciones.filter(c => !c.deleted && (!soloMias || c.creado_por_uid === userUid));
+    // Los KPIs se calculan sobre lo CARGADO (páginas de 30), no sobre todo el
+    // histórico: el subtítulo lo dice para que el número no parezca absoluto
+    // (auditoría UX 2026-09-28, P0 #20).
+    const deCargadas = `de las ${cotizaciones.length} cargadas`;
+    // Un rechazo del APROBADOR no es una oportunidad perdida con el cliente:
+    // la cotización nunca le llegó (auditoría UX 2026-09-28, P0 #17).
+    const esOportunidad = (c) => ['enviada', 'convertida', 'rechazada', 'vencida'].includes(c.estado)
+      && !(c.estado === 'rechazada' && c.rechazo_origen === 'aprobador');
     // Vista de TALLER: sus propios números. Lo que el cliente todavía no
     // contesta, lo que se aceptó y cuánto de eso ya se facturó.
     if (filtroTipo === 'taller') {
       const taller = visibles.filter(esTallerC);
       const esperando = taller.filter(c => c.estado === 'enviada' || c.estado === 'aprobada').length;
       const aceptadas = taller.filter(c => c.estado === 'convertida');
-      const oportunidadesT = taller.filter(c => ['enviada', 'convertida', 'rechazada', 'vencida'].includes(c.estado)).length;
+      const oportunidadesT = taller.filter(esOportunidad).length;
       const porFacturar = taller.filter(c => facturacionEstado(c) === 'pendiente').length;
       $('statTotal').textContent = filtradas.length;
       $('statPendientes').textContent = esperando;
       $('statPendSub').textContent = 'esperando la respuesta del cliente';
       $('statMontoLbl').textContent = 'Monto aceptado';
       $('statMontoAprobado').textContent = FMT.money(aceptadas.reduce((s, c) => s + Number(c.total || 0), 0));
-      $('statMontoSub').textContent = porFacturar ? `${porFacturar} por facturar` : 'todo lo aceptado ya se facturó';
+      $('statMontoSub').textContent = (porFacturar ? `${porFacturar} por facturar` : 'todo lo aceptado ya se facturó') + ' · ' + deCargadas;
       $('statTasaLbl').textContent = 'Tasa de aceptación';
       $('statTasa').textContent = (oportunidadesT ? Math.round(aceptadas.length / oportunidadesT * 100) : 0) + '%';
-      $('statTasaSub').textContent = 'aceptadas / enviadas';
+      $('statTasaSub').textContent = 'aceptadas / enviadas · ' + deCargadas;
       return;
     }
     $('statPendSub').textContent = 'requieren seguimiento';
     $('statMontoLbl').textContent = 'Monto cerrado';
     $('statTasaLbl').textContent = 'Tasa de cierre';
-    $('statTasaSub').textContent = 'convertidas / oportunidades';
+    $('statTasaSub').textContent = 'aceptadas / oportunidades · ' + deCargadas;
     // Los números de VENTAS no cuentan las reparaciones del taller: una
     // reparación aceptada no es una venta cerrada del vendedor.
     const ventas = visibles.filter(c => !esTallerC(c));
@@ -197,7 +212,8 @@
     // se rehace con otra cantidad) y contarla como perdida castigaría al
     // vendedor dos veces por la misma oportunidad.
     const convertidas = ventas.filter(c => c.estado === 'convertida').length;
-    const oportunidades = ventas.filter(c => ['enviada', 'convertida', 'rechazada', 'vencida'].includes(c.estado)).length;
+    // Sin los rechazos del aprobador (ver esOportunidad).
+    const oportunidades = ventas.filter(esOportunidad).length;
     const tasa = oportunidades > 0 ? Math.round(convertidas / oportunidades * 100) : 0;
     // "Total emitidas" debe ser consonante con lo que el usuario ve: cuenta
     // exactamente las filas listadas (respeta filtros de estado/texto/eliminadas
@@ -206,7 +222,7 @@
     $('statPendientes').textContent = enviadas;
     $('statMontoAprobado').textContent = FMT.money(montoCerrado);
     const sub = $('statMontoSub');
-    if (sub) sub.textContent = hayRentaCerrada ? 'convertidas · alquiler a 12 meses' : 'solo convertidas a venta';
+    if (sub) sub.textContent = (hayRentaCerrada ? 'aceptadas · alquiler a 12 meses' : 'solo aceptadas por el cliente') + ' · ' + deCargadas;
     $('statTasa').textContent = tasa + '%';
   }
 
@@ -237,7 +253,8 @@
       const n = c.facturacion.factura;
       return `<span class="chip-estado chip-entregada" title="${n ? `Factura N.° ${FMT.esc(n)}` : 'Facturada, sin número anotado'}">Facturada${n ? ` ${FMT.esc(n)}` : ''}</span>`;
     }
-    return `<span class="chip-estado chip-reparacion" title="Está en la bandeja de Facturación pendiente de Recepción">Por facturar</span>`;
+    // Chip propio (cotizaciones-kit.css): antes compartía el naranja de "Vencida" (T1).
+    return `<span class="chip-estado chip-cot-porfacturar" title="Está en la bandeja de Facturación pendiente de Recepción">Por facturar</span>`;
   }
 
   // ¿El usuario puede operar esta fila? Los roles con vista global mantienen sus
@@ -275,6 +292,26 @@
       const id = c.cotizacion_id || c.id;
       const total = FMT.money(Number(c.total || 0));
       const mutable = puedeMutarFila(c);
+      // Fila eliminada (toggle "Mostrar eliminadas"): atenuada, con etiqueta y
+      // solo Ver / Imprimir / Restaurar — sin Editar ni Duplicar (auditoría UX 2026-09-28, P0 #18).
+      if (c.deleted) {
+        return `
+        <tr data-id="${c.id}" class="cc-row-eliminada">
+          <td><span class="cc-cell-num">${id}</span></td>
+          <td><div class="cc-cell-cliente">${c.cliente_nombre ? FMT.esc(c.cliente_nombre) : '—'}</div></td>
+          <td class="td-muted">${fmtFechaCorta(fechaIso(c))}</td>
+          <td><div style="display:flex;flex-wrap:wrap;gap:4px;"><span class="chip-estado chip-cot-eliminada">Eliminada</span>${estadoChip(c.estado || 'borrador', c.cierre_motivo || c.rechazo_motivo, c)}</div></td>
+          <td style="font-size:13px;">${c.ejecutivo_nombre ? FMT.esc(c.ejecutivo_nombre) : '—'}</td>
+          <td class="cc-cell-total">${total}</td>
+          <td class="td-actions">
+            <span class="cc-row-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" title="Ver" data-action="detalle"><i data-lucide="eye"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" title="Imprimir / PDF" data-action="imprimir"><i data-lucide="printer"></i></button>
+              ${mutable ? `<button class="btn btn-secondary btn-sm" title="Restaurar la cotización" data-action="restaurar"><i data-lucide="rotate-ccw"></i> Restaurar</button>` : ''}
+            </span>
+          </td>
+        </tr>`;
+      }
       return `
         <tr data-id="${c.id}">
           <td><span class="cc-cell-num">${id}</span></td>
@@ -283,7 +320,7 @@
             ${c.cliente_email ? '<div class="cc-aten">' + FMT.esc(c.cliente_email) + '</div>' : ''}
           </td>
           <td class="td-muted">${fmtFechaCorta(fechaIso(c))}</td>
-          <td><div style="display:flex;flex-wrap:wrap;gap:4px;">${filtroTipo === 'todas' && esTallerC(c) ? '<span class="chip-estado chip-recibida" title="Cotización de servicio técnico (taller)">Taller</span>' : ''}${estadoChip(c.estado || 'borrador', c.cierre_motivo, c)}${facturacionChip(c)}</div></td>
+          <td><div style="display:flex;flex-wrap:wrap;gap:4px;">${filtroTipo === 'todas' && esTallerC(c) ? '<span class="chip-estado chip-cot-taller" title="Cotización de servicio técnico (taller)">Taller</span>' : ''}${estadoChip(c.estado || 'borrador', c.cierre_motivo || c.rechazo_motivo, c)}${facturacionChip(c)}</div></td>
           <td style="font-size:13px;">${c.ejecutivo_nombre ? FMT.esc(c.ejecutivo_nombre) : '—'}</td>
           <td class="cc-cell-total">${total}</td>
           <td class="td-actions">
@@ -311,13 +348,13 @@
     wrap.innerHTML = lista.map(c => {
       const id = c.cotizacion_id || c.id;
       return `
-        <div class="responsive-card" data-id="${c.id}">
+        <div class="responsive-card${c.deleted ? ' cc-row-eliminada' : ''}" data-id="${c.id}">
           <div class="responsive-card-top">
             <div>
               <div class="responsive-card-title">${c.cliente_nombre ? FMT.esc(c.cliente_nombre) : '—'}</div>
               <div class="responsive-card-sub"><span class="cc-cell-num">${id}</span> · ${fmtFechaCorta(fechaIso(c))}</div>
             </div>
-            ${estadoChip(c.estado || 'borrador', c.cierre_motivo, c)}
+            ${c.deleted ? '<span class="chip-estado chip-cot-eliminada">Eliminada</span>' : estadoChip(c.estado || 'borrador', c.cierre_motivo || c.rechazo_motivo, c)}
           </div>
           <div class="responsive-card-meta">
             <span>${c.ejecutivo_nombre ? FMT.esc(c.ejecutivo_nombre) : '—'}</span>
@@ -325,8 +362,9 @@
           </div>
           <div class="responsive-card-actions">
             <button class="btn btn-ghost btn-sm" data-action="detalle"><i data-lucide="eye"></i> Ver</button>
-            ${puedeMutarFila(c) && CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-sm" data-action="editar"><i data-lucide="pencil"></i> Editar</button>` : ''}
+            ${!c.deleted && puedeMutarFila(c) && CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-sm" data-action="editar"><i data-lucide="pencil"></i> Editar</button>` : ''}
             <button class="btn btn-ghost btn-sm" data-action="imprimir"><i data-lucide="printer"></i> Imprimir</button>
+            ${c.deleted && puedeMutarFila(c) ? `<button class="btn btn-secondary btn-sm" data-action="restaurar"><i data-lucide="rotate-ccw"></i> Restaurar</button>` : ''}
           </div>
         </div>
       `;
@@ -346,7 +384,7 @@
   }
 
   // ── Acciones ──────────────────────────────────────────────────
-  async function onAction(action, docId) {
+  async function onAction(action, docId, btn) {
     const cot = cotizaciones.find(c => c.id === docId);
     if (!cot) return;
     if (action === 'detalle')  { location.href = `detalle-cotizacion.html?id=${encodeURIComponent(docId)}`; return; }
@@ -354,8 +392,9 @@
     if (action === 'imprimir') { window.open(`imprimir-cotizacion.html?id=${encodeURIComponent(docId)}`, '_blank'); return; }
     if (action === 'duplicar') { return await duplicar(cot); }
     if (action === 'eliminar') { return await eliminar(cot); }
-    if (action === 'enviar')   { return await enviar(cot); }
-    if (action === 'enviar-directo') { return await enviar(cot); } // envío directo del vendedor (borrador→enviada)
+    if (action === 'enviar')   { return await enviar(cot, btn); }
+    if (action === 'enviar-directo') { return await enviar(cot, btn); } // envío directo del vendedor (borrador→enviada)
+    if (action === 'restaurar') { return await restaurar(cot, btn); }
     if (action === 'solicitar') { return await solicitarAprobacion(cot); }
     if (action === 'aprobar')  { return openAprobacion(cot.id); }
     if (action === 'cerrar')   { return await cerrarDesdeLista(cot); }
@@ -404,7 +443,21 @@
     }
   }
 
-  async function enviar(cot) {
+  // Candado estándar (js/ui/busy.js) — auditoría UX 2026-09-28, T3/#8: generar
+  // el link tarda y sin candado el segundo click abría dos paneles de envío.
+  function conCandado(btn, fn, opts = {}) {
+    if (typeof window.withBusy === 'function') {
+      return window.withBusy(btn, fn, { toast: false, rethrow: false, ...opts });
+    }
+    return fn();
+  }
+
+  function enviar(cot, btn) {
+    // Botón de icono: sin texto nuevo, el icono gira (cotizaciones-kit.css .is-busy).
+    return conCandado(btn, () => _enviar(cot), { label: false });
+  }
+
+  async function _enviar(cot) {
     // Pre-cargar link público (puede tardar un instante) antes de mostrar preview.
     let link;
     try { link = await ensureLinkPublico(cot.id); }
@@ -523,307 +576,64 @@
   async function eliminar(cot) {
     const ok = await Modal.confirm({
       title: 'Eliminar cotización',
-      message: '¿Seguro que deseas eliminar ' + (cot.cotizacion_id || cot.id) + '? Podrá restaurarse desde "Mostrar eliminadas".',
+      message: '¿Seguro que deseas eliminar ' + (cot.cotizacion_id || cot.id) + '? Podrás restaurarla desde "Mostrar eliminadas".',
       danger: true,
     });
     if (!ok) return;
-    await CotizacionesService.softDelete(cot.id);
-    cot.deleted = true;
-    Toast.show('Cotización eliminada', 'warn');
-    render();
+    try {
+      await CotizacionesService.softDelete(cot.id);
+      cot.deleted = true;
+      Toast.show('Cotización eliminada', 'warn');
+      render();
+    } catch (e) {
+      Toast.show('No se pudo eliminar: ' + (e?.message || e), 'bad');
+    }
+  }
+
+  // "Restaurar" (auditoría UX 2026-09-28, P0 #18): el diálogo de borrar lo
+  // prometía y nadie llamaba a CotizacionesService.restore.
+  function restaurar(cot, btn) {
+    return conCandado(btn, async () => {
+      try {
+        await CotizacionesService.restore(cot.id);
+        cot.deleted = false;
+        delete cot.deleted_at;
+        Toast.show('Cotización ' + (cot.cotizacion_id || '') + ' restaurada', 'ok');
+        render();
+      } catch (e) {
+        Toast.show('No se pudo restaurar: ' + (e?.message || e), 'bad');
+      }
+    }, { label: false });
   }
 
   // ── Helpers de envío público ──────────────────────────────────
-  async function ensureLinkPublico(docId) {
-    const doc = await CotizacionesService.getCotizacion(docId);
-    if (!doc) throw new Error('Cotización no encontrada');
-    const ui = CotState.toUi(doc);
-    const cat = await CotState.bootstrapCatalogos();
-    const cli = cat.clientesById[ui.clienteId] || {};
-    // Fallback al nombre guardado en el doc: el firmante puede ser un supervisor
-    // de taller (jefe_taller), que no está en el catálogo de ejecutivos (vendedores).
-    const ej  = cat.ejecutivos.find(e => e.id === ui.ejecutivoId)
-      || { nombre: doc.ejecutivo_nombre || '', rol: doc.ejecutivo_cargo || '', email: doc.ejecutivo_email || '', tel: '' };
-    const t   = window.CotizacionTotales.calcTotales(ui);
-    // Mismo espejo que el detalle (antes esta copia no llevaba el desglose de
-    // venta/alquiler ni decía que era de taller).
-    const snapshot = CotState.snapshotPublico(ui, t, cli, ej);
-    const { url } = await CotizacionesService.ensureVerificacionPublica(docId, {
-      cotizacion_id: ui.id,
-      cliente_nombre: cli.razon || doc.cliente_nombre || '',
-      dirigido_a: doc.dirigido_a,
-      dirigido_email: doc.dirigido_email,
-      ejecutivo_nombre: ej.nombre || doc.ejecutivo_nombre || '',
-      creado_por_uid: doc.creado_por_uid,
-      creado_por_email: doc.creado_por_email,
-      total: t.total, moneda: ui.moneda, fecha: ui.fecha, validezDias: ui.validezDias,
-      lleva_carta: CotState.llevaCarta(doc),
-      snapshot, emisor: cat.emisor,
+  // El espejo público y el modal de aprobación viven en cot-aprobacion.js,
+  // compartidos con el detalle (auditoría UX 2026-09-28, #11).
+  const ensureLinkPublico = (docId) => CotAprobacion.ensureLinkPublico(docId);
+
+  function openAprobacion(docId) {
+    return CotAprobacion.abrir(docId, {
+      rol: userRol, uid: userUid, policy: policyCfg,
+      onDone: async () => { await cargarCotizaciones(true); if (soloPorAprobar) await cargarPorAprobar(); },
     });
-    return url;
   }
 
-  // ── Aprobación overlay (servicio → jefe mantenimiento; comercial → gerente) ──
-  const T = window.CotizacionTotales;
-  let _aprobId = null;
-
-  async function openAprobacion(docId) {
-    const doc = await CotizacionesService.getCotizacion(docId);
-    if (!doc) { Toast.show('Cotización no encontrada', 'bad'); return; }
-    // Permiso según TIPO: una cotización de servicio la aprueba el jefe de
-    // mantenimiento; una comercial, el gerente (ambas también el admin).
-    if (!puedeAprobarCotizacion(userRol, doc)) {
-      Toast.show(esCotizacionServicio(doc)
-        ? 'Las cotizaciones de servicio las aprueba el jefe de mantenimiento o un administrador.'
-        : 'Las cotizaciones comerciales las aprueba un gerente o un administrador.', 'warn');
-      return;
-    }
-    _aprobId = docId;
-    const ui = CotState.toUi(doc);
-    const tot = T.calcTotales(ui);
-    const fechaTxt = ui.fecha || '—';
-    // El descuento por renglón es la razón más común por la que una cotización
-    // pequeña cae en aprobación (política A10). Se muestra explícito: antes el
-    // aprobador solo veía el descuento global y no entendía por qué le llegó.
-    const maxDescLinea = (ui.items || []).reduce((m, it) => Math.max(m, Number(it.desc || 0)), 0);
-
-    // POR QUÉ está aquí esta cotización. El aprobador abre este modal desde el
-    // CTA del correo y tenía que deducir el motivo mirando números.
-    const polAprob = T.evaluarPolitica(ui, policyCfg);
-    const motivosHtml = polAprob.motivos.length ? `
-      <div style="margin:10px 0 4px; padding:10px 12px; border-left:3px solid #B45309; background:#FFFBEB; border-radius:4px; font-size:13px; line-height:1.5;">
-        <b>Motivo de la aprobación</b>
-        <ul style="margin:6px 0 0; padding-left:18px;">
-          ${polAprob.motivos.map(m => `<li>${FMT.esc(m)}</li>`).join('')}
-        </ul>
-      </div>` : '';
-
-    // Un bloque de totales por modalidad. `mostrarTitulo` solo cuando la
-    // cotización mezcla: con una sola modalidad el encabezado sobra.
-    const bloque = (titulo, b, sufijo, mostrarTitulo) => {
-      if (!b.n) return '';
-      return `
-        ${mostrarTitulo ? `<div style="font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--fg-4); margin:6px 0 4px;">${titulo}</div>` : ''}
-        ${b.descLineas > 0 ? `
-        <div style="display:flex; justify-content:space-between;"><span>Precio de lista</span><strong>${FMT.money(b.bruto)}</strong></div>
-        <div style="display:flex; justify-content:space-between;"><span>Descuento por renglón (máx ${maxDescLinea}%)</span><strong>−${FMT.money(b.descLineas)}</strong></div>` : ''}
-        <div style="display:flex; justify-content:space-between;"><span>Subtotal</span><strong>${FMT.money(b.subtotal)}</strong></div>
-        ${ui.descuentoPct > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Descuento global (${ui.descuentoPct}%)</span><strong>−${FMT.money(b.descGlobal)}</strong></div>` : ''}
-        <div style="display:flex; justify-content:space-between;"><span>ITBMS (${ui.itbmsPct}%)</span><strong>${FMT.money(b.itbms)}</strong></div>
-        <div style="border-top:1px solid var(--border-default); margin-top:6px; padding-top:6px; display:flex; justify-content:space-between;">
-          <span><b>Total${mostrarTitulo ? (sufijo ? ' mensual' : ' venta') : ''}</b></span><strong>${FMT.money(b.total)}${sufijo}</strong>
-        </div>`;
-    };
-
-    $('bodyCotAprobacion').innerHTML = `
-      <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-4); margin-bottom:var(--sp-3);">
-        <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="file-text"></i> Detalles de la cotización</legend>
-        <div style="font-size:14px;">
-          <p style="margin:4px 0;"><b>Cotización ID:</b> ${ui.id}</p>
-          <p style="margin:4px 0;"><b>Cliente:</b> ${doc.cliente_nombre || '—'}</p>
-          <p style="margin:4px 0;"><b>Dirigido a:</b> ${doc.dirigido_a || '—'}</p>
-          <p style="margin:4px 0;"><b>Email destinatario:</b> ${doc.dirigido_email || '—'}</p>
-          <p style="margin:4px 0;"><b>Ejecutivo:</b> ${doc.ejecutivo_nombre || '—'}</p>
-          <p style="margin:4px 0;"><b>Fecha:</b> ${fechaTxt} · <b>Validez:</b> ${ui.validezDias} días</p>
-          <p style="margin:4px 0;"><b>Introducción:</b> ${doc.intro || '—'}</p>
-          ${CotState.esCotizacionDeTaller(doc) ? '' : `
-          <div style="margin:10px 0 4px; padding:10px; border:1px solid var(--border-subtle); border-radius:var(--radius-md); background:#F5F7FA;">
-            <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; line-height:1.5;">
-              <input type="checkbox" id="chkCartaAprob" ${CotState.llevaCarta(doc) ? 'checked' : ''} style="width:18px; height:18px; flex:none; margin-top:2px;">
-              <span><b>Enviar con carta de presentación</b><br>
-                <span style="font-size:12px; color:var(--fg-3);">Al aprobar, la cotización sale al cliente de inmediato. Estas 2 páginas institucionales van antes del documento.</span>
-              </span>
-            </label>
-          </div>`}
-          ${motivosHtml}
-          <div style="margin-top:8px; padding:8px; border:1px dashed var(--border-default); border-radius:8px; max-width:420px;">
-            ${bloque('Venta · pago único', tot.venta, '', tot.hayAlquiler && tot.hayVenta)}
-            ${tot.hayAlquiler ? bloque('Alquiler · por mes', tot.alquiler, '/mes', true) : ''}
-            ${tot.hayAlquiler ? `
-            <div style="border-top:1px solid var(--border-default); margin-top:8px; padding-top:8px; font-size:12.5px; color:var(--fg-3);">
-              <div style="display:flex; justify-content:space-between;"><span>Plazo acordado</span><strong>${tot.plazoMeses > 0 ? tot.plazoMeses + ' meses' : 'sin declarar'}</strong></div>
-              ${tot.plazoMeses > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Compromiso del plazo</span><strong>${FMT.money(tot.compromiso)}</strong></div>` : ''}
-              <div style="display:flex; justify-content:space-between; margin-top:6px; color:var(--fg-2);">
-                <span><b>Valor evaluado a ${tot.mesesComputables} meses</b></span><strong>${FMT.money(tot.total)}</strong>
-              </div>
-              <div style="font-family:var(--font-mono); font-size:11px; margin-top:2px;">
-                ${FMT.money(tot.venta.total)} + ${FMT.money(tot.alquiler.total)} × ${tot.mesesComputables}
-              </div>
-            </div>` : ''}
-          </div>
-        </div>
-      </fieldset>
-      <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-3);">
-        <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="list"></i> Renglones</legend>
-        <table class="app-table" style="font-size:13px; min-width:520px;">
-          <thead>
-            <tr><th>Descripción</th><th style="text-align:center;">Cant.</th>
-              ${tot.hayAlquiler ? '<th style="text-align:center;">Modalidad</th>' : ''}
-              <th style="text-align:right;">P. unit.</th><th style="text-align:right;">Desc.</th><th style="text-align:right;">Total</th></tr>
-          </thead>
-          <tbody>
-            ${ui.items.map(it => {
-              const esAlq = T.esAlquiler(it);
-              return `
-              <tr>
-                <td>${it.nombre || '—'}${it.modelo ? ' · ' + it.modelo : ''}</td>
-                <td style="text-align:center;">${it.cant}</td>
-                ${tot.hayAlquiler ? `<td style="text-align:center;"><span class="cc-mod-chip ${esAlq ? 'es-alquiler' : 'es-venta'}">${esAlq ? 'Alquiler' : 'Venta'}</span></td>` : ''}
-                <td style="text-align:right;">${FMT.money(it.precio)}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</td>
-                <td style="text-align:right;${Number(it.desc || 0) > Number(policyCfg?.descuentoMaxPct ?? 15) ? ' color:#B91C1C; font-weight:600;' : ''}">${Number(it.desc || 0) > 0 ? Number(it.desc) + '%' : '—'}</td>
-                <td style="text-align:right;">${FMT.money(T.lineTotal(it))}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </fieldset>
-    `;
-
-    // La casilla se persiste al momento: confirmarAprobacion() relee el documento
-    // de Firestore para armar el espejo público, así que cambiarla solo en
-    // pantalla no tendría ningún efecto sobre lo que recibe el cliente.
-    const chkCarta = document.getElementById('chkCartaAprob');
-    if (chkCarta) {
-      chkCarta.addEventListener('change', async (e) => {
-        const val = e.target.checked;
-        e.target.disabled = true;
-        try {
-          await CotizacionesService.updateCotizacion(docId, { incluye_carta: val });
-          Toast.show(val ? 'Se enviará con carta de presentación.' : 'Se enviará sin carta de presentación.', 'ok');
-        } catch (err) {
-          e.target.checked = !val;
-          Toast.show('No se pudo cambiar la carta: ' + (err?.message || err), 'bad');
-        } finally {
-          e.target.disabled = false;
-        }
-      });
-    }
-
-    Modal.open('overlayCotAprobacion', { onEscape: true });
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  }
-
-  function cerrarAprobacion() {
-    _aprobId = null;
-    Modal.close('overlayCotAprobacion');
-  }
-
-  async function confirmarAprobacion() {
-    if (!_aprobId) return;
-    // Candado: aprobar dispara el envío inmediato al cliente; dos clicks
-    // rápidos en el botón del modal duplicaban el correo.
-    const btnAprob = document.getElementById('btnConfirmarAprob');
-    if (btnAprob) { if (btnAprob.disabled) return; btnAprob.disabled = true; }
+  // Trae TODOS los borradores que esperan aprobación (mismo query que la señal
+  // SAP, índice estado+requiere_aprobacion), no solo los de las 30 cargadas.
+  async function cargarPorAprobar() {
     try {
-      const doc = await CotizacionesService.getCotizacion(_aprobId);
-      if (!doc) { Toast.show('No encontrada', 'bad'); return; }
-      if ((doc.estado || 'borrador') !== 'borrador') {
-        Toast.show('Solo se pueden aprobar cotizaciones en borrador.', 'bad'); return;
-      }
-
-      // 1) Marcar como aprobada. El email queda para que el historial muestre
-      // quién aprobó de verdad (antes decía "por administrador" fijo).
-      await CotizacionesService.updateCotizacion(_aprobId, {
-        estado: 'aprobada',
-        fecha_aprobacion: firebase.firestore.Timestamp.now(),
-        aprobado_por_uid: userUid,
-        aprobado_por_email: firebase.auth().currentUser?.email || null,
+      let q = firebase.firestore().collection('cotizaciones')
+        .where('estado', '==', 'borrador')
+        .where('requiere_aprobacion', '==', true);
+      // Un vendedor solo puede listar las suyas (rules).
+      if (userRol === ROLES.VENDEDOR && !esSupervisor) q = q.where('creado_por_uid', '==', userUid);
+      const snap = await q.limit(200).get();
+      let nuevas = false;
+      snap.forEach(d => {
+        if (!cotizaciones.some(c => c.id === d.id)) { cotizaciones.push({ id: d.id, ...d.data() }); nuevas = true; }
       });
-
-      // 2) Crear link público (mirror) + enviar correo a cliente y vendedor
-      try {
-        const link = await ensureLinkPublico(_aprobId);
-        let dest = doc.dirigido_email;
-        if (!dest) {
-          // Sin destinatario la cotización quedaba "aprobada" durmiente (ya no
-          // editable). Pedir el email aquí evita el desvío por Duplicar.
-          const email = await Modal.prompt({
-            title: 'Falta el email del destinatario',
-            message: 'La cotización no tiene "Email destinatario". Escríbelo para enviarla ahora, o cancela para dejarla aprobada sin enviar.',
-          });
-          const limpio = (email || '').trim();
-          if (limpio && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(limpio)) {
-            dest = limpio;
-            await CotizacionesService.updateCotizacion(_aprobId, { dirigido_email: dest });
-            doc.dirigido_email = dest;
-          } else if (limpio) {
-            Toast.show('Email inválido — quedó aprobada sin enviar.', 'warn');
-          }
-        }
-        if (!dest) {
-          Toast.show('✅ Aprobada, pero falta "Email destinatario" para enviar. Usa "Reenviar al cliente" desde el detalle cuando lo tengas.', 'warn');
-        } else {
-          // Mismo correo que "Enviar al cliente" (CotState.correoCliente). La
-          // copia que vivía aquí le ponía "aprobada" en el asunto al cliente,
-          // que es justamente quien todavía no ha aprobado nada.
-          const attachments = CotState.adjuntosToAttachments(doc.adjuntos);
-          const { subject, html } = CotState.correoCliente({
-            doc,
-            cotizacionId: doc.cotizacion_id,
-            clienteNombre: doc.cliente_nombre || '',
-            total: Number(doc.total || 0),
-            dirigidoA: doc.dirigido_a || '',
-            intro: doc.intro || '',
-            validezDias: doc.validezDias || 15,
-            ejecutivo: doc.ejecutivo_nombre || '',
-            ejecutivoCargo: CotizacionTaller.cargoFirmante(doc, null),
-            link,
-            adjuntos: attachments,
-          });
-          const replyTo = CotState.replyToDe({ ejecutivoEmail: doc.ejecutivo_email, creadoPorEmail: doc.creado_por_email });
-          await MailService.enqueue({
-            to: dest,
-            cc: doc.creado_por_email || null,
-            bcc: await CotizacionesService.bccSupervision(),
-            subject,
-            html,
-            attachments,
-            ...(replyTo ? { replyTo } : {}),
-            meta: { tipo: 'cotizacion_aprobada', cotizacion_id: doc.cotizacion_id, doc_id: _aprobId },
-          });
-          await CotizacionesService.updateCotizacion(_aprobId, {
-            estado: 'enviada',
-            enviada_en: firebase.firestore.FieldValue.serverTimestamp(),
-          });
-          Toast.show('✅ Aprobada y enviada a ' + dest, 'ok');
-        }
-      } catch (e2) {
-        console.warn('No se pudo encolar correo de aprobación:', e2);
-        Toast.show('✅ Aprobada, pero no se pudo enviar el correo automático.', 'warn');
-      }
-
-      cerrarAprobacion();
-      await cargarCotizaciones(true);
-    } catch (e) {
-      console.error(e);
-      Toast.show('No se pudo aprobar.', 'bad');
-    } finally {
-      // El modal se reutiliza para la siguiente aprobación: siempre revivir.
-      if (btnAprob) btnAprob.disabled = false;
-    }
-  }
-
-  async function rechazarAprobacion() {
-    if (!_aprobId) return;
-    const ok = await Modal.confirm({
-      title: 'Rechazar cotización',
-      message: '¿Confirmar el rechazo? El estado pasará a "Rechazada".',
-      danger: true,
-    });
-    if (!ok) return;
-    try {
-      await CotizacionesService.updateCotizacion(_aprobId, {
-        estado: 'rechazada',
-        fecha_rechazo: firebase.firestore.Timestamp.now(),
-        rechazado_por_uid: userUid,
-      });
-      Toast.show('Cotización rechazada', 'warn');
-      cerrarAprobacion();
-      await cargarCotizaciones(true);
-    } catch (e) {
-      console.error(e);
-      Toast.show('No se pudo rechazar.', 'bad');
-    }
+      if (nuevas) render();
+    } catch (e) { console.warn('No se pudieron traer las cotizaciones por aprobar:', e); }
   }
 
   // Atajo por número (auditoría): la búsqueda filtra solo lo paginado en
@@ -857,10 +667,15 @@
     $('toggleEliminadas').addEventListener('change', render);
     $('toggleMias').addEventListener('change', (e) => { soloMias = e.target.checked; render(); });
     $('btnCargarMas').addEventListener('click', () => cargarCotizaciones(false));
-    $('btnCerrarAprob').addEventListener('click', cerrarAprobacion);
-    $('btnCancelarAprob').addEventListener('click', cerrarAprobacion);
-    $('btnConfirmarAprob').addEventListener('click', confirmarAprobacion);
-    $('btnRechazarAprob').addEventListener('click', rechazarAprobacion);
+    // Los botones del modal de aprobación los enlaza cot-aprobacion.js.
+    const btnVerTodas = $('btnQuitarPorAprobar');
+    if (btnVerTodas) btnVerTodas.addEventListener('click', () => {
+      soloPorAprobar = false;
+      const url = new URL(window.location);
+      url.searchParams.delete('aprobar');
+      window.history.replaceState({}, document.title, url.toString());
+      render();
+    });
 
     $('tipoSeg').addEventListener('click', (e) => {
       const btn = e.target.closest('[data-tipo]');
@@ -893,7 +708,7 @@
       if (!btn) return;
       const row = btn.closest('[data-id]');
       if (!row) return;
-      onAction(btn.dataset.action, row.dataset.id);
+      onAction(btn.dataset.action, row.dataset.id, btn);
     });
 
     // Click en fila (no en botones) → detalle
@@ -928,6 +743,12 @@
         soloMias = false;
       }
 
+      // "Nueva cotización" solo para los roles que el editor deja entrar
+      // (cot-editor.js): el gerente la veía y el editor lo expulsaba (auditoría UX 2026-09-28, #6).
+      const rolesEditor = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER];
+      const btnNueva = $('btnNuevaCot');
+      if (btnNueva && !rolesEditor.includes(rol)) btnNueva.style.display = 'none';
+
       try { policyCfg = window.CotizacionTotales.policyFromConfig(cfg); }
       catch (e) { policyCfg = window.CotizacionTotales.POLICY_DEFAULT; }
 
@@ -958,7 +779,13 @@
       // comercial), ya que requiere leer el doc primero.
       const params = new URLSearchParams(location.search);
       const aprobarId = params.get('aprobar');
-      if (aprobarId) {
+      if (aprobarId === '1') {
+        // Filtro de la señal SAP (no es un docId): se queda en la URL.
+        soloPorAprobar = true;
+        filtroEstado = 'borrador';
+        render();
+        await cargarPorAprobar();
+      } else if (aprobarId) {
         openAprobacion(aprobarId);
         const url = new URL(window.location);
         url.searchParams.delete('aprobar');

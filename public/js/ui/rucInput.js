@@ -45,6 +45,10 @@
     let guardado = { ruc: "", tipo: "", dv: "" };
     let tocado = false;        // ¿el usuario cambió el RUC/DV desde que se cargó?
     let confirmado = false;    // "así sale en el documento" (DV que no cuadra)
+    // DV puesto por el sistema (auditoría UX 2026-09-28, #15): con la casilla
+    // vacía se rellena con el de la DGI en vez de pedir el clic "Usar X". Si
+    // el usuario lo escribe a mano deja de ser automático y no se toca más.
+    let dvAuto = false;
 
     // ── Pintar ──
     function pintar() {
@@ -120,7 +124,8 @@
       } else if (txt) {
         const v = R().verificarDV(p, dv);
         let linea = `Queda así: <b class="ruc-mono">${esc(txt)}</b>${dv ? ` · DV <b class="ruc-mono">${esc(dv)}</b>` : ""}`;
-        if (v.estado === "ok") out.push(`<span class="ruc-nota ruc-ok">${linea} — el DV cuadra con el de la DGI.</span>`);
+        if (v.estado === "ok" && dvAuto) out.push(`<span class="ruc-nota ruc-ok">${linea} — <b>DV calculado</b> según la DGI. Si el documento del cliente dice otro, escríbelo en la casilla del DV.</span>`);
+        else if (v.estado === "ok") out.push(`<span class="ruc-nota ruc-ok">${linea} — el DV cuadra con el de la DGI.</span>`);
         // Ficha vieja con el DV pegado: "Acomodar" ya lo pone en su casilla.
         else if (v.estado === "sin_dv" && legado && p.dvPegado) out.push(`<span class="ruc-nota">${linea}.</span>`);
         else if (v.estado === "sin_dv") out.push(`<span class="ruc-nota">${linea}. DV según la DGI: <b class="ruc-mono">${v.esperado}</b>
@@ -168,12 +173,24 @@
       const wrap = $ruc.closest(".form-field");
       if (wrap && wrap.classList.contains("has-error") && window.FormKit) FormKit.validarCampo($ruc);
       if (wrap && wrap.classList.contains("has-error")) marcarFaltantes();
+      autoDV();
     }
-    function ponerDV(v) {
+    function ponerDV(v, auto = false) {
       $dv.value = v;
       $dv.dispatchEvent(new Event("input", { bubbles: true }));
       tocado = true;
       confirmado = false;
+      dvAuto = auto;
+    }
+    // Rellena (o actualiza) el DV calculado mientras la casilla esté vacía o
+    // la haya llenado el sistema. Solo tras un cambio del usuario (volcar):
+    // abrir una ficha no cambia datos.
+    function autoDV() {
+      const actual = ($dv.value || "").trim();
+      if (actual && !dvAuto) return;
+      const esperado = p.tipo && p.tipo !== "otro" ? R().verificarDV(p, "").esperado : "";
+      if (esperado) { if (actual !== esperado) ponerDV(esperado, true); }
+      else if (dvAuto && actual) ponerDV("", true);   // RUC incompleto: el DV calculado ya no vale
     }
 
     // Pegar un RUC completo en cualquier parte lo reparte en todas.
@@ -251,9 +268,10 @@
       if (t && /-/.test(t) && pegar(t)) e.preventDefault();
     });
 
-    $dv.addEventListener("input", () => {
+    $dv.addEventListener("input", (e) => {
       const limpio = $dv.value.replace(/\D/g, "").slice(0, 2);
       if (limpio !== $dv.value) $dv.value = limpio;
+      if (e.isTrusted) dvAuto = false;   // lo escribió la persona: manda ella
       tocado = true; confirmado = false; pintarEstado();
     });
 
@@ -286,7 +304,7 @@
       $ruc.value = guardado.ruc;
       $tipo.value = guardado.tipo;
       $dv.value = guardado.dv;
-      tocado = false; confirmado = false;
+      tocado = false; confirmado = false; dvAuto = false;
       p = R().descomponer(guardado.ruc, { tipo: guardado.tipo, dv: guardado.dv });
       if (p.vacio) p = { tipo: guardado.tipo || "" };
       pintar();

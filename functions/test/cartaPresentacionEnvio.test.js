@@ -123,12 +123,17 @@ test("C4 · aprobar-y-enviar desde el listado muestra la carta y la persiste", (
   const src = leer("public", "js", "pages", "cotizaciones-index.js");
 
   // El botón Enviar del listado es la tercera ruta al cliente: mismo trato.
-  const enviar = src.slice(src.indexOf("async function enviar(cot)"), src.indexOf("async function duplicar"));
+  // Desde la auditoría UX 2026-09-28 el cuerpo vive en _enviar (enviar() es el candado).
+  const enviar = src.slice(src.indexOf("async function _enviar(cot)"), src.indexOf("async function duplicar"));
   assert.match(enviar, /llevaCarta: cartaAplica \? CotState\.llevaCarta\(cot\) : null/);
   assert.match(enviar, /updateCotizacion\(cot\.id, \{ incluye_carta: payload\.llevaCarta \}\)/);
   assert.match(enviar, /ensureLinkPublico\(cot\.id\)/, "cambiar la casilla obliga a reescribir el espejo");
 
-  const overlay = src.slice(src.indexOf("async function openAprobacion"), src.indexOf("function cerrarAprobacion"));
+  // El overlay de aprobación se extrajo a cot-aprobacion.js (compartido con el
+  // detalle, auditoría UX 2026-09-28 #11); el listado solo lo abre.
+  assert.match(src, /CotAprobacion\.abrir\(/, "el listado abre el overlay compartido");
+  const apr = leer("public", "js", "pages", "cot-aprobacion.js");
+  const overlay = apr.slice(apr.indexOf("async function abrir"), apr.indexOf("function cerrar()"));
   assert.match(overlay, /chkCartaAprob/, "el overlay de aprobación debe mostrar la carta");
   assert.match(overlay, /CotState\.llevaCarta\(doc\)/, "el estado mostrado sale del documento, no de un default");
   assert.match(overlay, /updateCotizacion\(docId, \{ incluye_carta: val \}\)/, "cambiarla ahí debe persistir: confirmarAprobacion relee el documento");
@@ -137,7 +142,8 @@ test("C4 · aprobar-y-enviar desde el listado muestra la carta y la persiste", (
 test("C5 · toda ruta de envío resuelve la carta con llevaCarta() sobre el documento", () => {
   for (const [archivo, ancla] of [
     ["cot-detalle.js", "lleva_carta: CotState.llevaCarta(cot)"],
-    ["cotizaciones-index.js", "lleva_carta: CotState.llevaCarta(doc)"],
+    // El espejo del listado/aprobación se arma en cot-aprobacion.js desde 2026-09-28.
+    ["cot-aprobacion.js", "lleva_carta: CotState.llevaCarta(doc)"],
   ]) {
     assert.match(
       leer("public", "js", "pages", archivo),

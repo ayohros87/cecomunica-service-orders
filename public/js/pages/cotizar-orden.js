@@ -661,13 +661,19 @@
 
   // ── Generar la cotización (borrador real) ──────────────────────────────────
   let generando = false;
-  async function generar() {
+  async function generar(ev) {
     if (generando) return;
     if (!form.clienteId) { Toast.show('Selecciona un cliente.', 'warn'); return; }
     const items = itemsDeForm();
     if (!items.length) { Toast.show('Agrega al menos una pieza con precio.', 'warn'); return; }
 
+    // "Generando…" en el botón tocado (auditoría UX 2026-09-28, T3): sin
+    // texto de espera el usuario volvía a tocar. `generando` sigue siendo el
+    // candado entre los dos botones (barra superior y panel lateral).
+    const btn = ev?.currentTarget || null;
+    const candado = window.withBusy || ((_b, fn) => fn());
     generando = true;
+    return candado(btn, async () => {
     try {
       const ui = CotState.nuevaCotizacion({ ejecutivoId: form.ejecutivoId, clienteId: form.clienteId });
       ui.id = await CotState.nextCotizacionId();
@@ -694,6 +700,11 @@
       doc.orden_id = ordenId;
       doc.origen = 'orden';
 
+      // Solo pide aprobación si quien la prepara NO puede aprobarla: la jefa de
+      // taller se mandaba la solicitud a sí misma. El flag queda estampado
+      // (señal SAP y rules) — auditoría UX 2026-09-28, #13.
+      const puedeAprobar = typeof puedeAprobarCotizacion === 'function' && puedeAprobarCotizacion(rolUsuario, doc);
+      doc.requiere_aprobacion = !puedeAprobar;
       const ref = await CotizacionesService.addCotizacion(doc);
 
       // La cotización ya existe: el borrador de autoguardado sobra.
@@ -701,9 +712,11 @@
       draftDirty = false;
       await discardDraft();
 
-      // Notifica a ventas@ (mismo correo que una cotización nueva).
-      try { await CotState.enqueueAprobacionMail({ doc, docId: ref.id, user }); }
-      catch (e) { console.warn('No se pudo encolar el correo de aprobación:', e); }
+      // Solicitud a la jefatura de taller (mismo correo que una cotización nueva).
+      if (!puedeAprobar) {
+        try { await CotState.enqueueAprobacionMail({ doc, docId: ref.id, user }); }
+        catch (e) { console.warn('No se pudo encolar el correo de aprobación:', e); }
+      }
 
       // Enlaza la cotización en la orden (no rompe si falla).
       try {
@@ -714,13 +727,16 @@
         });
       } catch (e) { console.warn('No se pudo enlazar la cotización en la orden:', e); }
 
-      Toast.show('Cotización ' + ui.id + ' creada · la jefatura de taller la revisa y la envía al cliente', 'ok');
+      Toast.show(puedeAprobar
+        ? 'Cotización ' + ui.id + ' creada · revísala y envíala al cliente con "Aprobar y enviar"'
+        : 'Cotización ' + ui.id + ' creada · la jefatura de taller la revisa y la envía al cliente', 'ok');
       setTimeout(() => { location.href = '../cotizaciones/detalle-cotizacion.html?id=' + encodeURIComponent(ref.id); }, 700);
     } catch (err) {
       console.error(err);
       Toast.show('Error al generar la cotización: ' + (err?.message || err), 'bad');
       generando = false;
     }
+    }, { label: 'Generando…' });
   }
 
   // ── Catálogo de piezas (drawer lateral, arrastrable a un equipo) ───────────
@@ -983,6 +999,45 @@
     orden = await OrdenesService.getOrder(ordenId);
     if (!orden) { Toast.show('Orden no encontrada', 'bad'); location.href = 'index.html'; return; }
     equipos = prepararEquipos(orden);
+
+    // ¿Ya hay cotización? (auditoría UX 2026-09-28, 4.2 #4): "Cotizar" no
+    // revisaba cotizacion_doc_id y se armaban cotizaciones duplicadas de la
+    // misma orden. Si la vinculada sigue viva (no descartada ni eliminada)
+    // se ofrece abrirla; preparar otra queda como decisión explícita.
+    if (orden.cotizacion_doc_id) {
+      let previa = null;
+      try { previa = await CotizacionesService.getCotizacion(orden.cotizacion_doc_id); }
+      catch (e) { console.warn('No se pudo leer la cotización vinculada:', e); }
+      const viva = previa && previa.deleted !== true && previa.estado !== 'descartada';
+      if (viva) {
+        const escH = (v) => String(v ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
+        const num = orden.cotizacion_id || previa.cotizacion_id || previa.id || '';
+        const estadoTxt = (window.CotState?.estadoLabel ? CotState.estadoLabel(previa.estado, previa) : previa.estado) || 'borrador';
+        const r = await Modal.sheet({
+          title: 'Esta orden ya tiene cotización',
+          icon: 'receipt',
+          size: 'sm',
+          html: `<p style="margin:0;line-height:1.5;">La orden <strong>${escH(ordenId)}</strong> ya tiene la cotización <strong>${escH(num)}</strong> (${escH(estadoTxt)}). Ábrela para revisarla o enviarla; prepara otra solo si de verdad hace falta una segunda.</p>`,
+          // El detalle de cotizaciones no admite técnicos: a ellos solo se
+          // les avisa (y siguen si de verdad hace falta otra).
+          buttons: [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER, ROLES.RECEPCION, ROLES.GERENTE].includes(rolUsuario)
+            ? [
+                { action: 'otra', label: 'Preparar otra' },
+                { action: 'ver', label: 'Ver cotización', primary: true, icon: 'receipt' },
+              ]
+            : [
+                { action: 'volver', label: 'Volver a la orden' },
+                { action: 'otra', label: 'Preparar otra', primary: true },
+              ],
+          closable: false,
+        });
+        if (r === 'ver') {
+          location.href = '../cotizaciones/detalle-cotizacion.html?id=' + encodeURIComponent(orden.cotizacion_doc_id);
+          return;
+        }
+        if (r === 'volver') { location.href = 'index.html?orden=' + encodeURIComponent(ordenId); return; }
+      }
+    }
 
     // Visita técnica (2026-09-04): el trabajo se documenta en informe_visita,
     // no en equipos[].trabajo_tecnico, y una visita a torre/repetidor puede no

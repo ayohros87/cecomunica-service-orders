@@ -35,6 +35,13 @@
       catch (_) { /* storage lleno o bloqueado: el respaldo es best-effort */ }
     }, 1200);
   }
+  // Escritura inmediata (sin debounce) — antes de salir a crear el cliente.
+  function _bkForzar() {
+    if (!_bkKey) return;
+    clearTimeout(_bkTimer);
+    try { localStorage.setItem(_bkKey, JSON.stringify({ ts: Date.now(), draft })); }
+    catch (_) { /* best-effort */ }
+  }
   function _bkLimpiar() {
     clearTimeout(_bkTimer);
     if (_bkKey) { try { localStorage.removeItem(_bkKey); } catch (_) { /* sin storage */ } }
@@ -167,7 +174,7 @@
             </div>
             <div class="cc-panel-body">
               <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 12px; line-height:1.5;">
-                Archivos que se enviarán junto con la propuesta al cliente (p.ej. el brochure del radio). PDF o imágenes, hasta 10 MB cada uno.
+                Archivos que se enviarán junto con la cotización al cliente (p.ej. el brochure del radio). PDF o imágenes, hasta 10 MB cada uno.
               </p>
               <div id="adjuntosList"></div>
               <input type="file" id="inpAdjunto" accept="application/pdf,image/*" multiple hidden>
@@ -310,7 +317,7 @@
           </select>
         </div>
         <div class="form-field">
-          <label class="form-label">Ejecutivo (firmante)</label>
+          <label class="form-label">Vendedor (firmante)</label>
           <select class="form-select" id="selEjec">
             <option value="">—</option>
             ${catalogos.ejecutivos.map(e => `<option value="${esc(e.id)}" ${e.id === draft.ejecutivoId ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
@@ -329,7 +336,17 @@
     `;
 
     $('btnNuevoCliente').addEventListener('click', () => {
-      location.href = '../clientes/ficha.html?nuevo=1&from=cotizacion';
+      const destino = '../clientes/ficha.html?nuevo=1&from=cotizacion';
+      // Auditoría UX 2026-09-28 (P0 #19): la ficha vuelve a nueva-cotizacion
+      // con ?cliente_id=; en modo NUEVA se fuerza el respaldo para que lo
+      // escrito se recupere al volver (y el cliente se aplica encima). En
+      // edición el regreso cae en otra cotización nueva: pasa por salir().
+      if (document.body.dataset.modo === 'nueva') {
+        if (dirty) { _bkForzar(); dirty = false; }
+        location.href = destino;
+      } else {
+        salir(destino);
+      }
     });
     CotState.mountClienteCombo('comboCliente', {
       clientes: catalogos.clientes,
@@ -858,13 +875,17 @@
         // molesta al aprobador: la envía él mismo desde el detalle. Solo se encola la
         // solicitud de aprobación cuando excede el umbral (o el rol no puede enviar).
         const pol = CotState.requiereAprobacionPara({ doc, rol: userRol, policy: policyCfg });
+        // Dentro de política el detalle abre directo el panel de envío
+        // (?enviar=1): el vendedor ya no tiene que buscar el botón (auditoría UX 2026-09-28, #10).
+        let destino = 'detalle-cotizacion.html?id=' + encodeURIComponent(ref.id);
         if (!pol.requiere) {
-          Toast.show('Cotización ' + draft.id + ' guardada · lista para enviar al cliente.', 'ok');
+          Toast.show('Cotización ' + draft.id + ' guardada · abriendo el envío al cliente.', 'ok');
+          destino += '&enviar=1';
         } else {
           await enqueueAprobacionMail(doc, ref.id, user);
           Toast.show('Cotización ' + draft.id + ' guardada · solicitud de aprobación enviada', 'ok');
         }
-        setTimeout(() => { location.href = 'detalle-cotizacion.html?id=' + encodeURIComponent(ref.id); }, 800);
+        setTimeout(() => { location.href = destino; }, 800);
       } else {
         // Defensa adicional: nunca persistir cambios sobre una cotización no editable.
         if (!CotState.esEditable(draft.estado)) {
@@ -905,8 +926,10 @@
   // Vista previa: NUNCA persiste. Serializa el borrador tal como está en pantalla
   // y lo abre en la página de impresión en modo preview (mismo layout que el
   // documento final). El guardado solo ocurre con el botón "Guardar".
-  function preview() {
-    if (!validar()) return;
+  // validar() es async: sin await la promesa siempre es "verdadera" y nunca
+  // bloqueaba (auditoría UX 2026-09-28, #7).
+  async function preview() {
+    if (!(await validar())) return;
     try {
       sessionStorage.setItem('cotPreviewDraft', JSON.stringify(draft));
     } catch (e) {
@@ -981,7 +1004,17 @@
               confirmLabel: 'Recuperar',
               cancelLabel: 'Descartar respaldo',
             });
-            if (ok) { draft = { ...draft, ...bk.draft }; dirty = true; }
+            if (ok) {
+              draft = { ...draft, ...bk.draft }; dirty = true;
+              // El cliente recién creado (?cliente_id=) va DESPUÉS del merge:
+              // antes el respaldo lo pisaba junto con el ITBMS (P0 #19).
+              const cidParam = esNueva ? params.get('cliente_id') : '';
+              if (cidParam) {
+                draft.clienteId = cidParam;
+                const cli = catalogos.clientesById[cidParam];
+                if (cli) draft.itbmsPct = cli.itbms_exento ? 0 : Math.round(FMT.ITBMS_RATE * 100);
+              }
+            }
             else _bkLimpiar();
           } else {
             _bkLimpiar();

@@ -23,13 +23,15 @@
     .firmas > div { flex: 1; border-top: 1.5px solid #111; padding-top: 6px; font-size: 12.5px; text-align: center; }
     .toolbar { max-width: 8.5in; margin: 14px auto 0; display: flex; gap: 10px; justify-content: flex-end; font-family: Arial, sans-serif; }
     .toolbar button { padding: 8px 18px; font: 600 13.5px Arial, sans-serif; border-radius: 8px; border: 1px solid #ccc; background: #0091D7; color: #fff; cursor: pointer; }
+    .toolbar button.sec { background: #fff; color: #0B2A47; margin-right: auto; }
     #estado { text-align: center; font-family: Arial, sans-serif; color: #666; padding: 60px 0; }
     @media print { body { background: #fff; } .hoja { box-shadow: none; margin: 0; min-height: auto; } .toolbar { display: none; } }
   </style>
   <script type="module" src="/js/entry/clientes-anexo-aumento.js"></script>
 </head>
 <body>
-  <div class="toolbar"><button onclick="window.print()">Imprimir</button></div>
+  <!-- "Volver" (auditoría UX 2026-09-28, #18): la hoja no tenía salida. -->
+  <div class="toolbar"><button type="button" class="sec" id="btnVolver">&larr; Volver</button><button onclick="window.print()">Imprimir</button></div>
   <div id="estado">Cargando anexo…</div>
   <div class="hoja" id="hoja" style="display:none;"></div>
   <script>
@@ -38,16 +40,33 @@
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const fmtFecha = (d) => d.toLocaleDateString('es-PA', { day: 'numeric', month: 'long', year: 'numeric' });
 
+    // Mismos roles que el Centro de gestión (auditoría UX 2026-09-28, #18: la
+    // hoja no tenía guard; cualquiera con sesión y el ?g= la abría).
+    const ROLES_ANEXO = ['administrador', 'admin', 'gerente', 'vendedor', 'recepcion', 'contabilidad'];
+    let clienteVolver = '';
+    function volver() {
+      if (history.length > 1 && document.referrer && new URL(document.referrer).origin === location.origin) { history.back(); return; }
+      location.href = clienteVolver ? './centro.html?id=' + encodeURIComponent(clienteVolver) : './centro.html';
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('btnVolver').addEventListener('click', volver);
       firebase.auth().onAuthStateChanged(async (user) => {
         if (!user) return (window.location.href = '../login.html');
         const gid = new URLSearchParams(location.search).get('g');
         if (!gid) { document.getElementById('estado').textContent = 'Falta el parámetro de la gestión (?g=).'; return; }
         try {
           const db = firebase.firestore();
+          let rol = null;
+          try { rol = (await db.collection('usuarios').doc(user.uid).get()).data()?.rol || null; } catch (_) { rol = null; }
+          if (!ROLES_ANEXO.includes(rol)) {
+            document.getElementById('estado').textContent = 'Tu rol no tiene acceso a los anexos de contrato.';
+            return;
+          }
           const gSnap = await db.collection('gestiones').doc(gid).get();
           if (!gSnap.exists) throw new Error('gestión no encontrada');
           const g = gSnap.data();
+          clienteVolver = g.cliente_id || '';
           const a = g.aumento || {};
           const [cSnap, cliSnap] = await Promise.all([
             a.contrato_doc_id ? db.collection('contratos').doc(a.contrato_doc_id).get() : Promise.resolve(null),
