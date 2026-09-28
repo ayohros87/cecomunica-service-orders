@@ -82,10 +82,12 @@ jobs:
 
       # Radiografía modular (usa acorn/eslint-scope de functions/node_modules):
       # puentes window faltantes, estado mutable compartido, escrituras a
-      # globales sin declarar. Informativa por ahora; --estricto cuando el
-      # build de Vite sea lo que se sirve en producción.
-      - name: Radiografía modular del frontend
-        run: node tools/check-modular.js
+      # globales sin declarar, archivos que no compilan como módulo y UMD que
+      # solo publica en window si no hay `module` (Rolldown lo envuelve como
+      # CommonJS y la global no existe: así se rompió el Centro el
+      # 2026-09-28). Estricta desde que producción se sirve desde dist/.
+      - name: Radiografía modular del frontend (estricta)
+        run: node tools/check-modular.js --estricto
 
       # Un export roto en index.js tumba el deploy COMPLETO de functions.
       - name: functions/index.js carga (exports completos)
