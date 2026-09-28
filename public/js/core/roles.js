@@ -27,7 +27,8 @@ const _PERMISOS = {
   // y vendedores consultan el archivo SIN la columna de montos. No agregar
   // roles aquí sin preguntar.
   'ver-montos-contrato': ['administrador', 'contabilidad', 'gerente'],
-  'crear-orden':       ['administrador', 'vendedor', 'recepcion', 'tecnico', 'tecnico_operativo', 'jefe_taller'],
+  // El vendedor NO crea órdenes (Alberto 2026-09-28: "¿para qué quiere ver Nueva orden?").
+  'crear-orden':       ['administrador', 'recepcion', 'tecnico', 'tecnico_operativo', 'jefe_taller'],
   'asignar-tecnico':   ['administrador', 'jefe_taller', 'recepcion'],
   // Cambiar el técnico de una orden YA asignada (reasignación esporádica que NO
   // toca el estado). Más restringido que 'asignar-tecnico': sin recepción.

@@ -39,7 +39,7 @@ window.MODULOS = (() => {
     // inventario perdió "centro" el 2026-09-03: bodega asigna los seriales de
     // las gestiones desde Almacén · Asignar, ya no desde la ficha del cliente.
     inventario:    ["almacen", "inventario", "equipos", "pendientes", "piezas", "firma"],
-    contabilidad:  ["facturacion", "firma"],
+    contabilidad:  ["facturacion", "contratos", "firma"],  // contratos: archivo de CONSULTA (Alberto 2026-09-28)
     vista:         ["ordenes", "poc", "firma"],
     tecnico:       ["ordenes", "poc", "firma"],
     jefe_taller:   ["ordenes", "poc", "cotizaciones", "firma"],

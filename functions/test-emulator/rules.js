@@ -39,6 +39,17 @@ async function main() {
   const ordenRoles = ["administrador","vendedor","recepcion","tecnico","tecnico_operativo","jefe_taller"];
   const noOrden    = ["gerente","inventario","contabilidad","vista"];
 
+  // ── usuarios: cada quien mantiene SOLO los datos de su firma de correo ───
+  // (Alberto 2026-09-28). El rol y lo demás siguen siendo del callable.
+  await assertSucceeds(as("tecnico").doc("usuarios/tecnico")
+    .set({ cargo: "Técnico de taller", telefono: "260-0000", celular: "6000-0000" }, { merge: true }));
+  await assertFails(as("tecnico").doc("usuarios/tecnico").set({ rol: "administrador" }, { merge: true }));
+  await assertFails(as("tecnico").doc("usuarios/tecnico").set({ cargo: "x", activo: false }, { merge: true }));
+  await assertFails(as("tecnico").doc("usuarios/vendedor").set({ cargo: "x" }, { merge: true }));
+  await assertFails(as("tecnico").doc("usuarios/nuevo_tecnico").set({ cargo: "x" }));
+  await assertFails(as("administrador").doc("usuarios/tecnico").delete());
+  ok("usuarios: el dueño edita solo cargo/teléfono/celular; ni rol, ni ajenos, ni crear, ni borrar");
+
   // ── ordenes_de_servicio ───────────────────────────────────────────────────
   for (const r of ordenRoles) await assertSucceeds(as(r).doc("ordenes_de_servicio/n_"+r).set({ x: 1 }));
   for (const r of ordenRoles) await assertSucceeds(as(r).doc("ordenes_de_servicio/o1").set({ x: 2 }, { merge: true }));
