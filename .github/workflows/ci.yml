@@ -87,12 +87,6 @@ jobs:
       - name: Radiografía modular del frontend
         run: node tools/check-modular.js
 
-      # Mientras producción se sirva desde public/ (sin build), cada <script>
-      # y <link> local lleva ?v=<hash del contenido>. Desactualizado = alguien
-      # tocó un JS/CSS sin correr `node tools/sellar-versiones.js`.
-      - name: Versiones selladas (?v= por hash)
-        run: node tools/sellar-versiones.js --check
-
       # Un export roto en index.js tumba el deploy COMPLETO de functions.
       - name: functions/index.js carga (exports completos)
         run: node -e "require('./functions/index.js'); console.log('index.js OK')"

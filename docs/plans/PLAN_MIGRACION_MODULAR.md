@@ -1,6 +1,6 @@
 # Migración del frontend a Vite multipágina — versión corta
 
-> **Fecha:** 2026-09-04, recortado 2026-09-07 · **Estado (2026-09-25):** Paso 0, F1, F2 y F3 hechos y commiteados (5234e57, db320ff, e0a2e1e, 30b1518). Producción sirve `public/` con el Paso 0 + F1; `dist/` (F2+F3) está en un canal de preview esperando el recorrido con sesión real. Ver §0.
+> **Fecha:** 2026-09-04, recortado 2026-09-07 · **Estado (2026-09-28):** COMPLETO. Paso 0, F1, F2 y F3 (5234e57, db320ff, e0a2e1e, 30b1518) en producción: hosting sirve `dist/` desde el 2026-09-28 por decisión de Alberto, sin recorrido previo con sesión real (el smoke test cubrió el montaje de las 90 páginas). F4 cerrado en el mismo deploy. Rollback: `hosting.public` → `public` y desplegar. Ver §0.
 
 ## 0. Estado de ejecución y hallazgos (2026-09-25)
 
@@ -11,7 +11,7 @@
 | F1 · puentes window | **Hecho y en producción** | 56 nombres en 17 archivos, no 320 en 28: el verificador cruza consumidores por página y solo puentea lo que otro archivo, el HTML o un handler generado usa de verdad. |
 | F2 · Vite | **Hecho, en preview** | 79 entries; 11 páginas quedan clásicas (10 son redirecciones sin scripts, más `login.html` que F3 convierte). Vite mueve el `<script type="module">` a `<head>`: los externos diferidos van junto al entry para conservar el orden. |
 | F3 · Firebase npm | **Hecho, en preview** | 261 etiquetas gstatic fuera. storage y functions compat van en el bundle (CargaDiferida ya no los trae de gstatic: mezclar versiones rompe el registry). Chunk `firebase-init` = 217 KB gzip, uno para toda la app, inmutable. |
-| F4 · cierre | Pendiente | Tras mover producción a `dist/`: quitar `sellar-versiones` del CI, actualizar `SISTEMA_TOP_DOWN.md` §1. |
+| F4 · cierre | **Hecho 2026-09-28** | `sellar-versiones` fuera del CI (el build pone los hashes; el script queda como herramienta por si hay que volver a `public/`), `SISTEMA_TOP_DOWN.md` §1 actualizado. Deploy de hosting: desde worktree limpio con `npm ci`; el predeploy construye. |
 
 **Verificación hecha:** smoke test con Chrome headless (puppeteer-core, `functions/node_modules`) sobre las 90 páginas: `public/` en HEAD vs `dist/`, con auth interceptada para que nunca resuelva y cada página monte su cascarón. Resultado F2: 88/90 idénticas (2 con ruido de ViewTransition de Chrome). Resultado F3: 85/90 (las otras 5 = mismo ruido + 3 páginas públicas que consultan Firestore sin sesión y el harness bloquea la red). Persistencia probada con SDK real en dos pestañas: IndexedDB creado, consola limpia. **No verificado:** flujos con sesión (login real, bandejas, modales). Eso se hace en el canal de preview antes de cambiar `hosting.public`.
 

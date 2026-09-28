@@ -20,7 +20,7 @@ Tres piezas de infraestructura (proyecto Firebase `cecomunica-service-orders`, p
 
 | Pieza | Qué es |
 |---|---|
-| **Hosting** | Sitio multipágina estático en `public/` — HTML + JS vanilla, sin build step. Firebase compat SDK 10.10.0 por CDN. |
+| **Hosting** | Sitio multipágina en `public/` — HTML + JS vanilla, empaquetado con Vite a `dist/` desde 2026-09-28 (`npm run build`, predeploy de hosting; un entry por página en `public/js/entry/`, hashes en el nombre). Firebase 12 desde npm (compat + modular) en un chunk compartido. Ver `docs/plans/PLAN_MIGRACION_MODULAR.md`. |
 | **Cloud Functions v2** | Node 22, `functions/src/` modular. **44 funciones**: 4 HTTP, 16 callables, 20 triggers Firestore, 4 crons. |
 | **Firestore + Storage** | ~40 colecciones. Reglas en `firestore.rules` / `storage.rules`, versionadas en el repo. |
 
