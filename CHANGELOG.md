@@ -1,5 +1,74 @@
 # Changelog
 
+## [Auditoría UX de ingeniería industrial: 31 datos falsos y callejones cerrados en un día] — 2026-09-28
+
+> Segunda auditoría UX/UI completa del app (`docs/AUDITORIA_UX_2026-09-28.md`),
+> esta vez con lente de ingeniería industrial: para qué sirve cada pantalla,
+> cuántas interacciones cuesta cada tarea y qué entiende alguien nuevo. Desde
+> agosto el sistema cambió de piel (cero diálogos nativos, Ctrl+K en 62
+> páginas, renovación de 22 a 5 clicks), así que la fricción de hoy ya no eran
+> botones muertos: eran **números que mienten, nombres que no coinciden y
+> caminos sin salida**. Los 31 P0 y ~90 quick wins se ejecutaron el mismo día,
+> un commit por módulo (`f668b56..a93a04d`). Lo más visible:
+>
+> - **Datos falsos corregidos.** Los 4 KPI del panel admin y 3 chequeos de
+>   Operación e Integridad usaban estados que no existen (`'COMPLETADA'`,
+>   `'ENTREGADA'`): "Órdenes abiertas" contaba solo POR ASIGNAR y "entregadas
+>   sin firma" siempre salía en verde. El reporte de pendientes omitía toda
+>   orden creada en la app (ordenaba por un campo que solo escribía el
+>   importador). Existencias no contaba los "no retirados". Una renovación
+>   aprobada pero sin firmar ya marcaba "renovado ✓" a sus orígenes. El rechazo
+>   del gerente a una cotización quedaba como "el cliente declinó" y bajaba la
+>   tasa de cierre del vendedor. La verificación pública certificaba "Contrato
+>   válido y activo" sin mirar el estado: un anulado se certificaba como vigente.
+> - **Pérdida de datos cerrada.** El formulario viejo de cliente borraba los
+>   correos de firma y acuses, las etiquetas y reactivaba al cliente al guardar.
+>   El importador de órdenes mandaba los equipos a una orden fantasma y pisaba
+>   firmas y QC. Las 6 acciones que crean gestiones no tenían candado: dos clicks
+>   eran dos expedientes y dos correos. Ahora hay un candado único (`withBusy`)
+>   en gestiones, aprobaciones, asignar técnico, enviar cotización, edición
+>   masiva de PoC y masivas de clientes.
+> - **Callejones y textos que mentían.** Bodega recibía "regístrelo en
+>   Descartados" (sin alta) y "abre un cambio de serial desde la ficha del
+>   cliente" (sin tener el módulo); "Registro (Ventas) · Carga rápida" no
+>   registraba nada; "seriales consecutivos" no lo eran; "+ Grupo" no existía;
+>   "Ver como" estaba roto; cerrar sesión desde /contratos/ o /admin/ daba 404;
+>   Ctrl+F en el home te mandaba a la firma de correo.
+> - **Un nombre y un color por estado.** En Órdenes "POR ASIGNAR" se lee "Por
+>   recibir" y "RECIBIDO" "Por asignar" (los datos no cambian); "Listo (falta
+>   QC)" / "Listo para entregar"; ANULADA en gris con chip. En cotizaciones el
+>   éxito ya es verde ("Aceptada") y no gris. En el pool "Cuarentena" se llama
+>   "Devuelto · por inspeccionar" en todas partes, "Condición" es "Tipo" y la
+>   palabra "pool" salió de la pantalla. "Base PoC" y "Preparar lote (Ventas)"
+>   se llaman igual en el home, el rail y el título. El app se llama
+>   "Plataforma"; "Centro de gestión" queda para el módulo.
+> - **Menos interacciones donde más se repite.** "Guardar y siguiente" y
+>   "Marcar todos" en la intervención; "Guardar y recibir" al cargar equipos;
+>   "firmó en papel" arriba del bloque de firma (7 de cada 10 entregas);
+>   guardar una cotización en política aterriza con el envío abierto; el DV se
+>   calcula solo; Enter avanza de casilla con el lector de barras (−19 por
+>   contrato de 20); "Corregir serial" en la ficha de Almacén (4 en vez de 8);
+>   ±N con motivo en piezas (2 en vez de 10 clicks); cierre de comisiones en
+>   lote; la tablet prellena nombre y cédula.
+> - **Bloqueos que faltaban.** No se manda a firmar un contrato mientras bodega
+>   no asigne los seriales (el Anexo A salía vacío); subir el firmado y aprobar
+>   una terminación confirman con consecuencias; los radios descartados en QC
+>   ya no vuelven a bodega ni al estante; "Inspección OK" en lote no salta al
+>   taller; el Customer de QuickBooks es 1 a 1.
+> - **Rules y trazabilidad.** `empresa/*` solo lo escribe administración (salvo
+>   facturacion_config e IPs); `poc_devices` solo lo crean admin y recepción;
+>   bodega registra descartes; nueva colección `admin_audit` con el antes/después
+>   de configuración, fusiones y migraciones (la fusión de duplicados ya no es
+>   "reversible" de mentira: guarda los valores previos).
+> - **Limpieza.** `public/tools/` (8 páginas que con `vite` escribían en
+>   producción sin rol) y ~2,440 líneas del módulo viejo de contratos con sus
+>   tests. Las tarjetas del home salen del catálogo único.
+>
+> Quedaron abiertas seis decisiones de negocio (contabilidad sin Contratos,
+> "Alquiler" por defecto, vendedor con "Nueva orden", cargo/teléfono propios,
+> descripciones de rol, "Ejecutivo de Ventas" impreso) y los proyectos P2 de la
+> sección 7 del informe.
+
 ## [El equipo devuelto sigue estando en POC — ahora como ficha cerrada] — 2026-09-16
 
 > Brenda: *"cuando posteriormente voy a buscar los seriales en PoC para
