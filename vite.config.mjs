@@ -60,16 +60,34 @@ function hashDe(abs) {
 // antes de que Vite procese el HTML y se restauran después con ?v=<hash>.
 function pluginClasicos() {
   const RE = /<script\b([^>]*)\bsrc\s*=\s*"([^"]+)"([^>]*)><\/script>/gi;
-  // <link href="x.css?v=…">: el ?v= interino (tools/sellar-versiones.js) se
-  // quita para que Vite resuelva el archivo y le ponga su propio hash.
-  const RE_CSS = /(<link\b[^>]*\bhref\s*=\s*")([^"?]+\.css)\?v=[^"]*(")/gi;
+  // Los CSS tampoco se empaquetan. Vite concatena las hojas de la página en
+  // un archivo propio y saca aparte las compartidas (ceco-ui), y con eso
+  // CAMBIA EL ORDEN de la cascada: en /ordenes/ ceco-ui quedó después de
+  // ordenes-index y pisó la tabla (2026-09-28, producción). Las hojas se
+  // sirven verbatim desde dist/css con ?v=<hash>, en el orden del HTML; los
+  // @import internos (app-kit-extras) siguen funcionando igual. Lo mismo para
+  // los <link rel="preload"> de fuentes: deben apuntar al mismo archivo que
+  // referencia el CSS verbatim, no a una copia con hash.
+  const RE_LINK = /<link\b([^>]*)\bhref\s*=\s*"([^"]+)"([^>]*)>/gi;
   return {
     name: 'ceco-clasicos',
     transformIndexHtml: {
       order: 'pre',
       handler(html, ctx) {
         const dirHtml = path.dirname(ctx.filename);
-        html = html.replace(RE_CSS, '$1$2$3');
+        html = html.replace(RE_LINK, (m, a1, href, a2) => {
+          const attrs = a1 + ' ' + a2;
+          if (/^(https?:)?\/\//.test(href)) return m;
+          if (!/\brel\s*=\s*"(stylesheet|preload|prefetch|modulepreload)"/i.test(attrs)) return m;
+          const limpio = href.replace(/[?#].*$/, '');
+          const abs = limpio.startsWith('/') ? path.join(PUBLIC, limpio) : path.resolve(dirHtml, limpio);
+          if (!fs.existsSync(abs)) {
+            throw new Error(`${path.relative(RAIZ, ctx.filename)}: <link href="${href}"> no existe`);
+          }
+          const url = '/' + path.relative(PUBLIC, abs).replace(/\\/g, '/') + '?v=' + hashDe(abs);
+          const tag = `<link${a1}href="${url}"${a2}>`;
+          return `<!--ceco-clasico:${Buffer.from(tag).toString('base64')}-->`;
+        });
         return html.replace(RE, (m, a1, src, a2) => {
           if (/^https?:/.test(src)) return m;
           const esModulo = /type\s*=\s*"module"/i.test(a1 + a2);

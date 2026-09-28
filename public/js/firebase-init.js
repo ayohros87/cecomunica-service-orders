@@ -44,6 +44,7 @@ if (!firebase.apps.length) {
   // IndexedDB firestore/[DEFAULT]/… creado, dos pestañas sin advertencias.
   try {
     firebase.firestore().settings({
+      merge: true, // sin esto compat avisa "overriding the original host"
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
     });
   } catch (err) {
@@ -53,6 +54,31 @@ if (!firebase.apps.length) {
   firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 }
 const db = firebase.firestore();
+
+// Vigía de la caché local. El día que cambia la versión del SDK, IndexedDB
+// tiene que migrar de esquema, y esa migración queda BLOQUEADA mientras otra
+// pestaña del app (con la versión anterior) tenga la base abierta: Firestore
+// encola todo y la página se queda "cargando" sin decir nada (reproducido
+// 2026-09-28 con SDK 10 → 12). Una lectura solo-caché no cuesta red ni rules;
+// si no responde en 4 s, se avisa qué hacer; cuando responde, se quita.
+(function vigiaCacheLocal() {
+  let aviso = null;
+  let listo = false;
+  const mostrar = () => {
+    if (listo || aviso) return;
+    aviso = document.createElement("div");
+    aviso.id = "ccAvisoCacheLocal";
+    aviso.setAttribute("role", "alert");
+    aviso.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:99999;background:#b45309;color:#fff;padding:10px 16px;font:14px/1.4 system-ui,sans-serif;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.25)";
+    aviso.textContent = "Hay otra pestaña de la app abierta con una versión anterior. Ciérrala (o cierra el navegador y vuelve a entrar) para continuar.";
+    (document.body || document.documentElement).appendChild(aviso);
+  };
+  const quitar = () => { listo = true; if (aviso) { aviso.remove(); aviso = null; } };
+  const t = setTimeout(mostrar, 4000);
+  db.collection("__vigia").doc("cache").get({ source: "cache" })
+    .then(quitar, quitar)
+    .finally(() => clearTimeout(t));
+})();
 
 // Handles modulares (misma app, misma sesión, misma caché que compat).
 // db._delegate ES la instancia modular (Firestore) que envuelve compat: sirve
