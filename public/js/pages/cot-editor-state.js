@@ -692,6 +692,11 @@
             <i data-lucide="x-circle"></i>
             <span style="margin-left:8px;"><b>Rechazada</b> — el cliente declinó la cotización</span>
           </button>
+          <button type="button" class="btn btn-secondary" data-act="vencida"
+                  style="justify-content:flex-start; text-align:left;">
+            <i data-lucide="hourglass"></i>
+            <span style="margin-left:8px;"><b>Validez vencida</b> — pasó el plazo y el cliente no respondió</span>
+          </button>
           <button type="button" class="btn btn-secondary" data-act="otros"
                   style="justify-content:flex-start; text-align:left;">
             <i data-lucide="pencil"></i>
@@ -732,7 +737,9 @@
         root.addEventListener('click', (e) => {
           const act = e.target.closest('[data-act]')?.dataset.act;
           if (!act) return;
-          if (act === 'convertida' || act === 'rechazada') { api.close({ estado: act, motivo: '' }); return; }
+          // 'vencida' entra aquí (auditoría UX 2026-09-28, remate): antes vivía
+          // aparte en "Cambiar estado" y eran dos caminos para cerrar.
+          if (act === 'convertida' || act === 'rechazada' || act === 'vencida') { api.close({ estado: act, motivo: '' }); return; }
           if (act === 'otros')  { opciones.style.display = 'none'; otros.style.display = ''; ta.focus(); return; }
           if (act === 'volver') { otros.style.display = 'none'; opciones.style.display = ''; error.style.display = 'none'; return; }
           if (act === 'guardar-otros') guardar();
@@ -875,6 +882,11 @@
       patch.fecha_descarte = ahora;
       patch.descartada_por_uid = uid || null;
       patch.cierre_motivo = String(motivo || '').trim().slice(0, 300);
+    } else if (estado === 'vencida') {
+      // Mismos sellos que ponía "Marcar Vencida" en el panel del detalle.
+      patch.fecha_vencimiento = ahora;
+      patch.vencida_manual = true;
+      patch.vencida_por_uid = uid || null;
     } else {
       patch.fecha_rechazo = ahora;
       patch.rechazado_por_uid = uid || null;
@@ -887,6 +899,7 @@
     if (taller && estado === 'rechazada') return 'Registrado: el cliente no aceptó';
     if (estado === 'convertida') return '🏆 Aceptada por el cliente';
     if (estado === 'descartada') return 'Cotización descartada — el motivo queda en el historial';
+    if (estado === 'vencida') return 'Cotización marcada como vencida';
     return 'Cotización rechazada';
   }
 

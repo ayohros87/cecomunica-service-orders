@@ -73,8 +73,8 @@ const VENTA = { cotizacion_id: "COT-2026-0102", origen: "comercial", cliente_nom
 // ── T ─────────────────────────────────────────────────────────────────────
 test("T · el asunto y el título distinguen taller de ventas; ventas no cambia", () => {
   assert.equal(CT.asunto(TALLER),
-    "Cotización de servicio técnico COT-2026-0101 · Orden 2026092501 · SKY CHEFS · CeComunica");
-  assert.equal(CT.asunto(VENTA), "Cotización COT-2026-0102 · RIBA SMITH · CeComunica");
+    "Cotización de servicio técnico COT-2026-0101 · Orden 2026092501 · SKY CHEFS · Cecomunica");
+  assert.equal(CT.asunto(VENTA), "Cotización COT-2026-0102 · RIBA SMITH · Cecomunica");
   assert.equal(CT.tituloDocumento(TALLER), "Cotización de servicio técnico");
   assert.equal(CT.tituloDocumento(VENTA), "Cotización");
   // Las viejas sin `origen` pero con orden siguen siendo de taller.
@@ -135,7 +135,7 @@ test("E · un solo correo al cliente: taller nombra la orden y pide responder pa
   assert.match(t.html, /Solangel · Jefa de Taller/);
   assert.match(t.html, /basta con responder a este correo/);
   const v = S.correoCliente({ doc: VENTA, clienteNombre: "RIBA SMITH", total: 10, link: "https://x" });
-  assert.equal(v.subject, "Cotización COT-2026-0102 · RIBA SMITH · CeComunica");
+  assert.equal(v.subject, "Cotización COT-2026-0102 · RIBA SMITH · Cecomunica");
   assert.doesNotMatch(v.html, /Orden de servicio/);
   // La copia que vivía en "Aprobar y enviar" le decía "aprobada" al cliente.
   // "Aprobar y enviar" vive en cot-aprobacion.js desde la auditoría UX 2026-09-28.

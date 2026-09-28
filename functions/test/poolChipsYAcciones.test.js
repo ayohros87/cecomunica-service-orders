@@ -282,8 +282,8 @@ test("las pestañas son sólo ubicaciones; las colas viven en las tarjetas", () 
 test("los deep-links de las señales del home siguen siendo válidos", () => {
   const page = cargarPagina();
   const señales = leer("public", "js", "pages", "home-signals.js");
-  const destinos = [...señales.matchAll(/inventario\/equipos\.html\?tab=([a-z_]+)/g)].map(m => m[1]);
-  assert.ok(destinos.length, "se esperaban señales apuntando al pool");
+  const destinos = [...señales.matchAll(/almacen\/index\.html\?tab=serial&estado=([a-z_]+)/g)].map(m => m[1]);
+  assert.ok(destinos.length, "se esperaban señales apuntando a Almacén · Avanzado (las señales van directo, sin pasar por el stub)");
   for (const t of destinos) {
     const esCola = Object.values(page.COLAS).some(c => c.tab === t);
     const esUbicacion = ["en_bodega", "asignado_contrato", "en_cliente", "en_taller", "otros", "todos"].includes(t);
