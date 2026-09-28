@@ -59,9 +59,9 @@
     const cli = String(clienteNombre || doc?.cliente_nombre || '').trim();
     if (esTaller(doc)) {
       const orden = doc?.orden_id ? ` · Orden ${doc.orden_id}` : '';
-      return `Cotización de servicio técnico ${id}${orden}${cli ? ` · ${cli}` : ''} · CeComunica`;
+      return `Cotización de servicio técnico ${id}${orden}${cli ? ` · ${cli}` : ''} · Cecomunica`;
     }
-    return `Cotización ${id}${cli ? ` · ${cli}` : ''} · CeComunica`;
+    return `Cotización ${id}${cli ? ` · ${cli}` : ''} · Cecomunica`;
   }
 
   // Nota al pie. La de ventas habla de "orden de compra" e inventario; una

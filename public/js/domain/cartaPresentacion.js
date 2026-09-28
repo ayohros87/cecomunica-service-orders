@@ -66,7 +66,7 @@
       <div class="cq-page cq-carta cq-carta--cover">
         <div class="k-cover-main">
           <div class="k-cover-brand">
-            <img src="/brand/logo-lockup-horizontal-inverse.svg" alt="CeComunica">
+            <img src="/brand/logo-lockup-horizontal-inverse.svg" alt="Cecomunica">
           </div>
 
           <div class="k-cover-kicker"><span class="eyebrow">Carta de presentación</span></div>
@@ -92,7 +92,7 @@
         </div>
 
         <div class="k-cover-photo">
-          <img src="/img/carta/cover-team-studio.jpg" alt="Equipo CeComunica con radio de comunicación crítica">
+          <img src="/img/carta/cover-team-studio.jpg" alt="Equipo Cecomunica con radio de comunicación crítica">
         </div>
         <div class="k-band"></div>
       </div>
@@ -104,7 +104,7 @@
       <div class="cq-page cq-carta">
         <div class="k-pad">
           <header class="k-doc-head">
-            <div><img src="/brand/logo-lockup-horizontal.svg" alt="CeComunica"></div>
+            <div><img src="/brand/logo-lockup-horizontal.svg" alt="Cecomunica"></div>
             <div class="k-doc-head__meta">
               <span class="eyebrow">Acerca de</span>
               <h2>Quiénes somos</h2>
@@ -118,7 +118,7 @@
                 <h3>Soluciones de radiocomunicación confiables, hechas en Panamá.</h3>
               </div>
               <div class="k-lead-quote">
-                <b>CeComunica</b> es una empresa con <b>33 años de experiencia</b>
+                <b>Cecomunica</b> es una empresa con <b>33 años de experiencia</b>
                 brindando soluciones de radiocomunicación en Panamá.
               </div>
               <p class="k-body-copy"><strong>Nuestro objetivo:</strong> ofrecerle una solución
@@ -126,7 +126,7 @@
                 técnico y acompañamiento, con propuestas económicas competitivas.</p>
             </div>
             <div class="k-qs-photo">
-              <img src="/img/carta/qs-team-advisor.jpg" alt="Asesora CeComunica mostrando un radio">
+              <img src="/img/carta/qs-team-advisor.jpg" alt="Asesora Cecomunica mostrando un radio">
               <div class="k-qs-cap"><i data-lucide="radio"></i>Asesoría y demostración de equipos en sitio.</div>
             </div>
           </div>

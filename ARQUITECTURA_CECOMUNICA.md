@@ -1,6 +1,6 @@
 # Arquitectura del Sistema Cecomunica
 
-> **Estado:** post-refactor Phases 0–5f + capa de servicios completa + migración Phase 6 (Layout.renderTopbar) en 24 páginas + **migración al UI Kit del Design System en 45 páginas** (Phase R3, completada 2026-05-28).
+> **Estado (2026-09-28):** frontend servido desde `dist/` (Vite MPA, un entry por página) · auditoría UX 2026-09-28 ejecutada y desplegada (P0, P1 y P2: ver `docs/AUDITORIA_UX_2026-09-28.md` y `CHANGELOG.md`).
 > Para el plan de trabajo pendiente ver `OUTSTANDING.md`.
 > Para el historial de cambios ver `CHANGELOG.md`.
 > Para el plan y estado de la migración al UI Kit ver `design-system/ui_kits/MIGRATION.md`.
@@ -17,77 +17,80 @@
 
 | Capa | Tecnología |
 |---|---|
-| Frontend | HTML5 + CSS3 + JavaScript vanilla (sin build step) |
-| SDK cliente | Firebase SDK 10.10.0 (compat mode, cargado desde `gstatic.com`) |
-| Iconografía | Lucide (UMD desde unpkg) |
-| Hosting | Firebase Hosting (archivos estáticos desde `public/`) |
-| Base de datos | Cloud Firestore (modo compat) |
+| Frontend | HTML5 + CSS3 + JavaScript vanilla, empaquetado con **Vite 8 (multipágina)** desde 2026-09-28: producción sirve `dist/` |
+| SDK cliente | Firebase 12 desde npm (compat para la app + modular solo para agregados `count()`), caché persistente multi-pestaña |
+| Iconografía | Lucide 1.23 en vendor a medida (`js/vendor/lucide.min.js`, regenerable con `tools/build-lucide-vendor.mjs`) |
+| Hosting | Firebase Hosting (predeploy `npm run build` → `dist/`) |
+| Base de datos | Cloud Firestore |
 | Almacenamiento | Firebase Storage |
-| Backend | Firebase Cloud Functions (Node.js 22, estructura modular en `functions/src/`) |
-| PDF | Puppeteer Core 24.17.0 |
+| Backend | Firebase Cloud Functions v2 (Node.js 22, estructura modular en `functions/src/`) |
+| PDF | Puppeteer Core |
 | Email | Nodemailer + SendGrid (vía Google Secret Manager) |
-| Excel | SheetJS 0.18.5 |
+| Excel | SheetJS |
 | Secretos | Google Secret Manager (`FIRMA_SECRET`, `SENDGRID_API_KEY`) |
 
 ---
 
 ## 3. Arquitectura del Frontend
 
-### 3.1 Topología real
+### 3.1 Topología real (al 2026-09-28)
 
-No es un SPA en sentido estricto. Cada `.html` es una página autónoma que carga sus propias dependencias. No hay bundler ni compilación.
+No es un SPA. Cada `.html` es una página autónoma que carga **un entry** de
+`public/js/entry/<carpeta>-<pagina>.js` con `<script type="module">`; el entry
+importa en orden los scripts clásicos (`core/`, `services/`, `domain/`, `ui/`,
+`pages/`), que siguen publicando sus globales en `window`. Vite empaqueta cada
+entry con hash y copia el resto de `public/` verbatim (menos `tools/` y
+`dev-diag-*`). Las páginas marcadas *(stub)* son redirecciones que se
+conservan mientras caduquen los enlaces de correos viejos.
 
 ```
 public/
-  index.html                   ← dashboard principal
-  login.html
-  perfil.html
-  firma-correo.html            ← generador de firma de correo (todos los roles)
-  admin/                       ← panel de administración (solo ROLES.ADMIN — ver §3.8)
-    index.html, operacion.html, salud.html,
-    auditoria.html, pii.html, config.html
-  contratos/
-    index.html, nuevo-contrato.html, editar-contrato.html,
-    imprimir-contrato.html, nuevo-cliente.html
-  ordenes/
-    index.html, nueva-orden.html, editar-orden.html,
-    agregar-equipo.html,
-    firmar-entrega.html, imprimir-orden.html,
-    cotizar-orden.html, cotizar-orden-formal.html,
-    estado_reparacion.html, tecnicos.html, modelo-de-radio.html,
-    progreso-tecnicos.html, reporte-pendientes.html,
-    importar-exportar.html, admin-equipos-cliente.html,
-    fotos-taller.html
-  clientes/
-    index.html, editar.html
-  inventario/
-    index.html, modelos.html, piezas.html,
-    cargar-inventario.html, vista-correo.html
-  POC/
-    index.html, nuevo-equipo.html, nuevo-batch.html,
-    editar-batch.html, imprimir-equipos.html,
-    importar-poc.html, vendedores-batch.html
-  cotizaciones/
-    index.html, nueva-cotizacion.html, editar-cotizacion.html,
-    imprimir-cotizacion.html
-  verify/
-    index.html                 ← verificación pública de contratos
+  index.html                   ← home (Command Center): señales por rol, tarjetas desde MODULOS.CATALOGO, rail
+  login.html · perfil.html · firma-correo.html
+  verificar-contrato.html (stub → verify/)
+  admin/                       ← panel (solo ROLES.ADMIN): index, operacion, financiero, kpi-reportes,
+                                 kpi-reporte-print, usuarios, auditoria, config, alertas, pii,
+                                 clientes-duplicados, refs-huerfanas, grupos, salud, integridad,
+                                 backfills, email-preview
+  almacen/index.html           ← espacio de bodega: pestañas Hoy · Asignar · Existencias · Piezas ·
+                                 Descartados · Con condición · No devueltos · Avanzado (lista por serial)
+  inventario/                  ← modelos, piezas-tarifas, cargos (Finanzas) · piezas, descartados,
+                                 condiciones, no-devueltos (pestañas de Almacén) ·
+                                 equipos, index, pendientes, cargar-inventario, vista-correo (stubs → Almacén)
+  clientes/                    ← centro.html (Centro de gestión: ficha 360 + todas las gestiones;
+                                 js en centro-core.js + 16 centro-*.js) · ficha.html (alta/edición
+                                 con documentos) · index.html (edición masiva avanzada) ·
+                                 regularizacion.html · anexo-aumento.html · editar.html (stub)
+  contratos/                   ← index.html (archivo de consulta) · documento.html · imprimir-contrato.html ·
+                                 transicion.html · nuevo-contrato, editar-contrato, cancelaciones,
+                                 nuevo-cliente, seriales (stubs → Centro / ficha / Almacén)
+  cotizaciones/                ← index, nueva-cotizacion, editar-cotizacion, detalle-cotizacion,
+                                 imprimir-cotizacion
+  ordenes/                     ← index (bandeja) · nueva-orden · nuevo-batch (única captura de equipos) ·
+                                 editar-orden · cotizar-orden · imprimir-orden · nota-entrega-intervenciones ·
+                                 progreso-tecnicos · reporte-pendientes · importar-exportar ·
+                                 admin-equipos-cliente · agregar-equipo, config, estado_reparacion,
+                                 modelo-de-radio, tecnicos (stubs)
+  POC/                         ← index (Base PoC) · nuevo-batch (lote; cola de lotes preparados por ventas) ·
+                                 vendedores-batch (Preparar lote) · nueva-consola · sim-cards ·
+                                 importar-poc · imprimir-equipos · editar-batch (stub)
+  facturacion/                 ← bandeja (portada de Finanzas) · comisiones · clientes-qbo · activacion ·
+                                 emision (honesta: no emite) · index (stub → bandeja)
+  firmar/                      ← index (firma remota del cliente) · tablet (kiosco de acuses)
+  verify/                      ← index (verificación pública del contrato) · cotizacion (respuesta pública)
   js/
-    firebase-init.js           ← único init de Firebase
-    core/                      ← módulos compartidos (auth, roles, formatting, layout)
-    services/                  ← capa de servicios (Firestore I/O)
-    domain/                    ← reglas de negocio puras (totales, scoring, normalización)
-    ui/                        ← primitivas UI compartidas (Toast, Modal)
-    pages/                     ← scripts extraídos de páginas grandes
-  css/
-    ceco-ui.css                ← design system compartido — importa app-kit-extras.css
-    app-kit-extras.css         ← primitivos R3 del UI Kit (toggle-pill, dropdown,
-                                  tooltip-floating, alert-banner, page-header-centered,
-                                  pager-input, responsive-cards, module-grid, auth-shell,
-                                  empty-state-hint, bulk-bar) — bridge hasta consolidar
-                                  todo en app.css del Design System
-    print-base.css             ← base para páginas imprimibles
-    ordenes-index.css          ← estilos de la página de órdenes
+    entry/                     ← 75 entries (uno por página)
+    firebase-init.js           ← único init de Firebase + guard de sesión
+    core/                      ← auth, roles, modulos (catálogo + ROL_LABELS), layout (topbar, rail,
+                                 drawer, Ctrl+K), formatting (FMT, fechas de Panamá), serial, icons
+    services/                  ← 33 servicios (única ruta de I/O a Firestore)
+    domain/                    ← 36 módulos puros (UMD: window + module.exports; varios duplicados a
+                                 propósito en functions/src/domain con test de sincronía)
+    ui/                        ← 25 primitivas: modal, toast, busy (withBusy), bandeja, entity-combo
+                                 (núcleo de picker/filtered-select), asistentes de bodega, firmaPad…
+    pages/                     ← 114 scripts de página
+  css/                         ← ceco-ui.css (canon de botón + alias), ceco-rail, ceco-command (home),
+                                 bandeja, form-kit, search-palette, ordenes-index, cotizaciones-kit…
 ```
 
 El Design System vive separado del runtime en `design-system/`:
@@ -114,16 +117,15 @@ La página `index.html` de cada kit es un portal con tarjetas a las áreas; cada
 
 ### 3.2 Orden de carga de scripts (por página)
 
-Cada página carga scripts en este orden en el `<head>`:
-
-1. Firebase SDK compat (app, auth, firestore, storage)
-2. `js/firebase-init.js` — `app`, `db`, `auth` globales + `verificarAccesoYAplicarVisibilidad()`
-3. `js/core/roles.js` — enum `ROLES`
-4. `js/core/formatting.js` — `FMT` (ITBMS, money, dates)
-5. `js/core/auth.js` — `AUTH` (role helpers)
-6. `js/services/<nombre>.js` — uno o más, según lo que use la página
-7. `js/pages/<nombre>.js` (con `defer`) — lógica de la página (páginas grandes)
-   — o un `<script>` inline (páginas pequeñas aún no migradas)
+Cada página tiene un entry en `js/entry/` que importa, en este orden, lo que la
+página necesita: `firebase-init.js` → `core/*` (roles, formatting, modulos,
+layout) → `ui/*` (toast, modal, busy…) → `services/*` → `domain/*` →
+`pages/*` → `vendor/lucide.min.js` + `core/icons.js`. El orden importa igual
+que con las etiquetas `<script>` viejas porque cada archivo publica globales en
+`window`. Algunas páginas conservan además etiquetas `<script src>` clásicas en
+el `<head>` para lo que debe correr durante el parse (por ejemplo `modulos.js`
+en el home). Los tests que verifican qué carga una página leen el entry con
+`functions/test/_helpers/entryScripts.js`.
 
 ### 3.3 Módulos core (`js/core/`)
 
@@ -193,10 +195,10 @@ Páginas grandes con script extraído a archivo externo (cargado con `defer`).
 | Coordinador | HTML de origen | Módulos |
 |---|---|---|
 | `contratos-index.js` | `contratos/index.html` | `contratos-state.js`, `contratos-approval.js`, `contratos-upload.js`, `contratos-equipos.js`, `contratos-list.js` |
-| `nuevo-contrato.js` | `contratos/nuevo-contrato.html` | `nc-state.js`, `nc-form.js`, `nc-combo.js`, `nc-preview.js`, `nc-guardar.js` |
 | `poc-index.js` | `POC/index.html` | `poc-state.js`, `poc-list.js`, `poc-bulk.js`, `poc-edit.js`, `poc-sim.js` |
 | `vendedores-batch.js` | `POC/vendedores-batch.html` | `window.VB` (namespace único) |
 | `ordenes-index.js` | `ordenes/index.html` | `ordenes-state.js`, `ordenes-data.js`, `ordenes-render.js`, `ordenes-filters.js`, `ordenes-flujo.js`, `ordenes-equipos.js`, `ordenes-notas.js`, `ordenes-ui.js`, `ordenes-events.js` *(Phase 5f, 2026-05-14)* |
+| `centro-core.js` | `clientes/centro.html` | `centro-directorio.js`, `centro-ficha.js`, `centro-regularizacion.js`, `centro-ficha-bloques.js`, `centro-firma.js`, `centro-gestiones.js`, `centro-acciones.js`, `centro-menu-gestion.js`, `centro-wiz-*.js`, `centro-cambio-serial.js`, `centro-plan-seriales-renovacion.js`, `centro-editor-contrato.js`, `centro-aprobaciones.js` *(partido 2026-09-28)* |
 
 El coordinador es delgado (≤ 110 líneas); cada módulo expone sus funciones públicas en `window.*` y las dependencias cruzadas se resuelven por el orden de `<script>` en el HTML.
 
@@ -206,7 +208,6 @@ El coordinador es delgado (≤ 110 líneas); cada módulo expone sus funciones p
 |---|---|---|
 | `piezas.js` | `inventario/piezas.html` | Candidato a `window.Piezas` (Phase 5g, opcional) |
 | `clientes-index.js` | `clientes/index.html` | Candidato a namespace (Phase 5g) |
-| `fotos-taller.js` | `ordenes/fotos-taller.html` | Candidato a namespace (Phase 5g) |
 | `editar-orden.js` | `ordenes/editar-orden.html` | Candidato a namespace (Phase 5g) |
 | Otros menores | varios | Ver `OUTSTANDING.md` §2.8 (Phase 5g) para inventario pendiente |
 
@@ -263,7 +264,6 @@ Contratos, PoC, Configuración Órdenes).
 Páginas conservadas intencionalmente sin rewrite completo (kit primitives
 funcionan; rewrite con diminishing returns):
 
-- `ordenes/fotos-taller.html` — UX compleja específica (photo grid, lightbox)
 - `ordenes/imprimir-orden.html`, `ordenes/nota-entrega.html`,
   `ordenes/nota-entrega-intervenciones.html`, `ordenes/cotizar-orden-formal.html`
   — print templates A4 con estilos inline intencionales para fidelidad de
@@ -437,7 +437,7 @@ Los campos `os_count`, `equipos_total`, `os_linked`, `os_serials_preview`, `os_h
 
 `ordenes_de_servicio/{id}.os_logs` es un array de auditoría escrito con `firebase.firestore.FieldValue.arrayUnion({ action, by })` cada vez que la orden cambia de estado.
 
-- **Quién escribe:** el frontend. `OrdenesService.assignTechnician`, `completeOrder` y la entrega (`ordenes-flujo.js` + `firmar-entrega.js`) anexan entradas para `ASIGNAR`, `COMPLETAR` y `ENTREGAR` respectivamente.
+- **Quién escribe:** el frontend. `OrdenesService.assignTechnician`, `completeOrder` y la entrega (`ordenes-flujo.js` + `ui/firmaTablet.js`) anexan entradas para `ASIGNAR`, `COMPLETAR` y `ENTREGAR` respectivamente.
 - **Quién lee:** la línea de tiempo en la fila expandida (audit-log timeline shipped en `CHANGELOG.md` batch 16). El timestamp se toma de los campos `fecha_*` dedicados ya que `arrayUnion` no admite `serverTimestamp()`; el `by` del array da el `uid` del autor.
 - **Forma:** `{ action: 'ENTREGAR' | 'ASIGNAR' | 'COMPLETAR' | …, by: <uid> }` — sin `ts` porque Firestore no permite `serverTimestamp()` dentro de `arrayUnion`. Si se requiere timestamp por entrada, migrar a una subcolección `ordenes_de_servicio/{id}/os_audit/{autoId}`.
 - **Límite:** Firestore tiene un cap de 1 MiB por documento. A ~50 bytes por entrada el techo práctico es ~20 000 acciones por orden — suficiente para el ciclo de vida típico pero a vigilar si en el futuro cada modificación de equipos se loguea aquí.

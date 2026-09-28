@@ -42,7 +42,7 @@ Object.assign(window.Centro, {
         const c = this.contratos.find(x => (x.contrato_id || x.id) === id);
         return c ? `<button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal(); Centro.abrirGestion('ct-${this.esc(c.id)}')">Confirmar serial saliente · <span class="cg-mono">${this.esc(id)}</span></button>` : this.esc(id);
       }).join(' ');
-      if (f.codigo === 'd7') return `<a class="btn btn-ghost cg-act" href="../inventario/equipos.html?tab=por_clasificar">Ver por clasificar</a>`;
+      if (f.codigo === 'd7') return `<a class="btn btn-ghost cg-act" href="../almacen/index.html?tab=serial&estado=por_clasificar">Ver por clasificar</a>`;
       if (f.codigo === 'd3' || f.codigo === 'd4') return `<span style="font-size:12.5px; color:var(--fg-3);">Se cierra al regularizar la cuenta.</span>`;
       if (f.codigo === 'd6') return `<span style="font-size:12.5px; color:var(--fg-3);">Agrégalos por anexo o libéralos desde el expediente del contrato.</span>`;
       return '';

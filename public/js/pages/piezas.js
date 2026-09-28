@@ -370,10 +370,18 @@ if (typeof payload.equipos_asociados === 'string' && payload.equipos_asociados.t
 const sc = parseBooleanLike(payload.sin_control_inventario);
 payload.sin_control_inventario = (sc === null) ? false : sc;
 
-// Validaciones mínimas
-if (!payload.marca || !(payload.precio_venta > 0)){
+// Precio y costo son de Finanzas (piezas-tarifas): la carga por CSV solo
+// los acepta de administración; para inventario las piezas nacen en 0 y el
+// precio se completa en Finanzas (auditoría UX 2026-09-28, remate).
+if (rolActual !== ROLES.ADMIN) {
+  payload.precio_venta = 0;
+  payload.costo_unitario = 0;
+}
+
+// Validaciones mínimas (el precio ya no es obligatorio: lo pone Finanzas)
+if (!payload.marca){
   err++;
-  errores.push(`Línea ${i+2}: requiere marca y precio_venta>0`);
+  errores.push(`Línea ${i+2}: requiere marca`);
   continue;
 }
 

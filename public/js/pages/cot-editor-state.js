@@ -912,7 +912,7 @@
     const idCot = opts.cotizacionId || doc.cotizacion_id || doc.id || '';
     const subject = CT
       ? CT.asunto({ ...doc, cotizacion_id: idCot }, { clienteNombre: clienteNom })
-      : `Cotización ${idCot}${clienteNom ? ` · ${clienteNom}` : ''} · CeComunica`;
+      : `Cotización ${idCot}${clienteNom ? ` · ${clienteNom}` : ''} · Cecomunica`;
     const titulo = CT ? CT.tituloDocumento(doc) : 'Cotización';
     const dirAHtml = opts.dirigidoA ? `<p style="margin:0 0 10px;">A la atención de: <b>${esc(opts.dirigidoA)}</b></p>` : '';
     const introHtml = esc(opts.intro || 'Adjuntamos la cotización solicitada.');
@@ -947,7 +947,7 @@
   <p style="font-size:12px; color:#6B7884; margin-top:24px;">
     ${taller
       ? 'Para autorizar la reparación basta con responder a este correo.'
-      : 'Si tiene cualquier consulta, puede responder a este correo.'} Atentamente, ${firma || 'CeComunica'}.
+      : 'Si tiene cualquier consulta, puede responder a este correo.'} Atentamente, ${firma || 'Cecomunica'}.
   </p>
 </div>`;
     return { subject, html };

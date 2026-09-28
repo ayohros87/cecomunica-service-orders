@@ -74,7 +74,7 @@
           ${logoSvg()}
           <div class="cq-divider"></div>
           <div>
-            <div class="cq-wm">CeComunica</div>
+            <div class="cq-wm">Cecomunica</div>
             <div class="cq-tag">Soluciones en Comunicaciones</div>
           </div>
         </div>

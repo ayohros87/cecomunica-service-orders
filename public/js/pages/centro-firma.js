@@ -763,7 +763,7 @@ Object.assign(window.Centro, {
       } else if (g.k === 'por_clasificar') {
         titulo = `<b>Por clasificar</b> · ubicación desconocida`; tono = 'warn';
         k2 = 'cola de bodega';
-        accion = `<a class="btn btn-ghost cg-act" href="../inventario/equipos.html?tab=por_clasificar" onclick="event.stopPropagation()">Ver por clasificar</a>`;
+        accion = `<a class="btn btn-ghost cg-act" href="../almacen/index.html?tab=serial&estado=por_clasificar" onclick="event.stopPropagation()">Ver por clasificar</a>`;
       } else if (g.k === 'taller') {
         titulo = `<b>En taller / revisión</b> · ${modelos(g.items)}`;
         k2 = 'vuelven al cliente al entregarse la orden';
@@ -793,7 +793,7 @@ Object.assign(window.Centro, {
   async verKardex(id) {
     const e = this.equipos.find(x => x.id === id);
     const serial = e?.serial || id;
-    const urlSeriales = `../inventario/equipos.html?serial=${encodeURIComponent(serial)}`;
+    const urlSeriales = `../almacen/index.html?tab=existencias&serial=${encodeURIComponent(serial)}`;
     this._abrirModal(`
       <h3 style="margin:0 0 2px;">Historia — <span class="cg-mono">${this.esc(serial)}</span></h3>
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3);">

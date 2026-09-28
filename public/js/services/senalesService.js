@@ -203,9 +203,9 @@ const SenalesService = {
     return this._count(
       db.collection('cotizaciones')
         .where('creado_por_uid', '==', uid)
-        .where('estado', 'in', ['borrador', 'enviada']),
+        .where('estado', 'in', ['borrador', 'enviada', 'aprobada']),
       null,
-      { col: 'cotizaciones', wheres: [['creado_por_uid', '==', uid], ['estado', 'in', ['borrador', 'enviada']]] }
+      { col: 'cotizaciones', wheres: [['creado_por_uid', '==', uid], ['estado', 'in', ['borrador', 'enviada', 'aprobada']]] }
     );
   },
 

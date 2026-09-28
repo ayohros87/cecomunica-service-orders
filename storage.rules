@@ -132,10 +132,13 @@ service firebase.storage {
     // Sin delete de frontend: quitar un adjunto solo lo desreferencia del doc.
     match /cotizaciones_adjuntos/{file} {
       allow read:   if request.auth != null;
+      // Quitar un adjunto desde el editor lo borra de inmediato (auditoría UX
+      // 2026-09-28); el job semanal sigue limpiando los huérfanos.
+      allow delete: if request.auth != null;
       allow create: if request.auth != null
                     && request.resource.size < 10 * 1024 * 1024
                     && request.resource.contentType.matches('(image/.*|application/pdf)');
-      allow update, delete: if false;
+      allow update: if false;
     }
 
     // ── Anexos de gestión firmados (aumento por enmienda, Ola 4) ─────────

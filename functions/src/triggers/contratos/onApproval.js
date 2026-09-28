@@ -136,6 +136,20 @@ const onContratoActivado = onDocumentUpdated(
     const estadoBefore = before.estado || null;
     const estadoAfter  = after.estado  || null;
 
+    // Un contrato que vence por fecha (sección H del cron) conserva estado
+    // 'activo' y solo marca vencimiento_estado: la verificación pública debe
+    // decir "vencido" igual, y volver a vigente si se corrige o renueva
+    // (auditoría UX 2026-09-28, remate de la verificación pública).
+    const vencBefore = before.vencimiento_estado || null;
+    const vencAfter  = after.vencimiento_estado  || null;
+    if (["activo", "aprobado"].includes(estadoAfter) && vencBefore !== vencAfter) {
+      if (vencAfter === "vencido") {
+        await propagarEstadoVerificacion(event.params.docId, after, "vencido");
+      } else if (vencBefore === "vencido") {
+        await propagarEstadoVerificacion(event.params.docId, after, estadoAfter);
+      }
+    }
+
     if (!["activo", "aprobado"].includes(estadoAfter)) {
       // Auditoría UX 2026-09-28 (P0 #1): la verificación pública (QR impreso)
       // certificaba como vigente un contrato anulado o vencido porque este

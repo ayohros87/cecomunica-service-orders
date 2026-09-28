@@ -191,7 +191,7 @@ window.HomeFeedOrdenes = (() => {
     const resto = activas.length - visibles.length;
 
     const pieLinks = resto > 0
-      ? `+${resto} más — <a href="contratos/index.html">ver contratos</a> · <a href="inventario/equipos.html?tab=otros">ver ventas en el pool</a>`
+      ? `+${resto} más — <a href="contratos/index.html">ver contratos</a> · <a href="almacen/index.html?tab=serial&estado=otros">ver ventas en el pool</a>`
       : '';
     const pieDesc = descartadas.length
       ? `<button class="fo-link" type="button" data-act="toggle-descartadas">${

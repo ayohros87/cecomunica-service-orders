@@ -147,7 +147,7 @@
     parts.push(`
       <div class="masthead">
         <div>
-          <img src="../brand/logo-lockup-horizontal.svg" alt="CeComunica">
+          <img src="../brand/logo-lockup-horizontal.svg" alt="Cecomunica">
           <div class="kicker">Reporte a la Junta Directiva · Confidencial</div>
         </div>
         <div class="fechas">

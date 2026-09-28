@@ -212,19 +212,19 @@ window.HomeSignals = (() => {
     S11: {
       modulo: 'equipos', icon: 'warehouse',
       label: 'Equipos en bodega', sub: 'disponibles para asignar',
-      href: 'inventario/equipos.html?tab=en_bodega',
+      href: 'almacen/index.html?tab=serial&estado=en_bodega',
       count: () => SenalesService.countEquiposPoolPorEstado('en_bodega'),
     },
     S12: {
       modulo: 'equipos', icon: 'search-check', moreIsBad: true,
       label: 'Equipos por verificar', sub: 'creados por migración automática',
-      href: 'inventario/equipos.html?tab=todos&verificar=1',
+      href: 'almacen/index.html?tab=serial&estado=todos&verificar=1',
       count: () => SenalesService.countEquiposPoolSinVerificar(),
     },
     S13: {
       modulo: 'equipos', icon: 'package-search', moreIsBad: true,
       label: 'Devueltos por inspeccionar', sub: 'regresaron de cliente, esperan inspección',
-      href: 'inventario/equipos.html?tab=devuelto_revision',
+      href: 'almacen/index.html?tab=serial&estado=devuelto_revision',
       count: () => SenalesService.countEquiposPoolPorEstado('devuelto_revision'),
       items: () => SenalesService.listCuarentena(),
       curso: true,
@@ -232,14 +232,14 @@ window.HomeSignals = (() => {
         txt: `<span class="bj-id">${esc(r.serial)}</span> <b>${esc(r.modelo)}</b>`
           + (r.cliente && r.cliente !== '—' ? ` · venía de ${esc(r.cliente)}` : ''),
         dias: r.dias,
-        cta: { label: 'Abrir en el pool', href: 'inventario/equipos.html?tab=devuelto_revision' },
+        cta: { label: 'Abrir en el pool', href: 'almacen/index.html?tab=serial&estado=devuelto_revision' },
       }),
       vacio: 'Cuarentena al día: todo lo devuelto ya pasó inspección.',
     },
     S14: {
       modulo: 'equipos', icon: 'map-pin-off', moreIsBad: true,
       label: 'Equipos por clasificar', sub: 'ubicación sin contrato ni orden que la respalde',
-      href: 'inventario/equipos.html?tab=por_clasificar',
+      href: 'almacen/index.html?tab=serial&estado=por_clasificar',
       count: () => SenalesService.countEquiposPoolPorEstado('por_clasificar'),
     },
     // Bandeja de bodega (Almacén · Hoy): el trabajo que nace en un contrato y
