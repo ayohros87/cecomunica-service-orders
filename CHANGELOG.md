@@ -1,5 +1,48 @@
 # Changelog
 
+## [Segunda ola de la auditoría UX: los proyectos de fondo] — 2026-09-28
+
+> Mismo día, después de desplegar los 31 P0 y los quick wins, se ejecutaron
+> los proyectos P2 de `docs/AUDITORIA_UX_2026-09-28.md` §7 (`6001797..`):
+>
+> - **El cliente responde desde el enlace.** La cotización pública tiene
+>   "¿Aceptas esta cotización?": nombre, comentario y listo. Una Cloud Function
+>   valida el token del enlace, exige que esté enviada y vigente, deja el mismo
+>   rastro que "Respuesta del cliente" y le avisa al vendedor. Además la lista
+>   busca en el servidor por tokens (con rango de fechas) y los KPIs cuentan
+>   todo el histórico, no "las N cargadas".
+> - **El lote PoC viaja dentro del app.** Ventas pulsa "Enviar a recepción";
+>   recepción ve la cola "Lotes preparados por ventas" en Nuevo lote, con
+>   "Cargar" (misma cascada que el archivo) y "Descartar" con motivo; el home
+>   avisa "Lotes PoC por cargar". Se acabó el JSON por WhatsApp.
+> - **Órdenes viejas se encuentran.** "hospi" o "202609" ya encuentran; hay
+>   rango de fechas combinable con el estado y "hay más" con Cargar más. Una
+>   sola captura de equipos (nuevo-batch absorbió agregar-equipo), el contrato
+>   de una ENTRADA se corrige desde editar-orden, y las fotos son una sola
+>   galería por orden con etiqueta de serial.
+> - **Una sola casa para los equipos.** La página avanzada de equipos es ahora
+>   una pestaña del espacio Almacén; los lotes tienen barra, Detener y reporte;
+>   Asignar imprime la lista por serial y verifica por escaneo antes de "Listo
+>   para programar" (con sustituto del mismo modelo si el radio no aparece);
+>   dañados y con condición ya no cuentan como disponibles; las piezas tienen
+>   kardex y sus precios solo se editan en Finanzas.
+> - **El Centro en 17 archivos.** `clientes-centro.js` (7,772 líneas) quedó
+>   partido por secciones sin cambiar lógica; "le toca a" es un dato y no una
+>   expresión regular sobre el texto; la línea de tiempo del contrato llega
+>   hasta Programación y Entrega; los documentos del cliente viven en la ficha
+>   y el formulario viejo desapareció.
+> - **Shell.** El home tiene rail; un solo canon de botón con alias; los tres
+>   pickers comparten núcleo; la firma pública usa el mismo lienzo; el buscador
+>   global consulta por tokens y recuerda los últimos 8 abiertos. Las 11
+>   pruebas que llevaban meses en rojo por la migración a Vite leen los entries.
+> - **Decisiones de Alberto:** contabilidad ve Contratos desde el home; el
+>   vendedor ya no ve "Nueva orden"; cada quien guarda cargo y teléfono de su
+>   firma de correo.
+>
+> Por correr después del deploy: los backfills de tokens de búsqueda
+> (`functions/scripts/backfill-cotizaciones-search-tokens.js` y
+> `backfill-ordenes-search-tokens.js`, dry-run y luego `--apply`).
+
 ## [Auditoría UX de ingeniería industrial: 31 datos falsos y callejones cerrados en un día] — 2026-09-28
 
 > Segunda auditoría UX/UI completa del app (`docs/AUDITORIA_UX_2026-09-28.md`),
