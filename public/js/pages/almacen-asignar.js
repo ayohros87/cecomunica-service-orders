@@ -227,10 +227,25 @@ window.AlmacenAsignar = (() => {
     return d === 0 ? 'hoy' : d === 1 ? 'hace 1 día' : `hace ${d} días`;
   }
 
+  // Solo existen info/warn/ok. Un tipo desconocido (el 'aviso' de antes)
+  // salía sin borde, sin fondo y con icono "undefined": ahora cae en info
+  // (auditoría UX 2026-09-28).
   function banner(kind, html) {
-    const s = { info: ['#BFDBFE', '#EFF6FF', '#1E3A8A', 'info'], warn: ['#FCD34D', '#FFFBEB', '#92400E', 'lock'], ok: ['#A7F3D0', '#ECFDF5', '#065F46', 'check-circle-2'] }[kind] || [];
+    const tipos = { info: ['#BFDBFE', '#EFF6FF', '#1E3A8A', 'info'], warn: ['#FCD34D', '#FFFBEB', '#92400E', 'lock'], ok: ['#A7F3D0', '#ECFDF5', '#065F46', 'check-circle-2'] };
+    const s = tipos[kind] || tipos.info;
     return `<div style="margin-bottom:var(--sp-3,12px);padding:12px 14px;border:1px solid ${s[0]};background:${s[1]};color:${s[2]};border-radius:10px;display:flex;gap:8px;align-items:flex-start;font-size:14px;">
       <i data-lucide="${s[3]}" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div>${html}</div></div>`;
+  }
+
+  // La vía para corregir un serial ya programado es una gestión de cambio de
+  // serial en el Centro. El rol inventario NO tiene el Centro: mandarlo allá
+  // era un callejón (auditoría UX 2026-09-28, P0 #23). A inventario se le dice
+  // a quién pedírselo; a los demás, enlace directo a la ficha del cliente.
+  function viaCambioSerialHtml(clienteId) {
+    if (window.userRole === 'inventario' || !clienteId) {
+      return 'Pídele a recepción o a ventas que abra la gestión de <strong>cambio de serial</strong> desde la ficha del cliente';
+    }
+    return `Ábrelo como gestión de <strong>cambio de serial</strong> desde la <a href="/clientes/centro.html?id=${encodeURIComponent(clienteId)}">ficha del cliente</a>`;
   }
 
   function crearAsignador(opciones) {
@@ -241,6 +256,13 @@ window.AlmacenAsignar = (() => {
       tituloPicker: 'Tomar del estante',
       origenPicker: 'el estante',
       onChange: ({ done, req }) => { const p = $('asProg'); if (p) p.textContent = `${done} / ${req}`; },
+      // Progreso de la validación por lotes (auditoría UX 2026-09-28, T12);
+      // null = terminó → vuelve el contador de avance.
+      onValidando: (i, n) => {
+        const p = $('asProg'); if (!p) return;
+        if (i == null) st.asignador?.refresh();
+        else p.textContent = `Validando ${i}/${n}…`;
+      },
       ...opciones,
     });
     return st.asignador;
@@ -326,7 +348,7 @@ window.AlmacenAsignar = (() => {
     const hay = asg.render(grupos);
 
     if (locked) {
-      $('asBanner').innerHTML = banner('ok', `<strong>Seriales listos.</strong> Este contrato ya pasó a programación${contrato.seriales_asignados_at?.toMillis ? ` (${hace(contrato.seriales_asignados_at.toMillis())})` : ''}. Para corregir un serial, se abre una gestión de <strong>cambio de serial</strong> desde la ficha del cliente y el trabajo vuelve a aparecer aquí.`);
+      $('asBanner').innerHTML = banner('ok', `<strong>Seriales listos.</strong> Este contrato ya pasó a programación${contrato.seriales_asignados_at?.toMillis ? ` (${hace(contrato.seriales_asignados_at.toMillis())})` : ''}. Para corregir un serial: ${viaCambioSerialHtml(ctxC.clienteId)}; el trabajo vuelve a aparecer aquí.`);
       asg.setLocked(true);
       footer([]);
     } else if (modoReemplazo) {
@@ -542,7 +564,7 @@ window.AlmacenAsignar = (() => {
         </div>
         <div style="margin-top:12px; padding:10px 12px; background:#FFFBEB; border:1px solid #FCD34D; border-radius:8px; color:#92400E; font-size:12.5px; line-height:1.55;">
           El contrato pasa a la <b>cola de programación</b> y activaciones recibe los seriales.
-          Después de esto, corregir un serial requiere una gestión de <b>cambio de serial</b> desde la ficha del cliente.
+          Después de esto, para corregir un serial: ${viaCambioSerialHtml(c.clienteId)}.
         </div>`,
       buttons: [
         { action: 'cancel', label: 'Volver a revisar' },
@@ -661,7 +683,7 @@ window.AlmacenAsignar = (() => {
     if (corrigiendo) {
       const entregado = g.cierre?.entrega === true;
       const marcados = marcadosPorTaller(g);
-      $('asBanner').innerHTML = banner(marcados ? 'aviso' : 'info',
+      $('asBanner').innerHTML = banner(marcados ? 'warn' : 'info',
         (marcados
           ? `<strong>El taller marcó ${marcados} radio(s) que no se pueden usar</strong> (van con ⚠ y su motivo). `
           : '<strong>Corrigiendo los seriales de esta gestión.</strong> ')
@@ -675,11 +697,11 @@ window.AlmacenAsignar = (() => {
       footer([`<button type="button" class="btn btn-primary" data-as="guardar-correccion"><i data-lucide="replace"></i> Guardar corrección</button>`]);
     } else if (!esperaBodega) {
       $('asBanner').innerHTML = banner('ok', conOS
-        ? '<strong>Seriales amarrados.</strong> La orden de programación ya existe; pool y orden los tienen.'
+        ? '<strong>Seriales amarrados.</strong> La orden de programación ya existe; el inventario y la orden los tienen.'
         : cerrada ? `<strong>Gestión ${g.estado}.</strong> Solo lectura.` : '<strong>Sin pendiente de bodega.</strong> Esta gestión no espera seriales en este paso.');
       asg.setLocked(true);
       if (puedeCorregir && marcadosPorTaller(g)) {
-        $('asBanner').innerHTML = banner('aviso',
+        $('asBanner').innerHTML = banner('warn',
           `<strong>El taller marcó ${marcadosPorTaller(g)} radio(s) que no se pueden usar.</strong> `
           + 'Entra a <strong>Corregir seriales</strong> y pon los que van en su lugar.');
       }

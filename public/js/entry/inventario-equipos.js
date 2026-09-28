@@ -9,6 +9,12 @@ import '/js/services/clientesService.js';
 import '/js/services/inventarioService.js';
 import '/js/domain/modeloFamilia.js';
 import '/js/services/equiposPoolService.js';
+// Lo que Recibir y la ficha usan y esta página no cargaba (auditoría UX
+// 2026-09-28): SerialPatron (seriales mal transcritos), condición
+// particular en la ficha y descartados en QC al recibir.
+import '/js/domain/serialPatron.js';
+import '/js/services/equiposCondicionesService.js';
+import '/js/services/equiposDescartadosService.js';
 import '/js/domain/stockAgg.js';
 import '/js/services/colaInventarioService.js';
 import '/js/services/conflictosPoolService.js';
@@ -20,6 +26,7 @@ import '/js/ui/asistente-venta.js';
 import '/js/services/pocService.js';
 import '/js/core/xlsx-loader.js';
 import '/js/ui/toast.js';
+import '/js/ui/busy.js';
 import '/js/ui/modal.js';
 import '/js/pages/inventario-equipos.js';
 import '/js/vendor/lucide.min.js';

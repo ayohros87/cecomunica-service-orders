@@ -197,6 +197,31 @@ const EquiposPoolService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
+  // findBySerial en LOTE (auditoría UX 2026-09-28, T12): `serial_norm in [...]`
+  // de 10 en 10 en vez de una consulta por serial — validar 20 seriales eran
+  // 20 idas y vueltas. Devuelve Map serial_norm → docs[] (vacío = no existe).
+  // Si una tanda falla, se reintenta serial a serial para no dar "no existe"
+  // por un error de red. `onProgreso(hechos, total)` para "Validando i/N".
+  async findBySeriales(seriales, onProgreso = null) {
+    const porNorm = new Map();
+    const claves = [...new Set((seriales || []).map(s => this.normalizarSerial(s)).filter(Boolean))];
+    claves.forEach(k => porNorm.set(k, []));
+    const db = firebase.firestore();
+    for (let i = 0; i < claves.length; i += 10) {
+      const tanda = claves.slice(i, i + 10);
+      if (onProgreso) { try { onProgreso(Math.min(i + tanda.length, claves.length), claves.length); } catch (_) {} }
+      try {
+        const snap = await db.collection('equipos_pool').where('serial_norm', 'in', tanda).get();
+        snap.docs.forEach(d => { const data = { id: d.id, ...d.data() }; porNorm.get(data.serial_norm)?.push(data); });
+      } catch (e) {
+        for (const k of tanda) {
+          try { porNorm.set(k, await this.findBySerial(k)); } catch (_) { porNorm.set(k, []); }
+        }
+      }
+    }
+    return porNorm;
+  },
+
   // Resuelve la unidad de un serial+modelo (_mismoModelo ya es tolerante a
   // datos desparejos; si no hay match es una colisión real entre modelos).
   async resolver(serial, modeloId, modeloLabel) {
@@ -634,23 +659,36 @@ const EquiposPoolService = {
   // Los que ya están en bodega con la ficha SIN modelo se completan sin
   // preguntar (`clasificarSinModelo`): no hay dato que pisar y era el único
   // caso en que contar una unidad no cambiaba nada.
-  // Retorna { nuevos, existentes, colisiones, invalidos, reubicados,
+  // Retorna { nuevos, existentes, colisiones, invalidos, repetidos, reubicados,
   //           modelo_completado, colisiones_pendientes, reubicables_pendientes,
-  //           bloqueados }.
+  //           bloqueados, invalidos_lista, repetidos_lista }.
+  // `repetidos` va APARTE de `invalidos` desde la auditoría UX 2026-09-28
+  // (T12): antes se sumaban juntos y "3 inválidos" podía ser un serial
+  // escaneado dos veces, que no es un error del serial.
   async recibir(seriales, { modelo_id = null, modelo_label = '', condicion = 'nuevo',
                             proveedor = '', notas = '', origen = 'bodega',
                             confirmarColisiones = false, confirmarReubicacion = false,
                             motivo = '' }, user, onProgress = null) {
     const db = firebase.firestore();
-    const resultado = { nuevos: 0, existentes: 0, colisiones: 0, invalidos: 0, reubicados: 0,
+    const resultado = { nuevos: 0, existentes: 0, colisiones: 0, invalidos: 0, repetidos: 0, reubicados: 0,
       modelo_completado: 0,
-      colisiones_pendientes: [], reubicables_pendientes: [], bloqueados: [] };
+      colisiones_pendientes: [], reubicables_pendientes: [], bloqueados: [],
+      invalidos_lista: [], repetidos_lista: [] };
 
     const vistos = new Set();
     const validos = [];
     for (const raw of seriales || []) {
       const norm = this.normalizarSerial(raw);
-      if (!this.esSerialValido(norm) || vistos.has(norm)) { resultado.invalidos++; continue; }
+      if (!this.esSerialValido(norm)) {
+        resultado.invalidos++;
+        resultado.invalidos_lista.push((raw ?? '').toString().trim());
+        continue;
+      }
+      if (vistos.has(norm)) {
+        resultado.repetidos++;
+        if (!resultado.repetidos_lista.includes(norm)) resultado.repetidos_lista.push(norm);
+        continue;
+      }
       vistos.add(norm);
       validos.push({ raw: (raw || '').toString().trim(), norm });
     }
@@ -820,7 +858,11 @@ const EquiposPoolService = {
   // que stock, Anexo A y facturación vean lo mismo. Si la página no cargó
   // ModeloFamilia/ModelosService, o la familia no tiene fila -R, solo cambia
   // la condición (y queda `familia_sin_fila_r` para el reporte de salud).
-  async liberar(id, { ref = null, notas = '' } = {}, user) {
+  // `esperado` (opcional, auditoría UX 2026-09-28): el estado en que DEBE
+  // estar la unidad para liberarla. Lo pasa la inspección en lote para que una
+  // unidad que cambió entre la carga y el clic (o que entró al taller) no se
+  // regrese a bodega por encima; la transacción de cambiarEstado lo verifica.
+  async liberar(id, { ref = null, notas = '', esperado = null } = {}, user) {
     const extra = { asignacion: null, orden_actual_id: null, condicion: 'reuso',
                     pendiente_devolucion: firebase.firestore.FieldValue.delete() };
     let notaR = '';
@@ -841,7 +883,7 @@ const EquiposPoolService = {
       }
     } catch (e) { console.warn('[pool.liberar] sin repunte a fila -R:', e?.message || e); }
     return this.cambiarEstado(id, this.ESTADOS.EN_BODEGA, {
-      tipo: 'liberacion', ref, notas: [notas, notaR].filter(Boolean).join(' — '),
+      esperado, tipo: 'liberacion', ref, notas: [notas, notaR].filter(Boolean).join(' — '),
       extra,
     }, user);
   },

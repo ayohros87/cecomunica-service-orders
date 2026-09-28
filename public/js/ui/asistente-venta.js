@@ -178,17 +178,24 @@ window.AsistenteVenta = {
       // venta puede seguir con las válidas.
       const vendibles = [], problemas = [];
       const vistos = new Set();
+      // Consulta por lotes `in` de 10 (auditoría UX 2026-09-28, T12): antes una
+      // consulta por serial. El progreso sigue visible en el botón — con 30+
+      // seriales el botón deshabilitado a secas parecía cuelgue.
+      const validosTanda = seriales.filter(s => EquiposPoolService.esSerialValido(EquiposPoolService.normalizarSerial(s)));
+      const progreso = (i, n) => { btn.textContent = `Validando ${i}/${n}…`; };
+      const porNorm = EquiposPoolService.findBySeriales
+        ? await EquiposPoolService.findBySeriales(validosTanda, progreso)
+        : null;
       let revisados = 0;
       for (const s of seriales) {
-        // Progreso visible: con 30+ seriales la validación tarda y el botón
-        // deshabilitado a secas parecía cuelgue.
-        btn.textContent = `Validando ${++revisados}/${seriales.length}…`;
         const norm = EquiposPoolService.normalizarSerial(s);
         if (!EquiposPoolService.esSerialValido(norm)) { problemas.push(`${esc(s)}: serial inválido`); continue; }
         if (vistos.has(norm)) continue;
         vistos.add(norm);
-        const docs = await EquiposPoolService.findBySerial(s);
-        if (!docs.length) { problemas.push(`${esc(norm)}: no está en el pool`); continue; }
+        let docs;
+        if (porNorm) docs = porNorm.get(norm) || [];
+        else { progreso(++revisados, seriales.length); docs = await EquiposPoolService.findBySerial(s); }
+        if (!docs.length) { problemas.push(`${esc(norm)}: no está en el inventario de equipos`); continue; }
         const enBodega = docs.filter(d => d.estado === 'en_bodega');
         if (!enBodega.length) {
           const estados = docs.map(d => EquiposPoolService.ESTADO_LABELS[d.estado] || d.estado).join(', ');
@@ -355,11 +362,17 @@ window.AsistenteVenta = {
     if (!el || !txt) return;
     const lineas = txt.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     if (!lineas.length) { el.style.display = 'none'; return; }
-    const norm = lineas.map(s => s.toUpperCase());
-    const repetidos = norm.length - new Set(norm).size;
+    // Se nombra cuál se repite (auditoría UX 2026-09-28, T12).
+    const vistos = new Set(), lista = [];
+    let repetidos = 0;
+    for (const s of lineas) {
+      const k = EquiposPoolService.normalizarSerial(s);
+      if (!k) continue;
+      if (vistos.has(k)) { repetidos++; if (!lista.includes(k)) lista.push(k); } else vistos.add(k);
+    }
     el.style.display = '';
     el.innerHTML = `<b>${lineas.length}</b> serial(es) en la tanda` +
-      (repetidos ? ` · <b style="color:#B45309;">${repetidos} repetido(s)</b>` : '');
+      (repetidos ? ` · <b style="color:#B45309;">${repetidos} repetido(s): ${this._esc(lista.slice(0, 6).join(', '))}${lista.length > 6 ? '…' : ''}</b> — se venden una sola vez` : '');
   },
 
   // Cierra el overlay — salvo mientras la venta corre (los confirm viven

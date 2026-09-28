@@ -319,7 +319,11 @@ window.AlmacenHoy = (() => {
             + (eq.asignacion?.cliente_nombre ? ` — de ${esc(eq.asignacion.cliente_nombre)}` : '')
             + ' <span style="color:var(--fg-3);">(sin tiquete de taller)</span>',
           at: eq.updated_at?.toMillis?.() || null,
-          ctaHtml: cta(vol(`${EQUIPOS}?serial=${encodeURIComponent(eq.serial || eq.serial_norm)}`), 'search-check', 'Revisar'),
+          // "Revisar" abre la ficha AQUÍ (auditoría UX 2026-09-28): Inspección
+          // OK y Dar de baja viven en la ficha; el href a Equipos por serial
+          // queda para Ctrl+clic / abrir en otra pestaña.
+          ctaHtml: Bandeja.cta({ href: vol(`${EQUIPOS}?serial=${encodeURIComponent(eq.serial || eq.serial_norm)}`),
+            icono: 'search-check', label: 'Revisar', data: { ficha: eq.serial || eq.serial_norm } }),
         }), vol(`${EQUIPOS}?tab=devuelto_revision`), 'devueltos');
       }
       if (enTaller) {
@@ -361,7 +365,7 @@ window.AlmacenHoy = (() => {
       notaVerificar = `<p class="bj-nota">${d.sinVerificarN.toLocaleString()} fichas de migración sin verificar
         (deuda, no trabajo del día) — <a href="${vol(`${EQUIPOS}?tab=todos&verificar=1`)}">revisar por lotes →</a></p>`;
     }
-    partes.push(grupo('Del pool', poolN, poolHtml, notaTaller + notaClasificar + notaVerificar));
+    partes.push(grupo('Del inventario de equipos', poolN, poolHtml, notaTaller + notaClasificar + notaVerificar));
 
     // ── De conteos ──
     // Solo diferencias contra un conteo RECIENTE: la conciliación significa
@@ -385,9 +389,13 @@ window.AlmacenHoy = (() => {
     partes.push(grupo('De conteos', difs.length,
       conMas(difs, (f) => fila({
         chip: 'Diferencia', chipCls: 'diferencia',
-        txt: `<b>${esc(f.modelo?.modelo || f.label)}</b> — pool ${f.seriales} vs conteo ${f.conteo} (${f.dif > 0 ? '+' : ''}${f.dif})`,
+        txt: `<b>${esc(f.modelo?.modelo || f.label)}</b> — registrado ${f.seriales} vs conteo ${f.conteo} (${f.dif > 0 ? '+' : ''}${f.dif})`,
         at: f.data?.ultima_actualizacion?.toMillis?.() || null,
-        ctaHtml: cta(vol(`${EQUIPOS}?tab=en_bodega${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`), 'diff', 'Revisar'),
+        // "Revisar" despliega el modelo en Existencias (sus seriales → ficha)
+        // sin salir del espacio (auditoría UX 2026-09-28); el href sigue siendo
+        // Equipos por serial para abrir en otra pestaña.
+        ctaHtml: Bandeja.cta({ href: vol(`${EQUIPOS}?tab=en_bodega${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`),
+          icono: 'diff', label: 'Revisar', data: { modelo: f.modelo_id || '', 'modelo-label': f.modelo?.modelo || f.label || '' } }),
       }), './index.html?tab=existencias', 'Existencias'),
       notaConteosViejos,
     ));
@@ -543,6 +551,18 @@ window.AlmacenHoy = (() => {
     document.getElementById('hoyGrupos')?.addEventListener('click', (e) => {
       const c = e.target.closest('[data-conflicto]');
       if (c) { e.preventDefault(); abrirConflicto(c.dataset.conflicto); return; }
+      // Ficha y Existencias en la misma página (auditoría UX 2026-09-28).
+      const fi = e.target.closest('a[data-ficha]');
+      if (fi && window.EquipoFicha && !(e.ctrlKey || e.metaKey || e.button !== 0)) {
+        e.preventDefault(); EquipoFicha.abrir(fi.dataset.ficha); return;
+      }
+      const mo = e.target.closest('a[data-modelo-label]');
+      if (mo && window.AlmacenExistencias?.enfocarModelo && !(e.ctrlKey || e.metaKey || e.button !== 0)) {
+        e.preventDefault();
+        AlmacenPage.setTab('existencias');
+        AlmacenExistencias.enfocarModelo(mo.dataset.modelo || null, mo.dataset.modeloLabel || '');
+        return;
+      }
       const a = e.target.closest('a[data-asignar]');
       if (!a || e.ctrlKey || e.metaKey || e.button !== 0) return;
       e.preventDefault();

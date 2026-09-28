@@ -80,7 +80,8 @@
       <div>
         <b>Estos equipos NO deben usarse.</b> Control de calidad los declaró
         inservibles al revisar la orden. Si alguien teclea uno de estos seriales
-        en bodega o en el taller, el campo muestra una alerta automática.
+        en bodega o en el taller, el campo muestra una alerta automática, y
+        Recibir, el importador y Asignar los bloquean.
       </div>
     </div>
 
@@ -91,6 +92,11 @@
         <input type="checkbox" id="dscVerRevocados"> Ver también los revocados
       </label>
       <span class="dsc-meta" id="dscResumen" style="margin-left:auto;"></span>
+      <!-- Alta manual (auditoría UX 2026-09-28): el cierre de ENTRADA manda aquí
+           cuando no pudo registrar un descarte; antes la página no tenía alta. -->
+      <button type="button" class="btn btn-primary btn-sm" id="dscRegistrar" style="display:none;">
+        <i data-lucide="plus"></i> Registrar descarte
+      </button>
     </div>
 
     <div class="app-table-wrap">

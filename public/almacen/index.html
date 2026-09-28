@@ -65,14 +65,21 @@
       width: 7px; height: 7px; border-radius: 50%; display: block;
       background: var(--fg-4);
     }
-    .ex-serial[data-dot="en_bodega"] i         { background: #16A34A; }
-    .ex-serial[data-dot="asignado_contrato"] i { background: #2563EB; }
-    .ex-serial[data-dot="en_cliente"] i        { background: #0891B2; }
-    .ex-serial[data-dot="en_taller"] i         { background: #7C3AED; }
-    .ex-serial[data-dot="devuelto_revision"] i { background: #D97706; }
-    .ex-serial[data-dot="vendido"] i           { background: #64748B; }
-    .ex-serial[data-dot="baja"] i              { background: #991B1B; }
-    .ex-serial[data-dot="por_clasificar"] i    { background: #9F1239; }
+    /* Un solo color por estado (auditoría UX 2026-09-28, T1): los puntos toman
+       el color de texto de los chips .eqpool-chip-* (ceco-ui.css). Antes taller
+       era morado aquí y amarillo en el chip, y baja roja aquí y gris allá. Si
+       cambia la paleta del chip, cambia este mapa también. */
+    .ex-serial[data-dot="en_bodega"] i         { background: #15803d; }
+    .ex-serial[data-dot="asignado_contrato"] i { background: #1d4ed8; }
+    .ex-serial[data-dot="en_cliente"] i        { background: #4338ca; }
+    .ex-serial[data-dot="en_taller"] i         { background: #a16207; }
+    .ex-serial[data-dot="devuelto_revision"] i { background: #c2410c; }
+    .ex-serial[data-dot="por_clasificar"] i    { background: #9f1239; }
+    .ex-serial[data-dot="vendido"] i           { background: #0f766e; }
+    .ex-serial[data-dot="pendiente_cobro"] i   { background: #b91c1c; }
+    .ex-serial[data-dot="no_retirado"] i       { background: #6d28d9; }
+    .ex-serial[data-dot="baja"] i              { background: #64748b; }
+    .ex-serial[data-dot="en_poc"] i            { background: #64748b; }
     .ex-mas { font-size: 12px; margin-left: 4px; white-space: nowrap; }
     .ex-expansion-pie { margin-top: 8px; font-size: 12.5px; }
 
@@ -218,14 +225,14 @@
           <span class="kpi-card-value" id="exKpiTaller">—</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-card-label">Cuarentena</span>
+          <span class="kpi-card-label">Devuelto · por inspeccionar</span>
           <span class="kpi-card-value" id="exKpiCuarentena">—</span>
-          <span class="kpi-card-sub">devueltos por inspeccionar</span>
+          <span class="kpi-card-sub">esperan inspección de bodega</span>
         </div>
         <div class="kpi-card">
           <span class="kpi-card-label">Modelos con diferencia</span>
           <span class="kpi-card-value" id="exKpiDif">—</span>
-          <span class="kpi-card-sub">pool vs conteo · meta: 0</span>
+          <span class="kpi-card-sub">registro vs conteo · meta: 0</span>
         </div>
       </div>
 
@@ -246,8 +253,8 @@
             <option value="asignado_contrato">Asignado</option>
             <option value="en_cliente">En cliente</option>
             <option value="en_taller">Taller</option>
-            <option value="devuelto_revision">Cuarentena</option>
-            <option value="otros">Otros (venta/baja/clasificar)</option>
+            <option value="devuelto_revision">Devuelto · por inspeccionar</option>
+            <option value="otros">Otros (venta/baja/clasificar/no retirado)</option>
           </select>
           <label class="toggle-pill"><input type="checkbox" onchange="AlmacenExistencias.toggleSoloDif(this)"> Solo con diferencia</label>
           <div style="flex:1;"></div>
@@ -263,8 +270,8 @@
                 <th style="text-align:right;">Asignado</th>
                 <th style="text-align:right;">Cliente</th>
                 <th style="text-align:right;">Taller</th>
-                <th style="text-align:right;">Cuarent.</th>
-                <th style="text-align:right;" title="Vendidos, bajas y por clasificar">Otros</th>
+                <th style="text-align:right;" title="Devuelto · por inspeccionar">Devueltos</th>
+                <th style="text-align:right;" title="Vendidos, bajas, por clasificar, no devueltos y no retirados">Otros</th>
                 <th style="text-align:right;">Conteo</th>
                 <th style="text-align:right;" title="Bodega − conteo físico (meta 0)">Dif.</th>
                 <th style="text-align:right;">Últ. conteo</th>

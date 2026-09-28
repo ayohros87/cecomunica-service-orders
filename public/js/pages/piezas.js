@@ -60,6 +60,11 @@ if (btnBatch) {
       return;
     }
 
+    // ?filtro=sin_stock|stock_bajo|activas — deep-link de la señal S9 del home
+    // (auditoría UX 2026-09-28: antes aterrizaba sin filtro).
+    const f = new URLSearchParams(location.search).get('filtro');
+    if (f) aplicarFiltroKpi(f, { sinRender: true });
+
     await cargar();
 
   } catch (e) {
@@ -67,6 +72,19 @@ if (btnBatch) {
     Toast.show('Error al validar rol','bad');
   }
 });
+
+// Los KPI aplican su filtro (auditoría UX 2026-09-28). Deja marcada solo la
+// casilla que corresponde; '' = ver todas.
+const FILTROS_KPI = { activas: 'chkActivas', sin_stock: 'chkSinStock', stock_bajo: 'chkStockBajo' };
+function aplicarFiltroKpi(clave, { sinRender = false } = {}) {
+  ['chkActivas', 'chkConStock', 'chkSinStock', 'chkStockBajo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.checked = FILTROS_KPI[clave] === id;
+    el.closest('.toggle-pill')?.classList.toggle('is-on', el.checked);
+  });
+  if (!sinRender) render();
+}
 /* ========= Batch: modal control ========= */
 function abrirBatchModal(){
   if (rolActual !== ROLES.ADMIN && rolActual !== ROLES.INVENTARIO) {
@@ -440,11 +458,16 @@ function showSkeleton(){
 
 
 
+// Mismos criterios en KPI y filtros (auditoría UX 2026-09-28): "sin stock" =
+// controlada y en 0; "stock bajo" = controlada, con algo, bajo el mínimo.
+const esSinStock = (p) => !p.sin_control_inventario && Number(p.cantidad || 0) <= 0;
+const esStockBajo = (p) => !p.sin_control_inventario && Number(p.cantidad || 0) > 0 && Number(p.cantidad || 0) < Number(p.minimo || 5);
+
 function renderResumen(){
   const total = piezas.length;
   const activas = piezas.filter(p => p.activo === true).length;
-  const criticas = piezas.filter(p => !p.sin_control_inventario && (p.cantidad || 0) <= 0).length;
-  const bajas = piezas.filter(p => !p.sin_control_inventario && (p.cantidad || 0) > 0 && (p.cantidad || 0) < (p.minimo || 5)).length;
+  const criticas = piezas.filter(esSinStock).length;
+  const bajas = piezas.filter(esStockBajo).length;
 
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('kpiTotal', total);
@@ -477,14 +500,39 @@ function render() {
   }
 
   // Toggles de stock (las piezas sin control de inventario no cuentan como agotadas)
-  if (document.getElementById('chkConStock')?.checked)
+  const on = (id) => !!document.getElementById(id)?.checked;
+  if (on('chkActivas')) data = data.filter(p => p.activo === true);
+  if (on('chkConStock'))
     data = data.filter(p => p.sin_control_inventario || Number(p.cantidad || 0) > 0);
-  if (document.getElementById('chkStockBajo')?.checked)
-    data = data.filter(p => !p.sin_control_inventario && Number(p.cantidad || 0) < Number(p.minimo || 5));
+  if (on('chkSinStock')) data = data.filter(esSinStock);
+  if (on('chkStockBajo')) data = data.filter(esStockBajo);
+
+  // KPI resaltado según el filtro aplicado.
+  const kpiOn = { kpiActivas: on('chkActivas'), kpiSinStock: on('chkSinStock'), kpiBajas: on('chkStockBajo') };
+  Object.entries(kpiOn).forEach(([id, v]) => document.getElementById(id)?.closest('.kpi-card')?.classList.toggle('is-on', v));
 
   // sort
   data = applySort(data);
   updateSortIndicators();
+
+  // Vacío POR FILTRO ≠ catálogo vacío (auditoría UX 2026-09-28): con piezas
+  // cargadas y un filtro puesto, "Crea tu primera pieza" era mentira.
+  const hayFiltro = !!q || ['chkActivas', 'chkConStock', 'chkSinStock', 'chkStockBajo'].some(on);
+  if (data.length === 0 && piezas.length && hayFiltro) {
+    tb.innerHTML = `
+      <tr>
+        <td colspan="13" style="padding:24px;">
+          <div class="card soft" style="text-align:center;">
+            <div style="font-size:16px; margin-bottom:8px;">No hay piezas que cumplan el filtro</div>
+            <button class="btn" onclick="limpiarFiltrosPiezas()"><i data-lucide="x"></i> Quitar filtros</button>
+          </div>
+        </td>
+      </tr>`;
+    const resumenVacio = document.getElementById('resumen');
+    if (resumenVacio) resumenVacio.innerHTML = `Mostrando <strong>0</strong> de <strong>${piezas.length}</strong> piezas`;
+    if (window.lucide) lucide.createIcons({ nodes: [tb] });
+    return;
+  }
 
   // empty state
   if (data.length === 0) {
@@ -555,9 +603,9 @@ function render() {
         <td>
           <div class="table-actions">
             ${chipCant}
-            <button class="btn btn-ghost btn-sm" title="Sumar 1" aria-label="Sumar" ${disableEdicion ? 'disabled' : ''} onclick="ajustarStock('${p.id}', 1)"><i data-lucide="plus"></i></button>
-            <button class="btn btn-ghost btn-sm" title="Restar 1" aria-label="Restar" ${disableEdicion ? 'disabled' : ''} onclick="ajustarStock('${p.id}', -1)"><i data-lucide="minus"></i></button>
+            <button class="btn btn-ghost btn-sm" title="Ajustar stock (±N con motivo)" aria-label="Ajustar stock" ${disableEdicion || p.sin_control_inventario ? 'disabled' : ''} onclick="ajustarStockN('${p.id}')">±</button>
           </div>
+          ${p.ultimo_ajuste?.motivo ? `<span class="muted" style="display:block; font-size:11px;" title="${String(p.ultimo_ajuste.motivo).replace(/"/g, '&quot;')}">últ.: ${p.ultimo_ajuste.delta > 0 ? '+' : ''}${Number(p.ultimo_ajuste.delta || 0)}</span>` : ''}
         </td>
         <td>${min}</td>
         <td>${unidad}</td>
@@ -600,6 +648,12 @@ function limpiar(){
   document.getElementById('filtroNombre').value = '';
   filtro = '';
   render();
+}
+
+function limpiarFiltrosPiezas(){
+  document.getElementById('filtroNombre').value = '';
+  filtro = '';
+  aplicarFiltroKpi('');
 }
 /* ========= Eliminar ========= */
 async function eliminarPieza(id, nombre = '') {
@@ -719,15 +773,65 @@ async function guardarPieza(){
   }
 }
 
-async function ajustarStock(id, delta) {
+async function ajustarStock(id, delta, motivo = '') {
   try {
-    await PiezasService.ajustarDelta(id, delta);
-    Toast.show(delta > 0 ? 'Stock incrementado' : 'Stock reducido','ok');
-    await cargar();
+    const r = await PiezasService.ajustarDelta(id, delta, { motivo, avisar: false });
+    if (r?.recortado) {
+      Toast.show(`Había ${r.antes}: no se pueden restar ${-delta}. Quedó en 0.`, 'warn');
+    } else {
+      Toast.show(delta > 0 ? `Stock: ${r?.antes ?? ''} → ${r?.despues ?? ''} (+${delta})` : `Stock: ${r?.antes ?? ''} → ${r?.despues ?? ''} (${delta})`, 'ok');
+    }
+    // Se actualiza la fila en memoria en vez de recargar el catálogo entero.
+    const p = piezas.find(x => x.id === id);
+    if (p && r) { p.cantidad = r.despues; if (motivo) p.ultimo_ajuste = { delta, motivo }; render(); renderResumen(); }
+    else await cargar();
   } catch (err) {
     console.error(err);
     Toast.show('Error al ajustar stock','bad');
   }
+}
+
+// ±N con motivo por fila (auditoría UX 2026-09-28): sumar 10 eran 10 clics y
+// 10 recargas, sin decir por qué. Enter en la cantidad salta al motivo; Enter
+// en el motivo aplica.
+async function ajustarStockN(id) {
+  const p = piezas.find(x => x.id === id);
+  if (!p) return;
+  const nombre = p.nombre || [p.marca, p.sku].filter(Boolean).join(' ') || 'pieza';
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+  const r = await Modal.sheet({
+    title: 'Ajustar stock', icon: 'package', size: 'sm',
+    html: `
+      <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);"><b>${esc(nombre)}</b> · hay <b>${Number(p.cantidad || 0)}</b></p>
+      <label class="form-label" for="ajN">Cantidad (+ entra, − sale)</label>
+      <input id="ajN" class="form-input" type="number" step="1" placeholder="Ej. 10 o -3" inputmode="numeric">
+      <label class="form-label" for="ajMotivo" style="margin-top:10px;">Motivo</label>
+      <input id="ajMotivo" class="form-input" type="text" placeholder="Ej. compra factura 1234, conteo, merma…">
+      <div id="ajErr" style="display:none; margin-top:8px; color:#b91c1c; font-size:13px;"></div>`,
+    buttons: [
+      { action: 'cancel', label: 'Cancelar' },
+      { action: 'ok', label: 'Aplicar', primary: true },
+    ],
+    onMount(root) {
+      const n = root.querySelector('#ajN'), m = root.querySelector('#ajMotivo');
+      setTimeout(() => n.focus(), 50);
+      n.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); m.focus(); } });
+      m.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); root.querySelector('[data-sheet-action="ok"]')?.click(); } });
+    },
+    onAction(action, root) {
+      if (action !== 'ok') return undefined;
+      const n = Math.trunc(Number(root.querySelector('#ajN').value));
+      const motivo = root.querySelector('#ajMotivo').value.trim();
+      const err = root.querySelector('#ajErr');
+      const falla = (t) => { err.textContent = t; err.style.display = ''; return false; };
+      if (!Number.isFinite(n) || n === 0) return falla('Escribe una cantidad distinta de 0 (negativa para restar).');
+      if (!motivo) return falla('El motivo es obligatorio: es lo único que dice por qué cambió el stock.');
+      if (Number(p.cantidad || 0) + n < 0) return falla(`Solo hay ${Number(p.cantidad || 0)}: no se pueden restar ${-n}.`);
+      return { n, motivo };
+    },
+  });
+  if (!r || typeof r !== 'object') return;
+  await ajustarStock(id, r.n, r.motivo);
 }
 
 async function toggleActivo(id, estado) {
@@ -777,7 +881,8 @@ async function duplicar(id) {
 // globales porque el archivo es un <script> clásico; al empaquetarse como
 // módulo ES dejarían de serlo. El puente los publica de forma explícita.
 Object.assign(window, {
-  abrirBatchModal, abrirModal, ajustarStock, cerrarBatchModal, cerrarModal,
+  abrirBatchModal, abrirModal, ajustarStock, ajustarStockN, aplicarFiltroKpi, limpiarFiltrosPiezas,
+  cerrarBatchModal, cerrarModal,
   descargarPlantillaCSV, duplicar, eliminarPieza, guardarBatch, guardarPieza,
   onTogglePiezas, sortBy, toggleActivo
 });

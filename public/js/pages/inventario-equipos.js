@@ -102,7 +102,7 @@ window.EquiposPool = {
       this.render();
     } catch (e) {
       console.error('Error al cargar equipos:', e);
-      Toast.show('Error al cargar el pool: ' + (e.message || e), 'bad');
+      Toast.show('Error al cargar el inventario de equipos: ' + (e.message || e), 'bad');
       this.render();
     }
   },
@@ -223,7 +223,7 @@ window.EquiposPool = {
     // Buscando se dice que se está buscando en todo el pool: este mensaje no
     // puede confundirse nunca con "ningún equipo coincide".
     const q = (document.getElementById('eqBusqueda')?.value || '').trim();
-    const msg = q ? `Buscando "${FMT.esc(q)}" en todo el pool…` : 'Cargando equipos…';
+    const msg = q ? `Buscando "${FMT.esc(q)}" en todo el inventario…` : 'Cargando equipos…';
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--fg-3); padding:var(--sp-6);">${msg}</td></tr>`;
   },
 
@@ -777,7 +777,7 @@ window.EquiposPool = {
     // Buscando, la pestaña deja de restringir: hay que DECIRLO, o el usuario
     // cree que está viendo sólo la ubicación que tiene seleccionada.
     const nota = f.q
-      ? '<span style="color:#92400e;">· buscando en <b>todo el pool</b>, no sólo en la pestaña</span>'
+      ? '<span style="color:#92400e;">· buscando en <b>todo el inventario</b>, no sólo en la pestaña</span>'
       : `<span style="color:var(--fg-3);">· ${nOcultos} equipos ocultos por estos filtros</span>`;
     bar.innerHTML = `<i data-lucide="filter" style="width:14px;height:14px;flex:none;color:#92400e;"></i>
       <span style="color:#92400e;">Viendo:</span> ${chips.join(' ')}
@@ -890,26 +890,26 @@ window.EquiposPool = {
       // que la alimenta/vacía — la página enseña el ciclo sola.
       const VACIO_POR_TAB = {
         en_bodega: 'No hay equipos disponibles en bodega. Entran con "Recibir equipos" / "Importar Excel", o cuando una entrada pasa la inspección.',
-        asignado_contrato: 'No hay unidades reservadas por contrato. Se asignan desde la página de Seriales del contrato (picker "Tomar del pool") y salen al confirmarse la entrega.',
+        asignado_contrato: 'No hay unidades reservadas por contrato. Se asignan en Almacén · Asignar y salen al confirmarse la entrega.',
         en_cliente: 'No hay unidades en clientes. Llegan aquí cuando la orden de programación se marca "Entregado al cliente".',
         en_taller: 'No hay unidades en taller. Entran al agregarse con serial a una orden de servicio y salen al entregarse.',
         devuelto_revision: 'No hay radios pendientes de inspección. Los que el cliente devolvió (cierre de enmienda, anulación de contrato o cambio por defectuoso) caen aquí al recibirse por una orden de ENTRADA; con "Inspección OK" regresan a bodega como Refurbished, o se dan de baja.',
         por_clasificar: 'No hay unidades por clasificar. Aquí caen las que el sistema tenía en un cliente sin nada que lo respalde (ni contrato ni orden de servicio). No es una ubicación física: hay que encontrar el radio — si aparece en bodega se registra con "Corregir estado"; si lo tiene un cliente, se asigna en Seriales de su contrato.',
         no_retirado: 'No hay radios sin retirar. Aquí caen los equipos DEL CLIENTE que quedaron listos y nadie vino a buscar: llegan cuando una reparación se cierra como "sin retirar" (menú ⋯ → Casos viejos, en Órdenes). Salen por una de tres puertas: el cliente los retira, vuelven a bodega si eran nuestros, o se dan por abandonados.',
-        otros: 'No hay unidades dadas de baja ni vendidas. Las ventas directas (facturadas en QuickBooks) se registran con "Registrar venta" para descontarlas de bodega; una baja hecha por error se revierte con "Revivir equipo".',
+        otros: 'No hay unidades dadas de baja ni vendidas. Las ventas directas (facturadas en QuickBooks) se registran con "Registrar venta" para descontarlas de bodega; una baja hecha por error se revierte con "Reactivar equipo".',
       };
       const hayOtrosFiltros = !!(fAct.mod || fAct.prop || fAct.sinVerificar || fAct.compartidos || fAct.sinCliente || fAct.listos);
       // Buscar y no encontrar nada ya NO significa "está en otra pestaña" — la
       // búsqueda barre el pool entero. Así que el mensaje dice lo que de verdad
       // pasa: ese serial no existe en el inventario, o lo tapa otro filtro.
       const msgBusqueda = hayOtrosFiltros
-        ? `Ningún equipo del pool coincide con "${esc(fAct.q)}" y los demás filtros activos. Prueba a limpiarlos.`
-        : `Ningún equipo del pool coincide con "${esc(fAct.q)}". Revisa que el serial esté bien escrito — si el equipo es real y nunca pasó por aquí, se dará de alta solo la próxima vez que toque un contrato, una orden o bodega.`;
+        ? `Ningún equipo coincide con "${esc(fAct.q)}" y los demás filtros activos. Prueba a limpiarlos.`
+        : `Ningún equipo coincide con "${esc(fAct.q)}". Revisa que el serial esté bien escrito — si el equipo es real y nunca pasó por aquí, se dará de alta solo la próxima vez que toque un contrato, una orden o bodega.`;
       // En modo por pestaña una ubicación vacía NO es un pool vacío: se mira
       // el total global, o la página diría "no hay equipos" con 7,600 fichas.
       const poolVacio = C ? C.total === 0 : !this._equipos.length;
       const msg = poolVacio
-        ? 'No hay equipos en el pool. Usa "Recibir equipos" o "Importar Excel".'
+        ? 'No hay equipos registrados. Usa "Recibir equipos" o "Importar Excel".'
         : fAct.q ? msgBusqueda
         : (hayOtrosFiltros ? 'Sin resultados con el filtro actual.' : (VACIO_POR_TAB[this._tab] || 'Sin resultados.'));
       tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--fg-3); padding:var(--sp-6); line-height:1.6;">${msg}</td></tr>`;
@@ -1014,13 +1014,15 @@ window.EquiposPool = {
     inspeccion: {
       label: 'Inspección OK → bodega',
       icono: 'check-circle-2',
-      aplica: (eq) => eq.estado === 'devuelto_revision',
+      // Sin ENTRADA de taller abierta y con el estado re-verificado en la
+      // transacción — mismo criterio que Existencias y Hoy (auditoría UX 2026-09-28).
+      aplica: (eq) => eq.estado === 'devuelto_revision' && !eq.orden_actual_id,
       titulo: 'Inspección OK en lote',
       cuerpo: (n) => `<b>${n}</b> unidad(es) pasan inspección y vuelven a bodega como disponibles `
-        + '(condición Refurbished).<br><br>Cada una deja su movimiento en el kardex.',
+        + '(tipo Refurbished). Las que tienen ENTRADA de taller abierta no se incluyen.<br><br>Cada una deja su movimiento en el kardex.',
       pideMotivo: false,
       correr: (eq) => EquiposPoolService.liberar(eq.id,
-        { notas: 'Inspección OK tras devolución (lote)' }, firebase.auth().currentUser),
+        { notas: 'Inspección OK tras devolución (lote)', esperado: EquiposPoolService.ESTADOS.DEVUELTO }, firebase.auth().currentUser),
     },
     corregir: {
       label: 'Corregir estado → bodega',
@@ -1363,7 +1365,7 @@ window.EquiposPool = {
     // Revivir NO es CTA: una baja correcta es terminal, revertirla es la
     // excepción. Vive en el menú para que no compita con las colas reales.
     if (puede && eq.estado === 'baja')
-      items.push(I('archive-restore', 'Revivir equipo → a bodega', `EquiposPool.revivir('${id}')`));
+      items.push(I('archive-restore', 'Reactivar equipo → a bodega', `EquiposPool.revivir('${id}')`));
     if (puede && !['baja', 'vendido'].includes(eq.estado)) {
       items.push('<div class="overflow-menu-divider"></div>');
       items.push(I('archive-x', 'Dar de baja', `EquiposPool.darDeBaja('${id}')`, 'danger'));
@@ -1389,6 +1391,14 @@ window.EquiposPool = {
   cerrarMenus() {
     document.querySelectorAll('.overflow-menu-dropdown.open[id^="eq-menu-"]')
       .forEach(m => m.classList.remove('open'));
+  },
+
+  // Búsqueda con debounce de 250 ms (auditoría UX 2026-09-28): render() filtra
+  // y repinta el registro entero; por tecla, con 7,000+ fichas, se trababa.
+  _buscarTimer: null,
+  buscarDiferido() {
+    clearTimeout(this._buscarTimer);
+    this._buscarTimer = setTimeout(() => this.render(), 250);
   },
 
   // ── Recibir equipos ──────────────────────────────────────────────────
@@ -1422,22 +1432,55 @@ window.EquiposPool = {
     document.getElementById('editPropiedad').value = eq.propiedad || 'desconocida';
     document.getElementById('editProveedor').value = eq.proveedor || '';
     document.getElementById('editNotas').value = eq.notas || '';
+    const mot = document.getElementById('editMotivo'); if (mot) mot.value = '';
     Modal.open('eqEditModal');
   },
 
-  async guardarEdicion() {
+  // Auditoría UX 2026-09-28: cambiar el MODELO o la PROPIEDAD cambia qué es la
+  // unidad o de quién es — va por reclasificarModelo / corregirPropiedad, que
+  // dejan movimiento en el kardex con el motivo. Proveedor y notas siguen por
+  // `actualizar` (datos de captura, sin kardex).
+  async guardarEdicion(btn) {
     if (!this._editandoId) return;
+    if (btn && window.withBusy?.esta?.(btn)) return;   // doble clic: sigue el primero
+    const eq = this._equipos.find(x => x.id === this._editandoId);
+    if (!eq) return;
     const modeloId = document.getElementById('editModelo').value || null;
+    const propiedad = document.getElementById('editPropiedad').value;
+    const motivo = (document.getElementById('editMotivo')?.value || '').trim();
+    const cambiaModelo = (modeloId || null) !== (eq.modelo_id || null);
+    const cambiaPropiedad = propiedad !== (eq.propiedad || 'desconocida');
+    if ((cambiaModelo || cambiaPropiedad) && !motivo) {
+      Toast.show('Escribe el motivo: cambiar modelo o propiedad queda en el kardex.', 'warn');
+      document.getElementById('editMotivo')?.focus();
+      return;
+    }
+    const user = firebase.auth().currentUser;
+    const correr = async () => {
+      if (cambiaModelo) {
+        await EquiposPoolService.reclasificarModelo(eq.id, {
+          modelo_id: modeloId,
+          modelo_label: modeloId ? this._modeloLabel(modeloId) : '',
+          // Modelo fuera del catálogo (o sin modelo): se conserva la de la ficha.
+          condicion: this._condicionDeModelo(modeloId) || this._condicionOriginal || 'nuevo',
+          estadoActual: eq.estado || null,
+          antes: `${eq.modelo_label || '(sin modelo)'} / ${eq.condicion || '?'}`,
+        }, `${motivo} (Editar ficha, Equipos por serial)`, user);
+      }
+      if (cambiaPropiedad) {
+        await EquiposPoolService.corregirPropiedad(eq.id, propiedad,
+          { estadoActual: eq.estado || null, antes: eq.propiedad || '' },
+          `${motivo} (Editar ficha, Equipos por serial)`, user);
+      }
+      const proveedor = document.getElementById('editProveedor').value;
+      const notas = document.getElementById('editNotas').value;
+      if (proveedor !== (eq.proveedor || '') || notas !== (eq.notas || '')) {
+        await EquiposPoolService.actualizar(eq.id, { proveedor, notas }, user);
+      }
+    };
     try {
-      await EquiposPoolService.actualizar(this._editandoId, {
-        modelo_id:    modeloId,
-        modelo_label: modeloId ? this._modeloLabel(modeloId) : '',
-        // Modelo fuera del catálogo (o sin modelo): se conserva la de la ficha.
-        condicion:    this._condicionDeModelo(modeloId) || this._condicionOriginal || 'nuevo',
-        propiedad:    document.getElementById('editPropiedad').value,
-        proveedor:    document.getElementById('editProveedor').value,
-        notas:        document.getElementById('editNotas').value,
-      }, firebase.auth().currentUser);
+      if (window.withBusy && btn) await withBusy(btn, correr, { label: 'Guardando…', silencioso: true });
+      else await correr();
       Modal.close('eqEditModal');
       const editadoId = this._editandoId;
       this._editandoId = null;
@@ -1496,7 +1539,7 @@ window.EquiposPool = {
   async inspeccionOk(id) {
     const eq = this._equipos.find(x => x.id === id);
     if (!await Modal.confirm({
-      message: `El equipo ${eq?.serial || id} pasó inspección y regresa a bodega como disponible (condición: Refurbished). ¿Confirmar?`,
+      message: `El equipo ${eq?.serial || id} pasó inspección y regresa a bodega como disponible (tipo: Refurbished). ¿Confirmar?`,
     })) return;
     try {
       await EquiposPoolService.liberar(id, { notas: 'Inspección OK tras devolución' }, firebase.auth().currentUser);
@@ -1512,7 +1555,7 @@ window.EquiposPool = {
     const eq = this._equipos.find(x => x.id === id);
     const motivo = await Modal.prompt({
       title: 'Dar de baja',
-      message: `Motivo de la baja de ${eq?.serial || id} (dañado, perdido, vendido…). El equipo sale del pool; si la baja resulta un error, administración o inventario pueden revivirlo desde la pestaña Baja / Venta.`,
+      message: `Motivo de la baja de ${eq?.serial || id} (dañado, perdido, vendido…). El equipo sale de la flota; si la baja resulta un error, administración o inventario pueden reactivarlo desde la pestaña Baja / Venta.`,
     });
     if (motivo === null) return;
     if (!motivo.trim()) { Toast.show('La baja requiere un motivo.', 'bad'); return; }
@@ -1527,10 +1570,10 @@ window.EquiposPool = {
 
   // Reversa de una baja por error — la unidad regresa a bodega como disponible.
   async revivir(id) {
-    if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden revivir equipos.', 'bad'); return; }
+    if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden reactivar equipos.', 'bad'); return; }
     const eq = this._equipos.find(x => x.id === id);
     const motivo = await Modal.prompt({
-      title: 'Revivir equipo',
+      title: 'Reactivar equipo',
       message: `Motivo de la reactivación de ${eq?.serial || id} (p. ej. baja registrada por error). El equipo regresa a bodega como disponible; si estaba asignado a un contrato u orden, hay que volver a asignarlo por el flujo normal.`,
     });
     if (motivo === null) return;
@@ -1886,7 +1929,7 @@ window.EquiposPool = {
         </div>
         <div class="app-table-wrap" style="max-height:220px; overflow:auto;">
           <table class="app-table compact">
-            <thead><tr><th>Serial</th><th>Modelo</th><th>Condición</th><th>Proveedor</th></tr></thead>
+            <thead><tr><th>Serial</th><th>Modelo</th><th>Tipo</th><th>Proveedor</th></tr></thead>
             <tbody>${muestra}</tbody>
           </table>
         </div>
@@ -2037,8 +2080,8 @@ window.EquiposPool = {
           </tbody>
         </table>
         <p style="font-size:12px; color:var(--fg-3); margin:var(--sp-2) 0 0;">
-          Dif. positiva = el pool tiene unidades que el conteo no vio (posible doble registro
-          o conteo desactualizado). Negativa = el conteo vio unidades que faltan en el pool —
+          Dif. positiva = el registro tiene unidades que el conteo no vio (posible doble registro
+          o conteo desactualizado). Negativa = el conteo vio unidades que faltan en el registro —
           captúralas con "Recibir equipos" en modo toma física.
         </p>`;
     } catch (e) {

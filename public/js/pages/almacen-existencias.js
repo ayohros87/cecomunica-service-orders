@@ -7,11 +7,12 @@
      →  ficha con kardex (drawer EquipoFicha, ya existente).
 
    Reemplaza el par "Inventario de Radios" (por modelo) / "Equipos
-   por serial" (por unidad) como vista. Las MUTACIONES (recibir,
-   vender, inspección, baja, lotes) siguen viviendo en
-   inventario/equipos.html — cada serial y cada modelo enlazan ahí
-   con deep-link; los asistentes se abren desde la topbar de este
-   espacio con ?accion=.
+   por serial" (por unidad) como vista. La ficha (EquipoFicha) ya trae
+   las acciones de cada unidad (inspección, baja, corregir serial…) y
+   aquí viven los lotes por bloque; inventario/equipos.html queda como
+   vista avanzada ("+N más", conciliación, lotes con Detener). Los
+   asistentes se abren desde la topbar de este espacio con ?accion=.
+   (Cabecera actualizada — auditoría UX 2026-09-28.)
 
    El join conteo↔pool es el de StockAgg (P6: un número, un
    cálculo); aquí solo se le pegan los conteos por estado.
@@ -35,12 +36,15 @@ window.AlmacenExistencias = (() => {
     { estado: 'asignado_contrato', label: 'Asignado' },
     { estado: 'en_cliente',        label: 'Cliente' },
     { estado: 'en_taller',         label: 'Taller' },
-    { estado: 'devuelto_revision', label: 'Cuarent.' },
+    { estado: 'devuelto_revision', label: 'Devueltos' },
   ];
   // `pendiente_cobro` va en "Otros" y NO en una columna propia: el equipo no
   // devuelto no es una ubicación que bodega pueda contar en el estante. Su
   // seguimiento vive en la bandeja de no devueltos, no en existencias.
-  const OTROS = ['vendido', 'baja', 'por_clasificar', 'en_poc', 'pendiente_cobro'];
+  // `no_retirado` (radio del cliente sin retirar) también va aquí: antes no
+  // estaba ni en COLS ni en OTROS y esas unidades no sumaban en ninguna
+  // columna ni salían al desplegar el modelo (auditoría UX 2026-09-28).
+  const OTROS = ['vendido', 'baja', 'por_clasificar', 'en_poc', 'pendiente_cobro', 'no_retirado'];
 
   // Filas cuyas unidades se están trayendo — evita que dos clicks seguidos
   // sobre la misma fila lancen dos consultas.
@@ -84,6 +88,10 @@ window.AlmacenExistencias = (() => {
       }
       ctx.cargado = true;
       render();
+      if (_enfoquePendiente) {
+        const p = _enfoquePendiente; _enfoquePendiente = null;
+        enfocarModelo(p.modeloId, p.label);
+      }
       // Una recarga (tras un lote, o desde un hook externo) rearma las filas
       // con `docs: null`. Si había una fila abierta hay que volver a traer sus
       // unidades, o se quedaría en "Cargando…" sin que nadie las pida.
@@ -201,13 +209,43 @@ window.AlmacenExistencias = (() => {
     render();
   }
 
-  // Enter en el buscador: si parece un serial, abre la ficha directamente —
-  // búsqueda universal sobre TODO el pool, sin importar filtros.
+  // Enter en el buscador. Auditoría UX 2026-09-28: si el texto coincide con
+  // un modelo, Enter lo despliega (antes "NX-410" se trataba como serial y
+  // abría una ficha inexistente); si no, y parece un serial, abre la ficha
+  // — búsqueda universal sobre TODO el registro, sin importar filtros. Si
+  // solo queda un modelo en la tabla, Enter lo abre también.
   function onBuscarEnter() {
     const raw = ($('exBuscador')?.value || '').trim();
     if (!raw) return;
+    const tl = EquiposPoolService._tightLabel(raw);
+    const exacto = tl && ctx.filas.find(f =>
+      EquiposPoolService._tightLabel(f.label) === tl
+      || EquiposPoolService._tightLabel(`${f.marca} ${f.label}`) === tl);
+    if (exacto) { abrirFila(exacto.key); return; }
     const norm = EquiposPoolService.normalizarSerial(raw);
-    if (norm && EquiposPoolService.esSerialValido(norm)) EquipoFicha.abrir(raw);
+    if (norm && EquiposPoolService.esSerialValido(norm)) { EquipoFicha.abrir(raw); return; }
+    const vis = filtradas();
+    if (vis.length === 1) abrirFila(vis[0].key);
+  }
+
+  function abrirFila(key) {
+    if (ctx.expandida !== key) toggleFila(key);
+  }
+
+  // Deep-link desde Hoy ("Revisar" de una diferencia de conteo, auditoría UX
+  // 2026-09-28): despliega el modelo y lo trae a la vista. Si la tabla aún no
+  // cargó, queda pendiente y se aplica al terminar activar().
+  let _enfoquePendiente = null;
+  function enfocarModelo(modeloId, label = '') {
+    if (!ctx.cargado) { _enfoquePendiente = { modeloId, label }; activar(); return; }
+    const tl = EquiposPoolService._tightLabel(label);
+    const f = ctx.filas.find(x => (modeloId && x.modelo_id === modeloId))
+      || (tl && ctx.filas.find(x => EquiposPoolService._tightLabel(x.label) === tl));
+    if (!f) return;
+    ctx.q = ''; ctx.filtroEstado = ''; ctx.soloDif = false;
+    const b = $('exBuscador'); if (b) b.value = '';
+    abrirFila(f.key);
+    requestAnimationFrame(() => document.querySelector('tr.ex-fila.is-abierta')?.scrollIntoView({ block: 'center' }));
   }
 
   function setFiltroEstado(v) { ctx.filtroEstado = v; render(); }
@@ -225,8 +263,12 @@ window.AlmacenExistencias = (() => {
     const tbody = $('exTabla');
     if (!tbody) return;
     if (!filas.length) {
+      // Mientras se teclea un serial la tabla no debe decir "sin modelos" a
+      // secas: el buscador también encuentra seriales (auditoría UX 2026-09-28).
+      const q = ctx.q.trim();
       tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--fg-3); padding:var(--sp-5);">
-        Sin modelos que cumplan el filtro.</td></tr>`;
+        ${q ? `Ningún modelo coincide con «${esc(q)}». Pulsa <b>Enter</b> para buscar el serial.`
+            : 'Sin modelos que cumplan el filtro.'}</td></tr>`;
     } else {
       tbody.innerHTML = filas.map(filaHtml).join('');
     }
@@ -316,9 +358,15 @@ window.AlmacenExistencias = (() => {
       const puede = ['administrador', 'inventario'].includes(window.userRole);
       let lote = '';
       if (puede && estado === 'devuelto_revision') {
-        lote = `<button type="button" class="btn btn-sm btn-accent" style="margin-left:6px;"
+        // Solo las que NO tienen ENTRADA del taller abierta: esas las
+        // inspecciona el taller y regresan solas al cerrarse la orden — mismo
+        // criterio que Hoy (auditoría UX 2026-09-28).
+        const nLibres = docs.filter(x => !x.orden_actual_id).length;
+        const nTaller = docs.length - nLibres;
+        lote = nLibres ? `<button type="button" class="btn btn-sm btn-accent" style="margin-left:6px;"
           onclick="event.stopPropagation(); AlmacenExistencias.loteAccion('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', 'inspeccion_ok', this)">
-          ✓ Inspección OK (${docs.length})</button>`;
+          ✓ Inspección OK (${nLibres})</button>` : '';
+        if (nTaller) lote += ` <span style="text-transform:none; letter-spacing:0;">· ${nTaller} con ENTRADA de taller abierta (las inspecciona el taller)</span>`;
       } else if (puede && estado === 'por_clasificar') {
         lote = `<button type="button" class="btn btn-sm btn-accent" style="margin-left:6px;"
           onclick="event.stopPropagation(); AlmacenExistencias.loteAccion('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', 'corregir', this)">
@@ -339,7 +387,7 @@ window.AlmacenExistencias = (() => {
           <i data-lucide="bar-chart-2" style="width:13px;height:13px;"></i> Histórico de conteos</a>` : '';
     return `
       <tr class="ex-expansion"><td colspan="10">
-        ${bloques || '<span style="color:var(--fg-3); font-size:13px;">Sin unidades en el pool (solo conteo físico).</span>'}
+        ${bloques || '<span style="color:var(--fg-3); font-size:13px;">Sin unidades registradas (solo conteo físico).</span>'}
         <div class="ex-expansion-pie">
           <a href="${linkEquipos}"><i data-lucide="scan-barcode" style="width:13px;height:13px;"></i>
             Gestionar en Equipos por serial (avanzado) →</a>${linkHistorico}
@@ -378,7 +426,7 @@ window.AlmacenExistencias = (() => {
   // ── Export / reporte (mismo cálculo del join — StockAgg) ──────────────
   async function exportarExcel() {
     await cargarXLSX();
-    const wsData = [['Marca', 'Modelo', 'Bodega', 'Asignado', 'En cliente', 'Taller', 'Cuarentena', 'Otros', 'Conteo físico', 'Diferencia']];
+    const wsData = [['Marca', 'Modelo', 'Bodega', 'Asignado', 'En cliente', 'Taller', 'Devuelto por inspeccionar', 'Otros', 'Conteo físico', 'Diferencia']];
     for (const f of filtradas()) {
       wsData.push([
         f.marca || '-', f.label,
@@ -469,11 +517,13 @@ window.AlmacenExistencias = (() => {
       return;
     }
     const docs = f.docs.filter(eq => eq.estado === estado
-      && (accion !== 'verificar' || eq.verificado === false));
+      && (accion !== 'verificar' || eq.verificado === false)
+      // Inspección OK no toca lo que tiene ENTRADA abierta (auditoría UX 2026-09-28).
+      && (accion !== 'inspeccion_ok' || !eq.orden_actual_id));
     if (!docs.length) return;
     const user = firebase.auth().currentUser;
     const msgs = {
-      inspeccion_ok: `¿Inspección OK para las ${docs.length} unidades de ${f.label} en cuarentena? Regresan a bodega como disponibles (reuso).`,
+      inspeccion_ok: `¿Inspección OK para las ${docs.length} unidades de ${f.label} devueltas por inspeccionar (sin ENTRADA de taller abierta)? Regresan a bodega como disponibles (reuso).`,
       corregir: `¿Corregir a bodega las ${docs.length} unidades de ${f.label} en "por clasificar"? Quedan disponibles y verificadas.`,
       verificar: `¿Marcar verificadas ${docs.length} unidades de ${f.label}?`,
     };
@@ -485,7 +535,7 @@ window.AlmacenExistencias = (() => {
       for (const eq of docs) {
         if (btn) btn.textContent = `Procesando ${ok + err + 1}/${docs.length}…`;
         try {
-          if (accion === 'inspeccion_ok') await EquiposPoolService.liberar(eq.id, { notas: 'Inspección OK en lote (Almacén · Existencias)' }, user);
+          if (accion === 'inspeccion_ok') await EquiposPoolService.liberar(eq.id, { notas: 'Inspección OK en lote (Almacén · Existencias)', esperado: EquiposPoolService.ESTADOS.DEVUELTO }, user);
           else if (accion === 'corregir') await EquiposPoolService.corregirABodega(eq.id, 'Corrección en lote (Almacén · Existencias)', user);
           else if (accion === 'verificar') await EquiposPoolService.verificar(eq.id, user);
           ok++;
@@ -502,5 +552,5 @@ window.AlmacenExistencias = (() => {
     }
   }
 
-  return { activar, recargar, refrescarSiCargado, render, toggleFila, onBuscar, onBuscarEnter, setFiltroEstado, toggleSoloDif, exportarExcel, copiarReporte, loteAccion, verHistorico };
+  return { activar, recargar, refrescarSiCargado, render, toggleFila, onBuscar, onBuscarEnter, setFiltroEstado, toggleSoloDif, exportarExcel, copiarReporte, loteAccion, verHistorico, enfocarModelo };
 })();

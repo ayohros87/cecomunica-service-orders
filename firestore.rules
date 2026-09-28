@@ -823,7 +823,7 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn()
         && (userRole() in ["administrador", "jefe_taller"] || esRevisorQcExtra()
-            || (userRole() in ["recepcion", "tecnico", "tecnico_operativo"]
+            || (userRole() in ["recepcion", "tecnico", "tecnico_operativo", "inventario"]
                 && request.resource.data.get("revocado", true) == false));
       allow delete: if isAdmin();
     }

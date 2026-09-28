@@ -173,7 +173,7 @@ window.SerialField = {
 
       if (!docs.length) {
         chip('sin registro en el pool', 'eqpool-chip-vacio',
-          'Este serial no existe en el pool — se dará de alta automáticamente al guardar. Verifica que esté bien escrito.');
+          'Este serial no existe en el inventario — se dará de alta automáticamente al guardar. Verifica que esté bien escrito.');
         if (opts.onInfo) opts.onInfo({ docs, unidad: null, descartado, condicion });
         return;
       }
@@ -197,21 +197,21 @@ window.SerialField = {
       const modeloCorto = (u.modelo_label || '').trim();
       const est = chip(
         `${esc(label)}${modeloCorto ? ` · ${esc(modeloCorto)}` : ''}`,
-        '', 'Estado en el pool — click para ver la ficha del equipo');
+        '', 'Estado en el inventario — clic para ver la ficha del equipo');
       est.classList.add(`eqpool-chip-${EquiposPoolService.ESTADO_LABELS[u.estado] ? u.estado : 'desconocido'}`);
 
       const clienteId = typeof opts.clienteId === 'function' ? (opts.clienteId() || '') : '';
       const clientePool = u.asignacion?.cliente_id || '';
       if (clientePool && clienteId && clientePool !== clienteId) {
         chip('⚠ otro cliente', 'eqpool-chip-aviso',
-          `En el pool esta unidad figura con ${u.asignacion?.cliente_nombre || 'otro cliente'} — verifica el serial`);
+          `En el inventario esta unidad figura con ${u.asignacion?.cliente_nombre || 'otro cliente'} — verifica el serial`);
       }
 
       const m = typeof opts.modelo === 'function' ? opts.modelo() : null;
       if (m && (m.modelo_id || (m.modelo_label || '').trim())
           && !EquiposPoolService._mismoModelo(u, m.modelo_id || null, m.modelo_label || '')) {
         chip(`modelo distinto: ${esc(u.modelo_label || u.modelo_id || '?')}`, 'eqpool-chip-alerta',
-          'El pool registra esta unidad con OTRO modelo — puede ser un error de dedo o una ficha por fusionar.');
+          'El inventario registra esta unidad con OTRO modelo — puede ser un error de dedo o una ficha por fusionar.');
       }
 
       if (opts.onInfo) opts.onInfo({ docs, unidad: u, descartado, condicion });

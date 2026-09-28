@@ -172,7 +172,7 @@
   <script>
     Layout.renderTopbar({
       title: '<i data-lucide="scan-barcode"></i> Equipos por serial',
-      back: { label: '<i data-lucide="arrow-left"></i> Inventario', href: 'index.html' },
+      back: { label: '<i data-lucide="arrow-left"></i> Almacén', href: '../almacen/index.html?tab=existencias' },
       actions: [
         { label: '<i data-lucide="package-plus"></i> Recibir equipos', onclick: 'EquiposPool.abrirRecibir()', cls: 'primary', id: 'btnRecibir' },
       ],
@@ -199,11 +199,13 @@
     <div class="eq-buscador">
       <div class="filter-search" style="flex:1; height:44px;">
         <span class="search-icon"><i data-lucide="search"></i></span>
-        <input type="search" id="eqBusqueda" placeholder="Buscar serial, modelo o cliente en todo el pool…"
-               aria-label="Buscar equipos en todo el pool" oninput="EquiposPool.render()"
+        <!-- Debounce 250 ms (auditoría UX 2026-09-28): repintar el registro
+             entero en cada tecla trababa la página con 7,000+ fichas. -->
+        <input type="search" id="eqBusqueda" placeholder="Buscar serial, modelo o cliente en todo el inventario…"
+               aria-label="Buscar equipos en todo el inventario" oninput="EquiposPool.buscarDiferido()"
                style="border:none; flex:1; font-size:15px;">
       </div>
-      <span class="eq-buscador-nota">Busca en <b>todo el pool</b>, sin importar la pestaña</span>
+      <span class="eq-buscador-nota">Busca en <b>todo el inventario</b>, sin importar la pestaña</span>
     </div>
 
     <!-- Pendientes: las colas que necesitan una decisión humana. Sustituyen a
@@ -323,7 +325,7 @@
 
       <!-- Tabla -->
       <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
-        <table class="app-table" aria-label="Equipos del pool">
+        <table class="app-table" aria-label="Equipos por serial">
           <thead>
             <tr>
               <th class="eq-td-sel"><input type="checkbox" id="eqSelAll" onchange="EquiposPool.toggleTodos(this.checked)" aria-label="Seleccionar todo lo visible" title="Seleccionar todo lo que se ve ahora"></th>
@@ -415,7 +417,7 @@
         </div>
         <div style="display:flex; gap:var(--sp-3);">
           <div class="form-field" style="flex:1;">
-            <label class="form-label" for="editCondicion">Condición</label>
+            <label class="form-label" for="editCondicion">Tipo</label>
             <select class="form-select" id="editCondicion" disabled
                     title="La determina el modelo: las filas con sufijo -R son refurbished.">
               <option value="nuevo">Nuevo</option>
@@ -441,10 +443,16 @@
           <label class="form-label" for="editNotas">Notas</label>
           <input class="form-input" id="editNotas" type="text">
         </div>
+        <!-- Cambiar modelo o propiedad deja movimiento en el kardex con este
+             motivo (auditoría UX 2026-09-28); antes se pisaba sin rastro. -->
+        <div class="form-field">
+          <label class="form-label" for="editMotivo">Motivo del cambio <span class="optional">(obligatorio si cambias modelo o propiedad)</span></label>
+          <input class="form-input" id="editMotivo" type="text" placeholder="Ej.: etiqueta revisada en el estante">
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="Modal.close('eqEditModal')"><i data-lucide="x"></i> Cancelar</button>
-        <button class="btn btn-primary" onclick="EquiposPool.guardarEdicion()"><i data-lucide="check"></i> Guardar</button>
+        <button class="btn btn-primary" onclick="EquiposPool.guardarEdicion(this)"><i data-lucide="check"></i> Guardar</button>
       </div>
     </div>
   </div>
@@ -464,7 +472,7 @@
           <span id="corrEstadoActual"></span> → <strong>En bodega</strong>.<br>
           Si la unidad en realidad está en otro lado (cliente, taller, POC), no corrijas aquí:
           regístrala por su flujo normal (seriales del contrato, orden de servicio o device POC)
-          y el pool se actualizará solo con los vínculos correctos.
+          y el inventario se actualizará solo con los vínculos correctos.
         </p>
         <div id="corrAvisos" style="font-size:13px; color:#92400e; background:#fef3c7; border-radius:8px; padding:var(--sp-3); margin-bottom:var(--sp-3);"></div>
         <div class="form-field" id="corrPocRow">
@@ -511,14 +519,14 @@
   <div id="eqConcilModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="eqConcilModalTitle">
     <div class="modal" style="max-width:640px;">
       <div class="modal-header">
-        <h3 class="modal-title" id="eqConcilModalTitle"><i data-lucide="scale"></i> Conciliación: pool vs conteo manual</h3>
+        <h3 class="modal-title" id="eqConcilModalTitle"><i data-lucide="scale"></i> Conciliación: registro vs conteo manual</h3>
         <button class="modal-close" onclick="Modal.close('eqConcilModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
       </div>
       <div class="modal-body">
         <p style="font-size:13px; color:var(--fg-2); margin:0 0 var(--sp-3);">
           Compara el conteo semanal de inventario (<code>inventario_actual</code>) contra las
-          unidades <strong>en bodega</strong> del pool. La diferencia es la métrica de avance de la
-          migración: cuando quede en cero varias semanas seguidas, el pool pasa a ser la fuente y el
+          unidades <strong>en bodega</strong> del registro. La diferencia es la métrica de avance de la
+          migración: cuando quede en cero varias semanas seguidas, el registro pasa a ser la fuente y el
           conteo manual queda como auditoría periódica.
         </p>
         <div id="concilTabla" style="max-height:380px; overflow:auto;">Cargando…</div>

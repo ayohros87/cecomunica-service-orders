@@ -99,13 +99,20 @@ window.AsistenteImportar = (() => {
         else if (EquiposPoolService.REUBICABLES_DESDE.includes(propia.estado)) x.clase = 'reubicar';
         else x.clase = 'bloqueada';
 
-        // Se proponen marcadas salvo lo que exige criterio humano (colisión) o
-        // lo que el sistema no debe decidir solo.
+        // Contrato VIGENTE detrás de la ficha (auditoría UX 2026-09-28): traer
+        // el radio a bodega o pasarlo a propiedad cecomunica deja al contrato
+        // mintiendo, así que NO se premarca — se advierte y decide bodega.
+        const cDoc = propia?.asignacion?.contrato_doc_id;
+        x.contratoVivo = !!cDoc && vivo(env.contratos?.get?.(cDoc));
+        x.propiedadPosible = !!propia && propia.propiedad !== 'cecomunica';
+
+        // Se proponen marcadas salvo lo que exige criterio humano (colisión,
+        // contrato vigente) o lo que el sistema no debe decidir solo.
         x.acciones = {
           crear:     x.clase === 'nueva',
-          reubicar:  x.clase === 'reubicar',
+          reubicar:  x.clase === 'reubicar' && !x.contratoVivo,
           modelo:    !!propia && (!propia.modelo_id || propia.modelo_id !== env.modeloId),
-          propiedad: !!propia && propia.propiedad !== 'cecomunica',
+          propiedad: x.propiedadPosible && !x.contratoVivo,
           // En una colisión NO se anota: la única ficha con ese serial es la
           // del OTRO modelo, y escribirle "DAÑADA" marcaría un radio ajeno. Si
           // se confirma, la ficha nueva nace sufijada y su id no se conoce
@@ -117,7 +124,10 @@ window.AsistenteImportar = (() => {
       },
       detalle(x, env) {
         const f = x.ficha;
-        if (x.clase === 'reubicar') return detalleUbicacion(f, x);
+        if (x.clase === 'reubicar') {
+          return detalleUbicacion(f, x) + (x.contratoVivo
+            ? ' — <b style="color:#b91c1c;">no se marcó: corrige primero el contrato</b>, o márcalo si de verdad está aquí' : '');
+        }
         if (x.clase === 'colision') {
           return `ya registrado como <b>${esc(x.otras[0]?.modelo_label || '(sin modelo)')}</b>`
             + ` — si es el MISMO radio con el código mal puesto, cierra y usa`
@@ -135,8 +145,10 @@ window.AsistenteImportar = (() => {
         const f = x.ficha, out = [];
         if (x.acciones.modelo) out.push(chip(i, 'modelo',
           f?.modelo_id ? `Reclasificar de ${esc(f.modelo_label || '(sin modelo)')}` : 'Completar el modelo'));
-        if (x.acciones.propiedad) out.push(chip(i, 'propiedad',
-          `Propiedad ${esc(f?.propiedad || 'sin dato')} → cecomunica`));
+        // El chip sale también sin premarcar (contrato vigente): la decisión
+        // queda a la vista en vez de desaparecer.
+        if (x.propiedadPosible) out.push(chip(i, 'propiedad',
+          `Propiedad ${esc(f?.propiedad || 'sin dato')} → cecomunica${x.contratoVivo ? ' (contrato vigente)' : ''}`));
         if (x.acciones.nota) out.push(chip(i, 'nota', 'Marcar DAÑADA'));
         if (x.clase === 'reubicar') out.push(chip(i, 'reubicar', 'Está en mi estante: traerlo a bodega'));
         if (x.clase === 'colision') out.push(chip(i, 'colision', 'Es otro equipo: crear ficha aparte'));
@@ -272,7 +284,7 @@ window.AsistenteImportar = (() => {
       detalle(x, env) {
         const f = x.ficha;
         if (x.clase === 'sin_ficha') {
-          return 'ese serial no está en el pool — para darlo de alta usa <b>“Conté este estante”</b>';
+          return 'ese serial no está en el inventario — para darlo de alta usa <b>“Conté este estante”</b>';
         }
         if (x.clase === 'no_es_origen') {
           return `está como <b>${esc(f?.modelo_label || '(sin modelo)')}</b>, no como`
@@ -415,7 +427,7 @@ window.AsistenteImportar = (() => {
       },
       detalle(x, env) {
         const f = x.ficha;
-        if (x.clase === 'sin_ficha') return 'ese serial no está en el pool';
+        if (x.clase === 'sin_ficha') return 'ese serial no está en el inventario';
         if (x.multiple) return `ese serial tiene ${x.todas.length} fichas — resuélvelo en la ficha`;
         if (x.clase === 'bloqueada') {
           return `está en ${esc(estadoLabel(f.estado))}: se resuelve por su propio flujo`;
@@ -475,7 +487,7 @@ window.AsistenteImportar = (() => {
       },
       detalle(x, env) {
         const f = x.ficha;
-        if (x.clase === 'sin_ficha') return 'ese serial no está en el pool';
+        if (x.clase === 'sin_ficha') return 'ese serial no está en el inventario';
         if (x.clase === 'ya_esta') return 'sin cambios';
         const otras = x.otras?.length ? ` · <span style="color:#b45309;">ese serial tiene ${x.todas.length} fichas: se anota la de ${esc(f.modelo_label || '?')}</span>` : '';
         return (f.notas ? `pisa la nota actual: “${esc(f.notas)}”` : `${esc(estadoLabel(f.estado))}`) + otras;
@@ -543,7 +555,8 @@ window.AsistenteImportar = (() => {
   async function abrir(opts = {}) {
     Object.assign(ctx, { opts: opts || {}, filas: [], columnas: [], items: [], diff: null,
       colSerial: -1, colNota: -1, intencion: '', modeloId: '', modeloOrigenId: '',
-      ubicacion: EquiposPoolService.ESTADOS.EN_BODEGA, nota: '', origen: '', conteos: null });
+      ubicacion: EquiposPoolService.ESTADOS.EN_BODEGA, nota: '', origen: '', conteos: null,
+      modeloDetectado: '' });
     render();
     try {
       const todos = await ModelosService.getModelos();
@@ -606,12 +619,17 @@ window.AsistenteImportar = (() => {
 
   // ── Paso 1: el contexto que pide la intención + el archivo ──────────────
 
+  // Con caja de filtro delante (FilteredSelect, auditoría UX 2026-09-28): el
+  // catálogo entero en un <select> nativo obligaba a buscar NX-410 vs
+  // NX-410-R a golpe de flecha. El filtro se monta en montarFiltrosModelo().
   function selectModelo(id, sel, etiqueta, ayuda) {
     const opts = ctx.modelos.map(m =>
       `<option value="${esc(m.id)}" ${m.id === sel ? 'selected' : ''}>${esc(m.label)}</option>`).join('');
     return `
       <div class="form-field">
         <label class="form-label" for="${id}">${esc(etiqueta)}</label>
+        <input class="form-input" id="${id}Filtro" type="search" autocomplete="off"
+               placeholder="Filtrar modelo… (ej. NX-410)" style="margin-bottom:4px;">
         <select class="form-select" id="${id}" onchange="AsistenteImportar._setModelo(this.value, '${id}')">
           <option value="">Seleccione…</option>${opts}
         </select>
@@ -623,11 +641,13 @@ window.AsistenteImportar = (() => {
     const it = intencion();
     if (it.pregunta === 'modelo') {
       return selectModelo('aiModelo', ctx.modeloId, 'Modelo de la hoja',
-        'La condición (nuevo / refurbished) la define el modelo escogido.');
+        ctx.modeloDetectado && ctx.modeloDetectado === ctx.modeloId
+          ? `Detectado en la hoja: <b>${esc(modeloLabel(ctx.modeloId))}</b> — verifícalo antes de revisar.`
+          : 'El tipo (nuevo / refurbished) lo define el modelo escogido. Si sueltas primero la hoja, se propone el modelo que traiga escrito.');
     }
     if (it.pregunta === 'origen_destino') {
       return selectModelo('aiModelo', ctx.modeloId, 'Código CORRECTO (a dónde van)',
-          'La condición (nuevo / refurbished) la define el modelo escogido.')
+          'El tipo (nuevo / refurbished) lo define el modelo escogido.')
         + selectModelo('aiModeloOrigen', ctx.modeloOrigenId, 'Código equivocado (de dónde vienen) — opcional',
             'Déjalo vacío si no lo sabes. Hace falta cuando un serial tiene más de una ficha, '
             + 'y es lo que permite mover el conteo físico.');
@@ -661,6 +681,9 @@ window.AsistenteImportar = (() => {
 
   function paso1() {
     const it = intencion();
+    // La hoja va PRIMERO (auditoría UX 2026-09-28): las hojas de bodega traen
+    // el modelo escrito ("NX-410-R") y el asistente ya lo reconoce, así que al
+    // soltarla se propone el modelo en vez de pedirlo antes a ciegas.
     cuerpo(`
       <div style="display:flex; align-items:center; gap:8px; margin:0 0 10px;">
         <i data-lucide="${esc(it.icono)}" style="width:16px;height:16px;"></i>
@@ -668,8 +691,6 @@ window.AsistenteImportar = (() => {
         <button class="btn btn-sm btn-ghost" style="margin-left:auto; font-size:12px;"
           onclick="AsistenteImportar._volverPaso0()">Cambiar</button>
       </div>
-
-      ${encabezadoPaso1()}
 
       <div id="aiDrop" style="border:2px dashed var(--border); border-radius:var(--radius-md);
            padding:18px; text-align:center; cursor:pointer; margin-top:var(--sp-2);">
@@ -686,7 +707,9 @@ window.AsistenteImportar = (() => {
         <textarea class="form-input" id="aiPegar" rows="4" placeholder="Un serial por línea"
           style="font-family:var(--font-mono); margin-top:6px;"></textarea>
         <button class="btn btn-sm" style="margin-top:6px;" onclick="AsistenteImportar._usarPegado()">Usar lo pegado</button>
-      </details>`,
+      </details>
+
+      <div id="aiEncabezado" style="margin-top:var(--sp-3);">${encabezadoPaso1()}</div>`,
       `<button class="btn btn-ghost" onclick="AsistenteImportar._volverPaso0()">← Atrás</button>
        <button class="btn btn-primary" id="aiBtnRevisar" disabled
          onclick="AsistenteImportar._revisar()">Revisar →</button>`);
@@ -705,7 +728,55 @@ window.AsistenteImportar = (() => {
       const f = e.dataTransfer?.files?.[0];
       if (f) leerArchivo(f);
     });
+    montarFiltrosModelo();
     sincronizarBoton();
+  }
+
+  function montarFiltrosModelo() {
+    if (!window.FilteredSelect) return;   // sin el componente queda el select nativo
+    ['aiModelo', 'aiModeloOrigen'].forEach(id => {
+      const sel = document.getElementById(id);
+      const fil = document.getElementById(`${id}Filtro`);
+      if (!sel || !fil) return;
+      FilteredSelect.montar({ select: sel, filtro: fil, items: ctx.modelos,
+        id: (m) => m.id, label: (m) => m.label, placeholder: 'Seleccione…' });
+    });
+  }
+
+  // Modelo que la hoja trae escrito (título de columna o celdas "NX-410-R").
+  // Gana el que más veces aparece; con empate no se propone nada.
+  function detectarModelo() {
+    const cuenta = new Map();
+    const porTight = new Map();
+    ctx.modelos.forEach(m => {
+      [m.label, m.modelo].forEach(t => {
+        const k = EquiposPoolService._tightLabel(t || '');
+        if (k && !porTight.has(k)) porTight.set(k, m.id);
+      });
+    });
+    for (const f of ctx.filas) {
+      for (const c of (f || [])) {
+        const k = EquiposPoolService._tightLabel(String(c || ''));
+        const id = k && porTight.get(k);
+        if (id) cuenta.set(id, (cuenta.get(id) || 0) + 1);
+      }
+    }
+    const orden = [...cuenta.entries()].sort((a, b) => b[1] - a[1]);
+    if (!orden.length || (orden[1] && orden[1][1] === orden[0][1])) return '';
+    return orden[0][0];
+  }
+
+  // Tras leer la hoja: si la intención pide modelo y no hay uno escogido, se
+  // preselecciona el detectado y se repinta el encabezado con el aviso.
+  function proponerModelo() {
+    const it = intencion();
+    if (it.pregunta !== 'modelo' && it.pregunta !== 'origen_destino') return;
+    const id = detectarModelo();
+    ctx.modeloDetectado = id || '';
+    if (!id || ctx.modeloId) return;
+    ctx.modeloId = id;
+    const enc = document.getElementById('aiEncabezado');
+    if (enc) { enc.innerHTML = encabezadoPaso1(); montarFiltrosModelo(); }
   }
 
   function _volverPaso0() { paso0(); }
@@ -715,7 +786,7 @@ window.AsistenteImportar = (() => {
     else ctx.modeloId = id;
     const hint = document.getElementById(`${cual || 'aiModelo'}Hint`);
     if (hint && cual !== 'aiModeloOrigen') {
-      hint.textContent = !id ? 'La condición (nuevo / refurbished) la define el modelo escogido.'
+      hint.textContent = !id ? 'El tipo (nuevo / refurbished) lo define el modelo escogido.'
         : condicionDe(id) === 'reuso'
           ? 'Refurbished: la fila del catálogo lleva sufijo -R.'
           : 'Nuevo: la fila del catálogo no lleva sufijo -R.';
@@ -773,6 +844,7 @@ window.AsistenteImportar = (() => {
           .map(f => (f || []).map(c => String(c ?? '').trim()));
       }
       detectarColumnas();
+      proponerModelo();
       if (info) {
         info.innerHTML = ctx.colSerial < 0
           ? `<span style="color:#b45309;">No encontré una columna con seriales en <b>${esc(file.name)}</b>.</span>`
@@ -951,6 +1023,17 @@ window.AsistenteImportar = (() => {
       } catch (e) { /* sin permiso o borrado: se trata como sin evidencia */ }
     }));
 
+    // 3b. Descartados en QC (auditoría UX 2026-09-28, T12): un radio que el
+    //     taller declaró inservible no vuelve a bodega por una hoja. Solo se
+    //     bloquea en las intenciones que dan de alta o traen a bodega.
+    let descartados = new Map();
+    const E = EquiposPoolService.ESTADOS;
+    const traeABodega = ['conteo', 'colision', 'revisar'].includes(ctx.intencion)
+      || (ctx.intencion === 'ubicacion' && ctx.ubicacion === E.EN_BODEGA);
+    if (traeABodega && window.EquiposDescartadosService?.descartadosDe) {
+      descartados = await EquiposDescartadosService.descartadosDe(norms);
+    }
+
     // 4. Clasificar cada serial según la intención declarada.
     const env = entorno(contratos);
     const patron = SerialPatron.revisar(norms);
@@ -960,6 +1043,12 @@ window.AsistenteImportar = (() => {
       x.sospecha = aviso.get(x.norm) || null;
       x.contrato = null;
       it.clasificar(x, env);
+      const dsc = descartados.get(x.norm);
+      if (dsc) {
+        x.clase = 'descartado';
+        x.descartado = dsc;
+        Object.keys(x.acciones || {}).forEach(k => { x.acciones[k] = false; });
+      }
       // El contrato del detalle sale de la ficha que la intención eligió.
       const f = x.ficha;
       if (!x.contrato && f?.asignacion?.contrato_doc_id) {
@@ -997,14 +1086,30 @@ window.AsistenteImportar = (() => {
   // origen es un hecho, pero que falten en el destino NO — si bodega ya las
   // anotó bajo el código bueno, sumarlas las contaría dos veces. Por eso la
   // suma va DESmarcada y con los números a la vista.
+  // Lo que de verdad queda en el estante tras aplicar (auditoría UX
+  // 2026-09-28): altas marcadas + las que ya estaban en bodega + las que se
+  // traen. Antes se fijaba con TODAS las filas, bloqueadas y colisiones
+  // incluidas — Dif artificial desde el primer día.
+  function conteoFijable() {
+    return ctx.items.filter(x => !x.excluido && (
+      (x.clase === 'nueva' && x.acciones?.crear)
+      || x.clase === 'en_bodega'
+      || (x.clase === 'reubicar' && x.acciones?.reubicar))).length;
+  }
+
   function bloqueConteo(nActivos) {
     const it = intencion();
     if (it.conteo === 'fijar') {
+      const n = conteoFijable();
+      const fuera = nActivos - n;
       return `
         <label class="toggle-pill" style="margin-top:var(--sp-2);">
           <input type="checkbox" id="aiFijarConteo" checked>
-          Fijar el conteo físico de ${esc(modeloLabel(ctx.modeloId))} en ${nActivos}
-        </label>`;
+          Fijar el conteo físico de ${esc(modeloLabel(ctx.modeloId))} en <b id="aiConteoN">${n}</b>
+        </label>
+        <p id="aiConteoNota" style="font-size:12px; color:var(--fg-3); margin:4px 0 0;${fuera ? '' : 'display:none;'}">
+          Cuenta solo las altas, las que ya están en bodega y las que se traen —
+          <span id="aiConteoFuera">${fuera}</span> fila(s) de la hoja no suman (bloqueadas, otro modelo, descartadas o sin marcar).</p>`;
     }
     if (it.conteo !== 'mover') return '';
 
@@ -1055,9 +1160,13 @@ window.AsistenteImportar = (() => {
       .join(' · ');
 
     const filas = items.map((x, i) => {
-      const meta = CLASES[x.clase] || { txt: x.clase || '—', color: 'var(--fg-3)' };
-      const detalle = it.detalle ? it.detalle(x, env) : '';
-      const chips = it.chips ? it.chips(x, i, env) : [];
+      const esDsc = x.clase === 'descartado';
+      const meta = esDsc ? { txt: 'Descartado en QC', color: '#b91c1c' }
+        : (CLASES[x.clase] || { txt: x.clase || '—', color: 'var(--fg-3)' });
+      const detalle = esDsc
+        ? `no se usa: ${esc(EquiposDescartadosService.motivoBloqueo(x.descartado))} · si fue un error, se revoca en Almacén · Descartados`
+        : (it.detalle ? it.detalle(x, env) : '');
+      const chips = esDsc ? [] : (it.chips ? it.chips(x, i, env) : []);
 
       const sosp = x.sospecha ? `
         <div style="margin-top:4px; font-size:12px; color:#b45309;">
@@ -1086,6 +1195,8 @@ window.AsistenteImportar = (() => {
     if (ctx.diff.invalidos.length) avisos.push(`${ctx.diff.invalidos.length} celda(s) no eran seriales y se ignoraron`);
     if (ctx.diff.duplicados.length) avisos.push(`${ctx.diff.duplicados.length} repetido(s) en la hoja`);
     if (sospechosos) avisos.push(`<b style="color:#b45309;">${sospechosos} con pinta de estar mal tecleado</b>`);
+    const nDsc = cuenta('descartado');
+    if (nDsc) avisos.push(`<b style="color:#b91c1c;">${nDsc} descartado(s) en QC — no se tocan</b>`);
 
     const nActivos = items.filter(x => !x.excluido).length;
     const titulo = it.pregunta === 'origen_destino'
@@ -1133,6 +1244,17 @@ window.AsistenteImportar = (() => {
 
   function _toggle(i, accion, on) {
     ctx.items[i].acciones[accion] = on;
+    // "Fijar conteo" sigue lo marcado sin repintar la tabla (y sin perder el scroll).
+    if (intencion().conteo === 'fijar') {
+      const n = conteoFijable();
+      const activos = ctx.items.filter(x => !x.excluido).length;
+      const el = document.getElementById('aiConteoN');
+      if (el) el.textContent = n;
+      const fu = document.getElementById('aiConteoFuera');
+      if (fu) fu.textContent = activos - n;
+      const nota = document.getElementById('aiConteoNota');
+      if (nota) nota.style.display = activos - n ? '' : 'none';
+    }
     // El bloque del conteo cuenta las reclasificaciones marcadas: si cambian,
     // los números de arriba tienen que cambiar con ellas.
     if (intencion().conteo === 'mover') paso2();
@@ -1190,9 +1312,13 @@ window.AsistenteImportar = (() => {
       r.errores = r.errores || [];
 
       if (it.conteo === 'fijar' && fijarConteo) {
+        // Lo que de verdad quedó en el estante: las que ya estaban + las altas
+        // y traídas que SÍ se escribieron (auditoría UX 2026-09-28).
+        const cantidad = activos.filter(x => x.clase === 'en_bodega').length
+          + (r.creadas || 0) + (r.reubicadas || 0);
         try {
-          await InventarioService.guardarInventario([{ modeloId: ctx.modeloId, cantidad: activos.length }]);
-          conteoTxt = `conteo físico de ${modeloLabel(ctx.modeloId)} fijado en ${activos.length}`;
+          await InventarioService.guardarInventario([{ modeloId: ctx.modeloId, cantidad }]);
+          conteoTxt = `conteo físico de ${modeloLabel(ctx.modeloId)} fijado en ${cantidad}`;
         } catch (e) { r.errores.push(`conteo físico: ${e.message || e}`); }
       }
       if (it.conteo === 'mover' && (restarOrigen || sumarDestino) && r.modelo) {

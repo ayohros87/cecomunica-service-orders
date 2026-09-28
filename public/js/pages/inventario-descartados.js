@@ -32,6 +32,69 @@
     return _rol === ROLES.ADMIN || _rol === ROLES.JEFE_TALLER;
   }
 
+  // Quién puede dar de ALTA un descarte: los mismos roles que firestore.rules
+  // deja escribir en equipos_descartados (admin, jefe_taller, recepción y
+  // técnicos; los revisores QC extra no se conocen desde aquí). El rol
+  // inventario NO está en esas reglas: hasta que se le abra, el botón no le
+  // sale para no ofrecer algo que las reglas van a negar (auditoría UX 2026-09-28).
+  function _puedeRegistrar() {
+    return [ROLES.ADMIN, ROLES.JEFE_TALLER, ROLES.RECEPCION, ROLES.TECNICO, ROLES.TECNICO_OPERATIVO, ROLES.INVENTARIO].includes(_rol);
+  }
+
+  async function _registrar(prefill = '') {
+    const r = await Modal.sheet({
+      title: 'Registrar descarte', icon: 'ban', size: 'sm',
+      html: `
+        <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
+          El serial quedará marcado como <b>no usable</b>: sale la alerta al teclearlo y
+          Recibir, el importador y Asignar lo bloquean. Si fue un error, se revoca después.</p>
+        <label class="form-label" for="dscNSerial">Serial</label>
+        <input id="dscNSerial" class="form-input" autocomplete="off" style="font-family:var(--font-mono, monospace);" placeholder="Escanea o escribe el serial">
+        <label class="form-label" for="dscNMotivo" style="margin-top:10px;">Motivo</label>
+        <textarea id="dscNMotivo" class="form-input" rows="3" placeholder="Qué tiene el equipo (obligatorio)"></textarea>
+        <label class="form-label" for="dscNOrden" style="margin-top:10px;">Orden (opcional)</label>
+        <input id="dscNOrden" class="form-input" autocomplete="off" placeholder="Nº de la orden donde se detectó">
+        <div id="dscNError" style="display:none; margin-top:10px; color:#b91c1c; font-size:13px;"></div>`,
+      buttons: [
+        { action: 'cancel', label: 'Cancelar' },
+        { action: 'ok', label: 'Registrar descarte', primary: true, icon: 'ban' },
+      ],
+      onMount(root) {
+        const s = root.querySelector('#dscNSerial');
+        if (prefill) s.value = prefill;
+        setTimeout(() => s && s.focus(), 50);
+        // Lector de barras: Enter en el serial pasa al motivo.
+        s.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); root.querySelector('#dscNMotivo').focus(); } });
+      },
+      async onAction(action, root) {
+        if (action !== 'ok') return undefined;
+        const err = root.querySelector('#dscNError');
+        const serial = root.querySelector('#dscNSerial').value.trim();
+        const motivo = root.querySelector('#dscNMotivo').value.trim();
+        const orden_id = root.querySelector('#dscNOrden').value.trim();
+        const falla = (m) => { err.textContent = m; err.style.display = ''; return false; };
+        const norm = EquiposDescartadosService.normalizar(serial);
+        if (!norm || !EquiposDescartadosService.esSerialValido(norm)) return falla('Escribe un serial válido (3-30 letras o números, con al menos un dígito).');
+        if (!motivo) return falla('El motivo es obligatorio: es lo que verá quien teclee el serial.');
+        const btn = root.querySelector('[data-sheet-action="ok"]');
+        if (window.withBusy?.esta?.(btn)) return false;   // doble clic: sigue el primero
+        try {
+          await window.withBusy(btn, () => EquiposDescartadosService.registrarManual({ serial, motivo, orden_id }), { label: 'Registrando…', silencioso: true });
+        } catch (e) {
+          console.error('[Descartados] registrar', e);
+          return falla(e?.code === 'permission-denied'
+            ? 'Tu rol no puede registrar descartes. Pídeselo al jefe de taller o a recepción.'
+            : 'No se pudo registrar: ' + (e?.message || e));
+        }
+        return norm;
+      },
+    });
+    if (!r || r === 'cancel') return;
+    if (window.SerialField) SerialField.invalidar(r);
+    Toast.show(`Descarte de ${r} registrado.`, 'ok');
+    await cargar();
+  }
+
   function _filtrar() {
     const q = (document.getElementById('dscBuscar').value || '').trim().toLowerCase();
     return _filas.filter(r => {
@@ -136,6 +199,7 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('dscBuscar').addEventListener('input', render);
+    document.getElementById('dscRegistrar').addEventListener('click', () => _registrar());
     document.getElementById('dscVerRevocados').addEventListener('change', (e) => {
       _verRevocados = e.target.checked;
       render();
@@ -156,7 +220,11 @@
         _rol = snap.exists ? (snap.data().rol || '') : '';
         window.userRole = _rol;   // la ficha del equipo lee este
       } catch (e) { console.warn('[Descartados] no se pudo leer el rol:', e); }
+      document.getElementById('dscRegistrar').style.display = _puedeRegistrar() ? '' : 'none';
+      // ?registrar=SERIAL (o =1): llega desde el aviso del cierre de ENTRADA.
       await cargar();
+      const pre = new URLSearchParams(location.search).get('registrar');
+      if (_puedeRegistrar() && pre != null) _registrar(pre === '1' ? '' : pre);
     });
   });
 

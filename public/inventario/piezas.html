@@ -56,6 +56,11 @@
 
     /* Truncar texto largo en celdas */
     .truncate { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* KPI como botón (filtran al clic) y el activo resaltado */
+    button.kpi-card { font: inherit; color: inherit; width: 100%; }
+    button.kpi-card:hover { border-color: var(--accent); }
+    button.kpi-card.is-on { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
   </style>
 
   <!-- Firebase -->
@@ -78,7 +83,7 @@
         label: '<i data-lucide="plus"></i> Nueva pieza' }
     ],
     menu: [
-      { href: './index.html', label: '<i data-lucide="package"></i> Radios' },
+      { href: '/almacen/index.html?tab=existencias', label: '<i data-lucide="package"></i> Equipos' },
       { id: 'btnBatch', onclick: 'abrirBatchModal()',
         label: '<i data-lucide="download"></i> Importar lote' },
       { divider: true },
@@ -104,24 +109,25 @@
     cuidado con pisarse los precios.
   </p>
 
+  <!-- KPI clicables (auditoría UX 2026-09-28): cada tarjeta aplica su filtro. -->
   <div class="kpi-grid" style="margin:var(--sp-4) 0;">
-    <div class="kpi-card">
+    <button type="button" class="kpi-card" style="text-align:left; cursor:pointer;" onclick="aplicarFiltroKpi('')" title="Ver todas">
       <span class="kpi-card-label">Total piezas</span>
       <span class="kpi-card-value" id="kpiTotal">—</span>
-    </div>
-    <div class="kpi-card">
+    </button>
+    <button type="button" class="kpi-card" style="text-align:left; cursor:pointer;" onclick="aplicarFiltroKpi('activas')" title="Ver solo las activas">
       <span class="kpi-card-label">Activas</span>
       <span class="kpi-card-value kpi-ok" id="kpiActivas">—</span>
-    </div>
-    <div class="kpi-card">
+    </button>
+    <button type="button" class="kpi-card" style="text-align:left; cursor:pointer;" onclick="aplicarFiltroKpi('sin_stock')" title="Ver las que no tienen stock">
       <span class="kpi-card-label">Sin stock</span>
       <span class="kpi-card-value kpi-crit" id="kpiSinStock">—</span>
-    </div>
-    <div class="kpi-card">
+    </button>
+    <button type="button" class="kpi-card" style="text-align:left; cursor:pointer;" onclick="aplicarFiltroKpi('stock_bajo')" title="Ver las que están bajo el mínimo">
       <span class="kpi-card-label">Stock bajo</span>
       <span class="kpi-card-value kpi-warn" id="kpiBajas">—</span>
-      <span class="kpi-card-sub">bajo el mínimo</span>
-    </div>
+      <span class="kpi-card-sub">bajo el mínimo (con algo de stock)</span>
+    </button>
   </div>
 
   <div class="ds-card">
@@ -131,7 +137,11 @@
         <input id="filtroNombre" type="search" placeholder="Buscar nombre, marca, SKU o equipo…" aria-label="Buscar piezas">
       </div>
       <div style="flex:1;"></div>
+      <label class="toggle-pill"><input type="checkbox" id="chkActivas" onchange="onTogglePiezas(this)"> Solo activas</label>
       <label class="toggle-pill"><input type="checkbox" id="chkConStock" onchange="onTogglePiezas(this)"> Solo con stock</label>
+      <!-- "Sin stock" aparte de "Stock bajo" (auditoría UX 2026-09-28): antes
+           "Stock bajo" mezclaba las agotadas con las que están bajo el mínimo. -->
+      <label class="toggle-pill"><input type="checkbox" id="chkSinStock" onchange="onTogglePiezas(this)"> Sin stock</label>
       <label class="toggle-pill"><input type="checkbox" id="chkStockBajo" onchange="onTogglePiezas(this)"> Stock bajo</label>
     </div>
     <div class="app-table-wrap app-table-wrap--sticky" data-density="roomy" style="border:none; box-shadow:none; border-radius:0; --sticky-table-offset:200px;">

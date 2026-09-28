@@ -38,7 +38,8 @@ window.AsistenteConteo = (() => {
             <input type="number" min="0" inputmode="numeric" data-conteo-modelo="${esc(m.id)}"
               value="${ctx.cantidades[m.id] ?? ''}" placeholder="—"
               style="width:82px; text-align:right;" class="cc-input"
-              oninput="AsistenteConteo._setCantidad('${esc(m.id)}', this.value)">
+              oninput="AsistenteConteo._setCantidad('${esc(m.id)}', this.value)"
+              onkeydown="AsistenteConteo._teclaCantidad(event, this)">
           </td>
         </tr>`).join('')
       || '<tr><td colspan="3" style="color:var(--fg-3);">Sin modelos con ese filtro.</td></tr>';
@@ -48,11 +49,12 @@ window.AsistenteConteo = (() => {
     render(`
       <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 8px;">
         Cuenta lo físico en bodega y teclea la cantidad por modelo. Deja vacío lo que no
-        contaste (no se toca su conteo anterior). El pool no se muestra a propósito:
-        el conteo es la verificación independiente.
+        contaste (no se toca su conteo anterior). Lo registrado no se muestra a propósito:
+        el conteo es la verificación independiente. <b>Enter</b> pasa al siguiente modelo.
       </p>
-      <input type="search" class="cc-input" placeholder="Filtrar modelo…" style="width:100%; margin-bottom:8px;"
-        value="${esc(filtro)}" oninput="AsistenteConteo._filtrar(this.value)">
+      <input type="search" class="cc-input" placeholder="Filtrar modelo… (Enter va a la cantidad)" style="width:100%; margin-bottom:8px;"
+        value="${esc(filtro)}" oninput="AsistenteConteo._filtrar(this.value)"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();AsistenteConteo._focoCantidad(0);}">
       <div style="max-height:46vh; overflow-y:auto;">
         <table class="app-table compact">
           <thead><tr><th>Marca</th><th>Modelo</th><th style="text-align:right;">Cantidad contada</th></tr></thead>
@@ -60,6 +62,24 @@ window.AsistenteConteo = (() => {
         </table>
       </div>`,
       `<button class="btn btn-primary" onclick="AsistenteConteo._revisar()">Revisar diferencias →</button>`);
+  }
+
+  // Enter en una cantidad → la del siguiente modelo (auditoría UX 2026-09-28,
+  // T12): contar con teclado numérico sin tocar el ratón. En la última, Enter
+  // lleva al botón "Revisar diferencias".
+  function _teclaCantidad(e, inp) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const todos = [...document.querySelectorAll('#conteoTbodyCaptura input[data-conteo-modelo]')];
+    const i = todos.indexOf(inp);
+    if (i >= 0 && i < todos.length - 1) _focoCantidad(i + 1);
+    else document.querySelector('#asistenteConteoOverlay .modal-footer .btn-primary')?.focus();
+  }
+
+  function _focoCantidad(i) {
+    const todos = document.querySelectorAll('#conteoTbodyCaptura input[data-conteo-modelo]');
+    const el = todos[i];
+    if (el) { el.focus(); el.select?.(); el.scrollIntoView({ block: 'nearest' }); }
   }
 
   function _setCantidad(modeloId, v) {
@@ -81,7 +101,7 @@ window.AsistenteConteo = (() => {
   async function _revisar() {
     const entradas = Object.entries(ctx.cantidades);
     if (!entradas.length) { if (window.Toast) Toast.show('No tecleaste ninguna cantidad.', 'warn'); return; }
-    render('<p style="color:var(--fg-3); font-size:13px;">Comparando contra el pool…</p>');
+    render('<p style="color:var(--fg-3); font-size:13px;">Comparando contra lo registrado…</p>');
     let poolMap;
     try {
       poolMap = await EquiposPoolService.contarBodegaPorModelo();
@@ -96,13 +116,13 @@ window.AsistenteConteo = (() => {
     render(`
       <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 8px;">
         ${filas.length} modelos contados · <b>${nDif === 0 ? 'todo cuadra' : `${nDif} con diferencia`}</b>.
-        Dif = pool − conteo: positiva, el pool tiene unidades que no viste (¿doble registro?);
-        negativa, contaste unidades que faltan en el pool (captúralas con "Recibir · toma física").
+        Dif = registrado − conteo: positiva, el registro tiene unidades que no viste (¿doble registro?);
+        negativa, contaste unidades que faltan en el registro (captúralas con "Recibir · toma física").
         Al guardar, las diferencias quedan como trabajo en la bandeja Hoy.
       </p>
       <div style="max-height:46vh; overflow-y:auto;">
         <table class="app-table compact">
-          <thead><tr><th>Modelo</th><th style="text-align:right;">Contado</th><th style="text-align:right;">Pool</th><th style="text-align:right;">Dif.</th></tr></thead>
+          <thead><tr><th>Modelo</th><th style="text-align:right;">Contado</th><th style="text-align:right;">Registrado</th><th style="text-align:right;">Dif.</th></tr></thead>
           <tbody>${filas.map(f => `
             <tr>
               <td>${esc(f.label)}</td>
@@ -159,5 +179,5 @@ window.AsistenteConteo = (() => {
 
   function cerrar() { if (hoja) hoja.api.close(null); }
 
-  return { abrir, _setCantidad, _filtrar, _revisar, _volverPaso1, _guardar };
+  return { abrir, _setCantidad, _teclaCantidad, _focoCantidad, _filtrar, _revisar, _volverPaso1, _guardar };
 })();

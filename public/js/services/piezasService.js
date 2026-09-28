@@ -55,19 +55,48 @@ const PiezasService = {
   },
 
   // Atomically apply a signed delta (+/-) to stock; result clamped to >= 0.
-  async ajustarDelta(id, delta) {
+  // Auditoría UX 2026-09-28: el recorte a 0 ya no es silencioso — devuelve
+  // { antes, despues, pedido, recortado, faltante } y, salvo `avisar:false`,
+  // muestra un Toast cuando el stock no alcanzaba (el consumo de una orden
+  // descontaba de más y nadie se enteraba). `motivo` (opcional) deja el
+  // último ajuste en el doc: `ultimo_ajuste {delta, motivo, por, fecha}` —
+  // la colección no tiene kardex propio, esto es lo mínimo para saber por qué.
+  async ajustarDelta(id, delta, { motivo = '', avisar = true } = {}) {
     const db = firebase.firestore();
     const ref = db.collection('inventario_piezas').doc(id);
-    return db.runTransaction(async t => {
+    const res = await db.runTransaction(async t => {
       const doc = await t.get(ref);
-      if (!doc.exists) return;
-      const actual = Number(doc.data().cantidad || 0);
+      if (!doc.exists) return null;
+      const d = doc.data();
+      const actual = Number(d.cantidad || 0);
       const nueva = Math.max(actual + delta, 0);
-      t.update(ref, {
+      const campos = {
         cantidad: nueva,
         actualizado_en: firebase.firestore.FieldValue.serverTimestamp(),
-      });
+      };
+      if (motivo) {
+        const u = firebase.auth().currentUser;
+        campos.ultimo_ajuste = {
+          delta, motivo: String(motivo).trim(),
+          por: u?.email || u?.uid || '',
+          fecha: firebase.firestore.FieldValue.serverTimestamp(),
+          antes: actual, despues: nueva,
+        };
+      }
+      t.update(ref, campos);
+      return {
+        antes: actual, despues: nueva, pedido: delta,
+        recortado: actual + delta < 0, faltante: actual + delta < 0 ? -(actual + delta) : 0,
+        etiqueta: d.nombre || [d.marca, d.sku].filter(Boolean).join(' ') || id,
+      };
     });
+    if (res?.recortado) {
+      console.warn('[Piezas] ajuste recortado a 0:', id, res);
+      if (avisar && window.Toast) {
+        Toast.show(`Stock de ${res.etiqueta}: había ${res.antes} y se pidió descontar ${-delta}. Quedó en 0 — faltan ${res.faltante}; revisa el conteo.`, 'warn');
+      }
+    }
+    return res;
   },
 
   // Batch-insert up to 450 piezas at a time (Firestore limit is 500 per batch).

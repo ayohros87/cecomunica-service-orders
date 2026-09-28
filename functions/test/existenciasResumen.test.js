@@ -191,7 +191,8 @@ test("E5 · una fila que solo existe por el conteo físico no dispara consulta",
   await P.toggleFila("join_mFANTASMA");
   await new Promise(r => setTimeout(r, 0));
   assert.equal(consultas.filter(c => c.col === "equipos_pool").length, 0);
-  assert.ok(els.get("exTabla").innerHTML.includes("Sin unidades en el pool"));
+  // Texto sin "pool" (auditoría UX 2026-09-28, T2: bodega no ve esa palabra).
+  assert.ok(els.get("exTabla").innerHTML.includes("Sin unidades registradas"));
 });
 
 test("E6 · sin resumen la pantalla no se queda muda: cae al pool y avisa", async () => {

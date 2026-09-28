@@ -115,6 +115,19 @@ window.AsignadorSeriales = (() => {
       body.addEventListener('paste', (e) => {
         if (e.target.classList.contains('serial-input')) onPasteSerial(e);
       });
+      // Lector de barras (auditoría UX 2026-09-28, T12): el lector manda el
+      // serial + Enter. Sin esto Enter no hacía nada y el segundo escaneo se
+      // pegaba al primero en la misma casilla. Enter salta a la siguiente
+      // casilla vacía; si ya no quedan, suelta el foco para que un escaneo de
+      // más no ensucie la última.
+      body.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || !e.target.classList?.contains('serial-input')) return;
+        e.preventDefault();
+        refresh();
+        const sig = siguienteVacia(e.target);
+        if (sig) { sig.focus(); sig.select?.(); }
+        else { e.target.blur(); toast('Todas las casillas tienen serial.', 'ok'); }
+      });
       // SerialField: chip persistente con el estado del serial en el pool.
       body.addEventListener('focusout', (e) => {
         const inp = e.target;
@@ -127,6 +140,16 @@ window.AsignadorSeriales = (() => {
                            modelo_label: inp.getAttribute('data-modelo') || '' }),
         });
       });
+    }
+
+    // Siguiente casilla de serial libre (habilitada, sin valor, no omitida)
+    // DESPUÉS de `desde`, dando la vuelta al principio si hace falta.
+    function siguienteVacia(desde) {
+      const libres = [...body.querySelectorAll('.serial-input')].filter(i =>
+        !i.disabled && !i.closest('.serial-row')?.classList.contains('bloqueado'));
+      const idx = libres.indexOf(desde);
+      const orden = idx >= 0 ? [...libres.slice(idx + 1), ...libres.slice(0, idx)] : libres;
+      return orden.find(i => !i.value.trim()) || null;
     }
 
     function onOmitToggle(chk) {
@@ -369,14 +392,14 @@ window.AsignadorSeriales = (() => {
         enBodega = await EquiposPoolService.listar({ estado: EquiposPoolService.ESTADOS.EN_BODEGA });
       } catch (e) {
         console.error('Error consultando el pool:', e);
-        toast('No se pudo consultar el pool de equipos.', 'bad');
+        toast('No se pudo consultar el inventario de equipos.', 'bad');
         return;
       }
       if (!enBodega.length) { toast('No hay equipos disponibles en bodega. Recibe equipos primero.', 'warn'); return; }
       abrirPickerPool(enBodega);
     }
 
-    function abrirPickerPool(enBodega) {
+    async function abrirPickerPool(enBodega) {
       const grupos = [...body.querySelectorAll('.serial-group')];
       if (!grupos.length) { toast('No hay modelos que serializar.', 'warn'); return; }
       const pres = presentes();
@@ -404,6 +427,19 @@ window.AsignadorSeriales = (() => {
             || String(a.serial || '').localeCompare(String(b.serial || '')));
         secciones.push({ ...s, unidades });
       }
+      // Descartados en QC fuera del estante (auditoría UX 2026-09-28, T12): la
+      // selección automática FIFO podía ofrecer un radio que el taller declaró
+      // inservible. Solo se consultan los modelos que se van a llenar.
+      const descartados = await descartadosDe(secciones.flatMap(s => s.unidades.map(u => u.serial || u.serial_norm)));
+      let nDesc = 0;
+      if (descartados.size) {
+        secciones.forEach(s => {
+          const antes = s.unidades.length;
+          s.unidades = s.unidades.filter(u => !descartados.has(norm(u.serial || u.serial_norm)));
+          nDesc += antes - s.unidades.length;
+        });
+      }
+      if (nDesc) toast(`${nDesc} unidad(es) descartada(s) en QC no se ofrecen (ver Almacén · Descartados).`, 'warn');
       if (!secciones.length) { toast('No hay cupos vacíos que llenar: todos los seriales están colocados u omitidos.', 'warn'); return; }
       if (!secciones.some(s => s.unidades.length)) {
         toast('En bodega no hay unidades de estos modelos. Recibe equipos primero.', 'warn');
@@ -414,7 +450,7 @@ window.AsignadorSeriales = (() => {
       // automática (FIFO por ingreso a bodega). Devuelve la selección; el
       // llenado del formulario sigue siendo jalarItems.
       EntityPicker.abrir({
-        titulo: opts.tituloPicker || 'Tomar del pool (bodega)', icono: 'scan-barcode', size: 'lg',
+        titulo: opts.tituloPicker || 'Tomar de bodega', icono: 'scan-barcode', size: 'lg',
         descripcion: 'Marca las unidades que vas a asignar, o usa <b>Selección automática</b> (toma las más antiguas en bodega por modelo).',
         placeholderBuscar: 'Filtrar por serial…', normalizar: (s) => norm(s),
         grupos: secciones.map((s, si) => ({
@@ -429,7 +465,7 @@ window.AsignadorSeriales = (() => {
           const s = secciones[Number(x.grupo)] || {};
           return { serial: x.id, modelo: s.modelo || '', modeloId: s.modeloId || '' };
         });
-        jalarItems(items, opts.origenPicker || 'el pool de bodega');
+        jalarItems(items, opts.origenPicker || 'bodega');
       });
     }
 
@@ -466,7 +502,7 @@ window.AsignadorSeriales = (() => {
         try {
           const docs = await EquiposPoolService.findBySerial(s.serial);
           if (!docs.length) {
-            if (!st.esLegacy) avisos.push({ serial: s.serial, chip: 'sin registro en el pool',
+            if (!st.esLegacy) avisos.push({ serial: s.serial, chip: 'sin registro en el inventario',
               chipCls: 'eqpool-chip-vacio',
               detalle: 'Verifica que esté bien escrito, o recíbelo antes en Almacén · Recibir equipos. Se dará de alta al guardar.' });
             continue;
@@ -474,9 +510,9 @@ window.AsignadorSeriales = (() => {
           const mismo = docs.find(d => EquiposPoolService._mismoModelo(d, s.modelo_id, s.modelo));
           if (!mismo) {
             const otros = docs.map(d => d.modelo_label || 'sin modelo').join(', ');
-            avisos.push({ serial: s.serial, chip: 'modelo distinto en el pool',
+            avisos.push({ serial: s.serial, chip: 'modelo distinto en el inventario',
               chipCls: 'eqpool-chip-alerta',
-              detalle: `El pool lo registra como ${otros} — verifica que sea el ${s.modelo}. Si es el mismo radio, el conflicto se resuelve en Almacén · Hoy (Conflictos).` });
+              detalle: `El inventario lo registra como ${otros} — verifica que sea el ${s.modelo}. Si es el mismo radio, el conflicto se resuelve en Almacén · Hoy (Conflictos).` });
             continue;
           }
           if (mismo.estado !== EquiposPoolService.ESTADOS.EN_BODEGA
@@ -506,7 +542,7 @@ window.AsignadorSeriales = (() => {
           title: 'Revisión antes de guardar', icon: 'search-check', size: 'lg',
           html: `
             <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
-              ${totalSeriales} serial(es) · <strong>${avisos.length} aviso(s)</strong> del pool de equipos. Guardar no se bloquea — revisa y decide.</p>
+              ${totalSeriales} serial(es) · <strong>${avisos.length} aviso(s)</strong> del inventario de equipos. Guardar no se bloquea — revisa y decide.</p>
             <div style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
               <table style="border-collapse:collapse; width:100%;">${filas}</table>
             </div>`,
@@ -536,16 +572,63 @@ window.AsignadorSeriales = (() => {
     // Pasan sin revisar: los ya guardados en esta misma fuente (setGuardados)
     // y las excepciones declaradas por la página (unidades que continúan del
     // contrato original, mismo cliente en renovación…).
-    async function validarDuro(seriales, { excepciones = null, esperado = null } = {}) {
+    // Descartados vigentes entre `seriales` (Map norm → doc). Fail-open: sin el
+    // servicio o con la red caída devuelve vacío, igual que SerialField.
+    async function descartadosDe(seriales) {
+      if (typeof EquiposDescartadosService === 'undefined' || !EquiposDescartadosService.descartadosDe) return new Map();
+      try {
+        const m = await EquiposDescartadosService.descartadosDe(seriales);
+        // Re-clave con la norma de este componente (puede ser Serial.clave).
+        const out = new Map();
+        m.forEach((d, k) => out.set(norm(k), d));
+        return out;
+      } catch (e) { return new Map(); }
+    }
+
+    // El pool se consulta por lotes `in` de 10 (auditoría UX 2026-09-28,
+    // T12): antes era una consulta por serial, lenta con 20+.
+    async function poolPorSerial(seriales, onProgreso) {
+      if (EquiposPoolService.findBySeriales) {
+        return EquiposPoolService.findBySeriales((seriales || []).map(s => s.serial), onProgreso);
+      }
+      // Servicio viejo en caché: el camino uno a uno de antes.
+      const porNorm = new Map();
+      for (const s of (seriales || [])) {
+        const k = EquiposPoolService.normalizarSerial(s.serial);
+        if (!k || porNorm.has(k)) continue;
+        try { porNorm.set(k, await EquiposPoolService.findBySerial(s.serial)); } catch (_) { porNorm.set(k, []); }
+      }
+      return porNorm;
+    }
+
+
+    async function validarDuro(seriales, { excepciones = null, esperado = null, onProgreso = null } = {}) {
       const errores = [];
       const unidades = new Map();
-      if (typeof EquiposPoolService === 'undefined') return { errores: [{ serial: '', tipo: 'inexistente', motivo: 'El pool de equipos no está disponible.' }], unidades };
+      if (typeof EquiposPoolService === 'undefined') return { errores: [{ serial: '', tipo: 'inexistente', motivo: 'El inventario de equipos no está disponible.' }], unidades };
       const exc = excepciones instanceof Set ? excepciones : new Set(excepciones || []);
+      const prog = onProgreso || opts.onValidando || null;
+      let porNorm, descartados;
+      try {
+        porNorm = await poolPorSerial(seriales, prog);
+        descartados = await descartadosDe((seriales || []).filter(s => !st.guardados.has(norm(s.serial))).map(s => s.serial));
+      } finally {
+        // null = terminó la validación (la página restaura su contador).
+        if (prog) { try { prog(null); } catch (_) {} }
+      }
       for (const s of (seriales || [])) {
         const k = norm(s.serial);
         if (!k) continue;
-        let docs = [];
-        try { docs = await EquiposPoolService.findBySerial(s.serial); } catch (e) { docs = []; }
+        const docs = porNorm.get(EquiposPoolService.normalizarSerial(s.serial)) || [];
+        // Descartado en QC: bloqueo sin "asignar de todos modos". Los ya
+        // guardados no se revisan (ya están en el contrato; su corrección va
+        // por la vía de corregir seriales).
+        const dsc = !st.guardados.has(k) && descartados.get(k);
+        if (dsc) {
+          errores.push({ serial: s.serial, tipo: 'descartado',
+            motivo: `No se puede usar: ${EquiposDescartadosService.motivoBloqueo(dsc)}. Si fue un error, se revoca en Almacén · Descartados.` });
+          continue;
+        }
         const mismoModelo = docs.filter(d => EquiposPoolService._mismoModelo(d, s.modelo_id || null, s.modelo || ''));
         const candidato = mismoModelo.find(d => d.estado === EquiposPoolService.ESTADOS.EN_BODEGA)
           || mismoModelo.find(d => st.contratoDocId && d.asignacion?.contrato_doc_id === st.contratoDocId)
@@ -587,6 +670,8 @@ window.AsignadorSeriales = (() => {
         const soloModelo = errores.length && errores.every(e => e.tipo === 'modelo');
         const chip = (t) => t === 'modelo'
           ? '<span class="eqpool-chip eqpool-chip-alerta">modelo distinto</span>'
+          : t === 'descartado'
+            ? '<span class="eqpool-chip eqpool-chip-alerta">descartado en QC</span>'
           : t === 'inexistente'
             ? '<span class="eqpool-chip eqpool-chip-vacio">no existe</span>'
             : '<span class="eqpool-chip eqpool-chip-aviso">no está en bodega</span>';
@@ -602,7 +687,7 @@ window.AsignadorSeriales = (() => {
           title: `${errores.length} serial(es) que no se pueden asignar`, icon: 'shield-alert', size: 'lg',
           html: `
             <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
-              Un serial se asigna solo si existe en el inventario, está en bodega y es del modelo pedido.</p>
+              Un serial se asigna solo si existe en el inventario, está en bodega, es del modelo pedido y no fue descartado en QC.</p>
             <div style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
               <table style="border-collapse:collapse; width:100%;">${filas}</table>
             </div>

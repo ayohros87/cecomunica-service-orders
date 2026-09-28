@@ -119,14 +119,37 @@ window.AsistenteRecibir = {
   async guardar() {
     const modeloId = this._el.querySelector('#asrModelo').value;
     if (!modeloId) { this._toast('Selecciona el modelo de los equipos.', 'bad'); return; }
-    const seriales = this._el.querySelector('#asrSeriales').value
+    let seriales = this._el.querySelector('#asrSeriales').value
       .split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     if (!seriales.length) { this._toast('Pega o escanea al menos un serial.', 'bad'); return; }
 
     const btn = this._el.querySelector('#asrBtnGuardar');
     btn.disabled = true;
     this._busy = true;
+    let descartadosFuera = [];
     try {
+      // Descartados en QC (auditoría UX 2026-09-28, T12): un radio que el
+      // taller declaró inservible no vuelve a bodega por un conteo. Se sacan
+      // de la tanda con su motivo; el resto se recibe.
+      if (window.EquiposDescartadosService?.descartadosDe) {
+        const dsc = await EquiposDescartadosService.descartadosDe(seriales);
+        if (dsc.size) {
+          const esDsc = (s) => dsc.has(EquiposDescartadosService.normalizar(s));
+          descartadosFuera = seriales.filter(esDsc);
+          const detalle = [...dsc.values()].slice(0, 8)
+            .map(d => `<b>${this._esc(d.serial || d.serial_norm)}</b> — ${this._esc(EquiposDescartadosService.motivoBloqueo(d))}`).join('<br>');
+          const resto = seriales.filter(s => !esDsc(s));
+          if (!resto.length) {
+            await Modal.alert({ title: 'Seriales descartados en QC', icon: 'ban',
+              message: `No se recibe ninguno: ${dsc.size === 1 ? 'el serial fue descartado' : 'todos fueron descartados'} en control de calidad.<br><br>${detalle}<br><br>Si fue un error, se revoca en Almacén · Descartados.` });
+            return;
+          }
+          const seguir = await Modal.confirm({ title: 'Seriales descartados en QC', confirmLabel: `Recibir los otros ${resto.length}`,
+            message: `${dsc.size} serial(es) fueron descartados en control de calidad y <b>no se reciben</b>:<br><br>${detalle}${dsc.size > 8 ? '<br>…' : ''}<br><br>Si fue un error, se revoca en Almacén · Descartados.` });
+          if (!seguir) return;
+          seriales = resto;
+        }
+      }
       // Detector de mal transcritos (auditoría): SerialPatron corría SOLO en
       // el importador — y justo este flujo de tecleo suelto es donde nacieron
       // seriales como 16O13D0998 (letra O por cero). Aviso no bloqueante.
@@ -227,7 +250,12 @@ window.AsistenteRecibir = {
       // misma mentira que este cambio vino a quitar.
       if (noMovidos) msg += ` ${noMovidos} se dejaron donde estaban.`;
       if (res.colisiones) msg += ` ${res.colisiones} con serial compartido entre modelos.`;
-      if (res.invalidos)  msg += ` ${res.invalidos} seriales inválidos.`;
+      // Repetidos e inválidos por separado (auditoría UX 2026-09-28, T12): un
+      // escaneo doble no es un serial malo, y cada uno se nombra.
+      const lista = (xs) => `${xs.slice(0, 5).join(', ')}${xs.length > 5 ? '…' : ''}`;
+      if (res.repetidos)  msg += ` ${res.repetidos} repetido(s) en la tanda, recibidos una sola vez (${lista(res.repetidos_lista || [])}).`;
+      if (res.invalidos)  msg += ` ${res.invalidos} no son seriales válidos (${lista(res.invalidos_lista || [])}).`;
+      if (descartadosFuera.length) msg += ` ${descartadosFuera.length} descartado(s) en QC no se recibieron.`;
       // Baja/vendido/en revisión no se mueven desde aquí: se nombran para que
       // nadie crea que el conteo los cubrió.
       const bloq = res.bloqueados || [];
@@ -236,7 +264,7 @@ window.AsistenteRecibir = {
           EquiposPoolService.ESTADO_LABELS[b.estado] || b.estado))].join(', ')}):`
           + ` ${bloq.slice(0, 5).map(b => b.serial).join(', ')}${bloq.length > 5 ? '…' : ''}.`;
       }
-      this._toast(msg, (res.colisiones || bloq.length) ? 'warn' : 'ok');
+      this._toast(msg, (res.colisiones || bloq.length || res.invalidos || descartadosFuera.length) ? 'warn' : 'ok');
       this._onDone(res);
     } catch (e) {
       console.error('Error al recibir equipos:', e);
@@ -265,7 +293,7 @@ window.AsistenteRecibir = {
     ).join('<br>');
     const resto = pendientes.length > MAX ? `<br>… y ${pendientes.length - MAX} más` : '';
     return `${pendientes.length === 1 ? 'Este serial ya existe' : `Estos ${pendientes.length} seriales ya existen`}`
-      + ` en el pool con un modelo distinto`
+      + ` en el inventario con un modelo distinto`
       + (modeloLabel ? ` a <b>${esc(modeloLabel)}</b>` : ' al que estás recibiendo') + ':'
       + `<br><br>${filas}${resto}<br><br>`
       + `Continúa <b>solo si de verdad son equipos distintos</b> que comparten numeración`
@@ -329,7 +357,7 @@ window.AsistenteRecibir = {
           </div>
           <div style="display:flex; gap:var(--sp-3);">
             <div class="form-field" style="flex:1;">
-              <label class="form-label" for="asrCondicion">Condición</label>
+              <label class="form-label" for="asrCondicion">Tipo</label>
               <select class="form-select" id="asrCondicion" disabled
                       title="La determina el modelo: las filas con sufijo -R son refurbished.">
                 <option value="nuevo">Nuevo</option>
@@ -362,7 +390,34 @@ window.AsistenteRecibir = {
     }).then(() => { if (this._el === overlay) { this._el = null; this._api = null; } });
     this._modeloFS = null;
 
-    overlay.querySelector('#asrModelo').addEventListener('change', () => this._sincronizarCondicion());
+    // Lector de barras (auditoría UX 2026-09-28, T12): elegido el modelo (a
+    // mano o porque el filtro dejó uno solo), el foco salta al cuadro de
+    // seriales; Enter en el filtro hace lo mismo o toma la coincidencia exacta.
+    overlay.querySelector('#asrModelo').addEventListener('change', (e) => {
+      this._sincronizarCondicion();
+      if (e.target.value) overlay.querySelector('#asrSeriales').focus();
+    });
+    overlay.querySelector('#asrModeloFiltro').addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const sel = overlay.querySelector('#asrModelo');
+      if (!sel.value) {
+        const t = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const q = t(e.target.value);
+        const opts = [...sel.options].filter(o => o.value);
+        // "NX-410" filtra NX-410 y NX-410-R: Enter toma la fila cuyo modelo
+        // coincide exacto (con o sin la marca delante); si no hay, al select.
+        const exacta = q && opts.find(o => {
+          const m = this._modelos.find(x => x.id === o.value);
+          const soloModelo = m ? t(m.label).slice(t(m.label.split(' ')[0]).length) : '';
+          return t(o.textContent) === q || soloModelo === q;
+        });
+        if (exacta) { sel.value = exacta.value; sel.dispatchEvent(new Event('change')); return; }
+        if (opts.length) sel.focus();
+        return;
+      }
+      overlay.querySelector('#asrSeriales').focus();
+    });
     overlay.querySelector('#asrSeriales').addEventListener('input', () => this._actualizarContador());
     overlay.querySelector('#asrBtnGuardar').addEventListener('click', () => this.guardar());
     this._sincronizarCondicion();
@@ -380,11 +435,26 @@ window.AsistenteRecibir = {
     if (!el || !txt) return;
     const lineas = txt.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     if (!lineas.length) { el.style.display = 'none'; return; }
-    const norm = lineas.map(s => s.toUpperCase());
-    const repetidos = norm.length - new Set(norm).size;
+    // Se NOMBRA cuál se repite (auditoría UX 2026-09-28, T12): "2 repetidos"
+    // a secas obligaba a buscar a ojo en una columna de 40 seriales.
+    const { repetidos, lista } = AsistenteRecibir._repetidos(lineas);
     el.style.display = '';
     el.innerHTML = `<b>${lineas.length}</b> serial(es) en la tanda` +
-      (repetidos ? ` · <b style="color:#B45309;">${repetidos} repetido(s)</b> — se reciben una sola vez` : '');
+      (repetidos ? ` · <b style="color:#B45309;">${repetidos} repetido(s): ${this._esc(lista.slice(0, 6).join(', '))}${lista.length > 6 ? '…' : ''}</b> — se reciben una sola vez` : '');
+  },
+
+  // Repetidos de una lista de seriales (por serial normalizado). Público: el
+  // asistente de venta arma el mismo contador.
+  _repetidos(lineas) {
+    const vistos = new Set(), rep = [];
+    const norm = (s) => (window.EquiposPoolService ? EquiposPoolService.normalizarSerial(s) : String(s).toUpperCase());
+    let n = 0;
+    for (const s of lineas) {
+      const k = norm(s);
+      if (!k) continue;
+      if (vistos.has(k)) { n++; if (!rep.includes(k)) rep.push(k); } else vistos.add(k);
+    }
+    return { repetidos: n, lista: rep };
   },
 
   // Cierra el overlay — salvo mientras la recepción corre (los confirm en

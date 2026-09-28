@@ -5,16 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Página retirada - Cecomunica</title>
   <!-- RETIRADA (E0, propuesta Almacén/Finanzas 2026-08): esta vista duplicaba
-       por tercera vez el join conteo↔pool y no tenía gate de rol. El reporte
-       para correo ahora se genera con "Copiar reporte (correo)" en el menú de
-       Inventario de Radios (mismo cálculo del tablero — StockAgg). -->
-  <meta http-equiv="refresh" content="0;url=./index.html">
-  <script>location.replace('./index.html');</script>
+       por tercera vez el join conteo↔registro y no tenía gate de rol. El
+       reporte para correo se copia desde Almacén · Existencias → "Copiar
+       reporte" (mismo cálculo — StockAgg). Redirige DIRECTO allá (auditoría UX
+       2026-09-28): antes eran dos saltos (index.html → almacén) y texto viejo. -->
+  <meta http-equiv="refresh" content="0;url=/almacen/index.html?tab=existencias">
+  <script>location.replace('/almacen/index.html?tab=existencias');</script>
 </head>
 <body>
   <p style="font-family:system-ui;margin:40px;text-align:center;">
-    Esta página se retiró. El reporte para correo ahora se copia desde
-    <a href="./index.html">Inventario de Radios</a> → menú → "Copiar reporte (correo)".
+    Esta página se retiró. El reporte para correo se copia desde
+    <a href="/almacen/index.html?tab=existencias">Almacén · Existencias</a> → "Copiar reporte".
   </p>
 </body>
 </html>

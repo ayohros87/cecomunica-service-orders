@@ -237,7 +237,8 @@ test("P4 · buscar en una pestaña carga el pool entero ANTES de responder", asy
   // Lo pintado MIENTRAS carga no puede ser una respuesta: tiene que decir que busca.
   const mientras = els.get("eqTabla").innerHTML;
   assert.ok(!/Ningún equipo/.test(mientras), "no puede decir 'ningún equipo coincide' con media lista");
-  assert.match(mientras, /Buscando "SERIALLEJOS" en todo el pool/);
+  // Sin la palabra "pool" en pantalla (auditoría UX 2026-09-28, T2).
+  assert.match(mientras, /Buscando "SERIALLEJOS" en todo el inventario/);
   await asentar(P);
   assert.equal(barridosCompletos(consultas), 1, "buscar tiene que traer el pool entero, una vez");
   assert.equal(P._completo, true);

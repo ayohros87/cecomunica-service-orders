@@ -100,6 +100,36 @@ const EquiposDescartadosService = {
   },
 
   /**
+   * Alta MANUAL desde Almacén · Descartados (auditoría UX 2026-09-28, P0 #23):
+   * el cierre de ENTRADA pedía "regístralo a mano" y la página no tenía alta.
+   * Escribe el MISMO doc que el QC (vía registrar); modelo y cliente se toman
+   * de la ficha del registro de equipos si existe, para que el listado no
+   * quede con "—". Devuelve el serial normalizado; lanza si no es un serial.
+   */
+  async registrarManual({ serial, motivo = '', orden_id = '' } = {}) {
+    const norm = this.normalizar(serial);
+    if (!norm || !this.esSerialValido(norm)) {
+      const e = new Error('Serial inválido'); e.code = 'serial-invalido'; throw e;
+    }
+    let modelo = '', modelo_id = '', cliente = '';
+    try {
+      if (typeof EquiposPoolService !== 'undefined' && EquiposPoolService.findBySerial) {
+        const eq = (await EquiposPoolService.findBySerial(norm))[0];
+        if (eq) {
+          modelo = eq.modelo_label || '';
+          modelo_id = eq.modelo_id || '';
+          cliente = eq.asignacion?.cliente_nombre || eq.cliente_nombre || '';
+        }
+      }
+    } catch (e) { console.warn('[EquiposDescartados] sin ficha para completar el alta:', e?.message || e); }
+    return this.registrar({
+      serial: String(serial).trim(), modelo, modelo_id, cliente,
+      orden_id: String(orden_id || '').trim(),
+      motivo: String(motivo || '').trim() || 'Registro manual en Almacén · Descartados',
+    });
+  },
+
+  /**
    * Revoca un descarte (se descartó por error, o el equipo se recuperó). No
    * borra: deja `revocado: true` y apila la traza. La alerta deja de salir.
    */
@@ -156,6 +186,54 @@ const EquiposDescartadosService = {
     }
     this._cache.set(norm, { doc, at: Date.now() });
     return doc;
+  },
+
+  /**
+   * Consulta en LOTE (auditoría UX 2026-09-28, T12): ¿cuáles de estos seriales
+   * están descartados y vigentes? Consultas `in` de 10 por doc-ID (el ID es el
+   * serial normalizado). Devuelve Map norm → doc vigente (solo los que están).
+   * Mismo criterio fail-open que buscar(): si una tanda falla, se sigue sin
+   * ella — un problema de red no puede trancar Recibir ni el asignador.
+   * `onProgreso(hechos, total)` opcional para "Validando i/N".
+   */
+  async descartadosDe(seriales, { onProgreso = null } = {}) {
+    const out = new Map();
+    const pendientes = [];
+    for (const s of new Set((seriales || []).map(x => this.normalizar(x)))) {
+      if (!s || !this.esSerialValido(s)) continue;
+      const hit = this._cache.get(s);
+      if (hit && Date.now() - hit.at < this._TTL_MS) { if (hit.doc) out.set(s, hit.doc); continue; }
+      pendientes.push(s);
+    }
+    const FP = firebase.firestore.FieldPath;
+    for (let i = 0; i < pendientes.length; i += 10) {
+      const tanda = pendientes.slice(i, i + 10);
+      try {
+        const snap = await this._col().where(FP.documentId(), 'in', tanda).get();
+        const vistos = new Set();
+        snap.forEach(d => {
+          vistos.add(d.id);
+          const data = { id: d.id, ...d.data() };
+          const vigente = data.revocado === true ? null : data;
+          this._cache.set(d.id, { doc: vigente, at: Date.now() });
+          if (vigente) out.set(d.id, vigente);
+        });
+        tanda.forEach(n => { if (!vistos.has(n)) this._cache.set(n, { doc: null, at: Date.now() }); });
+      } catch (e) {
+        console.warn('[EquiposDescartados] consulta en lote falló:', e);
+      }
+      if (onProgreso) { try { onProgreso(Math.min(i + 10, pendientes.length), pendientes.length); } catch (_) {} }
+    }
+    return out;
+  },
+
+  // Texto del motivo de bloqueo, el mismo en los cuatro puntos que consultan
+  // (Recibir, Importador, asignador, estante).
+  motivoBloqueo(doc) {
+    const ts = doc?.descartado_at;
+    const d = ts?.toDate ? ts.toDate() : (doc?.historial?.[0]?.fecha_iso ? new Date(doc.historial[0].fecha_iso) : null);
+    const f = d ? d.toLocaleDateString('es-PA') : '';
+    return `descartado en QC${f ? ` el ${f}` : ''}${doc?.motivo ? ` (${doc.motivo})` : ''}`;
   },
 
   /**

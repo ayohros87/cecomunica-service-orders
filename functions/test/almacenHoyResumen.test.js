@@ -243,7 +243,8 @@ test("H7 · con un servicio viejo en caché, la bandeja se pinta igual y solo ca
   const aviso = (els.get("avisoFallidas") || {}).innerHTML || "";
   assert.match(aviso, /No se pudo leer: <b>[^<]*por clasificar/, "tiene que avisar qué faltó");
   const grupos = (els.get("hoyGrupos") || {}).innerHTML || "";
-  assert.ok(/De contratos|Del pool/.test(grupos), "el resto de la bandeja SÍ se pinta");
+  // "Del pool" pasó a "Del inventario de equipos" (auditoría UX 2026-09-28, T2).
+  assert.ok(/De contratos|Del inventario de equipos/.test(grupos), "el resto de la bandeja SÍ se pinta");
 });
 
 test("H6 · abrir Almacén · Hoy no lee fichas de por clasificar ni de bodega, y la nota cuadra", async () => {

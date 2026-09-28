@@ -47,6 +47,9 @@ window.EquipoFicha = {
     fusion_duplicado:     'Fusión de ficha duplicada',
     conflicto_revisado:   'Conflicto de modelo resuelto',
     conflicto_reabierto:  'Conflicto de modelo reabierto',
+    correccion_serial:    'Corrección de serial',
+    correccion_modelo:    'Corrección de modelo',
+    correccion_propiedad: 'Corrección de propiedad',
   },
 
   _esc(s) {
@@ -79,7 +82,7 @@ window.EquipoFicha = {
       this._render(`
         <div style="padding:18px 6px; text-align:center; color:var(--fg-3); line-height:1.6;">
           <div style="font-family:var(--mono, monospace); font-size:16px; color:var(--text);">${this._esc(serialRaw)}</div>
-          Este serial no está registrado en el pool de equipos.<br>
+          Este serial no está registrado en el inventario de equipos.<br>
           Se registrará automáticamente la próxima vez que toque un contrato, una orden o bodega.
         </div>
         ${condicionHtml}`);
@@ -139,8 +142,8 @@ window.EquipoFicha = {
       // ya revisados". Mandarlo a ciegas hacía parecer que el dato se perdió.
       eq.serial_compartido
         ? (eq.conflicto_revisado === true
-            ? '<span class="eqpool-compartido" style="background:#fef3c7;color:#92400e;" title="Confirmado: dos radios físicos distintos comparten esta numeración (típico Kenwood NX-420 / NX-920). Verifica el modelo antes de operar. El detalle está en Inventario · Conflictos → «Ver los ya revisados».">2+ modelos · confirmado</span>'
-            : '<span class="eqpool-compartido" title="Este serial existe en más de una ficha y nadie lo ha revisado — verifica el modelo. Se resuelve en Inventario · pestaña Conflictos.">2+ modelos</span>')
+            ? '<span class="eqpool-compartido" style="background:#fef3c7;color:#92400e;" title="Confirmado: dos radios físicos distintos comparten esta numeración (típico Kenwood NX-420 / NX-920). Verifica el modelo antes de operar. El detalle está en Equipos por serial · Conflictos → «Ver los ya revisados».">2+ modelos · confirmado</span>'
+            : '<span class="eqpool-compartido" title="Este serial existe en más de una ficha y nadie lo ha revisado — verifica el modelo. Se resuelve en Equipos por serial · pestaña Conflictos.">2+ modelos</span>')
         : '',
       eq.verificado === false ? '<span class="eqpool-noverif" title="Creado por migración automática — pendiente de confirmación física">Sin verificar</span>' : '',
     ].join(' ');
@@ -149,7 +152,9 @@ window.EquipoFicha = {
       ['Asignado a', linkCliente],
       ['Contrato', linkContrato],
       ['Orden actual', linkOrden],
-      ['Condición', eq.condicion === 'reuso' ? 'Refurbished' : 'Nuevo'],
+      // "Tipo" y no "Condición" (auditoría UX 2026-09-28, T1): "condición"
+      // ya nombra la condición particular del radio (equipos_condiciones).
+      ['Tipo', eq.condicion === 'reuso' ? 'Refurbished' : 'Nuevo'],
       ['Propiedad', window.EquiposPoolService?.chipPropiedadHtml
         ? EquiposPoolService.chipPropiedadHtml(eq)
         : (eq.propiedad === 'cliente' ? 'Del cliente' : 'Sin clasificar')],
@@ -187,7 +192,7 @@ window.EquipoFicha = {
 
     const puedeInventario = this._ROLES_INVENTARIO.includes(window.userRole);
     const footerInv = puedeInventario
-      ? `<a class="btn btn-ghost" href="${EquiposPoolService.kardexUrl(eq.serial || eq.serial_norm)}">Abrir en Inventario</a>`
+      ? `<a class="btn btn-ghost" href="${EquiposPoolService.kardexUrl(eq.serial || eq.serial_norm)}">Abrir en Equipos por serial</a>`
       : '';
     // Fase A (propuesta Almacén 2026-08): la ficha deja de ser solo-lectura.
     // Acciones contextuales por estado, llamando directo al servicio — el
@@ -231,6 +236,10 @@ window.EquipoFicha = {
       a.push(btn('reactivar', 'Reactivar → bodega', 'btn-accent'));
     }
     if (eq.verificado === false) a.push(btn('verificar', 'Marcar verificado'));
+    // Corregir serial desde la ficha (auditoría UX 2026-09-28, flujo f): antes
+    // obligaba a salir a equipos.html (~8 pasos). Mismo servicio y la misma
+    // revisión + confirmación que allá; vale en cualquier estado.
+    a.push(btn('corregir_serial', 'Corregir serial'));
     return a.join('');
   },
 
@@ -243,8 +252,8 @@ window.EquipoFicha = {
     const aviso = (msg, tipo = 'ok') => { if (window.Toast) Toast.show(msg, tipo); };
     try {
       if (accion === 'inspeccion_ok') {
-        if (!await Modal.confirm({ title: 'Inspección OK', confirmLabel: 'A bodega', message: `¿Inspección OK? ${serial} regresa a bodega como disponible (condición reuso).` })) return;
-        await EquiposPoolService.liberar(eq.id, { notas: 'Inspección OK desde la ficha (Almacén)' }, user);
+        if (!await Modal.confirm({ title: 'Inspección OK', confirmLabel: 'A bodega', message: `¿Inspección OK? ${serial} regresa a bodega como disponible (tipo Refurbished).` })) return;
+        await EquiposPoolService.liberar(eq.id, { notas: 'Inspección OK desde la ficha (Almacén)', esperado: EquiposPoolService.ESTADOS.DEVUELTO }, user);
         aviso(`${serial} → en bodega.`);
       } else if (accion === 'corregir') {
         const motivo = await Modal.prompt({ title: 'Corregir a bodega', confirmLabel: 'Corregir', message: `Corregir ${serial} a bodega — la unidad está físicamente en bodega y su estado era heredado. Motivo (opcional):` });
@@ -272,6 +281,29 @@ window.EquipoFicha = {
         if (!motivo) return;
         await EquiposPoolService.anularVenta(eq.id, motivo, user);
         aviso(`${serial} → en bodega (venta anulada).`);
+      } else if (accion === 'corregir_serial') {
+        const nuevo = await Modal.prompt({
+          title: 'Corregir serial',
+          message: `Serial actual: ${serial || '¿?'} (${eq.modelo_label || 'modelo ?'}). Escribe el serial CORRECTO tal como aparece en la etiqueta del equipo. La corrección queda en el kardex.`,
+          defaultValue: eq.serial || '',
+          placeholder: 'Serial correcto',
+          confirmLabel: 'Revisar',
+        });
+        if (nuevo == null) return;
+        const limpio = nuevo.trim();
+        if (!limpio) { aviso('Serial vacío.', 'warn'); return; }
+        if (EquiposPoolService.normalizarSerial(limpio) === EquiposPoolService.normalizarSerial(eq.serial || eq.serial_norm || '')) {
+          aviso('Es el mismo serial (solo cambia formato). Nada que corregir.', 'warn'); return;
+        }
+        const ok = await Modal.confirm({
+          title: 'Confirmar corrección',
+          message: `${serial || '¿?'} → ${limpio}. La ficha conserva su historia y el movimiento queda en el kardex. Si el serial figura en un contrato vigente, corrígelo también en Seriales del contrato. ¿Aplicar?`,
+          confirmLabel: 'Corregir serial',
+        });
+        if (!ok) return;
+        await EquiposPoolService.corregirSerial(eq.id, limpio, 'Corregido desde la ficha (Almacén).', user);
+        if (window.SerialField) { SerialField.invalidar(serial); SerialField.invalidar(limpio); }
+        aviso(`Serial corregido: ${limpio}`);
       } else if (accion === 'verificar') {
         await EquiposPoolService.verificar(eq.id, user);
         aviso(`${serial} marcado como verificado.`);
