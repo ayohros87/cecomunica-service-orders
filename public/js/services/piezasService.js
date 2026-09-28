@@ -59,9 +59,13 @@ const PiezasService = {
   // { antes, despues, pedido, recortado, faltante } y, salvo `avisar:false`,
   // muestra un Toast cuando el stock no alcanzaba (el consumo de una orden
   // descontaba de más y nadie se enteraba). `motivo` (opcional) deja el
-  // último ajuste en el doc: `ultimo_ajuste {delta, motivo, por, fecha}` —
-  // la colección no tiene kardex propio, esto es lo mínimo para saber por qué.
-  async ajustarDelta(id, delta, { motivo = '', avisar = true } = {}) {
+  // último ajuste en el doc: `ultimo_ajuste {delta, motivo, por, fecha}`.
+  // Además, cada ±N queda en el kardex de la pieza (subcolección `kardex`,
+  // P2 §4.6): delta, antes/después, motivo, quién y de dónde vino (`origen`:
+  // 'ajuste' desde Piezas, 'orden' desde el consumo de una orden, …). Se
+  // escribe DESPUÉS de la transacción y a prueba de fallos: si las rules aún
+  // no lo permiten, el stock se ajusta igual y se avisa en consola.
+  async ajustarDelta(id, delta, { motivo = '', avisar = true, origen = '', ref: refOrigen = null } = {}) {
     const db = firebase.firestore();
     const ref = db.collection('inventario_piezas').doc(id);
     const res = await db.runTransaction(async t => {
@@ -96,7 +100,30 @@ const PiezasService = {
         Toast.show(`Stock de ${res.etiqueta}: había ${res.antes} y se pidió descontar ${-delta}. Quedó en 0 — faltan ${res.faltante}; revisa el conteo.`, 'warn');
       }
     }
+    if (res) {
+      try {
+        const u = firebase.auth().currentUser;
+        await ref.collection('kardex').add({
+          delta, antes: res.antes, despues: res.despues,
+          motivo: String(motivo || '').trim(),
+          origen: origen || (motivo ? 'ajuste' : 'sistema'),
+          ref: refOrigen || null,
+          por: u?.uid || 'system', por_email: u?.email || null,
+          fecha: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        console.warn('[Piezas] kardex no registrado:', id, e?.code || e);
+      }
+    }
     return res;
+  },
+
+  // Kardex de una pieza, más reciente primero.
+  async getKardex(id, { limite = 100 } = {}) {
+    const db = firebase.firestore();
+    const snap = await db.collection('inventario_piezas').doc(id).collection('kardex')
+      .orderBy('fecha', 'desc').limit(limite).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
   // Batch-insert up to 450 piezas at a time (Firestore limit is 500 per batch).

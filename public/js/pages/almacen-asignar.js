@@ -180,12 +180,18 @@ window.AlmacenAsignar = (() => {
     let lista = [];
     try { lista = await enBodega(); } catch (e) { console.warn('[Asignar] stock:', e?.code || e); }
     const chips = grupos.map(g => {
-      const disp = lista.filter(u => EquiposPoolService._mismoModelo(u, g.modelo_id || null, g.modelo || '')).length;
+      const delModelo = lista.filter(u => EquiposPoolService._mismoModelo(u, g.modelo_id || null, g.modelo || ''));
+      // "Disponible" ≠ "en bodega" (auditoría UX 2026-09-28, P2 #15): lo que
+      // el importador marcó DAÑADA cuenta en el estante pero no se ofrece. Lo
+      // descartado en QC y las condiciones particulares las filtra el picker
+      // (viven en otras colecciones; aquí no se consultan por cada modelo).
+      const danadas = EquiposPoolService.esDanada ? delModelo.filter(u => EquiposPoolService.esDanada(u)).length : 0;
+      const disp = delModelo.length - danadas;
       const faltan = Math.max(0, Number(g.activos || 0) - (g.slots || []).filter(s => s.serial || s.omitido).length);
       const corto = disp < faltan;
       return `<div class="as-pl${corto ? ' short' : ''}">
         <b>${Number(g.activos || 0)} × ${esc(g.modelo)}</b>
-        <small>${disp} en bodega${corto ? ` · faltan ${faltan - disp}` : ''}</small></div>`;
+        <small>${disp} disponible${disp === 1 ? '' : 's'}${danadas ? ` · ${danadas} dañada${danadas === 1 ? '' : 's'}` : ''}${corto ? ` · faltan ${faltan - disp}` : ''}</small></div>`;
     }).join('');
     return `<div class="as-picklist">${chips}</div>`;
   }
@@ -267,6 +273,10 @@ window.AlmacenAsignar = (() => {
     });
     return st.asignador;
   }
+
+  // Lista imprimible por serial (pick & confirm, auditoría UX 2026-09-28):
+  // se imprime DESPUÉS de escoger, para ir al estante con la hoja.
+  const BTN_IMPRIMIR = `<button type="button" class="btn btn-ghost btn-sm" data-as="imprimir" title="Lista por serial (modelo, serial, ubicación, cliente) para sacar del estante con casilla de verificación"><i data-lucide="printer"></i> Imprimir lista</button>`;
 
   function toolbar(botones) {
     const tb = $('asToolbar');
@@ -371,6 +381,7 @@ window.AlmacenAsignar = (() => {
           continuan.length
             ? `<button type="button" class="btn btn-primary btn-sm" data-as="traer-original" title="El plan de la venta dice que ${continuan.length} unidad(es) del contrato original continúan en este."><i data-lucide="repeat"></i> Traer del original (${continuan.length} continúan)</button>` : '',
           `<button type="button" class="btn ${continuan.length ? 'btn-ghost' : 'btn-primary'} btn-sm" data-as="tomar" title="Escoge unidades disponibles en bodega. Es la vía normal."><i data-lucide="scan-barcode"></i> Tomar del estante</button>`,
+          BTN_IMPRIMIR,
         ]);
         footer([
           `<button type="button" class="btn btn-ghost" data-as="guardar"><i data-lucide="save"></i> Guardar avance</button>`,
@@ -435,13 +446,21 @@ window.AlmacenAsignar = (() => {
     };
   }
 
-  async function persistirContrato(c, estado, datos) {
+  async function persistirContrato(c, estado, datos, { verificacion = null } = {}) {
     const uid = firebase.auth().currentUser?.uid || null;
     await ContratosService.saveSerialesManual(c.docId, datos.seriales, {
       uid, estado, contrato_id: c.contratoIdVisible, cliente_id: c.clienteId, cliente_nombre: c.clienteNombre,
     });
+    // La verificación por escaneo (pick & confirm) queda junto al estado:
+    // quién confirmó unidad por unidad, cuándo, cuántas y qué sustituyó.
+    const verif = verificacion ? {
+      picklist_verificada_at: firebase.firestore.FieldValue.serverTimestamp(),
+      picklist_verificada_por: uid,
+      picklist_verificada_n: verificacion.n,
+      picklist_reemplazos: (verificacion.reemplazos || []).map(r => ({ anterior: r.anterior, nuevo: r.nuevo, modelo: r.modelo || '', motivo: r.motivo })),
+    } : {};
     await db().collection('contratos').doc(c.docId).collection('seriales_estado').doc('current').set({
-      estado, omisiones: datos.omisiones, por: uid, at: firebase.firestore.FieldValue.serverTimestamp(),
+      estado, omisiones: datos.omisiones, por: uid, at: firebase.firestore.FieldValue.serverTimestamp(), ...verif,
     }, { merge: true });
   }
 
@@ -490,13 +509,23 @@ window.AlmacenAsignar = (() => {
     const c = st.trabajo; const asg = st.asignador;
     const error = asg.validarCompleto();
     if (error) { toast(error, 'warn'); return; }
-    const datos = asg.collect();
-    const r = await validarContrato(c, datos.seriales);
+    let datos = asg.collect();
+    let r = await validarContrato(c, datos.seriales);
     if (!r) return;
+    // Pick & confirm: antes de cerrar, bodega escanea cada serial con el
+    // radio en la mano. Si sustituyó alguno, el formulario cambió: se vuelve
+    // a recoger y a validar contra el pool.
+    const v = await verificarPicklist(datos.seriales);
+    if (!v) return;
+    if (v.reemplazos.length) {
+      datos = asg.collect();
+      r = await validarContrato(c, datos.seriales);
+      if (!r) return;
+    }
     if (!await hojaListo(c, datos)) return;
     const btn = $('asFoot').querySelector('[data-as="listo"]'); if (btn) btn.disabled = true;
     try {
-      await persistirContrato(c, 'asignados', datos);
+      await persistirContrato(c, 'asignados', datos, { verificacion: v });
       await registrarExcepcion(c, r.excepcion);
       invalidarBodega();
       toast(`${c.contratoIdVisible} listo para programar.`, 'ok');
@@ -729,7 +758,7 @@ window.AlmacenAsignar = (() => {
         toolbar([]);
         footer([`<button type="button" class="btn btn-primary" data-as="guardar-gestion"><i data-lucide="replace"></i> Guardar corrección</button>`]);
       } else {
-        toolbar([`<button type="button" class="btn btn-primary btn-sm" data-as="tomar"><i data-lucide="scan-barcode"></i> Tomar del estante</button>`]);
+        toolbar([`<button type="button" class="btn btn-primary btn-sm" data-as="tomar"><i data-lucide="scan-barcode"></i> Tomar del estante</button>`, BTN_IMPRIMIR]);
         footer([`<button type="button" class="btn btn-primary" data-as="guardar-gestion"><i data-lucide="save"></i> Guardar asignación</button>`]);
       }
     } else {
@@ -873,14 +902,30 @@ window.AlmacenAsignar = (() => {
     const t = st.trabajo; const asg = st.asignador;
     const g = t.g;
     if (asg.validarCompleto() && $('asBody').querySelector('.serial-input.dup')) { toast('Hay seriales duplicados (marcados en rojo).', 'warn'); return; }
-    const datos = asg.collect();
+    let datos = asg.collect();
     if (!datos.seriales.length && g.tipo !== 'reemplazo' && !esCambio(g)) { toast('Captura al menos un serial.', 'warn'); return; }
     if (esCambio(g) && !datos.seriales.length) { toast('Escribe el serial que tiene el radio de verdad.', 'warn'); return; }
     // Misma política dura que el resto: el serial existe, está en bodega y es
     // del modelo pedido. En una corrección eso es justo lo que se espera —
     // el radio "correcto" nunca salió, así que en el sistema sigue en bodega.
-    const r = await asg.exigirEnBodega(datos.seriales, {});
+    let r = await asg.exigirEnBodega(datos.seriales, {});
     if (!r) return;
+    // Pick & confirm: cuando la asignación queda COMPLETA (sale del estante de
+    // verdad) se verifica por escaneo, como en el contrato. Un cambio de
+    // serial no saca nada del estante; una parcial se verifica al completarse.
+    const esperado = (g.tipo === 'reemplazo' || esCambio(g))
+      ? (g.items || []).length
+      : ((g.tipo === 'demo' ? g.demo?.lineas : g.aumento?.lineas) || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
+    let v = null;
+    if (!esCambio(g) && esperado && datos.seriales.length >= esperado) {
+      v = await verificarPicklist(datos.seriales);
+      if (!v) return;
+      if (v.reemplazos.length) {
+        datos = asg.collect();
+        r = await asg.exigirEnBodega(datos.seriales, {});
+        if (!r) return;
+      }
+    }
     const btn = $('asFoot').querySelector('[data-as="guardar-gestion"]'); if (btn) btn.disabled = true;
     try {
       const objeto = (s) => {
@@ -918,6 +963,13 @@ window.AlmacenAsignar = (() => {
         await GestionesService.registrarEvento(t.gid, 'asignar',
           `Excepción de modelo (${r.excepcion.seriales.join(', ')}): ${r.excepcion.motivo}`).catch(() => {});
       }
+      // La verificación queda como evento de la gestión (el doc no admite
+      // campos nuevos en rules): quién, cuántas y qué sustituyó.
+      if (v) {
+        await GestionesService.registrarEvento(t.gid, 'asignar',
+          `Lista verificada por escaneo: ${v.n} serial(es)`
+          + (v.reemplazos.length ? `. Sustituidos: ${v.reemplazos.map(x => `${x.anterior} → ${x.nuevo} (${x.motivo})`).join('; ')}` : '')).catch(() => {});
+      }
       invalidarBodega();
       toast(esCambio(g)
         ? (completo
@@ -933,6 +985,250 @@ window.AlmacenAsignar = (() => {
       toast('No se pudo guardar la asignación.', 'bad');
       if (btn) btn.disabled = false;
     }
+  }
+
+  /* ═════════ Pick & confirm (auditoría UX 2026-09-28, P2 #13) ═════════ */
+  // Después de escoger, bodega imprime la lista por serial y va al estante.
+  // Antes de cerrar el trabajo confirma unidad por unidad escaneando (o
+  // tecleando) el serial del radio que tiene en la mano: ✓ por serial, aviso
+  // si el escaneado no está en la lista, "falta N" hasta completar. Lo que no
+  // aparece se sustituye por otro disponible del mismo modelo, con motivo, y
+  // el que no estaba se lo lleva en el kardex. La verificación queda en
+  // seriales_estado/current (contrato) o como evento (gestión).
+
+  function destinoTexto() {
+    const t = st.trabajo;
+    if (!t) return '';
+    if (t.tipo === 'contrato') return `${t.clienteNombre || 'Cliente'} · ${t.contratoIdVisible}`;
+    return `${t.g?.cliente_nombre || 'Cliente'} · ${t.gid} (${TIPO_G[t.g?.tipo] || t.g?.tipo || 'gestión'})`;
+  }
+  function refTrabajo() {
+    const t = st.trabajo;
+    if (!t) return null;
+    return t.tipo === 'contrato'
+      ? { tipo: 'contrato', id: t.docId, label: t.contratoIdVisible }
+      : { tipo: 'gestion', id: t.gid, label: t.gid };
+  }
+
+  // Dónde/cómo está la unidad según el estante (la ficha del pool no tiene
+  // estante ni pasillo: se dice lo que sí sabe — condición, ingreso, proveedor).
+  function ubicacionDe(u) {
+    if (!u) return 'no está en bodega';
+    const partes = ['Bodega', u.condicion === 'reuso' ? 'Refurbished' : 'Nuevo'];
+    if (u.ingreso_bodega_at?.toDate) partes.push('desde ' + u.ingreso_bodega_at.toDate().toLocaleDateString('es-PA'));
+    if (u.proveedor) partes.push(String(u.proveedor));
+    return partes.join(' · ');
+  }
+
+  // Las filas de la lista: lo que hay en el formulario ahora mismo, con lo que
+  // el estante sabe de cada unidad (caché de bodega).
+  async function filasPicklist(seriales = null) {
+    const lista = seriales || st.asignador.collect().seriales;
+    let bodega = [];
+    try { bodega = await enBodega(); } catch (e) { /* sin ubicación */ }
+    const porNorm = new Map(bodega.map(u => [norm(u.serial || u.serial_norm), u]));
+    return lista.map(s => {
+      const u = porNorm.get(norm(s.serial)) || null;
+      return {
+        serial: s.serial, modelo: s.modelo || u?.modelo_label || '', modelo_id: s.modelo_id || u?.modelo_id || '',
+        ubicacion: ubicacionDe(u), nota: u?.notas || '',
+      };
+    });
+  }
+
+  async function imprimirPicklist() {
+    if (!st.trabajo || !st.asignador) return;
+    const filas = await filasPicklist();
+    if (!filas.length) { toast('Todavía no hay seriales en la lista: escoge o teclea primero.', 'warn'); return; }
+    const user = firebase.auth().currentUser;
+    const destino = destinoTexto();
+    const fecha = new Date().toLocaleString('es-PA', { dateStyle: 'medium', timeStyle: 'short' });
+    const tr = filas.map((f, i) => `<tr>
+        <td>${i + 1}</td><td>${esc(f.modelo || '—')}</td><td class="mono">${esc(f.serial)}</td>
+        <td>${esc(f.ubicacion)}${f.nota ? `<br><small>${esc(f.nota)}</small>` : ''}</td>
+        <td>${esc(destino)}</td><td class="chk">☐</td></tr>`).join('');
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+      <title>Lista de picking · ${esc(destino)}</title>
+      <style>
+        body { font: 13px/1.4 system-ui, sans-serif; color: #111; margin: 24px; }
+        h1 { font-size: 18px; margin: 0 0 4px; } .sub { color: #555; margin: 0 0 14px; font-size: 12px; }
+        table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid #999; padding: 6px 8px; text-align: left; vertical-align: top; }
+        th { background: #f1f1f1; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+        .mono { font-family: ui-monospace, Consolas, monospace; font-size: 14px; } .chk { font-size: 18px; text-align: center; width: 36px; }
+        small { color: #555; } .pie { margin-top: 18px; font-size: 12px; color: #555; }
+        @media print { body { margin: 10mm; } }
+      </style></head>
+      <body onload="window.print()">
+        <h1>Lista de picking — ${esc(destino)}</h1>
+        <p class="sub">${filas.length} unidad${filas.length === 1 ? '' : 'es'} · impresa ${esc(fecha)}${user?.email ? ` por ${esc(user.email)}` : ''}</p>
+        <table><thead><tr><th>#</th><th>Modelo</th><th>Serial</th><th>Ubicación</th><th>Cliente / contrato</th><th>✓</th></tr></thead><tbody>${tr}</tbody></table>
+        <p class="pie">Marca cada casilla con el radio en la mano. Al volver, en Almacén · Asignar se escanea cada serial antes de cerrar: lo que no esté se sustituye ahí mismo.</p>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { toast('El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes para este sitio.', 'warn'); return; }
+    w.document.write(html);
+    w.document.close();
+  }
+
+  // Unidades DISPONIBLES del modelo para sustituir una que no apareció: en
+  // bodega, sin DAÑADA / condición / descarte (misma regla que el picker) y
+  // que no estén ya en la lista. Las más antiguas primero.
+  async function disponiblesDe(modeloId, modelo, excluir) {
+    const asg = st.asignador;
+    invalidarBodega();
+    const bodega = await enBodega();
+    const cand = bodega.filter(u => EquiposPoolService._mismoModelo(u, modeloId || null, modelo || '')
+      && !excluir.has(norm(u.serial || u.serial_norm)));
+    const seriales = cand.map(u => u.serial || u.serial_norm);
+    const [descartados, condiciones] = await Promise.all([
+      asg.descartadosDe ? asg.descartadosDe(seriales) : Promise.resolve(new Map()),
+      asg.condicionesVigentes ? asg.condicionesVigentes() : Promise.resolve(new Map()),
+    ]);
+    return cand
+      .filter(u => !(asg.motivoNoDisponible ? asg.motivoNoDisponible(u, descartados, condiciones) : null))
+      .sort((a, b) => (a.ingreso_bodega_at?.toMillis?.() || 0) - (b.ingreso_bodega_at?.toMillis?.() || 0)
+        || String(a.serial || '').localeCompare(String(b.serial || '')));
+  }
+
+  // La hoja de verificación. Resuelve { n, reemplazos } al confirmar con todo
+  // marcado, o null si se vuelve atrás.
+  async function hojaVerificacion(filas) {
+    const pend = new Map(filas.map(f => [norm(f.serial), { ...f, ok: false }]));
+    const reemplazos = [];
+    const faltan = () => [...pend.values()].filter(f => !f.ok).length;
+    const filaHtml = (k, f) => `<tr data-k="${esc(k)}" style="${f.ok ? 'background:#ECFDF5;' : ''}">
+        <td style="width:28px; text-align:center; color:#067647; font-weight:700;">${f.ok ? '✓' : ''}</td>
+        <td style="font-family:var(--font-mono, monospace); font-size:13.5px;">${esc(f.serial)}</td>
+        <td style="font-size:12.5px;">${esc(f.modelo || '—')}</td>
+        <td style="font-size:12px; color:var(--fg-3);">${esc(f.ubicacion)}${f.sustituye ? `<br>en lugar de ${esc(f.sustituye)}` : ''}</td>
+        <td style="text-align:right;">${f.ok ? '' : `<button type="button" class="btn btn-ghost btn-sm" data-ver="reemplazar" data-k="${esc(k)}" title="No apareció en el estante: sustituirlo por otro disponible del mismo modelo">No está…</button>`}</td>
+      </tr>`;
+    const pintar = (root) => {
+      root.querySelector('[data-ver="tabla"]').innerHTML = [...pend.entries()].map(([k, f]) => filaHtml(k, f)).join('');
+      const n = faltan();
+      root.querySelector('[data-ver="faltan"]').innerHTML = n
+        ? `Falta${n === 1 ? '' : 'n'} <b>${n}</b> de ${pend.size}`
+        : `<b style="color:#067647;">Todo verificado</b> · ${pend.size} de ${pend.size}`;
+      const btn = root.querySelector('[data-sheet-action="confirm"]');
+      if (btn) btn.disabled = n > 0;
+    };
+    const aviso = (root, msg, kind) => {
+      const el = root.querySelector('[data-ver="aviso"]');
+      const colores = { ok: ['#ECFDF5', '#065F46'], warn: ['#FFFBEB', '#92400E'], bad: ['#FEF2F2', '#991B1B'] }[kind] || ['#EFF6FF', '#1E3A8A'];
+      el.textContent = msg; el.style.background = colores[0]; el.style.color = colores[1];
+      el.style.display = msg ? '' : 'none';
+    };
+    const procesar = (root, valor) => {
+      const k = norm(valor);
+      if (!k) return;
+      const f = pend.get(k);
+      if (!f) { aviso(root, `${valor.trim()} NO está en la lista. Revisa el radio; si va en lugar de otro, usa "No está…" en la fila que sustituye.`, 'bad'); return; }
+      if (f.ok) { aviso(root, `${f.serial} ya estaba marcado.`, 'warn'); return; }
+      f.ok = true;
+      aviso(root, `✓ ${f.serial} · ${f.modelo || ''}`, 'ok');
+      pintar(root);
+    };
+    const reemplazar = async (root, k) => {
+      const f = pend.get(k);
+      if (!f || f.ok) return;
+      const motivo = await Modal.prompt({
+        title: 'No está en el estante', confirmLabel: 'Buscar sustituto',
+        message: `${f.serial} (${f.modelo || 'modelo ?'}) no apareció al verificar. ¿Qué pasó? Queda en el kardex de esa unidad.`,
+        placeholder: 'Ej.: no está en el estante; la etiqueta no coincide; está dañado',
+      });
+      if (!motivo || !motivo.trim()) return;
+      let cand = [];
+      try { cand = await disponiblesDe(f.modelo_id, f.modelo, new Set(pend.keys())); }
+      catch (e) { console.warn('[Asignar] sustitutos:', e?.code || e); }
+      if (!cand.length) { toast(`No hay otra unidad disponible de ${f.modelo || 'ese modelo'} en bodega.`, 'warn'); return; }
+      const r = await EntityPicker.abrir({
+        titulo: `Sustituto para ${f.serial}`, icono: 'replace', size: 'md', multiple: false,
+        descripcion: `Unidades disponibles de <b>${esc(f.modelo || '')}</b> (las más antiguas primero). La que escojas también hay que escanearla.`,
+        grupos: [{ id: 0, titulo: f.modelo || 'Modelo', cupos: 1,
+          items: cand.map(u => ({ id: u.serial || u.serial_norm, label: u.serial || u.serial_norm, sub: ubicacionDe(u) })) }],
+        confirmar: 'Usar esta', iconoConfirmar: 'check', placeholderBuscar: 'Filtrar por serial…', normalizar: (s) => norm(s),
+      });
+      const nuevo = r?.seleccion?.[0]?.id;
+      if (!nuevo) return;
+      const u = cand.find(x => (x.serial || x.serial_norm) === nuevo) || null;
+      pend.delete(k);
+      pend.set(norm(nuevo), { serial: nuevo, modelo: f.modelo, modelo_id: f.modelo_id, ubicacion: ubicacionDe(u), ok: false, sustituye: f.serial });
+      reemplazos.push({ anterior: f.serial, nuevo, modelo: f.modelo, modelo_id: f.modelo_id, motivo: motivo.trim() });
+      pintar(root);
+      aviso(root, `${nuevo} va en lugar de ${f.serial}. Escanéalo para marcarlo.`, 'warn');
+      root.querySelector('[data-ver="input"]')?.focus();
+    };
+    const r = await Modal.sheet({
+      title: 'Verificar la lista', icon: 'scan-line', size: 'md',
+      html: `
+        <p style="margin:0 0 10px; font-size:13px; color:var(--fg-2);">Con el radio en la mano, escanea o teclea su serial y pulsa Enter. Cada uno se marca ✓; el que no aparezca se sustituye con <b>No está…</b>.</p>
+        <input class="form-input" data-ver="input" type="text" autocomplete="off" placeholder="Escanea o teclea el serial y pulsa Enter"
+               style="font-family:var(--font-mono, monospace); font-size:15px; height:42px; margin-bottom:8px;">
+        <div data-ver="aviso" style="display:none; padding:8px 10px; border-radius:8px; font-size:12.5px; margin-bottom:8px;"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; margin-bottom:6px;">
+          <span data-ver="faltan"></span><span style="color:var(--fg-3);">${esc(destinoTexto())}</span>
+        </div>
+        <div style="border:1px solid var(--border); border-radius:8px; max-height:300px; overflow-y:auto;">
+          <table style="border-collapse:collapse; width:100%;"><tbody data-ver="tabla"></tbody></table>
+        </div>`,
+      buttons: [
+        { action: 'cancel', label: 'Volver' },
+        { action: 'confirm', label: 'Lista verificada', primary: true, icon: 'check' },
+      ],
+      onMount: (root) => {
+        pintar(root);
+        const inp = root.querySelector('[data-ver="input"]');
+        inp.addEventListener('keydown', (e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          procesar(root, inp.value);
+          inp.value = '';
+        });
+        root.addEventListener('click', (e) => {
+          const b = e.target.closest('[data-ver="reemplazar"]');
+          if (b) reemplazar(root, b.dataset.k);
+        });
+        setTimeout(() => inp.focus(), 80);
+      },
+      onAction: (action) => {
+        if (action === 'confirm' && faltan() > 0) { toast(`Faltan ${faltan()} por verificar.`, 'warn'); return false; }
+        return action;
+      },
+    });
+    if (r !== 'confirm') return null;
+    return { n: pend.size, reemplazos };
+  }
+
+  // Aplica los sustitutos al formulario y deja el rastro en el kardex del que
+  // no estaba (solo si tiene ficha; sin ficha no hay dónde anotarlo).
+  async function aplicarReemplazos(reemplazos) {
+    const asg = st.asignador;
+    const user = firebase.auth().currentUser;
+    for (const r of reemplazos) {
+      const inp = [...asg.body.querySelectorAll('.serial-input')].find(i => norm(i.value) === norm(r.anterior));
+      if (inp) inp.value = r.nuevo;
+      try {
+        const docs = await EquiposPoolService.findBySerial(r.anterior);
+        const d = Array.isArray(docs) ? docs[0] : null;
+        if (d && EquiposPoolService.registrarMovimiento) {
+          await EquiposPoolService.registrarMovimiento(d.id, {
+            tipo: 'picklist_no_encontrado', estadoActual: d.estado || null, ref: refTrabajo(),
+            notas: `${r.motivo} — sustituido por ${r.nuevo} al verificar la lista de ${destinoTexto()}`,
+          }, user);
+        }
+      } catch (e) { console.warn('[Asignar] kardex del sustituido:', e?.code || e); }
+    }
+    asg.refresh();
+  }
+
+  // El paso completo: filas → hoja → sustitutos aplicados. null = volver.
+  async function verificarPicklist(seriales) {
+    const filas = await filasPicklist(seriales);
+    if (!filas.length) return { n: 0, reemplazos: [] };
+    const v = await hojaVerificacion(filas);
+    if (!v) return null;
+    if (v.reemplazos.length) await aplicarReemplazos(v.reemplazos);
+    return v;
   }
 
   /* ═════════ Navegación tras guardar ═════════ */
@@ -970,6 +1266,7 @@ window.AlmacenAsignar = (() => {
       if (!btn) return;
       const a = btn.getAttribute('data-as');
       if (a === 'tomar') st.asignador?.tomarDelPool();
+      else if (a === 'imprimir') imprimirPicklist();
       else if (a === 'traer-original') traerDelOriginal();
       else if (a === 'guardar') guardarAvance();
       else if (a === 'listo') listoParaProgramar();
@@ -980,5 +1277,5 @@ window.AlmacenAsignar = (() => {
     });
   });
 
-  return { activar, recargar, abrirContrato, abrirGestion, cargarCola };
+  return { activar, recargar, abrirContrato, abrirGestion, cargarCola, imprimirPicklist, verificarPicklist };
 })();

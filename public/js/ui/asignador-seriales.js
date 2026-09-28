@@ -427,24 +427,38 @@ window.AsignadorSeriales = (() => {
             || String(a.serial || '').localeCompare(String(b.serial || '')));
         secciones.push({ ...s, unidades });
       }
-      // Descartados en QC fuera del estante (auditoría UX 2026-09-28, T12): la
-      // selección automática FIFO podía ofrecer un radio que el taller declaró
-      // inservible. Solo se consultan los modelos que se van a llenar.
-      const descartados = await descartadosDe(secciones.flatMap(s => s.unidades.map(u => u.serial || u.serial_norm)));
-      let nDesc = 0;
-      if (descartados.size) {
-        secciones.forEach(s => {
-          const antes = s.unidades.length;
-          s.unidades = s.unidades.filter(u => !descartados.has(norm(u.serial || u.serial_norm)));
-          nDesc += antes - s.unidades.length;
+      // "Disponible" ≠ "en bodega" (auditoría UX 2026-09-28, P2 #15). Del
+      // estante NO se ofrecen —ni a mano ni por selección automática— las
+      // unidades descartadas en QC (T12), las que el importador marcó DAÑADA
+      // (nota) ni las que arrastran una condición particular vigente. Se
+      // listan aparte como "No disponibles (N)" con su motivo, para que bodega
+      // sepa por qué el conteo del estante no cuadra con lo que se ofrece.
+      // Solo se consultan los modelos que se van a llenar.
+      const todas = secciones.flatMap(s => s.unidades.map(u => u.serial || u.serial_norm));
+      const [descartados, condiciones] = await Promise.all([descartadosDe(todas), condicionesVigentes()]);
+      const noDisp = [];
+      secciones.forEach(s => {
+        s.unidades = s.unidades.filter(u => {
+          const motivo = motivoNoDisponible(u, descartados, condiciones);
+          if (!motivo) return true;
+          noDisp.push({ modelo: s.modelo, serial: u.serial || u.serial_norm, motivo });
+          return false;
         });
-      }
-      if (nDesc) toast(`${nDesc} unidad(es) descartada(s) en QC no se ofrecen (ver Almacén · Descartados).`, 'warn');
+      });
       if (!secciones.length) { toast('No hay cupos vacíos que llenar: todos los seriales están colocados u omitidos.', 'warn'); return; }
       if (!secciones.some(s => s.unidades.length)) {
-        toast('En bodega no hay unidades de estos modelos. Recibe equipos primero.', 'warn');
+        toast(noDisp.length
+          ? `En bodega hay ${noDisp.length} unidad(es) de estos modelos, pero ninguna disponible (${[...new Set(noDisp.map(x => x.motivo))].join('; ')}).`
+          : 'En bodega no hay unidades de estos modelos. Recibe equipos primero.', 'warn');
         return;
       }
+      const noDispHtml = noDisp.length ? `
+        <details class="ep-nodisp" style="margin:0 0 10px; font-size:12.5px; color:var(--fg-2);">
+          <summary style="cursor:pointer; color:#92400E;"><b>No disponibles (${noDisp.length})</b> — están en bodega pero no se ofrecen</summary>
+          <ul style="margin:6px 0 0; padding-left:18px; line-height:1.6; max-height:140px; overflow-y:auto;">
+            ${noDisp.map(x => `<li><span style="font-family:var(--font-mono, monospace);">${esc(x.serial)}</span> · ${esc(x.modelo)} — ${esc(x.motivo)}</li>`).join('')}
+          </ul>
+        </details>` : '';
       // EntityPicker (js/ui/entity-picker.js, 2026-09-08): lista agrupada
       // por modelo con buscador, tope de cupos por grupo y selección
       // automática (FIFO por ingreso a bodega). Devuelve la selección; el
@@ -452,6 +466,7 @@ window.AsignadorSeriales = (() => {
       EntityPicker.abrir({
         titulo: opts.tituloPicker || 'Tomar de bodega', icono: 'scan-barcode', size: 'lg',
         descripcion: 'Marca las unidades que vas a asignar, o usa <b>Selección automática</b> (toma las más antiguas en bodega por modelo).',
+        extraHtml: noDispHtml,
         placeholderBuscar: 'Filtrar por serial…', normalizar: (s) => norm(s),
         grupos: secciones.map((s, si) => ({
           id: si, titulo: s.modelo, cupos: s.cupos,
@@ -572,6 +587,34 @@ window.AsignadorSeriales = (() => {
     // Pasan sin revisar: los ya guardados en esta misma fuente (setGuardados)
     // y las excepciones declaradas por la página (unidades que continúan del
     // contrato original, mismo cliente en renovación…).
+    // Por qué una unidad en bodega NO se ofrece (null = disponible). La regla
+    // vive en EquiposPoolService.motivoNoDisponible; con un servicio viejo en
+    // caché (sin el método) se cae al criterio anterior: solo descartados.
+    function motivoNoDisponible(u, descartados, condiciones) {
+      if (typeof EquiposPoolService !== 'undefined' && EquiposPoolService.motivoNoDisponible) {
+        return EquiposPoolService.motivoNoDisponible(u, { descartados, condiciones });
+      }
+      const dsc = descartados.get(norm(u.serial || u.serial_norm));
+      return dsc ? EquiposDescartadosService.motivoBloqueo(dsc) : null;
+    }
+
+    // Condiciones particulares VIGENTES, Map(serial_norm → doc). Una sola
+    // consulta (son pocas) en vez de una por unidad del estante. Fail-open.
+    async function condicionesVigentes() {
+      if (typeof EquiposCondicionesService === 'undefined' || !EquiposCondicionesService.listar) return new Map();
+      try {
+        const m = new Map();
+        for (const c of await EquiposCondicionesService.listar()) {
+          const k = c.serial_norm || norm(c.serial || '');
+          if (k && c.vigente !== false) m.set(k, c);
+        }
+        return m;
+      } catch (e) {
+        console.warn('[Asignador] condiciones no consultadas:', e?.code || e);
+        return new Map();
+      }
+    }
+
     // Descartados vigentes entre `seriales` (Map norm → doc). Fail-open: sin el
     // servicio o con la red caída devuelve vacío, igual que SerialField.
     async function descartadosDe(seriales) {
@@ -759,6 +802,7 @@ window.AsignadorSeriales = (() => {
       advertenciasPool, avisosCondiciones, panelRevisionSeriales, confirmarAvisosPool,
       validarDuro, panelBloqueo, exigirEnBodega,
       setGuardados, setContexto,
+      motivoNoDisponible, condicionesVigentes, descartadosDe,
     };
   }
 

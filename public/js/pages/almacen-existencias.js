@@ -9,10 +9,12 @@
    Reemplaza el par "Inventario de Radios" (por modelo) / "Equipos
    por serial" (por unidad) como vista. La ficha (EquipoFicha) ya trae
    las acciones de cada unidad (inspección, baja, corregir serial…) y
-   aquí viven los lotes por bloque; inventario/equipos.html queda como
-   vista avanzada ("+N más", conciliación, lotes con Detener). Los
-   asistentes se abren desde la topbar de este espacio con ?accion=.
-   (Cabecera actualizada — auditoría UX 2026-09-28.)
+   aquí viven los lotes por bloque, con el runner común del espacio
+   (AsistenteLote: barra, Detener, reporte por motivo). La lista por
+   serial completa ("+N más", filtros finos, lotes por selección) es
+   la pestaña Avanzado de esta misma página; inventario/equipos.html
+   solo redirige (auditoría UX 2026-09-28, P2 #14). La conciliación
+   contra el conteo es la columna Dif. de este grid — no hay otra.
 
    El join conteo↔pool es el de StockAgg (P6: un número, un
    cálculo); aquí solo se le pegan los conteos por estado.
@@ -23,12 +25,17 @@ window.AlmacenExistencias = (() => {
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
 
-  const EQUIPOS = '../inventario/equipos.html';
   const MAX_CHIPS = 40;   // seriales visibles por estado en la expansión
 
-  // Links que salen de Existencias: el topbar destino (layout.js) convierte
-  // ?volver=existencias en un "Volver" que regresa a esta pestaña.
-  const vol = (url) => url + (url.includes('?') ? '&' : '?') + 'volver=existencias';
+  // Links a la lista avanzada (pestaña Avanzado de esta misma página): el
+  // href es el deep-link real (Ctrl+clic) y el onclick cambia de sección sin
+  // recargar. `p` = {estado, modelo}.
+  const linkAvanzado = (p, texto, extraCss = '') => {
+    const args = JSON.stringify({ estado: p.estado || '', modelo: p.modelo || '' }).replace(/"/g, '&quot;');
+    const href = window.AlmacenPage ? window.AlmacenPage.urlAvanzado(p) : 'index.html?tab=serial';
+    return `<a class="ex-mas${extraCss ? ' ' + extraCss : ''}" href="${esc(href)}"
+      onclick="if(!(event.ctrlKey||event.metaKey)){event.preventDefault();event.stopPropagation();AlmacenPage.abrirAvanzado(${args});}">${texto}</a>`;
+  };
 
   // Columnas de estado del grid (el resto cae en "Otros").
   const COLS = [
@@ -296,9 +303,12 @@ window.AlmacenExistencias = (() => {
     if (difCard) difCard.classList.toggle('kpi-warn', t.difs !== 0);
   }
 
-  function celda(n, danger = false) {
-    if (!n) return '<td style="text-align:right; color:var(--fg-4);">—</td>';
-    return `<td style="text-align:right; font-variant-numeric:tabular-nums; ${danger ? 'color:#991B1B; font-weight:600;' : ''}">${n}</td>`;
+  // `sec`: columna secundaria — en tablet (≤1024 px) se esconde y su número
+  // pasa a la fila expandida (ver .ex-sec en almacen/index.html).
+  function celda(n, danger = false, sec = false) {
+    const cls = sec ? ' class="ex-sec"' : '';
+    if (!n) return `<td${cls} style="text-align:right; color:var(--fg-4);">—</td>`;
+    return `<td${cls} style="text-align:right; font-variant-numeric:tabular-nums; ${danger ? 'color:#991B1B; font-weight:600;' : ''}">${n}</td>`;
   }
 
   function filaHtml(f) {
@@ -316,16 +326,33 @@ window.AlmacenExistencias = (() => {
           ${esc(f.marca ? `${f.marca} ` : '')}<b>${esc(f.label)}</b>
         </td>
         ${celda(f.est['en_bodega'] || 0)}
-        ${celda(f.est['asignado_contrato'] || 0)}
-        ${celda(f.est['en_cliente'] || 0)}
-        ${celda(f.est['en_taller'] || 0)}
+        ${celda(f.est['asignado_contrato'] || 0, false, true)}
+        ${celda(f.est['en_cliente'] || 0, false, true)}
+        ${celda(f.est['en_taller'] || 0, false, true)}
         ${celda(f.est['devuelto_revision'] || 0, true)}
-        ${celda(otros)}
+        ${celda(otros, false, true)}
         <td style="text-align:right; color:var(--fg-3);">${f.conteo ?? '—'}</td>
         ${difHtml}
-        <td style="text-align:right; color:var(--fg-4); font-size:12px; white-space:nowrap;">${f.data?.ultima_actualizacion?.toDate ? f.data.ultima_actualizacion.toDate().toLocaleDateString('es-PA') : '—'}</td>
+        <td class="ex-sec" style="text-align:right; color:var(--fg-4); font-size:12px; white-space:nowrap;">${ultimoConteo(f)}</td>
       </tr>`;
     return fila + (abierta ? expansionHtml(f) : '');
+  }
+
+  function ultimoConteo(f) {
+    return f.data?.ultima_actualizacion?.toDate ? f.data.ultima_actualizacion.toDate().toLocaleDateString('es-PA') : '—';
+  }
+
+  // Lo que la tabla esconde en tablet, dicho en la fila expandida (solo se
+  // ve a ≤1024 px; en escritorio ya está en las columnas).
+  function resumenSecHtml(f) {
+    const otros = OTROS.reduce((s, e) => s + (f.est[e] || 0), 0);
+    return `<div class="ex-sec-resumen">
+      <span>Asignado <b>${f.est['asignado_contrato'] || 0}</b></span>
+      <span>Cliente <b>${f.est['en_cliente'] || 0}</b></span>
+      <span>Taller <b>${f.est['en_taller'] || 0}</b></span>
+      <span>Otros <b>${otros}</b></span>
+      <span>Últ. conteo <b>${esc(ultimoConteo(f))}</b></span>
+    </div>`;
   }
 
   function expansionHtml(f) {
@@ -333,6 +360,7 @@ window.AlmacenExistencias = (() => {
     // fila dice que está cargando en vez de mentir con "sin unidades".
     if (f.docs === null) {
       return `<tr class="ex-expansion"><td colspan="10">
+        ${resumenSecHtml(f)}
         <span style="color:var(--fg-3); font-size:13px;">Cargando las unidades de ${esc(f.label)}…</span>
       </td></tr>`;
     }
@@ -352,7 +380,7 @@ window.AlmacenExistencias = (() => {
         </button>`).join('');
       const resto = docs.length - MAX_CHIPS;
       const mas = resto > 0
-        ? `<a class="ex-mas" href="${vol(`${EQUIPOS}?tab=${encodeURIComponent(estado)}${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`)}">+${resto} más →</a>` : '';
+        ? linkAvanzado({ estado, modelo: f.modelo_id || '' }, `+${resto} más →`) : '';
       // Acciones de LOTE por bloque (Fase C): aplican a TODAS las unidades de
       // ese estado en este modelo — la forma de atacar el atraso por tandas.
       const puede = ['administrador', 'inventario'].includes(window.userRole);
@@ -381,16 +409,17 @@ window.AlmacenExistencias = (() => {
         ${chips}${mas}
       </div>`;
     }).join('');
-    const linkEquipos = vol(`${EQUIPOS}?tab=todos${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`);
+    const linkEquipos = linkAvanzado({ estado: 'todos', modelo: f.modelo_id || '' },
+      '<i data-lucide="sliders-horizontal" style="width:13px;height:13px;"></i> Ver en la lista por serial (Avanzado) →', 'ex-mas--pie');
     const linkHistorico = f.modelo_id
       ? ` · <a href="#" onclick="event.preventDefault(); event.stopPropagation(); AlmacenExistencias.verHistorico('${esc(f.modelo_id).replace(/'/g, "\\'")}')">
           <i data-lucide="bar-chart-2" style="width:13px;height:13px;"></i> Histórico de conteos</a>` : '';
     return `
       <tr class="ex-expansion"><td colspan="10">
+        ${resumenSecHtml(f)}
         ${bloques || '<span style="color:var(--fg-3); font-size:13px;">Sin unidades registradas (solo conteo físico).</span>'}
         <div class="ex-expansion-pie">
-          <a href="${linkEquipos}"><i data-lucide="scan-barcode" style="width:13px;height:13px;"></i>
-            Gestionar en Equipos por serial (avanzado) →</a>${linkHistorico}
+          ${linkEquipos}${linkHistorico}
           <span id="exHistorico-${esc(f.modelo_id || '')}"></span>
         </div>
       </td></tr>`;
@@ -498,17 +527,41 @@ window.AlmacenExistencias = (() => {
 
   // ── Acciones de lote por bloque (Fase C) ────────────────────────────────
   // Reutiliza las mismas funciones unitarias del servicio que las acciones de
-  // fila — igual que hacía la página de Equipos con sus lotes.
-  // Candado del lote (auditoría P0): el bucle secuencial puede tardar minutos
-  // con lotes grandes; antes corría SIN señal de progreso y con el botón vivo
-  // — un segundo click lanzaba OTRO bucle en paralelo sobre las mismas
-  // unidades (kardex con movimientos duplicados).
+  // fila. El runner es AsistenteLote (auditoría UX 2026-09-28, P2 #13): barra
+  // de progreso, Detener y reporte agrupado por motivo — antes esto corría un
+  // bucle mudo en el botón ("Procesando i/N") sin forma de parar un lote de
+  // 300 ni de saber cuáles fallaron.
+  // Candado (auditoría P0): un segundo clic no lanza OTRO lote sobre las
+  // mismas unidades (kardex con movimientos duplicados).
   let _loteEnVuelo = false;
+
+  // Qué hace cada lote. `correr` es LA función de servicio de la acción de
+  // fila — nunca una copia de la escritura.
+  const LOTES = {
+    inspeccion_ok: {
+      titulo: 'Inspección OK en lote', icono: 'check-circle-2', labelOk: 'Inspección OK',
+      cuerpo: (n, f) => `<b>${n}</b> unidad(es) de <b>${esc(f.label)}</b> devueltas por inspeccionar (sin ENTRADA de taller abierta) pasan inspección y vuelven a bodega como disponibles (tipo Refurbished).<br><br>Cada una deja su movimiento en el kardex.`,
+      correr: (eq, motivo, user) => EquiposPoolService.liberar(eq.id,
+        { notas: motivo || 'Inspección OK en lote (Almacén · Existencias)', esperado: EquiposPoolService.ESTADOS.DEVUELTO }, user),
+    },
+    corregir: {
+      titulo: 'Corregir estado en lote', icono: 'pencil-ruler', labelOk: 'Corregir a bodega',
+      pideMotivo: true, motivoPlaceholder: 'p. ej. conteo físico del 4-ago, estante A2',
+      cuerpo: (n, f) => `<b>${n}</b> unidad(es) de <b>${esc(f.label)}</b> en "por clasificar" pasarán a <b>En bodega</b>.<br><br>Al confirmar estás <b>afirmando que están físicamente en bodega</b> — normalmente porque acabas de contarlas. No lo uses para “limpiar la lista”.`,
+      correr: (eq, motivo, user) => EquiposPoolService.corregirABodega(eq.id, motivo, user),
+    },
+    verificar: {
+      titulo: 'Marcar como verificados', icono: 'badge-check', labelOk: 'Verificados',
+      cuerpo: (n, f) => `Se marcarán <b>${n}</b> ficha(s) de <b>${esc(f.label)}</b> como verificadas: confirmas que el dato de la migración es correcto porque tienes el equipo a la vista. <b>No hay deshacer en lote.</b>`,
+      correr: (eq, motivo, user) => EquiposPoolService.verificar(eq.id, user),
+    },
+  };
 
   async function loteAccion(key, estado, accion, btn) {
     if (_loteEnVuelo) return;
     const f = ctx.filas.find(x => x.key === key);
-    if (!f) return;
+    const L = LOTES[accion];
+    if (!f || !L) return;
     // El botón de lote vive DENTRO de la expansión, así que las unidades ya
     // están cargadas. Si aun así no lo estuvieran (una recarga a medias), se
     // para: un lote sobre una lista vacía no haría nada y parecería que sí.
@@ -521,36 +574,27 @@ window.AlmacenExistencias = (() => {
       // Inspección OK no toca lo que tiene ENTRADA abierta (auditoría UX 2026-09-28).
       && (accion !== 'inspeccion_ok' || !eq.orden_actual_id));
     if (!docs.length) return;
+    if (!window.AsistenteLote) { if (window.Toast) Toast.show('El runner de lotes no cargó. Recarga la página.', 'bad'); return; }
     const user = firebase.auth().currentUser;
-    const msgs = {
-      inspeccion_ok: `¿Inspección OK para las ${docs.length} unidades de ${f.label} devueltas por inspeccionar (sin ENTRADA de taller abierta)? Regresan a bodega como disponibles (reuso).`,
-      corregir: `¿Corregir a bodega las ${docs.length} unidades de ${f.label} en "por clasificar"? Quedan disponibles y verificadas.`,
-      verificar: `¿Marcar verificadas ${docs.length} unidades de ${f.label}?`,
-    };
-    if (!await Modal.confirm({ title: 'Acción en lote', confirmLabel: 'Continuar', message: msgs[accion] })) return;
     _loteEnVuelo = true;
     if (btn) btn.disabled = true;
-    let ok = 0, err = 0;
     try {
-      for (const eq of docs) {
-        if (btn) btn.textContent = `Procesando ${ok + err + 1}/${docs.length}…`;
-        try {
-          if (accion === 'inspeccion_ok') await EquiposPoolService.liberar(eq.id, { notas: 'Inspección OK en lote (Almacén · Existencias)', esperado: EquiposPoolService.ESTADOS.DEVUELTO }, user);
-          else if (accion === 'corregir') await EquiposPoolService.corregirABodega(eq.id, 'Corrección en lote (Almacén · Existencias)', user);
-          else if (accion === 'verificar') await EquiposPoolService.verificar(eq.id, user);
-          ok++;
-        } catch (e) { err++; console.warn('[lote]', eq.id, e?.code || e); }
-      }
-      if (window.Toast) Toast.show(`Lote: ${ok} unidades procesadas${err ? `, ${err} fallaron` : ''}.`, err ? 'warn' : 'ok');
+      const r = await AsistenteLote.correr({
+        titulo: L.titulo, icono: L.icono, cuerpoHtml: L.cuerpo(docs.length, f),
+        items: docs, etiqueta: (eq) => eq.serial || eq.serial_norm,
+        pideMotivo: !!L.pideMotivo, motivoPlaceholder: L.motivoPlaceholder || '',
+        correr: (eq, motivo) => L.correr(eq, motivo, user), labelOk: L.labelOk,
+      });
+      if (!r) return;                 // canceló antes de empezar: nada cambió
       await recargar();
       if (window.AlmacenHoy) AlmacenHoy.recargar();
     } finally {
       _loteEnVuelo = false;
       // recargar() repinta la tabla (el botón viejo queda huérfano), pero si
-      // algo falló antes del repintado hay que revivirlo.
+      // se canceló antes del repintado hay que revivirlo.
       if (btn) btn.disabled = false;
     }
   }
 
-  return { activar, recargar, refrescarSiCargado, render, toggleFila, onBuscar, onBuscarEnter, setFiltroEstado, toggleSoloDif, exportarExcel, copiarReporte, loteAccion, verHistorico, enfocarModelo };
+  return { activar, recargar, refrescarSiCargado, render, toggleFila, onBuscar, onBuscarEnter, setFiltroEstado, toggleSoloDif, exportarExcel, copiarReporte, loteAccion, verHistorico, enfocarModelo, LOTES };
 })();

@@ -234,12 +234,28 @@ const SenalesService = {
     );
   },
 
-  countPiezasSinStock() {
+  // S9 — piezas sin stock: el MISMO criterio que la tarjeta y el filtro "Sin
+  // stock" de inventario/piezas.html (esSinStock): pieza ACTIVA, con control
+  // de inventario (las "Libre" no se agotan) y en cero. Antes contaba
+  // cantidad<=0 a secas y la señal decía un número que la página no mostraba
+  // (auditoría UX 2026-09-28, P2 §4.6). Solo igualdades —sin índice
+  // compuesto—: activas en 0 menos las "Libre" activas en 0. Sin agregados
+  // cae al scan con el mismo predicado en cliente.
+  async countPiezasSinStock() {
     const db = firebase.firestore();
+    const wheres = [['activo', '==', true], ['cantidad', '==', 0]];
+    if (window.FbAgg && window.FbAgg.disponible) {
+      try {
+        const n = await window.FbAgg.count('inventario_piezas', wheres);
+        const libres = await window.FbAgg.count('inventario_piezas', [...wheres, ['sin_control_inventario', '==', true]]);
+        return Math.max(0, n - libres);
+      } catch (e) {
+        console.warn('[senales] agregado de piezas falló, cayendo al scan:', e?.code || e);
+      }
+    }
     return this._count(
-      db.collection('inventario_piezas').where('cantidad', '<=', 0),
-      null,
-      { col: 'inventario_piezas', wheres: [['cantidad', '<=', 0]] }
+      db.collection('inventario_piezas').where('activo', '==', true).where('cantidad', '==', 0),
+      (p) => p.sin_control_inventario !== true
     );
   },
 

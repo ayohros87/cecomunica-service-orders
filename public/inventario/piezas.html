@@ -102,11 +102,14 @@
   <!-- Pestañas del espacio Almacén — definición única en js/ui/almacen-nav.js -->
   <div id="wsTabs-mount"></div>
   <script>AlmacenNav.render('piezas');</script> <!-- en el parse: sin brinco -->
+  <!-- Precios solo en Finanzas (auditoría UX 2026-09-28, P2 §4.6): aquí se ven
+       de lectura; se editan en Piezas y Tarifas (admin/contabilidad). Antes las
+       dos pantallas escribían el mismo campo y se pisaban. -->
   <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 var(--sp-3); display:flex; align-items:center; gap:6px;">
     <i data-lucide="info" style="width:14px;height:14px;"></i>
-    El <b>precio de venta, costo y mapeo QuickBooks</b> también se administran en
-    Finanzas · Catálogo · <b>Piezas y Tarifas</b> (rol contabilidad) — misma colección,
-    cuidado con pisarse los precios.
+    Aquí se maneja el <b>stock</b> (con kardex por pieza). El <b>precio de venta, el costo y el
+    mapeo QuickBooks</b> se ven de lectura y se editan solo en Finanzas · Catálogo ·
+    <b>Piezas y Tarifas</b> <span id="lnkFinanzas"></span>.
   </p>
 
   <!-- KPI clicables (auditoría UX 2026-09-28): cada tarjeta aplica su filtro. -->
@@ -199,14 +202,16 @@
           <input class="form-input" id="f-descripcion" placeholder="Descripción detallada de la pieza">
         </div>
 
+        <!-- Precio y costo de LECTURA: se editan en Finanzas · Piezas y Tarifas. -->
         <div class="form-field">
-          <label class="form-label" for="f-precio">Precio de venta <span class="req"></span></label>
-          <input class="form-input" id="f-precio" type="number" step="0.01" placeholder="0.00">
+          <label class="form-label" for="f-precio">Precio de venta</label>
+          <input class="form-input" id="f-precio" type="number" step="0.01" placeholder="0.00" readonly tabindex="-1" style="background:var(--surface-sunken); color:var(--fg-3);">
         </div>
         <div class="form-field">
           <label class="form-label" for="f-costo">Costo unitario</label>
-          <input class="form-input" id="f-costo" type="number" step="0.01" placeholder="0.00">
+          <input class="form-input" id="f-costo" type="number" step="0.01" placeholder="0.00" readonly tabindex="-1" style="background:var(--surface-sunken); color:var(--fg-3);">
         </div>
+        <p id="f-precio-hint" class="muted" style="grid-column:1 / -1; font-size:12px; margin:-6px 0 4px;"></p>
 
         <div class="form-field">
           <label class="form-label" for="f-cantidad">Cantidad</label>

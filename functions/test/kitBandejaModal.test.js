@@ -120,15 +120,18 @@ test("K6 · el home (panel de señales y feeds) pinta con el kit: sin CSS inyect
 test("K7 · la cola de Conflictos vive una sola vez (ConflictosPoolService)", () => {
   const svc = leer("public", "js", "services", "conflictosPoolService.js");
   assert.ok(/agrupar\(/.test(svc) && /fusionarPoolFicha/.test(svc) && /conflicto_revisado/.test(svc));
-  for (const f of [["public", "js", "pages", "almacen-hoy.js"], ["public", "js", "pages", "inventario-equipos.js"]]) {
+  // La cola es UNA y vive en Almacén · Hoy; reabrir un resuelto va por la
+  // ficha (auditoría UX 2026-09-28, P2 #14: equipos.html se absorbió).
+  for (const f of [["public", "js", "pages", "almacen-hoy.js"], ["public", "js", "ui", "equipo-ficha.js"]]) {
     const src = sinComentarios(leer(...f));
     assert.ok(/ConflictosPoolService\./.test(src), `${f.at(-1)}: usa el servicio`);
     assert.ok(!/fusionarPoolFicha/.test(src), `${f.at(-1)}: el callable se invoca solo desde el servicio`);
     assert.ok(!/conflicto_revisado:\s*(true|valor)/.test(src), `${f.at(-1)}: la marca la escribe solo el servicio`);
   }
-  for (const h of [["public", "almacen", "index.html"], ["public", "inventario", "equipos.html"]]) {
-    assert.ok(/conflictosPoolService\.js/.test(textoScripts(h.slice(1).join("/"))), `${h.at(-1)} carga el servicio`);
-  }
+  const lista = sinComentarios(leer("public", "js", "pages", "inventario-equipos.js"));
+  assert.ok(!/renderConflictos|_gruposConflicto|ConflictosPoolService\./.test(lista),
+    "inventario-equipos.js: la cola de Conflictos no se duplica en la lista por serial");
+  assert.ok(/conflictosPoolService\.js/.test(textoScripts("almacen/index.html")), "almacen/index.html carga el servicio");
 });
 
 test("K8 · F3: una identidad de serial, un picker, un combo y un select filtrado", () => {

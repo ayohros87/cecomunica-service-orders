@@ -14,7 +14,7 @@ window.AlmacenNav = {
   // páginas propias. `enPagina` las convierte en botones que cambian de
   // sección sin recargar (AlmacenPage.setTab); desde fuera son enlaces con
   // ?tab=, que index.html resuelve en el parse.
-  EN_PAGINA: ['hoy', 'asignar', 'existencias'],
+  EN_PAGINA: ['hoy', 'asignar', 'existencias', 'serial'],
 
   TABS: [
     { id: 'hoy',         label: 'Hoy',           icon: 'inbox',        href: '/almacen/index.html' },
@@ -22,6 +22,10 @@ window.AlmacenNav = {
     // (propuesta 2026-09-03). Antes se hacía en /contratos/ y en la ficha.
     { id: 'asignar',     label: 'Asignar',       icon: 'scan-barcode', href: '/almacen/index.html?tab=asignar' },
     { id: 'existencias', label: 'Existencias',   icon: 'package',      href: '/almacen/index.html?tab=existencias' },
+    // Lista por serial con filtros finos, lotes con Detener, edición de
+    // proveedor/notas y Excel completo. Era inventario/equipos.html (auditoría
+    // UX 2026-09-28, P2 #14: una sola casa); equipos.html ahora redirige aquí.
+    { id: 'serial',      label: 'Avanzado',      icon: 'sliders-horizontal', href: '/almacen/index.html?tab=serial' },
     { id: 'piezas',      label: 'Piezas',        icon: 'puzzle',       href: '/inventario/piezas.html' },
     // Radios que control de calidad declaró inservibles. Vive aquí porque
     // quien tiene que consultarlo antes de recibir un equipo es bodega.

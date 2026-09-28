@@ -16,11 +16,12 @@
 //   P4 — buscar estando en una pestaña carga el pool entero ANTES de responder,
 //        y nunca pinta "ningún equipo coincide" con media lista en memoria.
 //   P5 — la búsqueda encuentra una ficha que está en OTRA ubicación (N1).
-//   P6 — Todos, Otros y Conflictos cargan el pool entero.
+//   P6 — Todos y Otros cargan el pool entero.
 //   P7 — cualquier filtro secundario carga el pool entero.
 //   P8 — mover una ficha fuera de la pestaña la saca de la lista y corrige los
 //        conteos con el delta.
-//   P9 — la conciliación no inventa diferencias en modo por pestaña.
+//   P9 — la conciliación no vive aquí: es la columna Dif. de Existencias,
+//        que sale del resumen (nunca de lo cargado en una pestaña).
 //   P10 — una ubicación vacía no dice "no hay equipos en el pool".
 //   P11 — sin resumen cae al pool entero y avisa.
 //   P12 — una carga que falla se muestra y NO se reintenta en bucle.
@@ -212,7 +213,9 @@ test("P2 · las tarjetas de Pendientes dicen el total GLOBAL, no el de lo cargad
   assert.equal(txt(els, "colaPorClasificar"), String(V.por.por_clasificar));
   assert.equal(txt(els, "colaPorInspeccionar"), String(V.por.devuelto_revision));
   assert.equal(txt(els, "colaSinVerificar"), String(V.sinVerificar), "sin verificar es del pool ENTERO");
-  assert.equal(txt(els, "colaConflictos"), "1", "el grupo K1 vive en dos ubicaciones y aun así cuenta");
+  // Conflictos ya no es tarjeta de esta lista: la cola vive en Almacén · Hoy
+  // (auditoría UX 2026-09-28, P2 #14) y esta pantalla no la recuenta.
+  assert.equal(els.get("colaConflictos"), undefined);
 });
 
 test("P3 · los contadores de pestaña dicen el total global", async () => {
@@ -256,8 +259,8 @@ test("P5 · la búsqueda encuentra una ficha que está en OTRA ubicación (N1)",
   assert.ok(!/Ningún equipo/.test(html));
 });
 
-test("P6 · Todos, Otros y Conflictos cargan el pool entero", async () => {
-  for (const tab of ["todos", "otros", "conflictos"]) {
+test("P6 · Todos y Otros cargan el pool entero", async () => {
+  for (const tab of ["todos", "otros"]) {
     const { P, consultas } = montar({ tab });
     await P.cargar();
     await asentar(P);
@@ -295,27 +298,22 @@ test("P8 · mover una ficha fuera de la pestaña la saca y corrige los conteos",
   assert.equal(txt(els, "colaSinVerificar"), String(verdad(POOL).sinVerificar - 1), "y ya no cuenta como sin verificar");
 });
 
-test("P9 · la conciliación no inventa diferencias en modo por pestaña", async () => {
-  // Se prueba abrirConciliacion() DE PUNTA A PUNTA, no el ayudante suelto: una
-  // primera versión de esta prueba llamaba a _bodegaDesdeResumen directo y
-  // seguía en verde aunque la conciliación volviera a agrupar lo cargado.
-  //
-  // Conteo físico que CUADRA con la bodega real: m1 tiene B1, B2, K1 (3) y m2
-  // tiene B3 (1). Con la bodega real, los dos modelos cuadran. Si se agrupara
-  // lo cargado —la pestaña en_cliente, sin una sola ficha de bodega— daría
-  // −3 y −1: diferencias falsas con cara de reporte correcto.
-  const { P, els } = montar({
-    tab: "en_cliente",
-    conteosFisicos: [{ id: "m1", cantidad: 3 }, { id: "m2", cantidad: 1 }],
-    modelos: [{ id: "m1", label: "PD606" }, { id: "m2", label: "NX420" }],
-  });
-  await P.cargar();
-  await asentar(P);
-  assert.ok(!P._equipos.some(e => e.estado === "en_bodega"), "en memoria no hay bodega");
-  await P.abrirConciliacion();
-  const html = els.get("concilTabla").innerHTML;
-  assert.match(html, /<strong>2\/2<\/strong> modelos cuadrados/,
-    "con la bodega real los dos modelos cuadran — agrupar lo cargado daría 0/2");
+test("P9 · la conciliación vive UNA vez: la columna Dif. de Existencias, desde el resumen", () => {
+  // Antes esta pantalla tenía su propio modal de conciliación y, en modo por
+  // pestaña, una versión agrupaba lo cargado (la pestaña en_cliente, sin una
+  // sola ficha de bodega) y reportaba −3 y −1: diferencias falsas con cara de
+  // reporte correcto. La absorción en Almacén (auditoría UX 2026-09-28, P2
+  // #14) la retiró: el único join conteo↔bodega es el de Existencias, y su
+  // bodega por modelo sale del resumen (`agregados_pool`), nunca de docs.
+  const pagina = leer("pages/inventario-equipos.js");
+  assert.doesNotMatch(pagina, /abrirConciliacion|_bodegaDesdeResumen|concilTabla/,
+    "la lista por serial no debe volver a tener conciliación propia");
+  const ex = leer("pages/almacen-existencias.js");
+  assert.match(ex, /StockAgg\.build\(\{ modelos, conteos, poolMap: bodegaMap \}\)/,
+    "Existencias concilia con StockAgg");
+  const armado = ex.slice(ex.indexOf("const bodegaMap = new Map()"), ex.indexOf("StockAgg.build("));
+  assert.match(armado, /g\.est\['en_bodega'\]/, "la bodega por modelo sale del resumen (est.en_bodega), no de docs");
+  assert.doesNotMatch(armado, /\.docs/, "no se agrupa lo cargado");
 });
 
 test("P10 · una ubicación vacía no dice 'no hay equipos en el pool'", async () => {

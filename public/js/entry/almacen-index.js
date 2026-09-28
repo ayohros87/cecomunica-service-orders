@@ -34,6 +34,12 @@ import '/js/ui/entity-picker.js';
 import '/js/ui/asignador-seriales.js';
 import '/js/pages/almacen-asignar.js';
 import '/js/pages/almacen-hoy.js';
+// Runner común de lotes (Existencias y Avanzado) — auditoría UX 2026-09-28.
+import '/js/ui/asistente-lote.js';
 import '/js/pages/almacen-existencias.js';
+// Pestaña Avanzado (lista por serial): era inventario/equipos.html. PocService
+// lo usa "Corregir estado" para desactivar el device POC vinculado.
+import '/js/services/pocService.js';
+import '/js/pages/inventario-equipos.js';
 import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';

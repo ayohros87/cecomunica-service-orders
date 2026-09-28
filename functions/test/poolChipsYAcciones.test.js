@@ -98,8 +98,10 @@ test("chipEstadoHtml usa siempre una clase con color", () => {
   assert.match(svc.chipEstadoHtml("estado_inventado"), /eqpool-chip-desconocido/);
 });
 
-test("la página de inventario ya no define su propia paleta de estados", () => {
-  const html = leer("public", "inventario", "equipos.html");
+test("la lista por serial ya no define su propia paleta de estados", () => {
+  // La lista vive en almacen/index.html (pestaña Avanzado) desde la auditoría
+  // UX 2026-09-28; inventario/equipos.html es solo un stub de redirección.
+  const html = leer("public", "almacen", "index.html");
   const js = leer("public", "js", "pages", "inventario-equipos.js");
   // .eq-badge era la copia desincronizada del kit; no debe volver. Se ignoran
   // los comentarios (HTML y CSS), que sí la nombran para explicar por qué se fue.
@@ -107,7 +109,7 @@ test("la página de inventario ya no define su propia paleta de estados", () => 
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/\/\*[\s\S]*?\*\//g, "");
   assert.ok(!/\.eq-badge-/.test(htmlSinComentarios),
-    "equipos.html volvió a declarar .eq-badge-* (duplica los chips del kit)");
+    "almacen/index.html volvió a declarar .eq-badge-* (duplica los chips del kit)");
   assert.ok(!/class="eq-badge/.test(js),
     "inventario-equipos.js volvió a emitir .eq-badge (usa EquiposPoolService.chipEstadoHtml)");
 });
@@ -257,18 +259,20 @@ test("la página aterriza en Bodega y sin filtro de propiedad impuesto", () => {
 });
 
 test("las pestañas son sólo ubicaciones; las colas viven en las tarjetas", () => {
-  const html = leer("public", "inventario", "equipos.html");
+  const html = leer("public", "almacen", "index.html");
   const tabs = [...html.matchAll(/class="eq-tab[^"]*"\s+data-tab="([^"]+)"/g)].map(m => m[1]);
   assert.deepEqual(tabs.sort(),
     ["asignado_contrato", "en_bodega", "en_cliente", "en_taller", "otros", "todos"].sort(),
-    "las colas (devuelto_revision/por_clasificar/conflictos) no deben volver a la fila de pestañas");
+    "las colas (devuelto_revision/por_clasificar) no deben volver a la fila de pestañas");
 
   const colas = [...html.matchAll(/class="eq-cola"\s+data-cola="([^"]+)"/g)].map(m => m[1]);
   // no_retirado (2026-09-09): radios DEL CLIENTE que quedaron listos y nadie
   // vino a buscar. Es cola y no pestaña por lo mismo que las otras — no es una
   // ubicación del inventario, es trabajo pendiente de DECISIÓN.
+  // Conflictos (1 serial, 2+ modelos) ya no es tarjeta aquí: la cola es UNA y
+  // vive en Almacén · Hoy (auditoría UX 2026-09-28, P2 #14).
   assert.deepEqual(colas.sort(),
-    ["conflictos", "devuelto_revision", "no_retirado", "por_clasificar", "sin_verificar"].sort());
+    ["devuelto_revision", "no_retirado", "por_clasificar", "sin_verificar"].sort());
 
   const page = cargarPagina();
   // Toda cola declarada en el HTML tiene que existir en el mapa de la página.
@@ -284,7 +288,14 @@ test("los deep-links de las señales del home siguen siendo válidos", () => {
     const esCola = Object.values(page.COLAS).some(c => c.tab === t);
     const esUbicacion = ["en_bodega", "asignado_contrato", "en_cliente", "en_taller", "otros", "todos"].includes(t);
     assert.ok(esCola || esUbicacion, `?tab=${t} ya no lleva a ninguna vista`);
+    // El stub de equipos.html traduce ?tab=X a ?tab=serial&estado=X, y la
+    // pestaña Avanzado acepta ese estado.
+    assert.ok(page.TABS_VALIDAS.includes(t), `la pestaña Avanzado no acepta estado=${t}`);
   }
+  const stub = leer("public", "inventario", "equipos.html");
+  assert.match(stub, /location\.replace\('\/almacen\/index\.html'/, "equipos.html tiene que redirigir a Almacén");
+  assert.match(stub, /d\.set\('estado', tab\)/, "el stub conserva la pestaña pedida como estado=");
+  assert.match(stub, /d\.set\('serial', serial\)/, "el stub conserva ?serial=");
 });
 
 // ── Acciones en lote ───────────────────────────────────────────────────────
@@ -325,10 +336,31 @@ test("la acción que afirma presencia física exige motivo", () => {
   assert.match(cuerpo, /físicamente/, "el confirm debe decir que se afirma presencia física");
 });
 
-test("_enTandas no se detiene ante un fallo y reporta cuál falló", async () => {
-  const page = cargarPagina();
+// ── Runner de lotes (js/ui/asistente-lote.js) ─────────────────────────────
+// Era _enTandas de la página; desde la auditoría UX 2026-09-28 (P2 #13) es
+// el runner común de Existencias y de la lista por serial.
+function cargarLote() {
+  const ctx = { console, window: {} };
+  vm.createContext(ctx);
+  vm.runInContext(leer("public", "js", "ui", "asistente-lote.js"), ctx);
+  return ctx.window.AsistenteLote;
+}
+
+test("las dos listas de Almacén corren sus lotes con el MISMO runner", () => {
+  for (const f of ["almacen-existencias.js", "inventario-equipos.js"]) {
+    const src = leer("public", "js", "pages", f);
+    assert.match(src, /AsistenteLote\.correr\(/, `${f}: el lote va por AsistenteLote`);
+    assert.doesNotMatch(src, /Procesando \$\{/, `${f}: no queda el bucle mudo en el botón`);
+  }
+  const scripts = require("./_helpers/entryScripts").textoScripts("almacen/index.html");
+  assert.match(scripts, /ui\/asistente-lote\.js/, "almacen/index.html carga el runner");
+  assert.match(scripts, /pages\/inventario-equipos\.js/, "almacen/index.html carga la lista por serial");
+});
+
+test("enTandas no se detiene ante un fallo y reporta cuál falló", async () => {
+  const page = cargarLote();
   const items = [1, 2, 3, 4, 5];
-  const res = await page._enTandas(items, async (n) => {
+  const res = await page.enTandas(items, async (n) => {
     if (n % 2 === 0) throw new Error("boom " + n);
   }, { concurrencia: 2 });
 
@@ -341,20 +373,20 @@ test("_enTandas no se detiene ante un fallo y reporta cuál falló", async () =>
   assert.ok(fallos.every(f => /boom/.test(f.error)), "el motivo del fallo debe conservarse por unidad");
 });
 
-test("_enTandas respeta la cancelación y dice cuántas quedaron sin intentar", async () => {
-  const page = cargarPagina();
+test("enTandas respeta la cancelación y dice cuántas quedaron sin intentar", async () => {
+  const page = cargarLote();
   const items = Array.from({ length: 50 }, (_, i) => i);
   let hechos = 0, cancelar = false;
-  const res = await page._enTandas(items, async () => { hechos++; if (hechos >= 10) cancelar = true; },
+  const res = await page.enTandas(items, async () => { hechos++; if (hechos >= 10) cancelar = true; },
     { concurrencia: 1, cancelado: () => cancelar });
   assert.ok(res.length >= 10 && res.length < 50,
     `debe parar a media lista (procesó ${res.length} de 50)`);
 });
 
-test("_enTandas informa progreso en cada unidad", async () => {
-  const page = cargarPagina();
+test("enTandas informa progreso en cada unidad", async () => {
+  const page = cargarLote();
   const vistos = [];
-  await page._enTandas([1, 2, 3], async () => {}, {
+  await page.enTandas([1, 2, 3], async () => {}, {
     concurrencia: 1, onProgreso: (hechos, total) => vistos.push(`${hechos}/${total}`),
   });
   assert.deepEqual(vistos, ["1/3", "2/3", "3/3"]);

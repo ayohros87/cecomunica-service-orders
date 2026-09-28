@@ -50,6 +50,9 @@ window.EquipoFicha = {
     correccion_serial:    'Corrección de serial',
     correccion_modelo:    'Corrección de modelo',
     correccion_propiedad: 'Corrección de propiedad',
+    // Pick & confirm de Almacén · Asignar (auditoría UX 2026-09-28): bodega
+    // no encontró la unidad al verificar la lista y la sustituyó.
+    picklist_no_encontrado: 'No estaba en el estante al verificar la lista',
   },
 
   _esc(s) {
@@ -138,12 +141,13 @@ window.EquipoFicha = {
       // Mismas clases y MISMO texto que en Inventario y junto a los inputs
       // (auditoría 2026-08-04, A4: una condición con cuatro nombres distintos).
       // Con decisión tomada el chip baja de tono y deja de mandar a la cola:
-      // en Conflictos solo está lo pendiente, y un resuelto vive bajo "Ver los
-      // ya revisados". Mandarlo a ciegas hacía parecer que el dato se perdió.
+      // en la cola de Conflictos (Almacén · Hoy) solo está lo pendiente; el
+      // resuelto se reabre desde esta misma ficha ("Reabrir conflicto").
+      // Mandarlo a ciegas hacía parecer que el dato se perdió.
       eq.serial_compartido
         ? (eq.conflicto_revisado === true
-            ? '<span class="eqpool-compartido" style="background:#fef3c7;color:#92400e;" title="Confirmado: dos radios físicos distintos comparten esta numeración (típico Kenwood NX-420 / NX-920). Verifica el modelo antes de operar. El detalle está en Equipos por serial · Conflictos → «Ver los ya revisados».">2+ modelos · confirmado</span>'
-            : '<span class="eqpool-compartido" title="Este serial existe en más de una ficha y nadie lo ha revisado — verifica el modelo. Se resuelve en Equipos por serial · pestaña Conflictos.">2+ modelos</span>')
+            ? '<span class="eqpool-compartido" style="background:#fef3c7;color:#92400e;" title="Confirmado: dos radios físicos distintos comparten esta numeración (típico Kenwood NX-420 / NX-920). Verifica el modelo antes de operar. Si la decisión fue equivocada, usa «Reabrir conflicto» aquí abajo.">2+ modelos · confirmado</span>'
+            : '<span class="eqpool-compartido" title="Este serial existe en más de una ficha y nadie lo ha revisado — verifica el modelo. Se resuelve en la cola de Conflictos de Almacén · Hoy.">2+ modelos</span>')
         : '',
       eq.verificado === false ? '<span class="eqpool-noverif" title="Creado por migración automática — pendiente de confirmación física">Sin verificar</span>' : '',
     ].join(' ');
@@ -191,8 +195,10 @@ window.EquipoFicha = {
     }).join('') : '<li style="font-size:12.5px; color:var(--fg-3); list-style:none;">Sin movimientos registrados.</li>';
 
     const puedeInventario = this._ROLES_INVENTARIO.includes(window.userRole);
+    // La lista avanzada (Almacén · Avanzado): editar proveedor/notas, lotes,
+    // exportar. kardexUrl a secas volvería a abrir esta misma ficha.
     const footerInv = puedeInventario
-      ? `<a class="btn btn-ghost" href="${EquiposPoolService.kardexUrl(eq.serial || eq.serial_norm)}">Abrir en Equipos por serial</a>`
+      ? `<a class="btn btn-ghost" href="${EquiposPoolService.kardexUrl(eq.serial || eq.serial_norm, { avanzado: true })}">Ver en la lista por serial</a>`
       : '';
     // Fase A (propuesta Almacén 2026-08): la ficha deja de ser solo-lectura.
     // Acciones contextuales por estado, llamando directo al servicio — el
@@ -236,6 +242,12 @@ window.EquipoFicha = {
       a.push(btn('reactivar', 'Reactivar → bodega', 'btn-accent'));
     }
     if (eq.verificado === false) a.push(btn('verificar', 'Marcar verificado'));
+    // Un conflicto de modelo ya cerrado ("son radios distintos") se reabre
+    // desde aquí: la cola de Almacén · Hoy solo muestra pendientes, y este era
+    // el único camino de vuelta cuando la decisión resultó equivocada.
+    if (eq.serial_compartido && eq.conflicto_revisado === true && window.ConflictosPoolService) {
+      a.push(btn('reabrir_conflicto', 'Reabrir conflicto'));
+    }
     // Corregir serial desde la ficha (auditoría UX 2026-09-28, flujo f): antes
     // obligaba a salir a equipos.html (~8 pasos). Mismo servicio y la misma
     // revisión + confirmación que allá; vale en cualquier estado.
@@ -307,6 +319,22 @@ window.EquipoFicha = {
       } else if (accion === 'verificar') {
         await EquiposPoolService.verificar(eq.id, user);
         aviso(`${serial} marcado como verificado.`);
+      } else if (accion === 'reabrir_conflicto') {
+        // Todas las fichas del serial vuelven a la cola de pendientes. No se
+        // borra la marca: se pone en false y el porqué queda en el kardex.
+        const snapG = await firebase.firestore().collection('equipos_pool')
+          .where('serial_norm', '==', eq.serial_norm || EquiposPoolService.normalizarSerial(serial)).limit(10).get();
+        const grupo = ConflictosPoolService.agrupar(
+          snapG.docs.map(d => ({ id: d.id, ...d.data() })), { incluirRevisados: true }).find(g => g.revisado);
+        if (!grupo) { aviso('Este serial ya no tiene un conflicto cerrado.', 'warn'); return; }
+        const motivo = await Modal.prompt({
+          title: 'Reabrir conflicto', confirmLabel: 'Reabrir',
+          message: `Las ${grupo.docs.length} fichas del serial ${serial} vuelven a la cola de Conflictos de Almacén · Hoy. ¿Por qué se reabre?`,
+          placeholder: 'Ej.: bodega revisó de nuevo y es un solo radio con el modelo mal capturado',
+        });
+        if (motivo === null) return;
+        await ConflictosPoolService.marcarRevisado(grupo, false, `Conflicto reabierto. ${(motivo || '').trim()}`.trim());
+        aviso(`${serial}: conflicto devuelto a la cola.`);
       } else if (accion === 'vender') {
         this._cerrar();
         if (window.AsistenteVenta) {

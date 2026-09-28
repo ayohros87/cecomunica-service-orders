@@ -902,6 +902,15 @@ async function main() {
   await assertSucceeds(as("recepcion").doc("poc_devices/d1").set({ x: 1 }));
   await assertSucceeds(as("vendedor").doc("clientes/cli1").set({ nombre: "X" }));
   ok("REGRESIÓN: inventario_piezas/analytics/poc_devices/clientes siguen abiertos");
+
+  // ── inventario_piezas/{id}/kardex: cada ajuste ±N con motivo (P2 Almacén,
+  // auditoría UX 2026-09-28). Lo escribe quien ajusta; nunca se edita ni borra.
+  await assertSucceeds(as("inventario").doc("inventario_piezas/p1/kardex/k1")
+    .set({ delta: 5, antes: 3, despues: 8, motivo: "compra", por: "inventario" }));
+  await assertSucceeds(as("tecnico").doc("inventario_piezas/p1/kardex/k1").get());
+  await assertFails(as("inventario").doc("inventario_piezas/p1/kardex/k1").set({ delta: 6 }, { merge: true }));
+  await assertFails(as("administrador").doc("inventario_piezas/p1/kardex/k1").delete());
+  ok("kardex de piezas: se registra y se lee; no se edita ni se borra");
   // Alta de PoC solo admin/recepción (auditoría UX 2026-09-28, T4); el update sigue abierto.
   for (const r of ["vendedor", "tecnico", "gerente", "vista"]) {
     await assertFails(as(r).doc(`poc_devices/nuevo_${r}`).set({ x: 1 }));

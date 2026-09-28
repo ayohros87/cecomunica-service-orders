@@ -46,6 +46,12 @@ firebase.auth().onAuthStateChanged(async (user) => {
     const rol = userDoc ? (userDoc.rol || null) : null;
     rolActual = rol;
     loadUIPrefs();
+    // Precios solo en Finanzas: el enlace de la nota de arriba es para admin
+    // (contabilidad no entra a esta página; inventario no edita precios).
+    const lnk = document.getElementById('lnkFinanzas');
+    if (lnk) lnk.innerHTML = rol === ROLES.ADMIN
+      ? '(<a href="/inventario/piezas-tarifas.html">Editar en Finanzas</a>)'
+      : '(administración o contabilidad)';
 
 const btnBatch = document.getElementById('btnBatch');
 if (btnBatch) {
@@ -458,9 +464,12 @@ function showSkeleton(){
 
 
 
-// Mismos criterios en KPI y filtros (auditoría UX 2026-09-28): "sin stock" =
-// controlada y en 0; "stock bajo" = controlada, con algo, bajo el mínimo.
-const esSinStock = (p) => !p.sin_control_inventario && Number(p.cantidad || 0) <= 0;
+// Mismos criterios en KPI, filtros y la señal S9 del home (auditoría UX
+// 2026-09-28): "sin stock" = ACTIVA, controlada y en 0 — una pieza inactiva o
+// "Libre" no es un faltante que alguien tenga que reponer; "stock bajo" =
+// controlada, con algo, bajo el mínimo. SenalesService.countPiezasSinStock
+// cuenta exactamente esto: si cambia aquí, cambia allá.
+const esSinStock = (p) => p.activo === true && !p.sin_control_inventario && Number(p.cantidad || 0) <= 0;
 const esStockBajo = (p) => !p.sin_control_inventario && Number(p.cantidad || 0) > 0 && Number(p.cantidad || 0) < Number(p.minimo || 5);
 
 function renderResumen(){
@@ -604,6 +613,7 @@ function render() {
           <div class="table-actions">
             ${chipCant}
             <button class="btn btn-ghost btn-sm" title="Ajustar stock (±N con motivo)" aria-label="Ajustar stock" ${disableEdicion || p.sin_control_inventario ? 'disabled' : ''} onclick="ajustarStockN('${p.id}')">±</button>
+            <button class="btn btn-ghost btn-sm" title="Kardex: cada entrada y salida con su motivo" aria-label="Kardex" onclick="verKardex('${p.id}')"><i data-lucide="history"></i></button>
           </div>
           ${p.ultimo_ajuste?.motivo ? `<span class="muted" style="display:block; font-size:11px;" title="${String(p.ultimo_ajuste.motivo).replace(/"/g, '&quot;')}">últ.: ${p.ultimo_ajuste.delta > 0 ? '+' : ''}${Number(p.ultimo_ajuste.delta || 0)}</span>` : ''}
         </td>
@@ -708,7 +718,55 @@ setVal('f-notas','');
       setVal('f-notas', pieza.notas || '');
     }
   }
+  // Precio y costo son de LECTURA aquí (auditoría UX 2026-09-28): se editan
+  // solo en Finanzas · Piezas y Tarifas (admin/contabilidad). Al crear
+  // quedan en 0 y Finanzas los ve marcados "⚠ sin precio".
+  const hint = document.getElementById('f-precio-hint');
+  if (hint) {
+    hint.innerHTML = (creando ? 'La pieza nace sin precio: ' : 'Precio y costo de lectura: ')
+      + (rolActual === ROLES.ADMIN
+        ? `<a href="/inventario/piezas-tarifas.html">Editar en Finanzas · Piezas y Tarifas</a>`
+        : 'los fija Finanzas (administración o contabilidad) en Piezas y Tarifas.')
+      + (creando ? '' : ` · <a href="#" onclick="event.preventDefault(); verKardex('${id}')">Ver kardex</a>`);
+  }
   Modal.open('overlay');
+}
+
+// Kardex de la pieza (auditoría UX 2026-09-28): cada ±N con motivo, quién y
+// de dónde (ajuste manual, consumo de una orden…). Antes solo quedaba el
+// último ajuste en el doc.
+async function verKardex(id) {
+  const p = piezas.find(x => x.id === id);
+  if (!p) return;
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+  const nombre = p.nombre || [p.marca, p.sku].filter(Boolean).join(' ') || 'pieza';
+  let movs = [];
+  let error = '';
+  try { movs = await PiezasService.getKardex(id); } catch (e) { console.warn(e); error = e?.message || String(e); }
+  const fecha = (ts) => ts?.toDate ? ts.toDate().toLocaleString('es-PA', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+  const filas = movs.map(m => `<tr>
+      <td style="padding:6px 8px; border-bottom:1px solid var(--border); white-space:nowrap; font-size:12px; color:var(--fg-3);">${esc(fecha(m.fecha))}</td>
+      <td style="padding:6px 8px; border-bottom:1px solid var(--border); text-align:right; font-weight:600; color:${Number(m.delta) > 0 ? '#067647' : '#b91c1c'}; font-variant-numeric:tabular-nums;">${Number(m.delta) > 0 ? '+' : ''}${Number(m.delta || 0)}</td>
+      <td style="padding:6px 8px; border-bottom:1px solid var(--border); text-align:right; color:var(--fg-3); font-variant-numeric:tabular-nums; white-space:nowrap;">${Number(m.antes ?? 0)} → ${Number(m.despues ?? 0)}</td>
+      <td style="padding:6px 8px; border-bottom:1px solid var(--border); font-size:13px;">${esc(m.motivo || '—')}
+        <span class="muted" style="display:block; font-size:11px;">${esc(m.origen || '')}${m.ref?.label || m.ref?.id ? ` · ${esc(m.ref.label || m.ref.id)}` : ''}${m.por_email ? ` · ${esc(m.por_email)}` : ''}</span></td>
+    </tr>`).join('');
+  const ultimo = p.ultimo_ajuste?.motivo && !movs.length
+    ? `<p class="muted" style="font-size:12px; margin:8px 0 0;">Último ajuste registrado antes del kardex: ${p.ultimo_ajuste.delta > 0 ? '+' : ''}${Number(p.ultimo_ajuste.delta || 0)} — ${esc(p.ultimo_ajuste.motivo)}</p>` : '';
+  await Modal.sheet({
+    title: 'Kardex', icon: 'history', size: 'md',
+    html: `
+      <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);"><b>${esc(nombre)}</b> · hay <b>${Number(p.cantidad || 0)}</b>${p.sin_control_inventario ? ' · sin control de inventario' : ''}</p>
+      ${error ? `<p style="color:#b91c1c; font-size:13px;">No se pudo leer el kardex: ${esc(error)}</p>` : ''}
+      ${movs.length ? `<div style="border:1px solid var(--border); border-radius:8px; max-height:360px; overflow-y:auto;">
+        <table style="border-collapse:collapse; width:100%;">
+          <thead><tr style="font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--fg-3);">
+            <th style="text-align:left; padding:6px 8px;">Fecha</th><th style="text-align:right; padding:6px 8px;">±</th><th style="text-align:right; padding:6px 8px;">Stock</th><th style="text-align:left; padding:6px 8px;">Motivo</th></tr></thead>
+          <tbody>${filas}</tbody></table></div>`
+        : (error ? '' : '<p class="muted" style="font-size:13px;">Sin movimientos en el kardex todavía: cada ±N con motivo queda aquí a partir de ahora.</p>')}
+      ${ultimo}`,
+    buttons: [{ action: 'cerrar', label: 'Cerrar', primary: true }],
+  });
 }
 
 
@@ -724,8 +782,6 @@ async function guardarPieza(){
   const nombre = (document.getElementById('f-nombre').value || '').trim();
   const descripcion = (document.getElementById('f-descripcion').value || '').trim();
 
-  const precio = Number(document.getElementById('f-precio').value || 0);
-  const costo = Number(document.getElementById('f-costo').value || 0);
   const cantidad = Number(document.getElementById('f-cantidad').value || 0);
   const minimo = Number(document.getElementById('f-minimo').value || 5);
   const unidad = (document.getElementById('f-unidad').value || 'pieza').trim();
@@ -739,15 +795,15 @@ async function guardarPieza(){
     ? equiposTxt.split(',').map(x=>x.trim()).filter(Boolean)
     : [];
 
-  if (!marca || precio <= 0){
-    Toast.show('Marca y Precio son requeridos','warn');
+  if (!marca){
+    Toast.show('La marca es requerida','warn');
     return;
   }
 
+  // Sin precio_venta ni costo_unitario: los escribe solo Finanzas (Piezas y
+  // Tarifas). Al crear nacen en 0 para que Finanzas los vea "⚠ sin precio".
   const payload = {
     marca, sku, nombre, descripcion,
-    precio_venta: precio,
-    costo_unitario: costo,
     cantidad, minimo, unidad, ubicacion,
     equipos_asociados,
     sin_control_inventario: sin_control,
@@ -757,7 +813,7 @@ async function guardarPieza(){
 
   try {
     if (piezaEditId === null){
-      await PiezasService.addPieza({ ...payload, creado_por_uid: firebase.auth().currentUser.uid });
+      await PiezasService.addPieza({ ...payload, precio_venta: 0, costo_unitario: 0, creado_por_uid: firebase.auth().currentUser.uid });
       Toast.show('Pieza creada','ok');
     } else {
       await PiezasService.updatePieza(piezaEditId, payload);
@@ -884,5 +940,5 @@ Object.assign(window, {
   abrirBatchModal, abrirModal, ajustarStock, ajustarStockN, aplicarFiltroKpi, limpiarFiltrosPiezas,
   cerrarBatchModal, cerrarModal,
   descargarPlantillaCSV, duplicar, eliminarPieza, guardarBatch, guardarPieza,
-  onTogglePiezas, sortBy, toggleActivo
+  onTogglePiezas, sortBy, toggleActivo, verKardex
 });

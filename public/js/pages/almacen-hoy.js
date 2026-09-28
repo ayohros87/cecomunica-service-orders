@@ -10,27 +10,51 @@
        conflictos de ficha, sin verificar (deuda de migración).
      · De conteos: modelos con diferencia pool ≠ conteo (StockAgg).
 
-   La bandeja RUTEA: cada ítem lleva a la pantalla donde ya se
-   resuelve (contratos/seriales.html, equipos.html con deep-link).
+   La bandeja RUTEA: cada ítem lleva a la pestaña de este mismo
+   espacio donde ya se resuelve (Asignar, Existencias, Avanzado).
    La bandeja vacía es el estado de éxito.
    ============================================================= */
 
 window.AlmacenPage = {
+  TABS: ['hoy', 'asignar', 'existencias', 'serial'],
+
+  // `extra`: lo que la pestaña necesita al abrirse. Asignar: {contrato, g,
+  // corregir}. Avanzado ('serial'): {estado, verificar, modelo, serial} —
+  // los mismos deep-links que recibía inventario/equipos.html.
   setTab(tab, extra = {}) {
-    ['hoy', 'asignar', 'existencias'].forEach(t => {
+    this.TABS.forEach(t => {
       const el = document.getElementById('tab-' + t);
       if (el) el.style.display = t === tab ? '' : 'none';
     });
     if (window.WorkspaceTabs) WorkspaceTabs.setActive(tab);
-    // Existencias y Asignar cargan bajo demanda la primera vez.
+    // Existencias, Asignar y Avanzado cargan bajo demanda la primera vez.
     if (tab === 'existencias' && window.AlmacenExistencias) AlmacenExistencias.activar();
     if (tab === 'asignar' && window.AlmacenAsignar) AlmacenAsignar.activar(extra);
+    if (tab === 'serial' && window.EquiposPool) EquiposPool.activar(extra);
     try {
       const url = new URL(location.href);
       if (tab === 'hoy') url.searchParams.delete('tab'); else url.searchParams.set('tab', tab);
-      if (tab !== 'asignar') { url.searchParams.delete('contrato'); url.searchParams.delete('g'); }
+      if (tab !== 'asignar') { url.searchParams.delete('contrato'); url.searchParams.delete('g'); url.searchParams.delete('corregir'); }
+      if (tab !== 'serial') { ['estado', 'verificar', 'modelo'].forEach(k => url.searchParams.delete(k)); }
+      if (tab !== 'serial' && tab !== 'existencias') url.searchParams.delete('serial');
       history.replaceState(null, '', url);
     } catch { /* la pestaña cambió igual */ }
+  },
+
+  // Deep-link a la lista avanzada desde otra pestaña de ESTA página (sin
+  // recargar). Es lo que antes era un href a inventario/equipos.html?tab=…
+  abrirAvanzado({ estado = '', verificar = false, modelo = '', serial = '' } = {}) {
+    AlmacenPage.setTab('serial', { estado, verificar, modelo, serial });
+  },
+
+  // El mismo destino como URL real (para Ctrl+clic / abrir en otra pestaña).
+  urlAvanzado({ estado = '', verificar = false, modelo = '', serial = '' } = {}) {
+    const q = ['tab=serial'];
+    if (estado) q.push('estado=' + encodeURIComponent(estado));
+    if (verificar) q.push('verificar=1');
+    if (modelo) q.push('modelo=' + encodeURIComponent(modelo));
+    if (serial) q.push('serial=' + encodeURIComponent(serial));
+    return `index.html?${q.join('&')}`;
   },
 
   // Desde Hoy (y desde cualquier <a data-asignar>): abrir la pestaña Asignar
@@ -44,12 +68,14 @@ window.AlmacenPage = {
     const visible = (id) => { const el = document.getElementById(id); return el && el.style.display !== 'none'; };
     if (visible('tab-existencias') && window.AlmacenExistencias) return AlmacenExistencias.recargar();
     if (visible('tab-asignar') && window.AlmacenAsignar) return AlmacenAsignar.recargar();
+    if (visible('tab-serial') && window.EquiposPool) return EquiposPool.cargar();
     return AlmacenHoy.recargar();
   },
 
   recargarTodo() {
     AlmacenHoy.recargar();
     if (window.AlmacenExistencias) AlmacenExistencias.refrescarSiCargado();
+    if (window.EquiposPool && EquiposPool._activo) EquiposPool.cargar();
   },
 
   // Asistentes (Fase B): componentes propios del espacio. Mientras alguno no
@@ -59,7 +85,7 @@ window.AlmacenPage = {
     AsistenteConteo.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
   },
   abrirRecibir() {
-    if (!window.AsistenteRecibir) { location.href = '../inventario/equipos.html?accion=recibir&volver=almacen'; return; }
+    if (!window.AsistenteRecibir) { if (window.Toast) Toast.show('El asistente de recepción no cargó. Recarga la página.', 'bad'); return; }
     AsistenteRecibir.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
   },
   // Importar la hoja de bodega tal cual llega. Es la vía principal de un conteo:
@@ -69,7 +95,7 @@ window.AlmacenPage = {
     AsistenteImportar.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
   },
   abrirVenta() {
-    if (!window.AsistenteVenta) { location.href = '../inventario/equipos.html?accion=vender&volver=almacen'; return; }
+    if (!window.AsistenteVenta) { if (window.Toast) Toast.show('El asistente de venta no cargó. Recarga la página.', 'bad'); return; }
     AsistenteVenta.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
   },
 };
@@ -79,8 +105,13 @@ window.AlmacenHoy = (() => {
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
 
-  const EQUIPOS = '../inventario/equipos.html';
   const MAX_FILAS = 8;   // por grupo; el resto queda tras "ver todos"
+
+  // Links a la lista avanzada (antes inventario/equipos.html): misma página,
+  // pestaña Avanzado. El href es real (Ctrl+clic abre otra pestaña con el
+  // deep-link); el clic normal lo captura el listener de abajo y cambia de
+  // sección sin recargar.
+  const avz = (p) => window.AlmacenPage.urlAvanzado(p);
 
   // Todo link que sale de la bandeja lleva ?volver=almacen: el topbar de la
   // página destino (layout.js) lo convierte en un "Volver" que regresa AQUÍ
@@ -322,9 +353,9 @@ window.AlmacenHoy = (() => {
           // "Revisar" abre la ficha AQUÍ (auditoría UX 2026-09-28): Inspección
           // OK y Dar de baja viven en la ficha; el href a Equipos por serial
           // queda para Ctrl+clic / abrir en otra pestaña.
-          ctaHtml: Bandeja.cta({ href: vol(`${EQUIPOS}?serial=${encodeURIComponent(eq.serial || eq.serial_norm)}`),
+          ctaHtml: Bandeja.cta({ href: avz({ serial: eq.serial || eq.serial_norm }),
             icono: 'search-check', label: 'Revisar', data: { ficha: eq.serial || eq.serial_norm } }),
-        }), vol(`${EQUIPOS}?tab=devuelto_revision`), 'devueltos');
+        }), avz({ estado: 'devuelto_revision' }), 'devueltos');
       }
       if (enTaller) {
         notaTaller = `<p class="bj-nota">${enTaller} devueltos están en inspección de TALLER
@@ -344,18 +375,20 @@ window.AlmacenHoy = (() => {
       const { n, sinModelo } = d.clasificar;
       notaClasificar = `<p class="bj-nota">${n.toLocaleString()} unidades en
         "por clasificar" (deuda de migración — ubicación sin respaldo${sinModelo ? `, ${sinModelo.toLocaleString()} sin modelo` : ''})
-        — <a href="${vol(`${EQUIPOS}?tab=por_clasificar`)}">revisar por lotes →</a></p>`;
+        — <a href="${avz({ estado: 'por_clasificar' })}">revisar por lotes →</a></p>`;
     }
 
     if (d.conflictos === null) fallidas.push('conflictos');
     else if (d.conflictos.length) {
       poolN += d.conflictos.length;
-      poolHtml += conMas(d.conflictos, (g) => fila({
+      // Esta es LA cola de Conflictos (la de Equipos por serial se retiró):
+      // se pintan todos, no hay "ver todos" a otra pantalla.
+      poolHtml += d.conflictos.map((g) => fila({
         chip: 'Conflicto', chipCls: 'conflicto',
         txt: `<b>${esc(g.norm)}</b> — ${g.docs.length} fichas: ${esc(g.docs.map(x => x.modelo_label || '¿?').join(' ↔ '))}`,
         ctaHtml: `<button type="button" class="btn btn-sm btn-accent bj-cta" data-conflicto="${esc(g.norm)}">
           <i data-lucide="git-merge" style="width:14px;height:14px;"></i> Resolver</button>`,
-      }), vol(`${EQUIPOS}?tab=conflictos`), 'conflictos');
+      })).join('');
     }
 
     total += poolN;
@@ -363,7 +396,7 @@ window.AlmacenHoy = (() => {
     if (d.sinVerificarN) {
       // Deuda de migración, no trabajo del día: se muestra pero NO suma al badge.
       notaVerificar = `<p class="bj-nota">${d.sinVerificarN.toLocaleString()} fichas de migración sin verificar
-        (deuda, no trabajo del día) — <a href="${vol(`${EQUIPOS}?tab=todos&verificar=1`)}">revisar por lotes →</a></p>`;
+        (deuda, no trabajo del día) — <a href="${avz({ estado: 'todos', verificar: true })}">revisar por lotes →</a></p>`;
     }
     partes.push(grupo('Del inventario de equipos', poolN, poolHtml, notaTaller + notaClasificar + notaVerificar));
 
@@ -394,7 +427,7 @@ window.AlmacenHoy = (() => {
         // "Revisar" despliega el modelo en Existencias (sus seriales → ficha)
         // sin salir del espacio (auditoría UX 2026-09-28); el href sigue siendo
         // Equipos por serial para abrir en otra pestaña.
-        ctaHtml: Bandeja.cta({ href: vol(`${EQUIPOS}?tab=en_bodega${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`),
+        ctaHtml: Bandeja.cta({ href: avz({ estado: 'en_bodega', modelo: f.modelo_id || '' }),
           icono: 'diff', label: 'Revisar', data: { modelo: f.modelo_id || '', 'modelo-label': f.modelo?.modelo || f.label || '' } }),
       }), './index.html?tab=existencias', 'Existencias'),
       notaConteosViejos,
@@ -540,9 +573,19 @@ window.AlmacenHoy = (() => {
     // La barra de pestañas y el deep-link ?tab= se resuelven en el parse
     // (scripts inline de la página) para que nada brinque; aquí solo se
     // dispara la carga de datos de la pestaña que quedó visible.
+    const qs = new URLSearchParams(location.search);
     const ex = document.getElementById('tab-existencias');
     if (ex && ex.style.display !== 'none' && window.AlmacenExistencias) {
       AlmacenExistencias.activar();
+      // ?serial= (kardexUrl desde contratos/clientes/órdenes, y el stub de
+      // inventario/equipos.html): la ficha del serial encima de Existencias.
+      if (qs.get('serial') && window.EquipoFicha) EquipoFicha.abrir(qs.get('serial'));
+    }
+    // ?tab=serial (lista avanzada) con los deep-links que traducía equipos.html.
+    const av = document.getElementById('tab-serial');
+    if (av && av.style.display !== 'none' && window.EquiposPool) {
+      EquiposPool.activar({ estado: qs.get('estado') || '', verificar: qs.get('verificar') === '1',
+        modelo: qs.get('modelo') || '', serial: qs.get('serial') || '' });
     }
     // Una acción de la ficha (inspección, baja, venta…) refresca las listas.
     if (window.EquipoFicha) EquipoFicha.onCambio = () => AlmacenPage.recargarTodo();
@@ -564,13 +607,23 @@ window.AlmacenHoy = (() => {
         return;
       }
       const a = e.target.closest('a[data-asignar]');
-      if (!a || e.ctrlKey || e.metaKey || e.button !== 0) return;
-      e.preventDefault();
-      AlmacenPage.abrirAsignar({ contrato: a.dataset.contrato || null, g: a.dataset.g || null });
+      if (a && !(e.ctrlKey || e.metaKey || e.button !== 0)) {
+        e.preventDefault();
+        AlmacenPage.abrirAsignar({ contrato: a.dataset.contrato || null, g: a.dataset.g || null });
+        return;
+      }
+      // Links a la lista avanzada ("ver devueltos", "revisar por lotes"): el
+      // href lleva ?tab=serial&…; aquí se traduce a un cambio de sección.
+      const av = e.target.closest('a[href*="tab=serial"]');
+      if (av && window.EquiposPool && !(e.ctrlKey || e.metaKey || e.button !== 0)) {
+        e.preventDefault();
+        const q = new URL(av.getAttribute('href'), location.href).searchParams;
+        AlmacenPage.abrirAvanzado({ estado: q.get('estado') || '', verificar: q.get('verificar') === '1',
+          modelo: q.get('modelo') || '', serial: q.get('serial') || '' });
+      }
     });
     // Deep-link ?tab=asignar (correo de "Solicitud de seriales" / de bodega):
     // la sección ya está visible desde el parse; aquí se cargan sus datos.
-    const qs = new URLSearchParams(location.search);
     if (qs.get('tab') === 'asignar' && window.AlmacenAsignar) {
       // &corregir=1 — el expediente manda a bodega a CORREGIR seriales ya
       // asignados, no a asignar los que faltan (2026-09-16).

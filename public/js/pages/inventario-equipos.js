@@ -1,13 +1,19 @@
 // @ts-nocheck
-// Pool de equipos serializados — listado, recepción en bodega, import Excel,
-// historia (kardex) y acciones de inspección/baja/verificación.
-// Plan: docs/plans/PLAN_POOL_EQUIPOS_SERIAL.md. Servicio: equiposPoolService.js.
-function cerrarSesion() {
-  firebase.auth().signOut()
-    .then(() => { window.location.href = '/login.html'; })
-    .catch(() => { window.location.href = '/login.html'; });
-}
-
+// Almacén · Por serial — la lista avanzada del pool de equipos (filtros finos,
+// selección y lotes, edición de proveedor/notas, corregir estado con POC,
+// exportar Excel completo). Plan: docs/plans/PLAN_POOL_EQUIPOS_SERIAL.md.
+//
+// Auditoría UX 2026-09-28, P2 #14 ("una sola casa"): esto era
+// inventario/equipos.html, la segunda casa del inventario. Ahora vive como la
+// sección #tab-serial de almacen/index.html y equipos.html solo redirige. Se
+// quedó aquí solo lo que Almacén no tenía; salieron las copias:
+//   · Conflictos → Almacén · Hoy (la cola) y la ficha (reabrir un resuelto).
+//   · Conciliación contra conteo → Existencias (columna Dif.).
+//   · Importador de Excel con plantilla → "Importar hoja" (AsistenteImportar).
+//   · Historia en modal propio → la ficha del equipo (EquipoFicha).
+//   · Runner de lotes propio → AsistenteLote (el mismo de Existencias).
+// El archivo conserva su nombre y window.EquiposPool porque las pruebas y los
+// onclick de la sección lo nombran así.
 window.EquiposPool = {
   _equipos: [],
   // Carga por pestaña (auditoría de consumo 2026-09-24): abrir esta página
@@ -15,7 +21,7 @@ window.EquiposPool = {
   // lecturas de Firestore de un día normal. Ahora, si lo que se mira es UNA
   // ubicación sin búsqueda ni filtros, se carga solo esa ubicación y los
   // conteos globales salen del resumen (`agregados_pool`). Todo lo que
-  // necesita el pool entero —la búsqueda, Conflictos, Todos, Otros, cualquier
+  // necesita el pool entero —la búsqueda, Todos, Otros, cualquier
   // filtro— lo sigue teniendo: render() lo pide ANTES de pintar (_datosListos).
   _completo: false,       // _equipos es el pool entero
   _cargadoEstado: null,   // qué ubicación hay en _equipos cuando NO es completo
@@ -27,9 +33,6 @@ window.EquiposPool = {
   _rol: null,
   _editandoId: null,
   _importRows: null,
-  // Cola de Conflictos: mostrar también los grupos ya cerrados. No se persiste
-  // — la cola abre siempre en "lo que falta"; el historial se pide a propósito.
-  _conflRevisados: false,
 
   // Filtros persistidos por usuario (localStorage).
   // Default de primera visita (N4, auditoría 2026-08-04): **Bodega, sin filtro
@@ -52,7 +55,8 @@ window.EquiposPool = {
     // cerró CERRADA (SIN RETIRAR)). Es una cola de DECISIÓN, no de trabajo:
     // se retiran, vuelven a bodega si eran nuestros, o se dan por abandonados.
     no_retirado:       { tab: 'no_retirado' },
-    conflictos:        { tab: 'conflictos' },
+    // Conflictos (1 serial, 2+ modelos) ya no es tarjeta aquí: la cola vive
+    // en Almacén · Hoy y un resuelto se reabre desde la ficha.
     sin_verificar:     { tab: 'todos', chk: 'chkSinVerificar' },
   },
 
@@ -108,7 +112,7 @@ window.EquiposPool = {
   },
 
   // Pestañas que son UNA ubicación: las únicas que se sirven cargando solo
-  // esa ubicación. Todos, Otros (baja+vendido) y Conflictos cruzan el pool.
+  // esa ubicación. Todos y Otros (baja+vendido) cruzan el pool.
   TABS_DE_UN_ESTADO: ['en_bodega', 'asignado_contrato', 'en_cliente', 'en_taller',
     'devuelto_revision', 'por_clasificar', 'no_retirado'],
 
@@ -180,14 +184,12 @@ window.EquiposPool = {
   // Pendientes y los contadores de pestaña dicen cuánto hay en TODO el pool.
   // Cada fuente se verificó contra el pool completo en producción (2026-09-25)
   // y coincide exacto: el resumen por estado, el count() de sin verificar
-  // (4,396 = 4,396) y la cola de conflictos por serial_compartido (los mismos
-  // 3 grupos). Devuelve null si el resumen no existe.
+  // (4,396 = 4,396). Devuelve null si el resumen no existe.
   async _cargarConteos() {
     const db = firebase.firestore();
-    const [resumen, sinVerif, grupos] = await Promise.all([
+    const [resumen, sinVerif] = await Promise.all([
       EquiposPoolService.resumenPorModelo(),
       db.collection('equipos_pool').where('verificado', '==', false).count().get(),
-      ConflictosPoolService.listarPendientes(),
     ]);
     if (!resumen.length) return null;
     const porEstado = {};
@@ -198,7 +200,6 @@ window.EquiposPool = {
       porEstado,
       total: Object.values(porEstado).reduce((a, b) => a + b, 0),
       sinVerificar: sinVerif.data().count,
-      conflictos: grupos.length,
     };
   },
 
@@ -252,7 +253,6 @@ window.EquiposPool = {
     try {
       const db = firebase.firestore();
       const snaps = await Promise.all(lista.map(id => db.collection('equipos_pool').doc(id).get()));
-      let tocaConflictos = false;
       for (const s of snaps) {
         const i = this._equipos.findIndex(e => e.id === s.id);
         const viejo = i >= 0 ? this._equipos[i] : null;
@@ -264,7 +264,6 @@ window.EquiposPool = {
           // el delta. Una ficha que no estaba cargada entra como nueva: es un
           // alta, o el ID nuevo de un serial corregido (el viejo ya restó).
           this._ajustarConteos(viejo, nuevo);
-          if (viejo?.serial_compartido || nuevo?.serial_compartido) tocaConflictos = true;
           const queda = nuevo && nuevo.estado === this._cargadoEstado;
           if (queda) { if (i >= 0) this._equipos[i] = nuevo; else this._equipos.push(nuevo); }
           else if (i >= 0) this._equipos.splice(i, 1);
@@ -275,11 +274,6 @@ window.EquiposPool = {
         } else if (i >= 0) {
           this._equipos.splice(i, 1);
         }
-      }
-      // La cola de conflictos no sale de un delta (depende de cuántas fichas
-      // comparten serial): si se tocó una ficha compartida, se recuenta.
-      if (tocaConflictos && this._conteos) {
-        this._conteos.conflictos = (await ConflictosPoolService.listarPendientes()).length;
       }
       // Mismo orden que EquiposPoolService.listar(), por si cambió el modelo.
       this._equipos.sort((a, b) => (a.modelo_label || '').localeCompare(b.modelo_label || '')
@@ -329,15 +323,12 @@ window.EquiposPool = {
       console.warn('No se pudo cargar el catálogo de modelos:', e);
       this._modelos = [];
     }
-    // Modales (editar/import): fila EXACTA del catálogo (N y R aparte). El de
-    // recibir vive en js/ui/asistente-recibir.js y carga su propio catálogo.
+    // Modal de editar: fila EXACTA del catálogo (N y R aparte). El de recibir
+    // vive en js/ui/asistente-recibir.js y carga su propio catálogo.
     const opts = this._modelos
       .map(m => `<option value="${FMT.esc(m.id)}">${FMT.esc(m.label)}</option>`).join('');
-    ['editModelo', 'impModelo'].forEach(id => {
-      const sel = document.getElementById(id);
-      if (!sel) return;
-      sel.innerHTML = (sel.options[0]?.outerHTML || '') + opts;
-    });
+    const selEdit = document.getElementById('editModelo');
+    if (selEdit) selEdit.innerHTML = (selEdit.options[0]?.outerHTML || '') + opts;
     // La condición se deriva del modelo, así que sigue al selector.
     document.getElementById('editModelo')?.addEventListener('change', () =>
       this._sincronizarCondicion('editModelo', 'editCondicion', 'editCondicionHint',
@@ -509,177 +500,7 @@ window.EquiposPool = {
   _enTab(eq, tab) {
     if (tab === 'todos') return true;
     if (tab === 'otros') return this.ESTADOS_OTROS.includes(eq.estado);
-    if (tab === 'conflictos') return false; // esa pestaña pinta GRUPOS, no filas
     return eq.estado === tab;
-  },
-
-  // ── Conflictos de modelo: mismo serial con 2+ fichas ─────────────────
-  // El failsafe de colisión crea una ficha sufijada cuando las fuentes traen
-  // el modelo distinto (contrato vs POC vs bodega). Casi siempre es el MISMO
-  // radio físico con el dato desparejo — esta cola los resuelve: fusionar en
-  // la ficha real, o marcar que son radios distintos (colisión real Kenwood).
-  //
-  // Un grupo ya resuelto (todas sus fichas con `conflicto_revisado`) sale de la
-  // COLA pero no deja de existir: el chip "2+ modelos" sigue en la ficha y el
-  // usuario que lo ve viene aquí a buscarlo. Por eso `incluirRevisados` — sin
-  // eso, el único destino que anuncia el chip es una pantalla donde el serial
-  // nunca aparece, y parece que el sistema perdió el dato.
-  // El predicado, la fusión y la marca de revisado viven en
-  // ConflictosPoolService (2026-09-08): la misma cola que Almacén · Hoy.
-  _gruposConflicto({ incluirRevisados = false } = {}) {
-    return ConflictosPoolService.agrupar(this._equipos, { incluirRevisados });
-  },
-
-  // Alterna el historial de conflictos ya cerrados dentro de la cola.
-  toggleConflRevisados() {
-    this._conflRevisados = !this._conflRevisados;
-    this.render();
-  },
-
-  renderConflictos(tbody, q = '') {
-    const esc = FMT.esc;
-    const puede = this.puedeEscribir();
-    const verRev = !!this._conflRevisados;
-    let grupos = this._gruposConflicto({ incluirRevisados: verRev });
-    const nRevisados = this._gruposConflicto({ incluirRevisados: true })
-      .filter(g => g.revisado).length;
-    const lblRevisados = nRevisados === 1 ? 'el 1 ya revisado' : `los ${nRevisados} ya revisados`;
-    if (q) grupos = grupos.filter(g => g.norm.toLowerCase().includes(q));
-
-    // Barra del historial: siempre visible mientras haya algo cerrado, también
-    // cuando la cola está vacía — es justo ahí donde el usuario que llega desde
-    // el chip "2+ modelos" necesita el camino.
-    const barra = nRevisados
-      ? `<tr><td colspan="9" style="padding:8px 14px; background:var(--bg-2, #f8fafc); border-bottom:1px solid var(--border);">
-          <label style="display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--fg-2); cursor:pointer;"
-                 title="Seriales que alguien ya resolvió: bodega confirmó que son radios físicos distintos. Salieron de la cola pero conservan el aviso «2+ modelos».">
-            <input type="checkbox" ${verRev ? 'checked' : ''} onchange="EquiposPool.toggleConflRevisados()">
-            Ver ${lblRevisados}
-          </label></td></tr>`
-      : '';
-
-    if (!grupos.length) {
-      const msg = verRev || !nRevisados
-        ? `No hay seriales con fichas en conflicto${verRev ? '' : ' pendientes de revisar'}.<br>
-           Aparecen aquí cuando el mismo serial se registró con modelos distintos desde fuentes distintas (contrato, POC, bodega).`
-        : `No hay conflictos pendientes de revisar.<br>
-           ${nRevisados === 1 ? 'El ya resuelto sigue aquí' : `Los ${nRevisados} ya resueltos siguen aquí`}: marca "Ver ${lblRevisados}" para consultarlos.`;
-      tbody.innerHTML = barra + `<tr><td colspan="9" style="text-align:center; color:var(--fg-3); padding:var(--sp-6); line-height:1.6;">${msg}</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = barra + grupos.map(({ norm, docs, revisado }) => {
-      const cards = docs.map(d => `
-        <label style="display:block; border:1px solid var(--border); border-radius:8px; padding:8px 10px; cursor:${puede && !revisado ? 'pointer' : 'default'}; font-size:12.5px;">
-          ${puede && !revisado ? `<input type="radio" name="confl_${esc(norm)}" value="${esc(d.id)}" style="margin-right:6px;">` : ''}
-          <strong>${esc(d.modelo_label || d.modelo_id || 'sin modelo')}</strong>
-          ${EquiposPoolService.chipEstadoHtml(d.estado)}
-          <div style="color:var(--fg-3); margin-top:3px;">
-            ${esc(d.asignacion?.cliente_nombre || 'sin asignación')}${d.asignacion?.contrato_id ? ` · ${esc(d.asignacion.contrato_id)}` : ''}
-            · origen ${esc((d.origen || '—').replace(/_/g, ' '))}
-            · <span style="font-family:var(--font-mono, monospace); font-size:11px;">${esc(d.id)}</span>
-          </div>
-        </label>`).join('');
-      const acciones = revisado
-        ? (puede ? `<div style="display:flex; justify-content:flex-end; margin-top:8px;">
-            <button class="btn btn-ghost btn-sm" onclick="EquiposPool.reabrirGrupo('${esc(norm)}')"
-                    title="Devuelve el grupo a la cola de pendientes — para cuando la decisión resultó equivocada y hay que fusionar">
-              Reabrir</button>
-          </div>` : '')
-        : (puede ? `<div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
-            <button class="btn btn-ghost btn-sm" onclick="EquiposPool.marcarDistintos('${esc(norm)}')"
-                    title="Colisión real (dos radios físicos comparten serial, tipo Kenwood NX420 y NX920) — se conservan ambas fichas y el grupo sale de esta cola">
-              Son radios distintos — mantener</button>
-            <button class="btn btn-primary btn-sm" onclick="EquiposPool.fusionarGrupo('${esc(norm)}')"
-                    title="Fusiona las demás fichas en la seleccionada: conserva su historia (kardex) y elimina los duplicados">
-              Fusionar en la seleccionada</button>
-          </div>` : '');
-      return `<tr><td colspan="9" style="padding:12px 14px; ${revisado ? 'background:var(--bg-2, #f8fafc);' : ''}">
-        <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
-          <span style="font-family:var(--font-mono, monospace); font-weight:600; font-size:14px;">${esc(norm)}</span>
-          ${revisado
-            ? `<span class="eqpool-chip" style="background:#f1f5f9;color:#475569;">revisado</span>
-               <span style="color:var(--fg-3); font-size:12px;">${docs.length} fichas — confirmado: son radios físicos distintos que comparten numeración</span>`
-            : `<span style="color:var(--fg-3); font-size:12px;">${docs.length} fichas — ¿cuál es el radio real?</span>`}
-        </div>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:8px;">${cards}</div>
-        ${acciones}
-      </td></tr>`;
-    }).join('');
-  },
-
-  async fusionarGrupo(norm) {
-    if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden fusionar fichas.', 'bad'); return; }
-    const sel = document.querySelector(`input[name="confl_${norm}"]:checked`);
-    if (!sel) { Toast.show('Selecciona primero la ficha que se conserva (el radio real).', 'warn'); return; }
-    const grupo = this._gruposConflicto().find(g => g.norm === norm);
-    if (!grupo) return;
-    const keeperId = sel.value;
-    const absorbidos = grupo.docs.filter(d => d.id !== keeperId).map(d => d.id);
-    const ok = await Modal.confirm({
-      title: 'Fusionar fichas',
-      message: `Se fusionarán ${absorbidos.length} ficha(s) del serial ${norm} en la seleccionada. `
-        + 'Su historia (kardex) se conserva dentro de la ficha final. Esta acción no se deshace.',
-      confirmLabel: 'Fusionar', danger: true,
-    });
-    if (!ok) return;
-    try {
-      const res = await ConflictosPoolService.fusionar({ keeperId, absorbidosIds: absorbidos });
-      Toast.show(`Fusión lista: ${res.fusionados} ficha(s) absorbida(s).`, 'ok');
-      await this.refrescar([keeperId, ...absorbidos]);
-    } catch (e) {
-      Toast.show('No se pudo fusionar: ' + (e.message || e), 'bad');
-    }
-  },
-
-  async marcarDistintos(norm) {
-    if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden revisar conflictos.', 'bad'); return; }
-    const grupo = this._gruposConflicto().find(g => g.norm === norm);
-    if (!grupo) return;
-    const ok = await Modal.confirm({
-      title: 'Confirmar radios distintos',
-      message: `Las ${grupo.docs.length} fichas del serial ${norm} quedarán marcadas como radios FÍSICOS distintos `
-        + '(colisión real de serial entre modelos). Salen de esta cola pero conservan el aviso "2+ MODELOS".',
-      confirmLabel: 'Son distintos',
-    });
-    if (!ok) return;
-    try {
-      await this._escribirRevisado(grupo, true,
-        'Serial compartido entre modelos: son radios distintos.');
-      Toast.show('Grupo marcado como radios distintos.', 'ok');
-      this.render();
-    } catch (e) {
-      Toast.show('No se pudo marcar: ' + (e.message || e), 'bad');
-    }
-  },
-
-  // Devuelve a la cola un grupo cerrado por error (la decisión era "fusionar",
-  // no "son distintos"). No borra la marca: la pone en false y deja el porqué
-  // en el kardex, para que la próxima revisión sepa que ya hubo una vuelta.
-  async reabrirGrupo(norm) {
-    if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden revisar conflictos.', 'bad'); return; }
-    const grupo = this._gruposConflicto({ incluirRevisados: true }).find(g => g.norm === norm);
-    if (!grupo) return;
-    const motivo = await Modal.prompt({
-      title: 'Reabrir conflicto',
-      message: `Las ${grupo.docs.length} fichas del serial ${norm} vuelven a la cola de pendientes. `
-        + '¿Por qué se reabre?',
-      placeholder: 'Ej.: bodega revisó de nuevo y es un solo radio con el modelo mal capturado',
-      confirmLabel: 'Reabrir',
-    });
-    if (motivo === null) return;
-    try {
-      await this._escribirRevisado(grupo, false, `Conflicto reabierto. ${(motivo || '').trim()}`.trim());
-      Toast.show('Grupo devuelto a la cola de pendientes.', 'ok');
-      this.render();
-    } catch (e) {
-      Toast.show('No se pudo reabrir: ' + (e.message || e), 'bad');
-    }
-  },
-
-  // Marca/desmarca `conflicto_revisado` en el grupo con kardex — la escritura
-  // es UNA (ConflictosPoolService.marcarRevisado), compartida con Almacén.
-  _escribirRevisado(grupo, valor, notas) {
-    return ConflictosPoolService.marcarRevisado(grupo, valor, notas);
   },
 
   _sinCliente(eq) {
@@ -790,7 +611,7 @@ window.EquiposPool = {
     const tbody = document.getElementById('eqTabla');
     if (!tbody) return;
     // Si lo que se va a pintar necesita datos que no están en memoria (una
-    // búsqueda estando en una sola pestaña, un filtro, Conflictos, Todos…), se
+    // búsqueda estando en una sola pestaña, un filtro, Todos…), se
     // piden ANTES de pintar. Todo camino pasa por aquí —pestañas, tarjetas,
     // filtros, búsqueda, deep-links—, así que nada puede pintarse con medio
     // pool. Lo que NUNCA puede pasar es responder "ningún equipo coincide" con
@@ -820,19 +641,16 @@ window.EquiposPool = {
     const nPorClasificar = cuenta('por_clasificar');
     const nPorInspeccionar = cuenta('devuelto_revision');
     const nNoRetirado = cuenta('no_retirado');
-    const nConflictos = C ? C.conflictos : this._gruposConflicto().length;
     const nSinVerificar = C ? C.sinVerificar : this._equipos.filter(e => e.verificado === false).length;
     set('colaPorClasificar', fmt(nPorClasificar));
     set('colaPorInspeccionar', fmt(nPorInspeccionar));
     set('colaNoRetirado', fmt(nNoRetirado));
-    set('colaConflictos', fmt(nConflictos));
     set('colaSinVerificar', fmt(nSinVerificar));
     const apagar = (cola, n) => document.querySelector(`.eq-cola[data-cola="${cola}"]`)
       ?.classList.toggle('is-vacia', n === 0);
     apagar('por_clasificar', nPorClasificar);
     apagar('devuelto_revision', nPorInspeccionar);
     apagar('no_retirado', nNoRetirado);
-    apagar('conflictos', nConflictos);
     apagar('sin_verificar', nSinVerificar);
 
     // Contadores de pestañas: respetan los filtros activos (modelo/propiedad/
@@ -863,21 +681,6 @@ window.EquiposPool = {
     }
     this._pintarSeleccion();
 
-    // La vista de Conflictos pinta GRUPOS, no filas. Cede ante una búsqueda:
-    // si el usuario teclea un serial, quiere resultados del pool entero —
-    // dejarlo dentro de la cola sería reponer la trampa que N1 vino a quitar.
-    if (this._tab === 'conflictos' && !fAct.q) {
-      this._renderFiltrosActivos(fAct, 0, 0);
-      // Conflictos pinta GRUPOS, no filas seleccionables: la selección que
-      // viniera de otra vista se descarta aquí para que la barra de lote no
-      // quede flotando sobre unidades que ya no están en pantalla.
-      this._sel.clear();
-      this._renderBarraLote();
-      this.renderConflictos(tbody, fAct.q);
-      if (typeof lucide !== 'undefined') lucide.createIcons();
-      return;
-    }
-
     // Barra "Viendo: …" — hace obvios los filtros activos sin abrir dropdowns.
     // Con búsqueda el universo es el pool entero, no la pestaña.
     const universo = fAct.q
@@ -889,7 +692,7 @@ window.EquiposPool = {
       // Estado vacío que EXPLICA la pestaña: qué cae aquí y cuál es el paso
       // que la alimenta/vacía — la página enseña el ciclo sola.
       const VACIO_POR_TAB = {
-        en_bodega: 'No hay equipos disponibles en bodega. Entran con "Recibir equipos" / "Importar Excel", o cuando una entrada pasa la inspección.',
+        en_bodega: 'No hay equipos disponibles en bodega. Entran con "Recibir equipos" / "Importar hoja", o cuando una entrada pasa la inspección.',
         asignado_contrato: 'No hay unidades reservadas por contrato. Se asignan en Almacén · Asignar y salen al confirmarse la entrega.',
         en_cliente: 'No hay unidades en clientes. Llegan aquí cuando la orden de programación se marca "Entregado al cliente".',
         en_taller: 'No hay unidades en taller. Entran al agregarse con serial a una orden de servicio y salen al entregarse.',
@@ -909,7 +712,7 @@ window.EquiposPool = {
       // el total global, o la página diría "no hay equipos" con 7,600 fichas.
       const poolVacio = C ? C.total === 0 : !this._equipos.length;
       const msg = poolVacio
-        ? 'No hay equipos registrados. Usa "Recibir equipos" o "Importar Excel".'
+        ? 'No hay equipos registrados. Usa "Recibir equipos" o "Importar hoja".'
         : fAct.q ? msgBusqueda
         : (hayOtrosFiltros ? 'Sin resultados con el filtro actual.' : (VACIO_POR_TAB[this._tab] || 'Sin resultados.'));
       tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--fg-3); padding:var(--sp-6); line-height:1.6;">${msg}</td></tr>`;
@@ -937,12 +740,13 @@ window.EquiposPool = {
         const asignadoA = (linkCliente + linkContrato + linkOrden + tagPoc) || '—';
         // El chip cambia de tono según haya decisión o no: rojo mientras el
         // conflicto está abierto, ámbar cuando ya se confirmó que son radios
-        // distintos. Antes ambos casos mandaban a la pestaña Conflictos, donde
+        // distintos. Antes ambos casos mandaban a la cola de Conflictos, donde
         // el resuelto no aparece — y parecía que el sistema perdió el dato.
+        // Hoy la cola está en Almacén · Hoy y el resuelto se reabre en la ficha.
         const compartido = eq.serial_compartido
           ? (eq.conflicto_revisado === true
-              ? `<span class="eqpool-compartido" style="background:#fef3c7;color:#92400e;" title="Confirmado: dos radios físicos distintos comparten esta numeración (típico Kenwood NX-420 / NX-920). Verifica el modelo antes de operar. El detalle está en la pestaña Conflictos → «Ver los ya revisados».">2+ modelos · confirmado</span>`
-              : `<span class="eqpool-compartido" title="Este serial existe en más de un modelo y nadie lo ha revisado — verifica el modelo antes de operar. Se resuelve en la pestaña Conflictos.">2+ modelos</span>`)
+              ? `<span class="eqpool-compartido" style="background:#fef3c7;color:#92400e;" title="Confirmado: dos radios físicos distintos comparten esta numeración (típico Kenwood NX-420 / NX-920). Verifica el modelo antes de operar. Si la decisión fue equivocada, se reabre desde la ficha (Historia).">2+ modelos · confirmado</span>`
+              : `<span class="eqpool-compartido" title="Este serial existe en más de un modelo y nadie lo ha revisado — verifica el modelo antes de operar. Se resuelve en la cola de Conflictos de Almacén · Hoy.">2+ modelos</span>`)
           : '';
         const noVerif = eq.verificado === false
           ? `<span class="eqpool-noverif" title="Creado por migración automática — pendiente de confirmación">Sin verificar</span>` : '';
@@ -1152,138 +956,24 @@ window.EquiposPool = {
   },
 
   // ── Ejecución del lote ───────────────────────────────────────────────
-  _loteCancelado: false,
-
-  abrirLote(clave) {
+  // El runner (barra, Detener, reporte por motivo) es AsistenteLote, el mismo
+  // de Existencias: antes cada pantalla tenía el suyo y el de Existencias ni
+  // siquiera se podía parar.
+  async abrirLote(clave) {
     if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden hacer cambios.', 'bad'); return; }
     const a = this.LOTE_ACCIONES[clave];
     if (!a) return;
     const aplican = this._seleccionados().filter(a.aplica);
     if (!aplican.length) { Toast.show('Ninguna unidad de la selección aplica a esa acción.', 'warn'); return; }
-
-    const esc = FMT.esc;
-    const muestra = aplican.slice(0, 8).map(e => esc(e.serial || e.serial_norm)).join(', ');
-    const resto = aplican.length > 8 ? ` … y ${aplican.length - 8} más` : '';
-    document.getElementById('loteTitulo').textContent = a.titulo;
-    document.getElementById('loteCuerpo').innerHTML = `
-      <p style="margin:0 0 10px; font-size:13.5px; line-height:1.55;">${a.cuerpo(aplican.length)}</p>
-      <div style="font-size:12px; color:var(--fg-3); font-family:var(--font-mono, monospace);
-                  background:var(--surface-sunken); border-radius:8px; padding:8px 10px; line-height:1.5;">
-        ${muestra}${resto}</div>
-      ${a.pideMotivo ? `
-        <div class="form-field" style="margin-top:12px;">
-          <label class="form-label" for="loteMotivo">Motivo (queda en el kardex de cada unidad)</label>
-          <input class="form-input" id="loteMotivo" type="text" placeholder="${esc(a.motivoPlaceholder || '')}">
-        </div>` : ''}`;
-    document.getElementById('loteProgreso').style.display = 'none';
-    document.getElementById('loteBotones').style.display = '';
-    const btn = document.getElementById('btnLoteConfirmar');
-    btn.disabled = false;
-    btn.textContent = `Confirmar (${aplican.length})`;
-    btn.onclick = () => this.correrLote(clave);
-    // Sin cierre por ESC: una vez arrancado el lote, un escape accidental
-    // escondería el progreso mientras las escrituras siguen corriendo. Para
-    // salir están Cancelar (antes) y Detener (durante), que son explícitos.
-    Modal.open('eqLoteModal', { onEscape: false });
-  },
-
-  async correrLote(clave) {
-    const a = this.LOTE_ACCIONES[clave];
-    const aplican = this._seleccionados().filter(a.aplica);
-    if (!aplican.length) return;
-
-    let motivo = '';
-    if (a.pideMotivo) {
-      motivo = (document.getElementById('loteMotivo')?.value || '').trim();
-      if (!motivo) { Toast.show('Esta acción requiere un motivo.', 'bad'); return; }
-    }
-
-    this._loteCancelado = false;
-    document.getElementById('loteBotones').style.display = 'none';
-    const prog = document.getElementById('loteProgreso');
-    prog.style.display = '';
-    const barra = document.getElementById('loteBarra');
-    const texto = document.getElementById('loteTexto');
-    const pintar = (hechos, total) => {
-      barra.style.width = `${Math.round((hechos / total) * 100)}%`;
-      texto.textContent = `${hechos} de ${total}…`;
-    };
-    pintar(0, aplican.length);
-
-    // Concurrencia acotada: cada unidad es su propia transacción (guard de
-    // estado + kardex), así que se lanzan de a 6 en vez de 1,578 de golpe.
-    const resultados = await this._enTandas(aplican, (eq) => a.correr(eq, motivo), {
-      concurrencia: 6,
-      onProgreso: pintar,
-      cancelado: () => this._loteCancelado,
+    const r = await AsistenteLote.correr({
+      titulo: a.titulo, icono: a.icono, cuerpoHtml: a.cuerpo(aplican.length),
+      items: aplican, etiqueta: (eq) => eq.serial || eq.serial_norm,
+      pideMotivo: a.pideMotivo, motivoPlaceholder: a.motivoPlaceholder || '',
+      correr: (eq, motivo) => a.correr(eq, motivo), labelOk: a.label,
     });
-
-    const ok = resultados.filter(r => r.ok);
-    const fallidos = resultados.filter(r => !r.ok);
-    const noIntentados = aplican.length - resultados.length;
-    Modal.close('eqLoteModal');
+    if (!r) return;
     this._sel.clear();
     await this.refrescar(aplican.map(e => e.id));
-    this._reporteLote({ accion: a, ok: ok.length, fallidos, noIntentados });
-  },
-
-  cancelarLote() { this._loteCancelado = true; },
-
-  // Corre `fn` sobre `items` con concurrencia acotada. Nunca lanza: cada unidad
-  // devuelve {ok} o {ok:false, error} para poder reportar el fallo parcial —
-  // en un lote de cientos, "algo falló" sin decir qué es inservible.
-  async _enTandas(items, fn, { concurrencia = 6, onProgreso, cancelado } = {}) {
-    const res = [];
-    let i = 0;
-    const worker = async () => {
-      while (i < items.length) {
-        if (cancelado && cancelado()) return;
-        const it = items[i++];
-        try { await fn(it); res.push({ it, ok: true }); }
-        catch (e) { res.push({ it, ok: false, error: (e && e.message) || String(e) }); }
-        if (onProgreso) onProgreso(res.length, items.length);
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(concurrencia, items.length) }, worker));
-    return res;
-  },
-
-  _reporteLote({ accion, ok, fallidos, noIntentados }) {
-    if (!fallidos.length && !noIntentados) {
-      Toast.show(`${accion.label}: ${ok} unidad(es) listas.`, 'ok');
-      return;
-    }
-    const esc = FMT.esc;
-    // Los fallos se agrupan por motivo: 300 errores iguales son UN problema, y
-    // listarlos uno por uno esconde el que sí es distinto.
-    const porError = new Map();
-    fallidos.forEach(f => {
-      if (!porError.has(f.error)) porError.set(f.error, []);
-      porError.get(f.error).push(f.it.serial || f.it.serial_norm);
-    });
-    const grupos = [...porError.entries()].sort((a, b) => b[1].length - a[1].length).map(([err, seriales]) => `
-      <div style="margin-bottom:10px;">
-        <div style="font-size:13px; font-weight:600; color:#b91c1c;">${esc(err)} — ${seriales.length}</div>
-        <div style="font-size:11.5px; color:var(--fg-3); font-family:var(--font-mono, monospace); line-height:1.5; word-break:break-all;">
-          ${esc(seriales.join(', '))}</div>
-      </div>`).join('');
-
-    document.getElementById('loteRepCuerpo').innerHTML = `
-      <p style="margin:0 0 12px; font-size:13.5px;">
-        <b style="color:#067647;">${ok}</b> unidad(es) listas ·
-        <b style="color:#b91c1c;">${fallidos.length}</b> con error
-        ${noIntentados ? ` · <b>${noIntentados}</b> sin intentar (cancelado)` : ''}
-      </p>
-      ${fallidos.length ? `<div style="max-height:300px; overflow-y:auto;">${grupos}</div>
-        <p style="margin:10px 0 0; font-size:12px; color:var(--fg-3);">
-          Las que fallaron no se tocaron: puedes volver a seleccionarlas y reintentar.</p>` : ''}`;
-    document.getElementById('btnLoteRepCopiar').onclick = () => {
-      const txt = fallidos.map(f => `${f.it.serial || f.it.serial_norm}\t${f.error}`).join('\n');
-      navigator.clipboard?.writeText(txt)
-        .then(() => Toast.show('Lista de errores copiada.', 'ok'))
-        .catch(() => Toast.show('No se pudo copiar.', 'bad'));
-    };
-    Modal.open('eqLoteReporteModal');
   },
 
   // ── Acciones de fila: 1 CTA contextual + menú ⋯ ──────────────────────
@@ -1349,7 +1039,7 @@ window.EquiposPool = {
     if (kind !== 'historia') items.push(I('history', 'Historia (kardex)', `EquiposPool.abrirHistoria('${id}')`));
     if (puede) items.push(I('pencil', 'Editar ficha (modelo, propiedad, notas)', `EquiposPool.abrirEdicion('${id}')`));
     // Corregir serial (auditoría 2026-08-13): un typo no colisiona (es un
-    // serial_norm distinto) → no cae en Conflictos y la ficha fantasma
+    // serial_norm distinto) → no cae en la cola de Conflictos y la ficha fantasma
     // convive con la real hasta que el Dif la delate. El remedio era baja +
     // alta, que partía el kardex en dos fichas. Ahora es una corrección con
     // rastro (movimiento correccion_serial) que conserva la historia.
@@ -1756,337 +1446,10 @@ window.EquiposPool = {
   },
 
   // ── Historia (kardex) ────────────────────────────────────────────────
-  _MOV_ICONS: {
-    ingreso_bodega: 'package-plus', asignacion_contrato: 'file-text',
-    liberacion: 'undo-2', entrega: 'truck', ingreso_taller: 'wrench',
-    salida_taller: 'log-out', prestamo_poc: 'radio-tower', devolucion: 'corner-down-left',
-    inspeccion: 'search-check', baja: 'archive-x', reactivacion: 'archive-restore',
-    venta: 'banknote', correccion_migracion: 'pencil-ruler',
-    correccion_serial: 'pencil', orden_programacion: 'clipboard-list',
-    migracion: 'database', cambio_estado: 'arrow-right-left',
-    reasignacion: 'users', fusion_duplicado: 'merge',
-    conflicto_revisado: 'check-check', conflicto_reabierto: 'rotate-ccw',
-  },
-
-  async abrirHistoria(id) {
-    const eq = this._equipos.find(x => x.id === id);
-    if (!eq) return;
-    const esc = FMT.esc;
-    document.getElementById('histSerialLabel').textContent = eq.serial || eq.serial_norm;
-    document.getElementById('histResumen').innerHTML = `
-      ${EquiposPoolService.chipEstadoHtml(eq.estado)}
-      <span style="font-size:13px; color:var(--fg-2); margin-left:8px;">${esc(eq.modelo_label || 'sin modelo')}</span>
-      ${eq.asignacion ? `<span class="eq-sub" style="display:inline; margin-left:8px;">${esc(eq.asignacion.cliente_nombre || '')} · ${esc(eq.asignacion.contrato_id || '')}</span>` : ''}`;
-    const cont = document.getElementById('histMovimientos');
-    cont.innerHTML = 'Cargando…';
-    Modal.open('eqHistoriaModal');
-    try {
-      const movs = await EquiposPoolService.getMovimientos(id);
-      if (!movs.length) { cont.innerHTML = '<p style="color:var(--fg-3); font-size:13px;">Sin movimientos registrados.</p>'; return; }
-      cont.innerHTML = movs.map(m => {
-        const fecha = m.at?.toDate ? FMT.datetime(m.at.toDate()) : '—';
-        const transicion = (m.de_estado || m.a_estado)
-          ? ` <span style="color:var(--fg-3);">${esc(EquiposPoolService.ESTADO_LABELS[m.de_estado] || m.de_estado || '·')} → ${esc(EquiposPoolService.ESTADO_LABELS[m.a_estado] || m.a_estado || '·')}</span>` : '';
-        const ref = m.ref ? ` · <span style="color:var(--fg-3);">${esc(m.ref.tipo)}: ${esc(m.ref.label || m.ref.id || '')}</span>` : '';
-        return `<div class="mov-item">
-          <div class="mov-icon"><i data-lucide="${this._MOV_ICONS[m.tipo] || 'circle'}"></i></div>
-          <div class="mov-body">
-            <strong>${esc((window.EquipoFicha?.MOV_LABELS?.[m.tipo]) || (m.tipo || '').replace(/_/g, ' '))}</strong>${transicion}
-            ${m.notas ? `<div>${esc(m.notas)}</div>` : ''}
-            <div class="mov-meta">${esc(fecha)}${ref}${m.por_email ? ` · ${esc(m.por_email)}` : (m.por === 'system' ? ' · sistema' : '')}</div>
-          </div>
-        </div>`;
-      }).join('');
-      if (typeof lucide !== 'undefined') lucide.createIcons();
-    } catch (e) {
-      cont.innerHTML = `<p style="color:#b91c1c; font-size:13px;">Error al cargar movimientos: ${FMT.esc(e.message || e)}</p>`;
-    }
-  },
-
-  // ── Import Excel ─────────────────────────────────────────────────────
-  abrirImport() {
-    if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden importar equipos.', 'bad'); return; }
-    this._importRows = null;
-    document.getElementById('eqImportFile').value = '';
-    document.getElementById('eqImportPreview').innerHTML = '';
-    document.getElementById('btnConfirmarImport').disabled = true;
-    Modal.open('eqImportModal');
-  },
-
-  cerrarImport() {
-    Modal.close('eqImportModal');
-    this._importRows = null;
-  },
-
-  // Solo SERIAL es obligatoria. MODELO debe calzar con el catálogo (como se ve
-  // en el filtro/exportación); CONDICION acepta nuevo/reuso. Filas sin MODELO
-  // usan el modelo por defecto del selector del modal.
-  async descargarPlantilla() {
-    await cargarXLSX();   // SheetJS bajo demanda
-    const ws = XLSX.utils.json_to_sheet([{
-      SERIAL:    'B12345678',
-      MODELO:    'HYTERA PNC360S',
-      CONDICION: 'nuevo',
-      PROVEEDOR: 'Proveedor S.A.',
-      NOTAS:     'Compra factura 123',
-    }]);
-    ws['!cols'] = [{ wch: 16 }, { wch: 24 }, { wch: 12 }, { wch: 20 }, { wch: 28 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'EQUIPOS');
-    XLSX.writeFile(wb, 'plantilla-equipos-serial.xlsx');
-  },
-
-  async previsualizarImport(input) {
-    const archivo = input.files?.[0];
-    if (!archivo) return;
-    const preview = document.getElementById('eqImportPreview');
-    try {
-      await cargarXLSX();   // SheetJS bajo demanda
-      const data = await archivo.arrayBuffer();
-      const workbook = XLSX.read(data);
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-      if (!jsonData.length) { preview.innerHTML = '<p style="color:var(--fg-3);">El archivo no tiene filas.</p>'; return; }
-
-      const headers = Object.keys(jsonData[0]);
-      const col = (...alias) => headers.find(h => alias.some(a => FMT.normalize(h).includes(a)));
-      const colSerial = col('serial', 'serie');
-      if (!colSerial) {
-        preview.innerHTML = '<p style="color:#b91c1c;">No se encontró la columna del serial. Se espera un header <code>SERIAL</code>.</p>';
-        return;
-      }
-      const colModelo = col('modelo');
-      const colCond   = col('condicion');
-      const colProv   = col('proveedor');
-      const colNotas  = col('nota');
-
-      // Índice del catálogo para resolver la columna MODELO fila por fila:
-      // por id exacto o por label compacto (mismo criterio que _tightLabel —
-      // "HYTERA PNC360S" ≡ "Hytera PNC-360S"; N y R siguen siendo filas aparte).
-      const porId = new Map(this._modelos.map(m => [m.id, m]));
-      const porLabel = new Map();
-      for (const m of this._modelos) {
-        const k = EquiposPoolService._tightLabel(m.label);
-        if (k && !porLabel.has(k)) porLabel.set(k, m);
-      }
-
-      const vistos = new Set();
-      const filas = [];
-      for (const f of jsonData) {
-        const serial = (f[colSerial] || '').toString().trim();
-        if (!serial) continue; // fila vacía del Excel
-        const norm = EquiposPoolService.normalizarSerial(serial);
-        const fila = { serial, norm, modelo_id: null, modelo_label: '',
-                       condicion: null, cond_csv: null,
-                       proveedor: '', notas: '', problema: '' };
-        if (!EquiposPoolService.esSerialValido(norm)) fila.problema = 'serial inválido';
-        const modeloTxt = colModelo ? (f[colModelo] || '').toString().trim() : '';
-        if (modeloTxt) {
-          const m = porId.get(modeloTxt) || porLabel.get(EquiposPoolService._tightLabel(modeloTxt));
-          if (m) { fila.modelo_id = m.id; fila.modelo_label = m.label; }
-          else if (!fila.problema) fila.problema = `modelo "${modeloTxt}" no está en el catálogo`;
-        }
-        // La condición la impone el modelo, no el archivo — misma regla que los
-        // modales. Si el archivo trae columna CONDICION y contradice al modelo,
-        // se avisa en la vista previa pero manda el catálogo.
-        if (fila.modelo_id) fila.condicion = this._condicionDeModelo(fila.modelo_id);
-        if (colCond) {
-          const c = FMT.normalize((f[colCond] || '').toString().trim());
-          if (c) fila.cond_csv = (c.startsWith('r') || c === 'usado') ? 'reuso' : 'nuevo';
-        }
-        if (colProv)  fila.proveedor = (f[colProv] || '').toString().trim();
-        if (colNotas) fila.notas = (f[colNotas] || '').toString().trim();
-        const dupKey = `${norm}|${fila.modelo_id || ''}`;
-        if (!fila.problema && vistos.has(dupKey)) fila.problema = 'duplicado en el archivo';
-        vistos.add(dupKey);
-        filas.push(fila);
-      }
-      this._importRows = filas;
-
-      const validas = filas.filter(f => !f.problema);
-      const problemas = filas.filter(f => f.problema);
-      const sinModelo = validas.filter(f => !f.modelo_id).length;
-      const condChocan = validas.filter(f => f.cond_csv && f.condicion && f.cond_csv !== f.condicion).length;
-
-      const esc = FMT.esc;
-      const muestra = validas.slice(0, 8).map(f => `<tr>
-        <td class="td-mono">${esc(f.norm)}</td>
-        <td>${f.modelo_label ? esc(f.modelo_label) : '<span style="color:var(--fg-3);">(modelo del selector)</span>'}</td>
-        <td>${f.condicion
-          ? (f.condicion === 'reuso' ? 'Refurbished' : 'Nuevo')
-          : '<span style="color:var(--fg-3);">(del selector)</span>'}</td>
-        <td>${esc(f.proveedor || '—')}</td>
-      </tr>`).join('');
-      const listaProblemas = problemas.slice(0, 6)
-        .map(f => `<li><span class="td-mono">${esc(f.serial)}</span>: ${esc(f.problema)}</li>`).join('');
-      preview.innerHTML = `
-        <div style="margin-bottom:var(--sp-2);">
-          <span class="import-stat"><strong>${filas.length}</strong> filas</span>
-          <span class="import-stat" style="color:#15803d;"><strong>${validas.length}</strong> válidas</span>
-          <span class="import-stat" style="color:#b91c1c;"><strong>${problemas.length}</strong> con problema</span>
-          ${sinModelo ? `<span class="import-stat" style="color:#92400e;"><strong>${sinModelo}</strong> sin MODELO (usarán el del selector)</span>` : ''}
-          ${condChocan ? `<span class="import-stat" style="color:#92400e;"><strong>${condChocan}</strong> con CONDICION distinta a la del modelo (manda el modelo)</span>` : ''}
-        </div>
-        <div class="app-table-wrap" style="max-height:220px; overflow:auto;">
-          <table class="app-table compact">
-            <thead><tr><th>Serial</th><th>Modelo</th><th>Tipo</th><th>Proveedor</th></tr></thead>
-            <tbody>${muestra}</tbody>
-          </table>
-        </div>
-        ${validas.length > 8 ? `<p style="font-size:12px; color:var(--fg-3); margin:var(--sp-2) 0 0;">Mostrando 8 de ${validas.length} filas válidas.</p>` : ''}
-        ${problemas.length ? `<div style="font-size:12px; color:#b91c1c; margin-top:var(--sp-2);">Filas que NO se importarán:<ul style="margin:4px 0 0; padding-left:18px;">${listaProblemas}</ul>${problemas.length > 6 ? `<span>…y ${problemas.length - 6} más.</span>` : ''}</div>` : ''}`;
-      document.getElementById('btnConfirmarImport').disabled = validas.length === 0;
-    } catch (e) {
-      console.error('Error al leer el archivo:', e);
-      preview.innerHTML = '<p style="color:#b91c1c;">No se pudo leer el archivo. ¿Es un Excel válido?</p>';
-    }
-  },
-
-  async confirmarImport() {
-    if (!this._importRows) return;
-    const validas = this._importRows.filter(f => !f.problema);
-    if (!validas.length) return;
-    const defaultId = document.getElementById('impModelo').value;
-    if (validas.some(f => !f.modelo_id) && !defaultId) {
-      Toast.show('Hay filas sin columna MODELO: selecciona el modelo por defecto.', 'bad');
-      return;
-    }
-    const btn = document.getElementById('btnConfirmarImport');
-    btn.disabled = true;
-    btn.innerHTML = 'Importando…';
-    try {
-      // Agrupa filas con metadatos idénticos y llama recibir() por grupo — se
-      // conservan los batches, el dedup por chunks y el failsafe de colisión.
-      const grupos = new Map();
-      for (const f of validas) {
-        const modelo_id = f.modelo_id || defaultId;
-        const modelo_label = f.modelo_id ? f.modelo_label : this._modeloLabel(defaultId);
-        // Las filas sin MODELO heredan el del selector, así que su condición
-        // solo se puede resolver aquí, ya elegido el default.
-        const condicion = this._condicionDeModelo(modelo_id) || 'nuevo';
-        const key = JSON.stringify([modelo_id, condicion, f.proveedor, f.notas]);
-        const g = grupos.get(key) || { seriales: [], meta: {
-          modelo_id, modelo_label, condicion,
-          proveedor: f.proveedor, notas: f.notas, origen: 'import_excel',
-        } };
-        g.seriales.push(f.serial);
-        grupos.set(key, g);
-      }
-      const user = firebase.auth().currentUser;
-      const res = { nuevos: 0, existentes: 0, colisiones: 0, invalidos: 0, modelo_completado: 0 };
-      // Las colisiones de modelo no se crean solas: se juntan las de todos los
-      // grupos y se preguntan una vez, como en la recepción manual.
-      const porGrupo = [];
-      for (const g of grupos.values()) {
-        const r = await EquiposPoolService.recibir(g.seriales, g.meta, user);
-        for (const k of Object.keys(res)) res[k] += r[k];
-        if ((r.colisiones_pendientes || []).length) {
-          porGrupo.push({ meta: g.meta, pendientes: r.colisiones_pendientes });
-        }
-      }
-      const pendientes = porGrupo.flatMap(x => x.pendientes);
-      let sinImportar = 0;
-      if (pendientes.length) {
-        const confirmado = await Modal.confirm({
-          title: 'Seriales que ya existen con otro modelo',
-          danger: true,
-          confirmLabel: `Sí, son ${pendientes.length === 1 ? 'otro equipo' : 'otros equipos'}`,
-          cancelLabel: 'No, no los importes',
-          message: AsistenteRecibir.mensajeColisiones(pendientes, null),
-        });
-        if (confirmado) {
-          for (const g of porGrupo) {
-            const r2 = await EquiposPoolService.recibir(
-              g.pendientes.map(c => c.serial), { ...g.meta, confirmarColisiones: true }, user);
-            for (const k of Object.keys(res)) res[k] += r2[k];
-          }
-        } else {
-          sinImportar = pendientes.length;
-        }
-      }
-      Toast.show(`Import completado: ${res.nuevos} nuevos, ${res.existentes} ya existían, ${res.colisiones} colisiones de serial, ${res.invalidos} inválidos.`
-        + (res.modelo_completado ? ` ${res.modelo_completado} tenían la ficha sin modelo y se completó.` : '')
-        + (sinImportar ? ` ${sinImportar} sin importar por modelo distinto — corrige el archivo.` : ''),
-        (res.colisiones || sinImportar) ? 'warn' : 'ok');
-      this.cerrarImport();
-      this.cargar();
-    } catch (e) {
-      console.error('Error al importar:', e);
-      Toast.show('Error al importar: ' + (e.message || e), 'bad');
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<i data-lucide="check"></i> Importar';
-      if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
-  },
-
-  // ── Conciliación pool vs conteo manual ───────────────────────────────
-  // El mismo Map que StockAgg.agruparPool arma recorriendo las fichas en
-  // bodega (modeloKey → {modelo_id, modelo_label, n}), pero desde el resumen.
-  // La clave del resumen ES el modeloKey (mismo cálculo front y back).
-  async _bodegaDesdeResumen() {
-    const m = new Map();
-    for (const r of await EquiposPoolService.resumenPorModelo()) {
-      const n = Number((r.est || {}).en_bodega || 0);
-      if (n) m.set(r.key, { modelo_id: r.modelo_id, modelo_label: r.modelo_label, n });
-    }
-    return m;
-  },
-
-  async abrirConciliacion() {
-    const cont = document.getElementById('concilTabla');
-    cont.innerHTML = 'Cargando…';
-    Modal.open('eqConcilModal');
-    try {
-      const conteos = await InventarioService.getInventarioActual();
-      const esc = FMT.esc;
-
-      // Join único conteo ↔ pool (StockAgg, mismo casado por id/label y misma
-      // convención de signo que el tablero de Inventario: dif = pool − conteo).
-      // En modo por pestaña _equipos no tiene toda la bodega: agrupar lo
-      // cargado daría una conciliación con diferencias FALSAS en cada modelo.
-      // Ahí la bodega por modelo sale del resumen, con la misma forma de Map.
-      const poolMap = this._completo
-        ? StockAgg.agruparPool(this._equipos.filter(e => e.estado === 'en_bodega'))
-        : await this._bodegaDesdeResumen();
-      const rows = StockAgg.join({ conteos, poolMap, labelDeModelo: id => this._modeloLabel(id) })
-        .map(f => ({
-          label: f.label,
-          conteo: f.conteo ?? 0,
-          pool: f.seriales,
-          diff: f.dif == null ? f.seriales : f.dif,
-        }))
-        .filter(f => f.conteo || f.pool)
-        .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff) || a.label.localeCompare(b.label));
-
-      if (!rows.length) {
-        cont.innerHTML = '<p style="color:var(--fg-3); font-size:13px;">Sin datos: no hay conteo manual ni unidades en bodega todavía.</p>';
-        return;
-      }
-      const cuadrados = rows.filter(f => f.diff === 0).length;
-      cont.innerHTML = `
-        <div style="margin-bottom:var(--sp-2); font-size:13px;">
-          <strong>${cuadrados}/${rows.length}</strong> modelos cuadrados
-        </div>
-        <table class="app-table compact">
-          <thead><tr><th>Modelo</th><th style="text-align:right;">Pool (bodega)</th><th style="text-align:right;">Conteo manual</th><th style="text-align:right;">Dif. (pool − conteo)</th></tr></thead>
-          <tbody>
-            ${rows.map(f => `<tr>
-              <td>${esc(f.label)}</td>
-              <td style="text-align:right;">${f.pool}</td>
-              <td style="text-align:right;">${f.conteo}</td>
-              <td style="text-align:right; font-weight:600; color:${f.diff === 0 ? '#15803d' : '#b91c1c'};">${f.diff > 0 ? '+' + f.diff : f.diff}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-        <p style="font-size:12px; color:var(--fg-3); margin:var(--sp-2) 0 0;">
-          Dif. positiva = el registro tiene unidades que el conteo no vio (posible doble registro
-          o conteo desactualizado). Negativa = el conteo vio unidades que faltan en el registro —
-          captúralas con "Recibir equipos" en modo toma física.
-        </p>`;
-    } catch (e) {
-      cont.innerHTML = `<p style="color:#b91c1c; font-size:13px;">Error: ${FMT.esc(e.message || e)}</p>`;
-    }
+  // La ficha del equipo ES el kardex (con sus acciones): antes había aquí un
+  // modal propio que repetía la misma historia con otro formato.
+  abrirHistoria(id) {
+    if (window.EquipoFicha) EquipoFicha.abrirPorId(id);
   },
 
   // ── Export ───────────────────────────────────────────────────────────
@@ -2110,115 +1473,86 @@ window.EquiposPool = {
     XLSX.utils.book_append_sheet(wb, ws, 'EQUIPOS');
     XLSX.writeFile(wb, `equipos-pool-${new Date().toISOString().slice(0, 10)}.xlsx`);
   },
-};
+  // ── Arranque dentro de Almacén ───────────────────────────────────────
+  // Lo llama AlmacenPage.setTab('serial') la primera vez (y el init de Hoy
+  // cuando la página abre con ?tab=serial). `params` son los deep-links que
+  // antes recibía equipos.html y que su stub traduce:
+  //   estado  (en_bodega, devuelto_revision, por_clasificar, otros, todos…)
+  //   verificar=1 · modelo=<id de catálogo o familia> · serial=<texto>
+  // En todos los casos se limpian los filtros secundarios para que lo pedido
+  // se vea sí o sí (la búsqueda no se persiste entre visitas).
+  _activo: false,
+  _arrancando: null,
+  TABS_VALIDAS: ['en_bodega', 'asignado_contrato', 'en_cliente', 'en_taller', 'devuelto_revision', 'por_clasificar', 'no_retirado', 'otros', 'todos'],
 
-document.addEventListener('DOMContentLoaded', () => {
-  firebase.auth().onAuthStateChanged(async user => {
-    if (!user) { window.location.href = '/login.html'; return; }
-    const userDoc = await UsuariosService.getUsuario(user.uid);
-    EquiposPool._rol = userDoc?.rol || ROLES.VISTA;
-
-    // Lectura: admin/inventario/gerente. Escritura: admin/inventario.
-    const permitidos = [ROLES.ADMIN, ROLES.INVENTARIO, ROLES.GERENTE];
-    if (!permitidos.includes(EquiposPool._rol)) {
-      Toast.show('No autorizado. Tu rol no tiene acceso a este módulo.', 'bad');
-      window.location.href = '/index.html';
+  async activar(params = {}) {
+    if (this._arrancando) await this._arrancando;
+    if (!this._activo) {
+      this._arrancando = this._arrancar();
+      try { await this._arrancando; } finally { this._arrancando = null; }
+      if (!this._activo) return;           // rol sin acceso: la sección ya lo dice
+      this._aplicarParams(params);
+      await this.cargar();
       return;
     }
-    if (!EquiposPool.puedeEscribir()) {
-      document.getElementById('btnRecibir')?.remove();
-      document.getElementById('btnVenta')?.remove();
-      document.getElementById('btnImportar')?.remove();
-      document.getElementById('btnPlantilla')?.remove();
+    if (params && Object.keys(params).some(k => params[k])) { this._aplicarParams(params); this.render(); }
+  },
+
+  async _arrancar() {
+    this._rol = window.userRole || this._rol || ROLES.VISTA;
+    // Lectura: admin/inventario/gerente. Escritura: admin/inventario. A
+    // Almacén también entran recepción/vendedor (asignar seriales): para ellos
+    // la lista avanzada no existe, igual que antes no podían abrir equipos.html.
+    const permitidos = [ROLES.ADMIN, ROLES.INVENTARIO, ROLES.GERENTE];
+    if (!permitidos.includes(this._rol)) {
+      const sec = document.getElementById('tab-serial');
+      if (sec) sec.innerHTML = '<div class="ds-card ds-card-padded" style="text-align:center; color:var(--fg-3);">La lista por serial es de administración, inventario y gerencia.</div>';
+      return;
+    }
+    if (!this.puedeEscribir()) {
       // Sin permiso de escritura las filas no llevan casilla, así que el
       // "seleccionar todo" de la cabecera sería un control muerto.
       document.getElementById('eqSelAll')?.remove();
     }
-    await EquiposPool.cargarModelos();
-    EquiposPool._restaurarFiltros();
-
-    // Deep-links de entrada al pool:
-    //   ?serial=  (desde contrato/cliente/orden) → pestaña "todos" + búsqueda
-    //   ?tab=     (señales del home)             → abre esa pestaña de estado
-    //   ?verificar=1 (señal "por verificar")     → toggle "solo sin verificar"
-    // En todos los casos se limpian los filtros secundarios para que lo pedido
-    // se vea sí o sí (la búsqueda no se persiste entre visitas).
-    const qp = new URLSearchParams(location.search);
-    const serialParam = qp.get('serial');
-    const tabParam = qp.get('tab');
-    const verifParam = qp.get('verificar');
-    const modeloParam = qp.get('modelo'); // id de catálogo — desde Inventario de Radios
-    // Los deep-links siguen aceptando ?tab=devuelto_revision / por_clasificar /
-    // conflictos (las señales del home apuntan ahí). Ya no son pestañas, así que
-    // lo que se enciende es su TARJETA de Pendientes — _pintarSeleccion resuelve
-    // cuál de las dos filas marcar.
-    const setTabUI = (tab) => {
-      EquiposPool._tab = tab;
-      EquiposPool._pintarSeleccion();
-    };
-    const limpiarSecundarios = () => {
-      ['eqFiltroModelo', 'eqFiltroPropiedad'].forEach(id => {
-        const n = document.getElementById(id); if (n) n.value = '';
-      });
-      ['chkSinVerificar', 'chkCompartidos', 'chkSinCliente', 'chkListos'].forEach(id => {
-        const n = document.getElementById(id); if (n) n.checked = false;
-      });
-    };
-    const TABS_VALIDAS = ['en_bodega', 'asignado_contrato', 'en_cliente', 'en_taller', 'devuelto_revision', 'por_clasificar', 'otros', 'conflictos', 'todos'];
-    if (serialParam) {
-      setTabUI('todos');
-      limpiarSecundarios();
-      const q = document.getElementById('eqBusqueda');
-      if (q) q.value = serialParam;
-    } else if (tabParam || verifParam || modeloParam) {
-      limpiarSecundarios();
-      setTabUI(TABS_VALIDAS.includes(tabParam) ? tabParam : 'todos');
-      if (verifParam) {
-        const chk = document.getElementById('chkSinVerificar');
-        if (chk) chk.checked = true;
-      }
-      // ?modelo=<id de catálogo> (clic en "Unidades (seriales)" de Inventario
-      // de Radios): el select de filtro usa claves de FAMILIA (no ids), así
-      // que primero se resuelve el id a su familia; si el param ya viene como
-      // clave de familia, también sirve.
-      if (modeloParam) {
-        const sel = document.getElementById('eqFiltroModelo');
-        let famKey = '';
-        for (const [key, fam] of (EquiposPool._familias || new Map()).entries()) {
-          if (key === modeloParam || fam.ids.has(modeloParam)) { famKey = key; break; }
-        }
-        if (sel && famKey && [...sel.options].some(o => o.value === famKey)) sel.value = famKey;
-      }
-    }
-
+    await this.cargarModelos();
+    this._restaurarFiltros();
     // Cierre del menú ⋯ de fila: al pulsar un item (tras ejecutar su acción),
-    // al hacer click fuera de cualquier menú, o con ESC. Mismo comportamiento
-    // que el menú de acciones de contratos.
+    // al hacer click fuera de cualquier menú, o con ESC.
     document.addEventListener('click', (e) => {
-      if (e.target.closest('.overflow-menu-item')) { EquiposPool.cerrarMenus(); return; }
-      if (!e.target.closest('.overflow-menu')) EquiposPool.cerrarMenus();
+      if (e.target.closest('.overflow-menu-item')) { this.cerrarMenus(); return; }
+      if (!e.target.closest('.overflow-menu')) this.cerrarMenus();
     });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') EquiposPool.cerrarMenus();
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.cerrarMenus(); });
+    this._activo = true;
+  },
+
+  _aplicarParams({ estado = '', verificar = false, modelo = '', serial = '' } = {}) {
+    if (!(estado || verificar || modelo || serial)) return;
+    ['eqFiltroModelo', 'eqFiltroPropiedad'].forEach(id => {
+      const n = document.getElementById(id); if (n) n.value = '';
     });
-
-    await EquiposPool.cargar();
-
-    // ?accion=recibir|vender — CTAs del espacio Almacén (propuesta 2026-08):
-    // el botón vive allá, el asistente probado sigue viviendo aquí. Solo para
-    // roles con escritura (a los demás ya se les quitaron los botones).
-    const accionParam = qp.get('accion');
-    if (accionParam && EquiposPool.puedeEscribir()) {
-      if (accionParam === 'recibir') EquiposPool.abrirRecibir();
-      else if (accionParam === 'vender') EquiposPool.abrirVenta();
+    ['chkSinVerificar', 'chkCompartidos', 'chkSinCliente', 'chkListos'].forEach(id => {
+      const n = document.getElementById(id); if (n) n.checked = false;
+    });
+    const q = document.getElementById('eqBusqueda');
+    if (q) q.value = serial || '';
+    this._tab = serial ? 'todos' : (this.TABS_VALIDAS.includes(estado) ? estado : 'todos');
+    this._errorCarga = null;
+    if (verificar) {
+      const chk = document.getElementById('chkSinVerificar');
+      if (chk) chk.checked = true;
     }
-  });
-});
-
-// --- Puente window (F1, docs/plans/PLAN_MIGRACION_MODULAR.md) ---
-// Estos nombres los usan otros archivos o el HTML (onclick / inline). Hoy son
-// globales porque el archivo es un <script> clásico; al empaquetarse como
-// módulo ES dejarían de serlo. El puente los publica de forma explícita.
-Object.assign(window, {
-  cerrarSesion
-});
+    // ?modelo=<id de catálogo>: el select de filtro usa claves de FAMILIA (no
+    // ids), así que primero se resuelve el id a su familia; si ya viene como
+    // clave de familia, también sirve.
+    if (modelo) {
+      const sel = document.getElementById('eqFiltroModelo');
+      let famKey = '';
+      for (const [key, fam] of (this._familias || new Map()).entries()) {
+        if (key === modelo || fam.ids.has(modelo)) { famKey = key; break; }
+      }
+      if (sel && famKey && [...sel.options].some(o => o.value === famKey)) sel.value = famKey;
+    }
+    this._pintarSeleccion();
+  },
+};

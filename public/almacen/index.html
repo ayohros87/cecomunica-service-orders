@@ -82,6 +82,16 @@
     .ex-serial[data-dot="en_poc"] i            { background: #64748b; }
     .ex-mas { font-size: 12px; margin-left: 4px; white-space: nowrap; }
     .ex-expansion-pie { margin-top: 8px; font-size: 12.5px; }
+    /* Existencias en tablet (auditoría UX 2026-09-28, P2 §4.6): a ≤1024 px la
+       tabla deja solo lo esencial (Modelo, Bodega, Devueltos, Conteo, Dif.) y
+       el resto (Asignado, Cliente, Taller, Otros, Últ. conteo) se lee en la
+       fila expandida. En escritorio el resumen no se pinta. */
+    .ex-sec-resumen { display: none; }
+    @media (max-width: 1024px) {
+      #tab-existencias .ex-sec { display: none; }
+      .ex-sec-resumen { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 10px; font-size: 12.5px; color: var(--fg-2); }
+      .ex-sec-resumen b { font-variant-numeric: tabular-nums; color: var(--fg-1); }
+    }
 
     /* Asignar (propuesta "Asignar desde Almacén" 2026-09-03): cola a la
        izquierda, trabajo a la derecha. El encabezado dice qué sacar del
@@ -123,6 +133,84 @@
     .motivo-input { flex-basis: 100%; margin-left: 32px; height: 34px; font-size: 13px; }
 
     /* .badge: kit (ceco-ui.css) */
+
+    /* Avanzado — la lista por serial (era inventario/equipos.html; auditoría
+       UX 2026-09-28, P2 #14). Estilos de página que viajaron con ella. Los
+       chips de estado son .eqpool-chip del kit; nada de paletas propias. */
+    .eq-sub { font-size:12px; color:var(--fg-3); display:block; }
+    .eq-buscador { display:flex; align-items:center; gap:12px; margin:0 0 var(--sp-3); }
+    .eq-buscador .filter-search { max-width:640px; }
+    .eq-buscador-nota { font-size:12.5px; color:var(--fg-3); }
+    .eq-filtros-finos {
+      display:flex; align-items:center; gap:var(--sp-3); flex-wrap:wrap;
+      padding:var(--sp-2) var(--sp-4) var(--sp-3);
+      border-bottom:1px solid var(--border-subtle);
+    }
+    .eq-seccion-lbl {
+      display:block; font-size:10.5px; text-transform:uppercase;
+      letter-spacing:.07em; color:var(--fg-3); margin-bottom:6px;
+    }
+    .eq-colas {
+      display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
+      gap:10px; margin-bottom:var(--sp-4);
+    }
+    .eq-cola {
+      display:flex; flex-direction:column; gap:2px; min-width:0;
+      text-align:left; padding:11px 14px; cursor:pointer;
+      background:var(--surface-card); border:1px solid var(--border-default);
+      border-radius:var(--radius-lg);
+      transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+    }
+    .eq-cola:hover { border-color:var(--accent); }
+    .eq-cola-n   { font-size:22px; font-weight:700; line-height:1.1; color:var(--fg-2); }
+    .eq-cola-lbl { font-size:12.5px; font-weight:600; }
+    .eq-cola-sub { font-size:11px; color:var(--fg-3); }
+    /* Color por cola = el mismo del chip del estado que representa. */
+    .eq-cola[data-cola="por_clasificar"]    .eq-cola-n { color:#9f1239; }
+    .eq-cola[data-cola="devuelto_revision"] .eq-cola-n { color:#c2410c; }
+    .eq-cola[data-cola="no_retirado"]       .eq-cola-n { color:#6d28d9; }
+    .eq-cola[data-cola="sin_verificar"]     .eq-cola-n { color:#a16207; }
+    .eq-cola.is-active[data-cola="por_clasificar"]    { border-color:#9f1239; box-shadow:0 0 0 2px #9f123933; }
+    .eq-cola.is-active[data-cola="devuelto_revision"] { border-color:#c2410c; box-shadow:0 0 0 2px #c2410c33; }
+    .eq-cola.is-active[data-cola="no_retirado"]       { border-color:#6d28d9; box-shadow:0 0 0 2px #6d28d933; }
+    .eq-cola.is-active[data-cola="sin_verificar"]     { border-color:#a16207; box-shadow:0 0 0 2px #a1620733; }
+    .eq-cola.is-vacia .eq-cola-n { color:var(--fg-3); }
+    .eq-tabs { display:flex; gap:var(--sp-2); flex-wrap:wrap; }
+    .eq-tab {
+      padding:5px 14px; border-radius:var(--radius-pill);
+      border:1px solid var(--border-default); background:var(--surface-sunken);
+      font-size:13px; font-weight:500; color:var(--fg-2); cursor:pointer;
+      transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+    }
+    .eq-tab:hover { border-color:var(--accent); color:var(--accent); }
+    .eq-tab.is-active { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600; }
+    .eq-filtros-activos {
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      padding:8px 14px; border-bottom:1px solid var(--border-default);
+      background:#fffbeb; font-size:12.5px;
+    }
+    .eq-chip {
+      display:inline-flex; align-items:center; gap:6px;
+      padding:3px 6px 3px 10px; border-radius:var(--radius-pill);
+      background:#fef3c7; color:#92400e; border:1px solid #fde68a;
+      font-weight:600;
+    }
+    .eq-chip button {
+      border:none; background:transparent; cursor:pointer; color:inherit;
+      font-size:13px; line-height:1; padding:2px 4px; border-radius:50%;
+    }
+    .eq-chip button:hover { background:#fde68a; }
+    .eq-td-sel { width:34px; text-align:center; }
+    .eq-td-sel input { width:15px; height:15px; cursor:pointer; }
+    .eq-barra-lote {
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+      padding:8px 14px; border-bottom:1px solid var(--border-default);
+      background:#ECFDF5; color:#065F46; font-size:12.5px;
+    }
+    .eq-barra-lote .btn { background:var(--surface-card); border:1px solid #A7F3D0; color:#065F46; }
+    .eq-barra-lote .btn:hover { background:#D1FAE5; }
+    #tab-serial table.app-table tbody td { font-size:14px; }
+    #tab-serial table.app-table tbody tr:nth-child(even) { background:#f1f5f9; }
   </style>
 
         <!-- functions-compat: fusionar fichas en conflicto (callable fusionarPoolFicha) -->
@@ -166,7 +254,9 @@
       menu: [
         { onclick: 'AlmacenPage.recargar()', label: '<i data-lucide="refresh-cw"></i> Recargar' },
         { divider: true },
-        { href: '../inventario/equipos.html?volver=almacen', label: '<i data-lucide="scan-barcode"></i> Equipos por serial (avanzado)' },
+        // La lista por serial (filtros finos, lotes, proveedor/notas, Excel
+        // completo) es la pestaña Avanzado de esta página.
+        { onclick: "AlmacenPage.setTab('serial')", label: '<i data-lucide="sliders-horizontal"></i> Avanzado (lista por serial)' },
       ],
       showHome: true, homeHref: '../index.html', showLogout: true
     });
@@ -267,14 +357,14 @@
               <tr>
                 <th>Modelo</th>
                 <th style="text-align:right;">Bodega</th>
-                <th style="text-align:right;">Asignado</th>
-                <th style="text-align:right;">Cliente</th>
-                <th style="text-align:right;">Taller</th>
+                <th class="ex-sec" style="text-align:right;">Asignado</th>
+                <th class="ex-sec" style="text-align:right;">Cliente</th>
+                <th class="ex-sec" style="text-align:right;">Taller</th>
                 <th style="text-align:right;" title="Devuelto · por inspeccionar">Devueltos</th>
-                <th style="text-align:right;" title="Vendidos, bajas, por clasificar, no devueltos y no retirados">Otros</th>
+                <th class="ex-sec" style="text-align:right;" title="Vendidos, bajas, por clasificar, no devueltos y no retirados">Otros</th>
                 <th style="text-align:right;">Conteo</th>
                 <th style="text-align:right;" title="Bodega − conteo físico (meta 0)">Dif.</th>
-                <th style="text-align:right;">Últ. conteo</th>
+                <th class="ex-sec" style="text-align:right;">Últ. conteo</th>
               </tr>
             </thead>
             <tbody id="exTabla"></tbody>
@@ -286,19 +376,251 @@
       </div>
     </section>
 
+    <!-- ============ AVANZADO — la lista por serial ============
+         Era inventario/equipos.html (auditoría UX 2026-09-28, P2 #14). Filtros
+         finos, selección y lotes (AsistenteLote), edición de proveedor/notas,
+         corregir estado con POC y Excel completo. Lo pinta js/pages/
+         inventario-equipos.js (window.EquiposPool); los ids son los de siempre. -->
+    <section id="tab-serial" style="display:none;">
+
+      <!-- Buscador: en TODO el inventario, no dentro de la pestaña activa. -->
+      <div class="eq-buscador">
+        <div class="filter-search" style="flex:1; height:44px;">
+          <span class="search-icon"><i data-lucide="search"></i></span>
+          <input type="search" id="eqBusqueda" placeholder="Buscar serial, modelo o cliente en todo el inventario…"
+                 aria-label="Buscar equipos en todo el inventario" oninput="EquiposPool.buscarDiferido()"
+                 style="border:none; flex:1; font-size:15px;">
+        </div>
+        <span class="eq-buscador-nota">Busca en <b>todo el inventario</b>, sin importar la pestaña</span>
+      </div>
+
+      <!-- Pendientes: colas que necesitan una decisión humana. Conflictos (1
+           serial, 2+ modelos) vive en Hoy; Por inspeccionar / clasificar / sin
+           retirar siguen aquí porque se atacan por lotes. -->
+      <span class="eq-seccion-lbl">Pendientes — lo que necesita una decisión</span>
+      <div class="eq-colas" role="group" aria-label="Colas pendientes">
+        <button class="eq-cola" data-cola="por_clasificar" onclick="EquiposPool.setCola('por_clasificar')"
+                title="El sistema las tenía con un cliente pero ningún contrato ni orden lo respalda: hay que encontrar el radio">
+          <span class="eq-cola-n" id="colaPorClasificar">—</span>
+          <span class="eq-cola-lbl">Por clasificar</span>
+          <span class="eq-cola-sub">ubicación sin respaldo</span>
+        </button>
+        <button class="eq-cola" data-cola="devuelto_revision" onclick="EquiposPool.setCola('devuelto_revision')"
+                title="Radios que el cliente devolvió y esperan inspección para volver a bodega o darse de baja">
+          <span class="eq-cola-n" id="colaPorInspeccionar">—</span>
+          <span class="eq-cola-lbl">Por inspeccionar</span>
+          <span class="eq-cola-sub">devueltos del cliente</span>
+        </button>
+        <button class="eq-cola" data-cola="no_retirado" onclick="EquiposPool.setCola('no_retirado')"
+                title="Radios DEL CLIENTE que quedaron listos y nadie vino a buscar: la orden se cerró sin retirar y hay que decidir qué se hace con ellos">
+          <span class="eq-cola-n" id="colaNoRetirado">—</span>
+          <span class="eq-cola-lbl">Sin retirar</span>
+          <span class="eq-cola-sub">el cliente no vino</span>
+        </button>
+        <button class="eq-cola" data-cola="sin_verificar" onclick="EquiposPool.setCola('sin_verificar')"
+                title="Fichas creadas por la migración automática, pendientes de confirmar con el equipo a la vista. No corre prisa: la ficha se usa igual.">
+          <span class="eq-cola-n" id="colaSinVerificar">—</span>
+          <span class="eq-cola-lbl">Sin verificar</span>
+          <span class="eq-cola-sub">residuo de la migración</span>
+        </button>
+      </div>
+
+      <div class="ds-card">
+
+        <!-- Guía del ciclo del equipo, con el mismo lenguaje de chips de todas las páginas. -->
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:var(--sp-3); font-size:12px; color:var(--fg-3);">
+          <i data-lucide="route" style="width:14px;height:14px;flex:none;"></i>
+          <span>Ciclo:</span>
+          <span class="eqpool-chip eqpool-chip-en_bodega">En bodega</span><span>→</span>
+          <span class="eqpool-chip eqpool-chip-asignado_contrato" title="Se asigna en Almacén · Asignar">Asignado a contrato</span><span>→</span>
+          <span class="eqpool-chip eqpool-chip-en_cliente" title="La orden de programación se marca entregada">En cliente</span>
+          <span title="Mientras está con el cliente puede pasar por taller (orden de servicio); si está en la plataforma POC lleva el tag POC como atributo">⇄ <span class="eqpool-chip eqpool-chip-en_taller">En taller</span></span>
+          <span>→</span>
+          <span class="eqpool-chip eqpool-chip-devuelto_revision" title="El cliente devolvió el equipo: cierre de enmienda, anulación o cambio por defectuoso">Devuelto · por inspeccionar</span><span>→</span>
+          <span>bodega (Refurbished) o</span> <span class="eqpool-chip eqpool-chip-baja">Baja</span>
+          <span style="margin-left:6px;" title="Venta directa sin contrato: la factura se emite en QuickBooks y aquí se descuenta el equipo de bodega">· venta directa: bodega → <span class="eqpool-chip eqpool-chip-vendido">Vendido</span></span>
+          <span style="margin-left:6px;" title="Si el sistema tenía la unidad con un cliente pero ningún contrato ni orden lo respalda, cae aquí: no es una ubicación, es 'hay que ir a buscarla'">· sin respaldo → <span class="eqpool-chip eqpool-chip-por_clasificar">Por clasificar</span></span>
+        </div>
+
+        <details style="margin-bottom:var(--sp-3); font-size:12px; color:var(--fg-3);">
+          <summary style="cursor:pointer;">¿Devolución, Entrada o “Devuelto”? — tres cosas distintas</summary>
+          <div style="padding:8px 0 0 20px; line-height:1.7;">
+            <b>Orden de DEVOLUCIÓN</b> — el tiquete de recuperar equipos donde el cliente. Vive en Órdenes.<br>
+            <b>Orden de ENTRADA</b> — la orden con que el taller recibe esa tanda para revisarla. Vive en Órdenes.<br>
+            <b><span class="eqpool-chip eqpool-chip-devuelto_revision">Devuelto · por inspeccionar</span></b> — el estado de <em>cada radio</em> mientras espera inspección. Vive aquí, en la tarjeta <b>Por inspeccionar</b>.
+          </div>
+        </details>
+
+        <!-- Las pestañas son SOLO ubicaciones; las colas viven en las tarjetas. -->
+        <div class="filter-bar">
+          <span class="eq-seccion-lbl" style="margin:0 2px 0 0; align-self:center;">Dónde están</span>
+          <div class="eq-tabs" role="tablist">
+            <button class="eq-tab is-active" data-tab="en_bodega" onclick="EquiposPool.setTab('en_bodega')" title="Disponibles para asignar">Bodega <span id="countBodega"></span></button>
+            <button class="eq-tab" data-tab="asignado_contrato" onclick="EquiposPool.setTab('asignado_contrato')" title="Reservadas por un contrato, aún sin entregar">Asignados <span id="countAsignados"></span></button>
+            <button class="eq-tab" data-tab="en_cliente" onclick="EquiposPool.setTab('en_cliente')" title="Entregadas y en poder del cliente">En cliente <span id="countCliente"></span></button>
+            <button class="eq-tab" data-tab="en_taller" onclick="EquiposPool.setTab('en_taller')" title="En una orden de servicio">Taller <span id="countTaller"></span></button>
+            <button class="eq-tab" data-tab="otros" onclick="EquiposPool.setTab('otros')" title="Unidades que salieron de la flota: dadas de baja o vendidas">Baja / Venta <span id="countOtros"></span></button>
+            <button class="eq-tab" data-tab="todos" onclick="EquiposPool.setTab('todos')">Todos <span id="countTodos"></span></button>
+          </div>
+        </div>
+
+        <!-- Filtros finos (segunda fila) + exportar -->
+        <div class="eq-filtros-finos">
+          <select id="eqFiltroModelo" class="form-select" style="max-width:230px;" onchange="EquiposPool.render()" aria-label="Filtrar por modelo">
+            <option value="">Todos los modelos</option>
+          </select>
+          <select id="eqFiltroPropiedad" class="form-select" style="max-width:170px;" onchange="EquiposPool.render()" aria-label="Filtrar por propiedad">
+            <option value="">Toda propiedad</option>
+            <option value="cecomunica">Flota Cecomunica</option>
+            <option value="cliente">De cliente</option>
+            <option value="desconocida">Desconocida</option>
+          </select>
+          <!-- "Sin verificar" lo maneja su tarjeta; el input queda oculto como
+               portador del estado (filtros, barra "Viendo:", persistencia). -->
+          <label class="toggle-pill" style="display:none;"><input type="checkbox" id="chkSinVerificar" onchange="EquiposPool.render()"> Sin verificar</label>
+          <label class="toggle-pill" title="Seriales que existen en más de un modelo, estén resueltos o no. Los pendientes de decisión están en la cola de Conflictos de Hoy"><input type="checkbox" id="chkCompartidos" onchange="EquiposPool.render()"> 2+ modelos</label>
+          <label class="toggle-pill" title="Unidades sin cliente ni contrato rastreable"><input type="checkbox" id="chkSinCliente" onchange="EquiposPool.render()"> Sin cliente</label>
+          <label class="toggle-pill" title="En taller con la orden ya COMPLETADO (EN OFICINA): el radio está terminado y solo falta registrar la entrega"><input type="checkbox" id="chkListos" onchange="EquiposPool.render()"> Listos para entrega</label>
+          <div style="flex:1;"></div>
+          <button class="btn btn-ghost btn-sm" onclick="EquiposPool.exportarExcel()" title="Exporta lo que se ve (con filtros) a Excel, con todas las columnas de la ficha"><i data-lucide="download"></i> Excel completo</button>
+          <button class="btn btn-ghost btn-sm" onclick="EquiposPool.cargar()" title="Recargar la lista"><i data-lucide="rotate-ccw"></i> Recargar</button>
+        </div>
+
+        <div id="eqFiltrosActivos" class="eq-filtros-activos" style="display:none;"></div>
+        <div id="eqBarraLote" class="eq-barra-lote" style="display:none;"></div>
+
+        <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+          <table class="app-table" aria-label="Equipos por serial">
+            <thead>
+              <tr>
+                <th class="eq-td-sel"><input type="checkbox" id="eqSelAll" onchange="EquiposPool.toggleTodos(this.checked)" aria-label="Seleccionar todo lo visible" title="Seleccionar todo lo que se ve ahora"></th>
+                <th>Serial</th>
+                <th>Modelo</th>
+                <th>Cond.</th>
+                <th>Propiedad</th>
+                <th>Estado</th>
+                <th>Asignado a</th>
+                <th>Origen</th>
+                <th style="width:210px;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="eqTabla">
+              <tr><td colspan="9" style="text-align:center; color:var(--fg-3); padding:var(--sp-6);">Cargando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="app-table-footer">
+          <div class="resumen-badge" id="eqResumen"></div>
+        </div>
+      </div><!-- /.ds-card -->
+    </section>
+
     <script>
-      // Deep-link ?tab=existencias resuelto EN EL PARSE (las secciones ya
-      // existen aquí): la pestaña correcta desde el primer frame, sin brinco.
-      // Los datos los carga init() cuando el auth resuelve.
+      // Deep-link ?tab=existencias|asignar|serial resuelto EN EL PARSE (las
+      // secciones ya existen aquí): la pestaña correcta desde el primer frame,
+      // sin brinco. Los datos los carga init() cuando el auth resuelve.
       (function () {
         const tab = new URLSearchParams(location.search).get('tab');
-        if (tab !== 'existencias' && tab !== 'asignar') return;
+        if (tab !== 'existencias' && tab !== 'asignar' && tab !== 'serial') return;
         document.getElementById('tab-hoy').style.display = 'none';
         document.getElementById('tab-' + tab).style.display = '';
         WorkspaceTabs.setActive(tab);
       })();
     </script>
 
+  </div>
+
+  <!-- Modales de la pestaña Avanzado (los ids son los que usa EquiposPool).
+       Los lotes, la historia, la conciliación y el importador viejo ya no
+       tienen modal aquí: AsistenteLote, la ficha, la columna Dif. y
+       "Importar hoja" respectivamente. -->
+  <div id="eqEditModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="eqEditModalTitle">
+    <div class="modal" style="max-width:460px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="eqEditModalTitle"><i data-lucide="pencil"></i> Editar <span id="editSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
+        <button class="modal-close" onclick="Modal.close('eqEditModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <label class="form-label" for="editModelo">Modelo</label>
+          <select class="form-select" id="editModelo"><option value="">Sin modelo</option></select>
+        </div>
+        <div style="display:flex; gap:var(--sp-3);">
+          <div class="form-field" style="flex:1;">
+            <label class="form-label" for="editCondicion">Tipo</label>
+            <select class="form-select" id="editCondicion" disabled
+                    title="La determina el modelo: las filas con sufijo -R son refurbished.">
+              <option value="nuevo">Nuevo</option>
+              <option value="reuso">Refurbished</option>
+            </select>
+            <p id="editCondicionHint" style="font-size:12px; color:var(--fg-3); margin:4px 0 0;">
+              La define el modelo escogido.</p>
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label class="form-label" for="editPropiedad">Propiedad</label>
+            <select class="form-select" id="editPropiedad">
+              <option value="cecomunica">Flota Cecomunica</option>
+              <option value="cliente">De cliente</option>
+              <option value="desconocida">Desconocida</option>
+            </select>
+          </div>
+          <div class="form-field" style="flex:1.5;">
+            <label class="form-label" for="editProveedor">Proveedor / factura</label>
+            <input class="form-input" id="editProveedor" type="text">
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="editNotas">Notas</label>
+          <input class="form-input" id="editNotas" type="text">
+          <p style="font-size:12px; color:var(--fg-3); margin:4px 0 0;">
+            Una nota que empiece por <b>DAÑADA</b> (la del importador) saca la unidad de "disponible" en Asignar.</p>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="editMotivo">Motivo del cambio <span class="optional">(obligatorio si cambias modelo o propiedad)</span></label>
+          <input class="form-input" id="editMotivo" type="text" placeholder="Ej.: etiqueta revisada en el estante">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="Modal.close('eqEditModal')"><i data-lucide="x"></i> Cancelar</button>
+        <button class="btn btn-primary" onclick="EquiposPool.guardarEdicion(this)"><i data-lucide="check"></i> Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="eqCorregirModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="eqCorregirModalTitle">
+    <div class="modal" style="max-width:500px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="eqCorregirModalTitle"><i data-lucide="pencil-ruler"></i> Corregir estado <span id="corrSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
+        <button class="modal-close" onclick="Modal.close('eqCorregirModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px; color:var(--fg-2); margin:0 0 var(--sp-3);">
+          <span id="corrIntro">Para unidades que la migración dejó con un estado equivocado y que
+          <strong>físicamente están en bodega</strong>.</span> Estado actual:
+          <span id="corrEstadoActual"></span> → <strong>En bodega</strong>.<br>
+          Si la unidad en realidad está en otro lado (cliente, taller, POC), no corrijas aquí:
+          regístrala por su flujo normal (Asignar, orden de servicio o device POC)
+          y el inventario se actualizará solo con los vínculos correctos.
+        </p>
+        <div id="corrAvisos" style="font-size:13px; color:#92400e; background:#fef3c7; border-radius:8px; padding:var(--sp-3); margin-bottom:var(--sp-3);"></div>
+        <div class="form-field" id="corrPocRow">
+          <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; cursor:pointer;">
+            <input type="checkbox" id="corrDesactivarPoc" checked style="margin-top:2px;">
+            <span>Desactivar también el device en el inventario POC (recomendado). Si queda activo,
+            la lista POC seguirá mostrando este radio y podría volver a marcarlo "En POC".</span>
+          </label>
+          <p id="corrPocDetalle" style="font-size:12px; margin:var(--sp-2) 0 0 26px;"></p>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="corrMotivo">Motivo de la corrección</label>
+          <input class="form-input" id="corrMotivo" type="text" placeholder="p. ej. el POC nunca registró la devolución; verificado físicamente en bodega">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="Modal.close('eqCorregirModal')"><i data-lucide="x"></i> Cancelar</button>
+        <button class="btn btn-primary" id="btnGuardarCorreccion" onclick="EquiposPool.guardarCorreccion()"><i data-lucide="check"></i> Corregir a En bodega</button>
+      </div>
+    </div>
   </div>
 
   </div> <!-- /cc-work -->

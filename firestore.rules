@@ -1351,6 +1351,14 @@ service cloud.firestore {
             || userRole() in ["administrador", "inventario", "contabilidad"]);
       // Eliminar ya era solo-admin en la UI (piezas.js); ahora también aquí.
       allow delete: if isAdmin();
+
+      // Kardex de la pieza (P2 Almacén, auditoría UX 2026-09-28): cada ajuste
+      // ±N con motivo, antes/después y quién. Lo escribe quien ajusta (el
+      // stock ya está abierto a todo el personal); nunca se edita ni se borra.
+      match /kardex/{movId} {
+        allow read, create: if isSignedIn();
+        allow update, delete: if false;
+      }
     }
     match /poc_logs/{docId}           { allow read, write: if isSignedIn(); }
     // Snapshots de borrado de grupos (admin/grupos.html): quién borró qué

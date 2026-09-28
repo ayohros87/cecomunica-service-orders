@@ -381,11 +381,40 @@ const EquiposPoolService = {
     return partes.join(' · ');
   },
 
-  // Link al kardex de una unidad: la página del pool con ?serial= abre la
-  // pestaña "todos" con la búsqueda precargada.
-  kardexUrl(serial, { desdeRaiz = false } = {}) {
-    const base = desdeRaiz ? 'inventario/equipos.html' : '../inventario/equipos.html';
-    return `${base}?serial=${encodeURIComponent((serial || '').toString().trim())}`;
+  // Link al kardex de una unidad: Almacén · Existencias con ?serial= abre la
+  // ficha (auditoría UX 2026-09-28, P2 #14: equipos.html se absorbió en el
+  // espacio Almacén). Ruta absoluta: sirve igual desde la raíz o una carpeta;
+  // el segundo argumento se conserva por firma (`desdeRaiz` ya no hace falta).
+  // `avanzado: true` lleva a la lista por serial (pestaña Avanzado) con el
+  // serial buscado — para editar proveedor/notas o seleccionarlo en un lote.
+  kardexUrl(serial, { avanzado = false } = {}) {
+    const s = encodeURIComponent((serial || '').toString().trim());
+    return avanzado
+      ? `/almacen/index.html?tab=serial&serial=${s}`
+      : `/almacen/index.html?tab=existencias&serial=${s}`;
+  },
+
+  // "Disponible" ≠ "en bodega" (auditoría UX 2026-09-28, P2 #15). Una unidad
+  // en bodega NO se ofrece para asignar si el importador la marcó DAÑADA (la
+  // marca es la nota que escribe AsistenteImportar: "DAÑADA — reportada por
+  // bodega…"; se quita editando la nota), si arrastra una condición
+  // particular vigente o si QC la descartó. Esas dos últimas viven en otras
+  // colecciones: el llamador pasa lo que ya consultó (Map/Set por serial
+  // normalizado). Devuelve el motivo, o null si está disponible.
+  esDanada(eq) {
+    return /^\s*DA[NÑ]ADA\b/i.test(String(eq?.notas || ''));
+  },
+  motivoNoDisponible(eq, { descartados = null, condiciones = null } = {}) {
+    const k = this.normalizarSerial(eq?.serial || eq?.serial_norm || '');
+    const dsc = descartados && k ? descartados.get(k) : null;
+    if (dsc) {
+      return (typeof EquiposDescartadosService !== 'undefined' && EquiposDescartadosService.motivoBloqueo)
+        ? EquiposDescartadosService.motivoBloqueo(dsc) : 'descartado en QC';
+    }
+    if (this.esDanada(eq)) return 'marcada DAÑADA por bodega en el conteo';
+    const c = condiciones && k ? condiciones.get(k) : null;
+    if (c) return `condición particular: ${String(c.condicion || c || '').slice(0, 60)}`;
+    return null;
   },
 
   // "Cómo llegó aquí" — la unidad entró por un REEMPLAZO.
@@ -1231,6 +1260,13 @@ const EquiposPoolService = {
       { tipo: 'nota', de_estado: estadoActual, a_estado: estadoActual,
         notas: (nota || '') + (antes ? ` (antes: "${antes}")` : '') },
       user);
+  },
+
+  // Solo kardex, sin tocar campos (pick & confirm de Almacén · Asignar,
+  // auditoría UX 2026-09-28): "no estaba en el estante al verificar la lista"
+  // es un hecho de la unidad que vale registrar aunque su estado no cambie.
+  async registrarMovimiento(id, { tipo = 'nota', notas = '', ref = null, estadoActual = null } = {}, user) {
+    return this._conKardex(id, {}, { tipo, de_estado: estadoActual, a_estado: estadoActual, notas, ref }, user);
   },
 };
 
