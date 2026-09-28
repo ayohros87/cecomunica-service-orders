@@ -127,6 +127,14 @@
     #previewContrato table { width: 100%; border-collapse: collapse; font-size: 12px; }
     #previewContrato th { position: sticky; top: 0; background: var(--surface-card); padding: var(--sp-2); text-align: left; font-weight: 600; border-bottom: 1px solid var(--border-default); }
     #previewContrato td { padding: var(--sp-1) var(--sp-2); border-bottom: 1px solid var(--border-subtle); font-family: var(--font-mono); }
+    /* Cola de lotes preparados por ventas (traspaso dentro del app) */
+    .nb-lotes-prep[hidden] { display: none; }
+    .nb-lotes-prep .app-table-wrap { overflow-x: auto; }
+    .nb-lotes-prep table { width: 100%; }
+    .nb-lote-sub { font-size: 12px; color: var(--fg-3); margin-top: 2px; }
+    .nb-lote-acc { white-space: nowrap; text-align: right; }
+    .nb-lote-acc .btn + .btn { margin-left: 4px; }
+    tr.nb-lote-activo td { background: var(--accent-soft); }
   </style>
 
           <script src="../js/core/modulos.js?v=1838cd29"></script>
@@ -171,17 +179,33 @@
       </div>
     </div>
 
+    <!-- Lotes que ventas envió desde "Preparar lote (Ventas)". "Cargar" hace lo
+         mismo que soltar su archivo en el paso 1. -->
+    <section class="nb-step nb-lotes-prep" id="nbLotesPrep" hidden>
+      <header class="nb-step-head"><i data-lucide="inbox"></i><h3 class="nb-step-title">Lotes preparados por ventas</h3>
+        <span class="badge info" id="nbLotesPrepCount">0</span>
+        <span class="nb-step-note">pendientes de cargar — "Cargar" llena todo lo de abajo como el archivo</span></header>
+      <div class="nb-step-body">
+        <div class="app-table-wrap">
+          <table class="app-table compact">
+            <thead><tr><th>Cliente</th><th>Vendedor</th><th style="text-align:right;">Equipos</th><th>Enviado</th><th></th></tr></thead>
+            <tbody id="nbLotesPrepLista"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <form id="batchForm">
 
       <!-- PASO 1: Cargar el archivo del vendedor (dispara todo) -->
       <section class="nb-step">
-        <header class="nb-step-head"><span class="nb-step-num">1</span><h3 class="nb-step-title">Cargar el archivo del vendedor</h3>
+        <header class="nb-step-head"><span class="nb-step-num">1</span><h3 class="nb-step-title">Cargar el lote del vendedor</h3>
           <span class="nb-step-note" id="nbPaso1Nota"></span></header>
         <div class="nb-step-body">
           <label class="form-file-zone" tabindex="0" role="button" aria-label="Subir archivo JSON" style="padding:var(--sp-4); min-height:auto;">
             <input type="file" id="vendorJson" accept=".json" onchange="cargarDesdeJSON(this)">
             <div class="form-file-zone-icon"><i data-lucide="folder-open" style="width:28px;height:28px;"></i></div>
-            <p style="margin:0; font-size:14px;"><strong>Arrastra el JSON del vendedor</strong> o haz clic</p>
+            <p style="margin:0; font-size:14px;"><strong>Arrastra el JSON del vendedor</strong> o haz clic <span class="nb-step-note">(si no está en la cola de arriba)</span></p>
           </label>
           <span class="form-hint">Es el primer paso: autocompleta cliente, IP, contrato y Unit ID, y jala los seriales del contrato. Todo lo de abajo se llena solo — solo revisa y guarda.</span>
 

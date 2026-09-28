@@ -188,6 +188,21 @@
       gap: var(--sp-2);
     }
     .action-grid .btn { width: 100%; justify-content: center; }
+
+    /* Envío a recepción + "Mis lotes enviados" */
+    .vb-enviado {
+      display: flex; gap: 10px; align-items: flex-start; margin: var(--sp-4) 0;
+      background: #ECFDF5; border: 1px solid #A7F3D0; color: #065F46;
+      border-radius: var(--radius-md); padding: 12px 14px; font-size: 14px;
+    }
+    .vb-enviado[hidden] { display: none; }
+    .vb-enviado i { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px; }
+    .vb-lotes { list-style: none; margin: 0; padding: 0; }
+    .vb-lote { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); font-size: 14px; }
+    .vb-lote:last-child { border-bottom: 0; }
+    .vb-lote-main { min-width: 0; }
+    .vb-lote-sub { font-size: 12px; color: var(--fg-3); margin-top: 2px; }
+    .vb-lote .badge { flex: 0 0 auto; }
   </style>
 
    <!-- SheetJS BAJO DEMANDA -->
@@ -222,9 +237,9 @@
     <div class="vb-intro">
       <i data-lucide="info"></i>
       <div>
-        Esta herramienta <strong>prepara</strong> los equipos de un cliente y genera un archivo —
-        <strong>no los carga al sistema</strong>. Al terminar, descarga el <strong>JSON</strong> y
-        envíalo a recepción para que los cargue.
+        Esta herramienta <strong>prepara</strong> los equipos de un cliente —
+        <strong>no los carga al sistema</strong>. Al terminar, pulsa <strong>Enviar a recepción</strong>:
+        el lote le llega en su cola de Nuevo lote (y por correo) para que lo cargue.
         <span id="autosaveStatus" class="autosave-status"></span>
       </div>
     </div>
@@ -328,16 +343,21 @@
     <section class="vb-step" id="vbStep4" style="display:none;">
       <header class="vb-step-head">
         <span class="vb-step-num">4</span>
-        <h3 class="vb-step-title">Revisión y exportación</h3>
+        <h3 class="vb-step-title">Revisar y enviar a recepción</h3>
         <span class="badge pending" id="badgeExport">Pendiente</span>
       </header>
       <div class="vb-step-body">
+        <div class="form-field" style="margin-bottom:var(--sp-3);">
+          <label class="form-label" for="vbNotas">Notas para recepción <span class="optional">(opcional)</span></label>
+          <textarea class="form-input form-textarea" id="vbNotas" rows="2" placeholder="Ej: instalación coordinada con TI del cliente el jueves"></textarea>
+        </div>
         <span class="form-hint" style="display:block; margin-bottom:var(--sp-3);">
-          Envía el <strong>JSON</strong> a recepción para cargar los equipos. El Excel es solo para revisar.
+          <strong>Enviar a recepción</strong> deja el lote en su cola y le manda un correo con el enlace. La copia JSON y el Excel son solo respaldo.
         </span>
         <div class="action-grid">
+          <button class="btn btn-primary" id="btnEnviarRecepcion" onclick="VB.enviarARecepcion()"><i data-lucide="send"></i> Enviar a recepción</button>
           <button class="btn btn-secondary" onclick="VB.mostrarTablaResultado()"><i data-lucide="eye"></i> Revisar resultado</button>
-          <button class="btn btn-primary" onclick="VB.descargarJSON()"><i data-lucide="file-json"></i> Descargar para recepción (JSON)</button>
+          <button class="btn btn-ghost" onclick="VB.descargarJSON()"><i data-lucide="file-json"></i> Descargar copia (JSON)</button>
           <button class="btn btn-ghost" onclick="VB.descargarExcel()"><i data-lucide="download"></i> Excel (solo revisar)</button>
         </div>
       </div>
@@ -345,6 +365,19 @@
 
     <!-- Resultado -->
     <div id="salida" style="margin-top: var(--sp-6);"></div>
+
+    <!-- Confirmación del envío (JS: VB._mostrarEnviado) -->
+    <div id="vbEnviado" class="vb-enviado" role="status" hidden></div>
+
+    <!-- Mis lotes enviados: estado que pone recepción al cargar o descartar -->
+    <section class="vb-step" id="vbMisLotesBox" hidden>
+      <header class="vb-step-head">
+        <i data-lucide="inbox"></i>
+        <h3 class="vb-step-title">Mis lotes enviados</h3>
+        <button type="button" class="btn btn-ghost btn-icon" onclick="VB.cargarMisLotes()" title="Actualizar"><i data-lucide="refresh-cw"></i></button>
+      </header>
+      <div class="vb-step-body"><ul id="vbMisLotes" class="vb-lotes"></ul></div>
+    </section>
   </div>
 
   <div id="toasts" class="toast-region"></div>

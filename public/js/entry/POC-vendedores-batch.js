@@ -11,6 +11,8 @@ import '/js/services/usuariosService.js';
 import '/js/services/modelosService.js';
 import '/js/services/clientesService.js';
 import '/js/services/pocService.js';
+import '/js/services/empresaService.js';
+import '/js/services/mailService.js';
 import '/js/ui/toast.js';
 import '/js/ui/entity-combo.js';
 import '/js/pages/vendedores-batch.js';

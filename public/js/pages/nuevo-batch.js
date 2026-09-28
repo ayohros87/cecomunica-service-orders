@@ -1121,6 +1121,18 @@ async function autoJalarContrato(cantidadEsperada) {
         await cargarModelosCatalogo();
         await proponerProximoUnitId(); // prefill del próximo Unit ID al abrir
 
+        // Cola de lotes preparados por ventas. Clic delegado: la tabla se
+        // re-pinta al cargar o descartar.
+        document.getElementById("nbLotesPrepLista")?.addEventListener("click", (e) => {
+          const c = e.target.closest?.("[data-lote-cargar]");
+          if (c) { cargarLotePreparado(c.getAttribute("data-lote-cargar")); return; }
+          const d = e.target.closest?.("[data-lote-descartar]");
+          if (d) descartarLotePreparadoUI(d.getAttribute("data-lote-descartar"));
+        });
+        const loteUrl = loteDeLaUrl();
+        await cargarLotesPreparados();
+        if (loteUrl) await cargarLotePreparado(loteUrl);
+
         // Auto-jalar el IP asignado del cliente al elegirlo.
         document.getElementById("cliente").addEventListener("change", onClienteChange);
         document.getElementById("btnJalarContrato")?.addEventListener("click", jalarSerialesDesdeContrato);
@@ -1523,12 +1535,25 @@ document.getElementById("addCliente").onclick = async () => {
         // WriteBatch en tandas de 400: el lote entra entero o no entra
         // (auditoría UX 2026-09-28, 4.7 #8). Progreso visible por tanda.
         totalLote = nuevos.length;
-        await PocService.addPocDevicesBatch(nuevos, {
+        const idsCreados = await PocService.addPocDevicesBatch(nuevos, {
           onProgress: (hechos, total) => {
             if (btnSubmitRef) btnSubmitRef.textContent = `Guardando ${Math.min(total, hechos + 400)}/${total}…`;
           },
         });
         loteGuardado = true;
+
+        // Lote de la cola: queda 'cargado' con los ids creados (el vendedor lo
+        // ve en "Mis lotes enviados"). Best-effort: los equipos ya existen.
+        if (loteActivo) {
+          try {
+            const u = firebase.auth().currentUser;
+            const nombre = window.Sesion?.nombre ? await Sesion.nombre(u) : "";
+            await PocService.marcarLotePreparadoCargado(loteActivo.id, idsCreados || [], { user: u, nombre });
+          } catch (e) {
+            console.warn("[nuevo-batch] no se pudo marcar el lote preparado como cargado:", e);
+            Toast.show(`Los equipos se crearon, pero el lote #${loteActivo.codigo} sigue en la cola. Descártalo con el motivo "ya cargado".`, "warn");
+          }
+        }
 
         // Fichas viejas: se cierran DESPUÉS de crear el lote nuevo — si la
         // creación falla a medias, el cliente no se queda sin ningún
@@ -1671,39 +1696,174 @@ function procesarArchivoJSON(file) {
   reader.onload = async function (e) {
     try {
       const dataRaw = JSON.parse(e.target.result);
-      if (!Array.isArray(dataRaw)) throw "Formato inválido";
-      const data = dataRaw.map(normalizarDetalleBatch);
-      // El archivo manda sobre lo jalado del saliente: si recepción sube un
-      // JSON, ese es el detalle del lote (y vuelve a casar por posición).
-      olvidarDetalleSaliente();
-      detallesBatch = data;
-
-      // El JSON del vendedor manda: dispara toda la cascada para que recepción
-      // solo revise y guarde.
-      //  1) Auto-seleccionar el cliente del archivo → jala IP + carga contratos.
-      const clienteOk = await autoSeleccionarCliente(data[0]?.cliente_id || "", data[0]?.cliente_nombre || "");
-      //  2) Proponer el próximo Unit ID (si el campo está vacío).
-      await proponerProximoUnitId();
-      //  3) Intentar jalar los seriales del contrato automáticamente.
-      let contratoJalado = null;
-      if (clienteOk) {
-        try { contratoJalado = await autoJalarContrato(data.length); }
-        catch (err) { console.warn('[nuevo-batch] auto-jalar contrato falló:', err); }
-      }
-      //  4) Pintar el preview combinado (auto-jalar ya lo refresca; esto cubre el
-      //     caso sin contrato jalado).
-      refrescarPreviews();
-
-      const partes = [`Archivo cargado: ${data.length} equipos`];
-      if (clienteOk) partes.push('cliente e IP autocompletados');
-      if (contratoJalado) partes.push(`seriales jalados del contrato ${contratoJalado}`);
-      else if (clienteOk) partes.push('elige el contrato y jala los seriales');
-      Toast.show(partes.join(' · ') + '.', 'ok');
+      // Un archivo suelto no es un lote de la cola: si antes se abrió uno,
+      // este guardado ya no lo marca como cargado.
+      soltarLotePreparado();
+      await aplicarLoteVendedor(dataRaw, { origen: 'Archivo cargado' });
     } catch (err) {
       Toast.show('Error al leer el archivo JSON: ' + err, 'bad');
     }
   };
   reader.readAsText(file);
+}
+
+// Cascada del lote del vendedor. La comparten el archivo JSON y los lotes
+// preparados de la cola (poc_lotes_preparados.filas es el mismo arreglo), así
+// que "Cargar" deja la página exactamente como soltar el archivo.
+async function aplicarLoteVendedor(dataRaw, { origen = 'Archivo cargado' } = {}) {
+  if (!Array.isArray(dataRaw)) throw "Formato inválido";
+  const data = dataRaw.map(normalizarDetalleBatch);
+  // El archivo manda sobre lo jalado del saliente: si recepción sube un
+  // JSON, ese es el detalle del lote (y vuelve a casar por posición).
+  olvidarDetalleSaliente();
+  detallesBatch = data;
+
+  // El JSON del vendedor manda: dispara toda la cascada para que recepción
+  // solo revise y guarde.
+  //  1) Auto-seleccionar el cliente del archivo → jala IP + carga contratos.
+  const clienteOk = await autoSeleccionarCliente(data[0]?.cliente_id || "", data[0]?.cliente_nombre || "");
+  //  2) Proponer el próximo Unit ID (si el campo está vacío).
+  await proponerProximoUnitId();
+  //  3) Intentar jalar los seriales del contrato automáticamente.
+  let contratoJalado = null;
+  if (clienteOk) {
+    try { contratoJalado = await autoJalarContrato(data.length); }
+    catch (err) { console.warn('[nuevo-batch] auto-jalar contrato falló:', err); }
+  }
+  //  4) Pintar el preview combinado (auto-jalar ya lo refresca; esto cubre el
+  //     caso sin contrato jalado).
+  refrescarPreviews();
+
+  const partes = [`${origen}: ${data.length} equipos`];
+  if (clienteOk) partes.push('cliente e IP autocompletados');
+  if (contratoJalado) partes.push(`seriales jalados del contrato ${contratoJalado}`);
+  else if (clienteOk) partes.push('elige el contrato y jala los seriales');
+  Toast.show(partes.join(' · ') + '.', 'ok');
+  return data;
+}
+
+// ── Lotes preparados por ventas (traspaso dentro del app) ──────────────────
+// El vendedor envía el lote desde "Preparar lote (Ventas)" y cae aquí, en la
+// cola; ya no viaja un archivo por correo o WhatsApp (auditoría UX
+// 2026-09-28, 4.7 #9). `loteActivo` es el lote abierto con "Cargar": al crear
+// los equipos se marca 'cargado' con sus ids.
+let loteActivo = null;
+let lotesPendientes = [];
+
+function soltarLotePreparado() {
+  loteActivo = null;
+  const nota = document.getElementById("nbPaso1Nota");
+  if (nota) nota.textContent = "";
+}
+
+function _escLote(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function haceCuantoLote(ms) {
+  if (!ms) return "";
+  const min = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  if (min < 1) return "hace un momento";
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.round(h / 24);
+  return `hace ${d} día${d === 1 ? "" : "s"}`;
+}
+
+async function cargarLotesPreparados() {
+  const box = document.getElementById("nbLotesPrep");
+  const cont = document.getElementById("nbLotesPrepLista");
+  if (!box || !cont) return;
+  try {
+    lotesPendientes = await PocService.getLotesPendientes();
+  } catch (e) {
+    console.warn("[nuevo-batch] no se pudieron leer los lotes preparados:", e);
+    return;
+  }
+  box.hidden = !lotesPendientes.length;
+  const cnt = document.getElementById("nbLotesPrepCount");
+  if (cnt) cnt.textContent = String(lotesPendientes.length);
+  cont.innerHTML = lotesPendientes.map(l => {
+    const vend = l.creado_por_nombre || l.creado_por_email || "—";
+    const parte = l.partes > 1 ? ` · parte ${l.parte} de ${l.partes}` : "";
+    const activo = loteActivo && loteActivo.id === l.id;
+    return `<tr${activo ? ' class="nb-lote-activo"' : ""}>
+      <td><strong>${_escLote(l.cliente_nombre || "sin cliente")}</strong><div class="nb-lote-sub">#${_escLote(l.codigo || l.id.slice(0, 6))}${parte}${l.notas ? " · " + _escLote(l.notas) : ""}</div></td>
+      <td>${_escLote(vend)}</td>
+      <td style="text-align:right;">${l.total ?? (l.filas || []).length}</td>
+      <td>${_escLote(haceCuantoLote(l.creado_at?.toMillis?.()))}</td>
+      <td class="nb-lote-acc">
+        <button type="button" class="btn btn-primary btn-sm" data-lote-cargar="${_escLote(l.id)}"><i data-lucide="upload"></i> ${activo ? "Abierto" : "Cargar"}</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-lote-descartar="${_escLote(l.id)}" title="Descartar este lote"><i data-lucide="x-circle"></i> Descartar</button>
+      </td></tr>`;
+  }).join("");
+  if (typeof lucide !== "undefined") lucide.createIcons();
+}
+
+// Abre un lote de la cola: lee el doc FRESCO (otra recepcionista pudo
+// cargarlo) y lo pasa por la misma cascada que el archivo.
+async function cargarLotePreparado(id) {
+  if (!id) return false;
+  let lote;
+  try { lote = await PocService.getLotePreparado(id); }
+  catch (e) {
+    console.error("[nuevo-batch] no se pudo leer el lote preparado:", e);
+    Toast.show("No se pudo abrir el lote. Revisa tu conexión e intenta de nuevo.", "bad");
+    return false;
+  }
+  if (!lote) { Toast.show("Ese lote ya no existe.", "bad"); return false; }
+  if (lote.estado !== "pendiente") {
+    const quien = lote.estado === "cargado"
+      ? `ya lo cargó ${lote.cargado_por?.nombre || lote.cargado_por?.email || "recepción"}`
+      : `se descartó${lote.motivo_descarte ? ": " + lote.motivo_descarte : ""}`;
+    Toast.show(`El lote #${lote.codigo || id.slice(0, 6)} de ${lote.cliente_nombre || "este cliente"} ${quien}.`, "warn");
+    cargarLotesPreparados();
+    return false;
+  }
+  try {
+    await aplicarLoteVendedor(lote.filas || [], { origen: `Lote #${lote.codigo || id.slice(0, 6)} de ${lote.creado_por_nombre || "ventas"}` });
+  } catch (err) {
+    Toast.show("El lote tiene un formato inválido: " + err, "bad");
+    return false;
+  }
+  loteActivo = { id, codigo: lote.codigo || id.slice(0, 6), cliente_nombre: lote.cliente_nombre || "" };
+  const notas = document.getElementById("notas");
+  if (notas && !notas.value.trim() && lote.notas) notas.value = lote.notas;
+  const nota = document.getElementById("nbPaso1Nota");
+  if (nota) nota.textContent = `lote #${loteActivo.codigo} de ${lote.creado_por_nombre || lote.creado_por_email || "ventas"}`;
+  cargarLotesPreparados();
+  return true;
+}
+
+async function descartarLotePreparadoUI(id) {
+  const l = lotesPendientes.find(x => x.id === id);
+  const motivo = await Modal.prompt({
+    title: "Descartar lote preparado",
+    confirmLabel: "Descartar",
+    multiline: true,
+    message: `El lote #${_escLote(l?.codigo || id.slice(0, 6))} de ${_escLote(l?.cliente_nombre || "este cliente")} sale de la cola. ` +
+      "No se borra: el vendedor verá el motivo en sus lotes enviados. ¿Por qué se descarta?",
+  });
+  if (motivo == null) return;
+  if (String(motivo).trim().length < 3) { Toast.show("Escribe el motivo (el vendedor lo va a leer).", "warn"); return; }
+  try {
+    const user = firebase.auth().currentUser;
+    const nombre = window.Sesion?.nombre ? await Sesion.nombre(user) : "";
+    await PocService.descartarLotePreparado(id, motivo, { user, nombre });
+    if (loteActivo && loteActivo.id === id) soltarLotePreparado();
+    Toast.show("Lote descartado.", "ok");
+  } catch (e) {
+    console.error("[nuevo-batch] no se pudo descartar el lote:", e);
+    Toast.show("No se pudo descartar (quizá otra persona ya lo cargó). Actualizo la lista.", "bad");
+  }
+  cargarLotesPreparados();
+}
+
+// ?lote=<id> (enlace del correo y de la señal del home): abre el lote directo.
+function loteDeLaUrl() {
+  const m = /[?&]lote=([^&#]+)/.exec(window.location?.search || "");
+  return m ? decodeURIComponent(m[1]) : "";
 }
 
 async function registrarCliente(nombreCliente) {
@@ -1725,6 +1885,6 @@ async function registrarCliente(nombreCliente) {
 // globales porque el archivo es un <script> clásico; al empaquetarse como
 // módulo ES dejarían de serlo. El puente los publica de forma explícita.
 Object.assign(window, {
-  cargarDesdeJSON, gpsEditar, grupoAgregar, grupoAplicarModelo, grupoQuitar,
+  cargarDesdeJSON, cargarLotePreparado, gpsEditar, grupoAgregar, grupoAplicarModelo, grupoQuitar,
   nombreEditar
 });

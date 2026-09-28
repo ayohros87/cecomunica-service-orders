@@ -710,25 +710,36 @@ window.VB = {
     return `lote-poc-${cli}-${fecha}.${ext}`;
   },
 
-  async descargarJSON() {
-    const datos = await this.generarJSON();
-    if (!datos.length) { Toast.show('No hay datos para descargar.', 'bad'); return; }
-
-    // Validación en el origen: avisar de equipos incompletos antes de exportar,
-    // para que a recepción le llegue limpio (previene el caso MIDES: modelos o
-    // grupos faltantes que después había que corregir a mano).
+  // Pendientes del lote (sin modelo / sin grupos / nombres repetidos): se avisa
+  // en el origen para que a recepción le llegue limpio (caso MIDES). Devuelve
+  // true si no hay pendientes o si el vendedor decide seguir.
+  async _confirmarPendientes(datos, confirmLabel) {
     const sinModelo = datos.filter(d => !d.modelo_id).length;
     const sinGrupos = datos.filter(d => !(d.grupos || []).length).length;
     const nombresNorm = datos.map(d => (d.radio_name || '').trim().toLowerCase());
     const dupSet = new Set(nombresNorm.filter((n, i) => n && nombresNorm.indexOf(n) !== i));
-    if (sinModelo || sinGrupos || dupSet.size) {
-      const partes = [];
-      if (sinModelo)   partes.push(`${sinModelo} sin modelo`);
-      if (sinGrupos)   partes.push(`${sinGrupos} sin grupos`);
-      if (dupSet.size) partes.push(`${dupSet.size} nombre(s) duplicado(s)`);
-      if (!await Modal.confirm({ title: 'Pendientes en el lote', confirmLabel: 'Descargar de todos modos', message: `Hay pendientes en el lote: ${partes.join(' · ')}.<br><br>Recepción lo recibirá así. Revisa la tabla (los puntos ámbar) antes de enviar.` })) return;
-    }
+    if (!sinModelo && !sinGrupos && !dupSet.size) return true;
+    const partes = [];
+    if (sinModelo)   partes.push(`${sinModelo} sin modelo`);
+    if (sinGrupos)   partes.push(`${sinGrupos} sin grupos`);
+    if (dupSet.size) partes.push(`${dupSet.size} nombre(s) duplicado(s)`);
+    return !!await Modal.confirm({ title: 'Pendientes en el lote', confirmLabel, message: `Hay pendientes en el lote: ${partes.join(' · ')}.<br><br>Recepción lo recibirá así. Revisa la tabla (los puntos ámbar) antes de enviar.` });
+  },
 
+  // Única fuente del lote para las dos salidas (enviar y descargar copia): lo
+  // que recepción carga desde el app y lo que dice el archivo es el mismo arreglo.
+  async _prepararLote(confirmLabel) {
+    const datos = await this.generarJSON();
+    if (!datos.length) { Toast.show('No hay datos para enviar.', 'bad'); return null; }
+    if (!await this._confirmarPendientes(datos, confirmLabel)) return null;
+    return datos;
+  },
+
+  // Respaldo: el archivo de siempre. Ya NO borra el borrador — el lote sale de
+  // verdad al enviarlo a recepción (auditoría UX 2026-09-28, 4.7 #9).
+  async descargarJSON() {
+    const datos = await this._prepararLote('Descargar de todos modos');
+    if (!datos) return;
     const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
@@ -736,9 +747,168 @@ window.VB = {
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
     this.setStep('exp');
-    // El JSON para recepción es el final del flujo: el lote ya salió, así que
-    // el borrador deja de ser trabajo pendiente y no debe restaurarse después.
+  },
+
+  // ---- Enviar a recepción (traspaso dentro del app) ----
+  _enviando: false,
+
+  async enviarARecepcion() {
+    if (this._enviando) return;   // doble clic = dos lotes iguales en la cola
+    this._enviando = true;
+    const btn = document.getElementById('btnEnviarRecepcion');
+    if (btn) btn.disabled = true;
+    try {
+      const datos = await this._prepararLote('Enviar de todos modos');
+      if (!datos) return;
+      const modeloId = document.getElementById('modeloGlobal')?.value || '';
+      const base = PocService.armarLotePreparado(datos, {
+        modelo: this.modelosDisponibles.find(m => m.id === modeloId)?.label || '',
+        grupos: VB.grupos,
+        notas:  document.getElementById('vbNotas')?.value || '',
+        user:   firebase.auth().currentUser,
+        nombre: this._userNombre,
+      });
+      const partes = PocService.partirLotePreparado(base);
+      const enviados = await PocService.enviarLotePreparado(partes);
+      // El correo es aviso, no candado: si falla, el lote ya está en la cola.
+      try { await this._avisarRecepcion(base, enviados); }
+      catch (e) { console.warn('[vendedores-batch] correo a recepción no encolado:', e); }
+      this._mostrarEnviado(enviados);
+      // Ahora sí el lote salió: el borrador deja de ser trabajo pendiente.
+      this._resetTrasEnvio();
+      this.cargarMisLotes();
+    } catch (e) {
+      console.error('[vendedores-batch] no se pudo enviar el lote:', e);
+      Toast.show(/demasiado grande/.test(e?.message || '') ? e.message : 'No se pudo enviar el lote. Revisa tu conexión e intenta de nuevo; tu borrador sigue guardado.', 'bad');
+    } finally {
+      this._enviando = false;
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  _fechaCorta(d) {
+    return (d || new Date()).toLocaleString('es-PA', { timeZone: 'America/Panama', dateStyle: 'medium', timeStyle: 'short' });
+  },
+
+  _mostrarEnviado(enviados) {
+    const box = document.getElementById('vbEnviado');
+    Toast.show('Lote enviado a recepción.', 'ok');
+    if (!box) return;
+    const codigos = enviados.map(e => `#${e.codigo}`).join(', ');
+    const nota = enviados.length > 1
+      ? ` <span class="form-hint">Era muy grande para un solo envío: salió en ${enviados.length} partes.</span>` : '';
+    box.innerHTML = `<i data-lucide="check-circle-2"></i><div><strong>Lote ${this._esc(codigos)} enviado a recepción</strong> · ${this._esc(this._fechaCorta())}${nota}</div>`;
+    box.hidden = false;
+    if (box.scrollIntoView) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    this._renderIcons();
+  },
+
+  _resetTrasEnvio() {
+    ['serialesPaste', 'vbNotas'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const sal = document.getElementById('salida');
+    if (sal) sal.innerHTML = '';
+    this.resetTablaEdicion();
+    this.setStep('exp');
     this.clearDraft(true);
+    this.updateStepBadges();
+  },
+
+  // Destinatarios: el MISMO buzón que el aviso "Nueva orden creada"
+  // (empresa/config.mail_orden_creada_to: primero = to, resto = cc; vacío =
+  // tecnico@cecomunica.com). Es la cola que recepción ya mira; no se consulta
+  // `usuarios` porque el vendedor no tiene permiso de listarla.
+  async _destinatariosRecepcion() {
+    const set = new Set();
+    try {
+      const cfg = await EmpresaService.getConfig();
+      (Array.isArray(cfg?.mail_orden_creada_to) ? cfg.mail_orden_creada_to : [])
+        .forEach(e => { if (e) set.add(String(e).trim().toLowerCase()); });
+    } catch (e) { console.warn('[vendedores-batch] destinatarios de recepción:', e); }
+    if (!set.size) set.add('tecnico@cecomunica.com');
+    return [...set];
+  },
+
+  async _avisarRecepcion(base, enviados) {
+    const lista = await this._destinatariosRecepcion();
+    const origen = window.location.origin;
+    const enlaces = enviados.map(e => ({
+      ...e, url: `${origen}/POC/nuevo-batch.html?lote=${encodeURIComponent(e.id)}`,
+    }));
+    const varias = enlaces.length > 1;
+    const vendedor = base.creado_por_nombre || base.creado_por_email || 'Ventas';
+    const cod = enviados.map(e => `#${e.codigo}`).join(', ');
+    const esc = (v) => this._esc(v);
+    const lineas = [
+      'Ventas preparó un lote de equipos PoC para cargar.',
+      '',
+      `Lote: ${cod}`,
+      `Cliente: ${base.cliente_nombre || '—'}`,
+      `Equipos: ${base.total}`,
+      `Preparado por: ${vendedor}`,
+    ];
+    if (base.notas) lineas.push(`Notas: ${base.notas}`);
+    lineas.push('');
+    enlaces.forEach(e => lineas.push((varias ? `Parte ${e.parte} de ${e.partes} (${e.total}): ` : '') + e.url));
+    const htmlLinks = enlaces.map(e =>
+      `<li><a href="${e.url}">${varias ? `Cargar parte ${e.parte} de ${e.partes} (${e.total} equipos)` : 'Cargar el lote en Nuevo lote'}</a></li>`).join('');
+    await MailService.enqueue({
+      to: lista[0],
+      ...(lista.length > 1 ? { cc: lista.slice(1) } : {}),
+      subject: `Lote PoC por cargar ${cod} – ${base.cliente_nombre || 'sin cliente'} (${base.total} equipos)`,
+      text: lineas.join('\n'),
+      html: `<p>Ventas preparó un lote de equipos PoC para cargar.</p>
+<ul>
+  <li><strong>Lote:</strong> ${esc(cod)}</li>
+  <li><strong>Cliente:</strong> ${esc(base.cliente_nombre || '—')}</li>
+  <li><strong>Equipos:</strong> ${base.total}</li>
+  <li><strong>Preparado por:</strong> ${esc(vendedor)}</li>
+  ${base.notas ? `<li><strong>Notas:</strong> ${esc(base.notas)}</li>` : ''}
+</ul>
+<ul>${htmlLinks}</ul>`,
+      meta: { source: 'poc_lote_preparado', lote_ids: enviados.map(e => e.id) },
+    });
+  },
+
+  // ---- Mis lotes enviados ----
+  _haceCuanto(ms) {
+    if (!ms) return '';
+    const min = Math.max(0, Math.round((Date.now() - ms) / 60000));
+    if (min < 1) return 'hace un momento';
+    if (min < 60) return `hace ${min} min`;
+    const h = Math.round(min / 60);
+    if (h < 24) return `hace ${h} h`;
+    const d = Math.round(h / 24);
+    return `hace ${d} día${d === 1 ? '' : 's'}`;
+  },
+
+  async cargarMisLotes() {
+    const cont = document.getElementById('vbMisLotes');
+    const uid = firebase.auth().currentUser?.uid;
+    if (!cont || !uid) return;
+    try {
+      const lotes = await PocService.getMisLotesPreparados(uid, { limit: 20 });
+      const box = document.getElementById('vbMisLotesBox');
+      if (box) box.hidden = !lotes.length;
+      const ESTADO = {
+        pendiente:  ['pending',  'Pendiente de cargar'],
+        cargado:    ['completo', 'Cargado'],
+        descartado: ['danger',   'Descartado'],
+      };
+      cont.innerHTML = lotes.map(l => {
+        const [cls, txt] = ESTADO[l.estado] || ['info', l.estado || '—'];
+        const cuando = l.creado_at?.toDate ? this._fechaCorta(l.creado_at.toDate()) : '';
+        let detalle = '';
+        if (l.estado === 'cargado') detalle = `lo cargó ${this._esc(l.cargado_por?.nombre || l.cargado_por?.email || 'recepción')}${l.cargado_at?.toMillis ? ' ' + this._haceCuanto(l.cargado_at.toMillis()) : ''}`;
+        if (l.estado === 'descartado') detalle = `descartado por ${this._esc(l.descartado_por?.nombre || 'recepción')}: ${this._esc(l.motivo_descarte || 'sin motivo')}`;
+        const parte = l.partes > 1 ? ` · parte ${l.parte} de ${l.partes}` : '';
+        return `<li class="vb-lote">
+          <div class="vb-lote-main"><strong>#${this._esc(l.codigo || l.id.slice(0, 6).toUpperCase())}</strong> · ${this._esc(l.cliente_nombre || 'sin cliente')} · ${l.total ?? (l.filas || []).length} equipos${parte}
+            <div class="vb-lote-sub">${this._esc(cuando)}${detalle ? ' · ' + detalle : ''}</div></div>
+          <span class="badge ${cls}">${txt}</span></li>`;
+      }).join('');
+    } catch (e) {
+      console.warn('[vendedores-batch] no se pudieron leer mis lotes:', e);
+    }
   },
 
   // ---- Draft autosave ----
@@ -908,6 +1078,7 @@ firebase.auth().onAuthStateChanged(async user => {
     const userDoc = await UsuariosService.getUsuario(user.uid);
     const rol     = userDoc ? userDoc.rol : null;
     VB._rol = rol;
+    VB._userNombre = (userDoc && userDoc.nombre) || user.email || "";
     if (![ROLES.ADMIN, ROLES.VENDEDOR, ROLES.RECEPCION].includes(rol)) {
       Toast.show('Acceso restringido.', 'bad');
       window.location.href = '../index.html';
@@ -923,6 +1094,7 @@ firebase.auth().onAuthStateChanged(async user => {
     }
     VB._draftKey = 'vend_batch_draft_' + user.uid;
     VB.restoreDraft();
+    VB.cargarMisLotes();
     setTimeout(() => document.getElementById('clienteGlobal')?.focus(), 100);
   } catch (error) {
     console.error('Error al verificar el rol o cargar modelos:', error);

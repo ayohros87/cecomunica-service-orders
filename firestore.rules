@@ -205,8 +205,12 @@ service cloud.firestore {
       // de la cotización podía marcarla "facturada" desde el navegador y el
       // control del taller pasaría a ser un palomeo — justo lo que este
       // circuito existe para retirar.
+      // `respuesta_cliente` (2026-09-28) va en el mismo candado: la escribe solo
+      // responderCotizacionPublica cuando el cliente responde desde el enlace.
+      // Si el navegador pudiera escribirla, "el cliente aceptó" sería un dato
+      // que cualquiera del staff puede fabricar.
       function tocaFacturacion() {
-        return request.resource.data.diff(resource.data).affectedKeys().hasAny(["facturacion"]);
+        return request.resource.data.diff(resource.data).affectedKeys().hasAny(["facturacion", "respuesta_cliente"]);
       }
 
       allow get:  if verTodasCot() || esDueno() || esSupervisorCot();
@@ -263,7 +267,12 @@ service cloud.firestore {
     // Mirror público de cotizaciones aprobadas. Creado por la app autenticada
     // (admin que aprueba); leído por cualquiera con el code en el URL.
     match /cotizacion_verificaciones/{docId} {
-      allow read: if true;
+      // `get` público (el enlace trae el id); `list` NO: el espejo guarda el
+      // código del enlace, y listar la colección entregaría todos los códigos,
+      // que desde 2026-09-28 bastan para aceptar o rechazar una cotización
+      // (responderCotizacionPublica). Nadie en la app lista esta colección.
+      allow get: if true;
+      allow list: if isSignedIn();
       allow create, update: if isSignedIn();
       allow delete: if false;
     }
@@ -779,6 +788,41 @@ service cloud.firestore {
       // sub=** SOLO lectura: poc_devices no tiene subcolecciones escritas, y un
       // {sub=**} con write sombreaba el delete:isAdmin de arriba (ver órdenes).
       match /{sub=**} { allow read: if isSignedIn(); }
+    }
+
+    // Lotes PoC que prepara ventas y carga recepción (traspaso dentro del app;
+    // antes viajaba un JSON por correo o WhatsApp — auditoría UX 2026-09-28,
+    // 4.7 #9). El vendedor crea y lee SOLO los suyos; recepción/admin leen
+    // todos y resuelven (pendiente → cargado | descartado, una sola vez);
+    // gerente lee. Nadie borra: un descarte deja el motivo a la vista.
+    match /poc_lotes_preparados/{loteId} {
+      function lotePrepPuedeGestionar() { return userRole() in ["administrador", "recepcion"]; }
+      allow read: if isSignedIn()
+        && (resource.data.creado_por_uid == request.auth.uid
+            || userRole() in ["administrador", "recepcion", "gerente"]);
+      allow create: if isSignedIn()
+        && userRole() in ["administrador", "vendedor", "recepcion"]
+        && request.resource.data.keys().hasOnly(["codigo", "envio_id", "cliente_id", "cliente_nombre",
+             "filas", "total", "modelo", "grupos", "gps", "notas", "estado", "parte", "partes",
+             "creado_por_uid", "creado_por_email", "creado_por_nombre", "creado_at"])
+        && request.resource.data.creado_por_uid == request.auth.uid
+        && request.resource.data.estado == "pendiente"
+        && request.resource.data.filas is list && request.resource.data.filas.size() > 0
+        && request.resource.data.cliente_nombre is string
+        && request.resource.data.creado_at == request.time;
+      allow update: if isSignedIn() && lotePrepPuedeGestionar()
+        && resource.data.estado == "pendiente"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado",
+             "cargado_por", "cargado_at", "batch_ref", "motivo_descarte", "descartado_por", "descartado_at"])
+        && ((request.resource.data.estado == "cargado"
+              && request.resource.data.batch_ref is list
+              && request.resource.data.cargado_por.uid == request.auth.uid
+              && request.resource.data.cargado_at == request.time)
+            || (request.resource.data.estado == "descartado"
+              && request.resource.data.motivo_descarte is string
+              && request.resource.data.motivo_descarte.size() >= 3
+              && request.resource.data.descartado_por.uid == request.auth.uid));
+      allow delete: if false;
     }
 
     // Pool de SIM cards (POC/sim-cards.html + asignación desde la lista POC).

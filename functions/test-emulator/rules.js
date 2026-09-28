@@ -103,6 +103,77 @@ async function main() {
   await assertSucceeds(as("recepcion").doc("poc_devices/pTipo4").set({ unit_id: "CONSOLA_DSI", unit_id_num: null }));
   ok("poc_devices: unit_id numérico rechazado; string + espejo int|null pasa");
 
+  // ── poc_lotes_preparados: traspaso vendedor → recepción dentro del app ────
+  // (auditoría UX 2026-09-28, 4.7 #9). El vendedor crea y lee los suyos;
+  // recepción/admin leen todos y resuelven una sola vez; gerente lee; nadie borra.
+  {
+    // Mismo SDK compat que usa rules-unit-testing (as(r).doc(...)).
+    const fbCompat = require("firebase/compat/app");
+    require("firebase/compat/firestore");
+    const serverTimestamp = () => (fbCompat.default || fbCompat).firestore.FieldValue.serverTimestamp();
+    const fila = { cliente_id: "CLI1", cliente_nombre: "CLIENTE UNO", radio_name: "Radio 1", gps: false,
+      modelo_id: "m1", modelo_label: "HYTERA PNC370", grupos: ["Ventas"] };
+    const lote = (uid, extra = {}) => ({
+      codigo: "ABC123", envio_id: "e1", cliente_id: "CLI1", cliente_nombre: "CLIENTE UNO",
+      filas: [fila], total: 1, modelo: "", grupos: ["Ventas"], gps: 0, notas: "", estado: "pendiente",
+      parte: 1, partes: 1, creado_por_uid: uid, creado_por_email: uid + "@x.com", creado_por_nombre: uid,
+      creado_at: serverTimestamp(), ...extra,
+    });
+    const L = "poc_lotes_preparados/";
+
+    await assertSucceeds(as("vendedor").doc(L + "lv1").set(lote("vendedor")));
+    await assertSucceeds(as("administrador").doc(L + "la1").set(lote("administrador")));
+    await assertSucceeds(as("recepcion").doc(L + "lr1").set(lote("recepcion")));
+    ok("poc_lotes_preparados: vendedor, admin y recepción crean lotes a su nombre");
+
+    await assertFails(as("vendedor").doc(L + "lvX1").set(lote("otro_vendedor")));
+    await assertFails(as("vendedor").doc(L + "lvX2").set(lote("vendedor", { estado: "cargado" })));
+    await assertFails(as("vendedor").doc(L + "lvX3").set(lote("vendedor", { batch_ref: ["d1"] })));
+    await assertFails(as("vendedor").doc(L + "lvX4").set(lote("vendedor", { filas: [] })));
+    await assertFails(as("vendedor").doc(L + "lvX5").set(lote("vendedor", { creado_at: new Date(2020, 0, 1) })));
+    for (const r of ["gerente", "tecnico", "inventario", "contabilidad", "vista"]) {
+      await assertFails(as(r).doc(L + "lbad_" + r).set(lote(r)));
+    }
+    ok("poc_lotes_preparados: ni a nombre ajeno, ni ya resuelto, ni vacío, ni roles fuera de ventas/recepción");
+
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(L + "lAjeno").set({ ...lote("otro_vendedor"), creado_at: new Date() });
+    });
+    await assertSucceeds(as("vendedor").doc(L + "lv1").get());
+    await assertSucceeds(as("vendedor").collection("poc_lotes_preparados").where("creado_por_uid", "==", "vendedor").get());
+    await assertFails(as("vendedor").doc(L + "lAjeno").get());
+    await assertFails(as("vendedor").collection("poc_lotes_preparados").where("estado", "==", "pendiente").get());
+    ok("poc_lotes_preparados: el vendedor lee los suyos (doc y query), no los ajenos ni la cola");
+
+    for (const r of ["administrador", "recepcion", "gerente"]) {
+      await assertSucceeds(as(r).doc(L + "lAjeno").get());
+      await assertSucceeds(as(r).collection("poc_lotes_preparados").where("estado", "==", "pendiente").get());
+    }
+    for (const r of ["tecnico", "inventario", "vista"]) await assertFails(as(r).doc(L + "lAjeno").get());
+    ok("poc_lotes_preparados: recepción, admin y gerente leen la cola; técnico/inventario/vista no");
+
+    const cargar = (uid) => ({ estado: "cargado", cargado_por: { uid, email: uid + "@x.com", nombre: uid },
+      cargado_at: serverTimestamp(), batch_ref: ["d1", "d2"] });
+    await assertFails(as("vendedor").doc(L + "lv1").update(cargar("vendedor")));
+    await assertFails(as("gerente").doc(L + "lv1").update(cargar("gerente")));
+    await assertFails(as("recepcion").doc(L + "lv1").update(cargar("administrador")));
+    await assertFails(as("recepcion").doc(L + "lv1").update({ ...cargar("recepcion"), filas: [] }));
+    await assertSucceeds(as("recepcion").doc(L + "lv1").update(cargar("recepcion")));
+    await assertFails(as("administrador").doc(L + "lv1").update(cargar("administrador")));
+    ok("poc_lotes_preparados: solo recepción/admin cargan, a su nombre, sin tocar las filas, y una sola vez");
+
+    const descartar = (uid, motivo) => ({ estado: "descartado", motivo_descarte: motivo,
+      descartado_por: { uid, email: uid + "@x.com", nombre: uid }, descartado_at: serverTimestamp() });
+    await assertFails(as("recepcion").doc(L + "la1").update(descartar("recepcion", "")));
+    await assertFails(as("vendedor").doc(L + "la1").update(descartar("vendedor", "duplicado")));
+    await assertSucceeds(as("administrador").doc(L + "la1").update(descartar("administrador", "duplicado del #ABC999")));
+    await assertFails(as("recepcion").doc(L + "la1").update(cargar("recepcion")));
+    ok("poc_lotes_preparados: descartar exige motivo y lo hace recepción/admin; un descartado no se carga");
+
+    for (const r of ["administrador", "recepcion", "vendedor"]) await assertFails(as(r).doc(L + "lr1").delete());
+    ok("poc_lotes_preparados: nadie borra (ni admin)");
+  }
+
   // ── ordenes: máquina de estados (transiciones ilegales bloqueadas) ────────
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
@@ -789,6 +860,24 @@ async function main() {
   ok("cotizaciones: flag en false no estorba el envío dentro de política");
   await assertSucceeds(as("gerente").doc("cotizaciones/cLinea").set({ estado: "enviada" }, { merge: true }));
   ok("cotizaciones: el aprobador del tipo envía aunque el flag pida aprobación");
+
+  // ── Respuesta del cliente desde el enlace público (2026-09-28) ────────────
+  // La escribe solo responderCotizacionPublica (admin SDK). El espejo se lee
+  // por id sin sesión, pero no se lista: guarda el código del enlace.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc("cotizaciones/cResp").set({ estado: "enviada", creado_por_uid: "vendedor", total: 100, descuentoPct: 0 });
+    await db.doc("cotizacion_verificaciones/cResp").set({ code: "abc123def456", estado: "enviada" });
+  });
+  await assertFails(as("vendedor").doc("cotizaciones/cResp").set({ respuesta_cliente: { respuesta: "aceptada", nombre: "X" } }, { merge: true }));
+  await assertFails(as("administrador").doc("cotizaciones/cResp").set({ respuesta_cliente: { respuesta: "aceptada", nombre: "X" } }, { merge: true }));
+  await assertSucceeds(as("vendedor").doc("cotizaciones/cResp").set({ intro: "hola" }, { merge: true }));
+  ok("cotizaciones: respuesta_cliente no la escribe el navegador (ni admin); el resto del doc sí");
+  const anonCot = testEnv.unauthenticatedContext().firestore();
+  await assertSucceeds(anonCot.doc("cotizacion_verificaciones/cResp").get());
+  await assertFails(anonCot.collection("cotizacion_verificaciones").get());
+  await assertFails(anonCot.doc("cotizacion_verificaciones/cResp").set({ estado: "convertida" }, { merge: true }));
+  ok("cotizacion_verificaciones: get anónimo sí; list y escritura anónimos no");
 
   // ── contadores: correlativos de cotizaciones y contratos ──────────────────
   // El número de contrato se RESERVA en contadores/contratos_{TIPO}_{YYYYMMDD}

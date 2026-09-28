@@ -81,6 +81,145 @@ const PocService = {
     return ids;
   },
 
+  // ── Lotes preparados por ventas (traspaso vendedor → recepción) ─────────
+  // Antes el vendedor descargaba un JSON y lo mandaba por correo o WhatsApp;
+  // ahora el lote viaja dentro del app (auditoría UX 2026-09-28, 4.7 #9).
+  // `filas` es EXACTAMENTE el arreglo del JSON de siempre: recepción lo carga
+  // por la misma función que procesa el archivo, así no hay dos formatos.
+  LOTE_PREP_COL: 'poc_lotes_preparados',
+  // Techo de un doc de Firestore: 1 MiB. Se deja margen porque el JSON en
+  // UTF-8 es solo una aproximación del tamaño real que cuenta Firestore.
+  LOTE_PREP_MAX_BYTES: 900 * 1024,
+
+  _bytesAprox(obj) {
+    const s = JSON.stringify(obj);
+    return typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(s).length : s.length * 3;
+  },
+
+  // Doc base del lote (sin id, sin timestamps). Puro: lo usan la página y las
+  // pruebas para asegurar que lo guardado y lo descargado son lo mismo.
+  armarLotePreparado(filas, { modelo = '', grupos = [], notas = '', user = null, nombre = '' } = {}) {
+    const f = Array.isArray(filas) ? filas : [];
+    return {
+      cliente_id:        f[0]?.cliente_id || null,
+      cliente_nombre:    f[0]?.cliente_nombre || '',
+      filas:             f,
+      total:             f.length,
+      modelo:            modelo || '',
+      grupos:            Array.isArray(grupos) ? grupos.slice() : [],
+      gps:               f.filter(x => x && x.gps).length,
+      notas:             (notas || '').toString().trim(),
+      estado:            'pendiente',
+      creado_por_uid:    user?.uid || null,
+      creado_por_email:  user?.email || null,
+      creado_por_nombre: nombre || user?.email || '',
+    };
+  },
+
+  // Parte el lote en varios docs si no cabe en uno (un lote de miles de
+  // equipos). Cada parte es un lote pendiente propio "parte i de n": recepción
+  // las carga una por una, igual que cargaría varios archivos.
+  partirLotePreparado(base, { maxBytes = this.LOTE_PREP_MAX_BYTES } = {}) {
+    const filas = base.filas || [];
+    const vacio = this._bytesAprox({ ...base, filas: [], codigo: 'XXXXXX', envio_id: 'x'.repeat(20), parte: 99, partes: 99 }) + 64;
+    const grupos = [];
+    let actual = [], tam = vacio;
+    for (const fila of filas) {
+      // +32: el id que la fila suma a batch_ref cuando recepción la carga.
+      const b = this._bytesAprox(fila) + 1 + 32;
+      if (vacio + b > maxBytes) throw new Error('Una fila del lote es demasiado grande para guardarse.');
+      if (actual.length && tam + b > maxBytes) { grupos.push(actual); actual = []; tam = vacio; }
+      actual.push(fila); tam += b;
+    }
+    if (actual.length) grupos.push(actual);
+    return grupos.map((fs, i) => ({
+      ...base, filas: fs, total: fs.length, gps: fs.filter(x => x && x.gps).length,
+      parte: i + 1, partes: grupos.length,
+    }));
+  },
+
+  // Escribe todas las partes en un solo WriteBatch (todo o nada). Devuelve
+  // [{ id, codigo, parte, partes, total }]. `codigo` es el "Lote #…" que ven
+  // vendedor y recepción (los 6 primeros del id: corto y sin contador).
+  async enviarLotePreparado(partes) {
+    const db = firebase.firestore();
+    const col = db.collection(this.LOTE_PREP_COL);
+    const refs = partes.map(() => col.doc());
+    const envioId = refs[0]?.id || null;
+    const batch = db.batch();
+    const out = [];
+    partes.forEach((p, i) => {
+      const codigo = refs[i].id.slice(0, 6).toUpperCase();
+      batch.set(refs[i], {
+        ...p, codigo, envio_id: envioId, estado: 'pendiente',
+        creado_at: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      out.push({ id: refs[i].id, codigo, parte: p.parte, partes: p.partes, total: p.total });
+    });
+    await batch.commit();
+    return out;
+  },
+
+  async getLotePreparado(id, opts) {
+    const doc = await firebase.firestore().collection(this.LOTE_PREP_COL).doc(id).get(opts);
+    return doc.exists ? { id: doc.id, ...doc.data() } : null;
+  },
+
+  _porCreadoDesc(a, b) {
+    return (b.creado_at?.toMillis?.() || 0) - (a.creado_at?.toMillis?.() || 0);
+  },
+
+  // Pendientes de cargar (recepción/admin). Sin orderBy: la cola se vacía al
+  // cargar, así que es corta y se ordena aquí sin índice compuesto.
+  async getLotesPendientes({ limit = 100 } = {}) {
+    const snap = await firebase.firestore().collection(this.LOTE_PREP_COL)
+      .where('estado', '==', 'pendiente').limit(limit).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(this._porCreadoDesc);
+  },
+
+  // Lotes del vendedor, los más recientes. Con el índice compuesto
+  // (creado_por_uid ASC, creado_at DESC) pide solo `limit`; sin él (índice aún
+  // no desplegado) cae a traer los suyos y ordenar aquí.
+  async getMisLotesPreparados(uid, { limit = 20 } = {}) {
+    const col = firebase.firestore().collection(this.LOTE_PREP_COL);
+    let docs;
+    try {
+      const snap = await col.where('creado_por_uid', '==', uid).orderBy('creado_at', 'desc').limit(limit).get();
+      docs = snap.docs;
+    } catch (e) {
+      if (e?.code !== 'failed-precondition') throw e;
+      const snap = await col.where('creado_por_uid', '==', uid).get();
+      docs = snap.docs;
+    }
+    return docs.map(d => ({ id: d.id, ...d.data() })).sort(this._porCreadoDesc).slice(0, limit);
+  },
+
+  _quien(user, nombre) {
+    return { uid: user?.uid || null, email: user?.email || null, nombre: nombre || user?.email || '' };
+  },
+
+  // Recepción creó los equipos: el lote pasa a 'cargado' con los ids creados.
+  // Las rules solo dejan pasar de 'pendiente', así que un segundo intento (otra
+  // pestaña, otra recepcionista) falla en vez de pisar el primero.
+  async marcarLotePreparadoCargado(id, deviceIds, { user = null, nombre = '' } = {}) {
+    return firebase.firestore().collection(this.LOTE_PREP_COL).doc(id).update({
+      estado:      'cargado',
+      cargado_por: this._quien(user, nombre),
+      cargado_at:  firebase.firestore.FieldValue.serverTimestamp(),
+      batch_ref:   Array.isArray(deviceIds) ? deviceIds : [],
+    });
+  },
+
+  // Descartar no borra: el vendedor ve el motivo en "Mis lotes enviados".
+  async descartarLotePreparado(id, motivo, { user = null, nombre = '' } = {}) {
+    return firebase.firestore().collection(this.LOTE_PREP_COL).doc(id).update({
+      estado:          'descartado',
+      motivo_descarte: (motivo || '').toString().trim(),
+      descartado_por:  this._quien(user, nombre),
+      descartado_at:   firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  },
+
   async updatePocDevice(id, fields) {
     const db = firebase.firestore();
     return db.collection('poc_devices').doc(id).update(this._conUnitIdNormalizado(fields, false));
