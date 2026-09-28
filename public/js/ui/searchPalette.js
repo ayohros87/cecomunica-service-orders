@@ -8,6 +8,10 @@
  *   - Arrow keys + Enter to navigate / open
  *   - Esc or click outside to close
  *
+ *   - "Recientes": con la caja vacía se listan los últimos 8 resultados
+ *     abiertos desde el palette (localStorage, por navegador). Volver al
+ *     cliente de hace un rato es Ctrl+K, Enter (P2 auditoría UX 2026-09-28).
+ *
  * Mounted by calling SearchPalette.init() once per page. The page must
  * have busquedaGlobalService.js loaded.
  */
@@ -20,6 +24,27 @@
   let activeIdx = -1;
   let flatResults = [];
   let debounceTimer = null;
+
+  // ── Recientes ────────────────────────────────────────────────────────
+  const RECIENTES_KEY = 'cc_palette_recientes';
+  const RECIENTES_MAX = 8;
+  function leerRecientes() {
+    try {
+      const v = JSON.parse(localStorage.getItem(RECIENTES_KEY) || '[]');
+      return Array.isArray(v) ? v.filter(r => r && r.link && r.title) : [];
+    } catch (_) { return []; }
+  }
+  function recordar(it) {
+    if (!it || !it.link) return;
+    const lista = [{ title: it.title, subtitle: it.subtitle || '', link: it.link, grupo: it.grupo || '' }]
+      .concat(leerRecientes().filter(r => r.link !== it.link))
+      .slice(0, RECIENTES_MAX);
+    try { localStorage.setItem(RECIENTES_KEY, JSON.stringify(lista)); } catch (_) { /* sin storage */ }
+  }
+  function olvidarRecientes() {
+    try { localStorage.removeItem(RECIENTES_KEY); } catch (_) { /* sin storage */ }
+  }
+  const HINT_VACIO = '<div class="sp-hint">Escribe al menos 2 caracteres para buscar.</div>';
 
   // Iconos/labels desde el catálogo único (MODULOS.CATALOGO, auditoría A9);
   // los literales quedan de fallback para un modulos.js viejo en caché.
@@ -66,6 +91,12 @@
     resultsEl = overlay.querySelector('#sp-results');
     input.addEventListener('input', onInput);
     input.addEventListener('keydown', onKeyDown);
+    // Abrir con clic también cuenta como "reciente" (Enter ya pasa por onKeyDown).
+    resultsEl.addEventListener('click', (e) => {
+      const fila = e.target.closest && e.target.closest('.sp-row');
+      if (fila) { recordar(flatResults[Number(fila.dataset.idx)]); return; }
+      if (e.target.closest && e.target.closest('.sp-olvidar')) { olvidarRecientes(); pintarVacio(); }
+    });
     // En táctil no hay Esc: el mismo rótulo es un botón (auditoría UX 2026-09-28).
     overlay.querySelector('.sp-cerrar').addEventListener('click', close);
     if (window.lucide) lucide.createIcons();
@@ -79,6 +110,8 @@
     if (typeof texto === 'string' && texto.trim()) {
       input.value = texto;
       onInput();
+    } else {
+      pintarVacio();
     }
     setTimeout(() => {
       input.focus();
@@ -90,18 +123,41 @@
     if (!overlay) return;
     overlay.classList.remove('is-open');
     input.value = '';
-    resultsEl.innerHTML = '<div class="sp-hint">Escribe al menos 2 caracteres para buscar.</div>';
+    resultsEl.innerHTML = HINT_VACIO;
     activeIdx = -1;
     flatResults = [];
+  }
+
+  // Caja vacía: los recientes (navegables con ↑/↓ y Enter) o la pista.
+  function pintarVacio() {
+    const rec = leerRecientes();
+    flatResults = [];
+    activeIdx = -1;
+    if (!rec.length) { resultsEl.innerHTML = HINT_VACIO; return; }
+    const rows = rec.map(it => {
+      const idx = flatResults.length;
+      flatResults.push(it);
+      const meta = GROUP_META[it.grupo];
+      return `<a class="sp-row" data-idx="${idx}" href="${escapeHtml(it.link)}">
+        <div class="sp-row-title">${escapeHtml(it.title)}</div>
+        <div class="sp-row-sub">${meta ? escapeHtml(meta.label) + (it.subtitle ? ' · ' : '') : ''}${escapeHtml(it.subtitle || '')}</div>
+      </a>`;
+    }).join('');
+    resultsEl.innerHTML = `<div class="sp-group sp-group--recientes">
+      <div class="sp-group-head"><i data-lucide="history"></i> Recientes
+        <button type="button" class="sp-olvidar" title="Borrar la lista de recientes">Limpiar</button></div>
+      ${rows}
+    </div>`;
+    if (window.lucide) lucide.createIcons();
+    activeIdx = 0;
+    highlightActive();
   }
 
   function onInput() {
     const q = input.value;
     clearTimeout(debounceTimer);
     if (q.trim().length < 2) {
-      resultsEl.innerHTML = '<div class="sp-hint">Escribe al menos 2 caracteres para buscar.</div>';
-      flatResults = [];
-      activeIdx = -1;
+      pintarVacio();
       return;
     }
     resultsEl.innerHTML = '<div class="sp-hint">Buscando…</div>';
@@ -130,8 +186,8 @@
       if (!items.length) return '';
       const rows = items.map(it => {
         const idx = flatResults.length;
-        flatResults.push(it);
-        return `<a class="sp-row" data-idx="${idx}" href="${it.link}">
+        flatResults.push({ ...it, grupo: k });
+        return `<a class="sp-row" data-idx="${idx}" href="${escapeHtml(it.link)}">
           <div class="sp-row-title">${escapeHtml(it.title)}</div>
           <div class="sp-row-sub">${escapeHtml(it.subtitle || '')}</div>
         </a>`;
@@ -161,7 +217,7 @@
     if (e.key === 'ArrowUp')   { activeIdx = Math.max(activeIdx - 1, 0);                       highlightActive(); e.preventDefault(); return; }
     if (e.key === 'Enter' && activeIdx >= 0) {
       const it = flatResults[activeIdx];
-      if (it?.link) location.href = it.link;
+      if (it?.link) { recordar(it); location.href = it.link; }
       e.preventDefault();
       return;
     }

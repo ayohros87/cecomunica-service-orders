@@ -210,12 +210,22 @@ h1,h2,h3,h4{margin:0;font-family:var(--font-display);color:var(--fg-1);font-weig
 .btn i{width:16px;height:16px}
 .btn:hover{background:var(--gray-50);border-color:var(--line-strong)}
 .btn:active{transform:translateY(1px)}
-.btn--primary{background:var(--accent);color:#fff;border-color:var(--accent)}
-.btn--primary:hover{background:var(--accent-hover);border-color:var(--accent-hover);box-shadow:var(--shadow-md)}
+/* Convención única de botón (P2 auditoría UX 2026-09-28, §4.1 #14): el canon
+   es .btn-primary/.btn-secondary/.btn-ghost/.btn-danger (ceco-ui.css); aquí
+   los nombres BEM de esta hoja son alias con el mismo look, y se aceptan
+   también los del canon para que un bloque del kit pegado en el home no salga
+   sin estilo. Primario en --accent-hover (#0074AC) como el canon: blanco sobre
+   el cian --accent no pasa AA en 14 px (T7). */
+.btn--primary,.btn-primary,.btn.primary{background:var(--accent-hover);color:#fff;border-color:var(--accent-hover)}
+.btn--primary:hover,.btn-primary:hover,.btn.primary:hover{background:var(--accent-press);border-color:var(--accent-press);color:#fff;box-shadow:var(--shadow-md)}
 .btn--navy{background:var(--navy-800);color:#fff;border-color:var(--navy-800)}
 .btn--navy:hover{background:var(--navy-700);border-color:var(--navy-700)}
-.btn--ghost{background:transparent;border-color:transparent;color:var(--fg-2)}
-.btn--ghost:hover{background:var(--gray-100)}
+.btn--secondary,.btn-secondary{background:var(--gray-50);color:var(--fg-1);border-color:var(--line-strong)}
+.btn--secondary:hover,.btn-secondary:hover{background:var(--gray-100)}
+.btn--ghost,.btn-ghost{background:transparent;border-color:transparent;color:var(--fg-2)}
+.btn--ghost:hover,.btn-ghost:hover{background:var(--gray-100)}
+.btn--danger,.btn-danger{background:var(--bad);color:#fff;border-color:var(--bad)}
+.btn--danger:hover,.btn-danger:hover{background:#B83A3A;border-color:#B83A3A;color:#fff;box-shadow:var(--shadow-md)}
 .btn--ok{background:var(--ok);color:#fff;border-color:var(--ok)}
 .btn--sm{padding:6px 11px;font-size:13px;border-radius:var(--r-sm)}
 .btn--icon{padding:9px;width:38px}
@@ -523,6 +533,16 @@ a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
    control de calidad" no caben junto a su número y se recortaban. */
 @media (max-width:560px){
   .kpis,.kpis[data-n="1"],.kpis[data-n="2"],.kpis[data-n="3"],.kpis[data-n="5"]{grid-template-columns:minmax(0,1fr)}
+}
+
+/* ── Home con rail (P2 auditoría UX 2026-09-28) ───────────────────────────
+   El home monta el rail como las páginas de módulo (.cc-app/.cc-work de
+   ceco-rail.css), así navegar no cambia la forma de la pantalla. En
+   escritorio el rail ya lleva la marca: la franja navy se queda con el saludo
+   y las acciones. ≤1024 px el rail es drawer (FAB) y la marca vuelve. */
+@media (min-width:1025px){
+  .cc-app--home .launch__hero-top > img,
+  .cc-app--home .launch__hero-top > .wm{display:none}
 }
 
 

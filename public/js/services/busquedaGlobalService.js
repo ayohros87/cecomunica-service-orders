@@ -2,20 +2,26 @@
  * busquedaGlobalService.js — cross-collection search for the admin cmd-K palette.
  *
  * Searches the 5 most-used collections in parallel and returns grouped results:
- *  - clientes        (nombre, email, ruc, telefono)
+ *  - clientes        (índice searchTokens; escaneo de respaldo)
  *  - ordenes         (via OrdenesService.searchOrders with searchTokens index)
- *  - contratos       (contrato_id, cliente_nombre)
- *  - cotizaciones    (id, cliente_nombre)
- *  - poc_devices     (serial, unit_id, radio_name, sim)
+ *  - contratos       (índice searchTokens; escaneo de respaldo)
+ *  - cotizaciones    (escaneo: sus searchTokens aún no están en producción)
+ *  - poc_devices     (escaneo: serial, unit_id, radio_name, sim)
  *
- * For collections without searchTokens, falls back to scanning the most
- * recent 500 docs. Cubre el 95% de las búsquedas reales sin destruir el
- * quota (ver PLAN §13.1.1).
+ * Índice primero (P2 auditoría UX 2026-09-28, §4.1 #14): clientes, contratos
+ * y órdenes ya llevan `searchTokens` (prefijos de palabra / número completo /
+ * sufijos de serial, según la colección) y un `array-contains` por token cuesta
+ * ~60 lecturas en vez de 500. El escaneo de los 500 más recientes queda de
+ * respaldo: documentos viejos sin tokens, un término que no tiene la forma
+ * de los tokens, o el índice caído. Cotizaciones pasa a índice con la misma
+ * llamada (_indexadoOEscaneo) cuando su trigger de tokens esté desplegado y
+ * la colección rellenada.
  */
 const BusquedaGlobalService = {
 
   MAX_PER_COLLECTION: 5,
   SCAN_LIMIT: 500,
+  IDX_LIMIT: 60,
 
   _norm(s) {
     return (s || '').toString().toLowerCase()
@@ -24,6 +30,32 @@ const BusquedaGlobalService = {
 
   _match(text, q) {
     return this._norm(text).includes(q);
+  },
+
+  // Todas las palabras tecleadas, en cualquier orden, sobre cualquiera de los
+  // campos (como EntityCombo.filtrar): "gamboa hotel" encuentra "Hotel Gamboa".
+  _matchTodas(campos, q) {
+    const heno = campos.map(c => this._norm(c)).join(' ');
+    return q.split(/\s+/).filter(Boolean).every(w => heno.includes(w));
+  },
+
+  // Token con que se consulta el índice: el mismo tokenizador de quien lo
+  // escribe (ClientesService.buildSearchTokens / ContratosService.buildSearchTokens):
+  // prefijos de palabra de ≥2 letras; RUC, cédula y teléfono en dígitos.
+  _tokenDe(q) {
+    const digitos = q.replace(/\D/g, '');
+    if (/^[\d\s.\-]+$/.test(q) && digitos.length >= 3) return digitos;
+    return q.split(/[^a-z0-9]+/).filter(w => w.length >= 2)[0] || '';
+  },
+
+  // Índice primero; escaneo si el índice falla o no trae nada. `indexado`
+  // devuelve hits ya mapeados (o [] si no hay token consultable).
+  async _indexadoOEscaneo(nombre, indexado, escaneo) {
+    try {
+      const hits = await indexado();
+      if (hits.length) return hits;
+    } catch (e) { console.warn(`[busqueda] índice ${nombre}, cae al escaneo:`, e?.message || e); }
+    return escaneo();
   },
 
   async searchAll(query) {
@@ -47,28 +79,32 @@ const BusquedaGlobalService = {
 
   async _searchClientes(q) {
     const db = firebase.firestore();
-    const snap = await db.collection('clientes')
-      .orderBy('updated_at', 'desc').limit(this.SCAN_LIMIT).get()
-      .catch(() => db.collection('clientes').limit(this.SCAN_LIMIT).get());
-    const hits = [];
-    snap.forEach(d => {
+    const pasa = (c) => c.deleted !== true &&
+      this._matchTodas([c.nombre, c.empresa, c.email, c.correo, c.ruc, c.telefono, c.cedula], q);
+    const aHit = (d) => {
       const c = d.data();
-      if (this._match(c.nombre,   q) ||
-          this._match(c.empresa,  q) ||
-          this._match(c.email,    q) ||
-          this._match(c.correo,   q) ||
-          this._match(c.ruc,      q) ||
-          this._match(c.telefono, q) ||
-          this._match(c.cedula,   q)) {
-        hits.push({
-          id: d.id,
-          title: c.nombre || c.empresa || '(sin nombre)',
-          subtitle: [c.email || c.correo, c.ruc, c.telefono].filter(Boolean).join(' · '),
-          link: `/clientes/editar.html?id=${encodeURIComponent(d.id)}`,
-        });
-      }
+      return {
+        id: d.id,
+        title: c.nombre || c.empresa || '(sin nombre)',
+        subtitle: [c.email || c.correo, c.ruc, c.telefono].filter(Boolean).join(' · '),
+        link: `/clientes/editar.html?id=${encodeURIComponent(d.id)}`,
+      };
+    };
+    return this._indexadoOEscaneo('clientes', async () => {
+      const tok = this._tokenDe(q);
+      if (!tok) return [];
+      // Mismo índice que ClientesService.searchByToken (array-contains + deleted).
+      const snap = await db.collection('clientes')
+        .where('searchTokens', 'array-contains', tok)
+        .where('deleted', '==', false)
+        .limit(this.IDX_LIMIT).get();
+      return snap.docs.filter(d => pasa(d.data())).slice(0, this.MAX_PER_COLLECTION).map(aHit);
+    }, async () => {
+      const snap = await db.collection('clientes')
+        .orderBy('updated_at', 'desc').limit(this.SCAN_LIMIT).get()
+        .catch(() => db.collection('clientes').limit(this.SCAN_LIMIT).get());
+      return snap.docs.filter(d => pasa(d.data())).slice(0, this.MAX_PER_COLLECTION).map(aHit);
     });
-    return hits.slice(0, this.MAX_PER_COLLECTION);
   },
 
   async _searchOrdenes(query) {
@@ -91,28 +127,38 @@ const BusquedaGlobalService = {
 
   async _searchContratos(q) {
     const db = firebase.firestore();
-    const snap = await db.collection('contratos')
-      .where('deleted', '!=', true)
-      .orderBy('deleted')
-      .orderBy('fecha_creacion', 'desc')
-      .limit(this.SCAN_LIMIT)
-      .get()
-      .catch(() => db.collection('contratos').limit(this.SCAN_LIMIT).get());
-    const hits = [];
-    snap.forEach(d => {
+    const pasa = (c) => c.deleted !== true &&
+      this._matchTodas([c.contrato_id, c.cliente_nombre, c.clienteNombre], q);
+    const aHit = (d) => {
       const c = d.data();
-      if (this._match(c.contrato_id,    q) ||
-          this._match(c.cliente_nombre, q) ||
-          this._match(c.clienteNombre,  q)) {
-        hits.push({
-          id: d.id,
-          title: c.contrato_id || d.id,
-          subtitle: [c.cliente_nombre || c.clienteNombre, c.estado].filter(Boolean).join(' · '),
-          link: `/contratos/index.html?buscar=${encodeURIComponent(c.contrato_id || d.id)}`,
-        });
-      }
+      return {
+        id: d.id,
+        title: c.contrato_id || d.id,
+        subtitle: [c.cliente_nombre || c.clienteNombre, c.estado].filter(Boolean).join(' · '),
+        link: `/contratos/index.html?buscar=${encodeURIComponent(c.contrato_id || d.id)}`,
+      };
+    };
+    return this._indexadoOEscaneo('contratos', async () => {
+      // Tokens del contrato: prefijos del nombre del cliente y el número
+      // COMPLETO en minúsculas (ContratosService.buildSearchTokens). Con
+      // dígitos en el término se prueba el número tal cual; un número a
+      // medias no es token y cae al escaneo, que sí hace subcadena.
+      const tok = /\d/.test(q) ? q.replace(/\s+/g, '') : this._tokenDe(q);
+      if (!tok || tok.length < 2) return [];
+      const snap = await db.collection('contratos')
+        .where('searchTokens', 'array-contains', tok)
+        .limit(this.IDX_LIMIT).get();
+      return snap.docs.filter(d => pasa(d.data())).slice(0, this.MAX_PER_COLLECTION).map(aHit);
+    }, async () => {
+      const snap = await db.collection('contratos')
+        .where('deleted', '!=', true)
+        .orderBy('deleted')
+        .orderBy('fecha_creacion', 'desc')
+        .limit(this.SCAN_LIMIT)
+        .get()
+        .catch(() => db.collection('contratos').limit(this.SCAN_LIMIT).get());
+      return snap.docs.filter(d => pasa(d.data())).slice(0, this.MAX_PER_COLLECTION).map(aHit);
     });
-    return hits.slice(0, this.MAX_PER_COLLECTION);
   },
 
   async _searchCotizaciones(q) {

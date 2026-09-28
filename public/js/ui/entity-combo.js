@@ -20,10 +20,21 @@
 //   }) → { value, item, set(id), setItems(items), focus(), input, clear() }
 //
 //   EntityCombo.filtrar(items, query, { campos, limite }) → { items, total, tokens }
+//
+// NÚCLEO COMÚN de los tres pickers (P2 auditoría UX 2026-09-28, §4.1 #14):
+// este archivo es también la única copia de los helpers que entity-picker.js
+// y filtered-select.js usaban duplicados (escape de HTML, normalización sin
+// acentos, resolver id|elemento). Ellos los toman de window.EntityCombo al
+// llamarse, así que en toda página que cargue uno de los tres va también
+// entity-combo.js (lo garantiza el entry de la página).
+//   EntityCombo.esc(v)      → texto seguro para innerHTML
+//   EntityCombo.normBusq(s) → minúsculas, sin acentos, sin bordes
+//   EntityCombo.el(x)       → x si es un nodo; document.getElementById(x) si es id
 window.EntityCombo = (() => {
   const RE_DIACRITICOS = /[̀-ͯ]/g;
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
+  const el = (x) => (typeof x === 'string' ? document.getElementById(x) : x);
 
   function normBusq(s) {
     return String(s == null ? '' : s).normalize('NFD').replace(RE_DIACRITICOS, '').toLowerCase().trim();
@@ -62,7 +73,7 @@ window.EntityCombo = (() => {
   }
 
   function montar(host, opts = {}) {
-    const cont = typeof host === 'string' ? document.getElementById(host) : host;
+    const cont = el(host);
     if (!cont && !opts.input) return null;
     const idDe = opts.id || ((it) => it.id);
     const labelDe = opts.label || ((it) => it.label ?? it.razon ?? it.nombre ?? '');
@@ -229,5 +240,5 @@ window.EntityCombo = (() => {
     };
   }
 
-  return { montar, filtrar, normBusq, resaltar };
+  return { montar, filtrar, normBusq, resaltar, esc, el };
 })();

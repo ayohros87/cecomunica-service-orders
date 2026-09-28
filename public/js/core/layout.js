@@ -209,6 +209,14 @@ const Layout = (() => {
        back: { href },             // botón volver opcional
        actions: [...],             // mismos specs que renderTopbar
      });
+
+     Estado (P2 auditoría UX 2026-09-28): NO está listo para las páginas de
+     módulo. Su topbar usa clases de ceco-command.css (.topbar__title,
+     .btn--ghost) que las páginas híbridas no cargan, y no trae lo que
+     renderTopbar sí (Volver por ?volver=, botón Buscar, menú "Más"): migrar
+     ordenes/contratos/cotizaciones/POC/almacén no sería un cambio solo de
+     shell. Esas páginas ya comparten el MISMO rail vía initRail(); el home
+     también desde esta fecha (su franja navy hace de topbar).
      ============================================================= */
 
   // Fuente única: MODULOS.CATALOGO (auditoría A9). El "espejo de emergencia"
@@ -468,7 +476,7 @@ const Layout = (() => {
   const asegurarPalette = () => {
     if (window.SearchPalette && window.BusquedaGlobalService) return Promise.resolve();
     if (!cargando) {
-      _css('/css/search-palette.css?v=sp2');
+      _css('/css/search-palette.css?v=sp3');
       cargando = (async () => {
         // OrdenesService es opcional para el palette (guard interno), pero
         // sin él no salen órdenes en los resultados — se trae también.
@@ -476,8 +484,8 @@ const Layout = (() => {
           try { await _script('/js/services/ordenesService.js?v=sp1'); }
           catch (_) { /* palette sin resultados de órdenes */ }
         }
-        if (!window.BusquedaGlobalService) await _script('/js/services/busquedaGlobalService.js?v=sp2');
-        if (!window.SearchPalette) await _script('/js/ui/searchPalette.js?v=sp2');
+        if (!window.BusquedaGlobalService) await _script('/js/services/busquedaGlobalService.js?v=sp3');
+        if (!window.SearchPalette) await _script('/js/ui/searchPalette.js?v=sp3');
       })();
     }
     return cargando;

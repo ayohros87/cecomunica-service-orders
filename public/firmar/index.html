@@ -199,7 +199,7 @@
 
   <script>
   window.Firma = {
-    sid: null, doc: null, trazos: 0, _dib: false, _ctx: null,
+    sid: null, doc: null, _pad: null,
 
     esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); },
     ver(id) {
@@ -355,36 +355,21 @@
     },
 
     armarCanvas() {
+      // Lienzo del kit (js/ui/firmaPad.js): el mismo que usan el acuse, la
+      // entrega y la visita. Antes esta página tenía su propio lienzo, sin
+      // presión del lápiz, sin punto en el clic corto y con la firma perdida
+      // al rotar el teléfono (P2 auditoría UX 2026-09-28, §4.1 #14).
       const cv = document.getElementById('firmaCanvas');
-      const escala = window.devicePixelRatio || 1;
-      cv.width = cv.offsetWidth * escala;
-      cv.height = cv.offsetHeight * escala;
-      const ctx = cv.getContext('2d');
-      ctx.scale(escala, escala);
-      ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#12233a';
-      this._ctx = ctx;
-      const pos = (e) => {
-        const r = cv.getBoundingClientRect();
-        return { x: e.clientX - r.left, y: e.clientY - r.top };
-      };
-      cv.addEventListener('pointerdown', (e) => {
-        e.preventDefault(); cv.setPointerCapture(e.pointerId);
-        this._dib = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y);
+      const hint = document.getElementById('fcHint');
+      this._pad = FirmaPad.mount(cv, {
+        alto: cv.clientHeight || 180,
+        color: '#12233a',
+        onChange: (firmado) => { hint.textContent = firmado ? '' : '— firme dentro del recuadro —'; },
       });
-      cv.addEventListener('pointermove', (e) => {
-        if (!this._dib) return; e.preventDefault();
-        const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); this.trazos++;
-        document.getElementById('fcHint').textContent = '';
-      });
-      const fin = () => { this._dib = false; };
-      cv.addEventListener('pointerup', fin);
-      cv.addEventListener('pointercancel', fin);
     },
 
     limpiar() {
-      const cv = document.getElementById('firmaCanvas');
-      this._ctx.clearRect(0, 0, cv.width, cv.height);
-      this.trazos = 0;
+      if (this._pad) this._pad.clear();
       document.getElementById('fcHint').textContent = '— firme dentro del recuadro —';
     },
 
@@ -502,7 +487,7 @@
         return;
       }
       if (!document.getElementById('fConsentBio').checked) { this.aviso('Debe autorizar el uso de sus fotos para verificar su identidad.'); return; }
-      if (this.trazos < 8) { this.aviso('Dibuje su firma en el recuadro.'); return; }
+      if (!this._pad || this._pad.isEmpty()) { this.aviso('Dibuje su firma en el recuadro.'); return; }
       if (!this._docVisto) { this.aviso('Abra y lea el documento completo ("Leer el contrato completo") antes de firmar.'); return; }
       if (!document.getElementById('fAcepta').checked) { this.aviso('Debe aceptar los términos del contrato.'); return; }
       const btn = document.getElementById('btnFirmar');
@@ -523,7 +508,7 @@
         }
 
         btn.textContent = 'Registrando la firma…';
-        const png = document.getElementById('firmaCanvas').toDataURL('image/png');
+        const png = this._pad.snapshot();
         await firebase.firestore().collection('firma_solicitudes').doc(this.sid).update({
           estado: 'firmado',
           firma: {

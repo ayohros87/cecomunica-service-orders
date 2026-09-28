@@ -6,3 +6,4 @@ import '/js/firebase-init.js';
 import '/js/domain/docIdentidad.js';
 import '/js/domain/firmante.js';
 import '/js/domain/contratoV2Texto.js';
+import '/js/ui/firmaPad.js'; // lienzo de firma del kit (P2 auditoría UX 2026-09-28)

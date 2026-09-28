@@ -15,18 +15,26 @@
 //     vacioGrupo: 'Sin elementos',
 //   }) → Promise<{ seleccion: [{ grupo, id, label, data }], extra } | null>
 window.EntityPicker = (() => {
-  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
+  // Núcleo común de los pickers (entity-combo.js, P2 auditoría UX 2026-09-28):
+  // escape de HTML y normalización sin acentos viven UNA vez, allá. Se
+  // resuelve al llamar, no al cargar, para que el orden del entry no importe.
+  const core = () => {
+    if (!window.EntityCombo) throw new Error('EntityPicker requiere entity-combo.js (núcleo común de los pickers)');
+    return window.EntityCombo;
+  };
   const toast = (m, k) => { if (window.Toast) Toast.show(m, k); };
 
   async function abrir({
     titulo = 'Seleccionar', icono = 'list-checks', size = 'lg', descripcion = '',
-    grupos = [], buscar = true, normalizar = (s) => String(s || '').trim().toLowerCase(),
+    grupos = [], buscar = true, normalizar = null,
     multiple = true, autoSeleccion = false, extraHtml = '', leerExtra = null,
     confirmar = 'Aceptar', iconoConfirmar = 'check', cancelar = 'Cancelar',
     vacioGrupo = 'Sin elementos.', placeholderBuscar = 'Filtrar…', mono = true,
   } = {}) {
     if (typeof Modal === 'undefined' || !Modal.sheet) throw new Error('EntityPicker requiere Modal.sheet');
+    const { esc, normBusq } = core();
+    // El buscador del picker ignora acentos y mayúsculas, como el combo.
+    if (typeof normalizar !== 'function') normalizar = normBusq;
     const tipo = multiple ? 'checkbox' : 'radio';
     const gruposHtml = grupos.map((g, gi) => {
       const filas = (g.items || []).map(it => `

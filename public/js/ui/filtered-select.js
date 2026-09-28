@@ -13,8 +13,16 @@
 //     opcion: (it, option) => {}      // decorar la <option> (data-attrs)
 //   }) → { setItems(items), repintar(), select, filtro }
 window.FilteredSelect = (() => {
-  const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-  const el = (x) => (typeof x === 'string' ? document.getElementById(x) : x);
+  // Núcleo común de los pickers (entity-combo.js, P2 auditoría UX 2026-09-28):
+  // la normalización y el resolver id|elemento viven UNA vez, allá. Se
+  // resuelven al llamar, no al cargar, para que el orden del entry no importe.
+  // FilteredSelect.norm sigue siendo público (misma función).
+  const core = () => {
+    if (!window.EntityCombo) throw new Error('FilteredSelect requiere entity-combo.js (núcleo común de los pickers)');
+    return window.EntityCombo;
+  };
+  const norm = (s) => core().normBusq(s);
+  const el = (x) => core().el(x);
 
   function montar({ select, filtro, items = [], id = (it) => it.id, label = (it) => it.label, placeholder = 'Seleccione…', opcion = null } = {}) {
     const sel = el(select);

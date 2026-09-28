@@ -9,5 +9,6 @@ import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';
 import '/js/ui/toast.js';
 import '/js/ui/modal.js';
+import '/js/ui/entity-combo.js'; // núcleo común de los pickers (P2 auditoría UX 2026-09-28)
 import '/js/ui/filtered-select.js'; // combo con búsqueda de Customers (auditoría UX 2026-09-28)
 import '/js/pages/facturacion-clientes-qbo.js';

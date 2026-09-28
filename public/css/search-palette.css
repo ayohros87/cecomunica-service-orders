@@ -78,6 +78,14 @@
   color: var(--fg-3, #64748b);
 }
 .sp-group-head .lucide { width: 14px; height: 14px; }
+/* "Recientes" (caja vacía): los últimos 8 abiertos, con su botón de limpiar. */
+.sp-group-head .sp-olvidar {
+  margin-left: auto;
+  border: none; background: transparent; cursor: pointer;
+  font: inherit; font-size: 11px; text-transform: none; letter-spacing: 0;
+  color: var(--fg-3, #64748b); padding: 2px 4px; border-radius: 4px;
+}
+.sp-group-head .sp-olvidar:hover { color: var(--fg-1, #0f172a); background: var(--surface-sunken, #f3f6f9); }
 .sp-row {
   display: block;
   padding: 8px 16px;
