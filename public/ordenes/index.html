@@ -168,38 +168,43 @@
             title="Completadas que el control de calidad aún no deja entregar">
       <span class="dot" aria-hidden="true"></span>QC <span class="estado-chip__count" data-count="qc">0</span>
     </button>
-    <button type="button" class="estado-chip estado-chip--entregado"
-            data-action="filtrar-estado-chip" data-estado="ENTREGADO AL CLIENTE"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Entregado <span class="estado-chip__count" data-count="ENTREGADO AL CLIENTE">0</span>
-    </button>
-    <button type="button" class="estado-chip estado-chip--visita-cerrada"
-            data-action="filtrar-estado-chip" data-estado="CERRADA (VISITA)"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="estado-chip__count" data-count="CERRADA (VISITA)">0</span>
-    </button>
-    <!-- Terminales que no tenían filtro (auditoría UX 2026-09-28, T1). -->
-    <button type="button" class="estado-chip estado-chip--cerrada"
-            data-action="filtrar-estado-chip" data-estado="CERRADA (DEVOLUCION)"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Devolución cerrada <span class="estado-chip__count" data-count="CERRADA (DEVOLUCION)">0</span>
-    </button>
-    <button type="button" class="estado-chip estado-chip--cerrada"
-            data-action="filtrar-estado-chip" data-estado="CERRADA (ENTRADA)"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Entrada cerrada <span class="estado-chip__count" data-count="CERRADA (ENTRADA)">0</span>
-    </button>
-    <button type="button" class="estado-chip estado-chip--sin-retirar"
-            data-action="filtrar-estado-chip" data-estado="CERRADA (SIN RETIRAR)"
-            role="tab" aria-selected="false"
-            title="Cerradas con radios del cliente todavía en la casa">
-      <span class="dot" aria-hidden="true"></span>Sin retirar <span class="estado-chip__count" data-count="CERRADA (SIN RETIRAR)">0</span>
-    </button>
-    <button type="button" class="estado-chip estado-chip--anulada"
-            data-action="filtrar-estado-chip" data-estado="ANULADA"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Anulada <span class="estado-chip__count" data-count="ANULADA">0</span>
-    </button>
+    <!-- Cerradas: los 6 estados terminales viven en UN chip con menú. Son de
+         consulta, no colas de trabajo; sueltos eran 12 chips en la barra
+         (auditoría UX 2026-09-28, seguimiento de Alberto). -->
+    <div class="estado-chip-grupo">
+      <button type="button" class="estado-chip estado-chip--cerradas"
+              data-action="abrir-chip-cerradas" data-estado=""
+              role="tab" aria-selected="false" aria-haspopup="menu" aria-expanded="false"
+              title="Órdenes ya cerradas: entregadas, visitas, devoluciones, entradas, sin retirar y anuladas">
+        <span class="dot" aria-hidden="true"></span><span class="estado-chip__label">Cerradas</span> <span class="estado-chip__count" data-count="cerradas">0</span><i data-lucide="chevron-down" class="estado-chip__caret" aria-hidden="true"></i>
+      </button>
+      <div class="estado-chip-menu" role="menu" hidden>
+        <button type="button" class="estado-chip-menu__item estado-chip--entregado" role="menuitem"
+                data-action="filtrar-estado-chip" data-estado="ENTREGADO AL CLIENTE">
+          <span class="dot" aria-hidden="true"></span>Entregado <span class="estado-chip__count" data-count="ENTREGADO AL CLIENTE">0</span>
+        </button>
+        <button type="button" class="estado-chip-menu__item estado-chip--visita-cerrada" role="menuitem"
+                data-action="filtrar-estado-chip" data-estado="CERRADA (VISITA)">
+          <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="estado-chip__count" data-count="CERRADA (VISITA)">0</span>
+        </button>
+        <button type="button" class="estado-chip-menu__item estado-chip--cerrada" role="menuitem"
+                data-action="filtrar-estado-chip" data-estado="CERRADA (DEVOLUCION)">
+          <span class="dot" aria-hidden="true"></span>Devolución cerrada <span class="estado-chip__count" data-count="CERRADA (DEVOLUCION)">0</span>
+        </button>
+        <button type="button" class="estado-chip-menu__item estado-chip--cerrada" role="menuitem"
+                data-action="filtrar-estado-chip" data-estado="CERRADA (ENTRADA)">
+          <span class="dot" aria-hidden="true"></span>Entrada cerrada <span class="estado-chip__count" data-count="CERRADA (ENTRADA)">0</span>
+        </button>
+        <button type="button" class="estado-chip-menu__item estado-chip--sin-retirar" role="menuitem"
+                data-action="filtrar-estado-chip" data-estado="CERRADA (SIN RETIRAR)">
+          <span class="dot" aria-hidden="true"></span>Sin retirar <span class="estado-chip__count" data-count="CERRADA (SIN RETIRAR)">0</span>
+        </button>
+        <button type="button" class="estado-chip-menu__item estado-chip--anulada" role="menuitem"
+                data-action="filtrar-estado-chip" data-estado="ANULADA">
+          <span class="dot" aria-hidden="true"></span>Anulada <span class="estado-chip__count" data-count="ANULADA">0</span>
+        </button>
+      </div>
+    </div>
   </div>
 
   <div class="mh-sub" id="mobileResumen" role="status" aria-live="polite" aria-atomic="true">
@@ -253,38 +258,43 @@
             title="Completadas que el control de calidad aún no deja entregar">
       <span class="dot" aria-hidden="true"></span>QC <span class="estado-chip__count" data-count="qc">0</span>
     </button>
-    <button type="button" class="estado-chip estado-chip--entregado"
-            data-action="filtrar-estado-chip" data-estado="ENTREGADO AL CLIENTE"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Entregado <span class="estado-chip__count" data-count="ENTREGADO AL CLIENTE">0</span>
-    </button>
-    <button type="button" class="estado-chip estado-chip--visita-cerrada"
-            data-action="filtrar-estado-chip" data-estado="CERRADA (VISITA)"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="estado-chip__count" data-count="CERRADA (VISITA)">0</span>
-    </button>
-    <!-- Terminales que no tenían filtro (auditoría UX 2026-09-28, T1). -->
-    <button type="button" class="estado-chip estado-chip--cerrada"
-            data-action="filtrar-estado-chip" data-estado="CERRADA (DEVOLUCION)"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Devolución cerrada <span class="estado-chip__count" data-count="CERRADA (DEVOLUCION)">0</span>
-    </button>
-    <button type="button" class="estado-chip estado-chip--cerrada"
-            data-action="filtrar-estado-chip" data-estado="CERRADA (ENTRADA)"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Entrada cerrada <span class="estado-chip__count" data-count="CERRADA (ENTRADA)">0</span>
-    </button>
-    <button type="button" class="estado-chip estado-chip--sin-retirar"
-            data-action="filtrar-estado-chip" data-estado="CERRADA (SIN RETIRAR)"
-            role="tab" aria-selected="false"
-            title="Cerradas con radios del cliente todavía en la casa">
-      <span class="dot" aria-hidden="true"></span>Sin retirar <span class="estado-chip__count" data-count="CERRADA (SIN RETIRAR)">0</span>
-    </button>
-    <button type="button" class="estado-chip estado-chip--anulada"
-            data-action="filtrar-estado-chip" data-estado="ANULADA"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Anulada <span class="estado-chip__count" data-count="ANULADA">0</span>
-    </button>
+    <!-- Cerradas: los 6 estados terminales viven en UN chip con menú. Son de
+         consulta, no colas de trabajo; sueltos eran 12 chips en la barra
+         (auditoría UX 2026-09-28, seguimiento de Alberto). -->
+    <div class="estado-chip-grupo">
+      <button type="button" class="estado-chip estado-chip--cerradas"
+              data-action="abrir-chip-cerradas" data-estado=""
+              role="tab" aria-selected="false" aria-haspopup="menu" aria-expanded="false"
+              title="Órdenes ya cerradas: entregadas, visitas, devoluciones, entradas, sin retirar y anuladas">
+        <span class="dot" aria-hidden="true"></span><span class="estado-chip__label">Cerradas</span> <span class="estado-chip__count" data-count="cerradas">0</span><i data-lucide="chevron-down" class="estado-chip__caret" aria-hidden="true"></i>
+      </button>
+      <div class="estado-chip-menu" role="menu" hidden>
+        <button type="button" class="estado-chip-menu__item estado-chip--entregado" role="menuitem"
+                data-action="filtrar-estado-chip" data-estado="ENTREGADO AL CLIENTE">
+          <span class="dot" aria-hidden="true"></span>Entregado <span class="estado-chip__count" data-count="ENTREGADO AL CLIENTE">0</span>
+        </button>
+        <button type="button" class="estado-chip-menu__item estado-chip--visita-cerrada" role="menuitem"
+                data-action="filtrar-estado-chip" data-estado="CERRADA (VISITA)">
+          <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="estado-chip__count" data-count="CERRADA (VISITA)">0</span>
+        </button>
+        <button type="button" class="estado-chip-menu__item estado-chip--cerrada" role="menuitem"
+                data-action="filtrar-estado-chip" data-estado="CERRADA (DEVOLUCION)">
+          <span class="dot" aria-hidden="true"></span>Devolución cerrada <span class="estado-chip__count" data-count="CERRADA (DEVOLUCION)">0</span>
+        </button>
+        <button type="button" class="estado-chip-menu__item estado-chip--cerrada" role="menuitem"
+                data-action="filtrar-estado-chip" data-estado="CERRADA (ENTRADA)">
+          <span class="dot" aria-hidden="true"></span>Entrada cerrada <span class="estado-chip__count" data-count="CERRADA (ENTRADA)">0</span>
+        </button>
+        <button type="button" class="estado-chip-menu__item estado-chip--sin-retirar" role="menuitem"
+                data-action="filtrar-estado-chip" data-estado="CERRADA (SIN RETIRAR)">
+          <span class="dot" aria-hidden="true"></span>Sin retirar <span class="estado-chip__count" data-count="CERRADA (SIN RETIRAR)">0</span>
+        </button>
+        <button type="button" class="estado-chip-menu__item estado-chip--anulada" role="menuitem"
+                data-action="filtrar-estado-chip" data-estado="ANULADA">
+          <span class="dot" aria-hidden="true"></span>Anulada <span class="estado-chip__count" data-count="ANULADA">0</span>
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Búsqueda rápida -->

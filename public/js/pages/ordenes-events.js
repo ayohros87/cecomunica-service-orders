@@ -89,6 +89,8 @@
     // Desde/Hasta (auditoría UX 2026-09-28, T6): re-consulta al servidor.
     'filtrar-fechas': () => filtrarPorFechas(),
     'filtrar-estado-chip': (el) => filtrarPorChipEstado(el),
+    // Chip "Cerradas": un solo chip con menú para los 6 estados terminales.
+    'abrir-chip-cerradas': (el) => abrirChipCerradas(el),
     'set-view-cards': () => setOrdersView('cards'),
     'set-view-table': () => setOrdersView('table'),
     // §4.4 Barcode scan-to-search

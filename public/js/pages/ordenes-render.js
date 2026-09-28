@@ -1568,6 +1568,9 @@ async function _refrescarConteosServidor() {
     };
     ESTADOS.forEach((e, i) => pinta(e, counts[i]));
     pinta('qc', qc);
+    // Chip "Cerradas" = suma de los 6 terminales (si alguno falló, no se pinta).
+    const cerr = ESTADOS.slice(4).map((e, i) => counts[i + 4]);
+    if (cerr.every(n => typeof n === 'number')) pinta('cerradas', cerr.reduce((a, b) => a + b, 0));
     _conteosSrvTs = Date.now();
   } finally { _conteosSrvEnVuelo = false; }
 }
@@ -1613,8 +1616,10 @@ function actualizarResumen(lista) {
   chipCount('COMPLETADO (EN OFICINA)', completadoOficina);
   chipCount('ENTREGADO AL CLIENTE', entregadoCliente);
   chipCount('CERRADA (VISITA)', cerradaVisita);
+  let cerradasTotal = entregadoCliente + cerradaVisita;
   ['CERRADA (DEVOLUCION)', 'CERRADA (ENTRADA)', 'CERRADA (SIN RETIRAR)', 'ANULADA']
-    .forEach(k => chipCount(k, fullList.filter(o => _statusOf(o) === k).length));
+    .forEach(k => { const n = fullList.filter(o => _statusOf(o) === k).length; cerradasTotal += n; chipCount(k, n); });
+  chipCount('cerradas', cerradasTotal);   // chip de grupo "Cerradas"
   chipCount('qc', qcPendientes);
   // El chip de QC es un toggle (checkbox #filtroQcPendiente), no un estado:
   // su "activo" se sincroniza aquí, que corre tras cada aplicación de filtros

@@ -4008,3 +4008,30 @@ tr.activo:hover { background: #f0f9ff !important; }
 @media (max-width: 768px), ((hover: none) and (pointer: coarse)) {
   .btn-firma-tablet { display: none !important; }
 }
+
+/* ── Chip "Cerradas" con menú (auditoría UX 2026-09-28, seguimiento) ────────
+   Los 6 estados terminales (entregado, visita, devolución, entrada, sin
+   retirar, anulada) son de consulta, no colas: sueltos eran 12 chips. Viven
+   en un solo chip; el menú se posiciona fijo desde JS para que la barra móvil
+   (overflow-x) no lo recorte. */
+.estado-chip-grupo { position: relative; display: inline-flex; }
+.estado-chip--cerradas .dot { background: #64748B; }
+.estado-chip--cerradas.active { background: var(--accent-soft); border-color: var(--accent); color: var(--fg-1); }
+.estado-chip__caret { width: 14px; height: 14px; margin-left: 2px; opacity: .7; }
+.estado-chip-menu {
+  position: fixed; z-index: 1200; min-width: 220px; padding: 6px;
+  display: grid; gap: 2px;
+  background: #fff; border: 1px solid var(--border-default);
+  border-radius: 12px; box-shadow: 0 10px 30px rgba(11, 42, 71, .18);
+}
+.estado-chip-menu[hidden] { display: none; }
+.estado-chip-menu__item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  height: 34px; padding: 0 10px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--fg-1); text-align: left;
+  font: 500 13px/1 var(--font-body, "Inter", system-ui, sans-serif); cursor: pointer;
+}
+.estado-chip-menu__item:hover, .estado-chip-menu__item:focus-visible { background: var(--accent-soft); outline: none; }
+.estado-chip-menu__item.active { background: var(--accent-soft); font-weight: 600; }
+.estado-chip-menu__item .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.estado-chip-menu__item .estado-chip__count { margin-left: auto; }

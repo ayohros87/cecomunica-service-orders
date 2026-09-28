@@ -1016,21 +1016,80 @@ syncSortHeaders();
  *
  * @param {HTMLElement} el — the clicked chip button
  */
+// Chip "Cerradas" (auditoría UX 2026-09-28, seguimiento): los 6 estados
+// terminales viven en UN chip con menú; sueltos eran 12 chips en la barra.
+const CHIP_CERRADAS = {
+  'ENTREGADO AL CLIENTE':  'Entregado',
+  'CERRADA (VISITA)':      'Visita cerrada',
+  'CERRADA (DEVOLUCION)':  'Devolución cerrada',
+  'CERRADA (ENTRADA)':     'Entrada cerrada',
+  'CERRADA (SIN RETIRAR)': 'Sin retirar',
+  'ANULADA':               'Anulada',
+};
+window.CHIP_CERRADAS = CHIP_CERRADAS;
+
+// Pinta el chip de grupo y sus ítems según el estado activo: si es uno de los
+// cerrados, el chip queda activo y su etiqueta dice cuál ("Cerradas · Anulada").
+function _pintarChipCerradas(current) {
+  const esCerrado = Object.prototype.hasOwnProperty.call(CHIP_CERRADAS, current);
+  document.querySelectorAll('.estado-chip--cerradas').forEach(chip => {
+    chip.classList.toggle('active', esCerrado);
+    chip.setAttribute('aria-selected', esCerrado ? 'true' : 'false');
+    chip.dataset.estado = esCerrado ? current : '';
+    const lbl = chip.querySelector('.estado-chip__label');
+    if (lbl) lbl.textContent = esCerrado ? `Cerradas · ${CHIP_CERRADAS[current]}` : 'Cerradas';
+  });
+  document.querySelectorAll('.estado-chip-menu__item').forEach(it => {
+    it.classList.toggle('active', (it.dataset.estado || '') === current);
+  });
+}
+
+function _cerrarMenusCerradas() {
+  document.querySelectorAll('.estado-chip-menu').forEach(m => { m.hidden = true; });
+  document.querySelectorAll('.estado-chip--cerradas').forEach(b => b.setAttribute('aria-expanded', 'false'));
+}
+
+// Abre el menú del chip "Cerradas" pegado al chip, en posición fija para que
+// la barra móvil (overflow-x) no lo recorte. Se cierra al elegir, al tocar
+// fuera o con Escape.
+window.abrirChipCerradas = function (btn) {
+  const menu = btn.parentElement?.querySelector('.estado-chip-menu');
+  if (!menu) return;
+  const abrir = menu.hidden;
+  _cerrarMenusCerradas();
+  if (!abrir) return;
+  const r = btn.getBoundingClientRect();
+  menu.hidden = false;
+  const ancho = menu.offsetWidth || 220;
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - ancho - 8));
+  menu.style.left = `${left}px`;
+  menu.style.top = `${r.bottom + 6}px`;
+  btn.setAttribute('aria-expanded', 'true');
+  menu.querySelector('.estado-chip-menu__item.active, .estado-chip-menu__item')?.focus();
+};
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.estado-chip-grupo')) _cerrarMenusCerradas();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') _cerrarMenusCerradas(); });
+window.addEventListener('resize', _cerrarMenusCerradas);
+
 window.filtrarPorChipEstado = function (el) {
   const estado = el.dataset.estado || '';
   const wasActive = el.classList.contains('active');
   const next = wasActive ? '' : estado;
+  _cerrarMenusCerradas();
 
   // Mirror into the hidden select.
   const sel = document.getElementById('filtroEstado');
   if (sel) sel.value = next;
 
   // Update chip ARIA state.
-  document.querySelectorAll('.estado-chips-bar .estado-chip').forEach(chip => {
+  document.querySelectorAll('.estado-chips-bar .estado-chip:not(.estado-chip--cerradas)').forEach(chip => {
     const isActive = chip.dataset.estado === next;
     chip.classList.toggle('active', isActive);
     chip.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
+  _pintarChipCerradas(next);
 
   // Con una BÚSQUEDA en pantalla el chip no la tira (auditoría UX 2026-09-28,
   // 4.2 #6) y ahora re-consulta EN EL SERVIDOR con el estado (4.2 #16): antes
@@ -1051,11 +1110,12 @@ window.filtrarPorChipEstado = function (el) {
 window.syncEstadoChipsFromSelect = function () {
   const sel = document.getElementById('filtroEstado');
   const current = (sel?.value || '').toString();
-  document.querySelectorAll('.estado-chips-bar .estado-chip').forEach(chip => {
+  document.querySelectorAll('.estado-chips-bar .estado-chip:not(.estado-chip--cerradas)').forEach(chip => {
     const isActive = (chip.dataset.estado || '') === current;
     chip.classList.toggle('active', isActive);
     chip.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
+  _pintarChipCerradas(current);
 };
 
 window.filtrarPorEstado = async function (estado, { limite = CHIP_PAGINA } = {}) {
