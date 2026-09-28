@@ -116,8 +116,42 @@
       try {
         // Sin DEVOLUCION (2026-09-02): nace "POR ASIGNAR" pero no es una orden
         // de taller pendiente — su circuito es la recuperación de equipos.
-        const ordenes = (await OrdenesService.filterByStatuses(["POR ASIGNAR", "ASIGNADO"]))
+        // Pendiente = lo que el taller todavía tiene por delante (auditoría UX
+        // 2026-09-28, P0 #6): por recibir, recibido esperando técnico y
+        // asignado. COMPLETADO queda fuera: ya salió del taller y su cola es
+        // la de entrega, que vive en la bandeja.
+        const ordenes = (await OrdenesService.filterByStatuses(["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO"]))
           .filter(o => (o.tipo_de_servicio || "").toUpperCase() !== "DEVOLUCION");
+
+        // Vendedor por NOMBRE: la app guarda el UID en vendedor_asignado; el
+        // importador viejo dejaba vendedor_email. Lookup best-effort.
+        const uids = [...new Set(ordenes.map(o => o.vendedor_asignado).filter(Boolean))];
+        const nombrePorUid = new Map();
+        try {
+          const db = firebase.firestore();
+          for (let i = 0; i < uids.length; i += 10) {
+            const snap = await db.collection("usuarios")
+              .where(firebase.firestore.FieldPath.documentId(), "in", uids.slice(i, i + 10)).get();
+            snap.forEach(d => { const u = d.data() || {}; nombrePorUid.set(d.id, u.nombre || u.email || d.id); });
+          }
+        } catch (e) { console.warn("No se pudieron leer los vendedores:", e); }
+
+        const fmtFecha = (f) => {
+          if (!f) return "-";
+          let d = null;
+          if (typeof f.toDate === "function") d = f.toDate();
+          else if (typeof f.seconds === "number") d = new Date(f.seconds * 1000);
+          else {
+            // "AAAA-MM-DD" del importador: se muestra tal cual (new Date lo
+            // lee como medianoche UTC y en Panamá caería el día anterior).
+            const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(f));
+            if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+            const t = new Date(f); if (!isNaN(t)) d = t; else return String(f);
+          }
+          return d.toLocaleDateString("es-PA", { timeZone: "America/Panama", day: "2-digit", month: "2-digit", year: "numeric" });
+        };
+        // Mismos nombres que la bandeja (T1): el dato no cambia, solo el texto.
+        const ETQ = { "POR ASIGNAR": "Por recibir", "RECIBIDO EN MOSTRADOR": "Por asignar", "ASIGNADO": "Asignado" };
 
         if (!ordenes.length) {
           mensajeDiv.textContent = "No hay órdenes pendientes.";
@@ -132,7 +166,7 @@
               <th>Cliente</th>
               <th>Tipo de servicio</th>
               <th>Estado</th>
-              <th>Fecha entrada</th>
+              <th>Fecha</th>
               <th>Cant. radios</th>
               <th>Vendedor</th>
             </tr>
@@ -144,7 +178,9 @@
 
         for (const data of ordenes) {
           let nombreCliente = data.cliente_nombre || data.cliente || "No disponible";
-          let vendedor = data.vendedor_email || "No disponible";
+          let vendedor = data.vendedor_nombre
+            || (data.vendedor_asignado && nombrePorUid.get(data.vendedor_asignado))
+            || data.vendedor_email || "No asignado";
 
           const equipos = (data.equipos || []).filter(e => !e.eliminado);
           const cantidadRadios = equipos.length;
@@ -155,8 +191,8 @@
               <td>${esc(data.ordenId)}</td>
               <td>${esc(nombreCliente)}</td>
               <td>${esc(data.tipo_de_servicio || "-")}</td>
-              <td>${esc(data.estado_reparacion || "-")}</td>
-              <td>${esc(data.fecha_entrada || "-")}</td>
+              <td>${esc(ETQ[data.estado_reparacion] || data.estado_reparacion || "-")}</td>
+              <td>${esc(fmtFecha(data.fecha_creacion || data.fecha_entrada))}</td>
               <td>${cantidadRadios}</td>
               <td>${esc(vendedor)}</td>
             </tr>

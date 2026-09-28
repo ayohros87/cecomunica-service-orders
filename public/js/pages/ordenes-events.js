@@ -364,6 +364,7 @@
     'cerrar-equipos-mobile': () => cerrarEquiposMobile(),
     'cerrar-trabajo-equipo': () => cerrarTrabajoEquipoModal(),
     'guardar-trabajo-equipo': () => guardarTrabajoEquipoModal(),
+    'guardar-trabajo-equipo-siguiente': () => guardarTrabajoEquipoModal({ siguiente: true }),
     'ver-obs-completa': (el) => {
       const ordenId = el.dataset.ordenId;
       const idx = parseInt(el.dataset.idx, 10);
@@ -435,6 +436,14 @@
       if (!ordenId) return;
       closeAllMenus();
       if (typeof generarNotaEntregaIntervenciones === 'function') generarNotaEntregaIntervenciones(ordenId);
+    },
+    // La orden ya tiene cotización (auditoría UX 2026-09-28): abrir la
+    // existente en vez de preparar otra.
+    'ver-cotizacion': (el) => {
+      const cotId = el.dataset.cotizacionId;
+      if (!cotId) return;
+      closeAllMenus();
+      window.location.href = '/cotizaciones/detalle-cotizacion.html?id=' + encodeURIComponent(cotId);
     },
     'cotizar-orden': (el) => {
       const ordenId = el.dataset.ordenId;

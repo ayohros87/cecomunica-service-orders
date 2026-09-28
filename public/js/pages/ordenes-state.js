@@ -293,12 +293,16 @@ function nombreClienteDe(orden) {
 //   POR ASIGNAR rojo (pide acción) · RECIBIDO violeta · ASIGNADO azul ·
 //   COMPLETADO verde · ENTREGADO gris. Las clases chip-* son tokens de
 //   paleta de ceco-ui (nombradas por el flujo de cotización histórico).
-function getEstadoClass(estado) {
+function getEstadoClass(estado, orden) {
   const e = (estado || "").toUpperCase();
   if (e === "POR ASIGNAR") return "chip-porasignar";        // rojo
   if (e === "RECIBIDO EN MOSTRADOR") return "chip-diagnostico"; // violeta
   if (e === "ASIGNADO") return "chip-recibida";             // azul
+  // Completada con el QC todavía pendiente: ámbar, no verde (auditoría UX
+  // 2026-09-28, T1) — el verde se leía "lista para entregar".
+  if (e === "COMPLETADO (EN OFICINA)" && _completadoFaltaQc(orden)) return "chip-espera";
   if (e === "COMPLETADO (EN OFICINA)") return "chip-lista"; // verde
+  if (e === "ANULADA") return "chip-entregada";             // gris (antes caía al ámbar por defecto)
   if (e === "ENTREGADO AL CLIENTE") return "chip-entregada"; // gris
   if (e === "CERRADA (VISITA)") return "chip-aprobada";     // esmeralda
   if (e === "CERRADA (DEVOLUCION)") return "chip-aprobada"; // esmeralda
@@ -324,11 +328,36 @@ function tipoChip(tipo) {
   return `<span class="tipo-chip ${cls}">${tipo.trim()}</span>`;
 }
 
-function estadoCompacto(estado) {
+// ── Nombres de estado EN PANTALLA (auditoría UX 2026-09-28, T1) ──────────
+// Solo cambia lo que se lee; el valor guardado (estado_reparacion), las rules,
+// los correos y los tests siguen con los nombres de siempre. El `title` de la
+// fila conserva el valor crudo.
+//   POR ASIGNAR           → "Por recibir" (su botón es Recibir). Los tipos que
+//                           no pasan por mostrador (PROGRAMACIÓN, ENTRADA,
+//                           VISITA) arrancan en Asignar: ahí sí es "Por asignar".
+//   RECIBIDO EN MOSTRADOR → "Por asignar" (la cola real de asignación).
+//   COMPLETADO            → "Listo (falta QC)" / "Listo para entregar".
+function _completadoFaltaQc(orden) {
+  if (!orden) return false;
+  if (esOrdenEntrada(orden) || esOrdenVisita(orden)) return false;
+  return typeof OrdenesQC !== "undefined" && typeof OrdenesQC.qcPendiente === "function"
+    && !!OrdenesQC.qcPendiente(orden);
+}
+
+function estadoCompacto(estado, orden) {
   const e = (estado || "").toUpperCase();
-  if (e === "COMPLETADO (EN OFICINA)") return "COMPLETADO";
+  if (e === "POR ASIGNAR") {
+    const sinMostrador = orden && (esOrdenProgramacion(orden) || esOrdenEntrada(orden) || esOrdenVisita(orden));
+    return sinMostrador ? "POR ASIGNAR" : "POR RECIBIR";
+  }
+  if (e === "RECIBIDO EN MOSTRADOR") return "POR ASIGNAR";
+  if (e === "COMPLETADO (EN OFICINA)") {
+    // Sin la orden a mano (o ENTRADA/VISITA, que no se entregan) queda el
+    // nombre neutro.
+    if (!orden || esOrdenEntrada(orden) || esOrdenVisita(orden)) return "COMPLETADO";
+    return _completadoFaltaQc(orden) ? "LISTO (FALTA QC)" : "LISTO PARA ENTREGAR";
+  }
   if (e === "ENTREGADO AL CLIENTE") return "ENTREGADO";
-  if (e === "RECIBIDO EN MOSTRADOR") return "RECIBIDO";
   if (e === "CERRADA (VISITA)") return "CERRADA";
   if (e === "CERRADA (DEVOLUCION)") return "CERRADA";
   if (e === "CERRADA (ENTRADA)") return "CERRADA";

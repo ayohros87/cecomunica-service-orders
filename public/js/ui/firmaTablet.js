@@ -48,6 +48,10 @@ window.FirmaTablet = (() => {
     tipo = 'entrega', ordenId, titulo, nombreLabel, leyenda = null,
     unidades = [], clienteNombre = '', contratoId = null, numero = null,
     copiaA = null,
+    // Nombre y cédula sugeridos (contacto de la orden o lo tecleado en el
+    // PC): la tablet los prellena EDITABLES en vez de pedirlos de cero
+    // (auditoría UX 2026-09-28: −2 interacciones por firma).
+    nombre = '', cedula = '',
   } = {}) {
     if (!TIPOS.includes(tipo)) {
       // Un tipo que la tablet no pinta deja la solicitud invisible: el
@@ -68,6 +72,8 @@ window.FirmaTablet = (() => {
       leyenda,
       copia_a: copiaA,
       unidades,
+      nombre: String(nombre || '').trim(),
+      cedula: String(cedula || '').trim(),
       creado_at: firebase.firestore.FieldValue.serverTimestamp(),
       creado_por_uid: user?.uid || null,
       creado_por_email: user?.email || null,

@@ -363,38 +363,113 @@
       }
     }
 
+   // Alta rápida de cliente con nombre + RUC (opcional) + correo (auditoría
+   // UX 2026-09-28, 4.2 #14): el Modal.prompt de solo nombre dejaba fichas
+   // sin RUC ni correo que luego trancaban el contrato y la factura. El RUC
+   // va por partes (js/ui/rucInput.js), igual que la ficha del cliente.
    document.getElementById("crearCliente").addEventListener("click", async () => {
-  const nombre = await Modal.prompt({ title: 'Nuevo cliente', confirmLabel: 'Crear', message: 'Nombre del nuevo cliente:' });
-  if (!nombre) return;
+  const esc = (v) => String(v ?? "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]));
+  const filtro = document.getElementById("clienteFiltro")?.value?.trim() || "";
+  let rucW = null;
+  const creado = await Modal.sheet({
+    title: "Nuevo cliente",
+    icon: "user-plus",
+    size: "md",
+    html: `
+      <div class="form-field">
+        <label class="form-label" for="ncNombre">Nombre o razón social <span class="req"></span></label>
+        <input class="form-input" id="ncNombre" type="text" autocomplete="off" value="${esc(filtro)}">
+        <span class="form-error-msg" data-nc-err="nombre"></span>
+      </div>
+      <div class="ruc-bloque" id="ncRucBloque" style="margin-bottom:0;">
+        <div class="form-field ruc-campo">
+          <span class="form-label" id="ncRucLabel">RUC / Cédula <small>(opcional)</small></span>
+          <div data-ruc-widget role="group" aria-labelledby="ncRucLabel"></div>
+          <input type="hidden" id="ruc">
+          <input type="hidden" id="ruc_tipo">
+          <span class="form-error-msg" data-ruc-msg>Completa el RUC.</span>
+        </div>
+        <div class="form-field ruc-dv">
+          <label class="form-label" for="dv">DV</label>
+          <input class="form-input" type="text" id="dv" inputmode="numeric" maxlength="2" autocomplete="off" style="font-family:var(--font-mono);">
+        </div>
+        <div class="ruc-estado" data-ruc-estado aria-live="polite"></div>
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="ncEmail">Correo <small>(opcional)</small></label>
+        <input class="form-input" id="ncEmail" type="email" autocomplete="off" placeholder="facturacion@empresa.com">
+        <span class="form-error-msg" data-nc-err="email"></span>
+      </div>
+      <p class="form-hint" style="margin:0;">El resto de la ficha (dirección, representante…) se completa luego en Clientes.</p>`,
+    buttons: [
+      { action: "cancelar", label: "Cancelar" },
+      { action: "crear", label: "Crear cliente", primary: true, icon: "check" },
+    ],
+    onMount(root) {
+      if (window.RucInput) {
+        try { rucW = RucInput.montar(root.querySelector("#ncRucBloque")); } catch (e) { console.warn("RucInput:", e); }
+      } else {
+        root.querySelector("#ncRucBloque").hidden = true;
+      }
+      setTimeout(() => root.querySelector("#ncNombre")?.focus(), 30);
+    },
+    async onAction(action, root) {
+      if (action !== "crear") return null;
+      const marcar = (clave, texto) => {
+        const span = root.querySelector(`[data-nc-err="${clave}"]`);
+        if (span) { span.textContent = texto; span.closest(".form-field")?.classList.add("has-error"); }
+      };
+      root.querySelectorAll(".form-field.has-error").forEach(f => f.classList.remove("has-error"));
+      const nombre = root.querySelector("#ncNombre").value.trim();
+      const email = root.querySelector("#ncEmail").value.trim().toLowerCase();
+      if (!nombre) { marcar("nombre", "Escribe el nombre del cliente."); return false; }
+      if (/[\\/.#[\]$]/.test(nombre)) { marcar("nombre", "El nombre no puede llevar / . # [ ] $"); return false; }
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { marcar("email", "Ese correo no parece válido."); return false; }
+      const probRuc = rucW ? rucW.problema() : null;
+      if (probRuc) { Toast.show(probRuc, "bad"); return false; }
 
-  const nombreLimpio = nombre.trim();
-  const regexProhibidos = /[\\/\\.#[\]$]/;
-  if (regexProhibidos.test(nombreLimpio)) {
-    Toast.show('El nombre contiene caracteres no permitidos: / . # [ ] $', 'bad');
-    return;
-  }
-
-  if (await ClientesService.existsByNorm("nombre", nombreLimpio)) {
-    Toast.show('Ya existe un cliente con ese nombre.', 'bad');
-    return;
-  }
-
-  await ClientesService.createCliente({
-    nombre: nombreLimpio,
-    fecha_creacion: new Date(),
-    deleted: false
+      const btn = root.querySelector('[data-sheet-action="crear"]');
+      const r = await withBusy(btn, async () => {
+        const raw = {
+          nombre,
+          email,
+          ruc: root.querySelector("#ruc").value,
+          ruc_tipo: root.querySelector("#ruc_tipo").value,
+          dv: root.querySelector("#dv").value,
+        };
+        const cliente = ClientesService.buildClientePayload(raw, { user: window.currentUser || firebase.auth().currentUser, isCreate: true });
+        if (cliente.rucdv_norm && cliente.dv_norm && await ClientesService.existsActiveByNorm("rucdv_norm", cliente.rucdv_norm)) {
+          Toast.show("Ya existe un cliente con ese RUC + DV.", "bad"); return false;
+        }
+        if (cliente.ruc_norm && await ClientesService.existsActiveByNorm("ruc_norm", cliente.ruc_norm)) {
+          Toast.show("Ya existe un cliente con ese RUC/Cédula.", "bad"); return false;
+        }
+        if (await ClientesService.existsActiveByNorm("nombre_norm", cliente.nombre_norm)) {
+          marcar("nombre", "Ya existe un cliente con ese nombre: búscalo en la lista."); return false;
+        }
+        const id = await ClientesService.createCliente(cliente);
+        return { id, nombre: cliente.nombre };
+      }, { label: "Creando…", rethrow: false, mensajeError: "No se pudo crear el cliente" });
+      return r && r.id ? r : false;
+    },
   });
+  if (!creado || !creado.id) return;
 
-  Toast.show('Cliente registrado.', 'ok');
+  Toast.show("Cliente registrado.", "ok");
   await cargarClientes();
 
-  // Seleccionar automáticamente
-  for (let i = 0; i < clienteSelect.options.length; i++) {
-    if (clienteSelect.options[i].textContent === nombreLimpio) {
-      clienteSelect.selectedIndex = i;
-      break;
+  // Seleccionar automáticamente el recién creado
+  const f = document.getElementById("clienteFiltro");
+  if (f) f.value = "";
+  if ([...clienteSelect.options].some(o => o.value === creado.id)) {
+    clienteSelect.value = creado.id;
+  } else {
+    for (let i = 0; i < clienteSelect.options.length; i++) {
+      if (clienteSelect.options[i].textContent === creado.nombre) { clienteSelect.selectedIndex = i; break; }
     }
   }
+  clienteSelect.dispatchEvent(new Event("change"));
+  clienteSelect.closest(".form-field")?.classList.remove("has-error");
 });
 
 
@@ -480,7 +555,20 @@
     // Error de negocio JUNTO AL CAMPO (formato único): marca el .form-field,
     // enfoca, y además avisa por mensaje/toast como antes.
     function errorJuntoAlCampo(el, texto) {
-      el.closest(".form-field")?.classList.add("has-error");
+      const campo = el.closest(".form-field");
+      campo?.classList.add("has-error");
+      // El texto va DENTRO del campo (auditoría UX 2026-09-28, 4.2 #14): en
+      // #mensaje, al pie de un formulario largo, no se veía.
+      if (campo) {
+        let msg = campo.querySelector(".form-error-msg[data-no-err]");
+        if (!msg) {
+          msg = document.createElement("span");
+          msg.className = "form-error-msg";
+          msg.dataset.noErr = "1";
+          campo.appendChild(msg);
+        }
+        msg.textContent = texto;
+      }
       el.focus();
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       mostrarMensaje(texto, "rojo");
@@ -489,10 +577,14 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (guardandoOrden) return;
-      [visitaSitio, contratoSelect, contratoMotivo].forEach(el =>
+      [visitaSitio, contratoSelect, contratoMotivo, clienteSelect, tipoSelect].forEach(el =>
         el.closest(".form-field")?.classList.remove("has-error"));
-      if (!clienteSelect.value || !tipoSelect.value) {
-        mostrarMensaje("Selecciona un cliente y el tipo de servicio.", "rojo");
+      if (!clienteSelect.value) {
+        errorJuntoAlCampo(clienteSelect, "Selecciona un cliente (o créalo con el botón +).");
+        return;
+      }
+      if (!tipoSelect.value) {
+        errorJuntoAlCampo(tipoSelect, "Selecciona el tipo de servicio.");
         return;
       }
 
@@ -668,6 +760,17 @@ try {
 const destinos = (window.EMPRESA_CONFIG?.mail_orden_creada_to || []).filter(Boolean);
 const to = destinos[0] || "tecnico@cecomunica.com";
 const cc = destinos.slice(1);
+// Nombre del vendedor y enlace directo a la orden (auditoría UX 2026-09-28,
+// P0 #8): el select guarda el UID y el correo mostraba ese UID; el enlace
+// iba a la bandeja sin ?orden= y había que buscarla a mano.
+const vendUid = data.vendedor_asignado || "";
+const vendNombre = vendUid
+  ? (nombreVendedor(vendUid) || document.getElementById("vendedor")?.selectedOptions?.[0]?.textContent?.trim() || "")
+  : "";
+const vendTxt = vendNombre || (vendUid ? "Asignado (sin nombre en la ficha)" : "No asignado");
+const enlaceOrden = `${window.location.origin}/ordenes/index.html?orden=${encodeURIComponent(id)}`;
+const fechaCreacion = new Date().toLocaleString("es-PA", { timeZone: "America/Panama", dateStyle: "short", timeStyle: "short" });
+const escMail = (v) => String(v ?? "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]));
 await MailService.enqueue({
   to,
   ...(cc.length ? { cc } : {}),
@@ -677,22 +780,22 @@ Se ha creado una nueva Orden de Servicio.
 
 📋 Orden: ${id}
 👤 Cliente: ${cliente_nombre}
-🧑‍💼 Vendedor: ${data.vendedor_asignado || "No asignado"}
+🧑‍💼 Vendedor: ${vendTxt}
 🔧 Tipo de servicio: ${data.tipo_de_servicio}
-📅 Fecha de creación: (automática)
+📅 Fecha de creación: ${fechaCreacion}
 
-${window.location.origin}/ordenes/index.html
+${enlaceOrden}
   `.trim(),
   html: `
 <p>Se ha creado una nueva <strong>Orden de Servicio</strong>.</p>
 <ul>
   <li><strong>Orden:</strong> ${id}</li>
-  <li><strong>Cliente:</strong> ${cliente_nombre}</li>
-  <li><strong>Vendedor:</strong> ${data.vendedor_asignado || "No asignado"}</li>
+  <li><strong>Cliente:</strong> ${escMail(cliente_nombre)}</li>
+  <li><strong>Vendedor:</strong> ${escMail(vendTxt)}</li>
   <li><strong>Tipo de servicio:</strong> ${data.tipo_de_servicio}</li>
-  <li><strong>Fecha de creación:</strong> (automática)</li>
+  <li><strong>Fecha de creación:</strong> ${fechaCreacion}</li>
 </ul>
-<p><a href="${window.location.origin}/ordenes/index.html">Abrir en plataforma</a></p>
+<p><a href="${enlaceOrden}">Abrir la orden en la plataforma</a></p>
   `.trim(),
   createdAt: firebase.firestore.FieldValue.serverTimestamp()
 });

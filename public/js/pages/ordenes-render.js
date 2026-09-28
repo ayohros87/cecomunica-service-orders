@@ -165,7 +165,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
       return ini ? `<span class="tec-avatar" aria-hidden="true">${ini}</span>` : '';
     })()}${escapeHtml(ordenData.tecnico_asignado)}${indicadorNota}</td>
     <td>${tipoChip(ordenData.tipo_de_servicio)}</td>
-    <td><span class="chip-estado ${getEstadoClass(estado)}" title="${estado}">${estadoCompacto(estado)}</span></td>
+    <td><span class="chip-estado ${getEstadoClass(estado, ordenData)}" title="${estado}">${estadoCompacto(estado, ordenData)}</span></td>
     <td>${formatFecha(ordenData.fecha_creacion)}${edadChip(ordenData, estado)}</td>
     <td class="col-fecha-entrega">${formatFecha(ordenData.fecha_entrega)}</td>
     <td class="acciones"><div class="acciones-wrap">${botonesFlujo(ordenId, estado, ordenData)}${botonesGestion(ordenId, estado, tooltipNota, estiloNota)}</div></td>
@@ -252,7 +252,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     card.innerHTML = `
       <div class="card-contrato__tier1">
         <div class="card-contrato__cliente">${nombreClienteDe(ordenData)}</div>
-        <span class="chip-estado ${getEstadoClass(estadoDisplay)}" title="${estadoDisplay}">${estadoCompacto(estadoDisplay)}</span>
+        <span class="chip-estado ${getEstadoClass(estadoDisplay, ordenData)}" title="${estadoDisplay}">${estadoCompacto(estadoDisplay, ordenData)}</span>
       </div>
       <div class="card-contrato__tier2">
         <span class="card-contrato__ord">#${ordenId}</span>
@@ -986,8 +986,11 @@ function _btnEntregar(ordenId, od) {
   const cls   = bloqueado ? ' btn-flujo--bloqueado' : '';
   const title = caducado
     ? 'El QC aprobado caducó: cambiaron los equipos de la orden'
-    : (bloqueado ? 'Requiere control de calidad aprobado' : 'Entregar al cliente');
-  return `<button class="btn-flujo btn-flujo--entregar${cls}" title="${title}" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
+    : (bloqueado ? 'Bloqueado: falta el control de calidad aprobado. Tócalo para ver qué falta.' : 'Entregar al cliente');
+  // Bloqueado = candado visible, no solo más tenue (auditoría UX 2026-09-28,
+  // 4.2 #12): al 20 % de opacidad nadie lo veía ni entendía por qué.
+  const icono = bloqueado ? 'lock' : 'send';
+  return `<button class="btn-flujo btn-flujo--entregar${cls}" title="${title}" aria-label="${bloqueado ? 'Entregar (bloqueado: falta QC)' : 'Entregar'}" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="${icono}"></i> Entregar</button>`;
 }
 
 // El contrato de la orden se ANULÓ (2026-09-15). Este botón SUSTITUYE a
@@ -1318,6 +1321,7 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   let menuItems = [
     { icon: '<i data-lucide="camera"></i>', label: esVisita ? "Fotos de la visita" : "Fotos de taller", action: "go-fotos-taller", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
   ];
+  let itemEliminar = null;   // va al final, separado (ver abajo)
 
   // Informe de visita — el registro estructurado del trabajo de campo
   // (reemplaza el volcado en notas técnicas). Primero en el menú para
@@ -1433,8 +1437,10 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
         class: 'highlighted',
       });
     }
+    // "Eliminar" se guarda para el FINAL del menú, separado (auditoría UX
+    // 2026-09-28, 4.2 #10): en medio de 9-11 acciones se tocaba por error.
     if (!esTerminal) {
-      menuItems.push({ icon: '<i data-lucide="trash-2"></i>', label: "Eliminar orden", action: "eliminar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "danger" });
+      itemEliminar = { icon: '<i data-lucide="trash-2"></i>', label: "Eliminar orden", action: "eliminar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "danger" };
     }
   } else if (rol === ROLES.TECNICO || rol === ROLES.TECNICO_OPERATIVO) {
     menuItems.push(
@@ -1454,8 +1460,11 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
       { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
     );
   } else if (rol === ROLES.VENDEDOR) {
+    // Entradas DIRECTAS también para el vendedor (auditoría UX 2026-09-28,
+    // 4.2 #10): el modal intermedio "Imprimir / documentos" era un click más.
     menuItems.push(
-      { icon: '<i data-lucide="printer"></i>', label: "Imprimir / documentos", action: "ver-documentos", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden-doc", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="clipboard-list"></i>', label: "Nota de entrega", action: "nota-entrega-doc", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
     );
   }
 
@@ -1475,10 +1484,23 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   // Cotizar — prepara una cotización (borrador) a partir de la orden y sus
   // intervenciones. Disponible para quienes pueden prepararla, incluidos los
   // técnicos de taller (preparan; la aprobación/envío es otro permiso).
-  if (canRole(rol, 'preparar-cotizacion')) {
+  // Si la orden YA tiene cotización, el ⋯ ofrece verla en vez de armar otra
+  // (auditoría UX 2026-09-28, 4.2 #4; mismo criterio que la visita). Quien no
+  // entra al detalle de cotizaciones (técnicos) solo ve que ya existe.
+  if (o.cotizacion_doc_id && canRole(rol, 'preparar-cotizacion')) {
+    const puedeVerDetalle = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER, ROLES.RECEPCION, ROLES.GERENTE].includes(rol);
+    menuItems.push(puedeVerDetalle
+      ? { icon: '<i data-lucide="receipt"></i>', label: `Ver cotización${o.cotizacion_id ? ' ' + escapeHtml(String(o.cotizacion_id)) : ''}`, action: "ver-cotizacion", dataAttributes: `data-cotizacion-id="${escapeHtml(String(o.cotizacion_doc_id))}"`, class: "" }
+      : { icon: '<i data-lucide="receipt"></i>', label: "Cotización ya preparada", action: "", dataAttributes: "", class: "disabled" });
+  } else if (canRole(rol, 'preparar-cotizacion')) {
     menuItems.push(
       { icon: '<i data-lucide="receipt"></i>', label: "Cotizar", action: "cotizar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
     );
+  }
+
+  if (itemEliminar) {
+    if (menuItems.length && !menuItems[menuItems.length - 1].divider) menuItems.push({ divider: true });
+    menuItems.push(itemEliminar);
   }
 
   if (menuItems.length === 0) return "<em>-</em>";
@@ -1523,7 +1545,9 @@ async function _refrescarConteosServidor() {
   _conteosSrvEnVuelo = true;
   try {
     const ESTADOS = ['POR ASIGNAR', 'RECIBIDO EN MOSTRADOR', 'ASIGNADO',
-      'COMPLETADO (EN OFICINA)', 'ENTREGADO AL CLIENTE', 'CERRADA (VISITA)'];
+      'COMPLETADO (EN OFICINA)', 'ENTREGADO AL CLIENTE', 'CERRADA (VISITA)',
+      // Chips nuevos (auditoría UX 2026-09-28, T1): terminales sin filtro.
+      'CERRADA (DEVOLUCION)', 'CERRADA (ENTRADA)', 'CERRADA (SIN RETIRAR)', 'ANULADA'];
     const [counts, qc] = await Promise.all([
       Promise.all(ESTADOS.map(e => SenalesService.countOrdenesPorEstado(e).catch(() => null))),
       SenalesService.countOrdenesQcPendiente().catch(() => null),
@@ -1573,13 +1597,15 @@ function actualizarResumen(lista) {
       .querySelectorAll(`.estado-chips-bar [data-count="${key}"]`)
       .forEach(span => { span.textContent = String(n); });
   };
-  chipCount('all', fullList.length);
+  // "Todas" va sin número (auditoría UX 2026-09-28): contaba solo lo cargado.
   chipCount('POR ASIGNAR', porAsignar);
   chipCount('RECIBIDO EN MOSTRADOR', recibidoMostrador);
   chipCount('ASIGNADO', asignado);
   chipCount('COMPLETADO (EN OFICINA)', completadoOficina);
   chipCount('ENTREGADO AL CLIENTE', entregadoCliente);
   chipCount('CERRADA (VISITA)', cerradaVisita);
+  ['CERRADA (DEVOLUCION)', 'CERRADA (ENTRADA)', 'CERRADA (SIN RETIRAR)', 'ANULADA']
+    .forEach(k => chipCount(k, fullList.filter(o => _statusOf(o) === k).length));
   chipCount('qc', qcPendientes);
   // El chip de QC es un toggle (checkbox #filtroQcPendiente), no un estado:
   // su "activo" se sincroniza aquí, que corre tras cada aplicación de filtros

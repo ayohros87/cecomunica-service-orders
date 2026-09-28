@@ -2575,7 +2575,7 @@
 
     let overlay = null, sheetApi = null;
     Modal.sheet({
-      title: `Devolución sin contrato`, icon: 'package-open', size: 'md',
+      title: `Devolución sin contrato en el sistema`, icon: 'package-open', size: 'md',
       html: `
           <p style="margin:0 0 10px;font-size:13px;color:var(--fg-2,#374151);">
             Para equipos alquilados con <b>contrato de papel</b> (fuera del sistema). Se crea el

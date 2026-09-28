@@ -577,6 +577,45 @@ window.cerrarEquiposMobile = function() {
 let _trabajoOrdenId = null;
 let _trabajoEquipoIdx = null;
 let _trabajoEquipoId = null;
+// Foto del formulario al abrir el modal de intervención: con ella se sabe si
+// hay cambios sin guardar (auditoría UX 2026-09-28, 4.2 #5 — en tablet un
+// toque fuera del modal se llevaba el texto escrito).
+let _trabajoSnapshot = "";
+let _trabajoConfirmandoCierre = false;
+
+function _trabajoEstadoForm() {
+  const v = (id) => (document.getElementById(id)?.value || "").trim();
+  const c = (id) => !!document.getElementById(id)?.checked;
+  return JSON.stringify([
+    v("trabajoEquipoText"), c("trabajoNoDisponible"), v("trabajoMotivoNoDisponible"),
+    c("trabajoDescartado"), v("trabajoDescarteMotivo"), c("trabajoCondicion"), v("trabajoCondicionTexto"),
+    document.querySelectorAll('#trabajoAplicarOtros .trabajo-aplicar-chk:checked').length,
+  ]);
+}
+function _trabajoSucio() {
+  return !!_trabajoSnapshot && _trabajoEstadoForm() !== _trabajoSnapshot;
+}
+
+// Cierre "blando" (toque fuera del modal o Escape): si hay cambios sin
+// guardar pregunta antes. Cancelar y la X siguen cerrando directo: son una
+// decisión explícita.
+window.solicitarCierreTrabajoEquipo = async function() {
+  if (_trabajoConfirmandoCierre) return;
+  if (!_trabajoSucio()) { cerrarTrabajoEquipoModal(); return; }
+  _trabajoConfirmandoCierre = true;
+  try {
+    const ok = await Modal.confirm({
+      title: "Cambios sin guardar",
+      message: "La intervención de este equipo tiene cambios sin guardar. ¿Cerrar y descartarlos?",
+      confirmLabel: "Descartar cambios",
+      cancelLabel: "Seguir editando",
+      danger: true,
+    });
+    if (ok) cerrarTrabajoEquipoModal();
+  } finally {
+    _trabajoConfirmandoCierre = false;
+  }
+};
 let _fotoViewerId = null;
 // Fotos que alimentan el visor cuando NO viene del modal de edición: la ficha
 // de solo lectura (verIntervencionEquipo) no toca _trabajoOrdenId/_Idx, así
@@ -743,6 +782,9 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
         <details style="margin:10px 0 0;">
           <summary style="cursor:pointer; font-size:13px; color:var(--fg-2);">
             Aplicar esta intervención también a otros equipos de la orden (${otros.length}) — solo el texto</summary>
+          <label style="display:flex; gap:6px; align-items:center; font-size:13px; font-weight:600; margin-top:6px;">
+            <input type="checkbox" id="trabajoAplicarTodos"> Marcar todos (${otros.length})
+          </label>
           <div style="max-height:140px; overflow-y:auto; margin-top:6px; display:flex; flex-direction:column; gap:4px;">
             ${otros.map(({ eq, i }) => {
               const s = escBatch(String(eq.numero_de_serie || eq.serial || eq.SERIAL || "-"));
@@ -757,6 +799,21 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
             }).join("")}
           </div>
         </details>`;
+      // "Marcar todos" (auditoría UX 2026-09-28, 4.2 #5): con 10 radios
+      // iguales eran 10 casillas. Se mantiene en sync con las individuales.
+      const todos = wrapOtros.querySelector("#trabajoAplicarTodos");
+      const chks = () => Array.from(wrapOtros.querySelectorAll(".trabajo-aplicar-chk"));
+      if (todos) {
+        todos.onchange = () => chks().forEach(ch => { ch.checked = todos.checked; });
+        chks().forEach(ch => {
+          ch.onchange = () => {
+            const l = chks();
+            const n = l.filter(x => x.checked).length;
+            todos.checked = n === l.length;
+            todos.indeterminate = n > 0 && n < l.length;
+          };
+        });
+      }
     }
   }
 
@@ -865,11 +922,9 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
     nav.style.display = total > 1 ? "flex" : "none";
     const pos = document.getElementById("trabajoNavPos");
     if (pos) pos.textContent = `Equipo ${idx + 1} de ${total}`;
-    const original = (e.trabajo_tecnico || "").toString().trim();
     const irA = async (destino) => {
       if (destino < 0 || destino >= total) return;
-      const txtAhora = (document.getElementById("trabajoEquipoText")?.value || "").trim();
-      if (txtAhora !== original) {
+      if (_trabajoSucio()) {
         const ok = await Modal.confirm({
           title: "Texto sin guardar",
           message: "La intervención de este equipo tiene cambios sin guardar. ¿Pasar al otro equipo y descartarlos?",
@@ -885,16 +940,22 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
     if (next) { next.disabled = idx === total - 1; next.onclick = () => irA(idx + 1); }
   }
 
+  // "Guardar y siguiente" (auditoría UX 2026-09-28, 4.2 #5): el modal se
+  // cerraba al guardar y había que reabrirlo por cada equipo.
+  const btnSig = document.getElementById("btnGuardarTrabajoSiguiente");
+  if (btnSig) btnSig.style.display = idx < equipos.length - 1 ? "" : "none";
+
   const modal = document.getElementById("modalTrabajoEquipo");
 
-  // Add backdrop click handler (close when clicking outside modal)
+  // Toque fuera del modal: cierra, pero pregunta si hay cambios sin guardar.
   modal.onclick = function(e) {
     if (e.target === modal) {
-      cerrarTrabajoEquipoModal();
+      solicitarCierreTrabajoEquipo();
     }
   };
-  
+
   APP.utils.show(modal);
+  _trabajoSnapshot = _trabajoEstadoForm();
   setTimeout(() => document.getElementById("trabajoEquipoText")?.focus(), 50);
 };
 
@@ -905,6 +966,7 @@ window.cerrarTrabajoEquipoModal = function() {
   _trabajoOrdenId = null;
   _trabajoEquipoIdx = null;
   _trabajoEquipoId = null;
+  _trabajoSnapshot = "";
 };
 
 window.agregarFotoEquipo = function() {
@@ -1768,11 +1830,21 @@ window.eliminarMaterialEquipo = async function(lineaId) {
   }
 };
 
-window.guardarTrabajoEquipoModal = async function() {
+window.guardarTrabajoEquipoModal = async function({ siguiente = false } = {}) {
   if (!_trabajoOrdenId && _trabajoOrdenId !== "") return;
   if (_trabajoEquipoIdx === null || _trabajoEquipoIdx === undefined) return;
 
   const btn = document.getElementById("btnGuardarTrabajoEquipo");
+  const btnSig = document.getElementById("btnGuardarTrabajoSiguiente");
+  if (btn?.disabled) return;   // ya hay un guardado en curso
+  // Tras guardar: cerrar, o abrir el siguiente equipo de la orden.
+  const ordenGuardada = _trabajoOrdenId;
+  const idxGuardado = _trabajoEquipoIdx;
+  const terminar = () => {
+    if (btnSig) btnSig.disabled = false;
+    if (siguiente) abrirTrabajoEquipoModal(ordenGuardada, idxGuardado + 1);
+    else cerrarTrabajoEquipoModal();
+  };
   const txt = (document.getElementById("trabajoEquipoText")?.value || "").trim();
   const chkNoDisp = document.getElementById("trabajoNoDisponible");
   const motivoNoDisp = (document.getElementById("trabajoMotivoNoDisponible")?.value || "").trim();
@@ -1800,6 +1872,7 @@ window.guardarTrabajoEquipoModal = async function() {
 
   try {
     btn.disabled = true;
+    if (btnSig) btnSig.disabled = true;
     btn.innerHTML = '<i data-lucide="loader"></i> Guardando...';
     APP.utils.lucideRefresh(btn);
 
@@ -1848,9 +1921,9 @@ window.guardarTrabajoEquipoModal = async function() {
 
       if (cacheOrden) cacheOrden.equipos = equiposAll;
       refrescarEquiposDeOrden(_trabajoOrdenId);
-      cerrarTrabajoEquipoModal();
-      Toast.show("⚠️ Equipo marcado como no disponible", "ok");
       btn.disabled = false;
+      terminar();
+      Toast.show("⚠️ Equipo marcado como no disponible", "ok");
       btn.innerHTML = '<i data-lucide="save"></i> Guardar';
       APP.utils.lucideRefresh(btn);
       return;
@@ -1922,7 +1995,8 @@ window.guardarTrabajoEquipoModal = async function() {
     // Refrescar UI - solo la tabla de equipos expandida si existe (desktop)
     refrescarEquiposDeOrden(_trabajoOrdenId);
 
-    cerrarTrabajoEquipoModal();
+    btn.disabled = false;
+    terminar();
     Toast.show(marcados.length
       ? `✅ Intervención guardada en ${1 + marcados.length} equipo(s)`
       : (marcarDescarte
@@ -1938,6 +2012,7 @@ window.guardarTrabajoEquipoModal = async function() {
   } catch (e) {
     console.error("❌ Error guardando trabajo del equipo:", e);
     Toast.show(`❌ Error al guardar: ${e?.message || e}`, "bad");
+    if (btnSig) btnSig.disabled = false;
     btn.disabled = false;
     btn.innerHTML = '<i data-lucide="save"></i> Guardar';
     APP.utils.lucideRefresh(btn);

@@ -23,6 +23,7 @@ import '/js/ui/equipo-ficha.js';
 import '/js/ui/serial-field.js';
 import '/js/domain/scoring.js';
 import '/js/ui/toast.js';
+import '/js/ui/busy.js';
 import '/js/ui/firmaTablet.js';
 import '/js/ui/modal.js';
 import '/js/pages/ordenes-state.js';

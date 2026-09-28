@@ -178,7 +178,7 @@ function _iniciarSnapshotInicial() {
   // in ordenes-index.js. Without this, auto-load appends page 1 below the
   // skeleton before the snapshot lands.
   APP.state.firstPageReady = false;
-  btnCargarMas.innerHTML = '<i data-lucide="chevron-down"></i> Cargar más órdenes (0)';
+  btnCargarMas.innerHTML = '<i data-lucide="chevron-down"></i> Cargar más órdenes';
   btnCargarMas.disabled = false;
   btnCargarMas.style.display = "block";
 
@@ -386,7 +386,8 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
       ? applyActiveFiltersToOrders(APP.state.orders, filters).length
       : APP.state.orders.length;
 
-    document.getElementById("btnCargarMas").innerHTML = `<i data-lucide="chevron-down"></i> Cargar más órdenes (${totalVisible})`;
+    // Sin contador (auditoría UX 2026-09-28): mostraba las YA cargadas.
+    document.getElementById("btnCargarMas").innerHTML = `<i data-lucide="chevron-down"></i> Cargar más órdenes`;
 
     // Estas filas se AÑADEN a mano, fuera de renderOrdersList: su firma de
     // pintado queda obsoleta y el próximo repintado debe ejecutarse de verdad.

@@ -94,7 +94,7 @@
         <div class="overflow-menu-dropdown" id="topbar-menu">
           <!-- Acción esporádica (auditoría órdenes P2): antes ocupaba un botón
                permanente del topbar; vive aquí para despejar la barra. -->
-          <button class="overflow-menu-item" data-action="nueva-devolucion" title="Registrar devolución de equipos con contrato de papel (fuera del sistema)"><i data-lucide="package-open"></i> Devolución sin contrato</button>
+          <button class="overflow-menu-item" data-action="nueva-devolucion" title="Registrar la devolución de equipos cuyo contrato no está en el sistema (contrato de papel)"><i data-lucide="package-open"></i> Devolución sin contrato en el sistema</button>
           <div class="overflow-menu-divider"></div>
           <button class="overflow-menu-item" data-action="go-reporte-pendientes"><i data-lucide="clock"></i> Pendientes</button>
           <!-- Válvula de casos viejos: reparaciones terminadas hace >30 días que
@@ -135,17 +135,19 @@
     <button type="button" class="estado-chip estado-chip--all active"
             data-action="filtrar-estado-chip" data-estado=""
             role="tab" aria-selected="true">
-      Todas <span class="estado-chip__count" data-count="all">0</span>
+      Todas
     </button>
     <button type="button" class="estado-chip estado-chip--por-asignar"
             data-action="filtrar-estado-chip" data-estado="POR ASIGNAR"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Por asignar <span class="estado-chip__count" data-count="POR ASIGNAR">0</span>
+            role="tab" aria-selected="false"
+            title="Reparaciones por recibir en mostrador (y programaciones, entradas y visitas que arrancan en Asignar)">
+      <span class="dot" aria-hidden="true"></span>Por recibir <span class="estado-chip__count" data-count="POR ASIGNAR">0</span>
     </button>
     <button type="button" class="estado-chip estado-chip--recibido"
             data-action="filtrar-estado-chip" data-estado="RECIBIDO EN MOSTRADOR"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Recibido <span class="estado-chip__count" data-count="RECIBIDO EN MOSTRADOR">0</span>
+            role="tab" aria-selected="false"
+            title="Recibidas en mostrador, esperando técnico">
+      <span class="dot" aria-hidden="true"></span>Por asignar <span class="estado-chip__count" data-count="RECIBIDO EN MOSTRADOR">0</span>
     </button>
     <button type="button" class="estado-chip estado-chip--asignado"
             data-action="filtrar-estado-chip" data-estado="ASIGNADO"
@@ -154,8 +156,9 @@
     </button>
     <button type="button" class="estado-chip estado-chip--completado"
             data-action="filtrar-estado-chip" data-estado="COMPLETADO (EN OFICINA)"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Completado <span class="estado-chip__count" data-count="COMPLETADO (EN OFICINA)">0</span>
+            role="tab" aria-selected="false"
+            title="Completadas en oficina: listas para entregar o esperando el QC (chip QC)">
+      <span class="dot" aria-hidden="true"></span>Listos <span class="estado-chip__count" data-count="COMPLETADO (EN OFICINA)">0</span>
     </button>
     <!-- Cola de QC (auditoría Q5): vivía enterrada en el dropdown "Resumen"
          siendo la cola que frena entregas. Toggle propio (filtrar-qc). -->
@@ -174,6 +177,28 @@
             data-action="filtrar-estado-chip" data-estado="CERRADA (VISITA)"
             role="tab" aria-selected="false">
       <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="estado-chip__count" data-count="CERRADA (VISITA)">0</span>
+    </button>
+    <!-- Terminales que no tenían filtro (auditoría UX 2026-09-28, T1). -->
+    <button type="button" class="estado-chip estado-chip--cerrada"
+            data-action="filtrar-estado-chip" data-estado="CERRADA (DEVOLUCION)"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Devolución cerrada <span class="estado-chip__count" data-count="CERRADA (DEVOLUCION)">0</span>
+    </button>
+    <button type="button" class="estado-chip estado-chip--cerrada"
+            data-action="filtrar-estado-chip" data-estado="CERRADA (ENTRADA)"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Entrada cerrada <span class="estado-chip__count" data-count="CERRADA (ENTRADA)">0</span>
+    </button>
+    <button type="button" class="estado-chip estado-chip--sin-retirar"
+            data-action="filtrar-estado-chip" data-estado="CERRADA (SIN RETIRAR)"
+            role="tab" aria-selected="false"
+            title="Cerradas con radios del cliente todavía en la casa">
+      <span class="dot" aria-hidden="true"></span>Sin retirar <span class="estado-chip__count" data-count="CERRADA (SIN RETIRAR)">0</span>
+    </button>
+    <button type="button" class="estado-chip estado-chip--anulada"
+            data-action="filtrar-estado-chip" data-estado="ANULADA"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Anulada <span class="estado-chip__count" data-count="ANULADA">0</span>
     </button>
   </div>
 
@@ -195,17 +220,19 @@
     <button type="button" class="estado-chip estado-chip--all active"
             data-action="filtrar-estado-chip" data-estado=""
             role="tab" aria-selected="true">
-      Todas <span class="estado-chip__count" data-count="all">0</span>
+      Todas
     </button>
     <button type="button" class="estado-chip estado-chip--por-asignar"
             data-action="filtrar-estado-chip" data-estado="POR ASIGNAR"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Por asignar <span class="estado-chip__count" data-count="POR ASIGNAR">0</span>
+            role="tab" aria-selected="false"
+            title="Reparaciones por recibir en mostrador (y programaciones, entradas y visitas que arrancan en Asignar)">
+      <span class="dot" aria-hidden="true"></span>Por recibir <span class="estado-chip__count" data-count="POR ASIGNAR">0</span>
     </button>
     <button type="button" class="estado-chip estado-chip--recibido"
             data-action="filtrar-estado-chip" data-estado="RECIBIDO EN MOSTRADOR"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Recibido <span class="estado-chip__count" data-count="RECIBIDO EN MOSTRADOR">0</span>
+            role="tab" aria-selected="false"
+            title="Recibidas en mostrador, esperando técnico">
+      <span class="dot" aria-hidden="true"></span>Por asignar <span class="estado-chip__count" data-count="RECIBIDO EN MOSTRADOR">0</span>
     </button>
     <button type="button" class="estado-chip estado-chip--asignado"
             data-action="filtrar-estado-chip" data-estado="ASIGNADO"
@@ -214,8 +241,9 @@
     </button>
     <button type="button" class="estado-chip estado-chip--completado"
             data-action="filtrar-estado-chip" data-estado="COMPLETADO (EN OFICINA)"
-            role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Completado <span class="estado-chip__count" data-count="COMPLETADO (EN OFICINA)">0</span>
+            role="tab" aria-selected="false"
+            title="Completadas en oficina: listas para entregar o esperando el QC (chip QC)">
+      <span class="dot" aria-hidden="true"></span>Listos <span class="estado-chip__count" data-count="COMPLETADO (EN OFICINA)">0</span>
     </button>
     <!-- Cola de QC (auditoría Q5): vivía enterrada en el dropdown "Resumen"
          siendo la cola que frena entregas. Toggle propio (filtrar-qc). -->
@@ -234,6 +262,28 @@
             data-action="filtrar-estado-chip" data-estado="CERRADA (VISITA)"
             role="tab" aria-selected="false">
       <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="estado-chip__count" data-count="CERRADA (VISITA)">0</span>
+    </button>
+    <!-- Terminales que no tenían filtro (auditoría UX 2026-09-28, T1). -->
+    <button type="button" class="estado-chip estado-chip--cerrada"
+            data-action="filtrar-estado-chip" data-estado="CERRADA (DEVOLUCION)"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Devolución cerrada <span class="estado-chip__count" data-count="CERRADA (DEVOLUCION)">0</span>
+    </button>
+    <button type="button" class="estado-chip estado-chip--cerrada"
+            data-action="filtrar-estado-chip" data-estado="CERRADA (ENTRADA)"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Entrada cerrada <span class="estado-chip__count" data-count="CERRADA (ENTRADA)">0</span>
+    </button>
+    <button type="button" class="estado-chip estado-chip--sin-retirar"
+            data-action="filtrar-estado-chip" data-estado="CERRADA (SIN RETIRAR)"
+            role="tab" aria-selected="false"
+            title="Cerradas con radios del cliente todavía en la casa">
+      <span class="dot" aria-hidden="true"></span>Sin retirar <span class="estado-chip__count" data-count="CERRADA (SIN RETIRAR)">0</span>
+    </button>
+    <button type="button" class="estado-chip estado-chip--anulada"
+            data-action="filtrar-estado-chip" data-estado="ANULADA"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Anulada <span class="estado-chip__count" data-count="ANULADA">0</span>
     </button>
   </div>
 
@@ -272,7 +322,9 @@
         <option value="ENTREGADO AL CLIENTE">ENTREGADO AL CLIENTE</option>
         <option value="CERRADA (VISITA)">CERRADA (VISITA)</option>
         <option value="CERRADA (ENTRADA)">CERRADA (ENTRADA)</option>
+        <option value="CERRADA (DEVOLUCION)">CERRADA (DEVOLUCION)</option>
         <option value="CERRADA (SIN RETIRAR)">CERRADA (SIN RETIRAR)</option>
+        <option value="ANULADA">ANULADA</option>
       </select>
     </div>
 
@@ -363,6 +415,9 @@
   <div></div>
   <button id="btnCargarMas" class="btn"><i data-lucide="chevron-down"></i> Cargar más órdenes</button>
 </div>
+<!-- Chip de estado con más órdenes de las cargadas (auditoría UX 2026-09-28):
+     "Mostrando 200 de N" + Cargar más. Lo pinta ordenes-filters.js. -->
+<div id="chipMasBox" class="toolbar mt-16" style="display:none; align-items:center; justify-content:center; gap:12px; font-size:13.5px; color:var(--fg-2);"></div>
 <!-- Modal Asignar Técnico -->
 <div id="modalAsignar" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalAsignarTitle">
   <div class="modal modal-md">
@@ -419,6 +474,56 @@
              autocomplete="email"
              class="modal-entrega__nombre">
       <p class="form-hint" id="entregaClienteEmailHint">Cargando email registrado…</p>
+    </div>
+
+    <!-- Checkbox A: Entrega con firma en papel (sin firma digital) — ARRIBA
+         del bloque de firma (auditoría UX 2026-09-28, 4.2 #11): 7 de cada 10
+         entregas de septiembre salieron por aquí y la casilla estaba al fondo,
+         después de nombre, ID y firma que en esta rama no se usan. Marcarla
+         oculta ese bloque (_toggleEntregaNoRecibido). Los ids/campos conservan el nombre
+         histórico "no recibido" (no_recibido en Firestore): la opción nació
+         como "el cliente no recibió", pero en la práctica se usa cuando el
+         cliente SÍ recibió y firmó la nota impresa pero la firma digital
+         falló. Ver emailRenderer.buildBodyNotaEntrega. -->
+    <div class="modal-entrega__alert">
+      <div class="modal-entrega__cb-row modal-entrega__cb-row--below" onclick="document.getElementById('entregaNoRecibido').click()">
+        <input type="checkbox" id="entregaNoRecibido"
+               class="modal-entrega__cb-input modal-entrega__cb-input--warn"
+               data-action="entrega-no-recibido-change"
+               onclick="event.stopPropagation()">
+        <label for="entregaNoRecibido" class="modal-entrega__cb-label modal-entrega__cb-label--warn">
+          El cliente recibió los equipos y firmó en papel, pero <strong>no</strong> pudo firmar digitalmente
+        </label>
+      </div>
+      <div id="entregaNoRecibidoBloque" class="modal-entrega__sub hidden">
+        <div class="form-field modal-entrega__field--tight">
+          <label class="modal-entrega__label--warn">¿Por qué no se pudo firmar digitalmente? <span class="req--warn">*</span></label>
+          <textarea id="entregaNoRecibidoMotivo" rows="2"
+                    placeholder="Ej.: la plataforma estaba actualizándose; se firmó la nota impresa..."
+                    class="modal-entrega__warn-input"></textarea>
+        </div>
+        <div class="form-field">
+          <label class="modal-entrega__label--warn">¿Quién recibió los equipos por el cliente? <span class="req--warn">*</span></label>
+          <input type="text" id="entregaPersonaInterna"
+                 placeholder="Nombre de quien firmó la nota impresa"
+                 class="modal-entrega__warn-input">
+        </div>
+        <!-- La nota impresa que el cliente firmó (auditoría 2026-09-17): sin
+             ella la prueba de la entrega vive en un archivador que el sistema
+             no sabe ubicar, y 7 de cada 10 entregas de septiembre salieron por
+             aquí. Opcional para no trancar el mostrador con cola: si no se
+             sube ahora, la orden queda pidiéndola. -->
+        <div class="form-field">
+          <label class="modal-entrega__label--warn">Foto de la nota firmada
+            <span class="modal-entrega__hint">(se puede subir después, desde la orden)</span>
+          </label>
+          <input type="file" id="entregaFotoPapel"
+                 accept="image/*,application/pdf" capture="environment"
+                 class="file modal-entrega__file"
+                 onchange="_entregaFotoPapelChange(this)">
+          <div id="entregaPreviewPapel" class="modal-entrega__preview"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Normal delivery block -->
@@ -544,53 +649,6 @@
     <!-- Leyenda para órdenes tipo ENTRADA -->
     <div id="entregaLegendaEntrada" class="modal-entrega__legenda-entrada hidden">
       Los radios ingresarán al taller para su revisión. Cualquier daño identificado como causado por mal uso, así como los accesorios o equipos no devueltos, serán notificados oportunamente mediante cotización para su posterior facturación.
-    </div>
-
-    <!-- Checkbox A: Entrega con firma en papel (sin firma digital) — below
-         the normal delivery block. Los ids/campos conservan el nombre
-         histórico "no recibido" (no_recibido en Firestore): la opción nació
-         como "el cliente no recibió", pero en la práctica se usa cuando el
-         cliente SÍ recibió y firmó la nota impresa pero la firma digital
-         falló. Ver emailRenderer.buildBodyNotaEntrega. -->
-    <div class="modal-entrega__alert">
-      <div class="modal-entrega__cb-row modal-entrega__cb-row--below" onclick="document.getElementById('entregaNoRecibido').click()">
-        <input type="checkbox" id="entregaNoRecibido"
-               class="modal-entrega__cb-input modal-entrega__cb-input--warn"
-               data-action="entrega-no-recibido-change"
-               onclick="event.stopPropagation()">
-        <label for="entregaNoRecibido" class="modal-entrega__cb-label modal-entrega__cb-label--warn">
-          El cliente recibió los equipos y firmó en papel, pero <strong>no</strong> pudo firmar digitalmente
-        </label>
-      </div>
-      <div id="entregaNoRecibidoBloque" class="modal-entrega__sub hidden">
-        <div class="form-field modal-entrega__field--tight">
-          <label class="modal-entrega__label--warn">¿Por qué no se pudo firmar digitalmente? <span class="req--warn">*</span></label>
-          <textarea id="entregaNoRecibidoMotivo" rows="2"
-                    placeholder="Ej.: la plataforma estaba actualizándose; se firmó la nota impresa..."
-                    class="modal-entrega__warn-input"></textarea>
-        </div>
-        <div class="form-field">
-          <label class="modal-entrega__label--warn">¿Quién recibió los equipos por el cliente? <span class="req--warn">*</span></label>
-          <input type="text" id="entregaPersonaInterna"
-                 placeholder="Nombre de quien firmó la nota impresa"
-                 class="modal-entrega__warn-input">
-        </div>
-        <!-- La nota impresa que el cliente firmó (auditoría 2026-09-17): sin
-             ella la prueba de la entrega vive en un archivador que el sistema
-             no sabe ubicar, y 7 de cada 10 entregas de septiembre salieron por
-             aquí. Opcional para no trancar el mostrador con cola: si no se
-             sube ahora, la orden queda pidiéndola. -->
-        <div class="form-field">
-          <label class="modal-entrega__label--warn">Foto de la nota firmada
-            <span class="modal-entrega__hint">(se puede subir después, desde la orden)</span>
-          </label>
-          <input type="file" id="entregaFotoPapel"
-                 accept="image/*,application/pdf" capture="environment"
-                 class="file modal-entrega__file"
-                 onchange="_entregaFotoPapelChange(this)">
-          <div id="entregaPreviewPapel" class="modal-entrega__preview"></div>
-        </div>
-      </div>
     </div>
 
     <!-- Notas de entrega (opcional) — se guardan en la orden y se incluyen
@@ -839,6 +897,7 @@
 
     <div class="modal-footer-mobile">
       <button class="btn btn-secondary btn-full" data-action="cerrar-trabajo-equipo">Cancelar</button>
+      <button id="btnGuardarTrabajoSiguiente" class="btn btn-secondary btn-full" data-action="guardar-trabajo-equipo-siguiente" style="display:none;">Guardar y siguiente <i data-lucide="chevron-right"></i></button>
       <button id="btnGuardarTrabajoEquipo" class="btn btn-primary btn-full" data-action="guardar-trabajo-equipo"><i data-lucide="save"></i> Guardar</button>
     </div>
   </div>

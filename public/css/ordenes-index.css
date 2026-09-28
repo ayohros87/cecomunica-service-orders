@@ -1274,29 +1274,15 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
 .btn-flujo--qc:hover   { background: #fef3c7; }
 .btn-flujo--qc-rechazo { color: #991b1b; border-color: #fecaca; }
 .btn-flujo--qc-rechazo:hover { background: #fef2f2; }
-.btn-flujo--bloqueado  { opacity: 0.45; }
+/* Bloqueado: candado + gris punteado a opacidad completa (auditoría UX
+   2026-09-28, 4.2 #12). Antes 0.45 × 0.45 de la fila ≈ 20 %: invisible. */
+.btn-flujo--bloqueado  { color: var(--fg-3); border-style: dashed; background: var(--surface-sunken, #f5f5f4); cursor: help; }
 .btn-flujo .lucide    { width: 14px; height: 14px; vertical-align: -2px; color: inherit; }
 
-/* Botón ⋯ es secundario (ghost) */
-.acciones-wrap > .overflow-menu { opacity: 0.7; }
-
-.acciones-wrap > .overflow-menu:hover { opacity: 1; }
-
-/* Quick actions on hover — ORDENES_INDEX_IMPROVEMENTS.md §5.5.
-   Actions are muted by default so they stop competing with the rest
-   of the row content, then jump to full opacity when the user hovers
-   (or focuses within) the row. Touch devices keep full opacity since
-   they have no hover state. */
-.orders-table tbody tr[data-orden-row] .acciones-wrap {
-  opacity: 0.45;
-  transition: opacity var(--dur-fast) var(--ease-out);
-}
-.orders-table tbody tr[data-orden-row]:hover .acciones-wrap,
-.orders-table tbody tr[data-orden-row]:focus-within .acciones-wrap,
-.orders-table tbody tr[data-orden-row].activo .acciones-wrap { opacity: 1; }
-@media (hover: none) {
-  .orders-table tbody tr[data-orden-row] .acciones-wrap { opacity: 1; }
-}
+/* Acciones de la fila al 100 % siempre (auditoría UX 2026-09-28, 4.2 #12):
+   atenuadas al 45 % hasta el hover, un usuario nuevo no descubría los
+   botones. La jerarquía la da el estilo ghost del ⋯, no la opacidad. */
+.acciones-wrap > .overflow-menu { opacity: 1; }
 
 /* .btn-wrap legacy wrapper rules removed — current render uses
    .acciones-wrap (see §5.5 hover-opacity block above). `.flujo` td
@@ -3447,6 +3433,14 @@ tr.activo:hover { background: #f0f9ff !important; }
 .estado-chip--completado  .dot { background: #16A34A; }
 .estado-chip--entregado   .dot { background: var(--gray-500); }
 .estado-chip--visita-cerrada .dot { background: #10B981; }
+/* Terminales con chip propio (auditoría UX 2026-09-28, T1): cierre limpio
+   esmeralda, sin retirar ámbar (radios ajenos en la casa), anulada gris. */
+.estado-chip--cerrada     .dot { background: #10B981; }
+.estado-chip--sin-retirar .dot { background: #D97706; }
+.estado-chip--anulada     .dot { background: var(--gray-400); }
+.estado-chip--cerrada.active { background: #ECFDF5; border-color: #10B981; color: #065F46; }
+.estado-chip--sin-retirar.active { background: #FFFBEB; border-color: #D97706; color: #92400E; }
+.estado-chip--anulada.active { background: var(--gray-100); border-color: var(--gray-400); color: var(--gray-600); }
 /* Chip de la cola de QC (toggle, no estado) — violeta clipboard-check. */
 .estado-chip--qc .dot { background: #7C3AED; }
 

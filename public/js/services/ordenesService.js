@@ -1729,15 +1729,28 @@ const OrdenesService = {
     return snap.docs.map(doc => ({ ordenId: doc.id, ...doc.data() }));
   },
 
-  async filterByStatuses(statuses, orderField = "fecha_entrada") {
+  // Sin orderBy en el servidor (auditoría UX 2026-09-28, P0 #6): ordenar por
+  // `fecha_entrada` (campo que solo escribe el importador de Excel) dejaba
+  // fuera TODAS las órdenes creadas en la app, porque Firestore excluye los
+  // docs que no tienen el campo del orderBy. Se ordena aquí, más reciente
+  // primero, por fecha_creacion con fecha_entrada de respaldo.
+  async filterByStatuses(statuses) {
     const db = firebase.firestore();
     const snap = await db.collection("ordenes_de_servicio")
       .where("estado_reparacion", "in", statuses)
-      .orderBy(orderField, "desc")
       .get();
+    const ms = (o) => {
+      const f = o.fecha_creacion || o.fecha_entrada;
+      if (!f) return 0;
+      if (typeof f.toMillis === "function") return f.toMillis();
+      if (typeof f.seconds === "number") return f.seconds * 1000;
+      const t = new Date(f).getTime();
+      return Number.isFinite(t) ? t : 0;
+    };
     return snap.docs
       .filter(doc => doc.data().eliminado !== true)
-      .map(doc => ({ ordenId: doc.id, ...doc.data() }));
+      .map(doc => ({ ordenId: doc.id, ...doc.data() }))
+      .sort((a, b) => ms(b) - ms(a));
   },
 
   async getEquipoMeta(ordenId, equipoId) {

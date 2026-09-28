@@ -89,6 +89,11 @@
 
       <div class="form-actions">
         <button type="submit" class="btn btn-primary btn-lg"><i data-lucide="save"></i> Guardar todos</button>
+        <!-- Guardar y recibir (auditoría UX 2026-09-28, 4.2 #13): con el
+             cliente en el mostrador, guardar y aterrizar ya en el acuse de
+             recepción. Solo se muestra si la orden se recibe en mostrador
+             (agregar-equipo.js lo decide al cargar la orden). -->
+        <button type="submit" class="btn btn-secondary btn-lg" id="btnGuardarRecibir" data-accion="recibir" hidden><i data-lucide="package-plus"></i> Guardar y recibir</button>
         <button type="button" class="btn btn-ghost" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
       </div>
     </form>

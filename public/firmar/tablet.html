@@ -357,8 +357,11 @@
       } else {
         document.getElementById('fUnidadesWrap').innerHTML = tabla;
       }
-      document.getElementById('fNombre').value = '';
-      document.getElementById('fCedula').value = '';
+      // Prellenado (auditoría UX 2026-09-28, 4.2 #16): si la solicitud trae
+      // nombre/cédula sugeridos desde el PC se ponen EDITABLES; si no, vacío
+      // como antes (la solicitud anterior no debe dejar su nombre aquí).
+      document.getElementById('fNombre').value = String(s.nombre || s.nombre_sugerido || '').trim();
+      document.getElementById('fCedula').value = String(s.cedula || s.cedula_sugerida || '').trim();
       _mostrarError('');
       document.getElementById('fHint').textContent = '— firma dentro del recuadro —';
       avisoLlegada();

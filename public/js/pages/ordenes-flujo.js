@@ -118,6 +118,11 @@ window.confirmarAsignarTecnico = async function (ordenId) {
   // "— supervisor", que no debe guardarse en tecnico_asignado).
   const tecnicoNombre = opcion.dataset.nombre || opcion.text;
 
+  // Candado estándar (auditoría UX 2026-09-28, T3): un doble click hacía dos
+  // escrituras y encolaba dos correos al técnico. Mientras corre, el botón
+  // queda deshabilitado con "Guardando…" y un segundo click se ignora.
+  const _candado = window.withBusy || ((_b, fn) => fn());
+  return _candado(btnConfirmar, async () => {
   try {
     if (modo === "reasignar") {
       const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
@@ -156,6 +161,7 @@ window.confirmarAsignarTecnico = async function (ordenId) {
     console.error("Error asignando técnico:", error);
     Toast.show("❌ Error al asignar técnico", "bad");
   }
+  }, { label: "Guardando…" });
 };
 
 window.completarOrden = async function (ordenId) {
@@ -824,7 +830,7 @@ window.cerrarEntrada = function (ordenId) {
 
       cleanup();
       if (fallos.length) {
-        Toast.show(`Entrada cerrada, pero NO se registró el descarte de ${fallos.join(', ')}. Regístrelo a mano en Inventario · Descartados.`, 'bad');
+        Toast.show(`Entrada cerrada, pero NO se registró el descarte de ${fallos.join(', ')}. Regístralo en Almacén · Descartados → Registrar descarte.`, 'bad');
       } else if (fallosCond.length) {
         Toast.show(`Entrada cerrada, pero NO se registró la condición de ${fallosCond.join(', ')}. Regístrala a mano desde la ficha del equipo.`, 'bad');
       } else if (descartados.length || conCondicion.length) {
@@ -1454,6 +1460,13 @@ window.copiarSeriales = function (ordenId) {
         unidades,
         clienteNombre: orden.cliente_nombre || '',
         contratoId: orden.contrato?.contrato_id || null,
+        // Sugerencia para la tablet (auditoría UX 2026-09-28, 4.2 #16): el
+        // nombre que recepción ya tecleó, o el contacto de la orden. La tablet
+        // lo prellena editable. OJO: FirmaTablet.solicitar (js/ui/firmaTablet.js)
+        // todavía no escribe estas dos claves en el doc — ver reporte.
+        nombre: (document.getElementById('entregaReceptorNombre')?.value || '').trim()
+          || orden.contacto_nombre || orden.visita?.contacto_sitio || '',
+        cedula: orden.contacto_cedula || '',
       });
       _firmaTablet = null;
       _unsubTablet = FirmaTablet.escuchar(_solTablet, {

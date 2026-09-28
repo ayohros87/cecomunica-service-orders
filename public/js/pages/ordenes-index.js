@@ -135,6 +135,8 @@ document.addEventListener("DOMContentLoaded", function () {
       // Entrega/Recepción (firma + receptor). Es el destino de los links
       // generados en onComplete.js.
       _abrirEntregaDeepLink();
+      // ?orden=<id>&recibir=1 — "Guardar y recibir" de agregar-equipo.
+      _abrirRecepcionDeepLink();
     } catch (e) {
       console.error("Error obteniendo rol del usuario:", e);
       Toast.show("Error al verificar permisos. Por favor, recarga la página.", 'bad');
@@ -402,6 +404,52 @@ async function _abrirEntregaDeepLink() {
 }
 window._abrirEntregaDeepLink = _abrirEntregaDeepLink;
 
+// Deep-link `?orden=<id>&recibir=1` (auditoría UX 2026-09-28, 4.2 #13): lo
+// usa "Guardar y recibir" de agregar-equipo para aterrizar directo en el
+// acuse de recepción, con el cliente todavía en el mostrador. Mismo patrón
+// que ?entrega=: la orden se trae por id si no está en la primera página.
+// Se lee al CARGAR el script: _syncFiltersToURL reescribe la URL con solo
+// los filtros conocidos y se llevaría el `recibir` antes de que llegue el rol.
+const _paramsRecibir = (typeof URLSearchParams === 'function')
+  ? new URLSearchParams(window.location.search) : null;
+async function _abrirRecepcionDeepLink() {
+  if (!_paramsRecibir || _paramsRecibir.get('recibir') !== '1') return;
+  const ordenId = _paramsRecibir.get('orden');
+  if (!ordenId) return;
+  _paramsRecibir.delete('recibir');   // una sola vez por carga
+  try {
+    const orders = (APP.state.orders = APP.state.orders || []);
+    let orden = orders.find(o => o.ordenId === ordenId);
+    if (!orden) {
+      orden = await OrdenesService.getOrder(ordenId);
+      if (orden) orders.unshift(orden);
+    }
+    if (!orden) { Toast.show('No se encontró la orden indicada.', 'bad'); return; }
+    const estado = String(orden.estado_reparacion || 'POR ASIGNAR').toUpperCase();
+    const sinMostrador = (typeof esOrdenProgramacion === 'function' && esOrdenProgramacion(orden))
+      || (typeof esOrdenEntrada === 'function' && esOrdenEntrada(orden))
+      || (typeof esOrdenVisita === 'function' && esOrdenVisita(orden))
+      || (typeof esOrdenDevolucion === 'function' && esOrdenDevolucion(orden));
+    const rol = APP.state.userRole || '';
+    const puedeRecibir = [ROLES.ADMIN, ROLES.RECEPCION, ROLES.JEFE_TALLER, ROLES.TECNICO].includes(rol);
+    if (estado !== 'POR ASIGNAR' || sinMostrador || !puedeRecibir) return;
+    if (typeof abrirModalRecepcion === 'function') abrirModalRecepcion(ordenId);
+    // Se consume el parámetro: recargar la página no debe reabrir el acuse.
+    try {
+      const actual = new URLSearchParams(window.location.search);
+      if (actual.has('recibir')) {
+        actual.delete('recibir');
+        const q = actual.toString();
+        history.replaceState(history.state, '', window.location.pathname + (q ? '?' + q : ''));
+      }
+    } catch (_) { /* sin history: no pasa nada */ }
+  } catch (e) {
+    console.error('[deep-link recibir]', e);
+    Toast.show('No se pudo abrir la recepción de la orden.', 'bad');
+  }
+}
+window._abrirRecepcionDeepLink = _abrirRecepcionDeepLink;
+
 // Ctrl/Cmd+K focuses the quick search; ESC closes any open .overlay modal;
 // ? opens the keyboard shortcut cheatsheet.
 document.addEventListener('keydown', (e) => {
@@ -425,8 +473,18 @@ document.addEventListener('keydown', (e) => {
     // Close shortcut modal if open
     const sm = document.getElementById('__shortcutsModal');
     if (sm) { sm.remove(); return; }
-    const modal = document.querySelector('.overlay[style*="display: flex"]');
-    if (modal) modal.style.display = 'none';
+    // El de ENCIMA (el último abierto), no el primero del DOM: con el de
+    // materiales abierto sobre el de intervención, Escape cerraba el de abajo.
+    const abiertos = document.querySelectorAll('.overlay[style*="display: flex"]');
+    const modal = abiertos[abiertos.length - 1];
+    if (!modal) return;
+    // Intervención técnica: Escape protegido si hay texto sin guardar
+    // (auditoría UX 2026-09-28, 4.2 #5).
+    if (modal.id === 'modalTrabajoEquipo' && typeof window.solicitarCierreTrabajoEquipo === 'function') {
+      window.solicitarCierreTrabajoEquipo();
+      return;
+    }
+    modal.style.display = 'none';
   }
 });
 

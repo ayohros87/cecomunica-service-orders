@@ -106,9 +106,13 @@
   e.preventDefault();
   if (guardandoEquipos) return;
 
-  const btnSubmit = form.querySelector("button[type='submit']");
+  // Los dos botones de guardar se trancan juntos; el que se tocó decide el
+  // aterrizaje ("Guardar y recibir" abre el acuse de recepción en la bandeja).
+  const botonesSubmit = Array.from(form.querySelectorAll("button[type='submit']"));
+  const btnSubmit = e.submitter || botonesSubmit[0] || null;
+  const yRecibir = btnSubmit?.dataset?.accion === "recibir";
   guardandoEquipos = true;
-  if (btnSubmit) btnSubmit.disabled = true;
+  botonesSubmit.forEach(b => { b.disabled = true; });
   let exito = false;
 
   try {
@@ -211,7 +215,8 @@
   // esperaba 2 s fijos y caía al index pelado — el paso siguiente natural
   // (Recibir con firma / Imprimir la hoja) obligaba a re-buscar la orden
   // recién creada. ?orden= la deja filtrada en la bandeja.
-  setTimeout(() => { window.location.href = `index.html?orden=${encodeURIComponent(ordenId)}`; }, 600);
+  const destino = `index.html?orden=${encodeURIComponent(ordenId)}` + (yRecibir ? "&recibir=1" : "");
+  setTimeout(() => { window.location.href = destino; }, 600);
   container.innerHTML = "";
   contador = 0;
   } catch (error) {
@@ -222,7 +227,7 @@
     // deshabilitado para no reabrir la ventana de doble-submit.
     if (!exito) {
       guardandoEquipos = false;
-      if (btnSubmit) btnSubmit.disabled = false;
+      botonesSubmit.forEach(b => { b.disabled = false; });
     }
   }
 });
@@ -260,6 +265,16 @@
 
     clienteInput.value = nombreCliente;
     tipoInput.value = data.tipo_de_servicio || data.tipo || "";
+
+    // "Guardar y recibir" solo donde existe el paso de recepción en mostrador:
+    // POR ASIGNAR y tipo que no arranca en Asignar (PROGRAMACIÓN, ENTRADA,
+    // VISITA) ni es DEVOLUCIÓN (su recepción es el check-in por serial).
+    const tipoNorm = String(data.tipo_de_servicio || data.tipo || "")
+      .toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const sinMostrador = ["PROGRAMACION", "ENTRADA", "VISITA", "DEVOLUCION"].some(t => tipoNorm.includes(t));
+    const estadoAct = String(data.estado_reparacion || "POR ASIGNAR").toUpperCase();
+    const btnRecibir = document.getElementById("btnGuardarRecibir");
+    if (btnRecibir) btnRecibir.hidden = sinMostrador || estadoAct !== "POR ASIGNAR";
     ordenClienteId = data.cliente_id || "";
   }
 }

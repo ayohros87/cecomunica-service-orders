@@ -46,6 +46,39 @@ function entrarModoServidor(resultados) {
 function salirModoServidor() {
   _resultadoServidor = null;
   APP.state.busquedaServidor = false;
+  APP.state.origenServidor = null;
+  _ocultarAvisoChip();
+}
+
+// ── "Mostrando N de M" del chip de estado (auditoría UX 2026-09-28, 4.2 #6)
+// El chip trae las 200 más recientes de ese estado y "Cargar más" se ocultaba
+// sin aviso: "Entregado" parecía tener 200 órdenes cuando eran 3,400.
+const CHIP_PAGINA = 200;
+function _ocultarAvisoChip() {
+  const box = document.getElementById("chipMasBox");
+  if (box) box.style.display = "none";
+}
+async function _mostrarAvisoChip(estado, mostradas, limite) {
+  const box = document.getElementById("chipMasBox");
+  if (!box) return;
+  let total = null;
+  try {
+    if (window.SenalesService) total = await SenalesService.countOrdenesPorEstado(estado);
+  } catch (e) { total = null; }
+  // El usuario pudo cambiar de chip mientras llegaba el conteo.
+  if ((document.getElementById("filtroEstado")?.value || "") !== estado) return;
+  const hayMas = total != null ? total > mostradas : mostradas >= limite;
+  if (!hayMas) { box.style.display = "none"; return; }
+  const fmt = (n) => Number(n).toLocaleString("es-PA");
+  box.innerHTML = `<span>Mostrando las <b>${fmt(mostradas)}</b> más recientes${total != null ? ` de <b>${fmt(total)}</b>` : ""}.</span>
+    <button type="button" class="btn btn-secondary btn-sm" id="btnChipMas"><i data-lucide="chevron-down"></i> Cargar más</button>`;
+  box.style.display = "flex";
+  const b = box.querySelector("#btnChipMas");
+  if (b) b.onclick = () => {
+    b.disabled = true;
+    filtrarPorEstado(estado, { limite: limite + CHIP_PAGINA });
+  };
+  if (window.lucide?.createIcons) { try { lucide.createIcons({ nodes: [box] }); } catch (_) {} }
 }
 window.entrarModoServidor = entrarModoServidor;
 window.salirModoServidor = salirModoServidor;
@@ -70,16 +103,21 @@ function setFechaEntregaVisible(visible) {
 
 function aplicarRestriccionesPorRol(rol) {
   const normalizedRole = String(rol || "").trim().toLowerCase();
-  const btnNuevaOrden = document.querySelector("button[data-action='go-nueva-orden']");
-  const btnConfig = document.querySelector("button[data-action='go-config']");
-  const btnProgreso = document.getElementById("btnProgresoTecnicos");
+  // Permisos alineados con roles.js (auditoría UX 2026-09-28, T4): antes se
+  // ocultaba con querySelector (solo el PRIMER botón: el cajón móvil seguía
+  // mostrando "Nueva" y "Config") y con listas de roles propias.
+  const puede = (accion) => typeof canRole === "function" ? canRole(normalizedRole, accion) : false;
   const btnAdminEquiposCliente = document.getElementById("btnAdminEquiposCliente");
   const mobileBtnAdminEquiposCliente = document.getElementById("mobileBtnAdminEquiposCliente");
   const topbarBtnAdminEquiposCliente = document.getElementById("topbarBtnAdminEquiposCliente");
 
-  if ([ROLES.VENDEDOR, ROLES.VISTA].includes(normalizedRole)) {
-    if (btnNuevaOrden) btnNuevaOrden.remove();
-    if (btnConfig) btnConfig.remove();
+  if (!puede("crear-orden")) {
+    document.querySelectorAll("[data-action='go-nueva-orden']").forEach(b => b.remove());
+  }
+  // Config (listas, importar/exportar) es de administrador: sus páginas ya
+  // rebotan a cualquier otro rol.
+  if (!puede("admin-equipos")) {
+    document.querySelectorAll("[data-action='go-config']").forEach(b => b.remove());
   }
 
   // El reporte de pendientes vuelca toda la operación (clientes + vendedores):
@@ -93,13 +131,15 @@ function aplicarRestriccionesPorRol(rol) {
     document.querySelectorAll(".btn-agregar-equipo").forEach(b => b.style.display = "none");
   }
 
-  if (btnProgreso) {
-    if ([ROLES.ADMIN, ROLES.TECNICO, ROLES.TECNICO_OPERATIVO].includes(normalizedRole)) {
-      btnProgreso.style.display = "inline-block";
-    } else {
-      btnProgreso.style.display = "none";
-    }
-  }
+  // "Progreso" = permiso 'ver-progreso' de roles.js (admin, vendedor, jefe de
+  // taller, gerente; antes lo veían técnicos y NO jefe ni gerente). Los
+  // técnicos lo conservan: progreso-tecnicos.html les abre su propia fila en
+  // modo lectura.
+  const verProgreso = puede("ver-progreso")
+    || [ROLES.TECNICO, ROLES.TECNICO_OPERATIVO].includes(normalizedRole);
+  document.querySelectorAll("[data-action='go-progreso-tecnicos']").forEach(b => {
+    b.style.display = verProgreso ? "" : "none";
+  });
 
   const isAdmin = normalizedRole === ROLES.ADMIN;
   if (btnAdminEquiposCliente) {
@@ -480,9 +520,11 @@ function aplicarFiltrosCombinados() {
     ? applyActiveFiltersToOrders(base, filters)
     : base;
 
+  // Sin contador: "(40)" eran las YA cargadas, no las que faltan (auditoría
+  // UX 2026-09-28, 4.2 #6).
   const btn = document.getElementById("btnCargarMas");
   if (btn && !APP.state.busquedaServidor) {
-    btn.innerHTML = `<i data-lucide="chevron-down"></i> Cargar más órdenes (${filtered.length})`;
+    btn.innerHTML = `<i data-lucide="chevron-down"></i> Cargar más órdenes`;
   }
 
   renderOrdersList(filtered);
@@ -698,6 +740,7 @@ window.filtrarOrdenes = async function () {
     // listener vivo repinta esto y no la bandeja completa, y la paginación
     // automática queda apagada hasta que se limpie la búsqueda.
     entrarModoServidor(resultados);
+    APP.state.origenServidor = "busqueda";
     renderOrdersList(resultados);
     return;
 
@@ -753,6 +796,7 @@ window.filtrarRapido = async function () {
 
     // Ver la nota de filtrarOrdenes: el resultado se anota antes de pintarlo.
     entrarModoServidor(resultados);
+    APP.state.origenServidor = "busqueda";
     renderOrdersList(resultados);
     return;
 
@@ -920,6 +964,15 @@ window.filtrarPorChipEstado = function (el) {
     chip.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
 
+  // Con una BÚSQUEDA en pantalla el chip filtra dentro de ese resultado en
+  // vez de tirarlo (auditoría UX 2026-09-28, 4.2 #6): así se puede pedir
+  // "cliente X, entregadas". El texto de búsqueda no se toca.
+  if (APP.state.busquedaServidor && APP.state.origenServidor === 'busqueda') {
+    _syncFiltersToURL();
+    aplicarFiltrosCombinados();
+    return;
+  }
+
   filtrarPorEstado(next);
 };
 
@@ -938,15 +991,17 @@ window.syncEstadoChipsFromSelect = function () {
   });
 };
 
-window.filtrarPorEstado = async function (estado) {
+window.filtrarPorEstado = async function (estado, { limite = CHIP_PAGINA } = {}) {
   const ordersTable = document.getElementById("ordersTable");
   const cardsWrap = document.getElementById("ordersCards");
   const btnCargarMas = document.getElementById("btnCargarMas");
   const loader = document.getElementById("loader");
 
-  document.getElementById("filtroOrden").value = "";
-  document.getElementById("filtroCliente").value = "";
-  document.getElementById("filtroSerial").value = "";
+  // Los filtros de texto YA NO se borran al tocar un chip (auditoría UX
+  // 2026-09-28, 4.2 #6): se conservan y se aplican sobre lo que trae el
+  // estado. Si hay texto, se avisa que el cruce es sobre esa página.
+  const hayTexto = ["filtroOrden", "filtroCliente", "filtroSerial"]
+    .some(id => (document.getElementById(id)?.value || "").trim());
   // Keep #filtroEstado in sync so the URL serializer sees the active estado.
   const filtroEstadoSel = document.getElementById("filtroEstado");
   if (filtroEstadoSel) filtroEstadoSel.value = estado || "";
@@ -961,7 +1016,7 @@ window.filtrarPorEstado = async function (estado) {
   if (!estado) {
     salirModoServidor();
     if (btnCargarMas) {
-      btnCargarMas.innerHTML = '<i data-lucide="chevron-down"></i> Cargar más órdenes (0)';
+      btnCargarMas.innerHTML = '<i data-lucide="chevron-down"></i> Cargar más órdenes';
       btnCargarMas.disabled = false;
       APP.utils.show(btnCargarMas);
     }
@@ -975,7 +1030,7 @@ window.filtrarPorEstado = async function (estado) {
   try {
     if (loader) loader.style.display = "block";
 
-    resultados = await OrdenesService.filterByStatus(estado, 200);
+    resultados = await OrdenesService.filterByStatus(estado, limite);
 
     if (resultados.length === 0) {
       salirModoServidor();
@@ -990,7 +1045,15 @@ window.filtrarPorEstado = async function (estado) {
     // Mismo trato que la búsqueda: el conjunto del servidor manda sobre el
     // repintado del listener vivo mientras el chip siga encendido.
     entrarModoServidor(resultados);
-    renderOrdersList(resultados);
+    APP.state.origenServidor = "estado";
+    // Con texto en los filtros avanzados se pinta el cruce (estado + texto).
+    if (hayTexto) {
+      aplicarFiltrosCombinados();
+      if (window.Toast) Toast.show("El filtro de texto se aplica sobre las órdenes cargadas de este estado.", "");
+    } else {
+      renderOrdersList(resultados);
+    }
+    _mostrarAvisoChip(estado, resultados.length, limite);
     return;   // el `finally` de abajo apaga el loader
 
   } catch (e) {
@@ -1004,7 +1067,7 @@ window.filtrarPorEstado = async function (estado) {
     if (e?.code === "failed-precondition") {
       console.log("🔄 Index missing, using fallback JS filter");
       try {
-        resultados = await OrdenesService.filterByStatus(estado, 200);
+        resultados = await OrdenesService.filterByStatus(estado, limite);
 
         if (resultados.length === 0) {
           salirModoServidor();
@@ -1013,7 +1076,9 @@ window.filtrarPorEstado = async function (estado) {
         } else {
           APP.state.orders = resultados;
           entrarModoServidor(resultados);
+          APP.state.origenServidor = "estado";
           renderOrdersList(resultados);   // ya hace resumen, roles, iconos y truncado
+          _mostrarAvisoChip(estado, resultados.length, limite);
         }
 
         if (loader) APP.utils.hide(loader);

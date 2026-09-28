@@ -14,8 +14,12 @@ function aplicarModoSoloLectura() {
     document.getElementById('btnLimpiar').disabled = true;
     document.getElementById('btnRefrescar').disabled = true;
 
-    // Atenuar visualmente los controles
-    document.querySelectorAll('.btn, select, input').forEach(el => {
+    // Atenuar SOLO los controles deshabilitados de la página (auditoría UX
+    // 2026-09-28, 4.2 #15): el selector genérico '.btn, select, input'
+    // también apagaba el topbar (Volver, Salir) y el rail, que sí funcionan.
+    ['buscarNombre', 'selPeriodo', 'btnBuscar', 'btnLimpiar', 'btnRefrescar'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
       el.style.opacity = '0.6';
       el.style.cursor = 'not-allowed';
     });
@@ -40,7 +44,8 @@ function aplicarModoSoloLectura() {
 
     function formatStamp(){
       const d = new Date();
-      const f = d.toISOString().slice(0,19).replace('T',' ');
+      // Hora de Panamá (T8): toISOString daba la hora UTC, 5 h adelantada.
+      const f = d.toLocaleString('es-PA', { timeZone: 'America/Panama', dateStyle: 'short', timeStyle: 'short' });
       document.getElementById('stamp').textContent = 'Actualizado: ' + f;
     }
 
@@ -67,13 +72,15 @@ function aplicarModoSoloLectura() {
 
     function fmtUltima(d){
       if (!d) return '—';
-      try { return d.toLocaleDateString('es-MX', { day:'2-digit', month:'short' }); }
+      try { return d.toLocaleDateString('es-PA', { day:'2-digit', month:'short', timeZone:'America/Panama' }); }
       catch (_) { return '—'; }
     }
 
     function canViewAll(role){
-      // Admin y Recepción pueden ver todo; técnicos ven su propia fila + ranking sin info sensible
-      return role === ROLES.ADMIN || role === ROLES.RECEPCION;
+      // Mismo permiso que roles.js 'ver-progreso' (admin, vendedor, jefe de
+      // taller, gerente — auditoría UX 2026-09-28, T4); técnicos ven su propia
+      // fila + ranking sin info sensible.
+      return typeof canRole === 'function' ? canRole(role, 'ver-progreso') : role === ROLES.ADMIN;
     }
 
     function medalla(idx){

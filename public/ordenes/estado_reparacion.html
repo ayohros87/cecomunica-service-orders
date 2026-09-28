@@ -56,6 +56,16 @@
 
     document.addEventListener("DOMContentLoaded", () => {
       verificarAccesoYAplicarVisibilidad(async (rol) => {
+      // Guard de rol (auditoría UX 2026-09-28, T4): la lista vive en
+      // empresa/* y la página es de Config, que es solo de administrador.
+      const rolNorm = String(rol || window.userRole || "").trim().toLowerCase();
+      if (rolNorm !== "administrador") {
+        const wrap = document.querySelector(".app-wrap") || document.body;
+        wrap.innerHTML = `<div class="ds-card ds-card-padded" style="text-align:center;">
+          <p style="font-weight:600;margin:0 0 12px;">Esta página es solo para administradores.</p>
+          <a class="btn btn-secondary" href="/ordenes/index.html">Volver a Órdenes</a></div>`;
+        return;
+      }
       const lista = document.getElementById("lista-estados");
       const form = document.getElementById("form-estado");
       const inputEstado = document.getElementById("nombre-estado");
