@@ -443,6 +443,34 @@ window.HomeSignals = (() => {
     try {
       sessionStorage.setItem(_cacheKey(uid, rol), JSON.stringify({ t: Date.now(), counts }));
     } catch { /* storage lleno/bloqueado: sin cache */ }
+    _writeLayout(uid, rol, counts);
+  }
+
+  /* ---- Último acomodo conocido (localStorage, 14 días) ----
+     La caché de conteos vive en sessionStorage (5 min, por pestaña): en una
+     pestaña nueva o al abrir el día, el camino frío pintaba TODAS las
+     tarjetas en la rejilla como "cargando" —incluidas las que llevan
+     semanas en 0— y solo al terminar los conteos se iban a "Al día"
+     (Alberto, 2026-09-29: "se abren un montón de tabs en 0 que ya ni se
+     usan antes de acomodarse"). Aquí solo se guarda QUÉ estaba en cero para
+     que cada tarjeta nazca en su zona; los números siguen llegando del
+     conteo. */
+  const LAYOUT_KEY = (uid, rol) => `ccSignalsLayout:v1:${uid}:${rol}`;
+  const LAYOUT_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+  function _readLayout(uid, rol) {
+    try {
+      const raw = localStorage.getItem(LAYOUT_KEY(uid, rol));
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      return (Date.now() - (d.t || 0) > LAYOUT_TTL_MS) ? null : (d.ceros || null);
+    } catch { return null; }
+  }
+  function _writeLayout(uid, rol, counts) {
+    try {
+      const ceros = {};
+      Object.entries(counts || {}).forEach(([id, n]) => { ceros[id] = (n === 0 || n === '0'); });
+      localStorage.setItem(LAYOUT_KEY(uid, rol), JSON.stringify({ t: Date.now(), ceros }));
+    } catch { /* sin localStorage: la próxima vez se verá el esqueleto */ }
   }
 
   /* ---- Delta diario ("▲ N vs ayer") ----
@@ -859,7 +887,30 @@ window.HomeSignals = (() => {
     }
 
     // Camino frío: los números se rellenan conforme llegan, pero las
-    // tarjetas NO se mueven hasta que todos los conteos terminaron.
+    // tarjetas NO se mueven hasta que todos los conteos terminaron. Y nacen
+    // ya en su zona si se sabe qué estaba en cero la última vez; si no se
+    // sabe nada (primera visita en este navegador), la fila muestra un
+    // esqueleto compacto en vez de ocho tarjetas "cargando".
+    const ceros = _readLayout(uid, rolEfectivo);
+    const grid = mount.querySelector('.kpis');
+    let skel = null;
+    if (ceros) {
+      ids.forEach(id => {
+        if (!ceros[id]) return;
+        const tile = mount.querySelector(`[data-signal="${id}"]`);
+        if (!tile) return;
+        if ((SOLO_SI_HAY[rolEfectivo] || []).includes(id)) tile.remove();
+        else tile.classList.add('is-cero');
+      });
+      _sincronizarN(mount);
+    } else if (grid) {
+      skel = document.createElement('div');
+      skel.className = 'kpis-skel';
+      skel.setAttribute('aria-busy', 'true');
+      skel.setAttribute('aria-label', 'Contando pendientes…');
+      grid.hidden = true;
+      grid.insertAdjacentElement('beforebegin', skel);
+    }
     const counts = {};
     await Promise.all(ids.map(async (id) => {
       try {
@@ -873,6 +924,7 @@ window.HomeSignals = (() => {
         else dropTile(id, { sync: false });
       }
     }));
+    if (skel) { skel.remove(); if (grid) grid.hidden = false; }
     _sincronizarN(mount);
     _writeCache(uid, rolEfectivo, counts);
     _applyDeltas(mount, ids, counts, _rotateSnapshot(uid, rolEfectivo, counts));
@@ -979,7 +1031,9 @@ window.HomeSignals = (() => {
     if (o && Object.keys(nuevos).length) {
       const hit = _readCache(o.uid, o.rolEfectivo);
       if (hit && hit.counts) {
-        try { sessionStorage.setItem(_cacheKey(o.uid, o.rolEfectivo), JSON.stringify({ t: hit.t, counts: { ...hit.counts, ...nuevos } })); } catch { /* sin caché */ }
+        const counts = { ...hit.counts, ...nuevos };
+        try { sessionStorage.setItem(_cacheKey(o.uid, o.rolEfectivo), JSON.stringify({ t: hit.t, counts })); } catch { /* sin caché */ }
+        _writeLayout(o.uid, o.rolEfectivo, counts);
       }
     }
   }

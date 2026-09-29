@@ -586,3 +586,12 @@ a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
   ::view-transition-old(*),
   ::view-transition-new(*) { animation: none !important; }
 }
+
+/* Esqueleto de la fila de señales en la PRIMERA visita del navegador (sin
+   acomodo conocido): una barra con brillo en vez de ocho tarjetas "cargando"
+   que después se reacomodan (home-signals.js, 2026-09-29). */
+.kpis-skel{height:78px;border-radius:var(--r-lg);border:1px solid var(--line);
+  background:linear-gradient(90deg,var(--surface) 25%,var(--surface-2,#EEF2F6) 50%,var(--surface) 75%);
+  background-size:200% 100%;animation:kpis-skel 1.2s infinite linear;margin-bottom:12px}
+@keyframes kpis-skel{from{background-position:200% 0}to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.kpis-skel{animation:none}}
