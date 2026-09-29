@@ -169,17 +169,46 @@ window.HomeSignals = (() => {
       href: 'contratos/index.html?estado=aprobado',
       count: () => SenalesService.countContratosPorEstado('aprobado'),
     },
-    S10: {
-      modulo: 'centro', icon: 'stamp', moreIsBad: true, fresh: true,
-      label: 'Contratos por aprobar', sub: 'esperando gerencia',
-      href: 'clientes/centro.html?aprobaciones=contratos',
-      count: () => window.AprobacionesService.contar('contratos'),
-    },
-    SAG: {
+    // UNA señal para todo lo que espera aprobación de administración/gerencia
+    // (gestiones + contratos), igual que la bandeja del Centro. Antes eran dos
+    // banners (S10 contratos, SAG gestiones) que a 0 se veían como dos cajas
+    // vacías (Alberto, 2026-09-29).
+    APR: {
       modulo: 'centro', icon: 'clipboard-check', moreIsBad: true, fresh: true,
-      label: 'Gestiones por aprobar', sub: 'esperando tu revisión',
-      href: 'clientes/centro.html?aprobaciones=gestiones',
-      count: () => window.AprobacionesService.contar('gestiones'),
+      label: 'Pendientes por aprobar', sub: 'gestiones y contratos esperando tu revisión',
+      href: 'clientes/centro.html',
+      count: async () => {
+        const [g, c] = await Promise.all(['gestiones', 'contratos'].map(t => window.AprobacionesService.contar(t)));
+        return (Number(g) || 0) + (Number(c) || 0);
+      },
+      // Filas mezcladas, las que más días llevan esperando arriba (primera
+      // página de cada cola; la bandeja del Centro trae el resto).
+      items: async () => {
+        const paginas = await Promise.all(['gestiones', 'contratos'].map(t =>
+          window.AprobacionesService.listar(t).then(p => p.docs.map(r => ({ tipo: t, r }))).catch(() => [])));
+        const ahora = Date.now();
+        return paginas.flat().map(({ tipo, r }) => {
+          const f = tipo === 'gestiones' ? (r.fecha_solicitud || r.created_at) : (r.fecha_creacion || r.created_at);
+          const ms = f?.toDate ? f.toDate().getTime() : (f ? new Date(f).getTime() : null);
+          return {
+            id: r.id, col: tipo,
+            cliente: r.cliente_nombre || 'Cliente sin nombre',
+            referencia: tipo === 'gestiones' ? r.id : (r.contrato_id || r.id),
+            clase: tipo === 'gestiones'
+              ? (window.GestionesService?.tipoLabel ? GestionesService.tipoLabel(r.tipo) : (r.tipo || 'Gestión'))
+              : (r.accion === 'Renovación' ? 'Renovación' : 'Contrato nuevo'),
+            dias: ms ? Math.max(0, Math.floor((ahora - ms) / 86400000)) : 0,
+            enlace: window.AprobacionesService.enlace(tipo, r),
+          };
+        }).sort((a, b) => b.dias - a.dias);
+      },
+      row: (r, esc) => ({
+        txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.referencia)}</span> · ${esc(r.clase)}`,
+        dias: r.dias,
+        cta: r.enlace ? { label: 'Revisar', href: `clientes/centro.html${r.enlace}` } : null,
+      }),
+      hrefLabel: 'Abrir el Centro →',
+      vacio: 'Nada pendiente por aprobar.',
     },
     // Pendiente del plan original ("no contable server-side"): contable desde
     // que la app estampa `requiere_aprobacion` al guardar (auditoría A10).
@@ -302,8 +331,10 @@ window.HomeSignals = (() => {
     // desde la lista de órdenes (chips por estado).
     // REGV/REGG (cuentas por regularizar, plan 2026-09-08): el vendedor ve su
     // cartera; admin y gerencia ven todas, con las sin vendedor primero.
-    administrador:     ['SAG', 'S10', 'OPC', 'S1', 'EST', 'S4Q', 'SAP', 'REGG', 'LPC'],
-    gerente:           ['S1', 'S10', 'SAP', 'S8', 'REGG'],
+    administrador:     ['APR', 'OPC', 'S1', 'EST', 'S4Q', 'SAP', 'REGG', 'LPC'],
+    // gerencia también aprueba gestiones (misma regla que el Centro): la señal
+    // unificada le trae las dos colas, antes solo veía contratos.
+    gerente:           ['S1', 'APR', 'SAP', 'S8', 'REGG'],
     jefe_taller:       ['S1', 'EST', 'S4Q', 'SAP'],
     recepcion:         ['OPC', 'S1', 'S2', 'ENT', 'S8', 'LPC'],
     vendedor:          ['S7', 'S8', 'S1', 'REGV'],
