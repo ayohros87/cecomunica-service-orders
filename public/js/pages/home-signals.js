@@ -55,14 +55,14 @@ window.HomeSignals = (() => {
   const SIGNALS = {
     OPC: {
       modulo: 'ordenes', icon: 'clipboard-plus', moreIsBad: true, fresh: true,
-      label: 'Órdenes por crear', sub: 'contratos listos y ventas sin orden',
+      label: 'Órdenes por crear', sub: 'contratos y ventas',
       href: 'ordenes/index.html',
       count: ctx => window.HomeFeedOrdenes.contar(ctx),
       panel: (mount, ctx, onCount) => window.HomeFeedOrdenes.renderPanel(mount, ctx, onCount),
     },
     S1: {
       modulo: 'ordenes', icon: 'alert-circle', alert: true, moreIsBad: true,
-      label: 'Órdenes por asignar', sub: 'requieren asignar técnico',
+      label: 'Órdenes por asignar', sub: 'sin técnico',
       href: 'ordenes/index.html?estado=POR%20ASIGNAR',
       // soloTaller: la DEVOLUCION vive en "POR ASIGNAR" pero jamás se asigna
       // (2026-09-02) — sin esto la señal contaba trabajo que no existe.
@@ -80,7 +80,7 @@ window.HomeSignals = (() => {
     },
     S2: {
       modulo: 'ordenes', icon: 'inbox',
-      label: 'Recibidas en mostrador', sub: 'pendientes de procesar',
+      label: 'Recibidas en mostrador', sub: 'por procesar',
       href: 'ordenes/index.html?estado=RECIBIDO%20EN%20MOSTRADOR',
       count: () => SenalesService.countOrdenesPorEstado(EST.MOSTRADOR),
     },
@@ -92,7 +92,7 @@ window.HomeSignals = (() => {
     },
     S4: {
       modulo: 'ordenes', icon: 'package-check',
-      label: 'Completadas (en oficina)', sub: 'terminadas en el taller',
+      label: 'Completadas (en oficina)', sub: 'terminadas',
       href: 'ordenes/index.html?estado=COMPLETADO%20(EN%20OFICINA)',
       count: () => SenalesService.countOrdenesPorEstado(EST.COMPLETADO),
     },
@@ -101,7 +101,7 @@ window.HomeSignals = (() => {
     // entregar" y contaba también estas.
     S4Q: {
       modulo: 'ordenes', icon: 'clipboard-check',
-      label: 'Esperando control de calidad', sub: 'no pueden entregarse aún',
+      label: 'Esperando control de calidad', sub: 'aún no se entregan',
       href: 'ordenes/index.html?qc=1',
       count: () => SenalesService.countOrdenesQcPendiente(),
       items: () => SenalesService.listQcCola(),
@@ -120,7 +120,7 @@ window.HomeSignals = (() => {
     // mismo razonamiento con el que S15 desplazó a S11.
     ENT: {
       modulo: 'ordenes', icon: 'package-check', alert: true, moreIsBad: true,
-      label: 'Listas para entregar', sub: 'QC listo, falta marcar la entrega',
+      label: 'Listas para entregar', sub: 'falta la entrega',
       href: 'ordenes/index.html?estado=COMPLETADO%20(EN%20OFICINA)',
       count: () => SenalesService.countListasParaEntregar(),
       items: () => SenalesService.listListasParaEntregar(),
@@ -161,7 +161,7 @@ window.HomeSignals = (() => {
     },
     S5: {
       modulo: 'ordenes', icon: 'wrench',
-      label: 'Mis órdenes asignadas', sub: 'en tu cola de trabajo',
+      label: 'Mis órdenes asignadas', sub: 'en tu cola',
       href: 'ordenes/index.html?mias=1&estado=ASIGNADO',
       count: (ctx) => SenalesService.countMisOrdenes(ctx.uid, EST.ASIGNADO),
     },
@@ -173,7 +173,7 @@ window.HomeSignals = (() => {
     },
     S6: {
       modulo: 'cotizaciones', icon: 'file-clock',
-      label: 'Cotizaciones enviadas', sub: 'esperando respuesta del cliente',
+      label: 'Cotizaciones enviadas', sub: 'esperan al cliente',
       href: 'cotizaciones/index.html?estado=enviada',
       count: () => SenalesService.countCotizacionesPorEstado('enviada'),
     },
@@ -198,7 +198,7 @@ window.HomeSignals = (() => {
       // Marca temporal "Nuevo" (hasta el día indicado, inclusive): la señal
       // cambió de nombre y de número (203 → ~13) y sin aviso parecería un error.
       nuevo: { hasta: '2026-10-02', nota: 'Antes decía "Contratos por activar" y contaba más de 200 contratos viejos. Ahora solo cuenta los que de verdad esperan la firma del cliente.' },
-      label: 'Contratos por firmar', sub: 'equipos listos, falta la firma del cliente',
+      label: 'Contratos por firmar', sub: 'falta la firma',
       href: 'clientes/centro.html',
       count: () => SenalesService.countContratosPorFirmar(),
       items: () => SenalesService.listContratosPorFirmar(),
@@ -211,7 +211,7 @@ window.HomeSignals = (() => {
       // Marca temporal "Nuevo" (hasta el día indicado, inclusive): la señal
       // cambió de nombre y de número (203 → ~13) y sin aviso parecería un error.
       nuevo: { hasta: '2026-10-02', nota: 'Antes decía "Contratos por activar" y contaba más de 200 contratos viejos. Ahora solo cuenta los que de verdad esperan la firma del cliente.' },
-      label: 'Mis contratos por firmar', sub: 'equipos listos, falta la firma del cliente',
+      label: 'Mis contratos por firmar', sub: 'falta la firma',
       href: 'clientes/centro.html',
       count: (ctx) => SenalesService.countContratosPorFirmar({ uid: ctx.uid }),
       // items() se llama sin ctx: el elaborador sale del usuario autenticado.
@@ -226,7 +226,7 @@ window.HomeSignals = (() => {
     // vacías (Alberto, 2026-09-29).
     APR: {
       modulo: 'centro', icon: 'clipboard-check', moreIsBad: true, fresh: true,
-      label: 'Pendientes por aprobar', sub: 'gestiones y contratos esperando tu revisión',
+      label: 'Pendientes por aprobar', sub: 'esperan tu revisión',
       href: 'clientes/centro.html',
       count: async () => {
         const [g, c] = await Promise.all(['gestiones', 'contratos'].map(t => window.AprobacionesService.contar(t)));
@@ -265,7 +265,7 @@ window.HomeSignals = (() => {
     // que la app estampa `requiere_aprobacion` al guardar (auditoría A10).
     SAP: {
       modulo: 'cotizaciones', icon: 'file-check', moreIsBad: true,
-      label: 'Cotizaciones por aprobar', sub: 'fuera de política, esperando visto bueno',
+      label: 'Cotizaciones por aprobar', sub: 'fuera de política',
       href: 'cotizaciones/index.html?estado=borrador&aprobar=1', // solo requiere_aprobacion (auditoría UX 2026-09-28, P0 #20)
       count: () => SenalesService.countCotizacionesPorAprobar(),
     },
@@ -291,18 +291,19 @@ window.HomeSignals = (() => {
     // href aterrizan en la pestaña/filtro EXACTOS de la señal (deep-links).
     S11: {
       modulo: 'equipos', icon: 'warehouse',
-      label: 'Equipos en bodega', sub: 'disponibles para asignar',
+      label: 'Equipos en bodega', sub: 'disponibles',
       href: 'almacen/index.html?tab=serial&estado=en_bodega',
       count: () => SenalesService.countEquiposPoolPorEstado('en_bodega'),
     },
     S12: {
       modulo: 'equipos', icon: 'search-check', moreIsBad: true,
-      label: 'Equipos por verificar', sub: 'creados por migración automática',
+      label: 'Equipos por verificar', sub: 'de la migración',
       href: 'almacen/index.html?tab=serial&estado=todos&verificar=1',
       count: () => SenalesService.countEquiposPoolSinVerificar(),
     },
     S13: {
       modulo: 'equipos', icon: 'package-search', moreIsBad: true,
+      deuda: true,
       label: 'Devueltos por inspeccionar', sub: 'regresaron de cliente, esperan inspección',
       href: 'almacen/index.html?tab=serial&estado=devuelto_revision',
       count: () => SenalesService.countEquiposPoolPorEstado('devuelto_revision'),
@@ -318,6 +319,7 @@ window.HomeSignals = (() => {
     },
     S14: {
       modulo: 'equipos', icon: 'map-pin-off', moreIsBad: true,
+      deuda: true,
       label: 'Equipos por clasificar', sub: 'ubicación sin contrato ni orden que la respalde',
       href: 'almacen/index.html?tab=serial&estado=por_clasificar',
       count: () => SenalesService.countEquiposPoolPorEstado('por_clasificar'),
@@ -327,7 +329,7 @@ window.HomeSignals = (() => {
     // o el viejo para no perder la señal a mitad de la migración.
     S15: {
       modulo: ['almacen', 'pendientes'], icon: 'scan-barcode', alert: true, moreIsBad: true,
-      label: 'Seriales por asignar', sub: 'contratos aprobados esperando bodega',
+      label: 'Seriales por asignar', sub: 'esperan a bodega',
       href: 'almacen/index.html',
       count: () => SenalesService.countSerialesPorAsignar(),
     },
@@ -336,6 +338,7 @@ window.HomeSignals = (() => {
     // se lee. El vendedor ve SU cartera; gerencia/admin ven todas (REGG).
     REGV: {
       modulo: 'centro', icon: 'clipboard-list', alert: true, moreIsBad: true,
+      deuda: true,
       label: 'Mis cuentas por regularizar', sub: 'operan, pero les faltan seriales o contratos',
       href: 'clientes/centro.html?filtro=regularizacion',
       count: (ctx) => SenalesService.countCuentasPorRegularizar({ uid: ctx.uid }),
@@ -350,6 +353,7 @@ window.HomeSignals = (() => {
     },
     REGG: {
       modulo: 'centro', icon: 'clipboard-list', moreIsBad: true,
+      deuda: true,
       label: 'Cuentas por regularizar', sub: 'todas las carteras — las sin vendedor primero',
       href: 'clientes/regularizacion.html',
       count: () => SenalesService.countCuentasPorRegularizar({}),
@@ -535,12 +539,15 @@ window.HomeSignals = (() => {
     const grid = mount.querySelector('.kpis');
     const cero = mount.querySelector('.kpis-zero');
     const items = mount.querySelector('.kpis-zero__items');
+    const deuda = mount.querySelector('.kpis-deuda');
+    const deudaItems = mount.querySelector('.kpis-deuda__items');
     if (!grid || !cero || !items) return;
     const orden = mount._signalOrder || [];
     for (const id of orden) {
       const tile = mount.querySelector(`[data-signal="${id}"]`);
       if (!tile) continue;
-      const destino = tile.classList.contains('is-cero') ? items : grid;
+      const destino = tile.classList.contains('is-cero') ? items
+        : (SIGNALS[id]?.deuda && deudaItems) ? deudaItems : grid;
       if (tile.parentElement === destino) continue;
       const foco = tile.contains(document.activeElement) ? document.activeElement : null;
       const siguiente = Array.from(destino.children).find(el => orden.indexOf(el.dataset.signal) > orden.indexOf(id));
@@ -551,7 +558,8 @@ window.HomeSignals = (() => {
     grid.setAttribute('data-n', String(n));
     grid.hidden = n === 0;
     cero.hidden = items.children.length === 0;
-    mount.classList.toggle('signals-all-zero', n === 0 && items.children.length > 0);
+    if (deuda) deuda.hidden = deudaItems.children.length === 0;
+    mount.classList.toggle('signals-all-zero', n === 0 && items.children.length > 0 && !(deudaItems && deudaItems.children.length));
   }
 
   const _esc = (v) => Bandeja.esc(v);
@@ -774,9 +782,21 @@ window.HomeSignals = (() => {
     mount.style.display = '';
     mount._signalOrder = ids;
     mount.classList.remove('signals-all-zero');
-    mount.innerHTML = `<div class="kpis" data-n="${ids.length}">${ids.map(id => _tileHtml(id, SIGNALS[id])).join('')}</div>
-      <div class="kpis-zero" hidden><span class="kpis-zero__label">Sin pendientes</span>
-        <div class="kpis-zero__items" role="group" aria-label="Accesos sin pendientes"></div></div>`;
+    // Tres zonas (repaso del home 2026-09-29): la cola del día en tarjetas;
+    // la DEUDA (`deuda: true` — atrasos de proyecto que no bajan en una
+    // semana: regularización, por clasificar, por inspeccionar) en una franja
+    // chica que no compite con ella; y lo que está en cero, en UNA línea de
+    // texto junto a "Actualizado". Antes todo pesaba igual: 4 botones en 0 y
+    // un 128 permanente al lado de "por asignar" enseñaban a no mirar la fila.
+    const dia = ids.filter(id => !SIGNALS[id].deuda);
+    const deuda = ids.filter(id => SIGNALS[id].deuda);
+    mount.innerHTML = `<div class="kpis" data-n="${dia.length}">${dia.map(id => _tileHtml(id, SIGNALS[id])).join('')}</div>
+      <div class="kpis-deuda"${deuda.length ? '' : ' hidden'}><span class="kpis-deuda__label">Seguimiento</span>
+        <div class="kpis-deuda__items" role="group" aria-label="Atrasos en seguimiento">${deuda.map(id => _tileHtml(id, SIGNALS[id])).join('')}</div></div>
+      <div class="kpis-foot">
+        <div class="kpis-zero" hidden><span class="kpis-zero__label">Al día:</span>
+          <div class="kpis-zero__items" role="group" aria-label="Sin pendientes"></div></div>
+      </div>`;
     if (typeof lucide !== 'undefined') lucide.createIcons();
     // La expansión se cablea ANTES de resolver los conteos: el camino de la
     // caché hace `return` temprano y sin esto las señales cacheadas no abrían.
@@ -849,7 +869,7 @@ window.HomeSignals = (() => {
       meta.innerHTML = '<span class="kpis-meta__t"></span>'
         + '<button type="button" class="kpis-meta__btn" data-signals-refresh title="Volver a contar ahora">'
         + '<i data-lucide="refresh-cw"></i> Actualizar</button>';
-      mount.appendChild(meta);
+      (mount.querySelector('.kpis-foot') || mount).appendChild(meta);
       meta.querySelector('[data-signals-refresh]').addEventListener('click', () => _recontar(mount, true));
       if (typeof lucide !== 'undefined') lucide.createIcons();
     }
