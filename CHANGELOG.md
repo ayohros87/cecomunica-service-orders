@@ -1,5 +1,16 @@
 # Changelog
 
+## [Home: una cotización borrada ya no pide visto bueno] — 2026-09-29
+
+> Alberto vio en el home "1 cotización por aprobar" y la cotización llevaba
+> una semana eliminada (COT-2026-0117, BRIHER, borrada el 22 de septiembre).
+> Las tres señales de cotizaciones del home (por aprobar, enviadas y mis
+> activas) contaban sin mirar `deleted`. Ahora filtran `deleted == false`
+> tanto en el agregado del servidor como en el scan de respaldo. Es una
+> igualdad directa y no la resta que usan las órdenes, porque toda
+> cotización nace con `deleted: false` (verificado: 147 documentos, ninguno
+> sin el campo). Test: `functions/test/senalesCotizacionesEliminadas.test.js`.
+
 ## [Remates de la auditoría UX: 7 chips en Órdenes, Alquiler/Propio/Mixto y política en el servidor] — 2026-09-28
 
 > Tercera tanda del día, a partir del recorrido de Alberto por lo desplegado:

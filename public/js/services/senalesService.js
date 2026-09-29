@@ -178,23 +178,33 @@ const SenalesService = {
   // el plan del Command Center dejó pendiente por "no contable server-side" —
   // contable desde que el flag se persiste (2026-08-17). Índice compuesto:
   // cotizaciones(estado ASC, requiere_aprobacion ASC).
+  // Cotizaciones: la eliminada (soft delete, `deleted: true`) no es cola de
+  // nadie. Aquí el filtro es una igualdad directa porque las tres puertas
+  // que crean cotizaciones escriben `deleted: false` desde el primer día
+  // (verificado 2026-09-29: 147 docs, ninguno sin el campo), así que no hace
+  // falta el truco de restar como en órdenes (`eliminado` ausente en las viejas).
+  // Antes no se filtraba y el home seguía pidiendo el visto bueno de una
+  // cotización borrada una semana atrás (COT-2026-0117).
   countCotizacionesPorAprobar() {
     const db = firebase.firestore();
     return this._count(
       db.collection('cotizaciones')
+        .where('deleted', '==', false)
         .where('estado', '==', 'borrador')
         .where('requiere_aprobacion', '==', true),
       null,
-      { col: 'cotizaciones', wheres: [['estado', '==', 'borrador'], ['requiere_aprobacion', '==', true]] }
+      { col: 'cotizaciones', wheres: [['deleted', '==', false], ['estado', '==', 'borrador'], ['requiere_aprobacion', '==', true]] }
     );
   },
 
   countCotizacionesPorEstado(estado) {
     const db = firebase.firestore();
     return this._count(
-      db.collection('cotizaciones').where('estado', '==', estado),
+      db.collection('cotizaciones')
+        .where('deleted', '==', false)
+        .where('estado', '==', estado),
       null,
-      { col: 'cotizaciones', wheres: [['estado', '==', estado]] }
+      { col: 'cotizaciones', wheres: [['deleted', '==', false], ['estado', '==', estado]] }
     );
   },
 
@@ -202,10 +212,11 @@ const SenalesService = {
     const db = firebase.firestore();
     return this._count(
       db.collection('cotizaciones')
+        .where('deleted', '==', false)
         .where('creado_por_uid', '==', uid)
         .where('estado', 'in', ['borrador', 'enviada', 'aprobada']),
       null,
-      { col: 'cotizaciones', wheres: [['creado_por_uid', '==', uid], ['estado', 'in', ['borrador', 'enviada', 'aprobada']]] }
+      { col: 'cotizaciones', wheres: [['deleted', '==', false], ['creado_por_uid', '==', uid], ['estado', 'in', ['borrador', 'enviada', 'aprobada']]] }
     );
   },
 
