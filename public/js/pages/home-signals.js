@@ -19,7 +19,7 @@
 window.HomeSignals = (() => {
 
   const TTL_MS = 5 * 60 * 1000;
-  const CACHE_PREFIX = 'ccHomeSignals:v2';
+  const CACHE_PREFIX = 'ccHomeSignals:v3';
 
   // Estados canónicos de ordenes_de_servicio (ver APP.ESTADOS en
   // ordenes-state.js — no se carga en el home; literales a propósito).
@@ -29,6 +29,19 @@ window.HomeSignals = (() => {
     ASIGNADO: 'ASIGNADO',
     COMPLETADO: 'COMPLETADO (EN OFICINA)',
   };
+
+  // Fila de un contrato por firmar (FIR/FIRV): "tranca la entrega" cuando la
+  // orden ya salió — es lo que recepción no puede entregar sin la firma.
+  function _filaFirma(r, esc) {
+    return {
+      txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.contrato)}</span> · ${esc(r.clase)}`
+        + (r.con_orden ? ' · <b>tranca la entrega</b>' : ''),
+      dias: r.dias,
+      cta: r.cliente_id
+        ? { label: 'Pedir firma', href: `clientes/centro.html?id=${encodeURIComponent(r.cliente_id)}&contrato=${encodeURIComponent(r.id)}` }
+        : null,
+    };
+  }
 
   // Catálogo. `modulo` = gate de visibilidad; `count(ctx)` → Promise<number>.
   const SIGNALS = {
@@ -163,11 +176,33 @@ window.HomeSignals = (() => {
       href: 'cotizaciones/index.html?estado=activas',
       count: (ctx) => SenalesService.countMisCotizacionesActivas(ctx.uid),
     },
-    S8: {
-      modulo: 'contratos', icon: 'file-check-2',
-      label: 'Contratos por activar', sub: 'aprobados, esperando equipos',
-      href: 'contratos/index.html?estado=aprobado',
-      count: () => SenalesService.countContratosPorEstado('aprobado'),
+    // "Contratos por firmar" (2026-09-29) reemplaza a S8 "Contratos por
+    // activar": contaba todo contrato en 'aprobado' (203) —históricos legacy,
+    // REEMP/DEMO que no llevan firma, borrados, ya entregados— y llevaba a la
+    // lista de contratos, así que el número no pedía nada. Esta es la cola
+    // que tranca entregas: seriales asignados, lleva firma y el cliente no ha
+    // firmado. Cada fila abre el contrato en el Centro, donde sale el enlace
+    // de firma. Recepción y gerencia ven todos; el vendedor, los suyos.
+    FIR: {
+      modulo: 'centro', icon: 'pen-line', moreIsBad: true,
+      label: 'Contratos por firmar', sub: 'equipos listos, falta la firma del cliente',
+      href: 'clientes/centro.html',
+      count: () => SenalesService.countContratosPorFirmar(),
+      items: () => SenalesService.listContratosPorFirmar(),
+      row: (r, esc) => _filaFirma(r, esc),
+      hrefLabel: 'Abrir el Centro →',
+      vacio: 'Ningún contrato esperando firma.',
+    },
+    FIRV: {
+      modulo: 'centro', icon: 'pen-line', moreIsBad: true,
+      label: 'Mis contratos por firmar', sub: 'equipos listos, falta la firma del cliente',
+      href: 'clientes/centro.html',
+      count: (ctx) => SenalesService.countContratosPorFirmar({ uid: ctx.uid }),
+      // items() se llama sin ctx: el elaborador sale del usuario autenticado.
+      items: () => SenalesService.listContratosPorFirmar({ uid: firebase.auth().currentUser?.uid || null }),
+      row: (r, esc) => _filaFirma(r, esc),
+      hrefLabel: 'Abrir el Centro →',
+      vacio: 'Ninguno de tus contratos espera firma.',
     },
     // UNA señal para todo lo que espera aprobación de administración/gerencia
     // (gestiones + contratos), igual que la bandeja del Centro. Antes eran dos
@@ -334,10 +369,10 @@ window.HomeSignals = (() => {
     administrador:     ['APR', 'OPC', 'S1', 'EST', 'S4Q', 'SAP', 'REGG', 'LPC'],
     // gerencia también aprueba gestiones (misma regla que el Centro): la señal
     // unificada le trae las dos colas, antes solo veía contratos.
-    gerente:           ['S1', 'APR', 'SAP', 'S8', 'REGG'],
+    gerente:           ['S1', 'APR', 'SAP', 'FIR', 'REGG'],
     jefe_taller:       ['S1', 'EST', 'S4Q', 'SAP'],
-    recepcion:         ['OPC', 'S1', 'S2', 'ENT', 'S8', 'LPC'],
-    vendedor:          ['S7', 'S8', 'S1', 'REGV'],
+    recepcion:         ['OPC', 'S1', 'S2', 'ENT', 'FIR', 'LPC'],
+    vendedor:          ['S7', 'FIRV', 'S1', 'REGV'],
     tecnico:           ['S5', 'S4P'],
     tecnico_operativo: ['S5', 'S4P'],
     // S14 (por clasificar) entra en lugar de S12 (por verificar): la ubicación

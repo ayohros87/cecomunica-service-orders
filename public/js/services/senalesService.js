@@ -220,14 +220,44 @@ const SenalesService = {
     );
   },
 
-  countContratosPorEstado(estado) {
-    const db = firebase.firestore();
-    return this._count(
-      db.collection('contratos').where('estado', '==', estado),
-      null,
-      { col: 'contratos', wheres: [['estado', '==', estado]] }
-    );
+  // Contratos por firmar (2026-09-29): reemplaza a "Contratos por activar",
+  // que contaba TODO contrato en 'aprobado' (203 al medirlo) y enviaba a la
+  // lista de contratos. 'aprobado' solo quiere decir "aprobado y sin firmar",
+  // y casi todo eso no espera nada: 116 históricos 'legacy' que se firmaron
+  // en papel antes del sistema, ~80 REEMP/DEMO que no llevan firma
+  // (ContratoFirma.SIN_FIRMA — 'aprobado' es su estado de reposo), borrados
+  // y los ya entregados antes del candado del 2026-09-03. Lo que queda es la
+  // cola real: bodega ya asignó los seriales (el Anexo A sale lleno), el
+  // cliente no ha firmado y la entrega está trancada por eso. `uid` limita a
+  // los contratos que elaboró esa persona (el vendedor ve los suyos).
+  listContratosPorFirmar({ uid = null } = {}) {
+    return this._memoList(`firmar:${uid || 'todos'}`, async () => {
+      const snap = await firebase.firestore().collection('contratos')
+        .where('estado', '==', 'aprobado')
+        .where('seriales_estado', '==', 'asignados')
+        .limit(300).get();
+      const now = new Date();
+      const lleva = (c) => (window.ContratoFirma ? ContratoFirma.lleva(c) : !['REEMP', 'DEMO'].includes(c.codigo_tipo));
+      const rows = [];
+      snap.forEach(d => {
+        const c = d.data() || {};
+        if (c.deleted === true || c.firmado === true || c.entrega_confirmada === true || !lleva(c)) return;
+        if (uid && c.creado_por_uid !== uid) return;
+        rows.push({
+          id: d.id, col: 'contratos',
+          cliente: c.cliente_nombre || 'Cliente sin nombre',
+          cliente_id: c.cliente_id || null,
+          contrato: c.contrato_id || d.id,
+          clase: c.accion && c.accion !== 'No Aplica' ? `${c.tipo_contrato || 'Contrato'} · ${c.accion}` : (c.tipo_contrato || 'Contrato'),
+          con_orden: Number(c.os_count || 0) > 0,
+          // Espera la firma desde que bodega dejó los seriales listos.
+          dias: Math.floor(PendientesDomain.edadDias(c.seriales_asignados_at || c.fecha_aprobacion || c.fecha_creacion, now) || 0),
+        });
+      });
+      return rows.sort((a, b) => b.dias - a.dias);
+    });
   },
+  async countContratosPorFirmar(opts) { return (await this.listContratosPorFirmar(opts)).length; },
 
   // Cola de bodega: contratos vigentes esperando que inventario asigne los
   // seriales (la marca la estampa onContratoAprobadoSolicitaSeriales). Es el

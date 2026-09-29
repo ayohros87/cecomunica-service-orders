@@ -10,6 +10,7 @@ import '/js/firebase-aggregates.js';
 import '/js/services/usuariosService.js';
 import '/js/domain/pendientes.js';
 import '/js/domain/regularizacion.js';
+import '/js/domain/contratoFirma.js';
 import '/js/services/senalesService.js';
 import '/js/services/aprobacionesService.js';
 import '/js/ui/bandeja.js';
