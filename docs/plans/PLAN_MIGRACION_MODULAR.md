@@ -15,7 +15,7 @@
 
 **Verificación hecha:** smoke test con Chrome headless (puppeteer-core, `functions/node_modules`) sobre las 90 páginas: `public/` en HEAD vs `dist/`, con auth interceptada para que nunca resuelva y cada página monte su cascarón. Resultado F2: 88/90 idénticas (2 con ruido de ViewTransition de Chrome). Resultado F3: 85/90 (las otras 5 = mismo ruido + 3 páginas públicas que consultan Firestore sin sesión y el harness bloquea la red). Persistencia probada con SDK real en dos pestañas: IndexedDB creado, consola limpia. **No verificado:** flujos con sesión (login real, bandejas, modales). Eso se hace en el canal de preview antes de cambiar `hosting.public`.
 
-**Lo que sigue a mano hasta F4:** los `?v=` que viven en constantes JS (`CargaDiferida.MODULOS`, `layout.js` palette) siguen siendo manuales: esos archivos se sirven verbatim desde `dist/js/`. Los harness de `functions/test-browser` que interceptan `/js/firebase-init.js` por URL dejan de aplicar con el bundle (el archivo no se pide por esa URL).
+**Ya no queda ningún `?v=` a mano (2026-09-28, tarde):** `CargaDiferida` trae sus 15 módulos con `import()` (chunks con hash) y el build sella las constantes `"/js/x.js?v=…"` de los JS verbatim (`layout.js`, `icons.js`) con el hash del archivo referido. Los harness de `functions/test-browser` que interceptan `/js/firebase-init.js` por URL dejan de aplicar con el bundle (el archivo no se pide por esa URL).
 > **Alcance:** solo `public/`. Firestore, rules, Functions y Hosting no cambian de proveedor ni de forma.
 > **Esfuerzo:** unas 2 semanas de trabajo concentrado. Todo lo demás (anexo A) se paga de paso con la regla del boy scout, sin proyecto dedicado.
 
