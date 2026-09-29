@@ -47,10 +47,34 @@ for (const abs of caminar(PUBLIC, (p) => p.endsWith('.html'))) {
   entradas[rel.replace(/\.html$/, '').replace(/\//g, '__')] = abs;
 }
 
+// Sellado de constantes `?v=` dentro de los JS que se sirven verbatim
+// (js/core/layout.js carga el buscador global por URL; js/core/icons.js el
+// lucide completo). Antes esos sufijos se bumpeaban a mano. Ahora el build
+// los reemplaza por el hash del archivo referido, y el hash del archivo que
+// los contiene se calcula SOBRE el contenido ya sellado, así que si cambia
+// ordenesService.js cambia también el ?v= de layout.js y nadie sirve viejo.
+const RE_CONST_V = /(['"`])(\/(?:js|css)\/[^'"`?]+\.(?:js|css))\?v=[^'"`]*\1/g;
+const sellados = new Map(); // abs -> Buffer con las constantes ya selladas
+function contenidoSellado(abs, pila = []) {
+  if (sellados.has(abs)) return sellados.get(abs);
+  let src = fs.readFileSync(abs);
+  if (/\.js$/.test(abs)) {
+    const texto = src.toString('utf8');
+    const nuevo = texto.replace(RE_CONST_V, (m, q, ruta) => {
+      const ref = path.join(PUBLIC, ruta);
+      if (!fs.existsSync(ref) || pila.includes(ref) || ref === abs) return m;
+      return `${q}${ruta}?v=${hashDe(ref, [...pila, abs])}${q}`;
+    });
+    if (nuevo !== texto) src = Buffer.from(nuevo, 'utf8');
+  }
+  sellados.set(abs, src);
+  return src;
+}
+
 const hashes = new Map();
-function hashDe(abs) {
+function hashDe(abs, pila = []) {
   if (!hashes.has(abs)) {
-    hashes.set(abs, crypto.createHash('sha1').update(fs.readFileSync(abs)).digest('hex').slice(0, 8));
+    hashes.set(abs, crypto.createHash('sha1').update(contenidoSellado(abs, pila)).digest('hex').slice(0, 8));
   }
   return hashes.get(abs);
 }
@@ -142,6 +166,13 @@ function pluginCopiaVerbatim() {
           return true;
         },
       });
+      // Los JS verbatim con constantes ?v= se escriben ya sellados.
+      for (const abs of caminar(path.join(PUBLIC, 'js'), (p) => p.endsWith('.js') && !/[\\/]js[\\/](vendor|entry)[\\/]/.test(p))) {
+        const sellado = contenidoSellado(abs);
+        if (!sellado.equals(fs.readFileSync(abs))) {
+          fs.writeFileSync(path.join(DIST, path.relative(PUBLIC, abs)), sellado);
+        }
+      }
     },
   };
 }
