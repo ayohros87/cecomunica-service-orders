@@ -331,11 +331,23 @@
     }
   }
 
+  // Arranque rápido (2026-09-29): antes la página esperaba la lectura del rol
+  // (usuarios/{uid}, un viaje al servidor) y DESPUÉS pedía la lista (otro
+  // viaje). Ahora el rol sale de Sesion (sessionStorage; sin red en
+  // navegaciones tibias) EN PARALELO con la lista, y la lista se pinta
+  // primero desde la caché local de Firestore mientras llega el servidor.
+  let _servidorListo = false;
   async function cargar() {
     const loader = $('loader');
     loader.style.display = '';
+    // Adelanto desde la caché local: pinta lo último visto mientras responde
+    // el servidor. Si el servidor ya llegó, o no hay caché, no hace nada.
+    S().listar({ incluirCerrados: true, limite: 1000, source: 'cache' })
+      .then(rows => { if (!_servidorListo && rows.length) { _filas = rows; render(); } })
+      .catch(() => { /* sin caché todavía */ });
     try {
       _filas = await S().listar({ incluirCerrados: true, limite: 1000 });
+      _servidorListo = true;
       render();
     } catch (e) {
       console.error('[NoDevueltos] cargar', e);
@@ -365,13 +377,17 @@
 
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) { window.location.href = '../login.html'; return; }
-      try {
-        // El rol gobierna qué botones se pintan; las rules son las que mandan
-        // de verdad (condonar es solo-admin también en el servidor).
-        const snap = await firebase.firestore().collection('usuarios').doc(user.uid).get();
-        window.userRole = snap.exists ? (snap.data().rol || '') : '';
-      } catch (e) { console.warn('[NoDevueltos] no se pudo leer el rol:', e); }
-      await cargar();
+      // El rol gobierna qué botones se pintan; las rules son las que mandan
+      // de verdad (condonar es solo-admin también en el servidor). Sale de
+      // Sesion (caché de sesión, compartida con el rail) y en paralelo con
+      // la bandeja, no antes.
+      const rolP = Sesion.rol(user.uid)
+        .then(r => { window.userRole = r || ''; })
+        .catch(e => { console.warn('[NoDevueltos] no se pudo leer el rol:', e); })
+        // Si la bandeja ya se pintó antes de saber el rol, se repinta para
+        // que salgan los botones que dependen de él.
+        .then(() => { if (_filas.length) render(); });
+      await Promise.all([rolP, cargar()]);
     });
   });
 

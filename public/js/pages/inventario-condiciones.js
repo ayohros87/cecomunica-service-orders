@@ -101,11 +101,23 @@
     }).join('');
   }
 
+  // Arranque rápido (2026-09-29): antes la página esperaba la lectura del rol
+  // (usuarios/{uid}, un viaje al servidor) y DESPUÉS pedía la lista (otro
+  // viaje). Ahora el rol sale de Sesion (sessionStorage; sin red en
+  // navegaciones tibias) EN PARALELO con la lista, y la lista se pinta
+  // primero desde la caché local de Firestore mientras llega el servidor.
+  let _servidorListo = false;
   async function cargar() {
     const loader = document.getElementById('loader');
     loader.style.display = '';
+    // Adelanto desde la caché local: pinta lo último visto mientras responde
+    // el servidor. Si el servidor ya llegó, o no hay caché, no hace nada.
+    EquiposCondicionesService.listar({ incluirLevantadas: true, limite: 1000, source: 'cache' })
+      .then(rows => { if (!_servidorListo && rows.length) { _filas = rows; render(); } })
+      .catch(() => { /* sin caché todavía */ });
     try {
       _filas = await EquiposCondicionesService.listar({ incluirLevantadas: true, limite: 1000 });
+      _servidorListo = true;
       render();
     } catch (e) {
       console.error('[Condiciones] cargar', e);
@@ -149,14 +161,20 @@
 
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) { window.location.href = '../login.html'; return; }
-      try {
-        const snap = await firebase.firestore().collection('usuarios').doc(user.uid).get();
-        _rol = snap.exists ? (snap.data().rol || '') : '';
-        window.userRole = _rol;   // la ficha del equipo lee este
-      } catch (e) { console.warn('[Condiciones] no se pudo leer el rol:', e); }
+      // Rol desde Sesion (caché de sesión, compartida con el rail), en
+      // paralelo con la lista: solo gobierna qué botones se pintan.
+      const rolP = Sesion.rol(user.uid)
+        .then(r => { _rol = r || ''; })
+        .catch(e => { console.warn('[Condiciones] no se pudo leer el rol:', e); })
+        .then(() => {
+          window.userRole = _rol;   // la ficha del equipo lee este
+          // Si la lista ya se pintó antes de saber el rol, se repinta para
+          // que salgan los botones que dependen de él.
+          if (_filas.length) render();
+        });
       // La ficha re-pinta el listado cuando registra o levanta desde ahí.
       if (window.EquipoFicha) EquipoFicha.onCambio = cargar;
-      await cargar();
+      await Promise.all([rolP, cargar()]);
     });
   });
 

@@ -162,11 +162,23 @@
     }).join('');
   }
 
+  // Arranque rápido (2026-09-29): antes la página esperaba la lectura del rol
+  // (usuarios/{uid}, un viaje al servidor) y DESPUÉS pedía la lista (otro
+  // viaje). Ahora el rol sale de Sesion (sessionStorage; sin red en
+  // navegaciones tibias) EN PARALELO con la lista, y la lista se pinta
+  // primero desde la caché local de Firestore mientras llega el servidor.
+  let _servidorListo = false;
   async function cargar() {
     const loader = document.getElementById('loader');
     loader.style.display = '';
+    // Adelanto desde la caché local: pinta lo último visto mientras responde
+    // el servidor. Si el servidor ya llegó, o no hay caché, no hace nada.
+    EquiposDescartadosService.listar({ incluirRevocados: true, limite: 1000, source: 'cache' })
+      .then(rows => { if (!_servidorListo && rows.length) { _filas = rows; render(); } })
+      .catch(() => { /* sin caché todavía */ });
     try {
       _filas = await EquiposDescartadosService.listar({ incluirRevocados: true, limite: 1000 });
+      _servidorListo = true;
       render();
     } catch (e) {
       console.error('[Descartados] cargar', e);
@@ -213,16 +225,21 @@
 
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) { window.location.href = '../login.html'; return; }
-      try {
-        // Lectura directa: esta página no carga ordenesService y el rol solo
-        // gobierna si aparece el botón "Revocar" (las reglas mandan de verdad).
-        const snap = await firebase.firestore().collection('usuarios').doc(user.uid).get();
-        _rol = snap.exists ? (snap.data().rol || '') : '';
-        window.userRole = _rol;   // la ficha del equipo lee este
-      } catch (e) { console.warn('[Descartados] no se pudo leer el rol:', e); }
-      document.getElementById('dscRegistrar').style.display = _puedeRegistrar() ? '' : 'none';
+      // El rol solo gobierna si aparecen "Revocar" y "Registrar" (las reglas
+      // mandan de verdad): sale de Sesion (caché de sesión, compartida con el
+      // rail) y en paralelo con la lista, no antes.
+      const rolP = Sesion.rol(user.uid)
+        .then(r => { _rol = r || ''; })
+        .catch(e => { console.warn('[Descartados] no se pudo leer el rol:', e); })
+        .then(() => {
+          window.userRole = _rol;   // la ficha del equipo lee este
+          document.getElementById('dscRegistrar').style.display = _puedeRegistrar() ? '' : 'none';
+          // Si la lista ya se pintó (caché o servidor) antes de saber el rol,
+          // se repinta para que salgan los botones que dependen de él.
+          if (_filas.length) render();
+        });
       // ?registrar=SERIAL (o =1): llega desde el aviso del cierre de ENTRADA.
-      await cargar();
+      await Promise.all([rolP, cargar()]);
       const pre = new URLSearchParams(location.search).get('registrar');
       if (_puedeRegistrar() && pre != null) _registrar(pre === '1' ? '' : pre);
     });

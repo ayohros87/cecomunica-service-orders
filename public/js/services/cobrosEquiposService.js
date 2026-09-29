@@ -364,10 +364,13 @@ const CobrosEquiposService = {
    * perseguir; `incluirCerrados` lo trae todo para auditoría o para armar el
    * estado de cuenta histórico de un cliente.
    */
-  async listar({ incluirCerrados = false, clienteId = '', limite = 500 } = {}) {
+  // `source: 'cache'` lee SOLO la caché local (IndexedDB, firebase-init):
+  // las páginas pintan al instante lo visto la última vez y el servidor lo
+  // corrige enseguida (arranque rápido 2026-09-29). Sin caché, rechaza.
+  async listar({ incluirCerrados = false, clienteId = '', limite = 500, source } = {}) {
     let q = this._col().orderBy('desde', 'asc').limit(limite);
     if (clienteId) q = this._col().where('cliente_id', '==', clienteId).limit(limite);
-    const snap = await q.get();
+    const snap = await (source ? q.get({ source }) : q.get());
     const rows = [];
     snap.forEach((d) => {
       const data = { id: d.id, ...d.data() };

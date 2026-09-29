@@ -7,12 +7,17 @@ const PiezasService = {
     return { id: doc.id, ...doc.data() };
   },
 
-  async getPiezas() {
+  // `source: 'cache'` lee SOLO la caché local (IndexedDB, firebase-init):
+  // las páginas pintan al instante lo visto la última vez y el servidor lo
+  // corrige enseguida (arranque rápido 2026-09-29). Sin caché, rechaza.
+  async getPiezas({ source } = {}) {
     const db = firebase.firestore();
+    const opts = source ? { source } : undefined;
     try {
-      const snap = await db.collection('inventario_piezas').orderBy('marca').get();
+      const snap = await db.collection('inventario_piezas').orderBy('marca').get(opts);
       return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch {
+    } catch (e) {
+      if (source) throw e; // sin caché: que lo diga, no leer del servidor
       // Fallback if index not ready
       const snap = await db.collection('inventario_piezas').get();
       return snap.docs.map(d => ({ id: d.id, ...d.data() }));

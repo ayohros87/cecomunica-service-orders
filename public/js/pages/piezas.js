@@ -42,8 +42,9 @@ let rolActual = null;
 firebase.auth().onAuthStateChanged(async (user) => {
   if (!user) return window.location.href = "../login.html";
   try {
-    const userDoc = await UsuariosService.getUsuario(user.uid);
-    const rol = userDoc ? (userDoc.rol || null) : null;
+    // Rol desde Sesion (caché de sesión, compartida con el rail): en
+    // navegaciones tibias no hay viaje al servidor antes de pedir las piezas.
+    const rol = (await Sesion.rol(user.uid)) || null;
     rolActual = rol;
     loadUIPrefs();
     // Precios solo en Finanzas: el enlace de la nota de arriba es para admin
@@ -432,10 +433,17 @@ const docData = {
   await cargar();
 }
 
+// Arranque rápido (2026-09-29): la tabla se pinta primero desde la caché
+// local de Firestore (lo último visto) y el servidor la corrige enseguida.
+let _servidorListo = false;
 async function cargar() {
   showSkeleton();
+  PiezasService.getPiezas({ source: 'cache' })
+    .then(rows => { if (!_servidorListo && rows.length) { piezas = rows; render(); renderResumen(); } })
+    .catch(() => { /* sin caché todavía */ });
   try {
     piezas = await PiezasService.getPiezas();
+    _servidorListo = true;
   } catch (e) {
     console.error(e);
     Toast.show('Error cargando piezas','bad');

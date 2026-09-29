@@ -210,8 +210,12 @@ const EquiposCondicionesService = {
    * Listado consultable. `incluirLevantadas` las trae para auditoría.
    * Ordenado por fecha de registro, más reciente primero.
    */
-  async listar({ incluirLevantadas = false, limite = 500 } = {}) {
-    const snap = await this._col().orderBy('registrado_at', 'desc').limit(limite).get();
+  // `source: 'cache'` lee SOLO la caché local (IndexedDB, firebase-init):
+  // las páginas pintan al instante lo visto la última vez y el servidor lo
+  // corrige enseguida (arranque rápido 2026-09-29). Sin caché, rechaza.
+  async listar({ incluirLevantadas = false, limite = 500, source } = {}) {
+    const q = this._col().orderBy('registrado_at', 'desc').limit(limite);
+    const snap = await (source ? q.get({ source }) : q.get());
     const rows = [];
     snap.forEach(d => {
       const data = { id: d.id, ...d.data() };
