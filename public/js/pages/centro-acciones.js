@@ -30,7 +30,20 @@ Object.assign(window.Centro, {
     const terminal = ['cerrada', 'anulada'].includes(g.estado);
 
     // ── Avanzar: lo que mueve el expediente al siguiente paso ──
-    if (g.estado === 'pendiente_aprobacion' && GestionesService.esReposicionDano(g)) {
+    // Cambio de MODELO (2026-09-29): bodega puso un radio de otra familia y la
+    // gestión volvió a administración. Se decide ESO — el reemplazo ya estaba
+    // aprobado —, así que "Aprobar" a secas no aparece: lo que se pregunta es
+    // si se acepta el modelo y qué pasa con la tarifa.
+    const cambiosModelo = g.estado === 'pendiente_aprobacion' ? GestionesService.cambiosModeloPendientes(g) : [];
+    if (cambiosModelo.length) {
+      const puede = this.puedeAprobar();
+      A.push(this._acc({ id: 'aprobar_cambio_modelo', label: 'Aprobar el cambio de modelo…', primaria: true,
+        hint: 'dices si la tarifa del cliente se mantiene; la OS sale sola',
+        onclick: `Centro.aprobarCambioModelo('${id}')`, ok: puede, motivo: 'solo administración o gerencia aprueba' }));
+      A.push(this._acc({ id: 'rechazar_cambio_modelo', label: 'Rechazar el cambio de modelo…',
+        hint: 'bodega pone un radio del modelo aprobado', onclick: `Centro.rechazarCambioModelo('${id}')`,
+        ok: puede, motivo: 'solo administración o gerencia decide' }));
+    } else if (g.estado === 'pendiente_aprobacion' && GestionesService.esReposicionDano(g)) {
       // DAÑO del cliente: aprobar tiene DOS sentidos y cada uno es su botón.
       // "Rechazar" es Anular, como en cualquier gestión.
       const puede = this.puedeAprobar();

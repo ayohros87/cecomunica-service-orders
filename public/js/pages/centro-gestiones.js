@@ -767,7 +767,7 @@ Object.assign(window.Centro, {
         ${(g.items || []).map((it, ix) => `<tr>
           <td class="cg-mono">${this.esc(it.serial_saliente || '—')}</td>
           <td>${this.esc(it.modelo || '—')}</td>
-          <td><span class="cg-mono">${this.esc(it.serial_nuevo || 'pendiente')}</span></td>
+          <td><span class="cg-mono">${this.esc(it.serial_nuevo || 'pendiente')}</span>${this._modeloEntroHtml(g, it)}</td>
           <td>${this.esc(it.modelo_solicitado || it.modelo || '—')}</td>
           <td style="font-size:12.5px;">${this.esc(it.motivo_detalle || it.motivo_codigo || '—')}
             ${it.elegibilidad === 'propio_excepcion' ? '<br><span class="cg-venc por_vencer">excepción serv. cliente</span>' : ''}</td>
@@ -845,7 +845,12 @@ Object.assign(window.Centro, {
         : esAumento ? 'aprobarAumentoGestion' : 'aprobarGestion';
       // La baja no se aprueba sin la carta del cliente (pedido 2026-08-27).
       const sinCarta = esBaja && !g.carta_path;
-      aprobacion = `<div class="cg-senal warn" style="margin:10px 0 0;">
+      const cambiosModelo = GestionesService.cambiosModeloPendientes(g);
+      aprobacion = cambiosModelo.length ? `<div class="cg-senal warn" style="margin:10px 0 0;">
+           <span><b>Bodega asignó otro modelo.</b> El reemplazo se aprobó con
+             ${cambiosModelo.map(p => `<b>${this.esc(p.de || '—')}</b> y entró <b>${this.esc(p.a || '—')}</b> <span class="cg-mono">${this.esc(p.serial || '')}</span>`).join('; ')}.
+             No se programa hasta que administración decida en Acciones si lo acepta y si la tarifa del cliente se mantiene.</span>
+           </div>` : `<div class="cg-senal warn" style="margin:10px 0 0;">
            <span>${esBaja
              ? 'Baja esperando aprobación (una sola, con el desglose por contrato a la izquierda).'
              : esActSeriales
@@ -932,6 +937,90 @@ Object.assign(window.Centro, {
       Toast.show('Aprobada con cargo — se arma la cotización para la jefatura de taller', 'ok');
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo aprobar: ' + (e?.message || e), 'bad'); }
+  },
+
+  // Bajo el serial que entró: su modelo real si no es el solicitado, y lo que
+  // administración decidió (la tarifa) — lo que queda para leer meses después.
+  _modeloEntroHtml(g, it) {
+    if (!it.serial_nuevo || !it.modelo_nuevo) return '';
+    const pedido = it.modelo_solicitado || it.modelo || '';
+    // Mismo criterio que el asignador y el servidor: N/R de una familia es el mismo modelo.
+    if (EquiposPoolService._mismoModelo({ modelo_id: it.modelo_id_nuevo, modelo_label: it.modelo_nuevo },
+      it.modelo_solicitado_id || it.modelo_id || null, pedido)) return '';
+    const clave = EquiposPoolService.normalizarSerial(it.serial_nuevo);
+    const d = (g.cambio_modelo || {})[clave];
+    const dec = !d ? '' : d.estado === 'aprobado'
+      ? ` · aprobado${d.decidido_por_email ? ` por ${this.esc(d.decidido_por_email.split('@')[0])}` : ''} · tarifa ${d.tarifa === 'se_ajusta' ? 'se ajusta' : 'se mantiene'}`
+      : d.estado === 'rechazado' ? ' · rechazado' : d.estado === 'pendiente' ? ' · por aprobar' : '';
+    return `<div style="font-size:12px; color:#92400E;">es ${this.esc(it.modelo_nuevo)}${dec}</div>`;
+  },
+
+  // CAMBIO DE MODELO (2026-09-29): bodega puso un radio de otro modelo y la
+  // gestión volvió aquí. Aprobar pide qué pasa con la tarifa del cliente —es
+  // la pregunta que nadie se hacía—; rechazar pide el motivo y bodega recibe
+  // el aviso de poner otro radio.
+  aprobarCambioModelo(gid) {
+    return this._candado('cambioModelo:' + gid, () => this._decidirCambioModelo(gid, true), 'Aprobando…');
+  },
+  rechazarCambioModelo(gid) {
+    return this._candado('cambioModelo:' + gid, () => this._decidirCambioModelo(gid, false), 'Rechazando…');
+  },
+  _tablaCambioModelo(pend) {
+    const t = (n) => (n == null ? '<span style="color:var(--fg-3);">sin línea en el contrato</span>' : `$${Number(n).toFixed(2)}/mes`);
+    return `<div style="border:1px solid var(--border); border-radius:8px; overflow:hidden; margin:0 0 12px;">
+      <table style="border-collapse:collapse; width:100%; font-size:13px;">
+        <thead><tr style="text-align:left; color:var(--fg-3);">
+          <th style="padding:6px 10px;">Aprobado</th><th style="padding:6px 10px;">Asignado por bodega</th><th style="padding:6px 10px;">Tarifa hoy</th></tr></thead>
+        <tbody>${pend.map(p => `<tr>
+          <td style="padding:6px 10px; border-top:1px solid var(--border);">${this.esc(p.de || '—')}
+            ${p.saliente ? `<div class="cg-mono" style="color:var(--fg-3); font-size:12px;">sale ${this.esc(p.saliente)}</div>` : ''}</td>
+          <td style="padding:6px 10px; border-top:1px solid var(--border);"><b>${this.esc(p.a || '—')}</b>
+            <div class="cg-mono" style="font-size:12px;">${this.esc(p.serial || '')}</div>
+            ${p.motivo ? `<div style="color:var(--fg-3); font-size:12px;">Bodega: ${this.esc(p.motivo)}</div>` : ''}</td>
+          <td style="padding:6px 10px; border-top:1px solid var(--border); font-size:12.5px;">
+            ${this.esc(p.de || '')}: ${t(p.tarifa_de)}<br>${this.esc(p.a || '')}: ${t(p.tarifa_a)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+  },
+  async _decidirCambioModelo(gid, aprobar) {
+    const g = await GestionesService.get(gid);
+    const pend = GestionesService.cambiosModeloPendientes(g);
+    if (!pend.length) { Toast.show('Esta gestión ya no tiene un cambio de modelo esperando', 'warn'); await this.recargarGestiones(); return; }
+    const r = await Modal.sheet({
+      title: aprobar ? 'Aprobar el cambio de modelo' : 'Rechazar el cambio de modelo',
+      icon: aprobar ? 'check' : 'x', size: 'md',
+      html: `${this._tablaCambioModelo(pend)}
+        ${aprobar ? `
+        <p style="margin:0 0 6px; font-size:13px;"><b>¿Qué pasa con la tarifa del cliente?</b></p>
+        <label style="display:flex; gap:8px; align-items:flex-start; font-size:13px; margin:0 0 6px;">
+          <input type="radio" name="cmTarifa" value="se_mantiene" checked> <span><b>Se mantiene</b> — el cliente sigue pagando lo mismo.</span></label>
+        <label style="display:flex; gap:8px; align-items:flex-start; font-size:13px; margin:0 0 10px;">
+          <input type="radio" name="cmTarifa" value="se_ajusta"> <span><b>Se ajusta</b> — el cambio de precio se hace aparte, con una gestión de <b>Ajuste de tarifa</b>.</span></label>
+        <textarea id="cmNota" class="form-input" rows="2" style="width:100%;" placeholder="Nota (obligatoria si se ajusta)"></textarea>
+        <p style="margin:8px 0 0; font-size:12.5px; color:var(--fg-3);">Al aprobar, la OS de programación sale sola.</p>`
+        : `<textarea id="cmNota" class="form-input" rows="2" style="width:100%;" placeholder="Motivo del rechazo (obligatorio) — lo recibe bodega"></textarea>
+        <p style="margin:8px 0 0; font-size:12.5px; color:var(--fg-3);">Bodega recibe el aviso de asignar un radio del modelo aprobado.</p>`}`,
+      buttons: [
+        { action: 'cancel', label: 'Volver' },
+        { action: 'confirm', label: aprobar ? 'Aprobar' : 'Rechazar', primary: true, danger: !aprobar },
+      ],
+      onAction: (action, root) => {
+        if (action !== 'confirm') return null;
+        const tarifa = aprobar ? (root.querySelector('input[name="cmTarifa"]:checked')?.value || null) : null;
+        const nota = root.querySelector('#cmNota')?.value.trim() || '';
+        if ((!aprobar || tarifa === 'se_ajusta') && nota.length < 5) {
+          Toast.show(aprobar ? 'Escribe la nota del ajuste' : 'Escribe el motivo del rechazo', 'warn');
+          return false;
+        }
+        return { tarifa, nota };
+      },
+    });
+    if (!r || typeof r !== 'object') return;
+    try {
+      await GestionesService.decidirCambioModelo(gid, { aprobar, tarifa: r.tarifa, nota: r.nota });
+      Toast.show(aprobar ? 'Cambio de modelo aprobado — la OS de programación sale sola' : 'Rechazado — bodega recibirá el aviso', 'ok');
+      await this.recargarGestiones();
+    } catch (e) { console.error(e); Toast.show('No se pudo guardar la decisión: ' + (e?.message || e), 'bad'); }
   },
 
   aprobarSinCargoGestion(gid) {

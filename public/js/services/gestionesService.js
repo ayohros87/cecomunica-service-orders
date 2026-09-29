@@ -301,6 +301,43 @@ const GestionesService = {
     await this.registrarEvento(gestionId, 'aprobar', 'Gestión aprobada — pasa a Bodega para asignar seriales.');
   },
 
+  // CAMBIO DE MODELO en un reemplazo (2026-09-29). Bodega puso un radio de
+  // otra familia y el servidor devolvió la gestión a administración
+  // (`cambio_modelo[serial].estado = 'pendiente'`). Decidir es sacarla de
+  // pendiente_aprobacion: aprobada → la OS de programación sale sola;
+  // rechazada → bodega recibe el aviso de poner otro radio. `tarifa` dice qué
+  // pasa con el precio del cliente: 'se_mantiene' o 'se_ajusta' (el ajuste se
+  // hace aparte, con una gestión de Ajuste de tarifa; aquí queda la decisión).
+  cambiosModeloPendientes(g) {
+    return Object.entries(g?.cambio_modelo || {})
+      .filter(([, d]) => d && d.estado === 'pendiente')
+      .map(([clave, d]) => ({ clave, ...d }));
+  },
+
+  async decidirCambioModelo(gestionId, { aprobar, tarifa = null, nota = '' }) {
+    const user = firebase.auth().currentUser;
+    const g = await this.get(gestionId);
+    const pend = this.cambiosModeloPendientes(g);
+    if (!pend.length) throw new Error('Esta gestión no tiene un cambio de modelo esperando.');
+    if (aprobar && !['se_mantiene', 'se_ajusta'].includes(tarifa)) throw new Error('Indica qué pasa con la tarifa.');
+    if ((!aprobar || tarifa === 'se_ajusta') && !String(nota || '').trim()) throw new Error('Escribe el motivo.');
+    const decision = {
+      estado: aprobar ? 'aprobado' : 'rechazado',
+      ...(aprobar ? { tarifa } : {}),
+      nota: String(nota || '').trim() || null,
+      decidido_por_uid: user?.uid || null,
+      decidido_por_email: user?.email || null,
+      decidido_at: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    const upd = { estado: 'pendiente_bodega' };
+    pend.forEach(p => { upd[`cambio_modelo.${p.clave}`] = { ...(g.cambio_modelo[p.clave] || {}), ...decision }; });
+    await firebase.firestore().collection(this.COL).doc(gestionId).update(upd);
+    const que = pend.map(p => `${p.serial}: ${p.de || '—'} → ${p.a || '—'}`).join('; ');
+    await this.registrarEvento(gestionId, 'cambio_modelo', aprobar
+      ? `Cambio de modelo APROBADO (${que}). Tarifa: ${tarifa === 'se_mantiene' ? 'se mantiene' : 'se ajusta'}${decision.nota ? ` — ${decision.nota}` : ''}. La OS de programación sale sola.`
+      : `Cambio de modelo RECHAZADO (${que}): ${decision.nota}. Bodega debe asignar un radio del modelo aprobado.`);
+  },
+
   // Reemplazo por DAÑO — aprobar CON CARGO (2026-09-25). Administración fija
   // el monto (parte del valor de reposición del catálogo) y la gestión queda
   // esperando al cliente: el trigger arma la cotización de la reposición y

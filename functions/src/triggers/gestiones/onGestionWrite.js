@@ -270,6 +270,122 @@ async function correoAdmins(gid, g) {
   });
 }
 
+// Bodega puso un radio de OTRO modelo en un reemplazo (2026-09-29): el precio
+// del cliente salió del modelo pedido, así que administración decide si la
+// tarifa se mantiene. Mismo buzón que toda aprobación (ventas@).
+const tarifaTxt = (n) => (n == null ? "sin línea en el contrato" : `$${Number(n).toFixed(2)}/mes`);
+async function correoCambioModelo(gid, g, cambios) {
+  const vend = await G.vendedorEmailDeCliente(g.cliente_id);
+  await G.encolarCorreo({
+    to: await G.aprobacionesTo(),
+    cc: vend || null,
+    subject: `Aprobación requerida: cambio de modelo en el reemplazo ${gid} — ${g.cliente_nombre || "Cliente"}`,
+    preheader: "Bodega asignó un modelo distinto al aprobado — no se programa hasta que decidas la tarifa",
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Cambio de modelo esperando aprobación</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        En el reemplazo <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>, Bodega asignó
+        un radio de un modelo <b>distinto al aprobado</b>. La gestión no se programa hasta que administración decida
+        si lo acepta y si la tarifa del cliente se mantiene.
+      </p>
+      ${G.tablaHtml(["Sale", "Aprobado", "Asignado", "Tarifa hoy", "Motivo de bodega"], cambios.map(c => [
+        `<code>${G.escapeHtml(c.saliente || "—")}</code>`,
+        G.escapeHtml(c.de || "—"),
+        `<b>${G.escapeHtml(c.a || "—")}</b> <code>${G.escapeHtml(c.serial)}</code>`,
+        `${G.escapeHtml(c.de || "")}: ${tarifaTxt(c.tarifa_de)}<br>${G.escapeHtml(c.a || "")}: ${tarifaTxt(c.tarifa_a)}`,
+        G.escapeHtml(c.motivo || "—"),
+      ]))}`,
+    ctaUrl: G.urlGestion(g, gid),
+    ctaLabel: "Revisar el cambio de modelo",
+    meta: { gestion_id: gid, paso: "cambio_modelo" },
+  });
+}
+
+// Devuelve la gestión a administración con los cambios sin decidir. En
+// transacción: el eco del propio set (y dos eventos casi simultáneos) no
+// pueden mandar el correo dos veces — la marca se reserva antes del efecto.
+async function escalarCambioModelo(ref, gid, g, sinDecidir) {
+  const conTarifa = [];
+  for (const c of sinDecidir) {
+    const t = await G.tarifasContrato(c.contrato_doc_id, c.de_id, c.a_id);
+    conTarifa.push({ ...c, tarifa_de: t[c.de_id] ?? null, tarifa_a: t[c.a_id] ?? null });
+  }
+  const nuevos = await db.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    const d = s.exists ? s.data() : null;
+    if (!d || d.ordenes?.programacion_id || d.ordenes?.programacion_en_curso) return [];
+    const dec = d.cambio_modelo || {};
+    const faltan = conTarifa.filter(c => !(dec[c.clave]?.estado === "pendiente" && dec[c.clave]?.a_id === c.a_id));
+    const patch = {};
+    for (const c of faltan) {
+      patch[c.clave] = {
+        estado: "pendiente", serial: c.serial, saliente: c.saliente,
+        de: c.de, de_id: c.de_id, a: c.a, a_id: c.a_id, motivo: c.motivo,
+        tarifa_de: c.tarifa_de, tarifa_a: c.tarifa_a,
+        contrato_doc_id: c.contrato_doc_id,
+        propuesto_at: admin.firestore.FieldValue.serverTimestamp(),
+      };
+    }
+    if (!faltan.length && d.estado === "pendiente_aprobacion") return [];
+    tx.set(ref, {
+      estado: "pendiente_aprobacion",
+      ...(faltan.length ? { cambio_modelo: patch } : {}),
+    }, { merge: true });
+    return faltan;
+  });
+  if (!nuevos.length) return;
+  await G.registrarEvento(gid, "cambio_modelo",
+    `Bodega asignó otro modelo: ${nuevos.map(c => `${c.serial} es ${c.a || "—"} (aprobado: ${c.de || "—"})`).join("; ")}. `
+    + "Vuelve a administración: no se programa hasta que se decida si se acepta y si la tarifa se mantiene.");
+  await correoCambioModelo(gid, g, nuevos);
+}
+
+// La espera de un serial que ya no está en la gestión (bodega lo cambió) se
+// retira; sin esperas vivas, la gestión regresa a pendiente_bodega.
+async function retirarEsperasViejas(ref, gid, g) {
+  const vigentes = new Set(G.cambiosDeModelo(g).map(c => `${c.clave}|${c.a_id}`));
+  const dec = g.cambio_modelo || {};
+  const viejas = Object.entries(dec).filter(([k, d]) => d?.estado === "pendiente" && !vigentes.has(`${k}|${d.a_id}`));
+  if (!viejas.length) return;
+  const quedan = Object.entries(dec).some(([k, d]) => d?.estado === "pendiente" && vigentes.has(`${k}|${d.a_id}`));
+  const patch = {};
+  for (const [k] of viejas) patch[k] = { estado: "retirado", retirado_at: admin.firestore.FieldValue.serverTimestamp() };
+  await ref.set({ cambio_modelo: patch, ...(quedan ? {} : { estado: "pendiente_bodega" }) }, { merge: true });
+  await G.registrarEvento(gid, "cambio_modelo",
+    `Bodega cambió el radio mientras se decidía: se retira la espera de ${viejas.map(([, d]) => d.serial).join(", ")}.`
+    + (quedan ? "" : " Sin otros cambios de modelo, la gestión vuelve a bodega."));
+}
+
+// Administración rechazó el modelo que puso bodega: bodega asigna otro radio,
+// del modelo aprobado. Corto, resultado primero, una sola acción.
+async function correoCambioModeloRechazado(gid, g, rechazados) {
+  const dec = g.cambio_modelo || {};
+  const to = await G.bodegaEmailTo();
+  if (!to) {
+    logger.warn("[onGestionWrite] sin buzón de bodega — rechazo de cambio de modelo sin aviso", { gid });
+    return;
+  }
+  await G.encolarCorreo({
+    to,
+    subject: `Cambio de modelo rechazado: asigna otro radio — ${g.cliente_nombre || "Cliente"} (${gid})`,
+    preheader: "Administración no aceptó el modelo asignado",
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#b91c1c;">Asigna otro radio</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        Administración <b>no aceptó</b> el modelo que asignaste en el reemplazo <b>${G.escapeHtml(gid)}</b>.
+        Cambia el serial por uno del modelo aprobado.
+      </p>
+      ${G.tablaHtml(["Asignaste", "Va", "Motivo"], rechazados.map(c => [
+        `${G.escapeHtml(c.a || "—")} <code>${G.escapeHtml(c.serial)}</code>`,
+        `<b>${G.escapeHtml(c.de || "—")}</b>`,
+        G.escapeHtml(dec[c.clave]?.nota || "—"),
+      ]))}`,
+    ctaUrl: G.urlBodegaGestion(gid),
+    ctaLabel: "Cambiar el serial en Almacén",
+    meta: { gestion_id: gid, paso: "cambio_modelo_rechazado" },
+  });
+}
+
 // Baja por serial: UNA sola aprobación por gestión, con el desglose claro de
 // qué contrato aporta cada equipo y su penalidad (decisión §8.10).
 async function correoAprobadoresBaja(gid, g) {
@@ -774,7 +890,18 @@ module.exports = onDocumentWritten(
         (creada && after.estado === "pendiente_bodega") ||
         (before && ["pendiente_aprobacion", "pendiente_firma", "pendiente_cliente"].includes(before.estado)
           && after.estado === "pendiente_bodega"));
-      if (entraABodega && !(after.tipo === "aumento" && serialesAumentoCompletos(after))) {
+      // Salida de la espera por un CAMBIO DE MODELO: bodega ya asignó, así que
+      // el aviso genérico ("asigna seriales") sobra. Aprobado → la sección C
+      // programa sola; rechazado → bodega tiene que poner otro radio.
+      const decidioCambioModelo = before && G.cambioModeloEnEspera(before) && !G.cambioModeloEnEspera(after);
+      if (decidioCambioModelo) {
+        const { rechazados } = G.estadoCambiosModelo(after);
+        if (rechazados.length) {
+          await correoCambioModeloRechazado(gid, after, rechazados);
+          await G.registrarEvento(gid, "correo_bodega",
+            `Aviso a Bodega: administración rechazó el cambio de modelo de ${rechazados.map(c => c.serial).join(", ")} — asignar un radio del modelo aprobado.`);
+        }
+      } else if (entraABodega && !(after.tipo === "aumento" && serialesAumentoCompletos(after))) {
         await correoBodega(gid, after);
         await G.registrarEvento(gid, "correo_bodega", "Aviso enviado a Bodega para asignar seriales.");
       }
@@ -1413,9 +1540,33 @@ module.exports = onDocumentWritten(
       const estadoListo = (g) => ["pendiente_bodega", "en_proceso"].includes(g.estado)
         || (g.estado === "pendiente_firma" && g.tipo === "aumento"
             && g.aumento?.es_ajuste !== true && g.aumento?.es_regularizacion !== true);
-      const lista = !after.ordenes?.programacion_id
+      let lista = !after.ordenes?.programacion_id
         && estadoListo(after)
         && asignacionCompleta(after);
+      // Cambio de MODELO en un reemplazo (2026-09-29): si bodega puso un radio
+      // de otra familia, la gestión vuelve a administración ANTES de reservar
+      // la OS — el precio del cliente salió del modelo aprobado, y no se
+      // programa lo que nadie decidió cobrar. Un rechazo también frena: bodega
+      // tiene que poner otro radio.
+      if (lista && after.tipo === "reemplazo") {
+        let gX = after;
+        const { items, cambio } = await G.completarModeloEntrante(after.items);
+        if (cambio) {
+          gX = { ...after, items };
+          await ref.set({ items }, { merge: true });
+        }
+        const { sinDecidir, rechazados } = G.estadoCambiosModelo(gX);
+        if (sinDecidir.length || rechazados.length) {
+          lista = false;
+          if (sinDecidir.length) await escalarCambioModelo(ref, gid, gX, sinDecidir);
+        }
+      }
+      // Bodega cambió el radio MIENTRAS administración decidía: la espera de un
+      // serial que ya no está en la gestión se retira, y si no queda ninguna,
+      // la gestión regresa a bodega (y la sección C sigue sola).
+      if (after.tipo === "reemplazo" && after.estado === "pendiente_aprobacion" && G.cambioModeloEnEspera(after)) {
+        await retirarEsperasViejas(ref, gid, after);
+      }
       // Puerta TRANSACCIONAL (2026-09-10, caso GR20260910-01). La lectura
       // fresca de 2026-08-31 solo tapaba la re-entrega TARDÍA de un evento:
       // dos escrituras casi simultáneas al expediente leían fresco las dos

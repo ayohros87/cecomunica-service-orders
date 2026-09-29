@@ -120,7 +120,7 @@ test("V2 · la gestión completa se verifica y deja evento; el cambio de serial 
   const g = src.slice(src.indexOf("async function guardarGestion("), src.indexOf("async function siguiente("));
   assert.match(g, /if \(!esCambio\(g\) && esperado && datos\.seriales\.length >= esperado\) \{\s*v = await verificarPicklist/,
     "solo cuando la asignación queda completa y saca radios del estante");
-  assert.match(g, /r = await asg\.exigirEnBodega\(datos\.seriales, \{\}\);\s*if \(!r\) return;\s*\}\s*\}/,
+  assert.match(g, /r = await asg\.exigirEnBodega\(datos\.seriales, \{ modeloDistinto: politicaModeloGestion\(g\) \}\);\s*if \(!r\) return;\s*\}\s*\}/,
     "con sustitutos se vuelve a validar contra el pool");
   assert.match(g, /registrarEvento\(t\.gid, 'asignar',\s*`Lista verificada por escaneo/, "queda como evento de la gestión");
 });

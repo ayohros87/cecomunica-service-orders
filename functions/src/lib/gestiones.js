@@ -194,6 +194,83 @@ async function completarModeloEntrante(items) {
   return { items: out, cambio };
 }
 
+// ── Cambio de MODELO en un reemplazo = decisión de administración ──────────
+// (Alberto, 2026-09-29). El reemplazo se aprueba con el modelo pedido y el
+// precio del cliente sale de ese modelo; si bodega pone uno de otra familia
+// (un PNC460-R por un PNC550-R porque no había PNC550 en buen estado), nadie
+// había decidido si la tarifa sigue igual. Ahora la gestión vuelve a
+// `pendiente_aprobacion` y no se programa hasta que administración lo decida.
+// La DETECCIÓN es del servidor —el modelo real sale de la ficha del radio—,
+// así que no depende de que el navegador avise; la DECISIÓN vive en
+// `cambio_modelo`, que las reglas solo dejan escribir a administración.
+//
+// `cambio_modelo` = { [serial_norm del entrante]: {
+//     estado: 'pendiente'|'aprobado'|'rechazado', serial, saliente,
+//     de, de_id, a, a_id, motivo, tarifa_de, tarifa_a,
+//     tarifa: 'se_mantiene'|'se_ajusta', nota, decidido_por_email, decidido_at } }
+function cambiosDeModelo(g) {
+  if (g?.tipo !== "reemplazo") return [];
+  const pool = require("../domain/equiposPool");
+  const out = [];
+  for (const it of (g.items || [])) {
+    const serial = String(it?.serial_nuevo || "").trim();
+    // Sin modelo real estampado no se decide nada (completarModeloEntrante
+    // corre antes): no se inventa un cambio que no se puede demostrar.
+    if (!serial || !it.modelo_id_nuevo) continue;
+    const deId = it.modelo_solicitado_id || it.modelo_id || null;
+    const de = it.modelo_solicitado || it.modelo || "";
+    if (!deId && !de) continue;
+    // Mismo criterio que el asignador: N/R de una familia es el mismo modelo.
+    if (pool.mismoModelo({ modelo_id: it.modelo_id_nuevo, modelo_label: it.modelo_nuevo || "" }, deId, de)) continue;
+    out.push({
+      clave: pool.normSerial(serial), serial,
+      saliente: String(it.serial_saliente || "").trim() || null,
+      de, de_id: deId, a: it.modelo_nuevo || "", a_id: it.modelo_id_nuevo,
+      motivo: String(it.cambio_modelo_motivo || "").trim() || null,
+      contrato_doc_id: it.contrato_doc_id || null,
+    });
+  }
+  return out;
+}
+
+// Reparte los cambios según lo que administración ya decidió. Una decisión
+// vale para ESE serial con ESE modelo: si bodega cambia el radio, se decide
+// de nuevo.
+function estadoCambiosModelo(g) {
+  const dec = g?.cambio_modelo || {};
+  const r = { sinDecidir: [], rechazados: [], aprobados: [] };
+  for (const c of cambiosDeModelo(g)) {
+    const d = dec[c.clave];
+    if (d && d.a_id === c.a_id && d.estado === "aprobado") r.aprobados.push(c);
+    else if (d && d.a_id === c.a_id && d.estado === "rechazado") r.rechazados.push(c);
+    else r.sinDecidir.push(c);
+  }
+  return r;
+}
+
+// ¿Hay un cambio de modelo esperando a administración? (para no confundir su
+// salida de pendiente_aprobacion con la aprobación inicial del reemplazo).
+function cambioModeloEnEspera(g) {
+  return Object.values(g?.cambio_modelo || {}).some((d) => d && d.estado === "pendiente");
+}
+
+// Tarifa que el cliente paga hoy por cada modelo en el contrato del saliente
+// (línea equipos[] del contrato). null = no hay contrato en el sistema o el
+// contrato no tiene ese modelo: se dice así, no se inventa un precio.
+async function tarifasContrato(contratoDocId, ...modeloIds) {
+  const out = {};
+  if (!contratoDocId) return out;
+  try {
+    const s = await db.collection("contratos").doc(contratoDocId).get();
+    const eq = (s.exists && Array.isArray(s.data().equipos)) ? s.data().equipos : [];
+    for (const id of modeloIds) {
+      const l = eq.find((e) => e && e.modelo_id === id && Number(e.precio) > 0);
+      out[id] = l ? Number(l.precio) : null;
+    }
+  } catch (e) { logger.warn("[gestiones] tarifas del contrato ilegibles", { contratoDocId, error: e.message }); }
+  return out;
+}
+
 /**
  * Crea la(s) orden(es) de PROGRAMACIÓN de una gestión con seriales asignados.
  * Reemplazo: UNA orden por contrato afectado (los ítems pueden cruzar
@@ -788,6 +865,7 @@ module.exports = {
   configEmailTo,
   registrarEvento, crearOrdenesProgramacion,
   modeloEntrante, completarModeloEntrante,
+  cambiosDeModelo, estadoCambiosModelo, cambioModeloEnEspera, tarifasContrato,
   bodegaEmailTo,
   salientesDeReemplazo,
 };

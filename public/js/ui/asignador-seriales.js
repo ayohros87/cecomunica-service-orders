@@ -707,10 +707,20 @@ window.AsignadorSeriales = (() => {
     // Panel de bloqueo de la política dura. Resuelve:
     //   false                → volver a editar
     //   { motivo }           → "asignar de todos modos" (solo si todos los
-    //                          errores son de modelo)
-    async function panelBloqueo(errores) {
+    //                          errores son de modelo y la política lo deja)
+    //
+    // `modeloDistinto` (2026-09-29, Alberto: "si se hizo un contrato con un
+    // modelo se le incluyó el precio de ese modelo; si bodega cambia el
+    // modelo, ¿quién dice que el precio es el mismo?"):
+    //   'forzar'     → bodega fuerza con motivo (demo: no lleva precio)
+    //   'aprobacion' → bodega PROPONE con motivo y administración decide
+    //                  (reemplazo: el servidor devuelve la gestión a aprobación)
+    //   'bloquear'   → no se fuerza: el modelo y el precio los fija el
+    //                  contrato/anexo, y se corrigen allá
+    async function panelBloqueo(errores, modeloDistinto = 'forzar') {
       {
         const soloModelo = errores.length && errores.every(e => e.tipo === 'modelo');
+        const puedeForzar = soloModelo && modeloDistinto !== 'bloquear';
         const chip = (t) => t === 'modelo'
           ? '<span class="eqpool-chip eqpool-chip-alerta">modelo distinto</span>'
           : t === 'descartado'
@@ -734,14 +744,22 @@ window.AsignadorSeriales = (() => {
             <div style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
               <table style="border-collapse:collapse; width:100%;">${filas}</table>
             </div>
-            ${soloModelo ? `
+            ${soloModelo && modeloDistinto === 'bloquear' ? `
+            <div style="margin-top:12px; padding:10px 12px; background:#FEF2F2; border:1px solid #FCA5A5; border-radius:8px; color:#991B1B; font-size:12.5px; line-height:1.55;">
+              <b>No se puede asignar otro modelo aquí.</b> El modelo y su precio los fija el contrato o el anexo
+              que firma el cliente. Si no hay de este modelo, o el modelo está mal escrito, pide al vendedor
+              que corrija la línea (modelo y precio) y asigna después.
+            </div>` : ''}
+            ${puedeForzar ? `
             <div style="margin-top:12px; padding:10px 12px; background:#FFFBEB; border:1px solid #FCD34D; border-radius:8px; color:#92400E; font-size:12.5px; line-height:1.55;">
-              Si estás seguro de que es el radio correcto y el modelo del contrato está mal escrito,
-              puedes asignarlo de todos modos. El motivo queda en el historial.
-              <input type="text" id="pbMotivo" class="form-input" placeholder="Motivo (obligatorio)" style="margin-top:8px; width:100%; height:34px;">
+              ${modeloDistinto === 'aprobacion'
+                ? `Puedes <b>proponer</b> este radio de otro modelo. La gestión vuelve a <b>administración</b>, que decide
+                   si lo acepta y si la tarifa del cliente se mantiene; no se programa hasta entonces. Explica por qué.`
+                : 'Si estás seguro de que es el radio correcto, puedes asignarlo de todos modos. El motivo queda en el historial.'}
+              <input type="text" id="pbMotivo" class="form-input" placeholder="${modeloDistinto === 'aprobacion' ? 'Por qué va otro modelo (obligatorio)' : 'Motivo (obligatorio)'}" style="margin-top:8px; width:100%; height:34px;">
             </div>` : ''}`,
           buttons: [
-            ...(soloModelo ? [{ action: 'forzar', label: 'Asignar de todos modos' }] : []),
+            ...(puedeForzar ? [{ action: 'forzar', label: modeloDistinto === 'aprobacion' ? 'Proponer a administración' : 'Asignar de todos modos' }] : []),
             { action: 'cancel', label: 'Volver a editar', primary: true },
           ],
           onMount: (root) => root.addEventListener('click', (e) => {
@@ -772,7 +790,7 @@ window.AsignadorSeriales = (() => {
       });
       let excepcion = null;
       if (errores.length) {
-        const r = await panelBloqueo(errores);
+        const r = await panelBloqueo(errores, ctxValidacion.modeloDistinto || 'forzar');
         if (!r) return null;
         // Forzado: las unidades de modelo distinto entran con su doc real.
         errores.forEach(e => { if (e.doc) unidades.set(norm(e.serial), e.doc); });

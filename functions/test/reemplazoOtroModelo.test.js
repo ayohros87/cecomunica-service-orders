@@ -80,3 +80,68 @@ test("fusión: entre varias vivas gana la que tiene orden abierta", () => {
   ]);
   assert.equal(h.de_ficha, "b");
 });
+
+// ── Cambio de modelo = decisión de administración (2026-09-29) ─────────────
+// "Si se hizo un contrato o una gestión con un modelo se le incluyó el precio
+// de ese modelo; si luego bodega decide cambiar el modelo, ¿quién dice que el
+// precio es el mismo?" — Alberto.
+const itLigo = (extra = {}) => ({
+  serial_saliente: "21708A0008", modelo: "PNC550-R", modelo_id: PNC550,
+  modelo_solicitado: "HYTERA PNC550-R", modelo_solicitado_id: PNC550,
+  serial_nuevo: "23905A0437", modelo_id_nuevo: PNC460, modelo_nuevo: "HYTERA PNC460-R",
+  cambio_modelo_motivo: "no hay PNC550 en buen estado", ...extra,
+});
+
+test("cambiosDeModelo: detecta el PNC460-R puesto por un PNC550-R", () => {
+  const c = G.cambiosDeModelo({ tipo: "reemplazo", items: [itLigo()] });
+  assert.equal(c.length, 1);
+  assert.equal(c[0].clave, "23905A0437");
+  assert.equal(c[0].de_id, PNC550);
+  assert.equal(c[0].a_id, PNC460);
+  assert.equal(c[0].motivo, "no hay PNC550 en buen estado");
+});
+
+test("cambiosDeModelo: N/R de la misma familia NO es cambio (caso SEPROSA GR20260928-01)", () => {
+  const it = { serial_nuevo: "23905A0441", modelo_solicitado: "HYTERA PNC460", modelo_solicitado_id: "DbCw",
+    modelo_id_nuevo: PNC460, modelo_nuevo: "HYTERA PNC460-R" };
+  assert.deepEqual(G.cambiosDeModelo({ tipo: "reemplazo", items: [it] }), []);
+  // Sin modelo real estampado no se inventa un cambio; y solo aplica a reemplazos.
+  assert.deepEqual(G.cambiosDeModelo({ tipo: "reemplazo", items: [itLigo({ modelo_id_nuevo: null })] }), []);
+  assert.deepEqual(G.cambiosDeModelo({ tipo: "demo", items: [itLigo()] }), []);
+});
+
+test("estadoCambiosModelo: una decisión vale para ESE serial con ESE modelo", () => {
+  const base = { tipo: "reemplazo", items: [itLigo()] };
+  assert.equal(G.estadoCambiosModelo(base).sinDecidir.length, 1);
+  const pend = { ...base, cambio_modelo: { "23905A0437": { estado: "pendiente", a_id: PNC460 } } };
+  assert.equal(G.estadoCambiosModelo(pend).sinDecidir.length, 1, "pendiente sigue sin decidir");
+  assert.equal(G.cambioModeloEnEspera(pend), true);
+  const ok = { ...base, cambio_modelo: { "23905A0437": { estado: "aprobado", a_id: PNC460, tarifa: "se_mantiene" } } };
+  assert.equal(G.estadoCambiosModelo(ok).aprobados.length, 1);
+  assert.equal(G.estadoCambiosModelo(ok).sinDecidir.length, 0);
+  assert.equal(G.cambioModeloEnEspera(ok), false);
+  const no = { ...base, cambio_modelo: { "23905A0437": { estado: "rechazado", a_id: PNC460 } } };
+  assert.equal(G.estadoCambiosModelo(no).rechazados.length, 1);
+  // Aprobado para OTRO modelo con el mismo serial: se decide de nuevo.
+  const otro = { ...base, cambio_modelo: { "23905A0437": { estado: "aprobado", a_id: "otroModelo" } } };
+  assert.equal(G.estadoCambiosModelo(otro).sinDecidir.length, 1);
+});
+
+test("rules: la decisión (cambio_modelo) solo la escribe administración al aprobar; bodega solo toca items", () => {
+  const rules = leer("firestore.rules");
+  const aprob = rules.slice(rules.indexOf("function esAprobacionGestion()"), rules.indexOf("function gestionBlanda()"));
+  assert.match(aprob, /userRole\(\) in \["administrador","gerente"\]/);
+  assert.match(aprob, /"cambio_modelo"/);
+  const asig = rules.slice(rules.indexOf("function esAsignacionGestion()"), rules.indexOf("function esMarcaTallerGestion()"));
+  assert.doesNotMatch(asig, /cambio_modelo/);
+});
+
+test("asignador: contrato, aumento y corrección no fuerzan otro modelo; reemplazo lo propone", () => {
+  const src = leer("public", "js", "pages", "almacen-asignar.js");
+  assert.match(src, /permitir: permitirContrato\(c\), modeloDistinto: 'bloquear'/);
+  assert.match(src, /if \(g\.tipo === 'reemplazo'\) return 'aprobacion';/);
+  assert.match(src, /if \(g\.tipo === 'demo'\) return 'forzar';/);
+  assert.doesNotMatch(src, /exigirEnBodega\([^)]*\{\}\)/, "ningún llamado sin política");
+  const asg = leer("public", "js", "ui", "asignador-seriales.js");
+  assert.match(asg, /const puedeForzar = soloModelo && modeloDistinto !== 'bloquear';/);
+});

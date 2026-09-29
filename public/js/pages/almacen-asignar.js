@@ -483,7 +483,9 @@ window.AlmacenAsignar = (() => {
   async function validarContrato(c, seriales) {
     const asg = st.asignador;
     if (asg.politica === 'suave') return (await asg.confirmarAvisosPool(seriales)) ? { unidades: new Map(), excepcion: null } : null;
-    return asg.exigirEnBodega(seriales, { excepciones: excepcionesContrato(c), permitir: permitirContrato(c) });
+    // Contrato: el modelo y su precio los fija el contrato — otro modelo no se
+    // fuerza aquí, se corrige la línea (2026-09-29).
+    return asg.exigirEnBodega(seriales, { excepciones: excepcionesContrato(c), permitir: permitirContrato(c), modeloDistinto: 'bloquear' });
   }
 
   async function guardarAvance() {
@@ -549,7 +551,7 @@ window.AlmacenAsignar = (() => {
     if ($('asBody').querySelector('.serial-input.dup')) { toast('Un serial de reemplazo duplica otro ya asignado.', 'warn'); return; }
     const datos = asg.collect();
     const nuevos = datos.seriales.filter(s => reemplazos.some(r => norm(r.nuevo) === norm(s.serial)));
-    const r = await asg.exigirEnBodega(nuevos, {});
+    const r = await asg.exigirEnBodega(nuevos, { modeloDistinto: 'bloquear' });
     if (!r) return;
     const btn = $('asFoot').querySelector('[data-as="reemplazo"]'); if (btn) btn.disabled = true;
     try {
@@ -798,13 +800,21 @@ window.AlmacenAsignar = (() => {
       }));
     }
     if (g.tipo === 'reemplazo') {
+      // Administración rechazó el modelo que se puso (2026-09-29): se dice en
+      // la fila, con su motivo — es lo que bodega tiene que cambiar.
+      const rechazo = (it) => {
+        const d = it.serial_nuevo ? (g.cambio_modelo || {})[norm(it.serial_nuevo)] : null;
+        return d && d.estado === 'rechazado'
+          ? `<b style="color:#991B1B;">Administración no aceptó ${esc(d.a || 'ese modelo')}${d.nota ? `: ${esc(d.nota)}` : ''}. Pon un ${esc(it.modelo_solicitado || it.modelo || 'radio del modelo aprobado')}.</b>`
+          : '';
+      };
       return (g.items || []).map((it, ix) => ({
         clave: String(ix),
         modelo: it.modelo_solicitado || it.modelo || '—',
         modelo_id: it.modelo_solicitado_id || '',
         activos: 1,
         titulo: `Sale <span style="font-family:var(--font-mono,monospace);">${esc(it.serial_saliente || '—')}</span> <span style="color:var(--fg-3); font-weight:400;">(${esc(it.modelo || '—')})</span> → entra ${esc(it.modelo_solicitado || it.modelo || '—')}`,
-        nota: it.motivo_detalle || it.motivo_codigo ? esc(it.motivo_detalle || it.motivo_codigo) : '',
+        nota: [rechazo(it), it.motivo_detalle || it.motivo_codigo ? esc(it.motivo_detalle || it.motivo_codigo) : ''].filter(Boolean).join('<br>'),
         slots: it.serial_nuevo ? [{ serial: it.serial_nuevo }] : [],
       }));
     }
@@ -850,7 +860,9 @@ window.AlmacenAsignar = (() => {
     });
     if (!pares.length) { toast('No cambiaste ningún serial.', 'warn'); return; }
 
-    const r = await asg.exigirEnBodega(pares.map(p => ({ serial: p.nuevo, modelo: p.modelo, modelo_id: p.modelo_id })), {});
+    // Corregir es el MISMO radio mal tecleado: un modelo distinto es otro radio
+    // (y otro precio) — no entra por aquí (2026-09-29).
+    const r = await asg.exigirEnBodega(pares.map(p => ({ serial: p.nuevo, modelo: p.modelo, modelo_id: p.modelo_id })), { modeloDistinto: 'bloquear' });
     if (!r) return;
 
     const entregado = g.cierre?.entrega === true;
@@ -898,6 +910,16 @@ window.AlmacenAsignar = (() => {
     }
   }
 
+  // Otro modelo en una gestión (2026-09-29): el precio sale del modelo
+  // aprobado. Reemplazo → se PROPONE y decide administración (el servidor
+  // devuelve la gestión a aprobación); aumento → lo fija el anexo, no se
+  // fuerza; cambio de serial → es el mismo radio; demo → no lleva precio.
+  function politicaModeloGestion(g) {
+    if (g.tipo === 'reemplazo') return 'aprobacion';
+    if (g.tipo === 'demo') return 'forzar';
+    return 'bloquear';
+  }
+
   async function guardarGestion() {
     const t = st.trabajo; const asg = st.asignador;
     const g = t.g;
@@ -908,7 +930,7 @@ window.AlmacenAsignar = (() => {
     // Misma política dura que el resto: el serial existe, está en bodega y es
     // del modelo pedido. En una corrección eso es justo lo que se espera —
     // el radio "correcto" nunca salió, así que en el sistema sigue en bodega.
-    let r = await asg.exigirEnBodega(datos.seriales, {});
+    let r = await asg.exigirEnBodega(datos.seriales, { modeloDistinto: politicaModeloGestion(g) });
     if (!r) return;
     // Pick & confirm: cuando la asignación queda COMPLETA (sale del estante de
     // verdad) se verifica por escaneo, como en el contrato. Un cambio de
@@ -922,7 +944,7 @@ window.AlmacenAsignar = (() => {
       if (!v) return;
       if (v.reemplazos.length) {
         datos = asg.collect();
-        r = await asg.exigirEnBodega(datos.seriales, {});
+        r = await asg.exigirEnBodega(datos.seriales, { modeloDistinto: politicaModeloGestion(g) });
         if (!r) return;
       }
     }
@@ -947,6 +969,8 @@ window.AlmacenAsignar = (() => {
           if (!s) { it.serial_nuevo = null; it.pool_doc_id_nuevo = null; it.modelo_id_nuevo = null; it.modelo_nuevo = null; return; }
           const o = objeto(s);
           it.serial_nuevo = o.serial; it.pool_doc_id_nuevo = o.pool_doc_id; it.asignado_at = new Date().toISOString();
+          // El porqué de bodega viaja con el ítem: es lo que lee administración al decidir.
+          it.cambio_modelo_motivo = (r.excepcion && r.excepcion.seriales.some(x => norm(x) === norm(o.serial))) ? r.excepcion.motivo : null;
           // El modelo del radio que ENTRA es el de su ficha, no el pedido: un
           // PNC460-R puesto por un PNC550-R partía una ficha fantasma en la OS
           // de programación (GR20260923-01, 2026-09-29). Ver G.modeloEntrante.
@@ -983,6 +1007,8 @@ window.AlmacenAsignar = (() => {
         ? (completo
           ? 'Corrección guardada — el sistema corrige el contrato y avisa a activaciones.'
           : 'Corrección guardada (parcial): falta confirmar el resto para que se aplique.')
+        : completo && g.tipo === 'reemplazo' && r.excepcion
+          ? 'Asignación completa con otro modelo — va a administración; la orden de programación sale cuando lo apruebe.'
         : completo
           ? 'Asignación completa — el sistema crea la orden de programación y avisa a Recepción.'
           : 'Asignación guardada (parcial).', 'ok');

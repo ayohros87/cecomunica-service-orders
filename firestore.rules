@@ -1032,7 +1032,11 @@ service cloud.firestore {
         return userRole() in ["administrador","gerente"]
           && resource.data.estado == "pendiente_aprobacion"
           && request.resource.data.estado in ["pendiente_bodega","en_proceso","pendiente_firma","pendiente_cliente"]
-          && soloTocaG(["estado","aprobacion","cierre","cobro"])
+          // `cambio_modelo` (2026-09-29): la decisión sobre un radio de otro
+          // modelo que puso bodega — la toma administración al sacar la
+          // gestión de pendiente_aprobacion, nunca bodega (esAsignacionGestion
+          // solo toca `items`).
+          && soloTocaG(["estado","aprobacion","cierre","cobro","cambio_modelo"])
           && (request.resource.data.estado != "pendiente_cliente"
               || resource.data.get("causa", "") == "dano_cliente")
           && (resource.data.tipo != "baja"
