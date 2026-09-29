@@ -1438,14 +1438,24 @@ module.exports = onDocumentWritten(
         });
       }
       if (gC) {
+        // El entrante lleva el modelo de SU ficha (G.modeloEntrante). Si el
+        // navegador no lo estampó (bundle viejo), se completa aquí y se guarda
+        // en el expediente para la entrega y la anulación.
+        if (gC.tipo === "reemplazo") {
+          const { items, cambio } = await G.completarModeloEntrante(gC.items);
+          if (cambio) {
+            gC.items = items;
+            await ref.set({ items }, { merge: true }).catch((e) =>
+              logger.warn("[onGestionWrite] modelo del entrante no guardado", { gid, message: e.message }));
+          }
+        }
         // Entrantes al pool: asignados a la gestión. El de reemplazo HEREDA el
         // contrato (línea de facturación) del saliente; el de demo queda del
         // cliente sin contrato (asignacion.tipo:'demo').
         const entrantes = gC.tipo === "reemplazo"
           ? (gC.items || []).map(it => ({
               serial: it.serial_nuevo,
-              modelo_id: it.modelo_solicitado_id || it.modelo_id || null,
-              modelo: it.modelo_solicitado || it.modelo || "",
+              ...G.modeloEntrante(it),
               asignacion: {
                 contrato_doc_id: it.contrato_doc_id || null,
                 contrato_id: it.contrato_id || null,

@@ -398,9 +398,10 @@ Object.assign(window.Centro, {
           radio_name: cfg?.radio_name || '',
           gps: cfg?.gps || false,
           grupos: cfg ? cfg.grupos : [],
-          // El modelo que ENTRA (el solicitado), no el del saliente.
-          modelo_id: it.modelo_solicitado_id || it.modelo_id || '',
-          modelo_label: it.modelo_solicitado || it.modelo || '',
+          // El modelo que ENTRA: el de la ficha del radio asignado y, si aún
+          // no lo hay, el solicitado — nunca el del saliente.
+          modelo_id: it.modelo_id_nuevo || it.modelo_solicitado_id || it.modelo_id || '',
+          modelo_label: it.modelo_nuevo || it.modelo_solicitado || it.modelo || '',
           // Referencia para quien lo lea; el lote de POC ignora estos dos.
           serial_saliente: it.serial_saliente,
           ficha_saliente: cfg ? (cfg.cerrada ? 'cerrada' : 'viva') : 'sin ficha en POC',

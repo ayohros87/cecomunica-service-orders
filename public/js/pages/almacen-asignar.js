@@ -619,8 +619,8 @@ window.AlmacenAsignar = (() => {
   function serialesActuales(g) {
     if (g.tipo === 'reemplazo' || esCambio(g)) {
       return (g.items || []).filter(it => it.serial_nuevo).map(it => ({
-        serial: it.serial_nuevo, modelo: it.modelo_solicitado || it.modelo || '',
-        modelo_id: it.modelo_solicitado_id || it.modelo_id || '',
+        serial: it.serial_nuevo, modelo: it.modelo_nuevo || it.modelo_solicitado || it.modelo || '',
+        modelo_id: it.modelo_id_nuevo || it.modelo_solicitado_id || it.modelo_id || '',
         nota: it.serial_saliente ? `sustituye a ${it.serial_saliente}` : '',
       }));
     }
@@ -772,7 +772,7 @@ window.AlmacenAsignar = (() => {
   function serialesGuardadosGestion(g) {
     const out = {};
     if (g.tipo === 'reemplazo' || esCambio(g)) {
-      (g.items || []).forEach(it => { const k = norm(it.serial_nuevo); if (k) out[k] = { serial: it.serial_nuevo, pool_doc_id: it.pool_doc_id_nuevo || null, modelo: it.modelo_solicitado || it.modelo || '', modelo_id: it.modelo_solicitado_id || it.modelo_id || null }; });
+      (g.items || []).forEach(it => { const k = norm(it.serial_nuevo); if (k) out[k] = { serial: it.serial_nuevo, pool_doc_id: it.pool_doc_id_nuevo || null, modelo: it.modelo_nuevo || it.modelo_solicitado || it.modelo || '', modelo_id: it.modelo_id_nuevo || it.modelo_solicitado_id || it.modelo_id || null }; });
     } else {
       const lista = (g.tipo === 'demo' ? g.demo?.seriales_asignados : g.aumento?.seriales_asignados) || [];
       lista.forEach(s => { const k = norm(s.serial); if (k) out[k] = s; });
@@ -944,9 +944,17 @@ window.AlmacenAsignar = (() => {
         const items = (g.items || []).map(it => ({ ...it }));
         items.forEach((it, ix) => {
           const s = datos.seriales.find(x => x.clave === String(ix));
-          if (!s) { it.serial_nuevo = null; it.pool_doc_id_nuevo = null; return; }
+          if (!s) { it.serial_nuevo = null; it.pool_doc_id_nuevo = null; it.modelo_id_nuevo = null; it.modelo_nuevo = null; return; }
           const o = objeto(s);
           it.serial_nuevo = o.serial; it.pool_doc_id_nuevo = o.pool_doc_id; it.asignado_at = new Date().toISOString();
+          // El modelo del radio que ENTRA es el de su ficha, no el pedido: un
+          // PNC460-R puesto por un PNC550-R partía una ficha fantasma en la OS
+          // de programación (GR20260923-01, 2026-09-29). Ver G.modeloEntrante.
+          if (g.tipo === 'reemplazo') {
+            const u = r.unidades.get(norm(s.serial));
+            it.modelo_id_nuevo = u?.modelo_id || null;
+            it.modelo_nuevo = u?.modelo_label || null;
+          }
           // Lo que bodega confirma deja de ser propuesta de quien la pidió.
           if (esCambio(g)) { it.serial_nuevo_propuesto = false; it.confirmado_por_bodega = true; }
         });

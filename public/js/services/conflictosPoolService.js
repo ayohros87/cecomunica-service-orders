@@ -42,7 +42,8 @@ const ConflictosPoolService = {
   },
 
   // Fusiona las fichas `absorbidosIds` en `keeperId` (callable: conserva el
-  // kardex de las absorbidas). Devuelve { fusionados }.
+  // kardex de las absorbidas). Devuelve { fusionados, heredoEstado } —
+  // heredoEstado ≠ null cuando la conservada tomó el flujo vivo de una absorbida.
   async fusionar({ keeperId, absorbidosIds }) {
     const fn = firebase.functions().httpsCallable('fusionarPoolFicha');
     const res = await fn({ keeperId, absorbidosIds });

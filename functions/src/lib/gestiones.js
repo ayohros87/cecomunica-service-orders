@@ -149,6 +149,51 @@ async function registrarEvento(gid, accion, detalle) {
   } catch (e) { logger.warn("[gestiones] evento no registrado", { gid, accion, error: e.message }); }
 }
 
+// El modelo del ENTRANTE de un reemplazo es el de SU ficha, no el que se pidió
+// (2026-09-29, GR20260923-01 / TRANSPORTE LIGO). `modelo_solicitado` es la
+// referencia; el radio que bodega pone puede ser de otra familia (un PNC460-R
+// por un PNC550-R). Con el modelo pedido, resolver() no casaba el serial con
+// su ficha: la asignación rebotaba ('no-existe'), la OS de programación partía
+// una ficha fantasma SERIAL__modelo en taller y la entrega dejaba el radio real
+// "en bodega" estando con el cliente.
+function modeloEntrante(it) {
+  return {
+    modelo_id: it?.modelo_id_nuevo || it?.modelo_solicitado_id || it?.modelo_id || null,
+    modelo: String(it?.modelo_nuevo || it?.modelo_solicitado || it?.modelo || "").trim(),
+  };
+}
+
+// Estampa modelo_id_nuevo / modelo_nuevo desde la ficha del pool en los ítems
+// que ya tienen serial_nuevo y no lo traen (clientes con el bundle viejo,
+// gestiones en vuelo). Devuelve { items, cambio }. La ficha se busca por
+// pool_doc_id_nuevo; si no hay, por serial cuando la ficha es ÚNICA — con dos
+// fichas (colisión real Kenwood) no se adivina y queda el modelo pedido.
+async function completarModeloEntrante(items) {
+  const pool = require("../domain/equiposPool");
+  let cambio = false;
+  const out = [];
+  for (const it of (items || [])) {
+    const serial = String(it?.serial_nuevo || "").trim();
+    if (!serial || it.modelo_id_nuevo) { out.push(it); continue; }
+    let ficha = null;
+    try {
+      if (it.pool_doc_id_nuevo) {
+        const s = await db.collection("equipos_pool").doc(it.pool_doc_id_nuevo).get();
+        if (s.exists) ficha = s.data();
+      }
+      if (!ficha) {
+        const q = await db.collection("equipos_pool").where("serial_norm", "==", pool.normSerial(serial)).get();
+        if (q.size === 1) ficha = q.docs[0].data();
+      }
+    } catch (e) { logger.warn("[gestiones] ficha del entrante ilegible", { serial, error: e.message }); }
+    if (ficha?.modelo_id) {
+      out.push({ ...it, modelo_id_nuevo: ficha.modelo_id, modelo_nuevo: ficha.modelo_label || "" });
+      cambio = true;
+    } else out.push(it);
+  }
+  return { items: out, cambio };
+}
+
 /**
  * Crea la(s) orden(es) de PROGRAMACIÓN de una gestión con seriales asignados.
  * Reemplazo: UNA orden por contrato afectado (los ítems pueden cruzar
@@ -201,8 +246,8 @@ async function crearOrdenesProgramacion(gid, g) {
       const serial = String((it.esDemo || it.esLinea) ? it.serial : it.serial_nuevo || "").trim();
       return {
         id: crypto.randomUUID(),
-        modelo_id: ((it.esDemo || it.esLinea) ? it.modelo_id : (it.modelo_solicitado_id || it.modelo_id)) || null,
-        modelo: String((it.esDemo || it.esLinea) ? it.modelo : (it.modelo_solicitado || it.modelo || "")).trim(),
+        modelo_id: ((it.esDemo || it.esLinea) ? it.modelo_id : modeloEntrante(it).modelo_id) || null,
+        modelo: String((it.esDemo || it.esLinea) ? it.modelo : modeloEntrante(it).modelo).trim(),
         serial,
         numero_de_serie: serial,
         observaciones: it.esDemo
@@ -383,7 +428,7 @@ async function limpiarAnulacion(gid, g) {
 
   // 4) Entrantes asignados por la gestión
   const entrantes = [
-    ...(g.items || []).map(it => ({ serial: it.serial_nuevo, modelo_id: it.modelo_solicitado_id || it.modelo_id, modelo: it.modelo_solicitado || it.modelo, saliente: it.serial_saliente })),
+    ...(g.items || []).map(it => ({ serial: it.serial_nuevo, ...modeloEntrante(it), saliente: it.serial_saliente })),
     ...((g.demo?.seriales_asignados || [])),
     ...((g.aumento?.seriales_asignados || [])),
   ].filter(u => String(u.serial || "").trim());
@@ -742,6 +787,7 @@ module.exports = {
   destinatariosRecepcionVendedor, vendedorEmailDeCliente, adminEmails, aprobadoresEmails, aprobacionesTo, encolarCorreo,
   configEmailTo,
   registrarEvento, crearOrdenesProgramacion,
+  modeloEntrante, completarModeloEntrante,
   bodegaEmailTo,
   salientesDeReemplazo,
 };

@@ -55,7 +55,11 @@ function patchGestion(g, mapa) {
       const n = cambia(it.serial_nuevo);
       if (!n) return it;
       toco = true;
-      return { ...it, serial_nuevo: n.nuevo, pool_doc_id_nuevo: n.pool_doc_id || it.pool_doc_id_nuevo || null };
+      return {
+        ...it, serial_nuevo: n.nuevo, pool_doc_id_nuevo: n.pool_doc_id || it.pool_doc_id_nuevo || null,
+        // El modelo del entrante es el de su ficha (lib/gestiones.modeloEntrante).
+        ...(n.modelo_id_nuevo ? { modelo_id_nuevo: n.modelo_id_nuevo, modelo_nuevo: n.modelo_nuevo || "" } : {}),
+      };
     });
     return toco ? { items } : null;
   }
@@ -180,7 +184,8 @@ async function aplicar(gid, g, pares) {
       });
 
       aplicados.push({ anterior, nuevo, modelo, modelo_id: modeloId,
-        pool_doc_id: pool.normSerial(nuevo), hereda_estado: viejo.estado });
+        pool_doc_id: entrante.id || pool.normSerial(nuevo), hereda_estado: viejo.estado,
+        modelo_id_nuevo: entrante.modelo_id || null, modelo_nuevo: entrante.modelo_label || "" });
     } catch (e) {
       logger.error("[correccionGestion] par no aplicado", { gid, anterior, nuevo, error: e.message });
       fallidos.push({ anterior, nuevo, motivo: e.message });

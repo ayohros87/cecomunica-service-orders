@@ -1,6 +1,8 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../lib/admin");
+const { custodiaPatch } = require("../domain/equiposPool");
+const { flujoAHeredar } = require("../domain/fusionPool");
 
 /**
  * fusionarPoolFicha — fusiona fichas duplicadas de un MISMO serial en la que
@@ -13,7 +15,7 @@ const { admin, db } = require("../lib/admin");
  * todos los docs compartan serial_norm.
  *
  * input:  { keeperId: string, absorbidosIds: string[] }
- * output: { fusionados: number, compartidoLimpiado: boolean }
+ * output: { fusionados: number, compartidoLimpiado: boolean, heredoEstado: string|null }
  * Roles: administrador | inventario (los mismos que operan la página).
  */
 
@@ -61,7 +63,9 @@ module.exports = onCall({ region: "us-central1" }, async (request) => {
   if (!keeperSnap.exists) throw new HttpsError("not-found", `No existe la ficha ${keeperId}.`);
   const keeper = { id: keeperSnap.id, ref: keeperSnap.ref, ...keeperSnap.data() };
 
-  let fusionados = 0;
+  // Todas las absorbidas antes de tocar nada: la validación de serial no
+  // puede fallar a la mitad, y la herencia del flujo se decide viéndolas juntas.
+  const absorbidas = [];
   for (const gid of absorbidosIds) {
     const gSnap = await col.doc(gid).get();
     if (!gSnap.exists) continue;
@@ -70,6 +74,15 @@ module.exports = onCall({ region: "us-central1" }, async (request) => {
       throw new HttpsError("failed-precondition",
         `${gid} no comparte serial con ${keeperId} — no se puede fusionar.`);
     }
+    absorbidas.push(g);
+  }
+  // La persona eligió la ficha por identidad, no por ubicación: si la
+  // absorbida llevaba el flujo vivo (orden, asignación, cliente) y la
+  // conservada está en reposo, el flujo pasa a la conservada (domain/fusionPool).
+  const herencia = flujoAHeredar(keeper, absorbidas);
+
+  let fusionados = 0;
+  for (const g of absorbidas) {
 
     const movs = await g.ref.collection("movimientos").get();
     const batch = db.batch();
@@ -86,6 +99,26 @@ module.exports = onCall({ region: "us-central1" }, async (request) => {
         + `${g.asignacion?.cliente_nombre ? ` con ${g.asignacion.cliente_nombre}` : ""}).`,
     });
     const upd = rellenar(keeper, g);
+    const hereda = herencia && herencia.de_ficha === g.id;
+    if (hereda) {
+      Object.assign(upd, {
+        estado: herencia.estado,
+        orden_actual_id: herencia.orden_actual_id,
+        asignacion: herencia.asignacion,
+        poc_device_id: herencia.poc_device_id,
+        ...custodiaPatch(herencia.estado, herencia.asignacion, keeper),
+      });
+      batch.set(keeper.ref.collection("movimientos").doc(), {
+        at: admin.firestore.FieldValue.serverTimestamp(),
+        por: quien.uid, por_email: quien.email,
+        tipo: "fusion_hereda_flujo", de_estado: keeper.estado, a_estado: herencia.estado,
+        ref: herencia.orden_actual_id ? { tipo: "orden", id: herencia.orden_actual_id, label: herencia.orden_actual_id } : null,
+        notas: `La ficha absorbida ${g.id} llevaba el flujo en curso`
+          + `${herencia.orden_actual_id ? ` (orden ${herencia.orden_actual_id})` : ""}`
+          + `${herencia.asignacion?.cliente_nombre ? ` con ${herencia.asignacion.cliente_nombre}` : ""}`
+          + ` — la ficha conservada lo toma en lugar de quedarse en ${keeper.estado}.`,
+      });
+    }
     batch.set(keeper.ref, {
       ...upd,
       conflicto_revisado: admin.firestore.FieldValue.delete(),
@@ -94,6 +127,7 @@ module.exports = onCall({ region: "us-central1" }, async (request) => {
     }, { merge: true });
     batch.delete(g.ref);
     await batch.commit();
+    if (hereda) Object.assign(keeper, upd);
     fusionados++;
   }
 
@@ -105,6 +139,6 @@ module.exports = onCall({ region: "us-central1" }, async (request) => {
     compartidoLimpiado = true;
   }
 
-  logger.info("[fusionarPoolFicha]", { keeperId, absorbidosIds, fusionados, por: quien.uid });
-  return { fusionados, compartidoLimpiado };
+  logger.info("[fusionarPoolFicha]", { keeperId, absorbidosIds, fusionados, heredo: herencia?.estado || null, por: quien.uid });
+  return { fusionados, compartidoLimpiado, heredoEstado: herencia?.estado || null };
 });

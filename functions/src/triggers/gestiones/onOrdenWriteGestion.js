@@ -57,7 +57,8 @@ async function estamparLinaje(gid, g, ordenEntregaId) {
       notas,
     });
     try {
-      const rEnt = await pool.resolver(entrante, it.modelo_solicitado_id || it.modelo_id || null, it.modelo_solicitado || it.modelo || "");
+      const mEnt = G.modeloEntrante(it);
+      const rEnt = await pool.resolver(entrante, mEnt.modelo_id, mEnt.modelo);
       if (rEnt.data) {
         await rEnt.ref.set({
           reemplaza_a: pool.normSerial(saliente),
@@ -111,8 +112,8 @@ async function estamparLinaje(gid, g, ordenEntregaId) {
     try {
       await db.collection("gestiones").doc(gid).collection("mapeos").add({
         saliente, entrante,
-        modelo: it.modelo_solicitado || it.modelo || null,
-        modelo_id: it.modelo_solicitado_id || it.modelo_id || null,
+        modelo: G.modeloEntrante(it).modelo || null,
+        modelo_id: G.modeloEntrante(it).modelo_id,
         contrato_doc_id: it.contrato_doc_id || null,
         contrato_id: it.contrato_id || null,
         auto: true,

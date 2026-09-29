@@ -46,8 +46,22 @@ const ASIGNACION = {
   if (!snap.exists) throw new Error(`No existe la ficha ${DOC_ID}`);
   const d = snap.data();
   console.log(`Ficha ${DOC_ID}: ${d.modelo_label} · estado=${d.estado} · orden=${d.orden_actual_id} · asignacion=${JSON.stringify(d.asignacion)}`);
+  // Paso 2 (idempotente): el linaje que la entrega no estampó porque tampoco
+  // encontró la ficha (onOrdenWriteGestion.estamparLinaje).
+  if (!d.reemplazo_origen) {
+    const origen = {
+      gestion_id: "GR20260923-01", saliente: "21708A0008", orden_entrega_id: "2026092403",
+      contrato_doc_id: null, contrato_id: null,
+      at: admin.firestore.Timestamp.fromDate(new Date("2026-09-25T20:21:57Z")),
+    };
+    console.log(`→ reemplazo_origen ${JSON.stringify({ ...origen, at: "2026-09-25T20:21:57Z" })}`);
+    if (EXECUTE) {
+      await snap.ref.set({ reemplaza_a: "21708A0008", reemplazo_origen: origen,
+        updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    }
+  }
   if (d.estado !== pool.ESTADOS.EN_BODEGA) {
-    console.log("No está en_bodega — nada que corregir (¿ya se corrigió o alguien la movió?).");
+    console.log("No está en_bodega — nada más que corregir (¿ya se corrigió o alguien la movió?).");
     return;
   }
   console.log(`→ ${pool.ESTADOS.EN_CLIENTE} con asignación ${JSON.stringify(ASIGNACION)}`);

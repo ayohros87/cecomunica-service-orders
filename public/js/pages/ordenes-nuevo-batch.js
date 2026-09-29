@@ -41,7 +41,7 @@ let gestionOrden = null;
 function serialesDeGestion(g) {
   if (!g) return [];
   const lista = g.tipo === "reemplazo"
-    ? (g.items || []).map(it => ({ serial: it.serial_nuevo, modelo: it.modelo_solicitado || it.modelo, modelo_id: it.modelo_solicitado_id || it.modelo_id }))
+    ? (g.items || []).map(it => ({ serial: it.serial_nuevo, modelo: it.modelo_nuevo || it.modelo_solicitado || it.modelo, modelo_id: it.modelo_id_nuevo || it.modelo_solicitado_id || it.modelo_id }))
     : ((g.tipo === "aumento" ? g.aumento?.seriales_asignados : g.demo?.seriales_asignados) || []);
   return lista
     .map(s => ({ serial: String(s.serial || "").trim(), modelo: s.modelo || "", modelo_id: s.modelo_id || "" }))

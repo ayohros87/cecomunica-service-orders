@@ -515,7 +515,11 @@ window.AlmacenHoy = (() => {
     const btn = root.querySelector('[data-sheet-action="fusionar"]'); if (btn) btn.disabled = true;
     try {
       const res = await ConflictosPoolService.fusionar({ keeperId, absorbidosIds });
-      if (window.Toast) Toast.show(`Fusión lista: ${res.fusionados} ficha(s) absorbida(s).`, 'ok');
+      // Si la absorbida traía el flujo en curso (orden, cliente), la conservada
+      // lo tomó: se dice, para que nadie crea que el radio sigue en bodega.
+      const heredo = res.heredoEstado
+        ? ` Tomó el estado de la absorbida: ${window.EquiposPoolService?.ESTADO_LABELS?.[res.heredoEstado] || res.heredoEstado}.` : '';
+      if (window.Toast) Toast.show(`Fusión lista: ${res.fusionados} ficha(s) absorbida(s).${heredo}`, 'ok');
       cargar();
       return true;
     } catch (e) {
