@@ -107,10 +107,16 @@ Object.assign(window.Centro, {
   _pintarEncabezado(c) {
     document.getElementById('fAvatar').textContent = this._iniciales(c.nombre);
     document.getElementById('fNombre').textContent = c.nombre || '(sin nombre)';
-    document.getElementById('fMeta').textContent = [
-      c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null, c.telefono || null, c.email || null,
-      c.vendedor_email ? `Vendedor: ${c.vendedor_email}` : null,
-    ].filter(Boolean).join(' · ') || '—';
+    // Meta en piezas (2026-09-28): en escritorio una línea con " · " (CSS);
+    // en el teléfono cada pieza es una línea corta y el vendedor va sin dominio.
+    const ident = [c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null, c.telefono || null].filter(Boolean);
+    const [vUser, vDom] = String(c.vendedor_email || '').split('@');
+    const meta = [
+      ident.length ? `<span class="m">${this.esc(ident.join(' · '))}</span>` : '',
+      c.email ? `<span class="m">${this.esc(c.email)}</span>` : '',
+      c.vendedor_email ? `<span class="m">Vendedor: ${this.esc(vUser)}${vDom ? `<span class="dom">@${this.esc(vDom)}</span>` : ''}</span>` : '',
+    ].filter(Boolean);
+    document.getElementById('fMeta').innerHTML = meta.join('') || '—';
     this._pintarChipReg(c);
   },
 });

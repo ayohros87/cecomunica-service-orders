@@ -153,21 +153,30 @@ Object.assign(window.Centro, {
     return (nombre || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
   },
 
+  // Tarjeta del directorio (2026-09-28): el estado de la cuenta a la vista con
+  // lo que el doc de cliente YA trae (activo, regularizacion, vendedor). No
+  // hay conteo cacheado de contratos/gestiones en el doc: no se pinta ninguno.
   _filaCliente(c) {
-    const sub = [c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null, c.telefono || null,
-                 c.vendedor_email ? `Vendedor: ${c.vendedor_email.split('@')[0]}` : (this.filtroReg ? 'sin vendedor' : null)]
-      .filter(Boolean);
-    // Con el filtro de regularización, la fila dice cuánto debe la cuenta.
-    const r = this.filtroReg ? c.regularizacion : null;
+    const sub = [c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null, c.telefono || null].filter(Boolean);
+    const r = c.regularizacion;
+    const nivel = r?.puntos > 0 ? ((window.Regularizacion?.NIVEL_LABEL || {})[r.nivel] || r.nivel || '') : '';
+    // Con el filtro de regularización, la fila dice además el nivel de la deuda.
+    if (this.filtroReg && nivel) sub.unshift(nivel);
+    const inactivo = c.activo === false;
+    const vendedor = c.vendedor_email ? c.vendedor_email.split('@')[0] : '';
+    const chips = [];
     if (r?.puntos > 0) {
-      const nivel = (window.Regularizacion?.NIVEL_LABEL || {})[r.nivel] || r.nivel || '';
-      sub.unshift(`${nivel ? nivel + ' · ' : ''}${r.puntos} punto${r.puntos === 1 ? '' : 's'} por regularizar`);
+      chips.push(`<span class="cg-chip cg-chip--warn" title="${this.esc(`${nivel ? nivel + ' · ' : ''}${r.puntos} punto${r.puntos === 1 ? '' : 's'} por regularizar`)}">Por regularizar · ${Number(r.puntos)}</span>`);
     }
-    return `<a class="cg-row" href="?id=${encodeURIComponent(c.id)}"
+    if (!c.vendedor_asignado && !c.vendedor_email) chips.push(`<span class="cg-chip cg-chip--warn" title="Nadie la atiende: asígnale un vendedor">Sin vendedor</span>`);
+    if (inactivo) chips.push(`<span class="cg-chip cg-chip--muted">Inactivo</span>`);
+    const lado = (vendedor ? `<span class="cg-vend" title="Vendedor: ${this.esc(c.vendedor_email)}">${this.esc(vendedor)}</span>` : '') + chips.join('');
+    return `<a class="cg-row cg-row--cli${inactivo ? ' cg-tenue' : ''}" href="?id=${encodeURIComponent(c.id)}"
       onclick="event.preventDefault(); Centro.abrir('${this.esc(c.id)}')">
-      <div class="cg-av">${this.esc(this._iniciales(c.nombre))}</div>
-      <div style="min-width:0;"><div class="n">${this.esc(c.nombre || '(sin nombre)')}</div>
+      <div class="cg-av${inactivo ? ' cg-av--off' : ''}">${this.esc(this._iniciales(c.nombre))}</div>
+      <div class="cg-main"><div class="n">${this.esc(c.nombre || '(sin nombre)')}</div>
         <div class="s">${this.esc(sub.join(' · ') || '—')}</div></div>
+      <div class="cg-side">${lado}</div>
       <span class="arr">›</span></a>`;
   },
 });

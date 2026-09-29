@@ -88,23 +88,72 @@
    Grid responsivo (antes 1.5fr/1fr fijo que rompía en móvil) +
    checklist como timeline componente. */
 .cg-exp { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr); gap: 16px; }
-@media (max-width: 760px) { .cg-exp { grid-template-columns: 1fr; } }
+/* En el teléfono la línea de tiempo va ARRIBA del detalle: es lo primero que
+   se busca ("¿en qué paso está y a quién le toca?"). */
+@media (max-width: 760px) {
+  .cg-exp { grid-template-columns: 1fr; }
+  .cg-exp > :last-child { order: -1; }
+}
 
+/* ── Fila de gestión / contrato en trámite (2026-09-28) ──────────
+   Grid de dos columnas: título+subtítulo · clúster (progreso, chips, ⋯,
+   flecha). En el teléfono el clúster baja a una segunda línea alineado a
+   la izquierda; antes el título quedaba en una columna de ~100 px. */
+.cg-row.cg-row--g { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: center; }
+.cg-row--g .cg-gmain { min-width: 0; }
+.cg-row--g .cg-gside { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.cg-row--g .cg-gside .arr { margin-left: 0; }
+/* La atenuación del historial va en el contenido, nunca en el clúster entero:
+   el menú "⋯" cuelga de él y quedaría traslúcido y debajo de las filas siguientes. */
+.cg-row.cg-tenue > .cg-gside { opacity: 1; }
+.cg-row.cg-tenue > .cg-gside > *:not(.cg-rowacts) { opacity: .62; }
+@media (max-width: 760px) {
+  .cg-row.cg-row--g { grid-template-columns: 1fr; }
+  .cg-row--g .cg-gside { justify-content: flex-start; }
+}
+/* Progreso de la gestión: mini barra verde + "3/6" en tabular-nums. */
+.cg-prog { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: 12px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.cg-prog .bar { display: block; width: 60px; height: 6px; border-radius: 999px; background: var(--surface-sunken, #EEF2F6); overflow: hidden; }
+.cg-prog .bar > i { display: block; height: 100%; border-radius: 999px; background: var(--cg-ok); }
+
+/* ── Línea de tiempo del expediente (2026-09-28) ─────────────────
+   Se lee como RUTA: los puntos van unidos por una línea fina; lo hecho en
+   verde con el título ya en segundo plano; el paso SIGUIENTE destacado en
+   cálido con su etiqueta y "le toca a X" como chip; lo futuro, tenue. */
 .cg-tl { margin: 0; }
-.cg-tl-item { display: flex; gap: 9px; align-items: flex-start; margin-bottom: 8px; }
+.cg-tl-item {
+  display: flex; gap: 10px; align-items: flex-start; position: relative;
+  margin: 0; padding: 5px 8px 5px 6px; border-radius: 8px;
+  border-left: 3px solid transparent;
+}
+.cg-tl-item::before {
+  content: ''; position: absolute; left: 14px; top: 26px; bottom: -8px; width: 2px;
+  background: var(--border-default);
+}
+.cg-tl-item.done::before { background: var(--cg-ok); }
+.cg-tl-item:last-child::before { display: none; }
 .cg-tl-dot {
-  width: 18px; height: 18px; border-radius: 6px; flex: none;
+  width: 18px; height: 18px; border-radius: 6px; flex: none; position: relative; z-index: 1;
   display: grid; place-items: center; font-size: 12px; margin-top: 1px;
   border: 1.5px solid var(--border-default);
   background: var(--surface-card, #fff); color: transparent;
 }
 .cg-tl-item.done .cg-tl-dot { background: var(--cg-ok); border-color: var(--cg-ok); color: #fff; }
-.cg-tl-item.next .cg-tl-dot { border-color: var(--cg-warn); }
-.cg-tl-t { font-size: 13px; }
+.cg-tl-item.next { background: var(--cg-warn-soft); border-left-color: var(--cg-warn); }
+.cg-tl-item.next .cg-tl-dot { border: 2px solid var(--cg-warn); }
+.cg-tl-item.todo .cg-tl-dot { border-color: var(--border-subtle, #E2E8EF); }
+.cg-tl-t { font-size: 13px; min-width: 0; }
 .cg-tl-t b { display: block; }
 .cg-tl-t .s { color: var(--fg-3); font-size: 12px; }
-/* "le toca a X" en el paso que sigue: mismo peso que en la fila de "Ahora" (centro.html). */
-.cg-tl-t .s .toca { color: var(--fg-2); font-weight: 600; }
+.cg-tl-item.done .cg-tl-t b { color: var(--fg-2); }
+.cg-tl-item.todo .cg-tl-t b { color: var(--fg-3); font-weight: 600; }
+.cg-tl-item.todo .cg-tl-t .s { color: var(--fg-4); }
+.cg-tl-lbl {
+  display: block; font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+  font-weight: 700; color: var(--cg-warn-deep); line-height: 1.2; margin-bottom: 2px;
+}
+/* "le toca a X": chip en su propia línea, el mismo tono que la fila de "Ahora". */
+.cg-tl-toca { display: block; margin-top: 5px; }
 
 .cg-os { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .cg-os a {

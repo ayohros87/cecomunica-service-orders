@@ -211,6 +211,22 @@ Object.assign(window.Centro, {
   _renovacionEnTramite() {
     return this._tramitesContrato().find(c => c.accion === 'Renovación') || null;
   },
+  // Progreso de la fila: mini barra verde + "hechos/total" (2026-09-28).
+  _progHtml(done, total) {
+    const pct = total > 0 ? Math.round(Math.min(1, Math.max(0, done / total)) * 100) : 0;
+    return `<span class="cg-prog" title="${done} de ${total} pasos" aria-label="${done} de ${total} pasos">
+      <span class="bar" aria-hidden="true"><i style="width:${pct}%;"></i></span><span class="num">${done}/${total}</span></span>`;
+  },
+  // Un paso de la línea de tiempo (gestión y contrato comparten la anatomía):
+  // hecho ✓ en verde; SIGUIENTE destacado con etiqueta y "le toca a X" como
+  // chip; futuro, tenue. El título ya viene escapado/armado por quien llama.
+  _tlItem({ titulo, sub, done, next, toca }) {
+    return `<div class="cg-tl-item ${done ? 'done' : next ? 'next' : 'todo'}">
+        <span class="cg-tl-dot">${done ? '✓' : ''}</span>
+        <span class="cg-tl-t">${next ? '<span class="cg-tl-lbl">Siguiente</span>' : ''}<b>${titulo}</b><span class="s">${sub}</span>${toca
+          ? `<span class="cg-tl-toca"><span class="cg-chip cg-chip--warn">le toca a ${this.esc(toca)}</span></span>` : ''}</span>
+      </div>`;
+  },
   _tramiteHtml(c) {
     const abierta = this.gSel === 'ct-' + c.id;
     const reg = this._regPendiente(c);
@@ -272,10 +288,7 @@ Object.assign(window.Centro, {
     const esRenov = c.accion === 'Renovación';
     const timeline = `<div class="cg-tl">` + pasos.map(([t, ok, s, rol], i) => {
       const next = !ok && pasos.slice(0, i).every(p => p[1]);
-      const toca = next ? this._tocaLabel(rol) : '';
-      return `<div class="cg-tl-item${ok ? ' done' : next ? ' next' : ''}">
-        <span class="cg-tl-dot">${ok ? '✓' : ''}</span>
-        <span class="cg-tl-t"><b>${t}</b><span class="s">${s}${toca ? ` · le toca a <span class="toca">${this.esc(toca)}</span>` : ''}</span></span></div>`;
+      return this._tlItem({ titulo: t, sub: s, done: ok, next, toca: next ? this._tocaLabel(rol) : '' });
     }).join('') + `</div>`;
     // Las acciones ya NO se pintan aquí sueltas: viven en el "⋯" de la fila y
     // en el pie del detalle, la misma lista y en el mismo orden que la de una
@@ -284,14 +297,16 @@ Object.assign(window.Centro, {
     const acc = this._accionesContrato(c);
     const acciones = this._pieAcciones('dct-' + c.id, acc);
     return `
-      <div class="cg-row" id="grow-ct-${this.esc(c.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('ct-${this.esc(c.id)}')"
+      <div class="cg-row cg-row--g" id="grow-ct-${this.esc(c.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('ct-${this.esc(c.id)}')"
            onkeydown="if(event.key==='Enter')this.click()" style="${abierta ? 'border-color:var(--accent);' : ''}">
-        <div style="min-width:0; flex:1;"><div class="n cg-mono" style="font-size:13px;">${this.esc(c.contrato_id || c.id)}</div>
+        <div class="cg-gmain"><div class="n cg-mono" style="font-size:13px;">${this.esc(c.contrato_id || c.id)}</div>
           <div class="s">${esRenov ? 'Renovación de cuenta' : 'Contrato nuevo'} · ${unid} unid. · $${Number(c.total_mensual || 0).toFixed(2)}/mes</div></div>
-        <span class="num" style="font-size:12px; color:var(--fg-3); flex:none;">${done}/${pasos.length}</span>
-        <span class="cg-chip ${chipCls}" style="flex:none;">${chipTxt}</span>
-        ${this._masFila('ct-' + c.id, this._accionesContrato(c), c.contrato_id || c.id)}
-        <span class="arr" style="margin-left:0;">${abierta ? '▾' : '›'}</span>
+        <div class="cg-gside">
+          ${this._progHtml(done, pasos.length)}
+          <span class="cg-chip ${chipCls}" style="flex:none;">${chipTxt}</span>
+          ${this._masFila('ct-' + c.id, this._accionesContrato(c), c.contrato_id || c.id)}
+          <span class="arr">${abierta ? '▾' : '›'}</span>
+        </div>
       </div>
       ${abierta ? `<div class="ds-card" style="padding:var(--sp-4); margin:-4px 0 10px; border-top:none;">
         <div class="cg-exp">
@@ -418,10 +433,10 @@ Object.assign(window.Centro, {
       const fecha = g.fecha_solicitud?.toDate ? g.fecha_solicitud.toDate().toLocaleDateString('es-PA') : '—';
       const abierta = this.gSel === g.id;
       return `
-      <div class="cg-row${atenuada && !abierta ? ' cg-tenue' : ''}" id="grow-${this.esc(g.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('${this.esc(g.id)}')"
+      <div class="cg-row cg-row--g${atenuada && !abierta ? ' cg-tenue' : ''}" id="grow-${this.esc(g.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('${this.esc(g.id)}')"
            onkeydown="if(event.key==='Enter')this.click()"
            style="${abierta ? 'border-color:var(--accent);' : ''}">
-        <div style="min-width:0; flex:1;"><div class="n cg-mono" style="font-size:13px;${g.estado === 'anulada' ? ' text-decoration:line-through; color:var(--fg-3);' : ''}">${this.esc(g.id)}</div>
+        <div class="cg-gmain"><div class="n cg-mono" style="font-size:13px;${g.estado === 'anulada' ? ' text-decoration:line-through; color:var(--fg-3);' : ''}">${this.esc(g.id)}</div>
           <div class="s">${g.tipo === 'aumento' && g.aumento?.es_regularizacion ? 'Regularización por anexo'
             : g.tipo === 'aumento' && g.aumento?.es_ajuste ? 'Ajuste de tarifa / servicios'
             : g.tipo === 'aumento' && g.aumento?.contrato_papel && !g.aumento?.contrato_doc_id ? `Anexo a contrato en papel <span class="cg-mono">${this.esc(g.aumento.contrato_id || '')}</span>`
@@ -431,16 +446,18 @@ Object.assign(window.Centro, {
             ? this.esc([...(g.aumento?.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`),
                         ...(g.aumento?.cargos || []).map(c => `${c.cantidad} × ${c.concepto}`)].join(', ') || '—')
             : `${(g.items || []).length} serial(es)`} · ${fecha}${g.estado === 'anulada' && g.anulada_motivo ? ` · <i>${this.esc(g.anulada_motivo)}</i>` : ''}</div></div>
-        ${atenuada ? '' : `<span class="num" style="font-size:12px; color:var(--fg-3); flex:none;">${done}/${defsG.length}</span>`}
-        ${g.regularizacion_bloqueada ? `<span class="cg-chip cg-chip--bad" style="flex:none;" title="Las cantidades del anexo no coinciden con los seriales — no se aplicó">No aplicado</span>` : ''}
-        ${this._chipCobro(g)}
-        <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}" style="flex:none;">${this.esc(
-          // Las actualizaciones de seriales ya no se firman (2026-09-09): no
-          // "esperan firma" (auditoría UX 2026-09-28).
-          g.estado === 'pendiente_firma' && g.tipo === 'aumento' && g.aumento?.es_regularizacion
-            ? 'Por aplicar (sin firma)' : GestionesService.estadoLabel(g.estado))}</span>
-        ${this._masFila(g.id, this._accionesGestion(g), g.id)}
-        <span class="arr" style="margin-left:0;">${abierta ? '▾' : '›'}</span>
+        <div class="cg-gside">
+          ${atenuada ? '' : this._progHtml(done, defsG.length)}
+          ${g.regularizacion_bloqueada ? `<span class="cg-chip cg-chip--bad" style="flex:none;" title="Las cantidades del anexo no coinciden con los seriales — no se aplicó">No aplicado</span>` : ''}
+          ${this._chipCobro(g)}
+          <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}" style="flex:none;">${this.esc(
+            // Las actualizaciones de seriales ya no se firman (2026-09-09): no
+            // "esperan firma" (auditoría UX 2026-09-28).
+            g.estado === 'pendiente_firma' && g.tipo === 'aumento' && g.aumento?.es_regularizacion
+              ? 'Por aplicar (sin firma)' : GestionesService.estadoLabel(g.estado))}</span>
+          ${this._masFila(g.id, this._accionesGestion(g), g.id)}
+          <span class="arr">${abierta ? '▾' : '›'}</span>
+        </div>
       </div>
       ${abierta ? this._detalleGestion(g) : ''}`;
     };
@@ -587,10 +604,7 @@ Object.assign(window.Centro, {
       const sub = k === 'firma' && done && typeof GestionAutorizacion !== 'undefined'
         && !GestionAutorizacion.texto(g).firmado
         ? 'Al cliente no se le envió nada a firmar' : s;
-      return `<div class="cg-tl-item${done ? ' done' : next ? ' next' : ''}">
-        <span class="cg-tl-dot">${done ? '✓' : ''}</span>
-        <span class="cg-tl-t"><b>${titulo}</b><span class="s">${sub}${toca ? ` · le toca a <span class="toca">${this.esc(toca)}</span>` : ''}</span></span>
-      </div>`;
+      return this._tlItem({ titulo, sub, done, next, toca });
     }).join('') + `</div>`;
 
     const ordenes = [
