@@ -1776,6 +1776,22 @@ td.acciones, td.flujo {
   align-items: center;
   min-height: 200px;
 }
+/* Variante que FLOTA (2026-09-29). En Almacén, Descartados, Con condición y
+   No devueltos el #loader iba como bloque de 200 px ENCIMA del contenido: al
+   cargar los datos aparecía, empujaba las pestañas y toda la página hacia
+   abajo, y al terminar todo volvía a subir ("se baja con la ruedita y luego
+   sube"). Así el spinner se centra sobre la zona de trabajo (a la derecha del
+   rail) sin ocupar sitio ni tapar clics; el disco blanco lo separa del texto
+   que quede debajo. Mismo id y mismo display toggle en el JS: nada que cambiar. */
+.loader-center--fijo {
+  position: fixed; top: 0; right: 0; bottom: 0; left: var(--cc-rail-cur, 0px);
+  min-height: 0; pointer-events: none; z-index: 40;
+}
+.loader-center--fijo .loader {
+  background: var(--surface-card, #fff);
+  box-shadow: 0 0 0 10px var(--surface-card, #fff), var(--shadow-md);
+}
+@media (max-width: 1024px) { .loader-center--fijo { left: 0; } } /* sin rail: ceco-rail.css */
 
 @keyframes spin {
   to { transform: rotate(360deg); }
