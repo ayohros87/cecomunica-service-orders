@@ -24,7 +24,12 @@ window.WorkspaceTabs = {
     const navCls = `ws-tabs${variant === 'sub' ? ' ws-tabs--sub' : ''}`;
     el.innerHTML = `<nav class="${navCls}" role="tablist">` + (tabs || []).map(t => {
       const is = t.id === active;
-      const badge = `<span class="ws-tab-badge" id="wsBadge-${t.id}" style="display:none"></span>`;
+      // El contador se pinta desde el último valor conocido (sessionStorage)
+      // para que la pestaña ya tenga su ancho al primer frame: antes "Hoy" y
+      // "Asignar" salían sin badge al volver a /almacen/ y, cuando llegaban
+      // los datos, se ensanchaban y corrían el resto de la fila.
+      const n = this._badgeCache(t.id);
+      const badge = `<span class="ws-tab-badge" id="wsBadge-${t.id}"${n ? '' : ' style="display:none"'}>${n || ''}</span>`;
       const inner = `${t.icon ? `<i data-lucide="${t.icon}"></i>` : ''}<span>${t.label}</span>${badge}`;
       const cls = `ws-tab${is ? ' is-active' : ''}`;
       if (t.href && !t.onclick) {
@@ -58,6 +63,11 @@ window.WorkspaceTabs = {
         nav.scrollLeft = a.offsetLeft - (nav.clientWidth - a.offsetWidth) / 2;
       });
     };
+    // Primer pase SÍNCRONO: render() corre en el parse con el CSS ya cargado,
+    // así que la medida es buena y la activa queda centrada ANTES del primer
+    // frame. Con solo el rAF la tira se pintaba en scroll 0 y luego brincaba
+    // hasta la activa (2026-09-29). El rAF queda como segundo pase.
+    aplicar();
     requestAnimationFrame(aplicar);
     // Los iconos se pintan en DOS tiempos: icons.js carga el vendor COMPLETO
     // cuando un nombre cae fuera del censo a medida y repinta, así que las
@@ -76,9 +86,22 @@ window.WorkspaceTabs = {
   },
 
   setBadge(tabId, n) {
+    this._badgeCache(tabId, n);
     const b = document.getElementById(`wsBadge-${tabId}`);
     if (!b) return;
     if (n) { b.textContent = String(n); b.style.display = ''; }
     else { b.style.display = 'none'; }
+  },
+
+  // Último contador por pestaña, por sesión de la pestaña del navegador
+  // (sessionStorage): lo lee render() para reservar el ancho al pintar.
+  // Es solo un adelanto visual; setBadge lo corrige cuando llegan los datos.
+  _badgeCache(tabId, n) {
+    const k = `wsBadge:${tabId}`;
+    try {
+      if (n === undefined) return Number(sessionStorage.getItem(k)) || 0;
+      if (n) sessionStorage.setItem(k, String(n)); else sessionStorage.removeItem(k);
+    } catch (_) { /* almacenamiento bloqueado: sin adelanto */ }
+    return n || 0;
   },
 };

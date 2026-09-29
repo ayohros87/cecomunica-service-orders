@@ -7,6 +7,14 @@
   border-bottom: 2px solid var(--border-default);
   margin: 0 0 var(--sp-4);
 }
+/* Pestañas FIRMES entre páginas (2026-09-29). Piezas / Descartados / Con
+   condición / No devueltos son enlaces a otra página, y la app cruza páginas
+   con @view-transition (ceco-ui.css). Sin nombre propio, la tira vieja y la
+   nueva hacían cross-fade como parte del contenido y se veían "nadar"; con
+   el mismo nombre en las dos páginas el navegador las empareja y las deja
+   QUIETAS, como al rail (cc-rail en ceco-rail.css). Solo la tira principal:
+   el nombre tiene que ser único por página y la de píldoras va aparte. */
+.ws-tabs:not(.ws-tabs--sub) { view-transition-name: ws-tabs; }
 .ws-tab {
   appearance: none; background: none; border: none; cursor: pointer;
   display: inline-flex; align-items: center; gap: 7px;
@@ -14,10 +22,16 @@
   color: var(--fg-3); text-decoration: none;
   border-bottom: 2px solid transparent; margin-bottom: -2px;
   border-radius: var(--radius-md) var(--radius-md) 0 0;
+  white-space: nowrap;
 }
 .ws-tab:hover { color: var(--fg-2); background: var(--surface-sunken); }
 .ws-tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
-.ws-tab svg { width: 15px; height: 15px; }
+/* El icono reserva su caja ANTES de que lucide lo pinte. La tira se pinta en
+   el parse con <i data-lucide> vacíos (0 px) y lucide llega después con el
+   módulo empaquetado: cada pestaña se ensanchaba 15 px al aparecer el svg y
+   toda la fila se corría a la derecha en cada página nueva. Con la caja
+   reservada el svg cae en el mismo sitio y nada se mueve. */
+.ws-tab > i[data-lucide], .ws-tab > svg { width: 15px; height: 15px; flex: 0 0 15px; }
 /* Pantalla angosta: la tira NO se apila. Con 7 pestañas el wrap daba TRES
    filas — 114 px de muro antes del contenido (medido a 390 px, 2026-09-10).
    Aquí es una sola fila que se arrastra con el dedo; workspace-tabs.js
@@ -54,4 +68,4 @@
 .ws-tabs--sub .ws-tab.is-active {
   background: var(--brand-soft); color: var(--accent); border-bottom-color: transparent;
 }
-.ws-tabs--sub .ws-tab svg { width: 14px; height: 14px; }
+.ws-tabs--sub .ws-tab > i[data-lucide], .ws-tabs--sub .ws-tab > svg { width: 14px; height: 14px; flex-basis: 14px; }
