@@ -5,6 +5,7 @@
 import '/js/firebase-init.js';
 import '/js/firebase-aggregates.js';
 import '/js/services/aprobacionesService.js';
+import '/js/ui/bandeja.js';
 import '/js/pages/centro-aprobaciones.js';
 import '/js/services/usuariosService.js';
 import '/js/services/clientesService.js';

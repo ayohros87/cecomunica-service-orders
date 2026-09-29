@@ -16,6 +16,7 @@
   <!-- UI kit del módulo (2026-08-28): chips unificados, anatomía de modal,
        pasos de wizard, expediente responsivo, jerarquía de botones. -->
   <link rel="stylesheet" href="../css/ceco-gestion.css?v=45619541">
+  <link rel="stylesheet" href="../css/bandeja.css?v=0a2d7aa4"> <!-- kit de bandeja: panel Pendientes por aprobar -->
 
       <script src="../js/core/modulos.js?v=1838cd29"></script>
   <script src="../js/core/layout.js?v=68295191"></script>
@@ -33,12 +34,24 @@
     .cg-tools { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:var(--sp-4); }
     .cg-tools #cgToolsExtra { margin-left:auto; display:inline-flex; gap:8px; align-items:center; }
     .cg-tools #cgToolsExtra:empty { display:none; }
-    .cg-aprobaciones { border:1px solid var(--border-default); border-radius:10px; padding:14px; margin-bottom:var(--sp-4); background:var(--surface-card); }
-    .cg-aprobaciones-head { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
-    .cg-aprobaciones-head h2 { font-size:15px; margin:0; margin-right:auto; }
-    .cg-aprobaciones-tabs { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
-    .cg-aprobaciones-tabs .is-on { background:var(--accent-soft, #E6F4FB); border-color:var(--accent); }
-    .cg-aprobaciones-tabs b { border-radius:12px; padding:1px 8px; background:var(--soft-warn, #FBF3E0); color:#8A6415; font-variant-numeric:tabular-nums; }
+    /* Pendientes por aprobar = panel del kit de bandeja (bandeja.css); aquí
+       solo el margen y los filtros Todas / Gestiones / Contratos del encabezado. */
+    .cg-aprobaciones { margin-bottom:var(--sp-4); }
+    .cg-aprob .bj-panel-h { flex-wrap:wrap; }
+    .cg-aprob-filtros { display:inline-flex; gap:4px; margin-left:12px; }
+    .cg-aprob-filtros .bj-cta--plano { padding:2px 8px; border-radius:999px; }
+    .cg-aprob-filtros .bj-cta--plano.is-on { background:var(--accent-soft, #E6F4FB); color:var(--accent-hover, #0074AC); }
+    .cg-aprob-filtros .bj-n { margin-left:3px; }
+    @media (max-width:760px) {
+      .cg-aprob-filtros { margin-left:0; width:100%; }
+      /* En el teléfono la fila del kit truncaba el nombre del cliente: el texto
+         va a lo ancho y la antigüedad + "Revisar" bajan a una segunda línea. */
+      .cg-aprob .bj-row { display:grid; grid-template-columns:auto minmax(0,1fr); grid-template-areas:"chip txt" "age cta"; row-gap:6px; align-items:center; }
+      .cg-aprob .bj-row .bj-chip { grid-area:chip; }
+      .cg-aprob .bj-row .bj-txt { grid-area:txt; white-space:normal; overflow:visible; text-overflow:clip; line-height:1.35; }
+      .cg-aprob .bj-row .bj-age { grid-area:age; justify-self:start; }
+      .cg-aprob .bj-row .bj-cta { grid-area:cta; justify-self:end; }
+    }
     .cg-aprobacion-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border-subtle); font-size:13px; }
     .cg-aprobacion-row > div { flex:1; min-width:0; overflow-wrap:anywhere; }
     .cg-aprobacion-row span { display:block; font-size:12px; color:var(--fg-3); margin-top:3px; }
@@ -268,19 +281,10 @@
       <!-- Bandeja "Cuentas por regularizar" (admin/gerencia): la pinta init(). -->
       <span id="cgToolsExtra"></span>
     </div>
-    <section id="cgAprobaciones" class="cg-aprobaciones hidden" aria-labelledby="cgAprobacionesTitulo">
-      <div class="cg-aprobaciones-head">
-        <h2 id="cgAprobacionesTitulo">Pendientes por aprobar</h2>
-        <button type="button" class="btn btn-ghost" data-aprobaciones-refresh>Actualizar</button>
-      </div>
-      <div class="cg-aprobaciones-tabs">
-        <button type="button" class="btn" data-aprobaciones="gestiones" aria-expanded="false" aria-controls="cgAprobacionesLista">Gestiones <b data-aprobaciones-count="gestiones">…</b></button>
-        <button type="button" class="btn" data-aprobaciones="contratos" aria-expanded="false" aria-controls="cgAprobacionesLista">Contratos <b data-aprobaciones-count="contratos">…</b></button>
-      </div>
-      <div id="cgAprobacionesLista" data-aprobaciones-lista></div>
-      <div class="cg-aprobaciones-mensaje" data-aprobaciones-mensaje role="status"></div>
-      <button type="button" class="btn btn-ghost hidden" data-aprobaciones-mas>Cargar más pendientes</button>
-    </section>
+    <!-- Pendientes por aprobar: UNA bandeja con el kit del home (js/ui/bandeja.js),
+         gestiones y contratos mezclados por antigüedad. La pinta entera
+         CentroAprobaciones.pintar() (antes: dos pestañas con conteo, 2026-09-29). -->
+    <section id="cgAprobaciones" class="cg-aprobaciones hidden" aria-label="Pendientes por aprobar"></section>
     <div id="cgLista"></div>
     <div style="text-align:center; margin-top:var(--sp-3);">
       <button class="btn btn-ghost hidden" id="btnMas">Cargar más</button>
