@@ -13,7 +13,7 @@ import "firebase/compat/functions";
 import "firebase/compat/storage";
 import { getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { getFirestore, persistentLocalCache, persistentMultipleTabManager, getCountFromServer } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
 
@@ -60,6 +60,31 @@ if (!firebase.apps.length) {
   firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 }
 const db = firebase.firestore();
+
+// Query.count() de vuelta en la API compat (2026-09-29). Firebase 12 (npm) NO
+// trae count() en compat: desde la migración del 2026-09-25 los cinco
+// servicios que contaban con `.count().get()` (gestiones, clientes, señales,
+// cancelaciones, cola de inventario) caían a sus guardas y BAJABAN los
+// documentos enteros para contar, y Avanzado reventaba con "count is not a
+// function". Se restaura sobre el prototipo compat con getCountFromServer
+// sobre el delegado modular (_delegate), con la misma forma de respuesta
+// (`snap.data().count`). Si algún día el SDK lo trae de fábrica, no se toca.
+try {
+  const Q = firebase.firestore.Query; // CollectionReference hereda de aquí
+  if (Q && typeof Q.prototype.count !== "function") {
+    Q.prototype.count = function count() {
+      const q = this._delegate || this;
+      return {
+        get: async () => {
+          const s = await getCountFromServer(q);
+          return { data: () => ({ count: s.data().count }) };
+        },
+      };
+    };
+  }
+} catch (e) {
+  console.warn("[firebase-init] no se pudo restaurar Query.count():", e?.code || e);
+}
 
 // Vigía de la caché local. El día que cambia la versión del SDK, IndexedDB
 // tiene que migrar de esquema, y esa migración queda BLOQUEADA mientras otra
