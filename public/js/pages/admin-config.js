@@ -443,7 +443,7 @@
     setText('lastUpdate', 'Cargando…');
     try {
       const [cfg] = await Promise.all([
-        EmpresaService.getConfig(),
+        EmpresaService.getConfig({ fresh: true }), // se edita aquí: nunca desde el memo de sesión
         (async () => { try { _users = await UsuariosAdminService.listAll(); } catch (e) { console.warn('[admin/config] no se pudieron cargar usuarios:', e); _users = []; } })(),
       ]);
       _cargado = cfg;
@@ -531,8 +531,8 @@
 
   async function exportSnapshot() {
     try {
-      const config     = await EmpresaService.getDoc('config');
-      const operadores = await EmpresaService.getDoc('operadores').catch(() => null);
+      const config     = await EmpresaService.getDoc('config', { fresh: true });
+      const operadores = await EmpresaService.getDoc('operadores', { fresh: true }).catch(() => null);
       const snapshot = {
         exported_at: new Date().toISOString(),
         exported_by: firebase.auth().currentUser?.email || firebase.auth().currentUser?.uid || 'unknown',

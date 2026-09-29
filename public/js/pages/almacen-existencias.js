@@ -76,6 +76,21 @@ window.AlmacenExistencias = (() => {
     const loader = $('loader');
     if (loader) loader.style.display = '';
     try {
+      // Pintado provisional desde la caché local de Firestore (2026-09-29):
+      // las tres colecciones son chicas (~330 docs) y cambian poco; lo que
+      // esta persona vio la última vez sale al instante y el servidor lo
+      // corrige encima. Sin caché vienen vacías y se espera como siempre.
+      try {
+        const [rc, mc, cc] = await Promise.all([
+          EquiposPoolService.resumenPorModelo({ source: 'cache' }),
+          ModelosService.getModelos({ source: 'cache' }),
+          InventarioService.getInventarioActual({ source: 'cache' }),
+        ]);
+        if (rc.length && mc.length) {
+          ctx.filas = armarFilas({ resumen: rc, modelos: mc, conteos: cc });
+          render();
+        }
+      } catch { /* sin caché: camino normal */ }
       const [resumen, modelos, conteos] = await Promise.all([
         EquiposPoolService.resumenPorModelo(),
         ModelosService.getModelos(),

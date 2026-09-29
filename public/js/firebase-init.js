@@ -226,7 +226,44 @@ window.Sesion = (() => {
     } catch { /* sin storage: nada que limpiar */ }
   }
 
-  return { cache, cacheAnonima, perfil, miPerfil, rol, nombre, limpiar };
+  /* Memo de sesión para datos de ARRANQUE que casi no cambian (config de
+     empresa, tipos de servicio, plantilla de técnicos, el doc del usuario).
+     Cada página los releía del servidor en serie antes de pintar: 4 viajes de
+     130-220 ms cada uno (medido 2026-09-29) antes del primer dato. Ahora el
+     primer viaje de la sesión paga y las páginas siguientes lo toman de
+     sessionStorage; se revalida en segundo plano UNA vez por carga de página
+     y, si cambió, la siguiente página ya lo ve. Las claves empiezan por
+     "ccSesion" para que limpiar() (logout) también las borre.
+     Solo valores serializables: los Timestamp se guardan como ISO. */
+  const _memoEnVuelo = new Map();
+  const _memoRevalidado = new Set();
+  const _memoKey = (clave) => "ccSesion:memo:v1:" + clave;
+  const _serializar = (v) => JSON.stringify(v, (k, x) => (x && typeof x.toDate === "function") ? x.toDate().toISOString() : x);
+  async function memo(clave, ttlMs, cargar, { revalidar = true } = {}) {
+    const k = _memoKey(clave);
+    let hit = null;
+    try {
+      const raw = sessionStorage.getItem(k);
+      if (raw) { const d = JSON.parse(raw); if (Date.now() - (d.t || 0) <= ttlMs) hit = d; }
+    } catch { /* sin storage o corrupto: camino frío */ }
+    const traer = () => {
+      if (!_memoEnVuelo.has(k)) {
+        _memoEnVuelo.set(k, Promise.resolve().then(cargar).then((v) => {
+          try { sessionStorage.setItem(k, _serializar({ t: Date.now(), v })); } catch { /* lleno/bloqueado */ }
+          return v;
+        }).finally(() => _memoEnVuelo.delete(k)));
+      }
+      return _memoEnVuelo.get(k);
+    };
+    if (hit) {
+      if (revalidar && !_memoRevalidado.has(k)) { _memoRevalidado.add(k); traer().catch(() => {}); }
+      return hit.v;
+    }
+    return traer();
+  }
+  function olvidar(clave) { try { sessionStorage.removeItem(_memoKey(clave)); } catch { /* sin storage */ } }
+
+  return { cache, cacheAnonima, perfil, miPerfil, rol, nombre, limpiar, memo, olvidar };
 })();
 
   // Apply admin-tunable config from empresa/config to runtime globals.

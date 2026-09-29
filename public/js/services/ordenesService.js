@@ -1133,23 +1133,28 @@ const OrdenesService = {
     if (this._techCache && (Date.now() - this._techCache.ts) < 300000) {
       return this._techCache.data;
     }
-    const db = firebase.firestore();
-    const snapshot = await db.collection("usuarios")
-      .where("rol", "in", ["tecnico", "tecnico_operativo", "jefe_taller"])
-      .get();
-
-    const technicians = [];
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      technicians.push({
-        uid: doc.id,
-        nombre: data.nombre || data.email || doc.id,
-        rol: data.rol || ""
+    const leer = async () => {
+      const db = firebase.firestore();
+      const snapshot = await db.collection("usuarios")
+        .where("rol", "in", ["tecnico", "tecnico_operativo", "jefe_taller"])
+        .get();
+      const technicians = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        technicians.push({
+          uid: doc.id,
+          nombre: data.nombre || data.email || doc.id,
+          rol: data.rol || ""
+        });
       });
-    });
-
-    const data = technicians.sort((a, b) =>
-      a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+      return technicians.sort((a, b) =>
+        a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+    };
+    // Y además memo de sesión (30 min): la caché en memoria muere en cada
+    // navegación, y esta lectura iba en serie en el arranque de la bandeja.
+    const data = window.Sesion?.memo
+      ? await Sesion.memo("tecnicos", 30 * 60 * 1000, leer)
+      : await leer();
     this._techCache = { ts: Date.now(), data };
     return data;
   },
@@ -1801,10 +1806,17 @@ const OrdenesService = {
    * @param {string} uid - User ID
    * @returns {Promise<Object>}
    */
+  // Memo de sesión (30 min, revalidación en segundo plano): la bandeja de
+  // órdenes lo esperaba en serie ANTES de pedir las órdenes, aunque el rol
+  // ya estaba en sessionStorage (Sesion). Misma política de 30 min que el rol.
   async getUserData(uid) {
-    const db = firebase.firestore();
-    const doc = await db.collection("usuarios").doc(uid).get();
-    return doc.exists ? doc.data() : null;
+    const leer = async () => {
+      const db = firebase.firestore();
+      const doc = await db.collection("usuarios").doc(uid).get();
+      return doc.exists ? doc.data() : null;
+    };
+    if (!window.Sesion?.memo) return leer();
+    return Sesion.memo(`usuario:${uid}`, 30 * 60 * 1000, leer);
   },
 
   // Clave bajo la que se guardan los consumos de un equipo: su id o, para

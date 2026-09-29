@@ -51,15 +51,24 @@ const EmpresaService = {
     return { id: doc.id, ...doc.data() };
   },
 
-  async getDoc(docId) {
-    const db = firebase.firestore();
-    const doc = await db.collection('empresa').doc(docId).get();
-    if (!doc.exists) return null;
-    return { id: doc.id, ...doc.data() };
+  // Memo de sesión (Sesion.memo, 30 min, revalidación en segundo plano): 21
+  // pantallas leen empresa/config o tipo_de_servicio al arrancar, en serie
+  // con las demás lecturas de arranque. `fresh: true` va al servidor siempre
+  // (pantallas que EDITAN estos documentos).
+  async getDoc(docId, { fresh = false } = {}) {
+    const leer = async () => {
+      const db = firebase.firestore();
+      const doc = await db.collection('empresa').doc(docId).get();
+      if (!doc.exists) return null;
+      return { id: doc.id, ...doc.data() };
+    };
+    if (fresh || !window.Sesion?.memo) return leer();
+    return Sesion.memo(`empresa:${docId}`, 30 * 60 * 1000, leer);
   },
 
   async setDoc(docId, data) {
     const db = firebase.firestore();
+    window.Sesion?.olvidar?.(`empresa:${docId}`);
     return db.collection('empresa').doc(docId).set(data);
   },
 
@@ -68,9 +77,9 @@ const EmpresaService = {
    * Never throws — on error returns the defaults so the calling page degrades
    * gracefully (offline, missing doc, ITP-blocked Safari, etc.).
    */
-  async getConfig() {
+  async getConfig({ fresh = false } = {}) {
     try {
-      const d = await this.getDoc('config');
+      const d = await this.getDoc('config', { fresh });
       return { ...EMPRESA_CONFIG_DEFAULTS, ...(d || {}) };
     } catch (err) {
       console.warn('[EmpresaService.getConfig] fallback to defaults:', err?.code || err);

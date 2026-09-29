@@ -295,7 +295,10 @@ const ClientesService = {
 
   // Parameterized page fetch — handles search-by-token and ordered list with cursor pagination.
   // Returns { docs: [{id,...data}], lastDoc: FirestoreDoc|null, count: number }
-  async listClientesPage({ term = '', onlyActive = false, cursorDoc = null, limit = 20 } = {}) {
+  // `source: 'cache'` lee SOLO la caché local (IndexedDB): el directorio del
+  // Centro pinta la primera página al instante con lo que ya tenía y luego la
+  // corrige con el servidor. Sin caché devuelve vacío, no falla.
+  async listClientesPage({ term = '', onlyActive = false, cursorDoc = null, limit = 20, source = null } = {}) {
     const db = firebase.firestore();
     const words = _norm(term).split(/\s+/).filter(Boolean);
 
@@ -304,7 +307,7 @@ const ClientesService = {
       let q = db.collection('clientes').orderBy('nombre').where('deleted', '==', false).limit(limit);
       if (onlyActive) q = q.where('activo', '==', true);
       if (cursorDoc) q = q.startAfter(cursorDoc);
-      const snap = await q.get();
+      const snap = source ? await q.get({ source }) : await q.get();
       return {
         docs: snap.docs.map(d => ({ id: d.id, ...d.data() })),
         lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1],

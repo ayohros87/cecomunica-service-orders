@@ -1,8 +1,9 @@
 const InventarioService = {
 
-  async getInventarioActual() {
+  async getInventarioActual({ source = null } = {}) {
     const db = firebase.firestore();
-    const snap = await db.collection('inventario_actual').get();
+    const q = db.collection('inventario_actual');
+    const snap = source ? await q.get({ source }) : await q.get();
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 

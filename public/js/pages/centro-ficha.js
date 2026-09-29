@@ -22,6 +22,22 @@ Object.assign(window.Centro, {
   async abrir(clienteId, { push = true } = {}) {
     try {
       window.AprobacionesService?.invalidarHome();
+      // Contratos, flota, catálogo y gestiones solo necesitan el id: se piden
+      // AL MISMO TIEMPO que el cliente (2026-09-29). Antes esperaban a que
+      // llegara el doc del cliente: un viaje entero de más antes de la ficha.
+      const db = firebase.firestore();
+      const enVuelo = Promise.all([
+        db.collection('contratos').where('cliente_id', '==', clienteId).get(),
+        EquiposPoolService.listarPorCliente(clienteId),
+        // Catálogo → ModeloFamilia: el pareo equipo↔línea (tarifa, vencimiento,
+        // Anexo A) se decide por familia N/R, no por texto.
+        (window.ModelosService?.catalogo ? ModelosService.catalogo().catch(e => { console.warn('[centro] catálogo no disponible:', e?.message || e); return null; }) : null),
+        GestionesService.listarPorCliente(clienteId).catch(e => {
+          console.warn('[centro] gestiones no disponibles:', e?.message || e);
+          return [];
+        }),
+      ]);
+      enVuelo.catch(() => {}); // si el cliente no existe, nadie espera esto
       const c = await ClientesService.getCliente(clienteId);
       if (!c || c.deleted) { Toast.show('Cliente no encontrado', 'bad'); return; }
       // Candado de cartera: un vendedor no abre clientes ajenos ni por deep-link.
@@ -48,21 +64,10 @@ Object.assign(window.Centro, {
       document.getElementById('fEquipos').innerHTML = skel(3, 38);
       document.getElementById('fGestiones').innerHTML = skel(2, 46);
 
-      // Carga en paralelo: contratos + flota + gestiones. Las gestiones NO
-      // tumban la ficha si fallan (p. ej. reglas aún sin desplegar en un
-      // entorno): el cliente completo vale más que esa sección.
-      const db = firebase.firestore();
-      const [conSnap, equipos, , gestiones] = await Promise.all([
-        db.collection('contratos').where('cliente_id', '==', clienteId).get(),
-        EquiposPoolService.listarPorCliente(clienteId),
-        // Catálogo → ModeloFamilia: el pareo equipo↔línea (tarifa, vencimiento,
-        // Anexo A) se decide por familia N/R, no por texto.
-        (window.ModelosService?.catalogo ? ModelosService.catalogo().catch(e => { console.warn('[centro] catálogo no disponible:', e?.message || e); return null; }) : null),
-        GestionesService.listarPorCliente(clienteId).catch(e => {
-          console.warn('[centro] gestiones no disponibles:', e?.message || e);
-          return [];
-        }),
-      ]);
+      // Contratos + flota + gestiones ya venían en vuelo desde arriba. Las
+      // gestiones NO tumban la ficha si fallan (p. ej. reglas aún sin
+      // desplegar en un entorno): el cliente completo vale más que esa sección.
+      const [conSnap, equipos, , gestiones] = await enVuelo;
       this.contratos = this._mapContratos(conSnap);
       this.equipos = Array.isArray(equipos) ? equipos : [];
       this.gestiones = gestiones;

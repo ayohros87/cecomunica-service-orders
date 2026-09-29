@@ -251,9 +251,12 @@ const EquiposPoolService = {
   // Sirve para PINTAR conteos. No para decidir una mutación: el trigger
   // aplica deltas y la reconciliación de las 05:30 corrige la deriva, así que
   // un número puede estar corrido por un rato. Lo que se toca se lee del pool.
-  async resumenPorModelo() {
+  // `source: 'cache'` → solo la caché local (Existencias pinta al instante y
+  // luego corrige con el servidor).
+  async resumenPorModelo({ source = null } = {}) {
     const db = firebase.firestore();
-    const snap = await db.collection('agregados_pool').get();
+    const q = db.collection('agregados_pool');
+    const snap = source ? await q.get({ source }) : await q.get();
     return snap.docs.map(d => {
       const v = d.data() || {};
       return {

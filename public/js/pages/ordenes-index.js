@@ -83,13 +83,6 @@ document.addEventListener("DOMContentLoaded", function () {
       APP.state.userId = user.uid || null;
       APP.state.userRole = rol;
 
-      // Allowlist de suplentes de QC (empresa/config.qc_revisores_extra) —
-      // puedeHacerQc() la consulta desde el render SÍNCRONO de botones, así
-      // que debe estar cargada antes de pintar la primera lista.
-      if (typeof OrdenesQC !== 'undefined') {
-        try { await OrdenesQC.precargarRevisoresExtra(); } catch (e) { /* falla cerrado */ }
-      }
-
       const shouldDefaultMine = [ROLES.TECNICO, ROLES.TECNICO_OPERATIVO].includes(rol);
       if (shouldDefaultMine) {
         const toggleMis = document.getElementById("toggleMisOrdenes");
@@ -98,11 +91,21 @@ document.addEventListener("DOMContentLoaded", function () {
         if (mobileSoloMias) mobileSoloMias.checked = true;
       }
 
-      // Skeleton was already painted at DOMContentLoaded (above) so the
-      // table never sits empty; it stays until the live snapshot replaces
-      // it. ORDENES_INDEX_IMPROVEMENTS.md QW11.
-      await cargarTiposDeServicioFiltros();
-      await cargarTecnicosFiltros();
+      // Las tres precargas van EN PARALELO (2026-09-29): antes iban en serie,
+      // cada una un viaje de 130-220 ms al servidor antes de pedir las órdenes.
+      // Con el memo de sesión (Sesion.memo) además salen de sessionStorage
+      // desde la segunda página de la sesión.
+      //  · Allowlist de suplentes de QC (empresa/config.qc_revisores_extra):
+      //    puedeHacerQc() la consulta desde el render SÍNCRONO de botones, así
+      //    que debe estar cargada antes de pintar la primera lista.
+      //  · Skeleton ya pintado en DOMContentLoaded: la tabla nunca queda vacía.
+      await Promise.all([
+        (typeof OrdenesQC !== 'undefined')
+          ? OrdenesQC.precargarRevisoresExtra().catch(() => { /* falla cerrado */ })
+          : null,
+        cargarTiposDeServicioFiltros(),
+        cargarTecnicosFiltros(),
+      ]);
       // Apply URL filter state AFTER the dropdowns have their options
       // populated (so `<select>` values resolve correctly) but BEFORE
       // the initial data load (so sort + soloMias take effect on the

@@ -116,11 +116,26 @@ Object.assign(window.Centro, {
       // de clientes (where activo == true): antes se filtraba en cliente con
       // `activo !== false`, así que los docs SIN el campo pasaban como activos
       // y la página traída encogía al filtrar (bug reportado 2026-08-28).
-      const { docs, lastDoc } = await ClientesService.listClientesPage({
-        term: this.term, cursorDoc: this.cursor, limit: 30,
-        onlyActive: this.soloActivos,
-      });
-      this.cursor = lastDoc;
+      const args = { term: this.term, cursorDoc: this.cursor, limit: 30, onlyActive: this.soloActivos };
+      // Primera página sin término: pintar YA desde la caché local de Firestore
+      // (lo que esta persona vio la última vez) mientras llega el servidor,
+      // que repinta encima (2026-09-29). Si no hay caché, viene vacío y se
+      // espera al servidor como siempre.
+      if (reset && !this.term) {
+        try {
+          const cache = await ClientesService.listClientesPage({ ...args, source: 'cache' });
+          if (cache.docs.length) this._pintarPagina(cache, { reset: true, provisional: true });
+        } catch { /* sin caché: camino normal */ }
+      }
+      const pagina = await ClientesService.listClientesPage(args);
+      if (reset) document.getElementById('cgLista').innerHTML = '';
+      this._pintarPagina(pagina, { reset });
+    } catch (e) { console.error(e); Toast.show('No se pudo cargar la lista de clientes', 'bad'); }
+  },
+
+  _pintarPagina({ docs, lastDoc }, { reset, provisional = false } = {}) {
+    {
+      if (!provisional) this.cursor = lastDoc;
       // "Mi cartera" filtra en cliente sobre la página traída: con carteras de
       // decenas de clientes es suficiente; el scoping por reglas llega después.
       const visibles = this.cartera === 'mios'
@@ -146,7 +161,7 @@ Object.assign(window.Centro, {
       document.getElementById('cgResumen').textContent =
         `${n} cliente${n === 1 ? '' : 's'}${this.soloActivos ? ' activos' : ''}${this.cartera === 'mios' ? ' en tu cartera' : ''}${lastDoc ? ' (hay más)' : ''}`;
       if (window.lucide?.createIcons) lucide.createIcons();
-    } catch (e) { console.error(e); Toast.show('No se pudo cargar la lista de clientes', 'bad'); }
+    }
   },
 
   _iniciales(nombre) {
