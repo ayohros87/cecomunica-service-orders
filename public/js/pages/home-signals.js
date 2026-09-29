@@ -383,12 +383,18 @@ window.HomeSignals = (() => {
     administrador:     ['APR', 'OPC', 'S1', 'EST', 'S4Q', 'SAP', 'REGG', 'LPC'],
     // gerencia también aprueba gestiones (misma regla que el Centro): la señal
     // unificada le trae las dos colas, antes solo veía contratos.
-    gerente:           ['S1', 'APR', 'SAP', 'FIR', 'REGG'],
+    // S1 (por asignar) solo para quien PUEDE asignar técnico ('asignar-tecnico'
+    // en core/roles.js: admin, jefe de taller, recepción). Gerencia y ventas lo
+    // veían en rojo sin poder hacer nada con él (repaso del home 2026-09-29).
+    gerente:           ['APR', 'SAP', 'FIR', 'REGG'],
     jefe_taller:       ['S1', 'EST', 'S4Q', 'SAP'],
     recepcion:         ['OPC', 'S1', 'S2', 'ENT', 'FIR', 'LPC'],
-    vendedor:          ['S7', 'FIRV', 'S1', 'REGV'],
-    tecnico:           ['S5', 'S4P'],
-    tecnico_operativo: ['S5', 'S4P'],
+    vendedor:          ['S7', 'FIRV', 'REGV'],
+    // S4P (mis completadas en oficina) salió el 2026-09-29: lo terminado ya
+    // no es trabajo del técnico — espera a recepción — y el número solo crecía
+    // (26-27 por técnico al medirlo). Sigue en la lista de órdenes (?mias=1).
+    tecnico:           ['S5'],
+    tecnico_operativo: ['S5'],
     // S14 (por clasificar) entra en lugar de S12 (por verificar): la ubicación
     // desconocida es un atraso accionable, mientras que "por verificar" es una
     // marca blanda — y su entrada bajó al marcar verificadas las ENTRADAs.
