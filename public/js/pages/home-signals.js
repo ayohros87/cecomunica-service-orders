@@ -43,6 +43,7 @@ window.HomeSignals = (() => {
   function _filaFirma(r, esc) {
     return {
       txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.contrato)}</span> · ${esc(r.clase)}`
+        + (r.vendedor ? ` · ${esc(r.vendedor)}` : '')
         + (r.con_orden ? ' · <b>tranca la entrega</b>' : ''),
       dias: r.dias,
       cta: r.cliente_id
@@ -192,13 +193,16 @@ window.HomeSignals = (() => {
     // lista de contratos, así que el número no pedía nada. Esta es la cola
     // que tranca entregas: seriales asignados, lleva firma y el cliente no ha
     // firmado. Cada fila abre el contrato en el Centro, donde sale el enlace
-    // de firma. Recepción y gerencia ven todos; el vendedor, los suyos.
+    // de firma. Pedir la firma es del VENDEDOR (FIRV, los suyos); gerencia ve
+    // todos con el nombre del vendedor para supervisar. Recepción NO la ve
+    // (2026-09-29): no le toca pedirla, y cuando la firma frena una entrega el
+    // candado de ENTREGAR ya se lo dice con el enlace a la ficha.
     FIR: {
       modulo: 'centro', icon: 'pen-line', moreIsBad: true,
       // Marca temporal "Nuevo" (hasta el día indicado, inclusive): la señal
       // cambió de nombre y de número (203 → ~13) y sin aviso parecería un error.
       nuevo: { hasta: '2026-10-02', nota: 'Antes decía "Contratos por activar" y contaba más de 200 contratos viejos. Ahora solo cuenta los que de verdad esperan la firma del cliente.' },
-      label: 'Contratos por firmar', sub: 'falta la firma',
+      label: 'Contratos por firmar', sub: 'de todos los vendedores',
       href: 'clientes/centro.html',
       count: () => SenalesService.countContratosPorFirmar(),
       items: () => SenalesService.listContratosPorFirmar(),
@@ -394,7 +398,7 @@ window.HomeSignals = (() => {
     // veían en rojo sin poder hacer nada con él (repaso del home 2026-09-29).
     gerente:           ['APR', 'SAP', 'FIR', 'REGG'],
     jefe_taller:       ['S1', 'EST', 'S4Q', 'SAP'],
-    recepcion:         ['OPC', 'S1', 'S2', 'ENT', 'FIR', 'LPC'],
+    recepcion:         ['OPC', 'S1', 'S2', 'ENT', 'LPC'],
     vendedor:          ['S7', 'FIRV', 'REGV'],
     // S4P (mis completadas en oficina) salió el 2026-09-29: lo terminado ya
     // no es trabajo del técnico — espera a recepción — y el número solo crecía

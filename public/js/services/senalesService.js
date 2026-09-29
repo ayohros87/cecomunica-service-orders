@@ -245,7 +245,9 @@ const SenalesService = {
   // y los ya entregados antes del candado del 2026-09-03. Lo que queda es la
   // cola real: bodega ya asignó los seriales (el Anexo A sale lleno), el
   // cliente no ha firmado y la entrega está trancada por eso. `uid` limita a
-  // los contratos que elaboró esa persona (el vendedor ve los suyos).
+  // los contratos que elaboró esa persona (el vendedor ve los suyos): pedir
+  // la firma es trabajo del VENDEDOR — el correo de firma le llega a él al
+  // aprobarse. Sin uid es la vista de supervisión de gerencia.
   listContratosPorFirmar({ uid = null } = {}) {
     return this._memoList(`firmar:${uid || 'todos'}`, async () => {
       const snap = await firebase.firestore().collection('contratos')
@@ -266,10 +268,22 @@ const SenalesService = {
           contrato: c.contrato_id || d.id,
           clase: c.accion && c.accion !== 'No Aplica' ? `${c.tipo_contrato || 'Contrato'} · ${c.accion}` : (c.tipo_contrato || 'Contrato'),
           con_orden: Number(c.os_count || 0) > 0,
+          creado_por_uid: c.creado_por_uid || null,
           // Espera la firma desde que bodega dejó los seriales listos.
           dias: Math.floor(PendientesDomain.edadDias(c.seriales_asignados_at || c.fecha_aprobacion || c.fecha_creacion, now) || 0),
         });
       });
+      // Vista de supervisión (sin uid, gerencia): la firma la pide el
+      // vendedor que elaboró el contrato — la fila dice de quién es. Un fallo
+      // leyendo usuarios no tumba la cola: la fila sale sin el nombre.
+      if (!uid && rows.length && window.UsuariosService?.getUsuariosByIds) {
+        try {
+          const uids = [...new Set(rows.map(r => r.creado_por_uid).filter(Boolean))];
+          const nombres = new Map((await UsuariosService.getUsuariosByIds(uids))
+            .map(u => [u.id, u.nombre || u.displayName || String(u.email || '').split('@')[0]]));
+          rows.forEach(r => { r.vendedor = nombres.get(r.creado_por_uid) || ''; });
+        } catch (e) { /* sin nombres */ }
+      }
       return rows.sort((a, b) => b.dias - a.dias);
     });
   },

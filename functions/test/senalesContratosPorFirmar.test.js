@@ -20,7 +20,7 @@ const REGISTROS = [
   { id: 'v1', estado: 'activo', seriales_estado: 'asignados', tipo_contrato: 'Alquiler', firmado: true },
 ];
 
-function montar() {
+function montar({ usuarios } = {}) {
   function query(filtros = []) {
     return {
       where: (campo, op, valor) => query([...filtros, [campo, op, valor]]),
@@ -33,6 +33,7 @@ function montar() {
   }
   const ctx = vm.createContext({ console, firebase: { firestore: () => ({ collection: () => query() }) } });
   ctx.window = ctx;
+  if (usuarios) ctx.UsuariosService = { getUsuariosByIds: usuarios };
   for (const file of ['domain/pendientes.js', 'domain/contratoFirma.js', 'services/senalesService.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../../public/js', file), 'utf8'), ctx);
   }
@@ -53,4 +54,21 @@ test('el vendedor solo ve los contratos que elaboró', async () => {
   const s = montar();
   assert.deepEqual([...(await s.listContratosPorFirmar({ uid: 'u2' })).map(f => f.id)], ['a2']);
   assert.equal(await s.countContratosPorFirmar({ uid: 'u1' }), 1);
+});
+
+
+// La firma la pide el vendedor: en la vista de supervisión (gerencia, sin uid)
+// cada fila dice de quién es; un fallo leyendo usuarios no tumba la cola.
+test('la vista de supervisión nombra al vendedor de cada contrato', async () => {
+  const s = montar({ usuarios: async () => [{ id: 'u1', nombre: 'Elvia Onodera' }, { id: 'u2', email: 'salomon@x.com' }] });
+  const filas = await s.listContratosPorFirmar();
+  assert.equal(filas.find(f => f.id === 'a1').vendedor, 'Elvia Onodera');
+  assert.equal(filas.find(f => f.id === 'a2').vendedor, 'salomon');
+});
+
+test('si no se pueden leer los usuarios, la cola sale igual sin nombres', async () => {
+  const s = montar({ usuarios: async () => { throw new Error('sin permiso'); } });
+  const filas = await s.listContratosPorFirmar();
+  assert.equal(filas.length, 2);
+  assert.ok(filas.every(f => !f.vendedor));
 });
