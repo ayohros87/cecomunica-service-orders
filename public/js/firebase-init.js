@@ -46,6 +46,12 @@ if (!firebase.apps.length) {
     firebase.firestore().settings({
       merge: true, // sin esto compat avisa "overriding the original host"
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      // Sin la autodetección de long polling: el SDK hacía una prueba de red
+      // extra al abrir el canal en cada página. Medido 2026-09-29 desde la
+      // oficina: primer viaje 493 → 384 ms. La app corre en redes directas
+      // (oficina, celular); un proxy que rompa streaming se notaría como
+      // "cargando" eterno y entonces se vuelve a activar.
+      experimentalAutoDetectLongPolling: false,
     });
   } catch (err) {
     console.warn("[firebase-init] caché persistente no disponible:", err?.code || err);
