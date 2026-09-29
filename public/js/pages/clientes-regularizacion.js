@@ -26,7 +26,7 @@ window.ClientesRegularizacion = (() => {
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) return (window.location.href = '../login.html');
       uid = user.uid;
-      try { const u = await UsuariosService.getUsuario(uid); rol = u?.rol || null; } catch (e) { rol = null; }
+      try { const u = await Sesion.miPerfil(user); rol = u?.rol || null; } catch (e) { rol = null; }
       // Recepción (cobros, Brenda) entra desde 2026-09-08 para F0: darle
       // vendedor a las cuentas sin dueño. Sin montos: no es información
       // financiera. El vendedor ve las suyas en el inicio y en cada ficha.

@@ -122,7 +122,7 @@
   firebase.auth().onAuthStateChanged(async user => {
     if (!user) { window.location.href = '../login.html'; return; }
     try {
-      const u = await UsuariosService.getUsuario(user.uid);
+      const u = await Sesion.miPerfil(user);
       if (!u || u.rol !== ROLES.ADMIN) {
         Toast.show('Acceso restringido a administradores.', 'bad');
         window.location.href = 'index.html';

@@ -1075,7 +1075,7 @@ firebase.auth().onAuthStateChanged(async user => {
   try {
     await VB.cargarModelos();
     VB.poblarDropdownModeloGlobal();
-    const userDoc = await UsuariosService.getUsuario(user.uid);
+    const userDoc = await Sesion.miPerfil(user);
     const rol     = userDoc ? userDoc.rol : null;
     VB._rol = rol;
     VB._userNombre = (userDoc && userDoc.nombre) || user.email || "";

@@ -36,7 +36,7 @@ window.FichaCliente = {
       this.uid = user.uid;
       this.email = user.email || null;
       try {
-        const u = await UsuariosService.getUsuario(user.uid);
+        const u = await Sesion.miPerfil(user);
         this.rol = u && u.rol ? u.rol : ROLES.VISTA;
       } catch (e) { this.rol = ROLES.VISTA; }
 

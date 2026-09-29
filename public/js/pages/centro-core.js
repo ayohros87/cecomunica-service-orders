@@ -70,7 +70,7 @@ window.Centro = {
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) return (window.location.href = '../login.html');
       try {
-        const u = await UsuariosService.getUsuario(user.uid);
+        const u = await Sesion.miPerfil(user);
         this.rol = u ? u.rol : null;
         this.uid = user.uid;
         this.email = user.email || null;

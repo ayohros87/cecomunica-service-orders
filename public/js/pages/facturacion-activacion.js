@@ -16,7 +16,7 @@ function fdate(ts){ return ts?.toDate ? ts.toDate().toLocaleDateString('es-PA') 
 firebase.auth().onAuthStateChanged(async (user)=>{
   if(!user) return window.location.href='../login.html';
   try{
-    const u = await UsuariosService.getUsuario(user.uid);
+    const u = await Sesion.miPerfil(user);
     const rol = u ? u.rol : null;
     if(!u || (rol!==ROLES.ADMIN && rol!==ROLES.CONTABILIDAD)){
       document.body.innerHTML="<h3 style='color:red;text-align:center;margin-top:100px;'>Acceso restringido</h3>"; return;

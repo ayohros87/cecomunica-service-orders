@@ -317,7 +317,7 @@ async function cargarYRenderQc(dias){
         return;
       }
       currentUser = user;
-      const uDoc = await UsuariosService.getUsuario(user.uid);
+      const uDoc = await Sesion.miPerfil(user);
       currentRole = uDoc ? (uDoc.rol || '') : '';
 
       // Todos pueden ver (técnico ve sus propios números + ranking general sin datos sensibles)

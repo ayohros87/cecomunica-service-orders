@@ -304,7 +304,7 @@ window.SimCards = {
 document.addEventListener('DOMContentLoaded', () => {
   firebase.auth().onAuthStateChanged(async user => {
     if (!user) { window.location.href = '/login.html'; return; }
-    const userDoc = await UsuariosService.getUsuario(user.uid);
+    const userDoc = await Sesion.miPerfil(user);
     SimCards._rol = userDoc?.rol || ROLES.VISTA;
 
     // Mismo universo de acceso que el módulo POC; escritura solo admin/recepción.

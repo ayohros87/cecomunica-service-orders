@@ -58,7 +58,7 @@
         try {
           const db = firebase.firestore();
           let rol = null;
-          try { rol = (await db.collection('usuarios').doc(user.uid).get()).data()?.rol || null; } catch (_) { rol = null; }
+          try { rol = (await Sesion.rol(user.uid)) || null; } catch (_) { rol = null; } // caché de sesión: sin viaje al servidor
           if (!ROLES_ANEXO.includes(rol)) {
             document.getElementById('estado').textContent = 'Tu rol no tiene acceso a los anexos de contrato.';
             return;

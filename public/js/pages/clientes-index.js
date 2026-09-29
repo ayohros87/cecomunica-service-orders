@@ -234,7 +234,7 @@ $selectAll.onchange = ()=>{
 
     // Carga rol (ajústalo a tu fuente: custom claims o colección usuarios)
     try{
-      const u = await UsuariosService.getUsuario(user.uid);
+      const u = await Sesion.miPerfil(user);
       role = u && u.rol ? u.rol : ROLES.VISTA;
     }catch(e){ role=ROLES.VISTA; }
     

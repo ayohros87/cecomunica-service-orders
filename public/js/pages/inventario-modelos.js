@@ -26,7 +26,7 @@ function setVal(id,v){ const el=document.getElementById(id); if(el) el.value=v; 
 firebase.auth().onAuthStateChanged(async (user) => {
   if (!user) return window.location.href = "../login.html";
   try{
-    const userDoc = await UsuariosService.getUsuario(user.uid);
+    const userDoc = await Sesion.miPerfil(user);
     const rol = userDoc ? userDoc.rol : null;
     // Catálogo + tarifas (info sensible) → solo admin y contabilidad.
     if (!userDoc || (rol !== ROLES.ADMIN && rol !== ROLES.CONTABILIDAD)) {

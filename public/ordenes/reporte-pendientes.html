@@ -83,8 +83,9 @@
       // operación pendiente (clientes + vendedores). Solo roles operativos y
       // de supervisión; ante duda (doc de usuario ilegible) se niega.
       try {
-        const snap = await firebase.firestore().collection("usuarios").doc(user.uid).get();
-        const rol = String((snap.data() || {}).rol || "").trim().toLowerCase();
+        // Rol desde la caché de sesión (Sesion, firebase-init): sin viaje al
+        // servidor en navegaciones tibias; en frío comparte la lectura del rail.
+        const rol = String((await Sesion.rol(user.uid)) || "").trim().toLowerCase();
         const permitidos = ["administrador", "recepcion", "jefe_taller", "gerente",
                             "tecnico", "tecnico_operativo", "vista"];
         if (!permitidos.includes(rol)) {

@@ -14,7 +14,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&am
 firebase.auth().onAuthStateChanged(async (user) => {
   if (!user) return window.location.href = "../login.html";
   try{
-    const userDoc = await UsuariosService.getUsuario(user.uid);
+    const userDoc = await Sesion.miPerfil(user);
     const rol = userDoc ? userDoc.rol : null;
     if (!userDoc || (rol !== ROLES.ADMIN && rol !== ROLES.CONTABILIDAD)) {
       document.body.innerHTML = "<h3 style='color:red; text-align:center; margin-top:100px;'>Acceso restringido</h3>";

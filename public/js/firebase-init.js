@@ -152,6 +152,26 @@ window.Sesion = (() => {
     return (await perfil(uid)).rol;
   }
 
+  // Perfil PROPIO con la forma que devolvía UsuariosService.getUsuario(uid)
+  // ({ id, rol, nombre }) pero desde la caché de sesión: sin red en
+  // navegaciones tibias y, en frío, compartiendo la única lectura con el
+  // rail. Para páginas que solo gatean por rol (arranque rápido 2026-09-29):
+  // antes cada una pagaba un viaje al servidor en serie ANTES de pedir sus
+  // datos. Si el doc no existe llega { rol: null }, que los gates tratan
+  // igual que el null de antes. Quien necesite más campos (activo, email…)
+  // sigue con UsuariosService.getUsuario.
+  async function miPerfil(user) {
+    const uid = typeof user === "string" ? user : (user && user.uid);
+    if (!uid) return null;
+    const c = cache(uid);
+    if (c && c.rol) {
+      _revalidar(uid, c.rol);
+      return { id: uid, rol: c.rol, nombre: c.nombre || "" };
+    }
+    const p = await perfil(uid);
+    return { id: uid, rol: p.rol, nombre: p.nombre || "" };
+  }
+
   // Nombre para saludo/rail. Nunca lanza.
   async function nombre(user) {
     const c = cache(user.uid);
@@ -206,7 +226,7 @@ window.Sesion = (() => {
     } catch { /* sin storage: nada que limpiar */ }
   }
 
-  return { cache, cacheAnonima, perfil, rol, nombre, limpiar };
+  return { cache, cacheAnonima, perfil, miPerfil, rol, nombre, limpiar };
 })();
 
   // Apply admin-tunable config from empresa/config to runtime globals.

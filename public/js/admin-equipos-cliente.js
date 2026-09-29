@@ -308,7 +308,7 @@
       }
 
       state.user = user;
-      const userDoc = await UsuariosService.getUsuario(user.uid);
+      const userDoc = await Sesion.miPerfil(user);
       const role = userDoc ? (userDoc.rol || '') : '';
       state.role = role;
 

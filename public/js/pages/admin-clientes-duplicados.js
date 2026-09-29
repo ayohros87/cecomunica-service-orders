@@ -200,7 +200,7 @@
   firebase.auth().onAuthStateChanged(async user => {
     if (!user) { window.location.href = '../login.html'; return; }
     try {
-      const userDoc = await UsuariosService.getUsuario(user.uid);
+      const userDoc = await Sesion.miPerfil(user);
       const rol = userDoc ? userDoc.rol : null;
       if (![ROLES.ADMIN].includes(rol)) {
         Toast.show('Acceso restringido a administradores.', 'bad');

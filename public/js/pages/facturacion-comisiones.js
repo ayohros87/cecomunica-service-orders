@@ -570,7 +570,7 @@ window.FacturacionComisiones = (() => {
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) return window.location.href = '../login.html';
       try {
-        const u = await UsuariosService.getUsuario(user.uid);
+        const u = await Sesion.miPerfil(user);
         rol = u ? u.rol : null;
         // Esta pantalla es de admin/contabilidad y punto: recepción marca pasos
         // de facturación, no libera comisiones.

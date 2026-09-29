@@ -193,7 +193,7 @@
     firebase.auth().onAuthStateChanged(async (user) => {
       if (user) {
         currentUser = user;
-        const userDoc = await UsuariosService.getUsuario(user.uid);
+        const userDoc = await Sesion.miPerfil(user);
         const rol = userDoc ? userDoc.rol || "" : "";
         limitarEdicionPorRol(rol);
       } else {
