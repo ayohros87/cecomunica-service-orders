@@ -536,19 +536,23 @@ window.HomeSignals = (() => {
      nada que hacer (número en gris, sin la barra roja de alerta): un cero
      en rojo era la cosa más ruidosa del home y significaba lo contrario.
      El conteo puede llegar como "50+" (scan topado), de ahí el === 0. */
-  function _pintaVal(mount, id, n) {
+  // `sync:false` pinta el número EN SU SITIO sin mover la tarjeta: el
+  // acomodo (rejilla / Seguimiento / Al día) se hace UNA vez cuando todos los
+  // conteos llegaron. Antes cada conteo movía su tarjeta al llegar y el home
+  // se armaba en tres o cuatro tandas (Alberto, 2026-09-29: "hay un enredo").
+  function _pintaVal(mount, id, n, { sync = true } = {}) {
     const tile = mount.querySelector(`[data-signal="${id}"]`);
     const val = mount.querySelector(`[data-signal-val="${id}"]`);
     if (!tile || !val) return;
     if ((n === 0 || n === '0') && (SOLO_SI_HAY[mount._renderOpts?.rolEfectivo] || []).includes(id)) {
       tile.remove();
-      _sincronizarN(mount);
+      if (sync) _sincronizarN(mount);
       return;
     }
     tile.classList.remove('is-loading');
     tile.classList.toggle('is-cero', n === 0 || n === '0');
     val.textContent = String(n);
-    _sincronizarN(mount);
+    if (sync) _sincronizarN(mount);
   }
 
   // Los ceros comparten una franja compacta. Mover el mismo enlace conserva
@@ -822,10 +826,10 @@ window.HomeSignals = (() => {
     _wireExpansion(mount, ids);
     _wireAprobaciones(mount, { rolEfectivo, uid, user });
 
-    const setVal = (id, n) => _pintaVal(mount, id, n);
-    const dropTile = (id) => {
+    const setVal = (id, n, opts) => _pintaVal(mount, id, n, opts);
+    const dropTile = (id, { sync = true } = {}) => {
       mount.querySelector(`[data-signal="${id}"]`)?.remove();
-      _sincronizarN(mount);
+      if (sync) _sincronizarN(mount);
     };
 
     // Opciones guardadas para recontar al volver (pageshow/visibilidad) o con
@@ -835,31 +839,41 @@ window.HomeSignals = (() => {
     const cacheHit = _readCache(uid, rolEfectivo);
     const cached = cacheHit && cacheHit.counts;
     if (cached) {
+      // Un solo pintado desde la caché, INCLUIDAS las frescas (aprobaciones,
+      // órdenes por crear) con su último valor conocido: así cada tarjeta
+      // nace en la zona que le toca y el recuento de las frescas solo cambia
+      // el número (y mueve la tarjeta únicamente si pasó de 0 a algo o al
+      // revés). Antes las frescas nacían en la rejilla como "cargando" y
+      // saltaban a "Al día" un segundo después.
       ids.forEach(id => {
-        if (SIGNALS[id].fresh) return;
+        const v = cached[id];
         // number o string: el conteo por scan reporta "400+" cuando topa.
-        if (typeof cached[id] === 'number' || typeof cached[id] === 'string') setVal(id, cached[id]);
-        else dropTile(id);
+        if (typeof v === 'number' || typeof v === 'string') setVal(id, v, { sync: false });
+        else if (!SIGNALS[id].fresh) dropTile(id, { sync: false });
       });
+      _sincronizarN(mount);
       _applyDeltas(mount, ids, cached, _rotateSnapshot(uid, rolEfectivo, cached));
       _pintaActualizado(mount, cacheHit.t);
       await _refrescarAprobaciones(mount);
       return;
     }
 
+    // Camino frío: los números se rellenan conforme llegan, pero las
+    // tarjetas NO se mueven hasta que todos los conteos terminaron.
     const counts = {};
     await Promise.all(ids.map(async (id) => {
       try {
         counts[id] = await SIGNALS[id].count({ rolEfectivo, uid, user });
-        setVal(id, counts[id]);
+        setVal(id, counts[id], { sync: false });
       } catch (err) {
         // permiso denegado / índice faltante → fuera la tarjeta, el home sigue.
         console.warn(`[HomeSignals] señal ${id} no disponible:`, err?.code || err);
         // Una aprobación no debe desaparecer ni parecer cero si falta red.
-        if (SIGNALS[id].fresh) setVal(id, '—');
-        else dropTile(id);
+        if (SIGNALS[id].fresh) setVal(id, '—', { sync: false });
+        else dropTile(id, { sync: false });
       }
     }));
+    _sincronizarN(mount);
     _writeCache(uid, rolEfectivo, counts);
     _applyDeltas(mount, ids, counts, _rotateSnapshot(uid, rolEfectivo, counts));
     _pintaActualizado(mount, Date.now());
@@ -922,10 +936,11 @@ window.HomeSignals = (() => {
           const n = await SIGNALS[id].count(o);
           if (mount._renderOpts !== o) return;
           counts[id] = n;
-          _pintaVal(mount, id, n);
+          _pintaVal(mount, id, n, { sync: false });
         } catch (e) { /* se queda el número anterior */ }
       }));
       if (mount._renderOpts !== o) return;
+      _sincronizarN(mount);   // un solo acomodo, no uno por conteo
       _writeCache(o.uid, o.rolEfectivo, counts);
       _pintaActualizado(mount, Date.now());
     } finally {
@@ -939,20 +954,34 @@ window.HomeSignals = (() => {
   async function _refrescarAprobaciones(mount) {
     const ctx = mount._aprobacionesCtx;
     if (!ctx) return;
+    const nuevos = {};
     await Promise.all(Object.entries(SIGNALS).filter(([, sig]) => sig.fresh).map(async ([id, sig]) => {
       if (!mount.querySelector(`[data-signal="${id}"]`)) return;
       try {
         const n = await sig.count(ctx);
-        if (mount._aprobacionesCtx === ctx) _pintaVal(mount, id, n);
+        if (mount._aprobacionesCtx !== ctx) return;
+        nuevos[id] = n;
+        _pintaVal(mount, id, n, { sync: false });
       } catch (e) {
         if (mount._aprobacionesCtx !== ctx) return;
         const tile = mount.querySelector(`[data-signal="${id}"]`);
         if (tile) {
-          _pintaVal(mount, id, '—');
+          _pintaVal(mount, id, '—', { sync: false });
           tile.title = 'No se pudo consultar. Abre el Centro de gestión para reintentar.';
         }
       }
     }));
+    if (mount._aprobacionesCtx !== ctx) return;
+    _sincronizarN(mount);   // un solo acomodo para todas las frescas
+    // Su último valor entra a la caché para que la próxima carga las pinte
+    // en su zona desde el primer momento (siempre se recuentan igual).
+    const o = mount._renderOpts;
+    if (o && Object.keys(nuevos).length) {
+      const hit = _readCache(o.uid, o.rolEfectivo);
+      if (hit && hit.counts) {
+        try { sessionStorage.setItem(_cacheKey(o.uid, o.rolEfectivo), JSON.stringify({ t: hit.t, counts: { ...hit.counts, ...nuevos } })); } catch { /* sin caché */ }
+      }
+    }
   }
 
   function _wireAprobaciones(mount, ctx) {
