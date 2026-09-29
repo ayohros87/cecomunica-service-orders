@@ -3,6 +3,9 @@
 // archivo sigue publicando sus globales en window (puente F1), así que el
 // orden importa igual que antes. Vite lo empaqueta y le pone hash.
 import '/js/firebase-init.js';
+// Conteos server-side (FbAgg.count): Firebase 12 dejó a la API compat sin
+// Query.count(), y Hoy/Avanzado contaban "sin verificar" con ella (2026-09-29).
+import '/js/firebase-aggregates.js';
 import '/js/ui/modal.js';
 import '/js/ui/bandeja.js';
 import '/js/services/usuariosService.js';

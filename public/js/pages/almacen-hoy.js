@@ -159,11 +159,11 @@ window.AlmacenHoy = (() => {
 
   // ── Cargas ────────────────────────────────────────────────────────────
   async function contarSinVerificar() {
-    const db = firebase.firestore();
-    const probe = db.collection('equipos_pool').limit(1);
-    if (typeof probe.count !== 'function') return null;
-    const s = await db.collection('equipos_pool').where('verificado', '==', false).count().get();
-    return s.data().count;
+    // Firebase 12 (npm, 2026-09-25): la API compat ya no trae Query.count() —
+    // el probe de antes devolvía null en silencio y la nota "sin verificar"
+    // desapareció de la bandeja. Va por getCountFromServer (FbAgg, en el entry).
+    if (!window.FbAgg || typeof FbAgg.count !== 'function') return null;
+    return FbAgg.count('equipos_pool', [['verificado', '==', false]]);
   }
 
   // La cola de Conflictos es UNA (ConflictosPoolService, compartida con
@@ -216,7 +216,10 @@ window.AlmacenHoy = (() => {
   }
 
   async function cargar() {
-    const loader = $('loader');
+    // El spinner solo si Hoy es la pestaña visible: cuando la carga corre en
+    // segundo plano (la página abrió en otra pestaña) no hay nada que tapar.
+    const hoyVisible = ($('tab-hoy') || {}).style?.display !== 'none';
+    const loader = hoyVisible ? $('loader') : null;
     if (loader) loader.style.display = '';
     try {
       // Cada carga cae por su lado: un permiso o índice roto no tumba la bandeja
@@ -578,9 +581,10 @@ window.AlmacenHoy = (() => {
     // (scripts inline de la página) para que nada brinque; aquí solo se
     // dispara la carga de datos de la pestaña que quedó visible.
     const qs = new URLSearchParams(location.search);
+    let pVisible = null; // la carga de la pestaña visible, si no es Hoy
     const ex = document.getElementById('tab-existencias');
     if (ex && ex.style.display !== 'none' && window.AlmacenExistencias) {
-      AlmacenExistencias.activar();
+      pVisible = AlmacenExistencias.activar();
       // ?serial= (kardexUrl desde contratos/clientes/órdenes, y el stub de
       // inventario/equipos.html): la ficha del serial encima de Existencias.
       if (qs.get('serial') && window.EquipoFicha) EquipoFicha.abrir(qs.get('serial'));
@@ -588,7 +592,7 @@ window.AlmacenHoy = (() => {
     // ?tab=serial (lista avanzada) con los deep-links que traducía equipos.html.
     const av = document.getElementById('tab-serial');
     if (av && av.style.display !== 'none' && window.EquiposPool) {
-      EquiposPool.activar({ estado: qs.get('estado') || '', verificar: qs.get('verificar') === '1',
+      pVisible = EquiposPool.activar({ estado: qs.get('estado') || '', verificar: qs.get('verificar') === '1',
         modelo: qs.get('modelo') || '', serial: qs.get('serial') || '' });
     }
     // Una acción de la ficha (inspección, baja, venta…) refresca las listas.
@@ -631,14 +635,21 @@ window.AlmacenHoy = (() => {
     if (qs.get('tab') === 'asignar' && window.AlmacenAsignar) {
       // &corregir=1 — el expediente manda a bodega a CORREGIR seriales ya
       // asignados, no a asignar los que faltan (2026-09-16).
-      AlmacenAsignar.activar({ contrato: qs.get('contrato'), g: qs.get('g'), corregir: qs.get('corregir') === '1' });
+      pVisible = AlmacenAsignar.activar({ contrato: qs.get('contrato'), g: qs.get('g'), corregir: qs.get('corregir') === '1' });
     }
     // ?accion=conteo|recibir|vender — deep-links de los asistentes.
     const accion = new URLSearchParams(location.search).get('accion');
     if (accion === 'conteo') AlmacenPage.abrirConteo();
     else if (accion === 'recibir') AlmacenPage.abrirRecibir();
     else if (accion === 'vender') AlmacenPage.abrirVenta();
-    cargar();
+    // La bandeja de Hoy (7 fuentes, ~10 consultas) se pide de una vez solo si
+    // es la pestaña visible. Si la página abrió en otra (deep-link ?tab=),
+    // sus datos van primero y Hoy se carga cuando terminen: antes se lanzaba
+    // siempre y competía por el mismo canal de Firestore, así que Asignar,
+    // Existencias y Avanzado esperaban a Hoy sin verlo (medido en el
+    // emulador, 2026-09-29). Su contador mientras tanto es el último conocido.
+    if (!pVisible) cargar();
+    else Promise.resolve(pVisible).catch(() => {}).then(() => cargar());
   }
 
   return { recargar, render, abrirConflicto, _conflictoFusionar, _conflictoDistintos, cargarGestionesBodega };

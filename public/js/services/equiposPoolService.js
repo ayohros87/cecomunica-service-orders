@@ -253,7 +253,20 @@ const EquiposPoolService = {
   // un número puede estar corrido por un rato. Lo que se toca se lee del pool.
   // `source: 'cache'` → solo la caché local (Existencias pinta al instante y
   // luego corrige con el servidor).
+  // Single-flight de 3 s: Hoy lo pide tres veces por carga (bodega, por
+  // clasificar, diferencias) y Existencias/Avanzado otra vez; todas comparten
+  // el mismo viaje (medido en el emulador, 2026-09-29). Cada llamador recibe
+  // su propia copia del arreglo.
+  _resumenVuelo: null,
   async resumenPorModelo({ source = null } = {}) {
+    if (source) return this._leerResumen({ source });
+    if (!this._resumenVuelo) {
+      this._resumenVuelo = this._leerResumen({})
+        .finally(() => setTimeout(() => { this._resumenVuelo = null; }, 3000));
+    }
+    return (await this._resumenVuelo).slice();
+  },
+  async _leerResumen({ source = null } = {}) {
     const db = firebase.firestore();
     const q = db.collection('agregados_pool');
     const snap = source ? await q.get({ source }) : await q.get();

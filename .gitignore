@@ -114,3 +114,6 @@ firebase.emu-test.json
 
 # Salida del build de Vite (F2, PLAN_MIGRACION_MODULAR.md); se genera en cada deploy
 dist/
+
+# Export de producción para el emulador (datos reales: NUNCA al repo)
+tools/emulador-almacen/emu-data.json

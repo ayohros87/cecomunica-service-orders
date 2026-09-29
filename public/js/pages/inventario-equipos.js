@@ -186,10 +186,17 @@ window.EquiposPool = {
   // y coincide exacto: el resumen por estado, el count() de sin verificar
   // (4,396 = 4,396). Devuelve null si el resumen no existe.
   async _cargarConteos() {
-    const db = firebase.firestore();
     const [resumen, sinVerif] = await Promise.all([
       EquiposPoolService.resumenPorModelo(),
-      db.collection('equipos_pool').where('verificado', '==', false).count().get(),
+      // Firebase 12 (npm): la API compat no trae Query.count(). El
+      // .count().get() de antes reventaba con "count is not a function" y la
+      // lista entera se quedaba sin pintar ("Error al cargar equipos";
+      // medido en el emulador 2026-09-29). Va por getCountFromServer (FbAgg,
+      // en el entry); si no está o falla, el contador queda en null.
+      (window.FbAgg && typeof FbAgg.count === 'function')
+        ? FbAgg.count('equipos_pool', [['verificado', '==', false]])
+            .catch(e => { console.warn('[Equipos] sin verificar:', e?.code || e); return null; })
+        : Promise.resolve(null),
     ]);
     if (!resumen.length) return null;
     const porEstado = {};
@@ -199,7 +206,7 @@ window.EquiposPool = {
     return {
       porEstado,
       total: Object.values(porEstado).reduce((a, b) => a + b, 0),
-      sinVerificar: sinVerif.data().count,
+      sinVerificar: sinVerif,
     };
   },
 
@@ -214,7 +221,7 @@ window.EquiposPool = {
       const e = eq.estado || 'sin_estado';
       C.porEstado[e] = Math.max(0, (C.porEstado[e] || 0) + signo);
       C.total = Math.max(0, C.total + signo);
-      if (eq.verificado === false) C.sinVerificar = Math.max(0, C.sinVerificar + signo);
+      if (eq.verificado === false && typeof C.sinVerificar === 'number') C.sinVerificar = Math.max(0, C.sinVerificar + signo);
     };
     mover(viejo, -1);
     mover(nuevo, +1);
@@ -641,7 +648,7 @@ window.EquiposPool = {
     const nPorClasificar = cuenta('por_clasificar');
     const nPorInspeccionar = cuenta('devuelto_revision');
     const nNoRetirado = cuenta('no_retirado');
-    const nSinVerificar = C ? C.sinVerificar : this._equipos.filter(e => e.verificado === false).length;
+    const nSinVerificar = (C && typeof C.sinVerificar === 'number') ? C.sinVerificar : this._equipos.filter(e => e.verificado === false).length;
     set('colaPorClasificar', fmt(nPorClasificar));
     set('colaPorInspeccionar', fmt(nPorInspeccionar));
     set('colaNoRetirado', fmt(nNoRetirado));

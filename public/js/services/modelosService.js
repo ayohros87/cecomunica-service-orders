@@ -16,7 +16,19 @@ const ModelosService = {
     catch (e) { this._catalogo = null; throw e; }
   },
 
+  // Single-flight de 3 s (sin `source`): en Almacén lo piden Hoy, Existencias
+  // y Avanzado en la misma ráfaga; comparten un viaje (2026-09-29). Cada
+  // llamador recibe su propia copia.
+  _modelosVuelo: null,
   async getModelos({ source = null } = {}) {
+    if (source) return this._leerModelos({ source });
+    if (!this._modelosVuelo) {
+      this._modelosVuelo = this._leerModelos({})
+        .finally(() => setTimeout(() => { this._modelosVuelo = null; }, 3000));
+    }
+    return (await this._modelosVuelo).slice();
+  },
+  async _leerModelos({ source = null } = {}) {
     const db = firebase.firestore();
     const snap = source
       ? await db.collection('modelos').get({ source })
