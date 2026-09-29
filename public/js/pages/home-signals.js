@@ -390,7 +390,11 @@ window.HomeSignals = (() => {
     // desde la lista de órdenes (chips por estado).
     // REGV/REGG (cuentas por regularizar, plan 2026-09-08): el vendedor ve su
     // cartera; admin y gerencia ven todas, con las sin vendedor primero.
-    administrador:     ['APR', 'OPC', 'S1', 'EST', 'S4Q', 'SAP', 'REGG', 'LPC'],
+    // Hay administradores que también venden (2026-09-29: Zuleika con 12
+    // cotizaciones, 3 contratos por firmar y 39 cuentas propias). Sus colas
+    // de vendedor van con SOLO_SI_HAY: al admin que no vende no le llenan la
+    // línea "Al día" con tres cosas que no son suyas.
+    administrador:     ['APR', 'OPC', 'S1', 'EST', 'S4Q', 'SAP', 'S7', 'FIRV', 'REGV', 'REGG', 'LPC'],
     // gerencia también aprueba gestiones (misma regla que el Centro): la señal
     // unificada le trae las dos colas, antes solo veía contratos.
     // S1 (por asignar) solo para quien PUEDE asignar técnico ('asignar-tecnico'
@@ -415,6 +419,12 @@ window.HomeSignals = (() => {
     inventario:        ['S15', 'S13', 'S14', 'S9'],
     vista:             ['S1', 'S3', 'S4'],
     contabilidad:      [],
+  };
+
+  // Por rol: señales que se quitan (en vez de ir a "Al día") cuando están
+  // en cero — colas propias que ese rol solo a veces tiene.
+  const SOLO_SI_HAY = {
+    administrador: ['S7', 'FIRV', 'REGV'],
   };
 
   function _cacheKey(uid, rol) { return `${CACHE_PREFIX}:${uid}:${rol}`; }
@@ -530,6 +540,11 @@ window.HomeSignals = (() => {
     const tile = mount.querySelector(`[data-signal="${id}"]`);
     const val = mount.querySelector(`[data-signal-val="${id}"]`);
     if (!tile || !val) return;
+    if ((n === 0 || n === '0') && (SOLO_SI_HAY[mount._renderOpts?.rolEfectivo] || []).includes(id)) {
+      tile.remove();
+      _sincronizarN(mount);
+      return;
+    }
     tile.classList.remove('is-loading');
     tile.classList.toggle('is-cero', n === 0 || n === '0');
     val.textContent = String(n);
