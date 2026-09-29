@@ -66,7 +66,9 @@ window.HomeSignals = (() => {
       href: 'ordenes/index.html?estado=POR%20ASIGNAR',
       // soloTaller: la DEVOLUCION vive en "POR ASIGNAR" pero jamás se asigna
       // (2026-09-02) — sin esto la señal contaba trabajo que no existe.
-      count: () => SenalesService.countOrdenesPorEstado(EST.POR_ASIGNAR, { soloTaller: true }),
+      // Cuenta desde las filas (memo compartida con el panel): las de más de
+      // orden_stale_max_dias van al grupo "por depurar" y no suman.
+      count: () => SenalesService.countOrdenesPorAsignar(),
       items: () => SenalesService.listOrdenesPorAsignar(),
       row: (r, esc) => ({
         txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.id)}</span> · ${esc(r.tipo)}`,
@@ -601,7 +603,10 @@ window.HomeSignals = (() => {
       return;
     }
     if (!panel.isConnected || panel.dataset.signalPanel !== id) return;
-    const activas = rows.filter(r => !r.pospuesto);
+    // `viejo` (más de orden_stale_max_dias): casi seguro ya salió del taller.
+    // Va en su propio grupo al final y no cuenta en la tarjeta.
+    const activas = rows.filter(r => !r.pospuesto && !r.viejo);
+    const viejas = rows.filter(r => !r.pospuesto && r.viejo);
     const pospuestas = rows.filter(r => r.pospuesto);
     const visibles = activas.slice(0, MAX_FILAS_PANEL);
     const resto = activas.length - visibles.length;
@@ -612,6 +617,11 @@ window.HomeSignals = (() => {
       + (visibles.length
         ? visibles.map(r => _filaHtml(id, sig, r)).join('')
         : Bandeja.listaVacia(sig.vacio || 'Nada pendiente.'))
+      + Bandeja.grupo({
+        titulo: `Más de ${viejas[0]?.viejo || 30} días — por depurar`, n: viejas.length,
+        filasHtml: viejas.slice(0, MAX_FILAS_PANEL).map(r => _filaHtml(id, sig, r)).join(''),
+        notaHtml: viejas.length ? Bandeja.nota('Casi seguro ya no están en el taller: ciérralas o regístralas desde la orden. No suman en el número de la tarjeta.') : '',
+      })
       + (pospuestas.length ? pospuestas.map(r => _filaHtml(id, sig, r)).join('') : '')
       + ((resto > 0 || pospuestas.length)
         ? Bandeja.pie(`${resto > 0 ? `…y ${resto} más — ábrelo en su módulo para verlo todo. ` : ''}${pospuestas.length ? `${pospuestas.length} pospuesto${pospuestas.length === 1 ? '' : 's'} (también fuera del correo diario).` : ''}`)

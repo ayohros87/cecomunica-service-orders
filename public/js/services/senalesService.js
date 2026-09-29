@@ -106,7 +106,12 @@ const SenalesService = {
 
   // La lista comparte las exclusiones del contador. Paginar antes de filtrar
   // evita que una página llena de eliminadas/devoluciones esconda las vivas.
-  async listOrdenesPorAsignar() {
+  // Memo compartida con el conteo (el conteo de S1 sale de estas filas).
+  listOrdenesPorAsignar() {
+    return this._memoList('asignar', () => this._leerOrdenesPorAsignar());
+  },
+  async _leerOrdenesPorAsignar() {
+    const { staleMax } = await this._config();
     const db = firebase.firestore();
     const base = db.collection('ordenes_de_servicio')
       .where('estado_reparacion', '==', 'POR ASIGNAR')
@@ -126,11 +131,22 @@ const SenalesService = {
           tipo: o.tipo_de_servicio || '—',
           dias: Math.max(0, Math.floor(PendientesDomain.edadDias(o.fecha_entrada || o.fecha_creacion, now) || 0)),
         });
+        rows[rows.length - 1].viejo = this._vieja(rows[rows.length - 1].dias, staleMax);
       }
       cursor = snap.size === 100 ? snap.docs[snap.docs.length - 1] : null;
     } while (cursor);
     return rows.sort((a, b) => b.dias - a.dias || a.id.localeCompare(b.id));
   },
+
+  // Más vieja que orden_stale_max_dias (30) = casi seguro ya no está en el
+  // taller: sigue en el panel, en su grupo "por depurar", pero no infla el
+  // número de la tarjeta (repaso del home 2026-09-29: 24 de las 44 "por
+  // asignar" y 33 de las 80 "listas para entregar" pasaban del mes, hasta
+  // 235 días). Mismo corte que "sin movimiento" y el correo diario.
+  // Devuelve el corte en días (para el título del grupo) o 0 si no es vieja.
+  _vieja(dias, staleMax) { return dias > staleMax ? staleMax : 0; },
+
+  async countOrdenesPorAsignar() { return (await this.listOrdenesPorAsignar()).filter(r => !r.viejo).length; },
 
   /**
    * Órdenes completadas que el candado de QC no deja entregar (ordenes-qc.js).
@@ -444,7 +460,7 @@ const SenalesService = {
   /** Terminadas con QC listo que nadie marco ENTREGADO (cron seccion E). */
   listListasParaEntregar() {
     return this._memoList('entregar', async () => {
-      const { entregaDias } = await this._config();
+      const { entregaDias, staleMax } = await this._config();
       const now = new Date();
       const snap = await firebase.firestore().collection('ordenes_de_servicio')
         .where('estado_reparacion', '==', 'COMPLETADO (EN OFICINA)')
@@ -461,6 +477,7 @@ const SenalesService = {
           dias: Math.floor(PendientesDomain.edadDias(o.fecha_completado || o.fecha_modificacion, now) || 0) || Math.floor(PendientesDomain.edadDias(o.fecha_creacion, now) || 0),
           ...this._snooze(o), ...this._curso(o),
         });
+        rows[rows.length - 1].viejo = this._vieja(rows[rows.length - 1].dias, staleMax);
       });
       return rows.sort((a, b) => b.dias - a.dias);
     });
@@ -586,7 +603,7 @@ const SenalesService = {
   },
 
   // Conteos derivados de las filas (excluyen pospuestas, como el correo).
-  async countListasParaEntregar() { return (await this.listListasParaEntregar()).filter(r => !r.pospuesto).length; },
+  async countListasParaEntregar() { return (await this.listListasParaEntregar()).filter(r => !r.pospuesto && !r.viejo).length; },
   async countEstancadas()         { return (await this.listEstancadas()).filter(r => !r.pospuesto).length; },
 
   /* ── Posponer (fase 3) ─────────────────────────────────────────────────

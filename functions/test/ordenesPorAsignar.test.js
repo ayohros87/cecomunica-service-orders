@@ -60,3 +60,21 @@ test('lista vacía y fallo de red son resultados distintos', async () => {
   assert.equal((await montar([]).service.listOrdenesPorAsignar()).length, 0);
   await assert.rejects(montar([], true).service.listOrdenesPorAsignar(), /sin red/);
 });
+
+// Repaso del home 2026-09-29: 24 de las 44 "por asignar" pasaban del mes (hasta
+// 235 días). Las de más de orden_stale_max_dias (30 por defecto) siguen en la
+// lista, marcadas `viejo`, pero no suman en la tarjeta.
+test('las de más de 30 días quedan en la lista como viejas y no cuentan', async () => {
+  const hace = d => new Date(Date.now() - d * 86400000);
+  const { service } = montar([
+    { id: 'n1', estado_reparacion: 'POR ASIGNAR', fecha_entrada: hace(30) },
+    { id: 'n2', estado_reparacion: 'POR ASIGNAR', fecha_entrada: hace(2) },
+    { id: 'v1', estado_reparacion: 'POR ASIGNAR', fecha_entrada: hace(31) },
+    { id: 'v2', estado_reparacion: 'POR ASIGNAR', tipo_de_servicio: 'ENTRADA', fecha_entrada: hace(235) },
+  ]);
+  const rows = await service.listOrdenesPorAsignar();
+  assert.equal(rows.length, 4, 'nada desaparece de la lista');
+  assert.deepEqual([...rows.filter(r => r.viejo).map(r => r.id)], ['v2', 'v1']);
+  assert.equal(rows.find(r => r.id === 'v1').viejo, 30, 'lleva el corte para el título del grupo');
+  assert.equal(await service.countOrdenesPorAsignar(), 2);
+});
