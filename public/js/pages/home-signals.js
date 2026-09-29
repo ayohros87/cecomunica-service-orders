@@ -30,6 +30,14 @@ window.HomeSignals = (() => {
     COMPLETADO: 'COMPLETADO (EN OFICINA)',
   };
 
+  // ¿La señal sigue en su ventana de "Nuevo"? Fecha local del navegador.
+  function _esNueva(sig) {
+    if (!sig.nuevo?.hasta) return false;
+    const d = new Date();
+    const hoy = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return hoy <= sig.nuevo.hasta;
+  }
+
   // Fila de un contrato por firmar (FIR/FIRV): "tranca la entrega" cuando la
   // orden ya salió — es lo que recepción no puede entregar sin la firma.
   function _filaFirma(r, esc) {
@@ -185,6 +193,9 @@ window.HomeSignals = (() => {
     // de firma. Recepción y gerencia ven todos; el vendedor, los suyos.
     FIR: {
       modulo: 'centro', icon: 'pen-line', moreIsBad: true,
+      // Marca temporal "Nuevo" (hasta el día indicado, inclusive): la señal
+      // cambió de nombre y de número (203 → ~13) y sin aviso parecería un error.
+      nuevo: { hasta: '2026-10-02', nota: 'Antes decía "Contratos por activar" y contaba más de 200 contratos viejos. Ahora solo cuenta los que de verdad esperan la firma del cliente.' },
       label: 'Contratos por firmar', sub: 'equipos listos, falta la firma del cliente',
       href: 'clientes/centro.html',
       count: () => SenalesService.countContratosPorFirmar(),
@@ -195,6 +206,9 @@ window.HomeSignals = (() => {
     },
     FIRV: {
       modulo: 'centro', icon: 'pen-line', moreIsBad: true,
+      // Marca temporal "Nuevo" (hasta el día indicado, inclusive): la señal
+      // cambió de nombre y de número (203 → ~13) y sin aviso parecería un error.
+      nuevo: { hasta: '2026-10-02', nota: 'Antes decía "Contratos por activar" y contaba más de 200 contratos viejos. Ahora solo cuenta los que de verdad esperan la firma del cliente.' },
       label: 'Mis contratos por firmar', sub: 'equipos listos, falta la firma del cliente',
       href: 'clientes/centro.html',
       count: (ctx) => SenalesService.countContratosPorFirmar({ uid: ctx.uid }),
@@ -459,9 +473,11 @@ window.HomeSignals = (() => {
     // — lo que no cabe se recorta por CSS, así que el subtítulo completo va
     // en el title= de la tarjeta y no como tercera línea de texto.
     const abre = typeof sig.items === 'function' || typeof sig.panel === 'function';
+    const nueva = _esNueva(sig);
+    const titulo = `${sig.label} — ${sig.sub}${nueva ? ` · Nuevo: ${sig.nuevo.nota}` : ''}`;
     return `
-<a class="kpi${sig.alert ? ' kpi--alert' : ''}${abre ? ' kpi--abre' : ''} is-loading" href="${sig.href}" data-signal="${id}" title="${sig.label} — ${sig.sub}"${abre ? ' aria-expanded="false" role="button"' : ''}>
-  <div class="kpi__label"><i data-lucide="${sig.icon}"></i> <span class="kpi__t">${sig.label}</span>${abre ? '<span class="kpi__chev" aria-hidden="true">▾</span>' : ''}</div>
+<a class="kpi${sig.alert ? ' kpi--alert' : ''}${abre ? ' kpi--abre' : ''}${nueva ? ' kpi--nuevo' : ''} is-loading" href="${sig.href}" data-signal="${id}" title="${titulo.replace(/"/g, '&quot;')}"${abre ? ' aria-expanded="false" role="button"' : ''}>
+  <div class="kpi__label"><i data-lucide="${sig.icon}"></i> <span class="kpi__t">${sig.label}</span>${nueva ? '<span class="kpi__nuevo">Nuevo</span>' : ''}${abre ? '<span class="kpi__chev" aria-hidden="true">▾</span>' : ''}</div>
   <div class="kpi__row">
     <div class="kpi__val num" data-signal-val="${id}">—</div>
     <div class="kpi__delta">${sig.sub}</div>
@@ -586,6 +602,7 @@ window.HomeSignals = (() => {
 
     const hrefPanel = typeof sig.hrefDe === 'function' ? sig.hrefDe(activas) : sig.href;
     panel.innerHTML = Bandeja.panelHead({ titulo: sig.label, n: activas.length, href: hrefPanel, hrefLabel: sig.hrefLabel })
+      + (_esNueva(sig) ? `<p class="kpi-nuevo-nota"><b>Nuevo.</b> ${sig.nuevo.nota}</p>` : '')
       + (visibles.length
         ? visibles.map(r => _filaHtml(id, sig, r)).join('')
         : Bandeja.listaVacia(sig.vacio || 'Nada pendiente.'))

@@ -317,6 +317,12 @@ a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
 /* Señal que se ABRE en filas (panel de pendientes, js/ui/bandeja.js pinta
    el panel; aquí solo el tile y el formulario de posponer). */
 .kpi--abre{cursor:pointer}
+/* Señal que cambió hace poco (sig.nuevo en home-signals.js): pastilla y borde
+   de acento unos días para que el cambio de número no parezca un error. */
+.kpi--nuevo{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.kpi__nuevo{flex:none;margin-left:auto;padding:1px 7px;border-radius:999px;background:var(--accent-hover);color:#fff;font:700 10px/1.5 var(--font-body);letter-spacing:.04em;text-transform:uppercase}
+.kpi__nuevo + .kpi__chev{margin-left:4px}
+.kpi-nuevo-nota{margin:0 0 8px;padding:8px 10px;border-radius:8px;background:var(--accent-soft);color:var(--fg-2);font-size:12.5px;line-height:1.4}
 .kpi__chev{font-size:10px;opacity:.55;margin-left:2px;transition:transform .15s;display:inline-block}
 .kpi[aria-expanded="true"] .kpi__chev{transform:rotate(180deg)}
 .kpi[aria-expanded="true"]{outline:2px solid var(--accent);outline-offset:-2px}
