@@ -22,7 +22,6 @@ admin.initializeApp({ projectId: "cecomunica-service-orders" });
 const db = admin.firestore();
 
 const EXECUTE = process.argv.includes("--execute");
-const norm = (s) => String(s || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 (async () => {
   const [poolSnap, ordSnap] = await Promise.all([

@@ -26,7 +26,7 @@ async function gerenciaEmails(cfg) {
     try {
       const s = await db.collection("usuarios").where("rol", "==", rol).get();
       s.forEach(d => { const e = String(d.get("email") || "").trim(); if (e && !/@sin\.email$/i.test(e) && d.get("activo") !== false) out.add(e); });
-    } catch (e) { /* sigue */ }
+    } catch { /* sigue */ }
     if (out.size) break;
   }
   return [...out];

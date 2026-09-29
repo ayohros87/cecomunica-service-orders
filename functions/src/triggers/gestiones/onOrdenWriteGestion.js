@@ -154,7 +154,7 @@ async function retirarMarcaCancelacion(gid, g) {
       try {
         const ss = await ref.collection("seriales").get();
         propios = ss.docs.map(d => d.data()?.serial).filter(x => typeof x === "string");
-      } catch (e) { /* propios null → la regla decide marcar y no se toca nada */ }
+      } catch { /* propios null → la regla decide marcar y no se toca nada */ }
       const decision = decidirMarcaCancelacion({ devueltos: cp.seriales, propios, sustituidos: salientes });
       if (decision.marcar) continue;
       await ref.set({

@@ -345,7 +345,7 @@ const onContratoActivado = onDocumentUpdated(
         try {
           const u = await db.collection("usuarios").doc(after.firmado_por_uid).get();
           activadoPor = u.exists ? (u.data().nombre || u.data().email || null) : null;
-        } catch (e) { /* best-effort */ }
+        } catch { /* best-effort */ }
       }
       const contratoFecha = after.creado_en?.toDate ? after.creado_en.toDate().toISOString().slice(0, 10) : null;
       // Composición junto al tipo (2026-09-28): "Servicio" ya no dice si es

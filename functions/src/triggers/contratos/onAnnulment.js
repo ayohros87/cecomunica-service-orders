@@ -344,7 +344,7 @@ module.exports = onDocumentUpdated(
     // Recepción siempre se entera de la anulación. El correo de la orden de
     // DEVOLUCIÓN no basta: no se crea cuando el contrato no tiene unidades
     // rastreadas en el pool (p.ej. tipo "Propio" — equipos del cliente).
-    try { (await recepcionEmails()).forEach(e => recipients.push(e)); } catch (e) { /* sin recepción */ }
+    try { (await recepcionEmails()).forEach(e => recipients.push(e)); } catch { /* sin recepción */ }
 
     const uniqueRecipients = [...new Set(recipients)];
     if (!uniqueRecipients.length) {

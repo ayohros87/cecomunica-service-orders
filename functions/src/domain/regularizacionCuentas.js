@@ -19,7 +19,7 @@ const ESTADOS_POOL = ["en_cliente", "asignado_contrato", "por_clasificar"];
 // Umbrales desde empresa/config (fallback: DEFAULTS del módulo).
 async function config() {
   let cfg = {};
-  try { const s = await db.collection("empresa").doc("config").get(); cfg = s.exists ? (s.data() || {}) : {}; } catch (e) { /* defaults */ }
+  try { const s = await db.collection("empresa").doc("config").get(); cfg = s.exists ? (s.data() || {}) : {}; } catch { /* defaults */ }
   const n = (k, d) => (Number(cfg[k]) > 0 ? Number(cfg[k]) : d);
   return {
     leve_max_d1: n("regularizacion_leve_max_d1", R.DEFAULTS.leve_max_d1),

@@ -3,7 +3,6 @@ const { db } = require("../lib/admin");
 const {
   buildEmailFromBase,
   buildBodyOrdenCompletada,
-  buildBodyNotaEntrega,
   renderByTemplate,
 } = require("../domain/emailRenderer");
 

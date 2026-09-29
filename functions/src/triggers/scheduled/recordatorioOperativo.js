@@ -121,7 +121,7 @@ module.exports = onSchedule(
       if (Number.isFinite(Number(cfg.devolucion_sla_dias)) && Number(cfg.devolucion_sla_dias) >= 1) devolucionSla = Number(cfg.devolucion_sla_dias);
       if (Number.isFinite(Number(cfg.qc_recordatorio_dias)) && Number(cfg.qc_recordatorio_dias) >= 1) qcDias = Number(cfg.qc_recordatorio_dias);
       if (Number.isFinite(Number(cfg.entrega_recordatorio_dias)) && Number(cfg.entrega_recordatorio_dias) >= 1) entregaDias = Number(cfg.entrega_recordatorio_dias);
-    } catch (e) { /* defaults */ }
+    } catch { /* defaults */ }
 
     // ── A) Órdenes estancadas ────────────────────────────────────────────
     try {
@@ -711,7 +711,7 @@ module.exports = onSchedule(
         const refs = renovadorIds.slice(i, i + 300).map((id) => db.collection("contratos").doc(id));
         try {
           (await db.getAll(...refs)).forEach((s) => { if (s.exists) renovadores.set(s.id, s.data()); });
-        } catch (err) { /* señal se mantiene para los que no se pudieron leer */ }
+        } catch { /* señal se mantiene para los que no se pudieron leer */ }
       }
 
       const filas = [];
@@ -804,7 +804,7 @@ module.exports = onSchedule(
       try {
         const cfg = (await db.collection("empresa").doc("config").get()).data() || {};
         if (Number.isFinite(Number(cfg.demo_recordatorio_dias)) && Number(cfg.demo_recordatorio_dias) >= 1) demoDias = Number(cfg.demo_recordatorio_dias);
-      } catch (e) { /* default */ }
+      } catch { /* default */ }
 
       const snap = await db.collection("gestiones")
         .where("estado", "==", "en_demo")
@@ -832,7 +832,7 @@ module.exports = onSchedule(
             try {
               const ev = await d.ref.collection("eventos").where("accion", "==", "entrega").limit(1).get();
               if (!ev.empty) base = aDate(ev.docs[0].data().at);
-            } catch (err) { /* fallback abajo */ }
+            } catch { /* fallback abajo */ }
           }
           if (!base) base = aDate(g.fecha_creacion);
           const edad = base ? (now - base) / 86400000 : null;
@@ -893,7 +893,7 @@ module.exports = onSchedule(
         const cfg = (await db.collection("empresa").doc("config").get()).data() || {};
         const n = Number(cfg.aumento_firma_recordatorio_dias);
         if (Number.isFinite(n) && n >= 1) dias = n;
-      } catch (e) { /* default */ }
+      } catch { /* default */ }
 
       const snap = await db.collection("gestiones")
         .where("estado", "==", "pendiente_firma")

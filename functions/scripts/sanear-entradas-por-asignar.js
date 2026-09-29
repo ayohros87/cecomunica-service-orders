@@ -49,8 +49,6 @@ const aDate = (ts) => { if (!ts) return null; if (ts.toDate) return ts.toDate();
   const d = new Date(ts); return isNaN(d.getTime()) ? null : d; };
 const edadDias = (ts) => { const d = aDate(ts); return d ? (now - d) / 864e5 : null; };
 
-// Estados del pool que hacen SEGURO el cierre (el trigger no los toca).
-const RESUELTOS = new Set(["en_bodega", "vendido", "baja", "por_clasificar"]);
 // Estados que significan "el radio volvió a salir": cerrar lo arrancaría.
 const CIRCULANDO = new Set(["en_cliente", "asignado_contrato"]);
 

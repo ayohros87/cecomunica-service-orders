@@ -55,7 +55,7 @@ async function precioCatalogo(modeloId) {
     await catalogo();
     const r = ModeloFamilia.precioReferencia({ modelo_id: String(modeloId) }, "precio_venta");
     return r.valor ? redondear(r.valor) : null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }

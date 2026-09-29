@@ -149,11 +149,11 @@ async function _destinatarios(clienteId) {
   try {
     const cfg = await configEmailTo("recepcion", "");
     if (cfg) cfg.split(",").map(s => s.trim().toLowerCase()).filter(isEmail).forEach(e => emails.add(e));
-  } catch (e) { /* fallback abajo */ }
+  } catch { /* fallback abajo */ }
   try {
     const taller = await configEmailTo("taller", "");
     if (taller) taller.split(",").map(s => s.trim().toLowerCase()).filter(isEmail).forEach(e => emails.add(e));
-  } catch (e) { /* sin taller configurado: recepción cubre el aviso */ }
+  } catch { /* sin taller configurado: recepción cubre el aviso */ }
   if (!emails.size) {
     try {
       const snap = await db.collection("usuarios").where("rol", "==", "recepcion").get();

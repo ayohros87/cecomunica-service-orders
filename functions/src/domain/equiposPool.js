@@ -236,7 +236,7 @@ async function upsertContacto(opts) {
   const norm = normSerial(opts.serial);
   if (!esSerialValido(norm)) return "ignorado";
 
-  const { ref, data, colisionConId } = await resolver(
+  const { ref, colisionConId } = await resolver(
     opts.serial, opts.modelo_id, opts.modelo_label,
     { adoptarSiExiste: opts.adoptarSiExiste === true });
 
@@ -549,7 +549,7 @@ async function estadoPrevioAOrden(ref, ordenId) {
       if (!mejor || t >= mejor.t) mejor = { t, de: m.de_estado };
     });
     return mejor ? mejor.de : null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }

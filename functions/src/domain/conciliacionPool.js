@@ -54,7 +54,7 @@ async function ejecutar() {
         ? String(s.data().estado_reparacion || "").trim().toUpperCase() : null;
       ordenCache.set(id, v);
       return v;
-    } catch (e) { return null; }
+    } catch { return null; }
   }
 
   // Prefetch en LOTE de las órdenes enlazadas (2026-09-02): estadoOrden ya
@@ -72,7 +72,7 @@ async function ejecutar() {
             ? String(s.data().estado_reparacion || "").trim().toUpperCase() : null;
           ordenCache.set(s.id, v);
         });
-      } catch (e) { /* best-effort */ }
+      } catch { /* best-effort */ }
     }
   }
 
@@ -262,7 +262,7 @@ async function ejecutar() {
         }
       }
     }
-  } catch (e) { /* best-effort: el resto del reporte vale igual */ }
+  } catch { /* best-effort: el resto del reporte vale igual */ }
 
   // ── I: gestiones abiertas huérfanas (Ola 6) ──
   // Abiertas sin cliente válido, o con ítems cuyo contrato no está en
@@ -283,7 +283,7 @@ async function ejecutar() {
       try {
         (await db.getAll(...tanda.map((id) => db.collection("clientes").doc(id))))
           .forEach((s) => clienteOk.set(s.id, s.exists && s.data().deleted !== true));
-      } catch (e) { tanda.forEach((id) => clienteOk.set(id, true)); }
+      } catch { tanda.forEach((id) => clienteOk.set(id, true)); }
     }
     for (const d of abiertas) {
       const g = d.data();
@@ -302,7 +302,7 @@ async function ejecutar() {
         });
       }
     }
-  } catch (e) { /* best-effort */ }
+  } catch { /* best-effort */ }
 
   // El total es DRIFT: lo que el sistema no sabe. F_esperando_apagado queda
   // fuera a propósito — eso ya se decidió y es una tarea en POC, no un dato

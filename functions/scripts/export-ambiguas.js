@@ -86,7 +86,7 @@ const codigo = (c) => c.codigo_tipo || ({ "Alquiler": "ALQ", "Propio": "PROP", "
     try {
       const mv = await a.u.ref.collection("movimientos").orderBy("at", "desc").limit(6).get();
       a.movs = mv.docs.map((d) => d.data());
-    } catch (e) { a.movs = []; }
+    } catch { a.movs = []; }
   }
 
   // ── Excel ──

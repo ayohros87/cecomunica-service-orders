@@ -38,7 +38,6 @@ const codigo = (c) => c.codigo_tipo || ({ Servicio: 'SERV', Alquiler: 'ALQ', Pro
     const conLineas = vig.filter(c => CON_VENC.has(codigo(c)) && (c.equipos || []).some(l => Number(l.cantidad) > 0));
     const sinSeriales = conLineas.filter(c => c.seriales_estado !== 'asignados' && c.seriales_estado !== 'legacy').length;
     const legacySeriales = conLineas.filter(c => c.seriales_estado === 'legacy').length;
-    const radiosSinContratoIds = a.campo.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id);
     const legacy = vig.filter(c => c.origen_tipo === 'legacy' || c.origen_legacy_ref).length;
     const papel = a.gestiones.filter(g => g.tipo === 'aumento' && (g.aumento?.papel || g.aumento?.contrato_papel || g.papel) && !['anulada', 'rechazada'].includes(g.estado)).length;
     const reempNoId = a.contratos.filter(c => codigo(c) === 'REEMP' && VIG.has(c.estado) && Array.isArray(c.reemplaza_seriales) && c.reemplaza_seriales.length === 0).length;

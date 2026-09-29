@@ -32,7 +32,7 @@ async function vendedorEmail(uid) {
     const snap = await db.collection("usuarios").doc(uid).get();
     const email = snap.exists ? snap.data().email : null;
     return email || undefined;
-  } catch (e) {
+  } catch {
     return undefined;
   }
 }

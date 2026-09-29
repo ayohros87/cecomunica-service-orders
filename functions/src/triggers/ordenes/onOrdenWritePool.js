@@ -126,7 +126,7 @@ async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } =
     try {
       const { data } = await pool.resolver(e.serial, e.modelo_id, e.modelo);
       estadoActual = data ? data.estado : null;
-    } catch (err) { /* si no se puede releer, se anota igual */ }
+    } catch { /* si no se puede releer, se anota igual */ }
     if (estadoActual === pool.ESTADOS.EN_BODEGA) continue;
     incidencias.push({
       serial: e.serial,
@@ -385,7 +385,7 @@ module.exports = onDocumentWritten(
             } else if (data.orden_actual_id !== ordenId) {
               await ref.set({ orden_actual_id: ordenId }, { merge: true });
             }
-          } catch (err) { /* best-effort por unidad */ }
+          } catch { /* best-effort por unidad */ }
         }
         return null;
       }
@@ -557,7 +557,7 @@ module.exports = onDocumentWritten(
           if (cv && after.cliente_id && cv !== after.cliente_id) return; // venta de otro cliente
           await ref.set({ venta: { orden_programacion_id: ordenId } }, { merge: true });
           logger.info("[onOrdenWritePool] Venta amarrada a orden de programación", { ordenId, serial: e.serial });
-        } catch (err) { /* best-effort por unidad */ }
+        } catch { /* best-effort por unidad */ }
       };
 
       // Una unidad VENDIDA conserva su estado (la venta es un hecho de
@@ -569,7 +569,7 @@ module.exports = onDocumentWritten(
           if (data && data.estado === pool.ESTADOS.VENDIDO && data.orden_actual_id === ordenId) {
             await ref.set({ orden_actual_id: null }, { merge: true });
           }
-        } catch (err) { /* best-effort por unidad */ }
+        } catch { /* best-effort por unidad */ }
       };
 
       // Salida del taller SIN entrega (se quitó el equipo de la orden, o la
@@ -585,7 +585,7 @@ module.exports = onDocumentWritten(
             const previo = await pool.estadoPrevioAOrden(r.ref, ordenId);
             destino = pool.destinoAlSalirDeOrden(r.data, previo);
           }
-        } catch (err) { /* best-effort por unidad: se cae al destino por defecto */ }
+        } catch { /* best-effort por unidad: se cae al destino por defecto */ }
         const aEstado = destino || pool.ESTADOS.EN_CLIENTE;
         await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
           aEstado,

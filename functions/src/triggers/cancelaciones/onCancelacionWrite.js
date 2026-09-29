@@ -61,18 +61,6 @@ module.exports = onDocumentWritten(
       }
     };
 
-    const getApproverEmails = async () => {
-      try {
-        const snap = await db.collection("usuarios").where("rol", "in", ["administrador", "gerente"]).get();
-        const emails = [];
-        snap.forEach((d) => { const e = d.data()?.email; if (isEmail(e)) emails.push(e.trim().toLowerCase()); });
-        return [...new Set(emails)];
-      } catch (e) {
-        logger.warn("[onCancelacionWrite] No se pudieron leer aprobadores", { message: e.message });
-        return [];
-      }
-    };
-
     const contratoDocId = after.contrato_doc_id || null;
     const contratoId    = after.contrato_id || contratoDocId || "—";
     const cliente       = after.cliente_nombre || "—";

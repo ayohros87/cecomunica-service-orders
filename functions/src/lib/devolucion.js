@@ -123,8 +123,6 @@ const ESTADOS_COLGANDO = ["asignado_contrato", "en_cliente"];
 // un radio que está en nuestro propio taller).
 const ESTADOS_EN_CONTRATO = [...ESTADOS_COLGANDO, "en_taller"];
 
-const _tight = (s) => String(s == null ? "" : s).trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-
 // Por qué se anula un contrato. La distinción no es burocrática: decide si el
 // equipo se mueve o no.
 //

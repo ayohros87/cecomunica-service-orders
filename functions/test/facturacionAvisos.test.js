@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 // no tocan Firestore, así que basta con un stub.
 const Module = require("module");
 const origLoad = Module._load;
-Module._load = function (req, parent, isMain) {
+Module._load = function (req, parent) {
   if (req === "./admin" && parent && parent.filename.includes("facturacionAvisos")) {
     return { admin: { firestore: { FieldValue: {}, Timestamp: {} } }, db: {} };
   }

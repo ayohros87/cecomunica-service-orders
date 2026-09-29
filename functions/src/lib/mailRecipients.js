@@ -79,7 +79,7 @@ async function recepcionEmails() {
   try {
     const cfg = await configEmailTo("recepcion", "");
     if (cfg) cfg.split(",").map(s => s.trim().toLowerCase()).filter(e => EMAIL_RE.test(e)).forEach(e => out.add(e));
-  } catch (e) { /* cae al rol */ }
+  } catch { /* cae al rol */ }
   if (!out.size) {
     try {
       const snap = await db.collection("usuarios").where("rol", "==", "recepcion").get();

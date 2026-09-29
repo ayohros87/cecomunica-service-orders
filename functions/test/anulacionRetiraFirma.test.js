@@ -50,7 +50,7 @@ function cargarLib() {
   };
   for (const m of ["../src/lib/gestiones", "../src/lib/inventario", "../src/lib/mailRecipients",
     "../src/domain/equiposPool", "../src/lib/bajas"]) {
-    try { delete require.cache[require.resolve(m)]; } catch (e) { /* no está: da igual */ }
+    try { delete require.cache[require.resolve(m)]; } catch { /* no está: da igual */ }
   }
   const G = require("../src/lib/gestiones");
   Module._load = orig;

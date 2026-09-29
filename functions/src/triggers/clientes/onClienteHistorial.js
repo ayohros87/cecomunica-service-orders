@@ -20,7 +20,7 @@ async function emailDeUsuario(uid) {
   try {
     const snap = await db.collection("usuarios").doc(uid).get();
     return (snap.exists && snap.data().email) || null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }

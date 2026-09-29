@@ -27,7 +27,7 @@ const EDAD_MIN_DIAS = 7;
 function pathDeUrl(url) {
   const m = String(url || "").match(/\/o\/([^?#]+)/);
   if (!m) return null;
-  try { return decodeURIComponent(m[1]); } catch (_) { return null; }
+  try { return decodeURIComponent(m[1]); } catch { return null; }
 }
 
 // Set de rutas referenciadas por cualquier cotización, borrada lógicamente o

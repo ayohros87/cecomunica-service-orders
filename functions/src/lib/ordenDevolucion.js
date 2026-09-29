@@ -168,8 +168,8 @@ async function _destinatarios(clienteId) {
         if (isEmail(e)) emails.add(String(e).trim().toLowerCase());
       }
     }
-  } catch (e) { /* sin vendedor */ }
-  try { (await recepcionEmails()).forEach(e => emails.add(e)); } catch (e) { /* sin recepción */ }
+  } catch { /* sin vendedor */ }
+  try { (await recepcionEmails()).forEach(e => emails.add(e)); } catch { /* sin recepción */ }
   return [...emails];
 }
 

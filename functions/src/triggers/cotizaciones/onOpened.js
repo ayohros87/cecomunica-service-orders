@@ -50,7 +50,7 @@ module.exports = onDocumentCreated(
             vendedorEmail = ud.email || null;
             vendedorNombre = ud.nombre || vendedorNombre;
           }
-        } catch (e) { /* no-op */ }
+        } catch { /* no-op */ }
       }
       if (!vendedorEmail) {
         logger.warn("[onCotizacionOpened] no se pudo resolver email del vendedor", { verifId });

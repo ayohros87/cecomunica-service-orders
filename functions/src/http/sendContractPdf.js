@@ -8,7 +8,7 @@ const cors       = require("cors")({
   ]
 });
 const puppeteer  = require("puppeteer-core");
-const { admin, db }                                         = require("../lib/admin");
+const { db }                                                = require("../lib/admin");
 const { sendEmail }                                         = require("../lib/mail");
 const { buildEmailFromBase }                                = require("../domain/emailRenderer");
 const { attachVerificationFromMirror, buildContractHtmlForPdf } = require("../domain/pdfRenderer");
@@ -37,7 +37,7 @@ module.exports = onRequest(
           return res.status(403).json({ error: "Unauthorized" });
         }
 
-        const { to, subject, html, text, contractDocId, pdfFileName } = req.body || {};
+        const { to, subject, text, contractDocId, pdfFileName } = req.body || {};
         if (!to || !subject || !contractDocId) {
           return res.status(400).json({ error: "Missing 'to', 'subject' or 'contractDocId'" });
         }

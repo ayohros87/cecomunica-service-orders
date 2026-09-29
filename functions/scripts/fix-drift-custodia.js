@@ -27,7 +27,6 @@ const db = admin.firestore();
 const pool = require("../src/domain/equiposPool");
 
 const WRITE = process.argv.includes("--write");
-const RX_CONTRATO = /\b(?:ALQ|PROP|REEMP|DEMO|TEMP)\d{8}-\d{2}\b/;
 // Seriales con contrato asignado (demos/temps) cuyo drift ya se verificó a mano.
 const EXTRA_NORMS = new Set(["23706A0395", "23706A0420", "24O31A0948", "18610A0014", "18610A0018"]);
 

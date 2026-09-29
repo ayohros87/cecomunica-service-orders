@@ -103,7 +103,7 @@ module.exports = onSchedule(
       const ne = Number(d.seriales_escalamiento_dias);
       if (Number.isFinite(n)  && n  >= 1) dias    = n;
       if (Number.isFinite(ne) && ne >= 1) diasEsc = ne;
-    } catch (e) { /* usa defaults */ }
+    } catch { /* usa defaults */ }
 
     const now = new Date();
     const snap = await db.collection("contratos")

@@ -40,7 +40,9 @@ module.exports = [
     rules: {
       ...js.configs.recommended.rules,
       // Ruido de estilo/limpieza → warning (no rompe CI)
-      "no-unused-vars": "warn",
+      // ignoreRestSiblings: `const { a, ...resto } = x` para OMITIR `a` es
+      // intencional (cierra-transiciones, onWriteCacheSync), no una variable olvidada.
+      "no-unused-vars": ["warn", { ignoreRestSiblings: true }],
       "no-empty": "warn",
       "no-constant-condition": "warn",
       // Bugs reales → error

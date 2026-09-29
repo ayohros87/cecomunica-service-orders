@@ -417,7 +417,7 @@ test("K5 · Modal.sheet resuelve con la acción del botón y respeta onAction=fa
   const p = Modal.sheet({
     title: "Prueba", html: "<p>x</p>",
     buttons: [{ action: "cancel", label: "No" }, { action: "ok", label: "Sí", primary: true }],
-    onAction: (a) => { intentos++; return intentos < 2 ? false : undefined; },
+    onAction: () => { intentos++; return intentos < 2 ? false : undefined; },
   });
   assert.match(overlay._html, /modal-header/);
   assert.match(overlay._html, /data-sheet-action="ok"/);

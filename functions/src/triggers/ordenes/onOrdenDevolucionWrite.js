@@ -201,7 +201,7 @@ const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim())
 // Recepción + el vendedor asignado del cliente. Nunca lanza.
 async function _destinatariosPendientes(clienteId) {
   const emails = new Set();
-  try { (await recepcionEmails()).forEach(e => emails.add(e)); } catch (e) { /* sin recepción */ }
+  try { (await recepcionEmails()).forEach(e => emails.add(e)); } catch { /* sin recepción */ }
   try {
     if (clienteId) {
       const cli = await db.collection("clientes").doc(clienteId).get();
