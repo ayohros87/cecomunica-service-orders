@@ -6,6 +6,7 @@ const { decidirMarcaCancelacion } = require("../../domain/cancelacionEntrada");
 const { decidirCierreTrasEntrada, buildCierre } = require("../../domain/cierreContrato");
 const G = require("../../lib/gestiones");
 const tandas = require("../../domain/entregaTandas");
+const { incidenciaSuperada } = require("../../lib/incidenciasEntrada");
 const { admin, db } = require("../../lib/admin");
 
 // Pool de equipos ↔ órdenes de servicio ("migración por contacto", plan
@@ -241,8 +242,24 @@ module.exports = onDocumentWritten(
           const k = pool.normSerial(e.serial);
           return seriales.has(k) || !keysAntes.has(k);
         });
+        // Un radio que alguien ya ubicó después del cierre NO se reintenta:
+        // aterrizarlo ahora lo sacaría del cliente que lo tiene (23905A0441,
+        // entregado a SEPROSA). Su incidencia sale de la lista y ya.
+        const superados = new Set();
+        for (const e of candidatos) {
+          const k = pool.normSerial(e.serial);
+          if (!seriales.has(k)) continue;
+          try {
+            if (await incidenciaSuperada(e.serial, { ordenId, desde: after.fecha_cierre_entrada })) superados.add(k);
+          } catch (err) {
+            logger.warn("[onOrdenWritePool] no se pudo revisar el kardex de la incidencia", { ordenId, serial: e.serial, error: err.message });
+          }
+        }
+        const aReintentar = candidatos.filter((e) => !superados.has(pool.normSerial(e.serial)));
         if (candidatos.length) {
-          const { incidencias, aterrizados } = await aterrizarEntrada(ordenId, after, candidatos, { reintento: true });
+          const { incidencias, aterrizados } = aReintentar.length
+            ? await aterrizarEntrada(ordenId, after, aReintentar, { reintento: true })
+            : { incidencias: [], aterrizados: 0 };
           // Lo que ya no falla sale de la lista; lo que sigue fallando se queda.
           const resueltos = new Set(candidatos.map((e) => pool.normSerial(e.serial)));
           const restantes = (after.cierre_entrada_incidencias || [])

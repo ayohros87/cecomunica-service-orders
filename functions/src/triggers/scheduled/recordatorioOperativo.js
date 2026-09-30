@@ -27,8 +27,9 @@
 //     quedó fuera del inventario al cerrar, casi siempre por un serial mal
 //     tecleado. Destinatario: recepción, con copia al taller.
 //
-// F es la ÚNICA sección que escribe (el escalado de etapa); las demás solo
-// mandan correos (mail_queue → onMailQueued). Un correo por sección por día,
+// Solo dos secciones escriben: F (el escalado de etapa) y G (limpia de la orden
+// las incidencias que el kardex ya superó); las demás solo mandan correos
+// (mail_queue → onMailQueued). Un correo por sección por día,
 // solo si hay filas.
 
 const { onSchedule } = require("firebase-functions/v2/scheduler");
@@ -44,6 +45,7 @@ const { pendientesDevolucion } = require("../../lib/devolucion");
 const PEND = require("../../domain/pendientes");
 const cobros = require("../../lib/cobrosEquipos");
 const VIG = require("../../lib/vigencia");
+const { incidenciaSuperada } = require("../../lib/incidenciasEntrada");
 
 const ESTADOS_ABIERTOS = ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO"];
 const STALE_DIAS_DEFAULT = 10;
@@ -498,10 +500,33 @@ module.exports = onSchedule(
         .get();
 
       const filas = [];
-      snap.forEach(d => {
+      for (const d of snap.docs) {
         const o = d.data() || {};
-        if (o.eliminado) return;
-        (o.cierre_entrada_incidencias || []).forEach(i => {
+        if (o.eliminado) continue;
+        // Lo que alguien ya ubicó después del cierre no se avisa, y se limpia
+        // de la orden (23905A0441: el correo decía "no existe" con el radio
+        // entregado a SEPROSA). La limpieza no reintenta: aterrizarlo lo
+        // sacaría del cliente que lo tiene.
+        const todas = o.cierre_entrada_incidencias || [];
+        const vivas = [];
+        for (const i of todas) {
+          let superada = false;
+          try {
+            superada = await incidenciaSuperada(i.serial, { ordenId: d.id, desde: o.fecha_cierre_entrada });
+          } catch (e) {
+            logger.warn("[recordatorioOperativo] no se pudo revisar el kardex", { orden: d.id, serial: i.serial, message: e.message });
+          }
+          if (!superada) vivas.push(i);
+        }
+        if (vivas.length < todas.length) {
+          await d.ref.set(vivas.length
+            ? { cierre_entrada_incidencias: vivas }
+            : { cierre_entrada_con_incidencias: admin.firestore.FieldValue.delete(),
+                cierre_entrada_incidencias: admin.firestore.FieldValue.delete() }, { merge: true });
+          logger.info("[recordatorioOperativo] incidencias de ENTRADA superadas por el kardex",
+            { orden: d.id, limpiadas: todas.length - vivas.length, quedan: vivas.length });
+        }
+        vivas.forEach(i => {
           filas.push({
             id: d.id,
             orden: o.numero_orden || d.id,
@@ -513,7 +538,7 @@ module.exports = onSchedule(
             dias: Math.floor(edadDias(o.cierre_entrada_incidencias_at || o.fecha_cierre_entrada, now) || 0),
           });
         });
-      });
+      }
       filas.sort((a, b) => b.dias - a.dias);
       const sinFicha = filas.filter(f => f.motivo === "sin_ficha").length;
 
