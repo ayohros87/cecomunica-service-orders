@@ -89,6 +89,8 @@ function modeloDelPool({ docs, unidad }) {
   return porId || modelos.find(m => normName(m.nombre) === normName(u.modelo_label || u.modelo || "")) || null;
 }
 
+let _serialesContratoEnVuelo = null;
+
 async function cargarModelos() {
   const raw = await ModelosService.getModelos();
   modelos = raw
@@ -101,7 +103,7 @@ function modelOptionsHtml(selectedId = "") {
     modelos.map(m => `<option value="${m.id}" ${m.id === selectedId ? 'selected' : ''}>${escHtml(m.nombre)}</option>`).join('');
 }
 
-async function cargarOrden() {
+async function cargarOrden(modelosEnVuelo = null) {
   ordenId = new URLSearchParams(window.location.search).get("orden_id") || "";
   if (!ordenId) {
     Toast.show("Falta el número de orden. Abre el batch desde una orden.", "bad");
@@ -115,18 +117,30 @@ async function cargarOrden() {
     return;
   }
 
+  // Cliente, seriales del contrato y gestión solo dependen de la orden: salen
+  // AL MISMO TIEMPO (2026-09-30), antes eran hasta 3 viajes en serie.
+  const cdId = (data.contrato?.aplica && data.contrato?.contrato_doc_id) ? data.contrato.contrato_doc_id : "";
+  const necesitaCliente = !(typeof data.cliente === "string" && data.cliente) && !data.cliente?.nombre && data.cliente_id;
+  const clienteEnVuelo = necesitaCliente
+    ? ClientesService.getCliente(data.cliente_id).catch(e => { console.error("Error cargando cliente:", e); return null; })
+    : Promise.resolve(null);
+  // Una sola lectura de los seriales del contrato: la usan el "Según el
+  // contrato" por fila y el jalado (?jalar=contrato), que antes la repetía.
+  _serialesContratoEnVuelo = cdId ? ContratosService.getSerialesManual(cdId) : null;
+  if (_serialesContratoEnVuelo) _serialesContratoEnVuelo.catch(() => {});
+  const gestionEnVuelo = data.gestion?.id
+    ? firebase.firestore().collection("gestiones").doc(data.gestion.id).get()
+    : null;
+  if (gestionEnVuelo) gestionEnVuelo.catch(() => {});
+
   let nombreCliente = "";
   if (typeof data.cliente === "string" && data.cliente) {
     nombreCliente = data.cliente;
   } else if (data.cliente?.nombre) {
     nombreCliente = data.cliente.nombre;
   } else if (data.cliente_id) {
-    try {
-      const cli = await ClientesService.getCliente(data.cliente_id);
-      if (cli) nombreCliente = cli.nombre || "";
-    } catch (e) {
-      console.error("Error cargando cliente:", e);
-    }
+    const cli = await clienteEnVuelo;
+    if (cli) nombreCliente = cli.nombre || "";
   }
 
   clienteNombre = nombreCliente;
@@ -152,7 +166,7 @@ async function cargarOrden() {
   // Seriales del contrato (serial -> modelo): permite mostrar "Según el contrato"
   // por fila y avisar de desajustes antes de guardar.
   if (contratoDocId) {
-    try { contratoSeriales = await ContratosService.getModeloPorSerial(contratoDocId); }
+    try { contratoSeriales = await ContratosService.getModeloPorSerial(contratoDocId, _serialesContratoEnVuelo); }
     catch (e) { console.warn("No se pudieron cargar los seriales del contrato:", e); }
   }
 
@@ -160,7 +174,7 @@ async function cargarOrden() {
   // cuentan como "del contrato" en la validación por fila.
   if (data.gestion?.id) {
     try {
-      const gs = await firebase.firestore().collection("gestiones").doc(data.gestion.id).get();
+      const gs = await gestionEnVuelo;
       gestionOrden = gs.exists ? { id: gs.id, ...gs.data() } : null;
     } catch (e) { console.warn("No se pudo leer la gestión de la orden:", e); }
     if (gestionOrden && serialesDeGestion(gestionOrden).length) {
@@ -173,6 +187,7 @@ async function cargarOrden() {
     }
   }
 
+  if (modelosEnVuelo) await modelosEnVuelo;
   // Modelo común (defaults para filas pegadas / "aplicar a todas").
   $("comunModelo").innerHTML = `<option value="">— Sin modelo —</option>` +
     modelos.map(m => `<option value="${m.id}">${escHtml(m.nombre)}</option>`).join('');
@@ -234,7 +249,9 @@ function addRow({ serial = "", modeloId = "", accesorios = {}, observaciones = "
       todos.checked = ACCESORIOS.every(x => !!tr.querySelector(`.${x}`)?.checked);
     }));
   }
-  if (typeof lucide !== 'undefined') lucide.createIcons();
+  // Iconos solo de esta fila: createIcons() sin root barría la página por
+  // cada fila, O(n²) al jalar decenas de seriales (2026-09-30).
+  if (window.Icons) Icons.pintar(tr); else if (typeof lucide !== 'undefined') lucide.createIcons({ root: tr });
   renumber();
   const serieInput = tr.querySelector(".serie");
   // SerialField: la validación viva de esta página era solo CONTRA EL CONTRATO;
@@ -475,7 +492,8 @@ window.jalarSerialesDesdeContrato = async ({ auto = false } = {}) => {
   const btn = $("btnJalarContrato");
   if (btn) btn.disabled = true;
   try {
-    const seriales = await ContratosService.getSerialesManual(contratoDocId);
+    const seriales = await (_serialesContratoEnVuelo || ContratosService.getSerialesManual(contratoDocId));
+    _serialesContratoEnVuelo = null; // un segundo clic relee (pudo cambiar)
     const conSerial = (seriales || []).filter(s => String(s.serial || "").trim());
     if (!conSerial.length) {
       Toast.show(auto
@@ -928,8 +946,12 @@ function wireComunTodos() {
 
 async function init() {
   try {
-    await cargarModelos();
-    await cargarOrden();
+    // Modelos y orden en paralelo (2026-09-30); cargarOrden espera los
+    // modelos solo donde los usa.
+    const modelosEnVuelo = cargarModelos();
+    modelosEnVuelo.catch(() => {});
+    await cargarOrden(modelosEnVuelo);
+    await modelosEnVuelo;
     wireComunTodos();
     // Editar el serial o el modelo revalida la fila contra el contrato.
     // Tocar a mano una observación la saca del control de "valores comunes"

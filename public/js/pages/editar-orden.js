@@ -61,13 +61,13 @@
     }
     
     // Función para cargar contratos del cliente
-    async function cargarContratosDelCliente(clienteId) {
+    async function cargarContratosDelCliente(clienteId, enVuelo = null) {
       contratoSelect.innerHTML = '<option value="">Seleccione contrato</option>';
-      
+
       if (!clienteId) return;
-      
+
       try {
-        const contratos = await ContratosService.getContratosActivosPorCliente(clienteId);
+        const contratos = await (enVuelo || ContratosService.getContratosActivosPorCliente(clienteId));
 
         contratos.forEach(contrato => {
           const option = document.createElement("option");
@@ -212,7 +212,22 @@
       document.getElementById("orderIdDisplay").textContent = ordenId;
       const volver = document.getElementById("fxVolver");
       if (volver) volver.href = `index.html?orden=${encodeURIComponent(ordenId)}`;
+      // Precarga en paralelo (2026-09-30): vendedores, técnicos, tipos y
+      // estados no dependen de la orden. Pasan por Sesion.memo, que comparte
+      // la lectura en vuelo, así que los await de abajo reciben la MISMA
+      // promesa en vez de encadenar 4-5 viajes al servidor uno tras otro.
+      const nada = () => null;
+      UsuariosService.getVendedores().catch(nada);
+      UsuariosService.getUsuariosByRol(["tecnico", "tecnico_operativo", "jefe_taller"]).catch(nada);
+      EmpresaService.getDoc("tipo_de_servicio").catch(nada);
+      EmpresaService.getDoc("estado_de_reparacion").catch(nada);
       const d = await OrdenesService.getOrder(ordenId);
+      // Cliente y contratos solo necesitan el cliente_id: salen juntos.
+      const clienteEnVuelo = d?.cliente_id
+        ? ClientesService.getCliente(d.cliente_id).catch(nada) : Promise.resolve(null);
+      const contratosEnVuelo = (d?.cliente_id && requiereContrato(d.tipo_de_servicio))
+        ? ContratosService.getContratosActivosPorCliente(d.cliente_id) : null;
+      if (contratosEnVuelo) contratosEnVuelo.catch(nada);
 
       if (d) {
         // Guardrail (auditoría órdenes P2): esta página edita la CABECERA y el
@@ -229,10 +244,8 @@
         let nombreCliente = d.cliente_nombre || d.cliente || "";
         
         if (d.cliente_id) {
-          try {
-            const cli = await ClientesService.getCliente(d.cliente_id);
-            if (cli) nombreCliente = cli.nombre || nombreCliente;
-          } catch (e) { /* opcional: console.warn(e); */ }
+          const cli = await clienteEnVuelo;
+          if (cli) nombreCliente = cli.nombre || nombreCliente;
         }
         
         document.getElementById("cliente").value = nombreCliente;
@@ -270,7 +283,7 @@
           
           // Cargar contratos del cliente
           if (d.cliente_id) {
-            await cargarContratosDelCliente(d.cliente_id);
+            await cargarContratosDelCliente(d.cliente_id, contratosEnVuelo);
           }
           
           // Prellenar datos del contrato

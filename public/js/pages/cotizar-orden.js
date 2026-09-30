@@ -97,9 +97,9 @@
 
   // Si hay un borrador reciente del usuario, ofrece restaurarlo; si lo rechaza,
   // se descarta para no volver a preguntar.
-  async function maybeRestoreDraft() {
+  async function maybeRestoreDraft(borradorEnVuelo = null) {
     let d = null;
-    try { d = await OrdenesService.getBorradorCotizacion(ordenId, user.uid); }
+    try { d = await (borradorEnVuelo || OrdenesService.getBorradorCotizacion(ordenId, user.uid)); }
     catch (e) { console.warn('No se pudo leer el borrador:', e); }
     if (!d) return false;
     const ts = d.updated_at?.toDate?.() || null;
@@ -300,7 +300,7 @@
       form.condiciones.push({ k: '', v: '' }); touch(); renderCliente();
       pc.querySelector(`[data-cond-k="${form.condiciones.length - 1}"]`)?.focus();
     });
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    pintarIconos(pc);
   }
 
   // ¿Este radio ya va a REPOSICIÓN POR DAÑO? Entonces se cobra la reposición
@@ -322,7 +322,7 @@
     }
     cont.innerHTML = equipos.map(eq => equipoHtml(eq)).join('');
     cont.querySelectorAll('.co-equipo').forEach(wrap => bindEquipo(wrap));
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    pintarIconos(cont);
   }
 
   function equipoHtml(eq) {
@@ -656,7 +656,7 @@
     $('selItbms').addEventListener('change', (e) => { form.itbmsPct = Number(e.target.value); touch(); renderResumen(); });
     $('btnGenerar2').addEventListener('click', generar);
     $('btnPreview2').addEventListener('click', abrirPreview);
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    pintarIconos($('panelResumen'));
   }
 
   // ── Generar la cotización (borrador real) ──────────────────────────────────
@@ -812,7 +812,7 @@
     el.querySelector('.co-cat-search input').value = '';
     renderCatalogoList('');
     el.hidden = false;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    pintarIconos(el);
     setTimeout(() => el.querySelector('.co-cat-search input')?.focus(), 30);
     // Las sugeridas por modelo llegan async — re-render cuando estén (solo si
     // el drawer sigue abierto sobre el mismo equipo y sin búsqueda activa).
@@ -927,7 +927,7 @@
         if (caret) caret.textContent = collapsed ? '▸' : '▾';
       });
     });
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    pintarIconos(list);
   }
 
   // ── Vista previa (no guarda ni notifica) ───────────────────────────────────
@@ -988,6 +988,14 @@
     }).then(() => document.body.classList.remove('co-previewing'));
   }
 
+  // Iconos SOLO del panel repintado (2026-09-30): createIcons() sin root
+  // recorría toda la página en cada repintado, y el resumen se repinta en
+  // cada tecla de descuento o ITBMS.
+  function pintarIconos(root) {
+    if (window.Icons && root) Icons.pintar(root);
+    else if (typeof lucide !== 'undefined') lucide.createIcons(root ? { root } : undefined);
+  }
+
   // ── Bootstrap ──────────────────────────────────────────────────────────────
   verificarAccesoYAplicarVisibilidad(async (rol) => {
     if (!canRole(rol, 'preparar-cotizacion')) { Toast.show('Sin acceso', 'bad'); location.href = 'index.html'; return; }
@@ -995,6 +1003,21 @@
 
     user = firebase.auth().currentUser;
     if (!ordenId) { Toast.show('Falta el id de la orden', 'bad'); location.href = 'index.html'; return; }
+
+    // Todo lo que solo depende del id de la orden y del usuario sale AL MISMO
+    // TIEMPO que la orden (2026-09-30): antes eran ~6 viajes en serie
+    // (orden → consumos → catálogos → piezas → jefes → borrador) antes del
+    // primer pintado. Cada promesa trae su propio catch: la que falle no
+    // tumba a las demás y conserva el comportamiento de antes.
+    const consumosEnVuelo = OrdenesService.getConsumos(ordenId)
+      .catch(e => { console.warn('No se pudieron cargar las piezas del taller (consumos):', e); return null; });
+    const catalogosEnVuelo = CotState.bootstrapCatalogos();
+    const piezasEnVuelo = PiezasService.getPiezas();
+    const jefesEnVuelo = UsuariosService.getUsuariosByRol([ROLES.JEFE_TALLER])
+      .catch(e => { console.warn('No se pudieron cargar supervisores de taller:', e); return null; });
+    const borradorEnVuelo = OrdenesService.getBorradorCotizacion(ordenId, user.uid)
+      .catch(e => { console.warn('No se pudo leer el borrador:', e); return null; });
+    [catalogosEnVuelo, piezasEnVuelo].forEach(p => p.catch(() => {})); // si la orden no existe, nadie las espera
 
     orden = await OrdenesService.getOrder(ordenId);
     if (!orden) { Toast.show('Orden no encontrada', 'bad'); location.href = 'index.html'; return; }
@@ -1066,21 +1089,21 @@
 
     // Piezas/accesorios que el técnico ya registró en el taller (consumos),
     // para mostrarlas y poder jalarlas a la cotización sin reescribir.
-    try {
-      const allCons = await OrdenesService.getConsumos(ordenId);
+    const [allCons, catalogosListos, piezasTodas, jefes] =
+      await Promise.all([consumosEnVuelo, catalogosEnVuelo, piezasEnVuelo, jefesEnVuelo]);
+    if (allCons) {
       consumosPorEquipo = {};
-      (allCons || []).forEach(c => { const k = c.equipoId || 'X'; (consumosPorEquipo[k] = consumosPorEquipo[k] || []).push(c); });
-    } catch (e) { console.warn('No se pudieron cargar las piezas del taller (consumos):', e); }
+      allCons.forEach(c => { const k = c.equipoId || 'X'; (consumosPorEquipo[k] = consumosPorEquipo[k] || []).push(c); });
+    }
 
-    catalogos = await CotState.bootstrapCatalogos();
-    piezas = (await PiezasService.getPiezas()).filter(p => p.activo !== false);
+    catalogos = catalogosListos;
+    piezas = (piezasTodas || []).filter(p => p.activo !== false);
 
     // El firmante de una cotización de SERVICIO es el supervisor de taller
     // (jefe_taller), no un vendedor. Lo sumamos al catálogo de ejecutivos para
     // que salga en el selector y su nombre se resuelva en la impresión.
     let supervisores = [];
     try {
-      const jefes = await UsuariosService.getUsuariosByRol([ROLES.JEFE_TALLER]);
       supervisores = (jefes || []).map(CotState.mapVendedorToEjec);
       const yaIds = new Set(catalogos.ejecutivos.map(e => e.id));
       supervisores.forEach(s => { if (s.id && !yaIds.has(s.id)) catalogos.ejecutivos.push(s); });
@@ -1106,7 +1129,7 @@
 
     // Borrador autoguardado: se ofrece restaurar DESPUÉS de aplicar los
     // defaults, para que lo restaurado tenga la última palabra.
-    const restaurado = await maybeRestoreDraft();
+    const restaurado = await maybeRestoreDraft(borradorEnVuelo);
 
     // Precarga automática de los consumos de cobro del técnico:
     // - Sin borrador: entran todos (y no dispara el autosave — no es un

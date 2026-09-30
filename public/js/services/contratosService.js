@@ -332,9 +332,11 @@ const ContratosService = {
     return Serial.clave(s);
   },
 
-  async getModeloPorSerial(contratoId) {
+  // `enVuelo`: promesa de getSerialesManual ya lanzada por el llamador (para
+  // no leer la misma subcolección dos veces).
+  async getModeloPorSerial(contratoId, enVuelo = null) {
     if (!contratoId) return new Map();
-    const rows = await this.getSerialesManual(contratoId);
+    const rows = (await (enVuelo || this.getSerialesManual(contratoId))) || [];
     const map = new Map();
     for (const r of rows) {
       const serial = String(r.serial || '').trim();

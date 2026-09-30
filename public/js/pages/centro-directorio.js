@@ -37,21 +37,32 @@ Object.assign(window.Centro, {
     document.getElementById('btnMas').classList.add('hidden');
     if (!cont.querySelector('.cg-row')) cont.innerHTML = '<div class="cg-empty">Cargando cuentas por regularizar…</div>';
     const soloMias = this.esVendedor() || this.cartera === 'mios';
+    const leer = async (source = null) => {
+      if (soloMias) return ClientesService.listClientesPorVendedor(this.uid, { onlyActive: true, source });
+      const q = firebase.firestore().collection('clientes').where('regularizacion.puntos', '>', 0).limit(400);
+      const snap = source ? await q.get({ source }) : await q.get();
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    };
+    // Pintado provisional desde la caché local (2026-09-30); el servidor repinta.
+    try {
+      const enCache = await leer('cache');
+      if (enCache.length) this._pintarPorRegularizar(enCache, soloMias);
+    } catch { /* sin caché: camino normal */ }
     let docs = [];
     try {
-      if (soloMias) {
-        docs = await ClientesService.listClientesPorVendedor(this.uid, { onlyActive: true });
-      } else {
-        const snap = await firebase.firestore().collection('clientes')
-          .where('regularizacion.puntos', '>', 0).limit(400).get();
-        docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      }
+      docs = await leer();
     } catch (e) {
       console.error('[centro] cuentas por regularizar:', e);
       cont.innerHTML = `<div class="cg-empty">No se pudieron cargar las cuentas por regularizar.
         <div class="cta"><button class="btn btn-ghost cg-act" onclick="Centro.cargarLista(true)">Reintentar</button></div></div>`;
       return;
     }
+    this._pintarPorRegularizar(docs, soloMias);
+  },
+
+  _pintarPorRegularizar(docs, soloMias) {
+    const cont = document.getElementById('cgLista');
+    const resumen = document.getElementById('cgResumen');
     const pospuesta = (c) => !!(window.PendientesDomain?.estaPospuesto && PendientesDomain.estaPospuesto(c, new Date()));
     const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     const words = norm(this.term).split(/\s+/).filter(Boolean);
@@ -80,17 +91,30 @@ Object.assign(window.Centro, {
     const clave = this.soloActivos ? 'act' : 'todos';
     // Caché corta: la búsqueda filtra aquí sin volver a pedir la cartera por tecla.
     if (!this._carteraCache || this._carteraCache.clave !== clave || Date.now() - this._carteraCache.at > 60000) {
+      // Pintado provisional desde la caché local de Firestore (2026-09-30):
+      // la cartera que este vendedor vio la última vez sale al instante y el
+      // servidor la corrige encima. Sin caché viene vacía y se espera.
+      if (!this._carteraCache) {
+        try {
+          const enCache = await ClientesService.listClientesPorVendedor(this.uid, { onlyActive: this.soloActivos, source: 'cache' });
+          if (enCache.length) this._pintarCartera(enCache);
+        } catch { /* sin caché: camino normal */ }
+      }
       const docs = await ClientesService.listClientesPorVendedor(this.uid, { onlyActive: this.soloActivos });
       this._carteraCache = { clave, docs, at: Date.now() };
     }
+    this._pintarCartera(this._carteraCache.docs);
+  },
+
+  _pintarCartera(docsCartera) {
     const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const words = norm(this.term).split(/\s+/).filter(Boolean);
     const visibles = words.length
-      ? this._carteraCache.docs.filter(c => {
+      ? docsCartera.filter(c => {
           const txt = norm([c.nombre, c.rucdv_norm, c.ruc, c.telefono, c.email].filter(Boolean).join(' '));
           return words.every(w => txt.includes(w));
         })
-      : this._carteraCache.docs;
+      : docsCartera;
     const cont = document.getElementById('cgLista');
     cont.innerHTML = visibles.length
       ? visibles.map(c => this._filaCliente(c)).join('')

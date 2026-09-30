@@ -535,14 +535,16 @@ const ClientesService = {
   // suyos, el directorio quedaba en blanco. Solo igualdades y sin orderBy:
   // Firestore las resuelve uniendo índices de un campo, sin índice
   // compuesto; el orden por nombre se hace aquí (una cartera cabe en `limit`).
-  async listClientesPorVendedor(uid, { onlyActive = false, limit = 500 } = {}) {
+  // `source: 'cache'` → solo la caché local (el Centro pinta la cartera al
+  // instante y luego la corrige con el servidor).
+  async listClientesPorVendedor(uid, { onlyActive = false, limit = 500, source = null } = {}) {
     if (!uid) return [];
     const db = firebase.firestore();
     let q = db.collection('clientes')
       .where('vendedor_asignado', '==', uid)
       .where('deleted', '==', false);
     if (onlyActive) q = q.where('activo', '==', true);
-    const snap = await q.limit(limit).get();
+    const snap = source ? await q.limit(limit).get({ source }) : await q.limit(limit).get();
     return snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }));
   },
