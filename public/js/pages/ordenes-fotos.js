@@ -230,7 +230,7 @@
     _fotos = OrdenesService.fotosDeOrden(data);
     _equipos = (Array.isArray(data.equipos) ? data.equipos : []).filter(e => e && !e.eliminado);
     const sub = overlayEl()?.querySelector(".fotos-sub");
-    if (sub) sub.textContent = `${data.cliente_nombre || "—"} · ${data.estado_reparacion || "—"}`;
+    if (sub) sub.textContent = `${data.cliente_nombre || "—"} · ${typeof estadoCompacto === "function" && data.estado_reparacion ? estadoCompacto(data.estado_reparacion, data) : (data.estado_reparacion || "—")}`;
     renderSelectsEquipo();
     renderGaleria();
   }

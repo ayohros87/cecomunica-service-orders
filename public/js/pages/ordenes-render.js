@@ -42,7 +42,7 @@ function edadChip(ordenData, estado) {
   const dias = Math.floor((Date.now() - ms) / 86400000);
   if (dias < 14) return "";
   const nivel = dias >= 30 ? "edad-chip--critica" : "edad-chip--alta";
-  return ` <span class="edad-chip ${nivel}" title="${dias} días en ${estado === 'POR ASIGNAR' ? 'POR ASIGNAR' : 'RECIBIDO EN MOSTRADOR'}">${dias} d</span>`;
+  return ` <span class="edad-chip ${nivel}" title="${dias} días en «${estadoCompacto(estado, ordenData).toLowerCase()}»">${dias} d</span>`;
 }
 
 // Tooltip del nombre de cliente truncado, en UNA pasada diferida.
@@ -170,7 +170,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
       return ini ? `<span class="tec-avatar" aria-hidden="true">${ini}</span>` : '';
     })()}${escapeHtml(ordenData.tecnico_asignado)}${indicadorNota}</td>
     <td>${tipoChip(ordenData.tipo_de_servicio)}</td>
-    <td><span class="chip-estado ${getEstadoClass(estado, ordenData)}" title="${estado}">${estadoCompacto(estado, ordenData)}</span></td>
+    <td><span class="chip-estado ${getEstadoClass(estado, ordenData)}" title="${estadoTooltip(estado, ordenData)}">${estadoCompacto(estado, ordenData)}</span></td>
     <td>${formatFecha(ordenData.fecha_creacion)}${edadChip(ordenData, estado)}</td>
     <td class="col-fecha-entrega">${formatFecha(ordenData.fecha_entrega)}</td>
     <td class="acciones"><div class="acciones-wrap">${botonesFlujo(ordenId, estado, ordenData)}${botonesGestion(ordenId, estado, tooltipNota, estiloNota)}</div></td>
@@ -257,7 +257,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     card.innerHTML = `
       <div class="card-contrato__tier1">
         <div class="card-contrato__cliente">${nombreClienteDe(ordenData)}</div>
-        <span class="chip-estado ${getEstadoClass(estadoDisplay, ordenData)}" title="${estadoDisplay}">${estadoCompacto(estadoDisplay, ordenData)}</span>
+        <span class="chip-estado ${getEstadoClass(estadoDisplay, ordenData)}" title="${estadoTooltip(estadoDisplay, ordenData)}">${estadoCompacto(estadoDisplay, ordenData)}</span>
       </div>
       <div class="card-contrato__tier2">
         <span class="card-contrato__ord">#${ordenId}</span>

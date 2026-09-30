@@ -367,6 +367,26 @@ function estadoCompacto(estado, orden) {
   return e;
 }
 
+// Tooltip del chip de estado: el MISMO nombre de pantalla + qué significa.
+// Antes el title llevaba el valor crudo y la fila "Por recibir" decía
+// "POR ASIGNAR" al pasar el mouse (y "Listo para entregar" decía
+// "COMPLETADO (EN OFICINA)") — dos nombres para lo mismo.
+function estadoTooltip(estado, orden) {
+  const e = (estado || "").toUpperCase();
+  const nombre = estadoCompacto(estado, orden);
+  const sinMostrador = orden && (esOrdenProgramacion(orden) || esOrdenEntrada(orden) || esOrdenVisita(orden));
+  const que =
+    e === "POR ASIGNAR" ? (sinMostrador ? "esperando técnico" : "el cliente aún no entrega el equipo en mostrador")
+    : e === "RECIBIDO EN MOSTRADOR" ? "recibida en mostrador, esperando técnico"
+    : e === "ASIGNADO" ? "en manos del técnico"
+    : e === "COMPLETADO (EN OFICINA)" ? (nombre === "LISTO (FALTA QC)" ? "trabajo terminado; falta el control de calidad para entregar" : nombre === "COMPLETADO" ? "trabajo terminado" : "trabajo terminado, en oficina")
+    : e === "ENTREGADO AL CLIENTE" ? "entregada al cliente"
+    : e === "CERRADA (SIN RETIRAR)" ? "archivada con equipos que el cliente no retiró"
+    : "";
+  const cap = (s) => s.charAt(0) + s.slice(1).toLowerCase();
+  return que ? `${cap(nombre)}: ${que}` : cap(nombre);
+}
+
 // Una orden de VISITA TECNICA es trabajo de campo (torres, repetidores,
 // sitios del cliente): no entra equipo al taller ni hay entrega posterior.
 // Su flujo cierra en sitio con firma del personal de la empresa visitada
@@ -435,6 +455,6 @@ function esOrdenEntrada(orden) {
 // módulo ES dejarían de serlo. El puente los publica de forma explícita.
 Object.assign(window, {
   esOrdenDevolucion, esOrdenEntrada, esOrdenProgramacion, esOrdenVisita,
-  escapeHtml, estadoCompacto, formatFecha, formatFechaHora, getEstadoClass,
+  escapeHtml, estadoCompacto, estadoTooltip, formatFecha, formatFechaHora, getEstadoClass,
   nombreClienteDe, normTxt, pendientesDevolucion, tipoChip
 });
