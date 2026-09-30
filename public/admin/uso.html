@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Uso del app — Cecomunica</title>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/ceco-rail.css">
+  <link rel="stylesheet" href="../css/admin-panel.css">
+
+  <script src="../js/core/modulos.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+
+  <style>
+    .uso-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+    @media (max-width: 900px) { .uso-grid { grid-template-columns: 1fr; } }
+    .uso-card { background: var(--surface, #fff); border: 1px solid var(--line); border-radius: 12px; padding: var(--sp-4); }
+    .uso-card h3 { margin: 0 0 var(--sp-3); font-size: 15px; }
+    .uso-card table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .uso-card th, .uso-card td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+    .uso-card td.num, .uso-card th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .uso-barra { height: 6px; border-radius: 3px; background: var(--accent, #0074AC); opacity: .75; }
+    .uso-vacio { color: var(--fg-3); font-size: 13px; padding: var(--sp-3) 0; }
+    .uso-dias { display: flex; align-items: flex-end; gap: 3px; height: 90px; margin-top: var(--sp-2); }
+    .uso-dias div { flex: 1; background: var(--accent, #0074AC); opacity: .7; border-radius: 3px 3px 0 0; min-height: 2px; }
+  </style>
+
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
+    }
+  </script>
+  <script type="module" src="/js/entry/admin-uso.js"></script>
+</head>
+<body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="bar-chart-3"></i> Uso del app',
+      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--wide">
+    <div class="admin-toolbar">
+      <select id="selRango" class="form-input" style="width:auto;">
+        <option value="7">Últimos 7 días</option>
+        <option value="30" selected>Últimos 30 días</option>
+      </select>
+      <span class="spacer"></span>
+      <span id="usoResumen" class="ts">—</span>
+    </div>
+    <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
+      <i data-lucide="info"></i>
+      <div>
+        Páginas vistas con sesión, contadas desde el <strong>30 de septiembre de 2026</strong>. Cada vez que
+        alguien abre una pantalla suma 1. En Almacén se cuenta la pestaña con la que se abrió.
+        Lo que la persona hace dentro de la pantalla no se cuenta aquí.
+      </div>
+    </div>
+
+    <div class="uso-card" style="margin-bottom:var(--sp-4);">
+      <h3>Páginas vistas por día</h3>
+      <div id="usoDias" class="uso-dias"></div>
+    </div>
+
+    <div class="uso-grid">
+      <div class="uso-card">
+        <h3>Pantallas más usadas</h3>
+        <div id="usoPaginas"><div class="uso-vacio">Cargando…</div></div>
+      </div>
+      <div class="uso-card">
+        <h3>Por usuario</h3>
+        <div id="usoUsuarios"><div class="uso-vacio">Cargando…</div></div>
+      </div>
+    </div>
+  </div>
+
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('admin'));
+  </script>
+</body>
+</html>

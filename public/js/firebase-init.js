@@ -111,6 +111,31 @@ try {
     .finally(() => clearTimeout(t));
 })();
 
+// Uso del app (2026-09-30): una página vista por carga, con sesión, se suma a
+// uso_diario/{fecha de Panamá} — total por página y por usuario — con
+// increment en set merge (una escritura, no bloquea nada: sin await). Lo lee
+// admin/uso.html. Slug = ruta sin ".html"; Almacén suma la pestaña (?tab=).
+(function registrarPaginaVista() {
+  let hecho = false;
+  firebase.auth().onAuthStateChanged((u) => {
+    if (!u || hecho) return;
+    hecho = true;
+    try {
+      let slug = location.pathname.replace(/^\/+/, "").replace(/\.html$/, "") || "index";
+      if (slug.endsWith("/")) slug += "index";
+      const tab = new URLSearchParams(location.search).get("tab");
+      if (tab && /^[a-z-]{1,20}$/.test(tab)) slug += "#" + tab;
+      const dia = new Date().toLocaleDateString("en-CA", { timeZone: "America/Panama" });
+      const inc = firebase.firestore.FieldValue.increment(1);
+      db.collection("uso_diario").doc(dia).set({
+        fecha: dia,
+        paginas: { [slug]: inc },
+        usuarios: { [u.uid]: { [slug]: inc } },
+      }, { merge: true }).catch(() => { /* telemetría: nunca estorba */ });
+    } catch { /* sin datos de uso esta vez */ }
+  });
+})();
+
 // Handles modulares (misma app, misma sesión, misma caché que compat).
 // db._delegate ES la instancia modular (Firestore) que envuelve compat: sirve
 // para collection()/getDoc()/getCountFromServer() y comparte caché y conexión.

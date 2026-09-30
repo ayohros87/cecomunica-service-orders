@@ -903,6 +903,20 @@ async function main() {
   await assertSucceeds(as("vendedor").doc("clientes/cli1").set({ nombre: "X" }));
   ok("REGRESIÓN: inventario_piezas/analytics/poc_devices/clientes siguen abiertos");
 
+  // ── uso_diario: contadores de páginas vistas (2026-09-30) ─────────────────
+  await assertSucceeds(as("tecnico").doc("uso_diario/2026-09-30")
+    .set({ fecha: "2026-09-30", paginas: { "ordenes/index": 1 }, usuarios: { tecnico: { "ordenes/index": 1 } } }, { merge: true }));
+  await assertSucceeds(as("vendedor").doc("uso_diario/2026-09-30")
+    .set({ paginas: { "clientes/centro": 1 } }, { merge: true }));
+  ok("uso_diario: cualquier usuario con sesión suma su página vista");
+  await assertFails(as("tecnico").doc("uso_diario/2026-09-30").get());
+  await assertSucceeds(as("administrador").doc("uso_diario/2026-09-30").get());
+  ok("uso_diario: solo admin lo lee");
+  await assertFails(as("tecnico").doc("uso_diario/2026-09-30").set({ otra: 1 }, { merge: true }));
+  await assertFails(as("tecnico").doc("uso_diario/no-es-fecha").set({ paginas: {} }));
+  await assertFails(as("administrador").doc("uso_diario/2026-09-30").delete());
+  ok("uso_diario: sin campos ajenos, id = fecha, nadie borra");
+
   // ── inventario_piezas/{id}/kardex: cada ajuste ±N con motivo (P2 Almacén,
   // auditoría UX 2026-09-28). Lo escribe quien ajusta; nunca se edita ni borra.
   await assertSucceeds(as("inventario").doc("inventario_piezas/p1/kardex/k1")
