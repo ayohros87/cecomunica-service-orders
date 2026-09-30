@@ -34,7 +34,7 @@ window.AlmacenAsignar = (() => {
     sel: null,            // {tipo, id}
     asignador: null,      // instancia del componente para el trabajo abierto
     trabajo: null,        // contexto del trabajo abierto
-    bodega: null,         // cache de en_bodega {t, lista}
+    bodega: null,         // cache de bodega por familia: Map clave → {t, r}
     cerrados: new Map(),  // 'tipo:id' → ms en que se cerró desde esta pestaña
   };
 
@@ -168,19 +168,39 @@ window.AlmacenAsignar = (() => {
   }
 
   // ── Stock en bodega por modelo (picklist) ─────────────────────────────
-  async function enBodega() {
-    if (st.bodega && Date.now() - st.bodega.t < 2 * 60 * 1000) return st.bodega.lista;
-    const lista = await EquiposPoolService.listar({ estado: EquiposPoolService.ESTADOS.EN_BODEGA });
-    st.bodega = { t: Date.now(), lista };
-    return lista;
+  // Solo los modelos del trabajo abierto, por familia del catálogo
+  // (EquiposPoolService.listarBodegaDe) — antes se bajaba la bodega entera
+  // (2,861 fichas) en cada apertura. Caché de 2 min por juego de modelos.
+  const refsDe = (grupos) => (grupos || []).map(g => ({ modelo_id: g.modelo_id || null, modelo: g.modelo || '' }));
+  async function bodegaDe(refs) {
+    const clave = refs.map(r => `${r.modelo_id || ''}|${r.modelo || ''}`).sort().join('~');
+    const c = st.bodega && st.bodega.get(clave);
+    if (c && Date.now() - c.t < 2 * 60 * 1000) return c.r;
+    const r = await EquiposPoolService.listarBodegaDe(refs);
+    if (!st.bodega) st.bodega = new Map();
+    st.bodega.set(clave, { t: Date.now(), r });
+    return r;
   }
   function invalidarBodega() { st.bodega = null; }
+  // Radios en bodega sin modelo en su ficha: no se cuentan en ningún modelo.
+  // Se dice, para que "N disponibles" no se lea como el estante entero.
+  const notaSinFicha = (n) => n
+    ? `<div style="font-size:12px; color:var(--fg-3); margin:6px 0 0;">Además hay <b>${n}</b> radio${n === 1 ? '' : 's'} en bodega sin modelo en su ficha: no se cuenta${n === 1 ? '' : 'n'} aquí hasta clasificarlo${n === 1 ? '' : 's'} (Almacén · Avanzado).</div>`
+    : '';
 
   async function picklistHtml(grupos) {
-    let lista = [];
-    try { lista = await enBodega(); } catch (e) { console.warn('[Asignar] stock:', e?.code || e); }
+    let res = null;
+    try { res = await bodegaDe(refsDe(grupos)); } catch (e) { console.warn('[Asignar] stock:', e?.code || e); }
+    // Sin consulta NO se pinta "0 disponibles · faltan N": sería afirmar que
+    // el estante está vacío cuando lo que pasó es que no se pudo mirar.
+    if (!res) {
+      const chips = grupos.map(g => `<div class="as-pl short">
+        <b>${Number(g.activos || 0)} × ${esc(g.modelo)}</b>
+        <small>stock no consultado — reintenta con Recargar</small></div>`).join('');
+      return `<div class="as-picklist">${chips}</div>`;
+    }
     const chips = grupos.map(g => {
-      const delModelo = lista.filter(u => EquiposPoolService._mismoModelo(u, g.modelo_id || null, g.modelo || ''));
+      const delModelo = res.deRef({ modelo_id: g.modelo_id || null, modelo: g.modelo || '' });
       // "Disponible" ≠ "en bodega" (auditoría UX 2026-09-28, P2 #15): lo que
       // el importador marcó DAÑADA cuenta en el estante pero no se ofrece. Lo
       // descartado en QC y las condiciones particulares las filtra el picker
@@ -193,7 +213,7 @@ window.AlmacenAsignar = (() => {
         <b>${Number(g.activos || 0)} × ${esc(g.modelo)}</b>
         <small>${disp} disponible${disp === 1 ? '' : 's'}${danadas ? ` · ${danadas} dañada${danadas === 1 ? '' : 's'}` : ''}${corto ? ` · faltan ${faltan - disp}` : ''}</small></div>`;
     }).join('');
-    return `<div class="as-picklist">${chips}</div>`;
+    return `<div class="as-picklist">${chips}</div>${notaSinFicha(res.sinFicha)}`;
   }
 
   // ── Trabajo (derecha) ─────────────────────────────────────────────────
@@ -1056,16 +1076,20 @@ window.AlmacenAsignar = (() => {
 
   // Las filas de la lista: lo que hay en el formulario ahora mismo, con lo que
   // el estante sabe de cada unidad (caché de bodega).
+  // Se consultan SOLO esos seriales (antes: la bodega entera). Si la consulta
+  // falla, la fila dice que no se pudo consultar — nunca "no está en bodega".
   async function filasPicklist(seriales = null) {
     const lista = seriales || st.asignador.collect().seriales;
-    let bodega = [];
-    try { bodega = await enBodega(); } catch (e) { /* sin ubicación */ }
-    const porNorm = new Map(bodega.map(u => [norm(u.serial || u.serial_norm), u]));
+    let porNorm = null;
+    try { porNorm = await EquiposPoolService.findBySeriales(lista.map(s => s.serial)); }
+    catch (e) { console.warn('[Asignar] ubicación:', e?.code || e); }
+    const EN_BODEGA = EquiposPoolService.ESTADOS.EN_BODEGA;
     return lista.map(s => {
-      const u = porNorm.get(norm(s.serial)) || null;
+      const docs = porNorm ? (porNorm.get(EquiposPoolService.normalizarSerial(s.serial)) || []) : null;
+      const u = docs ? (docs.find(d => d.estado === EN_BODEGA) || null) : null;
       return {
         serial: s.serial, modelo: s.modelo || u?.modelo_label || '', modelo_id: s.modelo_id || u?.modelo_id || '',
-        ubicacion: ubicacionDe(u), nota: u?.notas || '',
+        ubicacion: docs ? ubicacionDe(u) : 'no se pudo consultar el inventario', nota: u?.notas || '',
       };
     });
   }
@@ -1110,9 +1134,9 @@ window.AlmacenAsignar = (() => {
   async function disponiblesDe(modeloId, modelo, excluir) {
     const asg = st.asignador;
     invalidarBodega();
-    const bodega = await enBodega();
-    const cand = bodega.filter(u => EquiposPoolService._mismoModelo(u, modeloId || null, modelo || '')
-      && !excluir.has(norm(u.serial || u.serial_norm)));
+    const ref = { modelo_id: modeloId || null, modelo: modelo || '' };
+    const res = await bodegaDe([ref]);
+    const cand = res.deRef(ref).filter(u => !excluir.has(norm(u.serial || u.serial_norm)));
     const seriales = cand.map(u => u.serial || u.serial_norm);
     const [descartados, condiciones] = await Promise.all([
       asg.descartadosDe ? asg.descartadosDe(seriales) : Promise.resolve(new Map()),
@@ -1171,9 +1195,14 @@ window.AlmacenAsignar = (() => {
         placeholder: 'Ej.: no está en el estante; la etiqueta no coincide; está dañado',
       });
       if (!motivo || !motivo.trim()) return;
-      let cand = [];
+      let cand;
       try { cand = await disponiblesDe(f.modelo_id, f.modelo, new Set(pend.keys())); }
-      catch (e) { console.warn('[Asignar] sustitutos:', e?.code || e); }
+      catch (e) {
+        // Un fallo de consulta NO es "no hay otra unidad": se dice lo que pasó.
+        console.warn('[Asignar] sustitutos:', e?.code || e);
+        toast('No se pudo consultar la bodega para buscar un sustituto. Reintenta.', 'bad');
+        return;
+      }
       if (!cand.length) { toast(`No hay otra unidad disponible de ${f.modelo || 'ese modelo'} en bodega.`, 'warn'); return; }
       const r = await EntityPicker.abrir({
         titulo: `Sustituto para ${f.serial}`, icono: 'replace', size: 'md', multiple: false,

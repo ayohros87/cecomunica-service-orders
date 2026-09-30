@@ -130,7 +130,7 @@ function montar({ contratos = CONTRATOS, modelos = MODELOS } = {}) {
     Modal: { confirm: async () => estado.confirmar },
     FMT: { normalize: (s) => String(s || "").trim().toLowerCase(), normalizeGrupo: (s) => s, dedupGrupos: (a) => a, esc: (s) => s },
     ModelosService: { getModelos: async () => modelos },
-    ClientesService: { listClientes: async () => ({ docs: [] }) },
+    ClientesService: { listClientes: async () => ({ docs: [] }), loadClientes: async () => new Map() },
     PocService: { getCatalogoGrupos: async () => [] },
     ContratosService: {
       _serialKey: (s) => String(s || "").trim().toUpperCase(),

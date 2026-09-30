@@ -210,6 +210,7 @@ function montarLote({ gestion = GESTION_GR, config = null } = {}) {
     ModelosService: { getModelos: async () => [{ id: "mPNC370", marca: "HYTERA", modelo: "PNC370-R" }] },
     ClientesService: {
       listClientes: async () => ({ docs: [{ id: "CLI1", nombre: "MUNICIPIO DE ARRAIJAN", ip: "gob.cecomunica.net" }] }),
+      loadClientes: async () => new Map([["CLI1", { id: "CLI1", nombre: "MUNICIPIO DE ARRAIJAN", ip: "gob.cecomunica.net" }]]),
       existsByNorm: async () => true,
       updateCliente: async () => {},
     },

@@ -204,6 +204,7 @@ const EquiposPoolService = {
   // por un error de red. `onProgreso(hechos, total)` para "Validando i/N".
   async findBySeriales(seriales, onProgreso = null) {
     const porNorm = new Map();
+    const fallidos = [];
     const claves = [...new Set((seriales || []).map(s => this.normalizarSerial(s)).filter(Boolean))];
     claves.forEach(k => porNorm.set(k, []));
     const db = firebase.firestore();
@@ -215,9 +216,19 @@ const EquiposPoolService = {
         snap.docs.forEach(d => { const data = { id: d.id, ...d.data() }; porNorm.get(data.serial_norm)?.push(data); });
       } catch (e) {
         for (const k of tanda) {
-          try { porNorm.set(k, await this.findBySerial(k)); } catch (_) { porNorm.set(k, []); }
+          try { porNorm.set(k, await this.findBySerial(k)); } catch (_) { fallidos.push(k); }
         }
       }
+    }
+    // Un serial que no se pudo consultar NO es un serial inexistente
+    // (2026-09-30): antes quedaba con [] y los llamadores decían "no está en
+    // el inventario" / "no está en bodega" por un error de red. Ahora se
+    // lanza, y quien llama muestra que la validación no se pudo hacer.
+    if (fallidos.length) {
+      const e = new Error(`No se pudo consultar el inventario para ${fallidos.length} serial(es): ${fallidos.slice(0, 5).join(', ')}${fallidos.length > 5 ? '…' : ''}.`);
+      e.code = 'pool/consulta-incompleta';
+      e.fallidos = fallidos;
+      throw e;
     }
     return porNorm;
   },
@@ -289,6 +300,79 @@ const EquiposPoolService = {
   // ausente. El filtro por modeloKey al final es el que garantiza que la fila
   // pintada y las unidades traídas sean el mismo grupo, aunque mañana
   // aparezcan fichas sin id pero con etiqueta.
+  // Unidades EN BODEGA de ciertos modelos, por FAMILIA del catálogo
+  // (ModeloFamilia: el modelo, su variante N/R y nada más). Reemplaza en
+  // Asignar y en "Tomar de bodega" a la lista COMPLETA de bodega (2,861 fichas,
+  // 1.9 MB por apertura) filtrada con el pareo difuso por texto, que además
+  // inflaba los disponibles: "HYT-P50" casaba con HYT-P50 PRO, "PD606-R" con
+  // PD606G y las fichas sin modelo casaban con TODO (medido 2026-09-30 sobre
+  // producción: las 27 líneas pendientes contaban de más).
+  //
+  // refs: [{ modelo_id, modelo }]. Devuelve:
+  //   unidades   las fichas leídas (en_bodega)
+  //   deRef(ref) las de la familia de esa referencia
+  //   sinFicha   radios en bodega SIN modelo_id (no se ofrecen: no se sabe
+  //              qué son) — null si el resumen no se pudo leer
+  //   porFamilia false si alguna referencia no está en el catálogo y hubo que
+  //              caer a la lista completa + pareo por texto (camino viejo)
+  // Si una consulta falla, LANZA: nunca devuelve una lista parcial como si
+  // fuera el estante entero.
+  async listarBodegaDe(refs) {
+    const E = this.ESTADOS.EN_BODEGA;
+    let catalogo = [];
+    try { catalogo = window.ModelosService ? await ModelosService.catalogo() : []; }
+    catch (e) { console.warn('[pool] catálogo no disponible — pareo por texto:', e?.code || e); }
+    const MF = window.ModeloFamilia;
+    const famDe = (ref) => {
+      if (!MF || !catalogo.length) return null;
+      const f = MF.familiaDe(ref);
+      return f && !String(f).startsWith('~') ? f : null;
+    };
+    const idsPorFam = new Map();
+    let porTexto = false;
+    for (const r of (refs || [])) {
+      const ref = { modelo_id: r.modelo_id || null, modelo: r.modelo || '' };
+      const fam = famDe(ref);
+      if (!fam) { porTexto = true; continue; }
+      if (!idsPorFam.has(fam)) {
+        const ids = new Set([fam]);
+        catalogo.forEach(m => { if (famDe({ modelo_id: m.id }) === fam) ids.add(m.id); });
+        idsPorFam.set(fam, ids);
+      }
+    }
+    const orden = (a, b) => (a.modelo_label || '').localeCompare(b.modelo_label || '')
+      || (a.serial || '').localeCompare(b.serial || '');
+    let unidades;
+    if (porTexto) {
+      unidades = await this.listar({ estado: E });
+    } else {
+      const ids = [...new Set([...idsPorFam.values()].flatMap(s => [...s]))];
+      const db = firebase.firestore();
+      const tandas = [];
+      for (let i = 0; i < ids.length; i += 30) tandas.push(ids.slice(i, i + 30));
+      const snaps = await Promise.all(tandas.map(t => db.collection('equipos_pool')
+        .where('estado', '==', E).where('modelo_id', 'in', t).get()));
+      unidades = snaps.flatMap(s => s.docs.map(d => ({ id: d.id, ...d.data() }))).sort(orden);
+    }
+    let sinFicha = null;
+    try {
+      const resumen = await this.resumenPorModelo();
+      sinFicha = resumen.length
+        ? resumen.filter(r => !r.modelo_id).reduce((n, r) => n + Number((r.est || {})[E] || 0), 0)
+        : null;
+    } catch (_) { /* sin resumen: no se afirma nada sobre las fichas sin modelo */ }
+    const deRef = (r) => {
+      const ref = { modelo_id: r.modelo_id || null, modelo: r.modelo || '' };
+      const fam = famDe(ref);
+      if (fam) {
+        const ids = idsPorFam.get(fam) || new Set([fam]);
+        return unidades.filter(u => ids.has(u.modelo_id));
+      }
+      return unidades.filter(u => this._mismoModelo(u, ref.modelo_id, ref.modelo));
+    };
+    return { unidades, deRef, sinFicha, porFamilia: !porTexto };
+  },
+
   async listarPorModeloKey(key, modeloId = null) {
     if (!key) return [];
     const db = firebase.firestore();

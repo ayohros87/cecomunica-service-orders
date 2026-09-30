@@ -409,7 +409,7 @@ window.FacturacionBandeja = (() => {
     }
     const mount = document.getElementById('fbRows');
     mount.innerHTML = html;
-    if (window.lucide) lucide.createIcons({ nodes: [mount] });
+    if (window.Icons) Icons.pintar(mount); else if (window.lucide) lucide.createIcons({ root: mount }); // `nodes` no existe en el vendor: barría todo el documento
   }
 
   async function cargar() {

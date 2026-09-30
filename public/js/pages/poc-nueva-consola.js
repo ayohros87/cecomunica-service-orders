@@ -104,7 +104,8 @@ function construirDocConsola({
 
 // ── Carga de catálogos ─────────────────────────────────────────────────────
 async function cargarClientes() {
-  const { docs } = await ClientesService.listClientes({ limit: 2000 });
+  // Caché local + revalidación cada 5 min (2026-09-30), no 457 docs del servidor.
+  const docs = [...(await ClientesService.loadClientes()).values()];
   _clientesDocs = docs;
   // FilteredSelect (js/ui/filtered-select.js, 2026-09-08): filtra y con UNA
   // coincidencia auto-selecciona (dispara change → onClienteChange).

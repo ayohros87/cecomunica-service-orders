@@ -324,7 +324,9 @@
     let _clientesFS = null;
 
     async function cargarClientes() {
-  const { docs } = await ClientesService.listClientes({ limit: 2000 });
+  // loadClientes lee de la caché local y solo va al servidor cada 5 min
+  // (2026-09-30); listClientes({limit:2000}) bajaba los 457 clientes siempre.
+  const docs = [...(await ClientesService.loadClientes()).values()];
   _clientesFS = FilteredSelect.montar({ select: clienteSelect, filtro: 'clienteFiltro', items: docs,
     id: (c) => c.id, label: (c) => c.nombre, placeholder: 'Seleccione un cliente' });
   clienteSelect.addEventListener("change", async () => {

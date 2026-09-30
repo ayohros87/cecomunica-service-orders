@@ -44,11 +44,9 @@ const EMPRESA_CONFIG_DEFAULTS = Object.freeze({
 
 const EmpresaService = {
 
-  async getOperadores() {
-    const db = firebase.firestore();
-    const doc = await db.collection('empresa').doc('operadores').get();
-    if (!doc.exists) return null;
-    return { id: doc.id, ...doc.data() };
+  // Misma memo de sesión que getDoc (POC y SIM lo leen en cada arranque).
+  async getOperadores({ fresh = false } = {}) {
+    return this.getDoc('operadores', { fresh });
   },
 
   // Memo de sesión (Sesion.memo, 30 min, revalidación en segundo plano): 21

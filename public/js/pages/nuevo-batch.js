@@ -824,7 +824,8 @@ async function agregarElemento(ruta, selectId, label) {
   }
 }
 async function cargarClientes() {
-  const { docs } = await ClientesService.listClientes({ limit: 2000 });
+  // Caché local + revalidación cada 5 min (2026-09-30), no 457 docs del servidor.
+  const docs = [...(await ClientesService.loadClientes()).values()];
   const select = document.getElementById("cliente");
   select.innerHTML = '<option value="" disabled selected>Seleccione...</option>';
   docs.forEach(d => {

@@ -8,12 +8,19 @@ const UsuariosService = {
   },
 
   // Load users that have one of the given roles.
+  // Memo de sesión (30 min, revalidación en segundo plano): los dropdowns de
+  // vendedores/técnicos/jefes lo leían del servidor en cada página y casi
+  // siempre en serie con lo demás. UsuariosAdminService lo invalida al editar.
   async getUsuariosByRol(roles) {
-    const db = firebase.firestore();
-    const snap = await db.collection('usuarios')
-      .where('rol', 'in', roles)
-      .get();
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const leer = async () => {
+      const db = firebase.firestore();
+      const snap = await db.collection('usuarios')
+        .where('rol', 'in', roles)
+        .get();
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    };
+    if (!window.Sesion?.memo) return leer();
+    return Sesion.memo(`usuarios:rol:${[...roles].sort().join(',')}`, 30 * 60 * 1000, leer);
   },
 
   // Convenience: vendedores + administradores (used in many dropdowns).

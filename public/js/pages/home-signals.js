@@ -937,7 +937,11 @@ window.HomeSignals = (() => {
      número, con un botón para actualizar, y (2) al volver a la pestaña o
      desde el bfcache se recuenta solo si el número tiene más de un minuto
      (cambiar de pestaña a cada rato no dispara consultas). */
-  const RECUENTO_MIN_MS = 60 * 1000;
+  // 5 min, igual que el TTL de la caché de señales (2026-09-30). Con 60 s,
+  // recepción recontaba 108 veces por hora al volver a la pestaña (audit
+  // log), y cada recuento tiraba las listas memo y bajaba 250-350 docs. El
+  // botón "Actualizar" sigue forzando.
+  const RECUENTO_MIN_MS = 5 * 60 * 1000;
 
   function _haceTexto(t) {
     const min = Math.floor((Date.now() - t) / 60000);
@@ -975,7 +979,9 @@ window.HomeSignals = (() => {
     const btn = mount.querySelector('[data-signals-refresh]');
     if (btn) btn.disabled = true;
     try {
-      if (window.SenalesService?.invalidarListas) SenalesService.invalidarListas();
+      // Las listas memo (5 min) solo se tiran cuando la persona pide
+      // "Actualizar"; en el recuento automático el TTL ya las mantiene frescas.
+      if (forzar && window.SenalesService?.invalidarListas) SenalesService.invalidarListas();
       const previos = (_readCache(o.uid, o.rolEfectivo) || {}).counts || {};
       const counts = { ...previos };
       // Las `fresh` (aprobaciones, órdenes por crear) las recuenta

@@ -633,6 +633,14 @@ window.EquiposPool = {
     }
     const lista = this._filtrados();
     const esc = FMT.esc;
+    // Pintado por TANDAS (2026-09-30): la pestaña Bodega son 2,861 filas y
+    // pintarlas de una vez costaba ~2.6 s. Se pintan PAGINA y el resto se pide
+    // con "Ver más"; la tandas se reinicia al cambiar pestaña, filtro o
+    // búsqueda. Filtros, búsqueda, conteos y Excel siguen sobre la lista
+    // COMPLETA; la fila del final y el resumen dicen cuántas faltan por pintar.
+    const firma = JSON.stringify([this._tab, this._filtrosActivos()]);
+    if (firma !== this._firmaVista) { this._firmaVista = firma; this._limite = this.PAGINA; }
+    const mostrar = lista.slice(0, this._limite);
 
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     const fmt = (v) => v.toLocaleString('es-PA');
@@ -725,7 +733,7 @@ window.EquiposPool = {
       tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--fg-3); padding:var(--sp-6); line-height:1.6;">${msg}</td></tr>`;
     } else {
       const puede = this.puedeEscribir();
-      tbody.innerHTML = lista.map(eq => {
+      tbody.innerHTML = mostrar.map(eq => {
         // "Asignado a" navegable: cliente → ficha, contrato → lista con búsqueda
         // precargada (?buscar=), orden → editar-orden. Puede haber asignación Y
         // orden a la vez (unidad de contrato que está en taller): se muestran ambas.
@@ -772,21 +780,22 @@ window.EquiposPool = {
           <td style="font-size:12px; color:var(--fg-3);" title="${esc(eq.origen || '')}">${esc(this.ORIGEN_LABELS[eq.origen] || eq.origen || '—')}</td>
           <td>${this._accionesHtml(eq, puede)}</td>
         </tr>`;
-      }).join('');
+      }).join('') + (mostrar.length < lista.length ? this._filaVerMasHtml(mostrar.length, lista.length) : '');
     }
 
     // Poda de la selección: sólo sobrevive lo que sigue VISIBLE. Si un filtro,
     // una pestaña o una búsqueda esconde una fila, sale del lote — actuar sobre
     // filas que el usuario ya no ve es exactamente el accidente que hay que
     // impedir en una acción masiva.
-    const visibles = new Set(lista.map(e => e.id));
+    const visibles = new Set(mostrar.map(e => e.id));
     [...this._sel].forEach(id => { if (!visibles.has(id)) this._sel.delete(id); });
     this._renderBarraLote();
     this._sincronizarSelAll();
 
     const resumen = document.getElementById('eqResumen');
-    if (resumen) resumen.innerHTML =
-      `<strong>${lista.length}</strong> <span style="color:var(--muted);font-size:12px;">equipos mostrados</span>`;
+    if (resumen) resumen.innerHTML = mostrar.length < lista.length
+      ? `<strong>${fmt(mostrar.length)}</strong> de <strong>${fmt(lista.length)}</strong> <span style="color:var(--muted);font-size:12px;">equipos pintados · faltan ${fmt(lista.length - mostrar.length)} (Ver más, al final de la tabla)</span>`
+      : `<strong>${fmt(lista.length)}</strong> <span style="color:var(--muted);font-size:12px;">equipos mostrados</span>`;
     this._guardarFiltros();
     if (typeof lucide !== 'undefined') lucide.createIcons();
   },
@@ -806,6 +815,28 @@ window.EquiposPool = {
   //      poda a las filas visibles; si un filtro las esconde, salen del lote.
   //      Un lote que incluye filas invisibles es una escopeta.
   _sel: new Set(),
+
+  // Pintado por tandas (ver render()). "Seleccionar todo" y la poda del lote
+  // actúan sobre lo PINTADO: una acción masiva nunca toca filas que no se ven.
+  PAGINA: 200,
+  _limite: 200,
+  _firmaVista: '',
+  _visibles() { return this._filtrados().slice(0, this._limite); },
+  verMas(todos = false) {
+    this._limite = todos ? Infinity : this._limite + this.PAGINA;
+    this.render();
+  },
+  _filaVerMasHtml(n, total) {
+    const fmt = (v) => v.toLocaleString('es-PA');
+    const mas = Math.min(this.PAGINA, total - n);
+    return `<tr class="eq-ver-mas"><td colspan="9" style="text-align:center; padding:var(--sp-4); color:var(--fg-2); line-height:1.6;">
+      Se muestran <b>${fmt(n)}</b> de <b>${fmt(total)}</b>. Los otros <b>${fmt(total - n)}</b> también cumplen el filtro:
+      solo falta pintarlos. La búsqueda y el Excel ya los incluyen.
+      <div style="margin-top:8px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="EquiposPool.verMas()">Ver ${fmt(mas)} más</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="EquiposPool.verMas(true)">Ver todos (${fmt(total)})</button>
+      </div></td></tr>`;
+  },
 
   // Qué puede hacerse a cada unidad. Se usa para ofrecer sólo las acciones
   // aplicables y para contar cuántas de la selección aplican.
@@ -914,7 +945,7 @@ window.EquiposPool = {
   },
 
   toggleTodos(on) {
-    const visibles = this._filtrados();
+    const visibles = this._visibles();
     visibles.forEach(e => { if (on) this._sel.add(e.id); else this._sel.delete(e.id); });
     document.querySelectorAll('.eq-sel').forEach(c => { c.checked = on; });
     this._renderBarraLote();
@@ -930,7 +961,7 @@ window.EquiposPool = {
   _sincronizarSelAll() {
     const all = document.getElementById('eqSelAll');
     if (!all) return;
-    const visibles = this._filtrados();
+    const visibles = this._visibles();
     const marcados = visibles.filter(e => this._sel.has(e.id)).length;
     all.checked = marcados > 0 && marcados === visibles.length;
     all.indeterminate = marcados > 0 && marcados < visibles.length;

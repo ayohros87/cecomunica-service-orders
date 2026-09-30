@@ -59,7 +59,8 @@
   }
 
   async function cargarClientesMap() {
-    const { docs } = await ClientesService.listClientes({ limit: 2000 });
+    // Caché local + revalidación cada 5 min (2026-09-30), no 457 docs del servidor.
+    const docs = [...(await ClientesService.loadClientes()).values()];
     const map = {};
     docs.forEach((c) => {
       map[c.id] = c.nombre || c.razon_social || '';

@@ -555,7 +555,7 @@ function render() {
       </tr>`;
     const resumenVacio = document.getElementById('resumen');
     if (resumenVacio) resumenVacio.innerHTML = `Mostrando <strong>0</strong> de <strong>${piezas.length}</strong> piezas`;
-    if (window.lucide) lucide.createIcons({ nodes: [tb] });
+    if (window.Icons) Icons.pintar(tb); else if (window.lucide) lucide.createIcons({ root: tb }); // `nodes` no existe en el vendor: barría todo el documento
     return;
   }
 
@@ -576,7 +576,7 @@ function render() {
       </tr>`;
     const resumenVacio = document.getElementById('resumen');
     if (resumenVacio) resumenVacio.innerHTML = `Mostrando <strong>0</strong> de <strong>${piezas.length}</strong> piezas`;
-    if (window.lucide) lucide.createIcons({ nodes: [tb] });
+    if (window.Icons) Icons.pintar(tb); else if (window.lucide) lucide.createIcons({ root: tb }); // `nodes` no existe en el vendor: barría todo el documento
     return;
   }
 
@@ -660,7 +660,7 @@ function render() {
 
   applyColumnVisibility();
   applyDensity();
-  if (window.lucide) lucide.createIcons({ nodes: [tb] });
+  if (window.Icons) Icons.pintar(tb); else if (window.lucide) lucide.createIcons({ root: tb }); // `nodes` no existe en el vendor: barría todo el documento
 }
 
 

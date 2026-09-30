@@ -3,6 +3,7 @@
 // archivo sigue publicando sus globales en window (puente F1), así que el
 // orden importa igual que antes. Vite lo empaqueta y le pone hash.
 import '/js/firebase-init.js';
+import '/js/services/empresaService.js'; // memo de sesión de empresa/* (2026-09-30)
 // layout.js (rail + Ctrl+K) ya NO va aquí: el home lo carga clásico en el
 // <head> como las demás páginas (fija data-cc-rail en el parse). Importarlo
 // además lo ejecutaría dos veces (dos Layout, dos atajos).

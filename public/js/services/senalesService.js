@@ -434,8 +434,15 @@ const SenalesService = {
     const D = PendientesDomain.DEFAULTS;
     let cfg = {};
     try {
-      const snap = await firebase.firestore().collection('empresa').doc('config').get();
-      cfg = snap.exists ? (snap.data() || {}) : {};
+      // Vía EmpresaService (memo de sesión de 30 min): las señales S1, ENT y
+      // EST releían empresa/config cada una por su lado y en serie con su
+      // consulta. Si el servicio no está en la página, lectura directa.
+      if (window.EmpresaService?.getDoc) {
+        cfg = (await EmpresaService.getDoc('config')) || {};
+      } else {
+        const snap = await firebase.firestore().collection('empresa').doc('config').get();
+        cfg = snap.exists ? (snap.data() || {}) : {};
+      }
     } catch (e) { /* sin permiso o sin red: defaults */ }
     const num = (v, d) => (Number.isFinite(Number(v)) && Number(v) >= 1) ? Number(v) : d;
     const staleDias = num(cfg.orden_stale_dias, D.stale_dias);

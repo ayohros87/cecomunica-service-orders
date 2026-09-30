@@ -38,10 +38,13 @@
       const id = new URLSearchParams(location.search).get('id');
       const estado = document.getElementById('estado');
       const ir = document.getElementById('ir');
-      const alCentro = (url, texto) => {
+      // Con contrato resuelto se redirige DE INMEDIATO (2026-09-30): la espera
+      // de 1.5 s solo tiene sentido para que se lea el mensaje de error.
+      const alCentro = (url, texto, demora = 0) => {
         ir.href = url;
         estado.textContent = texto;
-        setTimeout(() => location.replace(url), 1500);
+        if (demora) setTimeout(() => location.replace(url), demora);
+        else location.replace(url);
       };
       if (!id) { alCentro('../clientes/centro.html', 'Te llevo al Centro…'); return; }
       // Esperar a que el SDK (defer) esté listo y haya sesión: sin auth las
@@ -57,7 +60,7 @@
             return;
           }
         } catch (e) { console.warn('No se pudo resolver el contrato:', e); }
-        alCentro('../clientes/centro.html', 'No se pudo resolver ese contrato — te llevo al Centro.');
+        alCentro('../clientes/centro.html', 'No se pudo resolver ese contrato — te llevo al Centro.', 1500);
       });
       if (window.firebase?.auth) arrancar();
       else window.addEventListener('DOMContentLoaded', arrancar);

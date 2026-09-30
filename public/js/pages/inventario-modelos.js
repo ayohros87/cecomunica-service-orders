@@ -119,8 +119,10 @@ function itemNombre(id){
 // Config global: Frecuencia y Mantenimiento comparten el MISMO ítem de QBO para todos.
 async function loadFactConfig(){
   try{
-    const d = await firebase.firestore().collection('empresa').doc('facturacion_config').get();
-    const c = d.exists ? d.data() : {};
+    // Memo de sesión vía EmpresaService (guardar un mapeo lo invalida).
+    const c = (window.EmpresaService?.getDoc
+      ? await EmpresaService.getDoc('facturacion_config')
+      : (await firebase.firestore().collection('empresa').doc('facturacion_config').get()).data()) || {};
     factConfig.qbo_item_frecuencia_id    = c.qbo_item_frecuencia_id || '';
     factConfig.qbo_item_mantenimiento_id = c.qbo_item_mantenimiento_id || '';
   }catch(e){ console.warn('factConfig', e); }
@@ -162,6 +164,7 @@ async function setGlobalItem(campo, value){
   }
   factConfig[campo] = value;
   try{
+    window.Sesion?.olvidar?.('empresa:facturacion_config');
     await firebase.firestore().collection('empresa').doc('facturacion_config')
       .set({ [campo]: value, actualizado_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
     Toast.show('Mapeo global guardado','ok');

@@ -8,7 +8,17 @@
 const UsuariosAdminService = {
 
   _call() {
-    return firebase.functions().httpsCallable('manageUser');
+    const fn = firebase.functions().httpsCallable('manageUser');
+    // Tras editar un usuario, los memos de sesión de usuarios por rol y de
+    // técnicos (UsuariosService, OrdenesService.loadTechnicians) quedan viejos.
+    return async (args) => {
+      const r = await fn(args);
+      if (args?.action !== 'resetPassword' && window.Sesion?.olvidarPrefijo) {
+        Sesion.olvidarPrefijo('usuarios:');
+        Sesion.olvidar('tecnicos');
+      }
+      return r;
+    };
   },
 
   async create({ email, nombre, rol }) {

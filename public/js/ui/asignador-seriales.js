@@ -387,19 +387,23 @@ window.AsignadorSeriales = (() => {
     // ── Picker del pool (unidades en bodega, FIFO por ingreso) ─────────
     async function tomarDelPool() {
       if (typeof EquiposPoolService === 'undefined') { toast('El pool de equipos no está disponible.', 'bad'); return; }
-      let enBodega;
+      // Solo los modelos de este formulario, por familia del catálogo
+      // (listarBodegaDe) — antes se bajaba la bodega entera y se pareaba por
+      // texto, que ofrecía modelos parecidos (HYT-P50 PRO por HYT-P50).
+      const refs = [...body.querySelectorAll('.serial-group')].map(g => ({
+        modelo_id: g.getAttribute('data-modelo-id') || null, modelo: g.getAttribute('data-modelo') || '' }));
+      let bodega;
       try {
-        enBodega = await EquiposPoolService.listar({ estado: EquiposPoolService.ESTADOS.EN_BODEGA });
+        bodega = await EquiposPoolService.listarBodegaDe(refs);
       } catch (e) {
         console.error('Error consultando el pool:', e);
         toast('No se pudo consultar el inventario de equipos.', 'bad');
         return;
       }
-      if (!enBodega.length) { toast('No hay equipos disponibles en bodega. Recibe equipos primero.', 'warn'); return; }
-      abrirPickerPool(enBodega);
+      abrirPickerPool(bodega);
     }
 
-    async function abrirPickerPool(enBodega) {
+    async function abrirPickerPool(bodega) {
       const grupos = [...body.querySelectorAll('.serial-group')];
       if (!grupos.length) { toast('No hay modelos que serializar.', 'warn'); return; }
       const pres = presentes();
@@ -421,8 +425,8 @@ window.AsignadorSeriales = (() => {
         porModelo.set(k, cur);
       });
       for (const s of porModelo.values()) {
-        const unidades = enBodega
-          .filter(d => EquiposPoolService._mismoModelo(d, s.modeloId, s.modelo) && !pres.has(norm(d.serial || d.serial_norm)))
+        const unidades = bodega.deRef({ modelo_id: s.modeloId || null, modelo: s.modelo })
+          .filter(d => !pres.has(norm(d.serial || d.serial_norm)))
           .sort((a, b) => (a.ingreso_bodega_at?.toMillis?.() || 0) - (b.ingreso_bodega_at?.toMillis?.() || 0)
             || String(a.serial || '').localeCompare(String(b.serial || '')));
         secciones.push({ ...s, unidades });
@@ -446,12 +450,19 @@ window.AsignadorSeriales = (() => {
         });
       });
       if (!secciones.length) { toast('No hay cupos vacíos que llenar: todos los seriales están colocados u omitidos.', 'warn'); return; }
+      // Radios en bodega sin modelo en su ficha: no se ofrecen (no se sabe qué
+      // son), pero se dice que existen — "no hay" no puede leerse como estante vacío.
+      const nSinFicha = Number(bodega.sinFicha || 0);
+      const txtSinFicha = nSinFicha
+        ? ` Además hay ${nSinFicha} radio(s) en bodega sin modelo en su ficha, que no se ofrecen hasta clasificarlos (Almacén · Avanzado).` : '';
       if (!secciones.some(s => s.unidades.length)) {
-        toast(noDisp.length
+        toast((noDisp.length
           ? `En bodega hay ${noDisp.length} unidad(es) de estos modelos, pero ninguna disponible (${[...new Set(noDisp.map(x => x.motivo))].join('; ')}).`
-          : 'En bodega no hay unidades de estos modelos. Recibe equipos primero.', 'warn');
+          : 'En bodega no hay unidades de estos modelos. Recibe equipos primero.') + txtSinFicha, 'warn');
         return;
       }
+      const sinFichaHtml = nSinFicha
+        ? `<p style="margin:0 0 10px; font-size:12.5px; color:var(--fg-3);">${esc(txtSinFicha.trim())}</p>` : '';
       const noDispHtml = noDisp.length ? `
         <details class="ep-nodisp" style="margin:0 0 10px; font-size:12.5px; color:var(--fg-2);">
           <summary style="cursor:pointer; color:#92400E;"><b>No disponibles (${noDisp.length})</b> — están en bodega pero no se ofrecen</summary>
@@ -466,7 +477,7 @@ window.AsignadorSeriales = (() => {
       EntityPicker.abrir({
         titulo: opts.tituloPicker || 'Tomar de bodega', icono: 'scan-barcode', size: 'lg',
         descripcion: 'Marca las unidades que vas a asignar, o usa <b>Selección automática</b> (toma las más antiguas en bodega por modelo).',
-        extraHtml: noDispHtml,
+        extraHtml: noDispHtml + sinFichaHtml,
         placeholderBuscar: 'Filtrar por serial…', normalizar: (s) => norm(s),
         grupos: secciones.map((s, si) => ({
           id: si, titulo: s.modelo, cupos: s.cupos,

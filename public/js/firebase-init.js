@@ -293,8 +293,16 @@ window.Sesion = (() => {
     return traer();
   }
   function olvidar(clave) { try { sessionStorage.removeItem(_memoKey(clave)); } catch { /* sin storage */ } }
+  // Borra todos los memos cuya clave empieza por el prefijo (p. ej. "usuarios:"
+  // cuando admin edita un usuario: hay una clave por combinación de roles).
+  function olvidarPrefijo(prefijo) {
+    try {
+      const p = _memoKey(prefijo);
+      Object.keys(sessionStorage).filter((k) => k.startsWith(p)).forEach((k) => sessionStorage.removeItem(k));
+    } catch { /* sin storage */ }
+  }
 
-  return { cache, cacheAnonima, perfil, miPerfil, rol, nombre, limpiar, memo, olvidar };
+  return { cache, cacheAnonima, perfil, miPerfil, rol, nombre, limpiar, memo, olvidar, olvidarPrefijo };
 })();
 
   // Apply admin-tunable config from empresa/config to runtime globals.

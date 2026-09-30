@@ -20,13 +20,22 @@ const ModelosService = {
   // y Avanzado en la misma ráfaga; comparten un viaje (2026-09-29). Cada
   // llamador recibe su propia copia.
   _modelosVuelo: null,
+  // Y memo de sesión (Sesion.memo, 30 min, revalidación en segundo plano):
+  // los 123 modelos se releían del servidor en cada página que los pinta
+  // (cotizaciones, contratos, órdenes, POC…). Las escrituras lo invalidan.
   async getModelos({ source = null } = {}) {
     if (source) return this._leerModelos({ source });
     if (!this._modelosVuelo) {
-      this._modelosVuelo = this._leerModelos({})
+      const leer = () => this._leerModelos({});
+      this._modelosVuelo = (window.Sesion?.memo ? Sesion.memo('modelos', 30 * 60 * 1000, leer) : leer())
         .finally(() => setTimeout(() => { this._modelosVuelo = null; }, 3000));
     }
     return (await this._modelosVuelo).slice();
+  },
+  _invalidar() {
+    this._catalogo = null;
+    this._modelosVuelo = null;
+    window.Sesion?.olvidar?.('modelos');
   },
   async _leerModelos({ source = null } = {}) {
     const db = firebase.firestore();
@@ -37,6 +46,7 @@ const ModelosService = {
   },
 
   async addModelo(data) {
+    this._invalidar();
     const db = firebase.firestore();
     return db.collection('modelos').add({
       ...data,
@@ -46,6 +56,7 @@ const ModelosService = {
   },
 
   async updateModelo(id, fields) {
+    this._invalidar();
     const db = firebase.firestore();
     return db.collection('modelos').doc(id).update({
       ...fields,
@@ -56,6 +67,7 @@ const ModelosService = {
   // Batch-insert de modelos (Firestore: 500 por batch). Usado por la importación
   // desde QuickBooks.
   async importModelos(rows, creado_por_uid) {
+    this._invalidar();
     const db = firebase.firestore();
     const CHUNK = 450;
     for (let i = 0; i < rows.length; i += CHUNK) {
@@ -74,6 +86,7 @@ const ModelosService = {
   },
 
   async setActivo(id, activo) {
+    this._invalidar();
     const db = firebase.firestore();
     return db.collection('modelos').doc(id).update({
       activo,
@@ -82,6 +95,7 @@ const ModelosService = {
   },
 
   async deleteModelo(id) {
+    this._invalidar();
     const db = firebase.firestore();
     return db.collection('modelos').doc(id).delete();
   },

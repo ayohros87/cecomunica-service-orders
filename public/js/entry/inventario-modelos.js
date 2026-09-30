@@ -3,6 +3,7 @@
 // archivo sigue publicando sus globales en window (puente F1), así que el
 // orden importa igual que antes. Vite lo empaqueta y le pone hash.
 import '/js/firebase-init.js';
+import '/js/services/empresaService.js'; // memo de sesión de empresa/* (2026-09-30)
 import '/js/services/usuariosService.js';
 import '/js/services/modelosService.js';
 import '/js/core/xlsx-loader.js';

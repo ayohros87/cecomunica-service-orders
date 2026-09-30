@@ -30,8 +30,10 @@ firebase.auth().onAuthStateChanged(async (user)=>{
 // Config de auto-activación (en empresa/facturacion_config, read/write=auth; UI gateada).
 async function cargarConfig(){
   try{
-    const d = await firebase.firestore().collection('empresa').doc('facturacion_config').get();
-    const data = d.exists ? d.data() : {};
+    // Memo de sesión vía EmpresaService (los toggles de abajo lo invalidan).
+    const data = (window.EmpresaService?.getDoc
+      ? await EmpresaService.getDoc('facturacion_config')
+      : (await firebase.firestore().collection('empresa').doc('facturacion_config').get()).data()) || {};
     const a = document.getElementById('autoActivar'); if(a) a.checked = !!data.auto_activar;
     const al = document.getElementById('alertasCorreo'); if(al) al.checked = !data.alertas_off; // on por default
   }catch(e){ console.warn('config', e); }
@@ -61,6 +63,7 @@ async function toggleAuto(on){
   });
   if (!ok) return;
   try{
+    window.Sesion?.olvidar?.('empresa:facturacion_config');
     await firebase.firestore().collection('empresa').doc('facturacion_config')
       .set({ auto_activar: !!on, actualizado_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
     Toast.show(on?'Auto-activación activada (corre 7:00 AM)':'Auto-activación desactivada','ok');
@@ -81,6 +84,7 @@ async function toggleAlertas(on){
   });
   if (!ok) return;
   try{
+    window.Sesion?.olvidar?.('empresa:facturacion_config');
     await firebase.firestore().collection('empresa').doc('facturacion_config')
       .set({ alertas_off: !on, actualizado_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
     Toast.show(on?'Alertas por correo activadas':'Alertas por correo apagadas','ok');
