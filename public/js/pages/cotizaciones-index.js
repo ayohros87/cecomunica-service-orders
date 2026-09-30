@@ -50,7 +50,17 @@
     // fecha_creacion, con el mismo índice que la paginación.
     const { desde, hasta } = rangoFechas();
     if (esInicial) { kpiSrv = null; _busqUltima = ''; }
-    const { docs, lastDoc: cursor } = await CotizacionesService.listCotizaciones({ lastDoc, limit: 30, creadoPorUid: uidFiltro, desde, hasta });
+    const args = { lastDoc, limit: 30, creadoPorUid: uidFiltro, desde, hasta };
+    // Primera página: pintar YA con la caché local de Firestore y repintar con
+    // el servidor (2026-09-30). Sin caché viene vacía y se espera.
+    if (esInicial && !lastDoc) {
+      try {
+        const enCache = await CotizacionesService.listCotizaciones({ ...args, source: 'cache' });
+        if (enCache.docs.length) { cotizaciones.length = 0; cotizaciones.push(...enCache.docs); render(); }
+      } catch { /* sin caché: camino normal */ }
+    }
+    const { docs, lastDoc: cursor } = await CotizacionesService.listCotizaciones(args);
+    if (esInicial && !args.lastDoc) cotizaciones.length = 0;
     if (docs.length) { lastDoc = cursor; cotizaciones.push(...docs); }
     render();
 

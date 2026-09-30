@@ -41,9 +41,9 @@ firebase.auth().onAuthStateChanged(async (user) => {
       if (e.target.id === 'chk-solo-config'){ soloConfig = e.target.checked; render(); }
     });
 
-    await cargarModelos();
     qboItems.loading = true;  // la lista de QBO llega en 2º plano (ver abajo)
-    await loadFactConfig();
+    // Catálogo y mapeo global en paralelo (2026-09-30), antes en serie.
+    await Promise.all([cargarModelos(), loadFactConfig()]);
     render();                 // pinta el catálogo YA desde Firestore (rápido)
     renderSalud().catch(e => console.warn('[modelos] salud del catálogo:', e?.message || e));
 

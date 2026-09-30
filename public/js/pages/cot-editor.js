@@ -966,11 +966,20 @@
       if (!permitidos.includes(rol)) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
       userRol = rol;
 
-      catalogos = await CotState.bootstrapCatalogos();
-      try { policyCfg = T.policyFromConfig(await EmpresaService.getConfig()); }
-      catch (e) { policyCfg = T.POLICY_DEFAULT; }
       const esNueva = document.body.dataset.modo === 'nueva';
       const params = new URLSearchParams(location.search);
+      // En edición, la cotización sale en paralelo con los catálogos y la
+      // config (2026-09-30): antes esperaba a que terminaran.
+      const docEnVuelo = (!esNueva && params.get('id'))
+        ? CotizacionesService.getCotizacion(params.get('id')) : null;
+      if (docEnVuelo) docEnVuelo.catch(() => {});
+      const [catalogosListos, cfgPolicy] = await Promise.all([
+        CotState.bootstrapCatalogos(),
+        EmpresaService.getConfig().catch(() => null),
+      ]);
+      catalogos = catalogosListos;
+      try { policyCfg = cfgPolicy ? T.policyFromConfig(cfgPolicy) : T.POLICY_DEFAULT; }
+      catch (e) { policyCfg = T.POLICY_DEFAULT; }
 
       if (esNueva) {
         const ejecId = catalogos.ejecutivos.find(e => e.id === user.uid)?.id || catalogos.ejecutivos[0]?.id || '';
@@ -984,7 +993,7 @@
       } else {
         const docId = params.get('id');
         if (!docId) { Toast.show('Falta id', 'bad'); location.href = 'index.html'; return; }
-        const doc = await CotizacionesService.getCotizacion(docId);
+        const doc = await (docEnVuelo || CotizacionesService.getCotizacion(docId));
         if (!doc) { Toast.show('No encontrada', 'bad'); location.href = 'index.html'; return; }
         draft = CotState.toUi(doc);
         // Solo se editan borradores. Una cotización aprobada/enviada/convertida/

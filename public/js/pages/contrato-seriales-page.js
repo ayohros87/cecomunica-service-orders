@@ -63,6 +63,15 @@
       return;
     }
 
+    // Las cuatro lecturas del contrato solo necesitan el docId: salen AL MISMO
+    // TIEMPO (2026-09-30), antes eran 3-4 viajes en serie. Cambios pendientes
+    // se lee siempre y solo se usa si ya está asignado (subcolección chica).
+    const refC = db().collection('contratos').doc(contratoDocId);
+    const enVuelo = {
+      seriales: ContratosService.getSerialesManual(contratoDocId).catch(() => []),
+      senal: refC.collection('seriales_estado').doc('current').get().catch(() => null),
+      cambios: refC.collection('seriales_cambios').where('estado', '==', 'pendiente').get().catch(() => null),
+    };
     try {
       contrato = await ContratosService.getContrato(contratoDocId);
     } catch (e) {
@@ -105,11 +114,10 @@
     let serialesGuardados = [];
     let omisiones = [];
     let estadoSenal = '';
-    try { serialesGuardados = await ContratosService.getSerialesManual(contratoDocId); } catch (e) { /* ok */ }
+    serialesGuardados = (await enVuelo.seriales) || [];
     try {
-      const sig = await db().collection('contratos').doc(contratoDocId)
-        .collection('seriales_estado').doc('current').get();
-      if (sig.exists) {
+      const sig = await enVuelo.senal;
+      if (sig && sig.exists) {
         const sd = sig.data() || {};
         if (Array.isArray(sd.omisiones)) omisiones = sd.omisiones;
         estadoSenal = sd.estado || '';
@@ -128,9 +136,8 @@
     ctx.cambioSet = new Set();
     if (ctx.yaAsignados) {
       try {
-        const qs = await db().collection('contratos').doc(contratoDocId)
-          .collection('seriales_cambios').where('estado', '==', 'pendiente').get();
-        if (!qs.empty) {
+        const qs = await enVuelo.cambios;
+        if (qs && !qs.empty) {
           const docs = qs.docs.map(d => ({ id: d.id, ...d.data() }));
           docs.sort((a, b) => (b.solicitado_at?.toMillis?.() || 0) - (a.solicitado_at?.toMillis?.() || 0));
           const req = docs[0];

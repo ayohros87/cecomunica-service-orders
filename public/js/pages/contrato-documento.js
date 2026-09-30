@@ -44,6 +44,21 @@
     const c = await ContratosService.resolverContrato(idParam);
     if (!c) { Toast.show('Contrato no encontrado', 'bad'); return; }
     const docId = c.id || idParam;
+    // Todo lo que el documento lee después del contrato sale AHORA y junto
+    // (2026-09-30): solicitud de firma, aprobador, flota del contrato y
+    // modelos. Antes eran 4 viajes en serie con la hoja oculta hasta el final.
+    const nada = (msg) => (e) => { console.warn(msg, e); return null; };
+    const enVuelo = {
+      firma: (c.firmado && c.firmado_digital?.solicitud_id)
+        ? firebase.firestore().collection('firma_solicitudes').doc(c.firmado_digital.solicitud_id).get()
+            .catch(nada('solicitud de firma no legible'))
+        : Promise.resolve(null),
+      aprobador: ((c.estado === 'activo' || c.estado === 'aprobado') && c.aprobado_por_uid)
+        ? UsuariosService.getUsuario(c.aprobado_por_uid).catch(nada('aprobador no legible'))
+        : Promise.resolve(null),
+      unidades: EquiposPoolService.listarPorContrato(docId).catch(nada('pool no legible')),
+      modelos: ModelosService.getModelos().catch(nada('modelos no legibles')),
+    };
 
     // ── Toolbar / aviso de estado ──
     $('lnkFicha').href = `../clientes/centro.html?id=${encodeURIComponent(c.cliente_id || '')}`;
@@ -143,11 +158,8 @@
     // viejos sin copia), se muestra el texto vigente y se dice con claridad.
     let sFirma = null;
     if (c.firmado && c.firmado_digital?.solicitud_id) {
-      try {
-        const snap = await firebase.firestore().collection('firma_solicitudes')
-          .doc(c.firmado_digital.solicitud_id).get();
-        sFirma = snap.exists ? snap.data() : null;
-      } catch (e) { console.warn('solicitud de firma no legible', e); }
+      const snap = await enVuelo.firma;
+      sFirma = snap && snap.exists ? snap.data() : null;
     }
     const frozen = sFirma?.documento?.clausulas_html ? sFirma.documento : null;
     // duracion_dias MANDA sobre el texto (el formulario viejo puede pisarlo).
@@ -200,7 +212,7 @@
     // Sello de LA EMPRESA (aprobador) en los espacios de la derecha.
     if ((c.estado === 'activo' || c.estado === 'aprobado') && c.aprobado_por_uid) {
       try {
-        const u = await UsuariosService.getUsuario(c.aprobado_por_uid);
+        const u = await enVuelo.aprobador;
         const fAp = fecha(c.fecha_aprobacion);
         const sello = `<div class="sello">✔ Firmado electrónicamente por ${esc(u?.nombre || '—')}<br>
           ${esc(u?.cargo || 'Administración')}${fAp ? `<br>${fAp.toLocaleString('es-PA')}` : ''}</div>`;
@@ -227,15 +239,13 @@
     // ── Anexo A: seriales CON SU TARIFA (2026-09-02, pedido de Alberto) ──
     // La tarifa por serial sale de su línea del contrato (modelo + modalidad)
     // más los servicios amarrados a ese serial (cargos con seriales — GPS).
-    let unidades = [];
-    try { unidades = await EquiposPoolService.listarPorContrato(docId); }
-    catch (e) { console.warn('pool no legible', e); }
+    const unidades = (await enVuelo.unidades) || [];
     $('aSub').textContent = `Contrato ${numero} · ${c.cliente_nombre || ''}`;
     $('folioA').textContent = `Anexo A · ${numero}`;
 
     let modelosMap = {};
     try {
-      const ms = await ModelosService.getModelos();
+      const ms = await enVuelo.modelos;
       (ms || []).forEach((m) => { modelosMap[m.id] = m; });
       // ModeloFamilia: pareo serial↔línea por familia N/R y valor de
       // reposición con caída a la fila base ("una familia, dos filas").

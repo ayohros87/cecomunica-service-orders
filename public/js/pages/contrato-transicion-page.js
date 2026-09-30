@@ -38,6 +38,14 @@
       renderMensaje('Acceso restringido. No tienes permiso para gestionar la transición de equipos.');
       return;
     }
+    // Seriales, pool del contrato nuevo y mapeos solo necesitan el docId:
+    // salen AL MISMO TIEMPO que el contrato (2026-09-30). Antes eran 5 viajes
+    // en serie antes del primer pintado. Cada promesa trae su catch.
+    const enVuelo = {
+      seriales: ContratosService.getSerialesManual(contratoDocId).catch(() => []),
+      poolNuevo: EquiposPoolService.listarPorContrato(contratoDocId).catch(() => null),
+      mapeos: db().collection('contratos').doc(contratoDocId).collection('mapeos').get().catch(() => null),
+    };
     try {
       ctx.contrato = await ContratosService.getContrato(contratoDocId);
     } catch (e) { console.error(e); renderMensaje('No se pudo cargar el contrato.'); return; }
@@ -52,12 +60,18 @@
     const sub = $('ph-subtitle');
     if (sub) sub.textContent = `${c.contrato_id || contratoDocId} · ${c.cliente_nombre || 'Cliente'} · ${c.accion || c.tipo_contrato || ''}`;
 
-    await cargarDatos();
+    await cargarDatos(enVuelo);
     render();
   }
 
-  async function cargarDatos() {
+  async function cargarDatos(enVuelo = null) {
     const c = ctx.contrato;
+    // Sin precarga (recargas tras registrar), se piden aquí, también juntas.
+    const pv = enVuelo || {
+      seriales: ContratosService.getSerialesManual(contratoDocId).catch(() => []),
+      poolNuevo: EquiposPoolService.listarPorContrato(contratoDocId).catch(() => null),
+      mapeos: db().collection('contratos').doc(contratoDocId).collection('mapeos').get().catch(() => null),
+    };
 
     // SALIENTES: anclados a los contratos originales vinculados (multi: una
     // renovación puede consolidar varios contratos viejos); si no hay vínculo
@@ -89,20 +103,14 @@
       && u.asignacion?.contrato_doc_id !== contratoDocId);
 
     // ENTRANTES: seriales del contrato nuevo + su doc del pool (para el trigger).
-    let seriales = [];
-    try { seriales = await ContratosService.getSerialesManual(contratoDocId); } catch (e) { /* ok */ }
+    const [seriales, poolNuevo, snapMapeos] = await Promise.all([pv.seriales, pv.poolNuevo, pv.mapeos]);
     ctx.entrantes = (seriales || []).filter(s => String(s.serial || '').trim());
-    try {
-      const poolNuevo = await EquiposPoolService.listarPorContrato(contratoDocId);
-      ctx.poolNuevoPorSerial = new Map(poolNuevo.map(u => [norm(u.serial || u.serial_norm), u]));
-    } catch (e) { ctx.poolNuevoPorSerial = new Map(); }
-
+    ctx.poolNuevoPorSerial = new Map((poolNuevo || []).map(u => [norm(u.serial || u.serial_norm), u]));
     // Mapeos ya registrados (append-only).
-    try {
-      const snap = await db().collection('contratos').doc(contratoDocId).collection('mapeos').get();
-      ctx.mapeos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => (a.at?.toMillis?.() || 0) - (b.at?.toMillis?.() || 0));
-    } catch (e) { ctx.mapeos = []; }
+    ctx.mapeos = snapMapeos
+      ? snapMapeos.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (a.at?.toMillis?.() || 0) - (b.at?.toMillis?.() || 0))
+      : [];
   }
 
   function renderMensaje(msg) {

@@ -97,7 +97,8 @@ const CotizacionesService = {
   // desde/hasta (Date, auditoría UX 2026-09-28 §4.5 #12): rango sobre
   // fecha_creacion, `hasta` exclusivo. Con creadoPorUid usa el MISMO índice
   // compuesto (la desigualdad va sobre el campo del orderBy).
-  async listCotizaciones({ lastDoc = null, limit = 30, creadoPorUid = null, desde = null, hasta = null } = {}) {
+  // source:'cache' → solo la caché local (el índice pinta al instante y el servidor corrige).
+  async listCotizaciones({ lastDoc = null, limit = 30, creadoPorUid = null, desde = null, hasta = null, source = null } = {}) {
     const db = firebase.firestore();
     let q = db.collection('cotizaciones');
     if (creadoPorUid) q = q.where('creado_por_uid', '==', creadoPorUid);
@@ -105,7 +106,7 @@ const CotizacionesService = {
     if (hasta) q = q.where('fecha_creacion', '<', hasta);
     q = q.orderBy('fecha_creacion', 'desc').limit(limit);
     if (lastDoc) q = q.startAfter(lastDoc);
-    const snap = await q.get();
+    const snap = source ? await q.get({ source }) : await q.get();
     const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     return { docs, lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1] };
   },

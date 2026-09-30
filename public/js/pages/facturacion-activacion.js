@@ -21,8 +21,9 @@ firebase.auth().onAuthStateChanged(async (user)=>{
     if(!u || (rol!==ROLES.ADMIN && rol!==ROLES.CONTABILIDAD)){
       document.body.innerHTML="<h3 style='color:red;text-align:center;margin-top:100px;'>Acceso restringido</h3>"; return;
     }
-    await cargar();
-    await cargarConfig();
+    // Contratos y config de auto-activación en paralelo (2026-09-30): los
+    // toggles no tienen por qué retener la tabla.
+    await Promise.all([cargar(), cargarConfig()]);
     render();
   }catch(e){ console.error(e); Toast.show('Error al iniciar','bad'); }
 });

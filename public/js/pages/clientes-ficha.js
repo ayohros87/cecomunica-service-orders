@@ -71,6 +71,8 @@ window.FichaCliente = {
 
   async cargar(id) {
     const db = firebase.firestore();
+    // Vendedores en paralelo con el cliente (2026-09-30), antes en serie.
+    const vendedoresEnVuelo = this.cargarVendedores();
     let snap = await db.collection('clientes').doc(id).get();
     // Persistencia multi-pestaña: si vino del caché, releer del servidor
     // (patrón del Centro, 8a7ba6d) — una ficha vieja aquí se EDITA y se pisa.
@@ -80,7 +82,7 @@ window.FichaCliente = {
     if (!snap.exists) { Toast.show('Cliente no encontrado.', 'bad'); return; }
     this.cliente = { id: snap.id, ...snap.data() };
 
-    await this.cargarVendedores();
+    await vendedoresEnVuelo;
     this.pintar();
     this.armarKit();
     this.cargarChips();

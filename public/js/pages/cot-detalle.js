@@ -716,6 +716,10 @@
       const params = new URLSearchParams(location.search);
       const docId = params.get('id');
       if (!docId) { Toast.show('Falta id', 'bad'); location.href = 'index.html'; return; }
+      // Catálogos en paralelo con el documento (2026-09-30), como ya hacía
+      // imprimir-cotizacion: antes esperaban a que llegara la cotización.
+      const catalogosEnVuelo = CotState.bootstrapCatalogos();
+      catalogosEnVuelo.catch(() => {});
       const doc = await CotizacionesService.getCotizacion(docId);
       if (!doc) { Toast.show('No encontrada', 'bad'); location.href = 'index.html'; return; }
 
@@ -732,7 +736,7 @@
         && ![ROLES.ADMIN, ROLES.JEFE_TALLER, ROLES.GERENTE].includes(rol)
         && doc.creado_por_uid !== user.uid;
 
-      catalogos = await CotState.bootstrapCatalogos();
+      catalogos = await catalogosEnVuelo;
       rawDoc = doc;
       try { policyCfg = T.policyFromConfig(cfg); }
       catch (e) { policyCfg = T.POLICY_DEFAULT; }

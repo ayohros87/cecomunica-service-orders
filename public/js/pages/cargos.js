@@ -6,7 +6,7 @@
 let listaCargos = [];
 let showInactivos = false;
 const _savedTimers = {};
-const qboServicios = { list: [], loaded: false };
+const qboServicios = { list: [], loaded: false, cargando: false };
 
 function debounce(fn, t=220){ let id; return (...a)=>{ clearTimeout(id); id=setTimeout(()=>fn(...a),t); }; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -25,9 +25,13 @@ firebase.auth().onAuthStateChanged(async (user) => {
     document.addEventListener('change', (e)=>{
       if (e.target.id === 'chk-inactivos'){ showInactivos = e.target.checked; render(); }
     });
+    // La tabla se pinta YA desde Firestore y se repinta cuando llega la lista
+    // de QuickBooks (2026-09-30): la callable tarda 1-3 s y bloqueaba la
+    // página entera. Mismo patrón que inventario-modelos.
     await cargarCargos();
-    await loadQboServicios();
+    qboServicios.cargando = true;
     render();
+    loadQboServicios().finally(() => { qboServicios.cargando = false; render(); });
   }catch(e){ console.error(e); Toast.show('Error validando usuario','bad'); }
 });
 
@@ -58,7 +62,7 @@ function qboOptions(selectedId){
     opts.push(`<option value="${esc(it.id)}"${on?' selected':''}>${esc(it.name)} (${esc(it.id)})</option>`);
   });
   if(sid && !found){
-    const aviso = qboServicios.loaded ? 'no encontrado en QBO' : 'QBO no disponible';
+    const aviso = qboServicios.loaded ? 'no encontrado en QBO' : (qboServicios.cargando ? 'cargando QuickBooks…' : 'QBO no disponible');
     opts.push(`<option value="${esc(sid)}" selected>ID ${esc(sid)} (${aviso})</option>`);
   }
   return opts.join('');

@@ -319,8 +319,8 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('btnImportarSims')?.remove();
       document.getElementById('btnPlantilla')?.remove();
     }
-    await SimCards.cargarOperadores();
-    await SimCards.cargar();
+    // Operadores y SIMs en paralelo (2026-09-30), antes en serie.
+    await Promise.all([SimCards.cargarOperadores(), SimCards.cargar()]);
   });
 });
 

@@ -246,8 +246,9 @@ if (!ALLOWED_ROLES.has(role)) {
 }
 await cargarVendedores();
 populateBulkVendedor();
+// resetPagination() ya llama updateTotalPages(): la segunda llamada lanzaba
+// otros 3 conteos que competían con la primera página (2026-09-30).
 resetPagination(); gotoPage(1);
-updateTotalPages();
 
   });
 

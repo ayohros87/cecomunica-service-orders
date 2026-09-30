@@ -88,9 +88,10 @@
       document.getElementById("perfil-correo").value = user.email || "";
 
       try {
-        const snap = await firebase.firestore().collection("usuarios").doc(user.uid).get();
-        if (snap.exists) {
-          const data = snap.data();
+        // Sesion.miPerfil: nombre y rol de sessionStorage (≈0 ms), o la misma
+        // lectura que ya hizo el rail en frío (2026-09-30). Antes releía el doc.
+        const data = window.Sesion?.miPerfil ? await Sesion.miPerfil(user) : null;
+        if (data) {
           document.getElementById("perfil-nombre").value = data.nombre || "";
           // Rol legible ("Recepción", no "recepcion"): misma tabla del rail.
           document.getElementById("perfil-rol").value = window.MODULOS

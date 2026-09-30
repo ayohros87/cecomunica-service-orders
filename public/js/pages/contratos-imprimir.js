@@ -116,10 +116,14 @@ if (data.estado === "activo" && data.fecha_aprobacion) {
 
   // --- Vendedor / Elaborador ---
 let vendedorInfo = { nombre: "Vendedor", cargo: "Vendedor", email: "" };
+// Vendedor y aprobador en paralelo (2026-09-30), antes en serie.
+const vendedorEnVuelo = data.creado_por_uid ? UsuariosService.getUsuario(data.creado_por_uid) : null;
+const aprobadorEnVuelo = data.aprobado_por_uid ? UsuariosService.getUsuario(data.aprobado_por_uid) : null;
+[vendedorEnVuelo, aprobadorEnVuelo].forEach(p => p && p.catch(() => {}));
 
 if (data.creado_por_uid) {
   try {
-    const docUser = await UsuariosService.getUsuario(data.creado_por_uid);
+    const docUser = await vendedorEnVuelo;
    if (docUser) {
   const u = docUser;
   vendedorInfo.nombre = u.nombre || u.Nombre || vendedorInfo.nombre; // acepta ambas variantes
@@ -137,7 +141,7 @@ if (data.creado_por_uid) {
 let aprobadorInfo = null;
 if (data.aprobado_por_uid) {
   try {
-    const docApr = await UsuariosService.getUsuario(data.aprobado_por_uid);
+    const docApr = await aprobadorEnVuelo;
     if (docApr) {
       const u = docApr;
       aprobadorInfo = {
