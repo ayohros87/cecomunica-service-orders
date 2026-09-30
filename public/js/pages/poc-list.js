@@ -380,8 +380,35 @@ window.PocList = {
     inValor.value = valor;
     this._focusId = p.get('id') || null;
     this._focusPendiente = true;
+    // Salto desde Ctrl+K con id (2026-09-30): basta leer ESA ficha. Antes cada
+    // salto abría la suscripción a las ~4,600 fichas vivas solo para resaltar
+    // una fila, y esperaba a que sincronizara (0.6-3 s). La búsqueda completa
+    // queda para cuando la persona escriba o cambie un filtro.
+    if (this._focusId) { this._pintarFocoPorId(this._focusId); return true; }
     this.filtrar();
     return true;
+  },
+
+  async _pintarFocoPorId(id) {
+    const ejecucionID = ++this._filtroID;
+    const tbody = document.getElementById('devicesTable');
+    const btnCargar = document.getElementById('btnCargarMas');
+    let d = null;
+    try {
+      // Caché local primero (al instante si ya se vio); si no está, servidor.
+      d = await PocService.getPocDevice(id, { source: 'cache' }).catch(() => null)
+        || await PocService.getPocDevice(id);
+    } catch (e) { console.warn('[POC] ficha del salto no disponible:', e?.code || e); }
+    if (ejecucionID !== this._filtroID) return;
+    if (!d) { this.filtrar(); return; }        // no está: la búsqueda completa decide
+    while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+    if (btnCargar) btnCargar.style.display = 'none';
+    tbody.appendChild(this._buildRow(d.id, d));
+    this._aplicarFocus(tbody);
+    PocState.actualizarResumen({ total: 1, activos: d.activo ? 1 : 0, incompletos: this._incompleta(d) ? 1 : 0 });
+    this.actualizarFlechitas();
+    if (window.Icons) Icons.pintar(tbody);
+    else if (typeof lucide !== 'undefined') lucide.createIcons({ root: tbody });
   },
 
   // Tras pintar la búsqueda del ?focus=: resalta la fila (por docId; si no,
@@ -655,7 +682,11 @@ window.PocList = {
         // Respetar la columna de orden activa (antes la vista filtrada quedaba
         // clavada en created_at desc y "ordenar por Unit ID" no hacía nada).
         this._ordenarDocs(coincidencias);
-        coincidencias.forEach(d => tbody.appendChild(this._buildRow(d.id, d)));
+        // Tope de pintado (2026-09-30): una búsqueda amplia (dos letras de un
+        // cliente) podía pintar miles de filas de ~15 celdas y congelar la
+        // página 1-4 s. Se pintan TOPE y el resto con "Mostrar más"; el
+        // resumen sigue contando TODAS las coincidencias.
+        this._pintarTanda(tbody, coincidencias, 0);
         this._aplicarFocus(tbody);
         PocState.actualizarResumen({ total, activos, incompletos });
         // "No se encontraron resultados" se leía como "este equipo nunca estuvo
@@ -673,6 +704,28 @@ window.PocList = {
           'Error al buscar en la base POC',
           'Revisa tu conexión e intenta de nuevo.');
       });
+  },
+
+  _TOPE_FILAS: 200,
+  _pintarTanda(tbody, lista, desde) {
+    tbody.querySelector?.('tr[data-mas]')?.remove();
+    const hasta = Math.min(lista.length, desde + this._TOPE_FILAS);
+    for (let i = desde; i < hasta; i++) tbody.appendChild(this._buildRow(lista[i].id, lista[i]));
+    const faltan = lista.length - hasta;
+    if (faltan > 0) {
+      const tr = document.createElement('tr');
+      tr.dataset.mas = '1';
+      tr.innerHTML = '<td colspan="12" style="padding:14px;text-align:center;"></td>';
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-secondary btn-sm';
+      btn.textContent = `Mostrar ${Math.min(faltan, this._TOPE_FILAS)} más (quedan ${faltan})`;
+      btn.onclick = () => {
+        this._pintarTanda(tbody, lista, hasta);
+        if (window.Icons) Icons.pintar(tbody);
+      };
+      tr.firstChild.appendChild(btn);
+      tbody.appendChild(tr);
+    }
   },
 
   // Busca lo mismo en las fichas cerradas y, si aparece, lo ofrece en el
@@ -957,7 +1010,9 @@ window.PocList = {
   },
 
   async filtrarDuplicados(tipo) {
-    const devices   = await PocService.getPocDevices();
+    // Fichas vivas desde la suscripción/memo de la búsqueda (0 lecturas si ya
+    // está abierta); antes bajaba las 6,498 con cerradas y las descartaba.
+    const devices   = await this._getAllMemo();
     const soloActivos = document.getElementById('soloActivos')?.checked;
     const equipos   = [];
 
@@ -1016,7 +1071,7 @@ window.PocList = {
     const resumenEl = document.getElementById('resumenEquipos');
     if (resumenEl) resumenEl.innerHTML = '<div class="loader" style="width:20px;height:20px;border-width:2px;"></div>';
 
-    const devices  = await PocService.getPocDevices();
+    const devices  = await this._getAllMemo(); // vivas, compartidas con la búsqueda
     const soloActivos = document.getElementById('soloActivos')?.checked;
     const invalidos = [];
 

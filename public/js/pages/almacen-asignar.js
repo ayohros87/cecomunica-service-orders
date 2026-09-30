@@ -317,25 +317,37 @@ window.AlmacenAsignar = (() => {
     const item = st.items.find(i => (i.tipo === 'contrato' || i.tipo === 'cambio') && i.id === docId);
     marcarSel(item?.tipo || 'contrato', docId);
     const el = cascaron({ titulo: 'Cargando…', sub: '' });
-    let contrato;
-    try { contrato = await ContratosService.getContrato(docId); } catch (e) { console.error(e); }
+    // Las cuatro lecturas solo necesitan el docId: salen AL MISMO TIEMPO
+    // (2026-09-30). Antes eran 3-4 viajes en serie. La de cambios pendientes
+    // se lee de todos modos y solo se usa si el contrato ya está asignado
+    // (subcolección chica, casi siempre vacía).
+    const ref = db().collection('contratos').doc(docId);
+    const [contratoR, guardadosR, sigR, cambiosR] = await Promise.allSettled([
+      ContratosService.getContrato(docId),
+      ContratosService.getSerialesManual(docId),
+      ref.collection('seriales_estado').doc('current').get(),
+      ref.collection('seriales_cambios').where('estado', '==', 'pendiente').get(),
+    ]);
+    const contrato = contratoR.status === 'fulfilled' ? contratoR.value : null;
+    if (contratoR.status === 'rejected') console.error(contratoR.reason);
     if (!contrato) { el.innerHTML = Bandeja.vacio('No se encontró el contrato.', 'search-x'); return; }
 
     let guardados = [], omisiones = [], estadoSenal = '';
-    try { guardados = await ContratosService.getSerialesManual(docId); } catch (e) { /* ok */ }
-    try {
-      const sig = await db().collection('contratos').doc(docId).collection('seriales_estado').doc('current').get();
-      if (sig.exists) { const sd = sig.data() || {}; if (Array.isArray(sd.omisiones)) omisiones = sd.omisiones; estadoSenal = sd.estado || ''; }
-    } catch (e) { /* ok */ }
+    if (guardadosR.status === 'fulfilled') guardados = guardadosR.value || [];
+    if (sigR.status === 'fulfilled' && sigR.value.exists) {
+      const sd = sigR.value.data() || {};
+      if (Array.isArray(sd.omisiones)) omisiones = sd.omisiones;
+      estadoSenal = sd.estado || '';
+    }
 
     const esLegacy = contrato.seriales_estado === 'legacy';
     const yaAsignados = !esLegacy && (estadoSenal === 'asignados' || contrato.seriales_estado === 'asignados');
 
     // Solicitud de cambio de serial pendiente → modo reemplazo.
     let cambioReq = null;
-    if (yaAsignados) {
+    if (yaAsignados && cambiosR.status === 'fulfilled') {
       try {
-        const qs = await db().collection('contratos').doc(docId).collection('seriales_cambios').where('estado', '==', 'pendiente').get();
+        const qs = cambiosR.value;
         if (!qs.empty) {
           const docs = qs.docs.map(d => ({ id: d.id, ...d.data() }));
           docs.sort((a, b) => (b.solicitado_at?.toMillis?.() || 0) - (a.solicitado_at?.toMillis?.() || 0));

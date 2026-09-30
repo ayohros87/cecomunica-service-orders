@@ -159,9 +159,11 @@ window.AlmacenHoy = (() => {
 
   // ── Cargas ────────────────────────────────────────────────────────────
   async function contarSinVerificar() {
-    // Firebase 12 (npm, 2026-09-25): la API compat ya no trae Query.count() —
-    // el probe de antes devolvía null en silencio y la nota "sin verificar"
-    // desapareció de la bandeja. Va por getCountFromServer (FbAgg, en el entry).
+    // Firebase 12 (npm, 2026-09-25) no traía Query.count() en compat;
+    // firebase-init lo restauró (b5b3726), así que va primero por compat y
+    // FbAgg queda de respaldo (mismo criterio que inventario-equipos).
+    const q = firebase.firestore().collection('equipos_pool').where('verificado', '==', false);
+    if (typeof q.count === 'function') return (await q.count().get()).data().count;
     if (!window.FbAgg || typeof FbAgg.count !== 'function') return null;
     return FbAgg.count('equipos_pool', [['verificado', '==', false]]);
   }
