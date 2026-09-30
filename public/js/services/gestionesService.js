@@ -540,10 +540,18 @@ const GestionesService = {
   // que quedó mal anotado. La bitácora tiene que decir cuál de los dos fue.
   async asignarItems(gestionId, items, { tipo = 'reemplazo' } = {}) {
     await firebase.firestore().collection(this.COL).doc(gestionId).update({ items });
-    const pares = items.map(i => `${i.serial_saliente || i.serial || '—'}→${i.serial_nuevo || '—'}`).join(', ');
-    await this.registrarEvento(gestionId, 'asignar', tipo === 'cambio_serial'
-      ? `Bodega confirmó el serial real contra el radio: ${pares}`
-      : `Bodega asignó: ${pares}`);
+    // Solo cuenta como asignado lo que trae serial: "asignó: X→—" se leía como
+    // hecho en GR20260917-03 (BALBOA), que se guardó sin ningún serial.
+    const sale = (i) => i.serial_saliente || i.serial || '—';
+    const con = items.filter(i => String(i.serial_nuevo || '').trim());
+    const sin = items.filter(i => !String(i.serial_nuevo || '').trim());
+    const pares = con.map(i => `${sale(i)}→${i.serial_nuevo}`).join(', ');
+    const faltan = sin.length ? `${con.length ? ' · ' : ''}sin serial todavía: ${sin.map(sale).join(', ')}` : '';
+    await this.registrarEvento(gestionId, 'asignar', !con.length
+      ? `Bodega guardó sin asignar ningún serial (pendientes: ${sin.map(sale).join(', ') || '—'}).`
+      : tipo === 'cambio_serial'
+        ? `Bodega confirmó el serial real contra el radio: ${pares}${faltan}`
+        : `Bodega asignó: ${pares}${faltan}`);
   },
 
   // Bodega CORRIGE seriales que ya asignó (2026-09-16). Solo deja el pedido:

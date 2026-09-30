@@ -27,8 +27,13 @@
 //     quedó fuera del inventario al cerrar, casi siempre por un serial mal
 //     tecleado. Destinatario: recepción, con copia al taller.
 //
-// Solo dos secciones escriben: F (el escalado de etapa) y G (limpia de la orden
-// las incidencias que el kardex ya superó); las demás solo mandan correos
+//  K) GESTIONES ESPERANDO A BODEGA: reemplazo/demo/aumento/cambio de serial
+//     en `pendiente_bodega`. Recordatorio a bodega y, pasado el tope,
+//     escalación semanal a administración (vendedor y bodega en copia).
+//
+// Solo escriben F (el escalado de etapa), G (limpia de la orden las
+// incidencias que el kardex ya superó) y K (sus contadores en
+// `bodega_aviso`, junto al `firma_recordatorio_at` de J); las demás solo mandan correos
 // (mail_queue → onMailQueued). Un correo por sección por día,
 // solo si hay filas.
 
@@ -977,6 +982,101 @@ module.exports = onSchedule(
       logger.info("[recordatorioOperativo] aumentos esperando firma", { pendientes: snap.size, avisados });
     } catch (e) {
       logger.error("[recordatorioOperativo] sección aumentos falló", { message: e.message });
+    }
+
+    // ── K) Gestiones esperando a bodega (2026-09-30, GR20260917-03) ──────
+    // Un reemplazo/demo/aumento/cambio de serial en `pendiente_bodega` recibía
+    // UN correo al entrar a la cola y después silencio: el reemplazo de BALBOA
+    // se aprobó el 17-sep y 13 días después seguía sin serial sin que nadie
+    // fuera de bodega se enterara. Misma cadencia que los contratos
+    // (domain/avisoSeriales): recordatorios a bodega y, pasado el tope,
+    // escalación semanal a administración con el vendedor y bodega en copia.
+    // Los contadores van en `bodega_aviso` (onGestionWrite ignora su eco).
+    try {
+      const G = require("../../lib/gestiones");
+      const AV = require("../../domain/avisoSeriales");
+      let dias = AV.DEFAULT_DIAS;
+      let diasEsc = AV.DEFAULT_DIAS_ESC;
+      try {
+        const cfg = (await db.collection("empresa").doc("config").get()).data() || {};
+        const n = Number(cfg.seriales_recordatorio_dias);
+        const ne = Number(cfg.seriales_escalamiento_dias);
+        if (Number.isFinite(n) && n >= 1) dias = n;
+        if (Number.isFinite(ne) && ne >= 1) diasEsc = ne;
+      } catch { /* defaults */ }
+
+      const snap = await db.collection("gestiones")
+        .where("estado", "==", "pendiente_bodega")
+        .limit(500)
+        .get();
+
+      const bodega = await G.bodegaEmailTo();
+      let recordados = 0;
+      let escalados = 0;
+      for (const d of snap.docs) {
+        const g = d.data() || {};
+        const dec = AV.decideAvisoGestion(g, { ahora: now, dias, diasEsc });
+        if (dec.accion === "nada") continue;
+
+        const tipo = G.TIPO_LABEL[g.tipo] || g.tipo;
+        const p = AV.pendienteGestion(g);
+        const hace = dec.diasAprobado != null ? `${dec.diasAprobado} días` : "días";
+        const avance = p.total > 0 && p.asignados > 0
+          ? `Van <b>${p.asignados} de ${p.total}</b> asignados.` : "";
+        const tabla = p.faltan.length
+          ? tablaHtml([g.tipo === "reemplazo" || g.tipo === "cambio_serial" ? "Sale" : "Falta", "Modelo"],
+              p.faltan.map(f => [esc(f.que), esc(f.detalle || "")]))
+          : "";
+        const escala = dec.accion === "escalacion";
+
+        let to = bodega;
+        let cc = null;
+        if (escala) {
+          to = await G.aprobacionesTo();
+          const vend = await G.vendedorEmailDeCliente(g.cliente_id);
+          cc = [vend, bodega].filter(Boolean).join(", ") || null;
+        }
+        if (!to) { logger.warn("[recordatorioOperativo] gestión en bodega sin buzón", { gid: d.id }); continue; }
+
+        await db.collection("mail_queue").add({
+          to,
+          ...(cc ? { cc } : {}),
+          subject: escala
+            ? `${tipo} ${d.id} sin asignar hace ${hace} — ${g.cliente_nombre || "Cliente"}`
+            : `Recordatorio ${dec.intento}: ${tipo} ${d.id} espera serial(es) — ${g.cliente_nombre || "Cliente"}`,
+          preheader: escala
+            ? `Bodega no ha asignado después de ${AV.MAX_RECORDATORIOS} recordatorios`
+            : `Lleva ${hace} esperando que bodega asigne`,
+          bodyContent: `
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:${escala ? "#991B1B" : "#9A3412"};">${escala ? "Gestión aprobada sin seriales" : "Recordatorio: seriales pendientes"}</h2>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              ${esc(tipo)} <b>${esc(d.id)}</b> de <b>${esc(g.cliente_nombre || "—")}</b> lleva
+              <b>${hace}</b> esperando que Bodega asigne. ${avance}
+              ${escala
+                ? `Ya se le recordó ${AV.MAX_RECORDATORIOS} veces a Bodega. Hay que asignar el serial o, si ya no va, anular la gestión.`
+                : "Al completar la asignación, la orden de programación sale sola."}
+            </p>
+            ${tabla}
+            ${escala ? `<p style="margin:12px 0 0;font:12px/1.5 Arial,sans-serif;color:#6b7280;">
+              Te llega porque administración aprobó la gestión; el vendedor y Bodega van en copia.
+              Se repite cada semana hasta que se asigne o se anule.</p>` : ""}`,
+          ctaUrl: escala ? G.urlGestion(g, d.id) : G.urlBodegaGestion(d.id),
+          ctaLabel: escala ? "Abrir la gestión" : "Asignar seriales",
+          meta: { source: "recordatorioOperativo", seccion: "gestion_bodega", tipo: dec.accion, gestion: d.id, intento: dec.intento },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        // Rutas anidadas con update() (dot-path), nunca set(merge).
+        await d.ref.update(escala
+          ? { "bodega_aviso.escalado_at": admin.firestore.FieldValue.serverTimestamp(), "bodega_aviso.escalado_count": dec.intento }
+          : { "bodega_aviso.recordatorio_at": admin.firestore.FieldValue.serverTimestamp(), "bodega_aviso.recordatorio_count": dec.intento });
+        await G.registrarEvento(d.id, "recordatorio", escala
+          ? `Escalación ${dec.intento} a administración: lleva ${hace} en bodega sin asignar.`
+          : `Recordatorio ${dec.intento} a Bodega: lleva ${hace} esperando serial(es).`);
+        if (escala) escalados++; else recordados++;
+      }
+      logger.info("[recordatorioOperativo] gestiones en bodega", { pendientes: snap.size, recordados, escalados });
+    } catch (e) {
+      logger.error("[recordatorioOperativo] sección gestiones en bodega falló", { message: e.message });
     }
 
     return null;

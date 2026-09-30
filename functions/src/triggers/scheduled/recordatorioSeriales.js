@@ -22,7 +22,8 @@ const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const { APP_BASE_URL, inventarioEmailTo } = require("../../lib/inventario");
 const { activacionesEmailTo } = require("../../lib/mailRecipients");
-const { decideAviso, MAX_RECORDATORIOS, DEFAULT_DIAS, DEFAULT_DIAS_ESC } = require("../../domain/avisoSeriales");
+const { decideAviso, pedidoSeriales, MAX_RECORDATORIOS, DEFAULT_DIAS, DEFAULT_DIAS_ESC } = require("../../domain/avisoSeriales");
+const { reemplazosPorModelo } = require("../../lib/planRenovacion");
 
 function esc(v) {
   return String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -44,34 +45,60 @@ async function emailDeUid(uid, cache) {
   return email;
 }
 
+// Lo que se le pidió a bodega (la MISMA tabla que la solicitud: en una
+// renovación con reemplazos, solo lo que entra) y cuánto lleva asignado.
+// El avance cuenta las filas de contratos/{id}/seriales; si el conteo falla,
+// el correo sale igual, sin la línea de avance.
+async function pedidoYAvance(doc, c) {
+  const reemplazos = c.accion === "Renovación" ? reemplazosPorModelo(c.transicion_plan) : [];
+  const ped = pedidoSeriales(c, reemplazos);
+  let asignadas = null;
+  if (ped.total) {
+    try {
+      asignadas = (await doc.ref.collection("seriales").count().get()).data().count;
+    } catch (e) {
+      logger.warn("[recordatorioSeriales] conteo de filas falló", { docId: doc.id, err: e.message });
+    }
+  }
+  return { ...ped, asignadas };
+}
+
+function tablaPedido(filas) {
+  const rows = filas.map(e => `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">${esc(e.modelo || "—")}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;">${Number(e.cantidad || 0)}</td></tr>`).join("");
+  return `<table role="presentation" width="100%" style="border-collapse:collapse;font:14px Arial,sans-serif;margin:8px 0 4px;">
+      <thead><tr>
+        <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Modelo</th>
+        <th style="text-align:center;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Cantidad</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// "Van 32 de 33": ALQ20260826-01 (Shevet) tenía 32 de 33 cargados y la
+// escalación decía que bodega "todavía no le asigna seriales".
+const hayAvance = (ped) => ped.total > 0 && ped.asignadas > 0;
+const lineaAvance = (ped) => hayAvance(ped)
+  ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">Van <b>${ped.asignadas} de ${ped.total}</b> seriales asignados — faltan <b>${Math.max(0, ped.total - ped.asignadas)}</b>. Si un radio no está, márcalo <b>sin serial</b> con su motivo y la asignación se cierra.</p>`
+  : "";
+
 // Cuerpo de la escalación. Distinto del recordatorio a bodega: aquí el que lee
 // no es quien asigna, así que lo primero es el daño (una cuenta que quizá ya
 // está activa y facturando sin equipos declarados), no la tarea.
-function buildEscalacionBody(c, docId, diasAprobado, intento) {
-  const equiposRows = (c.equipos || [])
-    .filter(e => Number(e.cantidad || 0) > 0)
-    .map(e => `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">${esc(e.modelo || "—")}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;">${Number(e.cantidad || 0)}</td></tr>`)
-    .join("");
+function buildEscalacionBody(c, docId, diasAprobado, intento, ped) {
   const activo = c.estado === "activo";
   return `
     <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#991B1B;">Contrato aprobado sin seriales</h2>
     <div style="margin:0 0 14px;padding:12px 14px;border:2px solid #b45309;border-radius:10px;background:#fffbeb;font:14px/1.6 Arial,sans-serif;color:#7c2d12;">
       El contrato <b>${esc(c.contrato_id || docId)}</b> de <b>${esc(c.cliente_nombre || "—")}</b>
       lleva <b>${diasAprobado != null ? `${diasAprobado} días` : "semanas"}</b> aprobado y bodega
-      todavía no le asigna seriales, después de ${MAX_RECORDATORIOS} recordatorios.
+      ${hayAvance(ped) ? `no ha terminado de asignarle los seriales (van ${ped.asignadas} de ${ped.total})` : "todavía no le asigna seriales"}, después de ${MAX_RECORDATORIOS} recordatorios.
       ${activo ? "<b>La cuenta ya está activa</b>, así que se está facturando un contrato cuyos equipos nadie ha declarado." : "Mientras tanto el contrato no llega a activaciones."}
     </div>
     <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
       Hay que resolverlo de una de dos formas: <b>asignar los seriales</b> (botón de abajo) o
       <b>anular el contrato</b> si ya no va. Dejarlo así deja los equipos sin dueño en el inventario.
     </p>
-    <table role="presentation" width="100%" style="border-collapse:collapse;font:14px Arial,sans-serif;margin:8px 0 4px;">
-      <thead><tr>
-        <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Modelo</th>
-        <th style="text-align:center;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Cantidad</th>
-      </tr></thead>
-      <tbody>${equiposRows}</tbody>
-    </table>
+    ${tablaPedido(ped.filas)}
     <div style="margin:16px 0 0;padding:10px 12px;border-left:3px solid #cbd5e1;background:#f8fafc;font:13px/1.6 Arial,sans-serif;color:#475569;">
       <b>Por qué te llegó este correo:</b> el contrato ya pasó los ${MAX_RECORDATORIOS} recordatorios
       que se le mandan a bodega, así que el aviso sube de nivel y va a las tres personas que pueden
@@ -129,6 +156,7 @@ module.exports = onSchedule(
       // La decisión (contadores y fechas base) vive en domain/avisoSeriales.
       const decision = decideAviso(c, { ahora: now, dias, diasEsc, max: MAX_RECORDATORIOS });
       if (decision.accion === "nada") continue;
+      const ped = await pedidoYAvance(doc, c);
 
       // Pasado el tope de recordatorios: escala fuera de bodega en vez de callarse.
       if (decision.accion === "escalacion") {
@@ -140,7 +168,7 @@ module.exports = onSchedule(
             cc: cc || undefined,
             subject:   `Seriales sin asignar hace ${diasAprobado != null ? diasAprobado + " días" : "semanas"} — ${c.contrato_id || doc.id} (${c.cliente_nombre || "—"})`,
             preheader: `El contrato ${c.contrato_id || doc.id} sigue sin seriales después de ${MAX_RECORDATORIOS} recordatorios a bodega`,
-            bodyContent: buildEscalacionBody(c, doc.id, diasAprobado, intento),
+            bodyContent: buildEscalacionBody(c, doc.id, diasAprobado, intento, ped),
             ctaUrl:    `${APP_BASE_URL}/almacen/index.html?tab=asignar&contrato=${encodeURIComponent(doc.id)}`,
             ctaLabel:  "Asignar seriales",
             meta:      { source: "recordatorioSeriales", tipo: "escalacion", contrato_id: c.contrato_id || doc.id, intento },
@@ -157,26 +185,16 @@ module.exports = onSchedule(
         continue;
       }
 
-      const equiposRows = (c.equipos || [])
-        .filter(e => Number(e.cantidad || 0) > 0)
-        .map(e => `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">${esc(e.modelo || "—")}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;">${Number(e.cantidad || 0)}</td></tr>`)
-        .join("");
-
       const intento = decision.intento;
       const bodyContent = `
         <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#9A3412;">Recordatorio: seriales pendientes</h2>
         <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
           El contrato <b>${esc(c.contrato_id || doc.id)}</b> de
-          <b>${esc(c.cliente_nombre || "—")}</b> sigue esperando que asignes los seriales.
+          <b>${esc(c.cliente_nombre || "—")}</b> sigue esperando que ${hayAvance(ped) ? "termines de asignar" : "asignes"} los seriales.
           Hasta entonces no continúa el proceso hacia activaciones.
         </p>
-        <table role="presentation" width="100%" style="border-collapse:collapse;font:14px Arial,sans-serif;margin:8px 0 4px;">
-          <thead><tr>
-            <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Modelo</th>
-            <th style="text-align:center;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Cantidad</th>
-          </tr></thead>
-          <tbody>${equiposRows}</tbody>
-        </table>`;
+        ${lineaAvance(ped)}
+        ${tablaPedido(ped.filas)}`;
 
       try {
         await db.collection("mail_queue").add({

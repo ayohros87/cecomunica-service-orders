@@ -88,11 +88,9 @@ async function vendedorEmail(uid) {
 }
 
 // Unidades del contrato que requieren serial (descontando bajas/cancelaciones).
-// Misma fórmula que el botón de seriales en la lista (contratos-list.js:24-26).
-function unidadesSerializables(contrato) {
-  const total = (contrato.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
-  return Math.max(0, total - Number(contrato.baja_cancelado_total || 0));
-}
+// Misma fórmula que el botón de seriales en la lista (contratos-list.js:24-26);
+// vive en domain/avisoSeriales para que el recordatorio cuente igual.
+const { unidadesSerializables, pedidoSeriales } = require("../../domain/avisoSeriales");
 
 // Lleva el estado no vigente (anulado, vencido, inactivo…) al doc público de
 // verificaciones/ con su fecha. update() falla con NOT_FOUND si no existe: así
@@ -520,10 +518,7 @@ const onContratoAprobadoSolicitaSeriales = onDocumentUpdated(
 
     // Renovación con reemplazos declarados: a bodega le toca SOLO lo que
     // entra por reemplazo (los que continúan ya están registrados).
-    const soloReemplazos = reemplazos.length > 0 && !!after.renovacion_sin_equipo;
-    const filasPedido = soloReemplazos
-      ? reemplazos.map(r => ({ modelo: r.modelo, cantidad: r.cantidad }))
-      : (after.equipos || []).filter(e => Number(e.cantidad || 0) > 0);
+    const { filas: filasPedido, soloReemplazos } = pedidoSeriales(after, reemplazos);
     const equiposRows = filasPedido
       .map(e => `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">${escapeHtml(e.modelo || "—")}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;">${Number(e.cantidad || 0)}</td></tr>`)
       .join("");

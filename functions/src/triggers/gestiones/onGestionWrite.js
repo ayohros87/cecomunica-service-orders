@@ -466,8 +466,8 @@ async function correoAprobadoresAumento(gid, g) {
           ? `Los equipos <b>ya están en poder del cliente</b>: al aprobar, quedan amarrados al contrato de una vez.
              <b>No se le envía nada al cliente para firmar</b>, ni pasa por bodega ni genera entrega.`
           : `Vigencia propia de <b>${G.escapeHtml(String(a.duracion_meses || "?"))} meses</b> desde la entrega.
-             Al aprobar, el cliente firma el anexo y recién entonces el sistema aplica las líneas y
-             pide los seriales a Bodega.`}
+             Al aprobar, Bodega recibe el aviso para asignar los seriales <b>mientras</b> el cliente
+             firma el anexo; la entrega queda esperando la firma.`}
       </p>
       ${detalleAumentoHtml(a)}`,
     ctaUrl: G.urlGestion(g, gid),
@@ -526,7 +526,7 @@ async function correoBodega(gid, g, { anticipo = false } = {}) {
         La gestión <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> espera
         que Bodega asigne ${queEspera}.
         ${anticipo
-          ? "El anexo quedó <b>aprobado</b> y la firma del cliente se está consiguiendo <b>en paralelo</b> — puedes asignar los seriales desde ya. La orden de programación saldrá sola cuando el anexo esté firmado."
+          ? "El anexo quedó <b>aprobado</b> y la firma del cliente se está consiguiendo <b>en paralelo</b> — puedes asignar los seriales desde ya. Al completarlos, la orden de programación sale sola; lo único que espera la firma es la entrega."
           : "Al completar la asignación, el sistema crea solo la orden de programación y avisa a Recepción."}
       </p>
       ${g.tipo === "reemplazo"
@@ -720,7 +720,10 @@ module.exports = onDocumentWritten(
     // monto de referencia, el puntero a la cotización) — sus ecos no deciden
     // nada. Cuando administración aprueba, `cobro` cambia JUNTO con `estado`,
     // y eso sí pasa.
-    if (soloCambiaron(before, after, ["seriales_norm", "correccion_en_curso", "cobro"])) return null;
+    // `bodega_aviso` y `firma_recordatorio_at` son los contadores que escribe
+    // recordatorioOperativo (secciones K y J): marcan que se avisó, no deciden.
+    if (soloCambiaron(before, after, ["seriales_norm", "correccion_en_curso", "cobro",
+      "bodega_aviso", "firma_recordatorio_at"])) return null;
 
     // ── A0) ANULADA → revertir los efectos regados (caso P223344) ────────
     // Órdenes creadas sin trabajar se eliminan; flags del pool se limpian;

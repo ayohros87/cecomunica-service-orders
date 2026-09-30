@@ -141,3 +141,94 @@ test("C2 · el correo de seriales asignados dice desde cuándo está viva la cue
   assert.ok(/Cuenta activa desde/.test(src), "el cuerpo debe mostrar la fecha de activación real");
   assert.ok(/APROBADO/.test(src), "el asunto debe conservar la palabra por la que activaciones filtra");
 });
+
+// ── Contrato que ya no vive (2026-09-30, DEMO20260814-01 Tocumen) ────────────
+
+test("D1 · un contrato anulado con la marca pendiente no recibe más escalaciones", () => {
+  const tocumen = {
+    contrato_id: "DEMO20260814-01", estado: "anulado",
+    fecha_aprobacion: ts("2026-08-14T19:56:00Z"),
+    seriales_recordatorio_count: MAX_RECORDATORIOS,
+    seriales_recordatorio_at: ts("2026-08-20T12:00:00Z"),
+    seriales_escalado_count: 2, seriales_escalado_at: ts("2026-09-25T12:00:00Z"),
+  };
+  assert.equal(decideAviso(tocumen, { ahora: new Date("2026-10-02T12:00:00Z") }).accion, "nada");
+  assert.equal(decideAviso({ ...tocumen, estado: "vencido" }, { ahora: new Date("2026-10-02T12:00:00Z") }).accion, "nada");
+  assert.equal(decideAviso({ ...tocumen, estado: "aprobado" }, { ahora: new Date("2026-10-02T12:00:00Z") }).accion, "escalacion");
+});
+
+// ── Gestiones esperando a bodega (2026-09-30, GR20260917-03 BALBOA) ─────────
+
+const { decideAvisoGestion, baseBodegaGestion, pendienteGestion, pedidoSeriales } = require("../src/domain/avisoSeriales");
+
+test("E1 · BALBOA: reemplazo 13 días en bodega sin serial recibe recordatorio", () => {
+  const balboa = {
+    tipo: "reemplazo", estado: "pendiente_bodega",
+    fecha_solicitud: ts("2026-09-17T21:27:00Z"),
+    aprobacion: { at: ts("2026-09-17T21:29:00Z") },
+    items: [{ serial_saliente: "24O31A0882", modelo: "PNC360S-R", serial_nuevo: null }],
+  };
+  const d = decideAvisoGestion(balboa, { ahora: new Date("2026-09-30T12:00:00Z") });
+  assert.equal(d.accion, "recordatorio");
+  assert.equal(d.intento, 1);
+  assert.equal(d.diasAprobado, 12);
+  const p = pendienteGestion(balboa);
+  assert.deepEqual([p.total, p.asignados, p.faltan.length], [1, 0, 1]);
+});
+
+test("E2 · fuera de pendiente_bodega, o si es baja, no se avisa", () => {
+  const base = { fecha_solicitud: ts("2026-08-01T12:00:00Z"), items: [{}] };
+  for (const estado of ["pendiente_aprobacion", "pendiente_firma", "pendiente_cliente", "cerrada", "anulada"]) {
+    assert.equal(decideAvisoGestion({ ...base, tipo: "reemplazo", estado }, { ahora: HOY }).accion, "nada", estado);
+  }
+  assert.equal(decideAvisoGestion({ ...base, tipo: "baja", estado: "pendiente_bodega" }, { ahora: HOY }).accion, "nada");
+  assert.equal(decideAvisoGestion({ ...base, tipo: "reemplazo", estado: "pendiente_bodega", deleted: true }, { ahora: HOY }).accion, "nada");
+});
+
+test("E3 · la espera cuenta desde la entrada MÁS RECIENTE a bodega (cliente aceptó / cambio de modelo)", () => {
+  const g = {
+    fecha_solicitud: ts("2026-09-01T12:00:00Z"),
+    aprobacion: { at: ts("2026-09-02T12:00:00Z") },
+    cobro: { aceptada_at: ts("2026-09-10T12:00:00Z") },
+    cambio_modelo: { a: { decidido_at: ts("2026-09-15T12:00:00Z") } },
+  };
+  assert.equal(baseBodegaGestion(g).toISOString(), "2026-09-15T12:00:00.000Z");
+});
+
+test("E4 · pasado el tope, la gestión escala con sus propios contadores", () => {
+  const g = {
+    tipo: "demo", estado: "pendiente_bodega", fecha_solicitud: ts("2026-08-01T12:00:00Z"),
+    demo: { lineas: [{ modelo: "HYT-P50", cantidad: 3 }], seriales_asignados: [{ serial: "A1" }] },
+    bodega_aviso: { recordatorio_count: MAX_RECORDATORIOS, recordatorio_at: ts("2026-08-20T12:00:00Z") },
+  };
+  const d = decideAvisoGestion(g, { ahora: HOY });
+  assert.equal(d.accion, "escalacion");
+  assert.equal(d.intento, 1);
+  const p = pendienteGestion(g);
+  assert.deepEqual([p.total, p.asignados], [3, 1]);
+});
+
+// ── El recordatorio pide lo mismo que la solicitud ──────────────────────────
+
+test("F1 · renovación sin equipo con reemplazos: el pedido es SOLO lo que entra, sin avance", () => {
+  const c = { accion: "Renovación", renovacion_sin_equipo: true, equipos: [{ modelo: "PNC360S-R", cantidad: 20 }] };
+  const p = pedidoSeriales(c, [{ modelo: "PNC460-R", cantidad: 2 }]);
+  assert.deepEqual(p.filas, [{ modelo: "PNC460-R", cantidad: 2 }]);
+  assert.equal(p.total, null);
+});
+
+test("F2 · contrato normal: todas las líneas y el total descuenta las bajas", () => {
+  const p = pedidoSeriales({ equipos: [{ modelo: "HYT-P50", cantidad: 14 }, { modelo: "X", cantidad: 0 }, { modelo: "PNC460-R", cantidad: 2 }], baja_cancelado_total: 1 }, []);
+  assert.equal(p.filas.length, 2);
+  assert.equal(p.total, 15);
+});
+
+test("F3 · la solicitud y el recordatorio usan la misma definición del pedido", () => {
+  assert.ok(/pedidoSeriales\(after, reemplazos\)/.test(leer("src", "triggers", "contratos", "onApproval.js")));
+  assert.ok(/pedidoSeriales\(c, reemplazos\)/.test(leer("src", "triggers", "scheduled", "recordatorioSeriales.js")));
+});
+
+test("F4 · el eco de los contadores de aviso no vuelve a correr la máquina de la gestión", () => {
+  const src = leer("src", "triggers", "gestiones", "onGestionWrite.js");
+  assert.ok(/"bodega_aviso", "firma_recordatorio_at"\]/.test(src));
+});

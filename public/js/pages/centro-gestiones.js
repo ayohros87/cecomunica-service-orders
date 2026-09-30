@@ -1141,7 +1141,7 @@ Object.assign(window.Centro, {
       title: 'Aprobar el aumento', confirmLabel: 'Aprobar aumento',
       message: `Al contrato <b class="cg-mono">${this.esc(a.contrato_id || '—')}</b> se le agregan
         <b>${(a.lineas || []).length} línea(s)</b> (${unid} unid.)${mensual ? ` por <b>$${mensual.toFixed(2)}/mes</b>` : ''}${a.duracion_meses ? ` a ${Number(a.duracion_meses)} mes(es)` : ''}.
-        <br><br>Después se imprime el anexo y el cliente lo firma; al firmarse, el sistema aplica las líneas y avisa a bodega.`,
+        <br><br>Bodega recibe el aviso para asignar los seriales desde ya, mientras se imprime el anexo y el cliente lo firma; la entrega espera la firma.`,
     });
     if (!ok) { this.abrirGestion(gid); return; }
     try {
