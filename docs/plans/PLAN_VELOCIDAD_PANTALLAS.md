@@ -76,8 +76,8 @@ Todo lo del ranking quedó hecho salvo esto, que se dejó a propósito:
 |---|---|
 | Lectura doble de gestiones en la ficha del Centro | 52 docs; el listener sostiene el repintado en vivo del expediente |
 | Pintado provisional de Almacén · Hoy | Su render usa Timestamps que no sobreviven a sessionStorage: antigüedad y orden saldrían mal por un instante |
-|  de POC | Cuenta sobre las filas del DOM; exige reescribirlo y se usa poco |
-|  con caché primero | Lee POC del servidor a propósito: la caché parcial dejaba grupos fuera |
+| `mostrarTodo` de POC | Cuenta sobre las filas del DOM; exige reescribirlo y se usa poco |
+| `admin-grupos` con caché primero | Lee POC del servidor a propósito: la caché parcial dejaba grupos fuera |
 | "Con SIM" en el KPI de POC del admin | Es un O entre dos campos; contarlo pide un índice compuesto nuevo. Se quitó del subtítulo |
 | admin-operacion, admin-salud, admin-refs-huerfanas, admin-financiero | Solo las usa el dueño; quedan como candidatas si vuelven a salir picos de lecturas |
 | Pestaña Serial de inventario | Ya pintaba por tandas de 200 (otra sesión, mismo día) |
