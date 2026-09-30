@@ -664,7 +664,16 @@ window.AsignadorSeriales = (() => {
       const prog = onProgreso || opts.onValidando || null;
       let porNorm, descartados;
       try {
-        porNorm = await poolPorSerial(seriales, prog);
+        try {
+          porNorm = await poolPorSerial(seriales, prog);
+        } catch (e) {
+          // No se pudo consultar el inventario (2026-09-30): antes la búsqueda
+          // devolvía [] y aquí salía "no existe". Ahora es un bloqueo propio —
+          // sin verificar, no se guarda — y el panel dice lo que pasó.
+          console.warn('[Asignador] validación sin consulta:', e?.code || e);
+          const motivo = 'No se pudo consultar el inventario para verificar este serial. Reintenta; si persiste, revisa la conexión.';
+          return { errores: (seriales || []).filter(x => norm(x.serial)).map(x => ({ serial: x.serial, tipo: 'sin_consulta', motivo })), unidades };
+        }
         descartados = await descartadosDe((seriales || []).filter(s => !st.guardados.has(norm(s.serial))).map(s => s.serial));
       } finally {
         // null = terminó la validación (la página restaura su contador).
@@ -738,6 +747,8 @@ window.AsignadorSeriales = (() => {
             ? '<span class="eqpool-chip eqpool-chip-alerta">descartado en QC</span>'
           : t === 'inexistente'
             ? '<span class="eqpool-chip eqpool-chip-vacio">no existe</span>'
+          : t === 'sin_consulta'
+            ? '<span class="eqpool-chip eqpool-chip-alerta">no se pudo verificar</span>'
             : '<span class="eqpool-chip eqpool-chip-aviso">no está en bodega</span>';
         const filas = errores.map(e => `
           <tr>
