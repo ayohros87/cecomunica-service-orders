@@ -1539,88 +1539,69 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
 }
 window.botonesGestion = botonesGestion;
 
-// ── Conteos del SERVIDOR para chips/KPIs (auditoría M4/A8) ────────────────
-// Los conteos locales solo ven lo CARGADO (50 por página): "Por asignar: 3"
-// podía ser 8 en el servidor. Tras cada pintado local se corrigen con los
-// MISMOS count() agregados de las señales del home (SenalesService — 1
-// lectura por cada 1,000 contados), con throttle para no facturar por tecla.
-// El chip "Todas" queda local a propósito: cuenta lo cargado (los estados
-// legacy no están en la lista canónica y una suma server-side mentiría).
+// ── Conteos de los chips: SOLO del servidor (2026-09-30) ──────────────────
+// Antes cada repintado ponía el conteo de lo CARGADO (50 órdenes) y el
+// servidor lo corregía después, pero con throttle de 45 s: cualquier repintado
+// dentro de esa ventana (el listener vivo repinta seguido) dejaba el número
+// local encima — "Cerradas 27" con 1,855, "Listos 4" con 82. Ahora el último
+// conteo del servidor se guarda aquí y es lo único que se pinta; mientras no
+// llega (o si falla) el chip dice "—", nunca un número que parece real.
+// Mismos count() agregados de las señales del home (1 lectura por cada 1,000
+// contados), con throttle para no facturar por tecla.
+const CHIPS_ABIERTOS = ['por_recibir', 'por_asignar', 'ASIGNADO', 'COMPLETADO (EN OFICINA)'];
+const CHIPS_CERRADOS = ['ENTREGADO AL CLIENTE', 'CERRADA (VISITA)', 'CERRADA (DEVOLUCION)',
+  'CERRADA (ENTRADA)', 'CERRADA (SIN RETIRAR)', 'ANULADA'];
+const _conteosSrv = {};
 let _conteosSrvTs = 0;
 let _conteosSrvEnVuelo = false;
+
+function _pintarConteosChips() {
+  const pinta = (key, n) => {
+    document.querySelectorAll(`.estado-chips-bar [data-count="${key}"]`)
+      .forEach(s => { s.textContent = n == null ? '—' : String(n); });
+  };
+  [...CHIPS_ABIERTOS, ...CHIPS_CERRADOS, 'qc'].forEach(k => pinta(k, _conteosSrv[k]));
+  const cerradas = window.SenalesService
+    ? SenalesService.sumaConteos(CHIPS_CERRADOS.map(k => _conteosSrv[k]))
+    : null;
+  pinta('cerradas', cerradas);
+}
+
 async function _refrescarConteosServidor() {
   if (!window.SenalesService) return;
   if (_conteosSrvEnVuelo || (Date.now() - _conteosSrvTs) < 45000) return;
   _conteosSrvEnVuelo = true;
   try {
-    const ESTADOS = ['POR ASIGNAR', 'RECIBIDO EN MOSTRADOR', 'ASIGNADO',
-      'COMPLETADO (EN OFICINA)', 'ENTREGADO AL CLIENTE', 'CERRADA (VISITA)',
-      // Chips nuevos (auditoría UX 2026-09-28, T1): terminales sin filtro.
-      'CERRADA (DEVOLUCION)', 'CERRADA (ENTRADA)', 'CERRADA (SIN RETIRAR)', 'ANULADA'];
+    const claves = [...CHIPS_ABIERTOS, ...CHIPS_CERRADOS];
     const [counts, qc] = await Promise.all([
-      Promise.all(ESTADOS.map(e => SenalesService.countOrdenesPorEstado(e).catch(() => null))),
+      Promise.all(claves.map(k => SenalesService.countChipBandeja(k).catch(() => null))),
       SenalesService.countOrdenesQcPendiente().catch(() => null),
     ]);
-    const pinta = (key, n) => {
-      if (n == null) return;   // un count fallido no pisa el número local
-      document.querySelectorAll(`.estado-chips-bar [data-count="${key}"]`)
-        .forEach(s => { s.textContent = String(n); });
-    };
-    ESTADOS.forEach((e, i) => pinta(e, counts[i]));
-    pinta('qc', qc);
-    // Chip "Cerradas" = suma de los 6 terminales (si alguno falló, no se pinta).
-    const cerr = ESTADOS.slice(4).map((e, i) => counts[i + 4]);
-    if (cerr.every(n => typeof n === 'number')) pinta('cerradas', cerr.reduce((a, b) => a + b, 0));
+    // Un conteo fallido no borra el último bueno.
+    claves.forEach((k, i) => { if (counts[i] != null) _conteosSrv[k] = counts[i]; });
+    if (qc != null) _conteosSrv.qc = qc;
     _conteosSrvTs = Date.now();
-  } finally { _conteosSrvEnVuelo = false; }
+  } finally {
+    _conteosSrvEnVuelo = false;
+    _pintarConteosChips();
+  }
+}
+
+// Nombre de pantalla del filtro activo, para el "Total: N · …" del resumen.
+function _etiquetaFiltroEstado(valor) {
+  if (!valor) return 'Todos';
+  const EB = window.EstadosBandeja;
+  const v = EB ? EB.vistaDe(valor) : null;
+  if (v) return EB.VISTAS[v].etiqueta;
+  if (window.CHIP_CERRADAS && CHIP_CERRADAS[valor]) return CHIP_CERRADAS[valor];
+  return valor;
 }
 
 function actualizarResumen(lista) {
   const el = document.getElementById("resumenOrdenes");
-  // Count from APP.state.chipBase — the last UNFILTERED dataset (kept fresh
-  // by the snapshot + pagination in ordenes-data.js). APP.state.orders no
-  // sirve de base: filtrarPorEstado lo reemplaza con el subset de un solo
-  // estado y los demás chips caían a 0. The legacy resumen-button shows the
-  // filtered total so the user has both numbers.
-  const fullList = APP.state.chipBase || APP.state.orders || lista || [];
   const total = (lista || []).length;
 
-  const _statusOf = (o) => (o.estado_reparacion || "POR ASIGNAR").toUpperCase();
-  const porAsignar         = fullList.filter(o => _statusOf(o) === "POR ASIGNAR").length;
-  const recibidoMostrador  = fullList.filter(o => _statusOf(o) === "RECIBIDO EN MOSTRADOR").length;
-  const asignado           = fullList.filter(o => _statusOf(o) === "ASIGNADO").length;
-  const completadoOficina  = fullList.filter(o => _statusOf(o) === "COMPLETADO (EN OFICINA)").length;
-  const entregadoCliente   = fullList.filter(o => _statusOf(o) === "ENTREGADO AL CLIENTE").length;
-  const cerradaVisita      = fullList.filter(o => _statusOf(o) === "CERRADA (VISITA)").length;
-  // Cola de control de calidad: completadas que el candado no deja entregar.
-  // Es un subconjunto de "completadas", no un estado — por eso va como chip
-  // aparte y no en la barra de estados. Sin esto, "Completadas (en oficina)"
-  // se leía como "listas para entregar" cuando parte no lo estaba.
-  const qcPendientes = fullList.filter(o =>
-    _statusOf(o) === "COMPLETADO (EN OFICINA)"
-    && !(typeof esOrdenEntrada === 'function' && esOrdenEntrada(o))
-    && typeof OrdenesQC !== 'undefined' && OrdenesQC.qcPendiente(o)).length;
-
-  // Pump counts into BOTH estado chip bars (desktop #estadoChipsBar
-   // and mobile #estadoChipsBarMobile). Selecting by .class instead
-   // of #id keeps a single source of truth and both stay in sync.
-  const chipCount = (key, n) => {
-    document
-      .querySelectorAll(`.estado-chips-bar [data-count="${key}"]`)
-      .forEach(span => { span.textContent = String(n); });
-  };
-  // "Todas" va sin número (auditoría UX 2026-09-28): contaba solo lo cargado.
-  chipCount('POR ASIGNAR', porAsignar);
-  chipCount('RECIBIDO EN MOSTRADOR', recibidoMostrador);
-  chipCount('ASIGNADO', asignado);
-  chipCount('COMPLETADO (EN OFICINA)', completadoOficina);
-  chipCount('ENTREGADO AL CLIENTE', entregadoCliente);
-  chipCount('CERRADA (VISITA)', cerradaVisita);
-  let cerradasTotal = entregadoCliente + cerradaVisita;
-  ['CERRADA (DEVOLUCION)', 'CERRADA (ENTRADA)', 'CERRADA (SIN RETIRAR)', 'ANULADA']
-    .forEach(k => { const n = fullList.filter(o => _statusOf(o) === k).length; cerradasTotal += n; chipCount(k, n); });
-  chipCount('cerradas', cerradasTotal);   // chip de grupo "Cerradas"
-  chipCount('qc', qcPendientes);
+  _pintarConteosChips();
   // El chip de QC es un toggle (checkbox #filtroQcPendiente), no un estado:
   // su "activo" se sincroniza aquí, que corre tras cada aplicación de filtros
   // (incluye el deep-link ?qc=1 y el chip del dropdown Resumen).
@@ -1631,17 +1612,13 @@ function actualizarResumen(lista) {
   });
   // Corrección asíncrona con los conteos del servidor (throttled, ver arriba).
   _refrescarConteosServidor();
-  // (The old #mobileHeader .topbar-badges cluster — tbPorAsignar /
-  // tbAsignado / tbCompletado / tbEntregado — was a duplicate estado
-  // filter and is gone. Its counts now live in the mobile chip bar
-  // above, populated by chipCount().)
 
   if (!el) return;
 
   const filtroEstadoSelect = document.getElementById("filtroEstado");
   const estadoActivo = filtroEstadoSelect ? filtroEstadoSelect.value : "";
   const qcActivo = !!document.getElementById("filtroQcPendiente")?.checked;
-  const estadoLabel = qcActivo ? "Pendientes de QC" : (estadoActivo || "Todos");
+  const estadoLabel = qcActivo ? "Pendientes de QC" : _etiquetaFiltroEstado(estadoActivo);
 
   // Texto plano, sin dropdown: el menú "Resumen" era la TERCERA copia del
   // filtro de estado (los chips y el select ya filtran). Queda el conteo del

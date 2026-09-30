@@ -4033,5 +4033,6 @@ tr.activo:hover { background: #f0f9ff !important; }
 }
 .estado-chip-menu__item:hover, .estado-chip-menu__item:focus-visible { background: var(--accent-soft); outline: none; }
 .estado-chip-menu__item.active { background: var(--accent-soft); font-weight: 600; }
+.estado-chip-menu__sep { height: 1px; margin: 4px 6px; background: var(--border-default); }
 .estado-chip-menu__item .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .estado-chip-menu__item .estado-chip__count { margin-left: auto; }

@@ -7,6 +7,7 @@ import '/js/firebase-aggregates.js';
 import '/js/core/carga-diferida.js';
 import '/js/services/clientesService.js';
 import '/js/domain/pendientes.js';
+import '/js/domain/estadosBandeja.js';
 import '/js/domain/entregaTandas.js';
 import '/js/domain/contratoFirma.js';
 import '/js/services/ordenesService.js';

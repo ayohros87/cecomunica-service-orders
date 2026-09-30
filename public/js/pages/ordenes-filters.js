@@ -135,7 +135,9 @@ async function _buscarEnServidor(modo, { anexar = false } = {}) {
         quickSearch: false,
       };
   const hayTexto = !!(texto.filtroOrden || texto.filtroCliente || texto.filtroSerial);
-  const estado = (document.getElementById("filtroEstado")?.value || "").trim().toUpperCase();
+  // Sin toUpperCase: las claves de chip por_recibir/por_asignar son valores
+  // del select y vuelven a él (filtrarPorEstado); buscarOrdenes normaliza.
+  const estado = (document.getElementById("filtroEstado")?.value || "").trim();
   const { desde, hasta } = _rangoFechas();
   _syncFiltersToURL();
 
@@ -224,11 +226,13 @@ async function _mostrarAvisoChip(estado, mostradas, limite) {
   if (!box) return;
   let total = null;
   try {
-    if (window.SenalesService) total = await SenalesService.countOrdenesPorEstado(estado);
+    if (window.SenalesService) total = await SenalesService.countChipBandeja(estado);
   } catch (e) { total = null; }
   // El usuario pudo cambiar de chip mientras llegaba el conteo.
   if ((document.getElementById("filtroEstado")?.value || "") !== estado) return;
-  const hayMas = total != null ? total > mostradas : mostradas >= limite;
+  // "N+" (conteo con tope) es un piso: basta para saber si hay más.
+  const totalN = total == null ? null : parseInt(total, 10);
+  const hayMas = Number.isFinite(totalN) ? totalN > mostradas : mostradas >= limite;
   if (!hayMas) { box.style.display = "none"; return; }
   const fmt = (n) => Number(n).toLocaleString("es-PA");
   box.innerHTML = `<span>Mostrando las <b>${fmt(mostradas)}</b> más recientes${total != null ? ` de <b>${fmt(total)}</b>` : ""}.</span>
@@ -380,7 +384,15 @@ function matchesAdvancedFilters(order, filters) {
   // "Ver órdenes" para ver ESAS, no para explorar la bandeja.
   if (filters.idsCorreo && filters.idsCorreo.size && !filters.idsCorreo.has(order.ordenId)) return false;
 
-  if (filters.filtroEstado && estado !== filters.filtroEstado) return false;
+  // Chip de estado: misma regla que la consulta (domain/estadosBandeja.js) —
+  // por_recibir / por_asignar son vistas; POR ASIGNAR crudo ya excluye las
+  // DEVOLUCIÓN ahí.
+  if (filters.filtroEstado) {
+    const ok = typeof EstadosBandeja !== "undefined"
+      ? EstadosBandeja.coincide(order, filters.filtroEstado)
+      : estado === filters.filtroEstado;
+    if (!ok) return false;
+  }
   // Rango de fechas (auditoría UX 2026-09-28, T6): el mismo criterio que el
   // servidor, para que el repintado vivo no muestre lo que la consulta excluyó.
   if (filters.desdeMs != null || filters.hastaMs != null) {
@@ -389,13 +401,6 @@ function matchesAdvancedFilters(order, filters) {
     if (filters.desdeMs != null && f < filters.desdeMs) return false;
     if (filters.hastaMs != null && f > filters.hastaMs) return false;
   }
-  // Filtrar por "POR ASIGNAR" es la cola de ASIGNACIÓN de taller (2026-09-02,
-  // pedido del dueño): las DEVOLUCIÓN viven en ese estado pero jamás llevan
-  // técnico — aquí solo estorban. Se encuentran por el filtro de tipo o sin
-  // filtro de estado.
-  if (String(filters.filtroEstado || "").toUpperCase() === "POR ASIGNAR"
-      && typeof PendientesDomain !== "undefined"
-      && !PendientesDomain.esColaDeTaller(order)) return false;
   if (filters.soloMias && !esOrdenMia(order)) return false;
   // Cola de control de calidad: completadas que no pueden entregarse hasta
   // que el QC quede aprobado. Las ENTRADA cierran sin QC, así que no son cola.
@@ -1123,6 +1128,11 @@ window.filtrarPorEstado = async function (estado, { limite = CHIP_PAGINA } = {})
   const cardsWrap = document.getElementById("ordersCards");
   const btnCargarMas = document.getElementById("btnCargarMas");
   const loader = document.getElementById("loader");
+
+  // Una clave de vista llega a veces en mayúsculas (URL, búsqueda): se lleva a
+  // la forma del <option> o el select la descarta y el chip queda en "Todas".
+  const vista = window.EstadosBandeja ? EstadosBandeja.vistaDe(estado) : null;
+  if (vista) estado = vista;
 
   // Keep #filtroEstado in sync so the URL serializer sees the active estado.
   const filtroEstadoSel = document.getElementById("filtroEstado");

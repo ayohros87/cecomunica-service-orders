@@ -105,6 +105,48 @@ const SenalesService = {
     );
   },
 
+  // Conteo de un chip de la bandeja de órdenes (2026-09-30). Las vistas de
+  // domain/estadosBandeja.js se arman con count() de igualdades:
+  //   por_recibir = POR ASIGNAR − tipos sin mostrador − DEVOLUCION
+  //   por_asignar = RECIBIDO EN MOSTRADOR + Σ POR ASIGNAR de cada tipo sin mostrador
+  // Cualquier otro valor es un estado guardado. Un "N+" (scan con tope) se
+  // propaga; null = no se pudo contar.
+  async countChipBandeja(clave) {
+    const EB = window.EstadosBandeja;
+    const v = EB ? EB.vistaDe(clave) : null;
+    if (!v) return this.countOrdenesPorEstado(String(clave || '').trim().toUpperCase());
+    const col = firebase.firestore().collection('ordenes_de_servicio');
+    const PA = 'POR ASIGNAR';
+    if (v === 'por_recibir') {
+      return this._count(
+        col.where('estado_reparacion', '==', PA),
+        (o) => this._viva(o) && EB.coincide(o, v),
+        { col: 'ordenes_de_servicio', wheres: [['estado_reparacion', '==', PA]], restarEliminadas: true,
+          excluirTipos: [...EB.TIPOS_SIN_MOSTRADOR, ...EB.TIPOS_FUERA_DE_COLA] });
+    }
+    const partes = await Promise.all([
+      this.countOrdenesPorEstado('RECIBIDO EN MOSTRADOR'),
+      ...EB.TIPOS_SIN_MOSTRADOR.map(t => this._count(
+        col.where('estado_reparacion', '==', PA).where('tipo_de_servicio', '==', t),
+        this._viva,
+        { col: 'ordenes_de_servicio', wheres: [['estado_reparacion', '==', PA], ['tipo_de_servicio', '==', t]],
+          restarEliminadas: true })),
+    ]);
+    return this.sumaConteos(partes);
+  },
+
+  // Suma conteos que pueden venir como número, "N+" (piso) o null (falló):
+  // cualquier null anula la suma; un piso la vuelve piso.
+  sumaConteos(valores) {
+    let n = 0, piso = false;
+    for (const v of valores) {
+      if (typeof v === 'number') n += v;
+      else if (typeof v === 'string' && /^\d+\+$/.test(v)) { n += parseInt(v, 10); piso = true; }
+      else return null;
+    }
+    return piso ? `${n}+` : n;
+  },
+
   // La lista comparte las exclusiones del contador. Paginar antes de filtrar
   // evita que una página llena de eliminadas/devoluciones esconda las vivas.
   // Memo compartida con el conteo (el conteo de S1 sale de estas filas).

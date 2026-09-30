@@ -1224,6 +1224,12 @@ const OrdenesService = {
     const desdeMs = desde ? desde.getTime() : null;
     const hastaMs = hasta ? hasta.getTime() : null;
 
+    const EB = window.EstadosBandeja;
+    const estadosServidor = estado ? (EB ? EB.estadosDe(estado) : [estado]) : [];
+    const coincideEstado = (data) => EB
+      ? EB.coincide(data, estado)
+      : String(data.estado_reparacion || "POR ASIGNAR").trim().toUpperCase() === estado;
+
     // Verificación contra el texto crudo: el índice solo propone candidatos.
     const cumple = (data, id, { conEstadoYFecha }) => {
       if (data.eliminado === true) return false;
@@ -1246,7 +1252,7 @@ const OrdenesService = {
         }
       }
       if (conEstadoYFecha) {
-        if (estado && String(data.estado_reparacion || "POR ASIGNAR").trim().toUpperCase() !== estado) return false;
+        if (estado && !coincideEstado(data)) return false;
         const f = ms(data.fecha_creacion);
         if (desdeMs != null && (f == null || f < desdeMs)) return false;
         if (hastaMs != null && (f == null || f > hastaMs)) return false;
@@ -1258,7 +1264,9 @@ const OrdenesService = {
       let q = db.collection("ordenes_de_servicio");
       if (valoresAncla.length) q = q.where("searchTokens", "array-contains-any", valoresAncla);
       if (servidor) {
-        if (estado) q = q.where("estado_reparacion", "==", estado);
+        // Una vista de dos estados (por_asignar) no cabe en un == junto al
+        // array-contains-any de los tokens: se verifica en cliente (cumple).
+        if (estado && estadosServidor.length === 1) q = q.where("estado_reparacion", "==", estadosServidor[0]);
         if (desde) q = q.where("fecha_creacion", ">=", desde);
         if (hasta) q = q.where("fecha_creacion", "<=", hasta);
         q = q.orderBy("fecha_creacion", "desc");
@@ -1340,6 +1348,32 @@ const OrdenesService = {
     const hit = this._fbsMemo.get(memoKey);
     if (hit && (Date.now() - hit.at) < 60_000) return hit.rows;
 
+    // Chips que son VISTAS (por_recibir / por_asignar, domain/estadosBandeja.js):
+    // se consulta cada estado guardado, se filtra con la misma regla que la
+    // etiqueta de la fila y se vuelve a ordenar por fecha.
+    const EB = window.EstadosBandeja;
+    if (EB && EB.esVista(estado)) {
+      const partes = await Promise.all(EB.estadosDe(estado).map(e => this._filterByEstadoCrudo(e, limit)));
+      const ms = (o) => {
+        const f = o.fecha_creacion;
+        if (!f) return 0;
+        if (typeof f.toMillis === "function") return f.toMillis();
+        if (typeof f.seconds === "number") return f.seconds * 1000;
+        const t = new Date(f).getTime();
+        return Number.isFinite(t) ? t : 0;
+      };
+      const rows = partes.flat().filter(o => EB.coincide(o, estado))
+        .sort((a, b) => ms(b) - ms(a)).slice(0, limit);
+      this._fbsMemo.set(memoKey, { at: Date.now(), rows });
+      return rows;
+    }
+    const rows = await this._filterByEstadoCrudo(estado, limit);
+    this._fbsMemo.set(memoKey, { at: Date.now(), rows });
+    return rows;
+  },
+
+  // Una consulta por estado GUARDADO (sin memo: lo pone filterByStatus).
+  async _filterByEstadoCrudo(estado, limit) {
     const db = firebase.firestore();
 
     try {
@@ -1356,10 +1390,7 @@ const OrdenesService = {
         if (data.eliminado === true) return;
         resultados.push({ ordenId: doc.id, ...data });
       });
-      resultados = this._sinDevolucionSiPorAsignar(estado, resultados);
-
-      this._fbsMemo.set(memoKey, { at: Date.now(), rows: resultados });
-      return resultados;
+      return this._sinDevolucionSiPorAsignar(estado, resultados);
     } catch (e) {
       // Fallback if index is missing (failed-precondition)
       if (e?.code === "failed-precondition") {
@@ -1379,7 +1410,6 @@ const OrdenesService = {
 
         const filtrados = this._sinDevolucionSiPorAsignar(estado,
           allDocs.filter(o => o.estado_reparacion === estado));
-        this._fbsMemo.set(memoKey, { at: Date.now(), rows: filtrados });
         return filtrados;
       }
       

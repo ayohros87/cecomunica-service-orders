@@ -138,27 +138,27 @@
       Todas
     </button>
     <button type="button" class="estado-chip estado-chip--por-asignar"
-            data-action="filtrar-estado-chip" data-estado="POR ASIGNAR"
+            data-action="filtrar-estado-chip" data-estado="por_recibir"
             role="tab" aria-selected="false"
-            title="Reparaciones por recibir en mostrador (y programaciones, entradas y visitas que arrancan en Asignar)">
-      <span class="dot" aria-hidden="true"></span>Por recibir <span class="estado-chip__count" data-count="POR ASIGNAR">0</span>
+            title="Reparaciones que el cliente todavía no entrega en mostrador">
+      <span class="dot" aria-hidden="true"></span>Por recibir <span class="estado-chip__count" data-count="por_recibir">—</span>
     </button>
     <button type="button" class="estado-chip estado-chip--recibido"
-            data-action="filtrar-estado-chip" data-estado="RECIBIDO EN MOSTRADOR"
+            data-action="filtrar-estado-chip" data-estado="por_asignar"
             role="tab" aria-selected="false"
-            title="Recibidas en mostrador, esperando técnico">
-      <span class="dot" aria-hidden="true"></span>Por asignar <span class="estado-chip__count" data-count="RECIBIDO EN MOSTRADOR">0</span>
+            title="Esperando técnico: recibidas en mostrador, programaciones, entradas y visitas">
+      <span class="dot" aria-hidden="true"></span>Por asignar <span class="estado-chip__count" data-count="por_asignar">—</span>
     </button>
     <button type="button" class="estado-chip estado-chip--asignado"
             data-action="filtrar-estado-chip" data-estado="ASIGNADO"
             role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Asignado <span class="estado-chip__count" data-count="ASIGNADO">0</span>
+      <span class="dot" aria-hidden="true"></span>Asignado <span class="estado-chip__count" data-count="ASIGNADO">—</span>
     </button>
     <button type="button" class="estado-chip estado-chip--completado"
             data-action="filtrar-estado-chip" data-estado="COMPLETADO (EN OFICINA)"
             role="tab" aria-selected="false"
             title="Completadas en oficina: listas para entregar o esperando el QC (chip QC)">
-      <span class="dot" aria-hidden="true"></span>Listos <span class="estado-chip__count" data-count="COMPLETADO (EN OFICINA)">0</span>
+      <span class="dot" aria-hidden="true"></span>Listos <span class="estado-chip__count" data-count="COMPLETADO (EN OFICINA)">—</span>
     </button>
     <!-- Cola de QC (auditoría Q5): vivía enterrada en el dropdown "Resumen"
          siendo la cola que frena entregas. Toggle propio (filtrar-qc). -->
@@ -166,7 +166,7 @@
             data-action="filtrar-qc"
             role="tab" aria-selected="false"
             title="Completadas que el control de calidad aún no deja entregar">
-      <span class="dot" aria-hidden="true"></span>QC <span class="estado-chip__count" data-count="qc">0</span>
+      <span class="dot" aria-hidden="true"></span>QC <span class="estado-chip__count" data-count="qc">—</span>
     </button>
     <!-- Cerradas: los 6 estados terminales viven en UN chip con menú. Son de
          consulta, no colas de trabajo; sueltos eran 12 chips en la barra
@@ -176,32 +176,35 @@
               data-action="abrir-chip-cerradas" data-estado=""
               role="tab" aria-selected="false" aria-haspopup="menu" aria-expanded="false"
               title="Órdenes ya cerradas: entregadas, visitas, devoluciones, entradas, sin retirar y anuladas">
-        <span class="dot" aria-hidden="true"></span><span class="estado-chip__label">Cerradas</span> <span class="estado-chip__count" data-count="cerradas">0</span><i data-lucide="chevron-down" class="estado-chip__caret" aria-hidden="true"></i>
+        <span class="dot" aria-hidden="true"></span><span class="estado-chip__label">Cerradas</span> <span class="estado-chip__count" data-count="cerradas">—</span><i data-lucide="chevron-down" class="estado-chip__caret" aria-hidden="true"></i>
       </button>
       <div class="estado-chip-menu" role="menu" hidden>
         <button type="button" class="estado-chip-menu__item estado-chip--entregado" role="menuitem"
                 data-action="filtrar-estado-chip" data-estado="ENTREGADO AL CLIENTE">
-          <span class="dot" aria-hidden="true"></span>Entregado <span class="estado-chip__count" data-count="ENTREGADO AL CLIENTE">0</span>
+          <span class="dot" aria-hidden="true"></span>Entregado <span class="estado-chip__count" data-count="ENTREGADO AL CLIENTE">—</span>
         </button>
         <button type="button" class="estado-chip-menu__item estado-chip--visita-cerrada" role="menuitem"
                 data-action="filtrar-estado-chip" data-estado="CERRADA (VISITA)">
-          <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="estado-chip__count" data-count="CERRADA (VISITA)">0</span>
+          <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="estado-chip__count" data-count="CERRADA (VISITA)">—</span>
         </button>
+        <!-- Separador (2026-09-30): arriba las dos que se usan (Entregado 12,
+             Visita cerrada 16 consultas en septiembre); abajo las de archivo (0). -->
+        <div class="estado-chip-menu__sep" role="separator"></div>
         <button type="button" class="estado-chip-menu__item estado-chip--cerrada" role="menuitem"
                 data-action="filtrar-estado-chip" data-estado="CERRADA (DEVOLUCION)">
-          <span class="dot" aria-hidden="true"></span>Devolución cerrada <span class="estado-chip__count" data-count="CERRADA (DEVOLUCION)">0</span>
+          <span class="dot" aria-hidden="true"></span>Devolución cerrada <span class="estado-chip__count" data-count="CERRADA (DEVOLUCION)">—</span>
         </button>
         <button type="button" class="estado-chip-menu__item estado-chip--cerrada" role="menuitem"
                 data-action="filtrar-estado-chip" data-estado="CERRADA (ENTRADA)">
-          <span class="dot" aria-hidden="true"></span>Entrada cerrada <span class="estado-chip__count" data-count="CERRADA (ENTRADA)">0</span>
+          <span class="dot" aria-hidden="true"></span>Entrada cerrada <span class="estado-chip__count" data-count="CERRADA (ENTRADA)">—</span>
         </button>
         <button type="button" class="estado-chip-menu__item estado-chip--sin-retirar" role="menuitem"
                 data-action="filtrar-estado-chip" data-estado="CERRADA (SIN RETIRAR)">
-          <span class="dot" aria-hidden="true"></span>Sin retirar <span class="estado-chip__count" data-count="CERRADA (SIN RETIRAR)">0</span>
+          <span class="dot" aria-hidden="true"></span>Sin retirar <span class="estado-chip__count" data-count="CERRADA (SIN RETIRAR)">—</span>
         </button>
         <button type="button" class="estado-chip-menu__item estado-chip--anulada" role="menuitem"
                 data-action="filtrar-estado-chip" data-estado="ANULADA">
-          <span class="dot" aria-hidden="true"></span>Anulada <span class="estado-chip__count" data-count="ANULADA">0</span>
+          <span class="dot" aria-hidden="true"></span>Anulada <span class="estado-chip__count" data-count="ANULADA">—</span>
         </button>
       </div>
     </div>
@@ -228,27 +231,27 @@
       Todas
     </button>
     <button type="button" class="estado-chip estado-chip--por-asignar"
-            data-action="filtrar-estado-chip" data-estado="POR ASIGNAR"
+            data-action="filtrar-estado-chip" data-estado="por_recibir"
             role="tab" aria-selected="false"
-            title="Reparaciones por recibir en mostrador (y programaciones, entradas y visitas que arrancan en Asignar)">
-      <span class="dot" aria-hidden="true"></span>Por recibir <span class="estado-chip__count" data-count="POR ASIGNAR">0</span>
+            title="Reparaciones que el cliente todavía no entrega en mostrador">
+      <span class="dot" aria-hidden="true"></span>Por recibir <span class="estado-chip__count" data-count="por_recibir">—</span>
     </button>
     <button type="button" class="estado-chip estado-chip--recibido"
-            data-action="filtrar-estado-chip" data-estado="RECIBIDO EN MOSTRADOR"
+            data-action="filtrar-estado-chip" data-estado="por_asignar"
             role="tab" aria-selected="false"
-            title="Recibidas en mostrador, esperando técnico">
-      <span class="dot" aria-hidden="true"></span>Por asignar <span class="estado-chip__count" data-count="RECIBIDO EN MOSTRADOR">0</span>
+            title="Esperando técnico: recibidas en mostrador, programaciones, entradas y visitas">
+      <span class="dot" aria-hidden="true"></span>Por asignar <span class="estado-chip__count" data-count="por_asignar">—</span>
     </button>
     <button type="button" class="estado-chip estado-chip--asignado"
             data-action="filtrar-estado-chip" data-estado="ASIGNADO"
             role="tab" aria-selected="false">
-      <span class="dot" aria-hidden="true"></span>Asignado <span class="estado-chip__count" data-count="ASIGNADO">0</span>
+      <span class="dot" aria-hidden="true"></span>Asignado <span class="estado-chip__count" data-count="ASIGNADO">—</span>
     </button>
     <button type="button" class="estado-chip estado-chip--completado"
             data-action="filtrar-estado-chip" data-estado="COMPLETADO (EN OFICINA)"
             role="tab" aria-selected="false"
             title="Completadas en oficina: listas para entregar o esperando el QC (chip QC)">
-      <span class="dot" aria-hidden="true"></span>Listos <span class="estado-chip__count" data-count="COMPLETADO (EN OFICINA)">0</span>
+      <span class="dot" aria-hidden="true"></span>Listos <span class="estado-chip__count" data-count="COMPLETADO (EN OFICINA)">—</span>
     </button>
     <!-- Cola de QC (auditoría Q5): vivía enterrada en el dropdown "Resumen"
          siendo la cola que frena entregas. Toggle propio (filtrar-qc). -->
@@ -256,7 +259,7 @@
             data-action="filtrar-qc"
             role="tab" aria-selected="false"
             title="Completadas que el control de calidad aún no deja entregar">
-      <span class="dot" aria-hidden="true"></span>QC <span class="estado-chip__count" data-count="qc">0</span>
+      <span class="dot" aria-hidden="true"></span>QC <span class="estado-chip__count" data-count="qc">—</span>
     </button>
     <!-- Cerradas: los 6 estados terminales viven en UN chip con menú. Son de
          consulta, no colas de trabajo; sueltos eran 12 chips en la barra
@@ -266,32 +269,35 @@
               data-action="abrir-chip-cerradas" data-estado=""
               role="tab" aria-selected="false" aria-haspopup="menu" aria-expanded="false"
               title="Órdenes ya cerradas: entregadas, visitas, devoluciones, entradas, sin retirar y anuladas">
-        <span class="dot" aria-hidden="true"></span><span class="estado-chip__label">Cerradas</span> <span class="estado-chip__count" data-count="cerradas">0</span><i data-lucide="chevron-down" class="estado-chip__caret" aria-hidden="true"></i>
+        <span class="dot" aria-hidden="true"></span><span class="estado-chip__label">Cerradas</span> <span class="estado-chip__count" data-count="cerradas">—</span><i data-lucide="chevron-down" class="estado-chip__caret" aria-hidden="true"></i>
       </button>
       <div class="estado-chip-menu" role="menu" hidden>
         <button type="button" class="estado-chip-menu__item estado-chip--entregado" role="menuitem"
                 data-action="filtrar-estado-chip" data-estado="ENTREGADO AL CLIENTE">
-          <span class="dot" aria-hidden="true"></span>Entregado <span class="estado-chip__count" data-count="ENTREGADO AL CLIENTE">0</span>
+          <span class="dot" aria-hidden="true"></span>Entregado <span class="estado-chip__count" data-count="ENTREGADO AL CLIENTE">—</span>
         </button>
         <button type="button" class="estado-chip-menu__item estado-chip--visita-cerrada" role="menuitem"
                 data-action="filtrar-estado-chip" data-estado="CERRADA (VISITA)">
-          <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="estado-chip__count" data-count="CERRADA (VISITA)">0</span>
+          <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="estado-chip__count" data-count="CERRADA (VISITA)">—</span>
         </button>
+        <!-- Separador (2026-09-30): arriba las dos que se usan (Entregado 12,
+             Visita cerrada 16 consultas en septiembre); abajo las de archivo (0). -->
+        <div class="estado-chip-menu__sep" role="separator"></div>
         <button type="button" class="estado-chip-menu__item estado-chip--cerrada" role="menuitem"
                 data-action="filtrar-estado-chip" data-estado="CERRADA (DEVOLUCION)">
-          <span class="dot" aria-hidden="true"></span>Devolución cerrada <span class="estado-chip__count" data-count="CERRADA (DEVOLUCION)">0</span>
+          <span class="dot" aria-hidden="true"></span>Devolución cerrada <span class="estado-chip__count" data-count="CERRADA (DEVOLUCION)">—</span>
         </button>
         <button type="button" class="estado-chip-menu__item estado-chip--cerrada" role="menuitem"
                 data-action="filtrar-estado-chip" data-estado="CERRADA (ENTRADA)">
-          <span class="dot" aria-hidden="true"></span>Entrada cerrada <span class="estado-chip__count" data-count="CERRADA (ENTRADA)">0</span>
+          <span class="dot" aria-hidden="true"></span>Entrada cerrada <span class="estado-chip__count" data-count="CERRADA (ENTRADA)">—</span>
         </button>
         <button type="button" class="estado-chip-menu__item estado-chip--sin-retirar" role="menuitem"
                 data-action="filtrar-estado-chip" data-estado="CERRADA (SIN RETIRAR)">
-          <span class="dot" aria-hidden="true"></span>Sin retirar <span class="estado-chip__count" data-count="CERRADA (SIN RETIRAR)">0</span>
+          <span class="dot" aria-hidden="true"></span>Sin retirar <span class="estado-chip__count" data-count="CERRADA (SIN RETIRAR)">—</span>
         </button>
         <button type="button" class="estado-chip-menu__item estado-chip--anulada" role="menuitem"
                 data-action="filtrar-estado-chip" data-estado="ANULADA">
-          <span class="dot" aria-hidden="true"></span>Anulada <span class="estado-chip__count" data-count="ANULADA">0</span>
+          <span class="dot" aria-hidden="true"></span>Anulada <span class="estado-chip__count" data-count="ANULADA">—</span>
         </button>
       </div>
     </div>
@@ -325,6 +331,8 @@
       </select>
       <select id="filtroEstado" class="filter-select" data-action="filtrar-estado" hidden aria-hidden="true" tabindex="-1">
         <option value="">Todos</option>
+        <option value="por_recibir">Por recibir</option>
+        <option value="por_asignar">Por asignar</option>
         <option value="POR ASIGNAR">POR ASIGNAR</option>
         <option value="RECIBIDO EN MOSTRADOR">RECIBIDO EN MOSTRADOR</option>
         <option value="ASIGNADO">ASIGNADO</option>
