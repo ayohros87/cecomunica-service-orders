@@ -186,17 +186,21 @@ window.EquiposPool = {
   // y coincide exacto: el resumen por estado, el count() de sin verificar
   // (4,396 = 4,396). Devuelve null si el resumen no existe.
   async _cargarConteos() {
+    // Sin verificar, del pool ENTERO. Firebase 12 (npm) no traía Query.count()
+    // en compat y el .count().get() reventaba ("count is not a function",
+    // 2026-09-29); firebase-init lo restauró sobre getCountFromServer
+    // (b5b3726), así que va primero por compat. FbAgg queda de respaldo; si
+    // nada está disponible o falla, el contador queda en null.
+    const contarSinVerif = () => {
+      const q = firebase.firestore().collection('equipos_pool').where('verificado', '==', false);
+      if (typeof q.count === 'function') return q.count().get().then(s => s.data().count);
+      if (window.FbAgg && typeof FbAgg.count === 'function') return FbAgg.count('equipos_pool', [['verificado', '==', false]]);
+      return Promise.resolve(null);
+    };
     const [resumen, sinVerif] = await Promise.all([
       EquiposPoolService.resumenPorModelo(),
-      // Firebase 12 (npm): la API compat no trae Query.count(). El
-      // .count().get() de antes reventaba con "count is not a function" y la
-      // lista entera se quedaba sin pintar ("Error al cargar equipos";
-      // medido en el emulador 2026-09-29). Va por getCountFromServer (FbAgg,
-      // en el entry); si no está o falla, el contador queda en null.
-      (window.FbAgg && typeof FbAgg.count === 'function')
-        ? FbAgg.count('equipos_pool', [['verificado', '==', false]])
-            .catch(e => { console.warn('[Equipos] sin verificar:', e?.code || e); return null; })
-        : Promise.resolve(null),
+      Promise.resolve().then(contarSinVerif)
+        .catch(e => { console.warn('[Equipos] sin verificar:', e?.code || e); return null; }),
     ]);
     if (!resumen.length) return null;
     const porEstado = {};
@@ -635,7 +639,7 @@ window.EquiposPool = {
     const esc = FMT.esc;
     // Pintado por TANDAS (2026-09-30): la pestaña Bodega son 2,861 filas y
     // pintarlas de una vez costaba ~2.6 s. Se pintan PAGINA y el resto se pide
-    // con "Ver más"; la tandas se reinicia al cambiar pestaña, filtro o
+    // con "Ver más"; la tanda se reinicia al cambiar pestaña, filtro o
     // búsqueda. Filtros, búsqueda, conteos y Excel siguen sobre la lista
     // COMPLETA; la fila del final y el resumen dicen cuántas faltan por pintar.
     const firma = JSON.stringify([this._tab, this._filtrosActivos()]);
