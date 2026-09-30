@@ -79,15 +79,34 @@
     if (wrap) wrap.innerHTML = '';
   }
 
+  // Conteo server-side (1 lectura facturada por agregado) en vez de bajar la
+  // colección entera (2026-09-30): los cuatro KPIs bajaban ~9,300 docs por
+  // carga, y se repetían con "Actualizar" y con el Auto de 5 min.
+  // Verificado contra producción ese día: mismos números que el cálculo
+  // sobre los documentos (órdenes 65/82/1239, contratos 49/203/109, POC
+  // 3203/4590, cotizaciones 10/11/32).
+  const contar = async (q) => (await q.count().get()).data().count;
+  // total(q) − marcadas(q): las órdenes viejas no traen `eliminado` (ni todas
+  // las fichas de POC `deleted`), así que no se puede filtrar "!= true" en el
+  // servidor sin perderlas.
+  const menos = (campo) => async (q) =>
+    (await Promise.all([contar(q), contar(q.where(campo, '==', true))])).reduce((a, b) => a - b);
+  const vivas = menos('eliminado');
+  const sinCerradas = menos('deleted');
+
   async function loadOrdenesKPI() {
     try {
-      const all = await OrdenesService.listAll();
-      const live = all.filter(o => o.eliminado !== true);
+      const O = firebase.firestore().collection('ordenes_de_servicio');
+      const abiertosQ = O.where('estado_reparacion', 'in', [...AdminMetrics.ESTADOS_ABIERTOS]);
       // Sin DEVOLUCION (2026-09-02): vive en "POR ASIGNAR" pero es un circuito
       // aparte (recuperación de equipos), no una orden de taller abierta.
-      const abiertas = AdminMetrics.contarOrdenesAbiertas(live);
-      const completadas = AdminMetrics.countWhere(live, AdminMetrics.esCompletadaSinEntregar);
-      const entregadas = AdminMetrics.countWhere(live, AdminMetrics.esEntregada);
+      const [abiertasTodas, abiertasDev, completadas, entregadas] = await Promise.all([
+        vivas(abiertosQ),
+        vivas(abiertosQ.where('tipo_de_servicio', '==', 'DEVOLUCION')),
+        vivas(O.where('estado_reparacion', '==', AdminMetrics.ESTADO_COMPLETADO)),
+        vivas(O.where('estado_reparacion', '==', AdminMetrics.ESTADO_ENTREGADO)),
+      ]);
+      const abiertas = Math.max(0, abiertasTodas - abiertasDev);
       state.metrics.ordenes_abiertas = abiertas;
       setStat('kpiOrdenes', abiertas.toLocaleString('es-PA'),
         `<span class="tag">${completadas}</span> en oficina sin entregar · <span class="tag">${entregadas}</span> entregadas`);
@@ -99,11 +118,9 @@
 
   async function loadContratosKPI() {
     try {
-      const res = await ContratosService.listContratos({ limit: 1000 });
-      const items = res?.docs || [];
-      const pendientes = AdminMetrics.countWhere(items, c => c.estado === 'pendiente_aprobacion');
-      const aprobados = AdminMetrics.countWhere(items, c => c.estado === 'aprobado');
-      const activos = AdminMetrics.countWhere(items, c => c.estado === 'activo');
+      const C = firebase.firestore().collection('contratos');
+      const [pendientes, aprobados, activos] = await Promise.all(
+        ['pendiente_aprobacion', 'aprobado', 'activo'].map(e => contar(C.where('estado', '==', e))));
       state.metrics.contratos_pendientes = pendientes;
       setStat('kpiContratos', pendientes.toLocaleString('es-PA'),
         `<span class="tag">${aprobados}</span> aprobados · <span class="tag">${activos}</span> activos`);
@@ -115,8 +132,11 @@
 
   async function loadCotizacionesKPI() {
     try {
-      const result = await CotizacionesService.listCotizaciones({ limit: 500 });
-      const items = (result?.docs || []).filter(c => c.deleted !== true);
+      // Solo enviadas/aprobadas: son las únicas que cuenta
+      // contarCotizacionesPorVencer (antes se bajaban las últimas 500).
+      const snap = await firebase.firestore().collection('cotizaciones')
+        .where('estado', 'in', ['enviada', 'aprobada']).get();
+      const items = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.deleted !== true);
       // Misma cuenta que "Probar" en alertas (auditoría UX 2026-09-28).
       const { porVencer: vencenPronto, vencidas, enviadas } =
         AdminMetrics.contarCotizacionesPorVencer(items, new Date());
@@ -133,24 +153,24 @@
 
   async function loadPocKPI() {
     try {
-      const all = await PocService.getPocDevices();
-      const items = Array.isArray(all) ? all : [];
-      const activos = AdminMetrics.countWhere(items, d => d.activo === true && d.deleted !== true);
-      const conSim = AdminMetrics.countWhere(items, d => d.activo === true && d.deleted !== true && (d.sim_number || d.sim_phone));
-      const total = AdminMetrics.countWhere(items, d => d.deleted !== true);
+      // Conteos en vez de las 6,498 fichas (~6.5 MB). "Con SIM" se quitó: es
+      // un O entre sim_number y sim_phone y contarlo exige un índice
+      // compuesto nuevo; el detalle vive en POC.
+      const P = firebase.firestore().collection('poc_devices');
+      const [activos, total] = await Promise.all([sinCerradas(P.where('activo', '==', true)), sinCerradas(P)]);
       state.metrics.poc_activos = activos;
       setStat('kpiPoc', activos.toLocaleString('es-PA'),
-        `<span class="tag">${conSim}</span> con SIM · <span class="tag">${total}</span> totales`);
+        `<span class="tag">${total}</span> totales`);
     } catch (err) {
       console.error('[admin] poc KPI:', err);
       setStatError('kpiPoc');
     }
   }
 
-  async function checkBanners() {
+  async function checkBanners(usuariosEnVuelo = null) {
     clearBanners();
     try {
-      const usuarios = await firebase.firestore().collection('usuarios').get();
+      const usuarios = await (usuariosEnVuelo || firebase.firestore().collection('usuarios').get());
       const sinRol = usuarios.docs.filter(d => !d.data().rol);
       const badge = $('usuariosSinRolBadge');
       if (badge) {
@@ -191,15 +211,18 @@
     state.loading = true;
     setLoadingAll();
     try {
-      // KPIs primero — pueblan state.metrics que el evaluador de alertas necesita.
+      // KPIs y la lectura de usuarios (banner "sin rol") en paralelo
+      // (2026-09-30); las alertas configurables se evalúan al final porque
+      // necesitan state.metrics.
+      const usuariosEnVuelo = firebase.firestore().collection('usuarios').get();
+      usuariosEnVuelo.catch(() => {});
       await Promise.all([
         loadOrdenesKPI(),
         loadContratosKPI(),
         loadCotizacionesKPI(),
         loadPocKPI(),
       ]);
-      // Banners después (usuarios sin rol + alertas configurables sobre métricas).
-      await checkBanners();
+      await checkBanners(usuariosEnVuelo);
       state.lastLoadAt = new Date();
       const ts = $('lastUpdate');
       if (ts) ts.textContent = `Actualizado ${fmtTs(state.lastLoadAt)}`;

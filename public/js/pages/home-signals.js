@@ -469,8 +469,22 @@ window.HomeSignals = (() => {
     try {
       const ceros = {};
       Object.entries(counts || {}).forEach(([id, n]) => { ceros[id] = (n === 0 || n === '0'); });
-      localStorage.setItem(LAYOUT_KEY(uid, rol), JSON.stringify({ t: Date.now(), ceros }));
+      // Y los números (2026-09-30): en pestaña nueva se pintan de inmediato
+      // como "últimos conocidos" mientras llegan los reales (ver render).
+      localStorage.setItem(LAYOUT_KEY(uid, rol), JSON.stringify({ t: Date.now(), ceros, counts: counts || {} }));
     } catch { /* sin localStorage: la próxima vez se verá el esqueleto */ }
+  }
+  // Últimos números conocidos, solo si tienen menos de 12 h: más viejos que
+  // eso confunden más de lo que ayudan (el turno anterior).
+  const ULTIMOS_MAX_MS = 12 * 60 * 60 * 1000;
+  function _readUltimos(uid, rol) {
+    try {
+      const raw = localStorage.getItem(LAYOUT_KEY(uid, rol));
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      if (!d.counts || Date.now() - (d.t || 0) > ULTIMOS_MAX_MS) return null;
+      return { t: d.t, counts: d.counts };
+    } catch { return null; }
   }
 
   /* ---- Delta diario ("▲ N vs ayer") ----
@@ -892,9 +906,22 @@ window.HomeSignals = (() => {
     // sabe nada (primera visita en este navegador), la fila muestra un
     // esqueleto compacto en vez de ocho tarjetas "cargando".
     const ceros = _readLayout(uid, rolEfectivo);
+    const ultimos = _readUltimos(uid, rolEfectivo);
     const grid = mount.querySelector('.kpis');
     let skel = null;
-    if (ceros) {
+    if (ultimos) {
+      // Pestaña nueva / primera del día (2026-09-30): los últimos números
+      // conocidos salen YA, con su antigüedad en la franja ("Actualizado hace
+      // N min"), y los reales los reemplazan al llegar. Las señales frescas
+      // (aprobaciones) no se pintan viejas: esperan su conteo.
+      ids.forEach(id => {
+        if (SIGNALS[id].fresh) return;
+        const v = ultimos.counts[id];
+        if (typeof v === 'number' || typeof v === 'string') setVal(id, v, { sync: false });
+      });
+      _sincronizarN(mount);
+      _pintaActualizado(mount, ultimos.t);
+    } else if (ceros) {
       ids.forEach(id => {
         if (!ceros[id]) return;
         const tile = mount.querySelector(`[data-signal="${id}"]`);

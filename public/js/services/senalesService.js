@@ -51,20 +51,21 @@ const SenalesService = {
     // Cualquier fallo (módulo bloqueado, sin sesión, error) cae al scan.
     if (spec && window.FbAgg && window.FbAgg.disponible) {
       try {
-        let n = await window.FbAgg.count(spec.col, spec.wheres);
-        if (spec.restarEliminadas) {
-          n -= await window.FbAgg.count(spec.col, [...spec.wheres, ['eliminado', '==', true]]);
-        }
+        // Todos los agregados de UN conteo salen a la vez (2026-09-30): antes
+        // iban en serie (total → eliminadas → cada tipo), 2-4 viajes por señal.
         // Exclusión de tipos por inclusión-exclusión: se resta el tipo entero
         // y, si también se restaron eliminadas, se devuelve el traslape
         // (tipo + eliminada) que se restó dos veces.
+        const partes = [[+1, spec.wheres]];
+        if (spec.restarEliminadas) partes.push([-1, [...spec.wheres, ['eliminado', '==', true]]]);
         for (const tipo of (spec.excluirTipos || [])) {
-          n -= await window.FbAgg.count(spec.col, [...spec.wheres, ['tipo_de_servicio', '==', tipo]]);
+          partes.push([-1, [...spec.wheres, ['tipo_de_servicio', '==', tipo]]]);
           if (spec.restarEliminadas) {
-            n += await window.FbAgg.count(spec.col,
-              [...spec.wheres, ['tipo_de_servicio', '==', tipo], ['eliminado', '==', true]]);
+            partes.push([+1, [...spec.wheres, ['tipo_de_servicio', '==', tipo], ['eliminado', '==', true]]]);
           }
         }
+        const valores = await Promise.all(partes.map(([, w]) => window.FbAgg.count(spec.col, w)));
+        const n = valores.reduce((acc, v, i) => acc + partes[i][0] * v, 0);
         return Math.max(0, n);
       } catch (e) {
         console.warn('[senales] agregado falló, cayendo al scan:', e?.code || e);
@@ -317,8 +318,10 @@ const SenalesService = {
     const wheres = [['activo', '==', true], ['cantidad', '==', 0]];
     if (window.FbAgg && window.FbAgg.disponible) {
       try {
-        const n = await window.FbAgg.count('inventario_piezas', wheres);
-        const libres = await window.FbAgg.count('inventario_piezas', [...wheres, ['sin_control_inventario', '==', true]]);
+        const [n, libres] = await Promise.all([
+          window.FbAgg.count('inventario_piezas', wheres),
+          window.FbAgg.count('inventario_piezas', [...wheres, ['sin_control_inventario', '==', true]]),
+        ]);
         return Math.max(0, n - libres);
       } catch (e) {
         console.warn('[senales] agregado de piezas falló, cayendo al scan:', e?.code || e);

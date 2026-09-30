@@ -29,8 +29,19 @@
 
   // ─────────── Checks ───────────
 
+  // Una sola lectura de las órdenes por corrida (2026-09-30): dos checks
+  // bajaban la colección completa (~2,100 docs) cada uno.
+  let _ordenesCorrida = null;
+  function ordenesDeLaCorrida() {
+    if (!_ordenesCorrida) {
+      _ordenesCorrida = OrdenesService.listAll();
+      _ordenesCorrida.catch(() => { _ordenesCorrida = null; });
+    }
+    return _ordenesCorrida;
+  }
+
   async function checkOrdenesSinContrato() {
-    const all = await OrdenesService.listAll();
+    const all = await ordenesDeLaCorrida();
     const withCt = all.filter(o => o.eliminado !== true && o.contrato_id);
     if (!withCt.length) return { severity: 'error', count: 0, items: [] };
 
@@ -38,12 +49,13 @@
     // Check existence in batches of 30 by contratoId.
     const uniqueCtIds = Array.from(new Set(withCt.map(o => o.contrato_id)));
     const existing = new Set();
-    for (let i = 0; i < uniqueCtIds.length; i += 30) {
-      const slice = uniqueCtIds.slice(i, i + 30);
-      // contratos can be queried by contrato_id (the user-facing CT-YYYY-NNN)
-      const snap = await db.collection('contratos').where('contrato_id', 'in', slice).get();
-      snap.forEach(d => existing.add(d.data().contrato_id));
-    }
+    // Lotes de 30 en paralelo (2026-09-30), antes uno tras otro.
+    const lotes = [];
+    for (let i = 0; i < uniqueCtIds.length; i += 30) lotes.push(uniqueCtIds.slice(i, i + 30));
+    // contratos can be queried by contrato_id (the user-facing CT-YYYY-NNN)
+    const snaps = await Promise.all(lotes.map(slice =>
+      db.collection('contratos').where('contrato_id', 'in', slice).get()));
+    snaps.forEach(snap => snap.forEach(d => existing.add(d.data().contrato_id)));
     const orphans = withCt.filter(o => !existing.has(o.contrato_id));
     return {
       severity: 'error',
@@ -105,7 +117,7 @@
   }
 
   async function checkOrdenesEntregadasSinFirma() {
-    const all = await OrdenesService.listAll();
+    const all = await ordenesDeLaCorrida();
     // 'ENTREGADA' no existe (auditoría UX 2026-09-28): el chequeo nunca
     // fallaba. El estado real sale de AdminMetrics.esEntregada.
     const bad = all.filter(o =>
@@ -256,9 +268,13 @@
     // Render all skeletons upfront so the page shows progress.
     checks.forEach(([id, title, desc]) => renderSkeleton(id, title, desc));
 
-    // Run sequentially to keep cost predictable.
+    // En paralelo (2026-09-30): antes en serie "para que el costo sea
+    // predecible"; el costo es el mismo (menor, con una sola lectura de
+    // órdenes por corrida) y la página termina en el tiempo del check más
+    // lento en vez de la suma. Cada uno se pinta al terminar.
+    _ordenesCorrida = null;
     let totalIssues = 0;
-    for (const [id, title, desc, fn] of checks) {
+    await Promise.all(checks.map(async ([id, title, desc, fn]) => {
       try {
         const res = await fn();
         renderCheck(id, title, desc, res);
@@ -267,7 +283,7 @@
         console.error(`[admin/integridad] ${id}:`, err);
         renderError(id, title, desc, err);
       }
-    }
+    }));
     setText('totalIssues', totalIssues > 0
       ? `${totalIssues} ${totalIssues === 1 ? 'hallazgo' : 'hallazgos'} totales`
       : 'Sin hallazgos');
