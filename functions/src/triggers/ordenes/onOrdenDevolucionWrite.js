@@ -33,7 +33,7 @@ const pool = require("../../domain/equiposPool");
 const { crearOrdenEntrada, equipoDeEntrada, frasePiezas, RE_OBS_AUTO, obsDeTanda, corregirEquiposEntrada } = require("../../lib/ordenEntrada");
 const { recepcionEmails } = require("../../lib/mailRecipients");
 const { APP_BASE_URL } = require("../../lib/inventario");
-const { pendientesDevolucion, resumenDevolucion, derivarEstadoDevolucion } = require("../../lib/devolucion");
+const { pendientesDevolucion, resumenDevolucion, derivarEstadoDevolucion, cierraSolaDevolucion, ESTADO_CERRADA } = require("../../lib/devolucion");
 const cobros = require("../../lib/cobrosEquipos");
 const { emailAcuse } = require("../../lib/acuseDevolucion");
 const sust = require("../../domain/sustitucionSaliente");
@@ -844,6 +844,38 @@ module.exports = onDocumentWritten(
 
     // Copias del acuse solicitadas para el cliente (solicitado → encolado).
     await procesarEnviosAcuses(ordenId, after);
+
+    // Cierre automático del lado del servidor (2026-09-30): si ya no queda
+    // nada que resolver, firmar ni cobrar, la orden se cierra aunque la
+    // escritura no haya salido del modal de devolución. Se decide sobre el doc
+    // FRESCO dentro de una transacción; el eco de este update es el que corre
+    // el camino de `cerroAhora` (ENTRADA de respaldo, avisos) y el espejo ya
+    // cerrado, así que esta pasada termina aquí para no estampar en el
+    // contrato un "abierta" viejo encima del eco.
+    if (cierraSolaDevolucion(after)) {
+      const ref = db.collection("ordenes_de_servicio").doc(ordenId);
+      try {
+        const cerro = await db.runTransaction(async (tx) => {
+          const snap = await tx.get(ref);
+          const fresca = snap.exists ? snap.data() : null;
+          if (!fresca || fresca.eliminado === true || !cierraSolaDevolucion(fresca)) return false;
+          tx.update(ref, {
+            estado_reparacion: ESTADO_CERRADA,
+            fecha_completado: admin.firestore.FieldValue.serverTimestamp(),
+            completado_por_uid: null,
+            "devolucion.cierre_pendientes": 0,
+            os_logs: admin.firestore.FieldValue.arrayUnion({ action: "CERRAR_DEVOLUCION", by: "system" }),
+          });
+          return true;
+        });
+        if (cerro) {
+          logger.info("[onOrdenDevolucionWrite] Devolución cerrada sola: todo resuelto y firmado", { ordenId });
+          return null;
+        }
+      } catch (e) {
+        logger.warn("[onOrdenDevolucionWrite] Cierre automático falló (queda abierta)", { ordenId, error: e.message });
+      }
+    }
 
     // Espejo en el/los contrato(s). Corre SIEMPRE, no solo cuando hubo
     // resoluciones: la creación del tiquete es justo cuando el chip debe

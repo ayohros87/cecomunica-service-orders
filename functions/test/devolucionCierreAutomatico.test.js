@@ -177,3 +177,52 @@ test("la bandeja nombra el acuse pendiente, no el cierre", () => {
   assert.match(SRC_RENDER, /Firmar acuse<\/button>/);
   assert.match(SRC_RENDER, /con eso la orden se cierra sola/);
 });
+
+// ── 6. El servidor cierra con la MISMA regla que el navegador (2026-09-30) ─
+// El navegador solo evalúa _cierraSola en la escritura que resuelve la última
+// unidad o guarda el último acuse: las órdenes que quedaron completas antes
+// del 2026-09-09 (o por otro camino) seguían abiertas. El trigger aplica
+// cierraSolaDevolucion en cualquier escritura; si las dos divergen, el
+// servidor cerraría lo que la pantalla no (o al revés).
+const { cierraSolaDevolucion } = require("../src/lib/devolucion");
+const SRC_TRIGGER = fs.readFileSync(
+  path.join(__dirname, "..", "src", "triggers", "ordenes", "onOrdenDevolucionWrite.js"), "utf8");
+
+test("cierraSolaDevolucion (servidor) == _cierraSola (navegador) sobre el mismo corpus", () => {
+  const r = (s, a) => recibido(s, a);
+  const corpus = [
+    { devolucion: { esperados: [r("A1", "ac"), { id: "A2", serial: "A2", resolucion: null }] } },
+    { devolucion: { esperados: [r("A1", "ac"), r("A2", null)] } },
+    { devolucion: { esperados: [r("A1", "ac"), r("A2", "ac")] } },
+    { devolucion: { modo: "confirmacion", esperados: [
+      { id: "A1", serial: "A1", resolucion: "nunca_salio" },
+      { id: "A2", serial: "A2", resolucion: "no_devuelve" }] } },
+    { estado_reparacion: "CERRADA (DEVOLUCION)", devolucion: { esperados: [r("A1", "ac")] } },
+    { devolucion: { esperados: [], esperados_por_modelo: [] } },
+    { devolucion: {} },
+    { devolucion: { esperados: [r("A1", "ac")], esperados_por_modelo: [{ modelo: "X", cantidad: 2, recibidos: 1 }] } },
+    { devolucion: { esperados: [r("A1", "ac"), r("A2", "ac")], esperados_por_modelo: [{ modelo: "X", cantidad: 2, recibidos: 2 }] } },
+    { devolucion: { esperados: [], esperados_por_modelo: [{ modelo: "X", cantidad: 1, recibidos: 1 }] } },
+    { devolucion: { modo: "sin_contrato", total_esperado: 0, esperados: [r("A1", "ac")] } },
+    { devolucion: { modo: "sin_contrato", total_esperado: 2, esperados: [r("A1", "ac")] } },
+    { devolucion: { modo: "sin_contrato", total_esperado: 2, esperados: [r("A1", "ac"), r("A2", "ac")] } },
+    { devolucion: { modo: "sin_contrato", total_esperado: 2, esperados: [r("A1", "ac"), r("A2", null)] } },
+    { devolucion: { modo: "sin_contrato", total_esperado: 1, esperados: [r("A1", "ac"), r("A2", "ac")] } },
+  ];
+  corpus.forEach((o, i) => {
+    assert.equal(cierraSolaDevolucion(o), cierra(o), `caso ${i} diverge: ${JSON.stringify(o)}`);
+  });
+  // Y el corpus ejerce los dos resultados.
+  assert.ok(corpus.some(o => cierraSolaDevolucion(o)) && corpus.some(o => !cierraSolaDevolucion(o)));
+});
+
+test("el trigger cierra dentro de una transacción, re-evaluando el doc fresco", () => {
+  const i = SRC_TRIGGER.indexOf("if (cierraSolaDevolucion(after))");
+  assert.notEqual(i, -1, "el trigger evalúa el cierre automático");
+  const bloque = SRC_TRIGGER.slice(i, SRC_TRIGGER.indexOf("// Espejo", i));
+  assert.match(bloque, /runTransaction/);
+  assert.match(bloque, /!cierraSolaDevolucion\(fresca\)/, "decide sobre el doc fresco, no el snapshot del evento");
+  assert.match(bloque, /action: "CERRAR_DEVOLUCION", by: "system"/, "mismo rastro que el cierre de la pantalla");
+  assert.match(bloque, /if \(cerro\) \{[\s\S]*return null;/,
+    "tras cerrar no estampa el espejo viejo: lo hace el eco con la orden ya cerrada");
+});

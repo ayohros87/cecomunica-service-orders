@@ -279,8 +279,43 @@ function unidadesRecuperablesDeBaja({ fichas = [], contratoDocId = null, items =
   });
 }
 
+/**
+ * ¿La orden de DEVOLUCIÓN ya puede cerrarse sola? Espejo de `_cierraSola` en
+ * public/js/pages/ordenes-devolucion.js (sin el permiso de operar: aquí
+ * escribe el backend). test/devolucionCierreAutomatico.test.js compara las
+ * dos sobre el mismo corpus y falla si divergen.
+ *
+ * El navegador solo lo evalúa en la escritura que resuelve la última unidad o
+ * guarda el último acuse, así que las órdenes que quedaron completas por otro
+ * camino (o antes del cierre automático, 2026-09-09) seguían abiertas
+ * (2026-09-30: El Machetazo, UDELAS, MIDES). El trigger lo aplica en
+ * cualquier escritura.
+ * @param {Object} orden — doc completo de la orden
+ * @returns {boolean}
+ */
+function cierraSolaDevolucion(orden) {
+  const o = orden || {};
+  if (String(o.estado_reparacion || "").toUpperCase() === ESTADO_CERRADA) return false;
+  const dev = o.devolucion || {};
+  const esperados = dev.esperados || [];
+  const porModelo = dev.esperados_por_modelo || [];
+  if (esperados.some(e => !e.resolucion)) return false;
+  // Recibido sin acuse: el cliente todavía tiene que firmar.
+  if (esperados.some(e => e.resolucion === "recibido" && !e.acuse_id)) return false;
+  // Faltantes (por modelo o de contrato de papel): se itemizan para cobrarlos
+  // en el cierre manual — eso lo decide una persona.
+  if (pendientesDevolucion(dev) > 0) return false;
+  if (dev.modo === "sin_contrato") {
+    const total = Number(dev.total_esperado || 0);
+    if (!total) return false;
+    return esperados.filter(e => e.resolucion === "recibido").length >= total;
+  }
+  // Tiquete vacío: no hay nada que dar por terminado.
+  return esperados.length > 0 || porModelo.some(m => Number(m.cantidad || 0) > 0);
+}
+
 module.exports = {
-  pendientesDevolucion, esperadosDevolucion, resumenDevolucion,
+  pendientesDevolucion, esperadosDevolucion, resumenDevolucion, cierraSolaDevolucion,
   derivarEstadoDevolucion, unidadesRecuperablesDeBaja,
   clasificarUnidadesAnulacion, TIPO_ANULACION,
   ESTADOS_COLGANDO, ESTADOS_EN_CONTRATO, ESTADO_CERRADA,
