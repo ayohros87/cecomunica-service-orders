@@ -2,6 +2,7 @@
 
 > **Meta:** que el app se sienta como un programa local: el dato aparece sin espera perceptible.
 > **Base medida (oficina, Chrome contra producción):** primer viaje a Firestore por página ~400 ms (abre el canal; ya sin autodetección de long polling), cada viaje en serie después 130-220 ms, leer de la caché local 50 ms, archivos de la página 100 ms con caché. El rol, la config de empresa, el doc del usuario y los técnicos ya salen de `Sesion.memo` (sessionStorage) desde la segunda página.
+> **Estado (2026-09-30): COMPLETO.** Las cinco olas en producción con CI en verde: A 13571fb, B d9d91de, C 5e01589, D e77ca35, E 2bc2790. Lo que se dejó a propósito está en §5.
 > **Ya hecho antes de este plan (6b3bb96, d32b7ae):** memo de sesión, órdenes con precargas en paralelo, Centro con ficha en paralelo y directorio desde caché, Existencias desde caché, sin autodetección de long polling.
 
 ## 1. Los siete patrones que se repiten
@@ -66,3 +67,19 @@ Verificación por ola: sintaxis, radiografía estricta, build, smoke de las 90 p
 ## 4. Lo que este plan no resuelve
 
 El primer viaje de cada página (~400 ms) sigue ahí mientras cada navegación recargue la página. Con las olas A-E, en visitas repetidas el dato aparece desde la caché local antes de que ese viaje termine, así que deja de percibirse. Quitarlo de verdad exige un cascarón sin recarga (SPA), que es otro proyecto.
+
+## 5. Cierre (2026-09-30)
+
+Todo lo del ranking quedó hecho salvo esto, que se dejó a propósito:
+
+| Qué | Por qué no |
+|---|---|
+| Lectura doble de gestiones en la ficha del Centro | 52 docs; el listener sostiene el repintado en vivo del expediente |
+| Pintado provisional de Almacén · Hoy | Su render usa Timestamps que no sobreviven a sessionStorage: antigüedad y orden saldrían mal por un instante |
+|  de POC | Cuenta sobre las filas del DOM; exige reescribirlo y se usa poco |
+|  con caché primero | Lee POC del servidor a propósito: la caché parcial dejaba grupos fuera |
+| "Con SIM" en el KPI de POC del admin | Es un O entre dos campos; contarlo pide un índice compuesto nuevo. Se quitó del subtítulo |
+| admin-operacion, admin-salud, admin-refs-huerfanas, admin-financiero | Solo las usa el dueño; quedan como candidatas si vuelven a salir picos de lecturas |
+| Pestaña Serial de inventario | Ya pintaba por tandas de 200 (otra sesión, mismo día) |
+
+Verificación de cada ola: sintaxis, radiografía estricta, build, 1,132 tests de functions, smoke de las 90 páginas contra la ola anterior y CI. Los KPIs del admin se compararon contra producción antes del cambio (mismos números).
