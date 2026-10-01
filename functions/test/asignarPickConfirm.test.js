@@ -122,7 +122,23 @@ test("V2 · la gestión completa se verifica y deja evento; el cambio de serial 
     "solo cuando la asignación queda completa y saca radios del estante");
   assert.match(g, /r = await asg\.exigirEnBodega\(datos\.seriales, \{ modeloDistinto: politicaModeloGestion\(g\) \}\);\s*if \(!r\) return;\s*\}\s*\}/,
     "con sustitutos se vuelve a validar contra el pool");
-  assert.match(g, /registrarEvento\(t\.gid, 'asignar',\s*`Lista verificada por escaneo/, "queda como evento de la gestión");
+  // D1/P7 (2026-10-01): el evento distingue lo escaneado de lo tecleado a mano.
+  assert.match(g, /if \(v && \(v\.n \|\| v\.manual\)\) \{\s*await GestionesService\.registrarEvento\(t\.gid, 'asignar',\s*\(v\.n \? `Lista verificada por escaneo/,
+    "queda como evento de la gestión");
+  assert.match(g, /tecleado\(s\) a mano \(verificados al teclear\)/, "y dice cuántos se teclearon");
+});
+
+test("V2b · solo se verifica lo que no se tecleó a mano (D1/P7, 2026-10-01)", () => {
+  const src = sinComentarios(leer("public", "js", "pages", "almacen-asignar.js"));
+  const vp = src.slice(src.indexOf("async function verificarPicklist("), src.indexOf("async function siguiente("));
+  assert.match(vp, /const porVerificar = todos\.filter\(s => s\.source && s\.source !== 'manual'\)/, "lo manual no entra a la hoja");
+  assert.match(vp, /if \(!porVerificar\.length\) return \{ n: 0, manual, reemplazos: \[\] \}/, "todo a mano = sin hoja");
+  const asg = sinComentarios(leer("public", "js", "ui", "asignador-seriales.js"));
+  assert.match(asg, /e\.target\.dataset\.origen = 'manual'/, "teclear marca la casilla");
+  assert.match(asg, /inpSlot\.dataset\.origen = 'picker'/, "el picker marca la casilla");
+  assert.match(asg, /inp\.dataset\.origen = 'pegado'/, "pegar columna marca la casilla");
+  assert.match(asg, /source: inp\.dataset\.origen \|\| 'manual'/, "collect() lo saca en source");
+  assert.match(src, /picklist_manual_n: Number\(verificacion\.manual \|\| 0\)/, "se guarda cuántos no pasaron por la hoja");
 });
 
 test("V3 · el sustituido se anota en el kardex por el servicio, y la ficha sabe leerlo", () => {

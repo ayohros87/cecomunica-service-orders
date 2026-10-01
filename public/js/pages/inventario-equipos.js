@@ -145,7 +145,11 @@ window.EquiposPool = {
   // búsqueda por modelo, cliente o nota sigue funcionando igual.
   _busquedaServidor: null,
   _claveBusqueda(q) {
-    const n = EquiposPoolService.normalizarSerial(q);
+    // Sin el servicio (o sin Serial) no hay búsqueda por servidor: se busca
+    // en memoria como siempre, nunca se rompe el filtro.
+    let n = '';
+    try { n = (typeof EquiposPoolService !== 'undefined' && EquiposPoolService.normalizarSerial(q)) || ''; }
+    catch (_) { n = ''; }
     return (n.length >= 3 && /\d/.test(n)) ? n : '';
   },
 

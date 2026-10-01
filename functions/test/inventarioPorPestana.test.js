@@ -134,7 +134,9 @@ function montar({ tab = "en_bodega", pool = POOL.map(p => ({ ...p })), resumen =
         }
         if (nombre === "equipos_pool") {
           if (fallarPool) throw new Error("red caída");
-          let docs = estado.pool.filter(p => filtros.every(([c, , v]) => p[c] === v));
+          // Igualdad y el rango de prefijo (>= q, < q+U+F8FF) de la búsqueda por serial (L1).
+          const cumple = (p, [c, op, v]) => op === ">=" ? String(p[c] ?? "") >= v : op === "<" ? String(p[c] ?? "") < v : p[c] === v;
+          let docs = estado.pool.filter(p => filtros.every(f => cumple(p, f)));
           if (limite) docs = docs.slice(0, limite);
           return { docs: docs.map(p => ({ id: p.id, data: () => ({ ...p }) })), size: docs.length, empty: !docs.length };
         }
@@ -165,6 +167,8 @@ function montar({ tab = "en_bodega", pool = POOL.map(p => ({ ...p })), resumen =
   };
   ctxObj.window.Toast = ctxObj.Toast;
   const ctx = vm.createContext(ctxObj);
+  vm.runInContext(leer("core/serial.js"), ctx);
+  ctxObj.Serial = ctxObj.window.Serial;
   vm.runInContext(leer("services/equiposPoolService.js"), ctx);
   ctxObj.EquiposPoolService = ctxObj.window.EquiposPoolService;
   vm.runInContext(leer("domain/stockAgg.js"), ctx);
@@ -257,6 +261,40 @@ test("P5 · la búsqueda encuentra una ficha que está en OTRA ubicación (N1)",
   const html = els.get("eqTabla").innerHTML;
   assert.ok(html.includes("SERIALLEJOS"), "el serial de otra ubicación TIENE que aparecer");
   assert.ok(!/Ningún equipo/.test(html));
+});
+
+// L1 (2026-10-01): si lo tecleado parece serial (3+ alfanuméricos con dígito)
+// se consulta por prefijo de serial_norm y NO se barre el pool. Lo que no
+// parece serial (P4/P5: "SERIALLEJOS", sin dígito) sigue el camino de siempre.
+test("P5b · un serial con dígito se busca por prefijo en el servidor, cruza ubicaciones y no barre el pool", async () => {
+  const pool = POOL.map(p => ({ ...p }));
+  pool.push({ id: "22610A3919", serial: "22610A3919", serial_norm: "22610A3919", modelo_id: "m2", modelo_label: "NX420", estado: "en_cliente", verificado: true, propiedad: "cliente" });
+  pool.push({ id: "22610A3920", serial: "22610A3920", serial_norm: "22610A3920", modelo_id: "m2", modelo_label: "NX420", estado: "en_taller", verificado: true, propiedad: "cecomunica" });
+  const { P, consultas, els } = montar({ tab: "en_bodega", pool });
+  await P.cargar();
+  await asentar(P);
+  consultas.length = 0;
+  els.get("eqBusqueda").value = "2261 0a39";       // con espacio y minúsculas: se normaliza
+  P.render();
+  await asentar(P);
+  assert.equal(barridosCompletos(consultas), 0, "no se baja el pool");
+  const rango = consultas.find(c => c.col === "equipos_pool" && c.filtros.some(f => f[1] === ">="));
+  assert.ok(rango, "consulta por rango de serial_norm");
+  assert.deepEqual(rango.filtros.map(f => f[0] + f[1] + f[2]), ["serial_norm>=22610A39", "serial_norm<22610A39"]);
+  const html = els.get("eqTabla").innerHTML;
+  assert.ok(html.includes("22610A3919") && html.includes("22610A3920"), "aparecen las de cliente y taller estando en Bodega");
+  assert.equal(P._completo, false);
+  // Los filtros secundarios siguen aplicando sobre el resultado.
+  els.get("eqFiltroPropiedad").value = "cliente";
+  assert.deepEqual(P._filtrados().map(e => e.serial), ["22610A3919"]);
+  // Un prefijo sin resultado cae al pool completo (modelo, cliente, nota).
+  els.get("eqFiltroPropiedad").value = "";
+  consultas.length = 0;
+  els.get("eqBusqueda").value = "ZZ999";
+  P.render();
+  await asentar(P);
+  assert.equal(barridosCompletos(consultas), 1, "sin resultado por serial se busca en todo");
+  assert.equal(P._completo, true);
 });
 
 test("P6 · Todos y Otros cargan el pool entero", async () => {

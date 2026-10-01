@@ -592,7 +592,7 @@ window.AlmacenHoy = (() => {
     // EquipoFicha decide su footer ("Abrir en Inventario") con window.userRole.
     window.userRole = rol;
     // Antes del gate del cuerpo: el técnico también ve la topbar.
-    AlmacenPage._topbarPorRol();
+    if (window.AlmacenPage) window.AlmacenPage._topbarPorRol();
     // Mismo criterio que las páginas del área: operan admin/inventario, lee
     // gerencia; y quien puede gestionar seriales (recepción/vendedor) puede
     // ver su cola aquí igual que podía en la bandeja vieja.

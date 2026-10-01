@@ -47,11 +47,18 @@ const MODELOS = [
   { id: "mFANTASMA", modelo: "FANTASMA", marca: "ACME", activo: true },
 ];
 
+// Conteos RECIENTES: desde R2 (2026-10-01) una diferencia solo cuenta en el
+// KPI si el conteo tiene menos de 30 días (mismo criterio que Hoy).
+const HOY = { toMillis: () => Date.now() };
 const CONTEOS = [
-  { id: "mPD606", cantidad: 2 },
-  { id: "mNX420", cantidad: 1 },
-  { id: "mFANTASMA", cantidad: 4 },
+  { id: "mPD606", cantidad: 2, ultima_actualizacion: HOY },
+  { id: "mNX420", cantidad: 1, ultima_actualizacion: HOY },
+  { id: "mFANTASMA", cantidad: 4, ultima_actualizacion: HOY },
 ];
+
+// "Barrer" el pool = leer equipos_pool SIN filtro. Las lecturas acotadas
+// (devueltos por inspeccionar, ~150 docs, R2) no son el barrido que se quitó.
+const barridos = (consultas) => consultas.filter(c => c.col === "equipos_pool" && c.filtros.length === 0).length;
 
 // Deriva el resumen igual que lo hace el trigger en el servidor.
 function resumenDeVerdad(pool, modeloKey) {
@@ -120,8 +127,11 @@ test("E1 · cargar la pantalla lee el resumen y NO el pool entero", async () => 
   await P.activar();
   const cols = consultas.map(c => c.col);
   assert.ok(cols.includes("agregados_pool"), "tiene que leer el resumen");
-  assert.equal(cols.filter(c => c === "equipos_pool").length, 0,
+  assert.equal(barridos(consultas), 0,
     "abrir Existencias NO puede barrer el pool — es justo lo que se vino a quitar");
+  const acotadas = consultas.filter(c => c.col === "equipos_pool");
+  assert.deepEqual(acotadas.map(c => c.filtros), [[["estado", "==", "devuelto_revision"]]],
+    "lo único que se lee del pool son los devueltos por inspeccionar (R2)");
 });
 
 test("E2 · los números pintados son los mismos que daría barrer el pool", async () => {
@@ -143,6 +153,27 @@ test("E2 · los números pintados son los mismos que daría barrer el pool", asy
   const html = els.get("exTabla").innerHTML;
   assert.ok(html.includes("PD606") && html.includes("NX420"), "los modelos se pintan");
   assert.ok(html.includes("(sin modelo)"), "el grupo sin modelo sigue apareciendo");
+});
+
+test("E2b · los KPIs usan el criterio de Hoy: devueltos en ENTRADA y conteos viejos no cuentan (R2)", async () => {
+  const pool = POOL.map(p => (p.id === "A4" ? { ...p, orden_actual_id: "OS-1" } : { ...p }));
+  const { P, els } = montar({ pool });
+  // Un conteo de hace 45 días: la diferencia existe pero es "sin recontar".
+  CONTEOS[2].ultima_actualizacion = { toMillis: () => Date.now() - 45 * 86400000 };
+  try {
+    await P.activar();
+    assert.equal(els.get("exKpiCuarentena").textContent, "0", "el devuelto con ENTRADA abierta lo inspecciona el taller");
+    assert.match(els.get("exKpiCuarentenaSub").textContent, /1 más en ENTRADA abierta/);
+    assert.equal(els.get("exKpiDif").textContent, "0", "contra un conteo de 45 días no es diferencia reciente");
+    assert.match(els.get("exKpiDifSub").textContent, /1 sin recontar/);
+    assert.match(els.get("exTabla").innerHTML, /viejo/, "la fila la muestra apagada y dicha");
+    // Una sola fila "(sin modelo)", y al final (C1).
+    const filas = els.get("exTabla").innerHTML.split("<tr class=\"ex-fila").slice(1);
+    assert.equal(filas.filter(f => f.includes("(sin modelo)")).length, 1);
+    assert.ok(filas[filas.length - 1].includes("(sin modelo)"), "va de última");
+  } finally {
+    CONTEOS[2].ultima_actualizacion = HOY;
+  }
 });
 
 test("E3 · expandir trae solo las unidades de ese modelo, y una sola vez", async () => {
@@ -198,7 +229,7 @@ test("E5 · una fila que solo existe por el conteo físico no dispara consulta",
 test("E6 · sin resumen la pantalla no se queda muda: cae al pool y avisa", async () => {
   const { P, consultas, els, ctxObj } = montar({ resumen: [] });
   await P.activar();
-  assert.equal(consultas.filter(c => c.col === "equipos_pool").length, 1,
+  assert.equal(barridos(consultas), 1,
     "con el resumen vacío SÍ se lee el pool — la pantalla no puede quedarse en blanco");
   assert.ok(ctxObj.Toast._avisos.some(a => a.tipo === "warn"),
     "y tiene que avisar: volver a barrer el pool en silencio sería peor que el error");
