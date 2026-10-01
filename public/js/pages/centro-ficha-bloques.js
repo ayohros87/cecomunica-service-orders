@@ -396,7 +396,7 @@ Object.assign(window.Centro, {
         ${dato('Firmado', this._firmadoTxt(c)
           || (!ContratoFirma.lleva(c) ? `<span style="color:var(--fg-3);">no lleva firma — ${ContratoFirma.porQue(c)}</span>` : ''))}
         ${dato('Entregado', this._entregaTxt(c))}
-        ${dato('Firma digital', c.firmado_pendiente_validacion
+        ${dato('Firma por enlace', c.firmado_pendiente_validacion
           ? '<span class="cg-venc por_vencer">recibida — validar firmante</span>'
           : (!c.firmado && c.firma_solicitud_estado === 'pendiente' ? 'enlace enviado — esperando firma' : ''))}
       </div>
@@ -601,7 +601,7 @@ Object.assign(window.Centro, {
         blank: true, hint: cuando, href: this.esc(c.firmado_url) });
     }
     if (c.firmado_tipo === 'digital') {
-      return this._acc({ id: 'firmado', grupo: 'Documentos', label: 'Ver el firmado (firma digital)',
+      return this._acc({ id: 'firmado', grupo: 'Documentos', label: 'Ver el firmado (por enlace)',
         blank: true, hint: cuando ? `${cuando} — no hay PDF: el documento trae la firma` : 'no hay PDF: el documento trae la firma',
         href: `../contratos/documento.html?id=${encodeURIComponent(c.id)}` });
     }
@@ -615,7 +615,8 @@ Object.assign(window.Centro, {
       return `<a href="${this.esc(c.firmado_url)}" target="_blank" rel="noopener">Ver el PDF firmado</a>${cuando}`;
     }
     if (c.firmado_tipo === 'digital') {
-      return `<a href="../contratos/documento.html?id=${encodeURIComponent(c.id)}" target="_blank" rel="noopener">Ver el documento firmado</a>${cuando} (firma digital)`;
+      // Una sola palabra para esa firma en todo el app: "por enlace" (C9).
+      return `<a href="../contratos/documento.html?id=${encodeURIComponent(c.id)}" target="_blank" rel="noopener">Ver el documento firmado</a>${cuando} (firmado por enlace)`;
     }
     return `sí ✓${cuando}`;
   },

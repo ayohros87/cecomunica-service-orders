@@ -67,7 +67,9 @@ window.ArchivoExpediente = {
     }
 
     if (data.firmado_url || data.firmado_tipo) {
-      const comoFirmo = data.firmado_tipo === 'digital' ? 'Firmado en tablet'
+      // 'digital' lo escribe solo el trigger del enlace /firmar/ (la tablet
+      // de recepción no firma contratos): auditoría de módulos 2026-09-30, R2.
+      const comoFirmo = data.firmado_tipo === 'digital' ? 'Firmado por enlace'
         : data.firmado_tipo === 'no_recibido' ? 'Firmado en papel (sin copia digital)'
           : 'Firmado';
       hitos.push(this.hito('hecho', comoFirmo, this.fecha(data.firmado_at || data.fecha_firma, { hora: true })));

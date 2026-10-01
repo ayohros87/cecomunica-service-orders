@@ -84,7 +84,7 @@ Object.assign(window.Centro, {
     }
     if (esAum && !esAct && g.estado === 'pendiente_firma') {
       const conEnlace = g.firma_solicitud_estado === 'pendiente';
-      A.push(this._acc({ id: 'firma', label: conEnlace ? 'Ver o reenviar el enlace de firma' : 'Enviar anexo para firma digital',
+      A.push(this._acc({ id: 'firma', label: conEnlace ? 'Ver o reenviar el enlace de firma' : 'Enviar anexo para firma por enlace',
         primaria: !conEnlace, hint: conEnlace ? 'el cliente ya lo tiene — se puede reenviar' : 'el cliente firma con el dedo, desde el celular',
         onclick: `Centro.enviarFirmaAnexo('${id}')`, ok: puedeG, motivo: 'tu rol no mueve gestiones' }));
       A.push(this._acc({ id: 'subir_firmado', label: 'Subir el anexo firmado', hint: 'PDF o foto del papel firmado',
