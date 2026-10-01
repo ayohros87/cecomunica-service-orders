@@ -393,6 +393,7 @@ Object.assign(window.Centro, {
         ${dato('Origen', (c.contrato_origen_refs || []).map(r => `<span class="cg-mono">${this.esc(r)}</span>`).join(', ')
           || (c.origen_legacy_ref ? `papel: ${this.esc(c.origen_legacy_ref)}` : ''))}
         ${dato('Renovado por', renovador ? `<span class="cg-mono">${this.esc(renovador.contrato_id || renovador.id)}</span>` : '')}
+        ${dato('Contrato aparte (no anexo)', c.motivo_contrato_nuevo ? `<i>${this.esc(c.motivo_contrato_nuevo)}</i>` : '')}
         ${dato('Firmado', this._firmadoTxt(c)
           || (!ContratoFirma.lleva(c) ? `<span style="color:var(--fg-3);">no lleva firma — ${ContratoFirma.porQue(c)}</span>` : ''))}
         ${dato('Entregado', this._entregaTxt(c))}

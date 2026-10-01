@@ -96,6 +96,12 @@ Object.assign(window.Centro, {
     const pie = [
       (est.tipo === 'nueva' || est.tipo === 'sin_contrato')
         ? item('Centro.wizAumento(null,{papel:true})', '¿Contrato en papel? Anexo de aumento', '', 'pie') : '',
+      // Contrato nuevo con cuenta vigente (decisión 6 de Alberto, 1-oct-2026):
+      // SÍ, como respaldo y no como camino principal — otra sede, otro
+      // servicio aparte. Al final del menú, y el wizard pide y guarda la razón
+      // por la que no es un anexo ni una renovación.
+      hayContrato && !tram
+        ? item('Centro.wizContrato({nuevoConVigente:true})', '¿Otro contrato aparte? Nuevo contrato', 'respaldo — pide la razón de no usar anexo o renovación', 'pie') : '',
       this._puedeMasiva() ? `<a class="pie" href="./index.html">Edición masiva de clientes</a>` : '',
     ].filter(Boolean).join('');
 

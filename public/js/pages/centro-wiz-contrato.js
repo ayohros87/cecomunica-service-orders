@@ -208,6 +208,8 @@ Object.assign(window.Centro, {
     if (!this.puedeCrearGestion()) { Toast.show('Tu rol no crea contratos desde aquí', 'warn'); return; }
     if (typeof opts === 'string') opts = { renovarDe: opts };
     opts = opts || {};
+    // crearContrato() lee aquí si este contrato nace con cuenta vigente (D6).
+    this._wcOpts = opts;
     // Con una renovación en curso no se abre otra: se lleva al trámite.
     if (opts.renovarCuenta || opts.renovarDe) {
       const tram = this._renovacionEnTramite();
@@ -394,6 +396,16 @@ Object.assign(window.Centro, {
         </label>
         <div id="wcTot" class="ds-card" style="padding:10px 14px; max-width:380px; margin-top:10px;"></div>
       </div>
+
+      ${opts.nuevoConVigente ? `
+      <div class="cg-paso" id="wcMotivoNuevoBloque">
+        <div class="cg-paso-t">¿Por qué un contrato nuevo y no un anexo o renovación? <span class="hint">obligatorio</span></div>
+        <p style="margin:0 0 6px; font-size:12.5px; color:var(--fg-3); max-width:72ch;">
+          Esta cuenta ya tiene contrato vigente: lo normal es <b>Agregar equipos</b> (anexo) o <b>Renovar cuenta</b>.
+          Un contrato aparte es un respaldo (otra sede, otro servicio). La razón queda guardada en el contrato y se ve en el expediente.</p>
+        <textarea class="form-input" id="wcMotivoNuevo" rows="2" style="resize:vertical;" minlength="10" required
+          placeholder="Ej.: sucursal de Colón con facturación aparte" aria-label="Por qué un contrato nuevo"></textarea>
+      </div>` : ''}
 
       <div class="cg-paso">
         <div class="cg-paso-t"><span class="n">4</span> Observaciones <span class="hint">opcional</span></div>

@@ -488,6 +488,15 @@ Object.assign(window.Centro, {
     const meses = durUnidad === 'meses' ? durN : 0;
     if (!tipo) { Toast.show('Elige el tipo de contrato', 'warn'); return; }
     if (!(durN > 0)) { Toast.show(`Indica la duración en ${durUnidad === 'dias' ? 'días' : 'meses'}`, 'warn'); return; }
+    // Contrato nuevo con cuenta vigente (decisión 6, 1-oct-2026): la razón de
+    // no hacerlo por anexo o renovación es obligatoria y queda en el contrato.
+    const nuevoConVigente = !!this._wcOpts?.nuevoConVigente;
+    const motivoNuevo = (document.getElementById('wcMotivoNuevo')?.value || '').trim();
+    if (nuevoConVigente && motivoNuevo.length < 10) {
+      Toast.show('Escribe por qué va un contrato nuevo y no un anexo o renovación (mínimo 10 caracteres)', 'warn');
+      document.getElementById('wcMotivoNuevo')?.focus();
+      return;
+    }
 
     const lineas = this._lineasModelo('wcm');
     if (!lineas.length) { Toast.show('Indica al menos un modelo (de la lista)', 'warn'); return; }
@@ -593,6 +602,9 @@ Object.assign(window.Centro, {
       // una cuenta con deuda → queda dicho; DEMO/TEMP se estampan pero no
       // cuentan como puntuales (Regularizacion.esPuntual).
       Object.assign(contrato, Centro._estampaReg());
+      if (nuevoConVigente) {
+        Object.assign(contrato, { motivo_contrato_nuevo: motivoNuevo, motivo_contrato_nuevo_por_uid: this.uid || null });
+      }
       const docRef = await ContratosService.addContrato(contrato);
 
       // La ficha recuerda la validación: el próximo contrato de este cliente

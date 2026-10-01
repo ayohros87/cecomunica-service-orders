@@ -56,7 +56,9 @@ window.ArchivoExpediente = {
     const hitos = [];
 
     hitos.push(this.hito('hecho', 'Contrato creado', this.fecha(data.fecha_creacion, { hora: true }),
-      data.creado_por_uid ? `<span style="color:var(--fg-3);">por ${E(CS.mapaUsuarios[data.creado_por_uid] || '—')}</span>` : ''));
+      (data.creado_por_uid ? `<span style="color:var(--fg-3);">por ${E(CS.mapaUsuarios[data.creado_por_uid] || '—')}</span>` : '')
+      // Contrato nuevo con cuenta vigente (decisión 6, 1-oct-2026): la razón se ve aquí.
+      + (data.motivo_contrato_nuevo ? `<div style="color:var(--fg-3); margin-top:2px;">Contrato aparte, no anexo ni renovación: <i>${E(data.motivo_contrato_nuevo)}</i></div>` : '')));
 
     if (['aprobado', 'activo'].includes(data.estado) || data.fecha_aprobacion) {
       hitos.push(this.hito('hecho', 'Aprobado', this.fecha(data.fecha_aprobacion, { hora: true }),
