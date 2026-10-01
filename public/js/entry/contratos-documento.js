@@ -12,5 +12,6 @@ import '/js/services/modelosService.js';
 import '/js/domain/docIdentidad.js';
 import '/js/domain/contratoV2Texto.js';
 import '/js/domain/contratoFirma.js';
+import '/js/domain/anexoSustituidos.js';
 import '/js/ui/toast.js';
 import '/js/pages/contrato-documento.js';

@@ -62,12 +62,18 @@
                font:13px Arial,sans-serif; }
     .toolbar button, .toolbar a { font:600 13px Arial,sans-serif; color:#fff; background:var(--navy);
       border:0; border-radius:8px; padding:8px 16px; cursor:pointer; text-decoration:none; }
+    body.no-imprimir .toolbar button { opacity:.45; pointer-events:none; }
     .toolbar a.sec { background:#fff; color:var(--navy); border:1px solid var(--navy); }
     .aviso-estado { max-width:8.5in; margin:0 auto 14px; border-radius:9px; padding:9px 16px;
       font:12.5px/1.5 Arial,sans-serif; background:#FEF3C7; border:1px solid #F59E0B; color:#92400E; display:none; }
     @media print {
       html, body { background:#fff; padding:0; }
       .toolbar, .aviso-estado { display:none !important; }
+      /* Anexo A con un radio sustituido que ya estaba en casa
+         (js/domain/anexoSustituidos.js): ni con Ctrl+P sale el papel. */
+      body.no-imprimir .wrap { display:none !important; }
+      body.no-imprimir::before { content:"Documento bloqueado: el Anexo A lista radios ya sustituidos. Pídele a bodega que los corrija y vuelve a generarlo.";
+        display:block; font:14px Arial,sans-serif; padding:40px; }
       .hoja { box-shadow:none; margin:0; max-width:none; padding:0.35in 0.45in;
               page-break-after:always; }
       .hoja:last-child { page-break-after:auto; }

@@ -58,6 +58,12 @@
         : Promise.resolve(null),
       unidades: EquiposPoolService.listarPorContrato(docId).catch(nada('pool no legible')),
       modelos: ModelosService.getModelos().catch(nada('modelos no legibles')),
+      // Reemplazos del contrato: marcan en el Anexo A los radios ya
+      // sustituidos (js/domain/anexoSustituidos.js).
+      reemplazos: firebase.firestore().collection('gestiones')
+        .where('contratos_afectados', 'array-contains', docId).get()
+        .then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() })))
+        .catch(nada('reemplazos no legibles')),
     };
 
     // ── Toolbar / aviso de estado ──
@@ -277,10 +283,16 @@
       const base = linea ? Number(linea.precio || 0) : 0;
       return { txt: `${money(base + extras)}${etiquetas.length ? ` <span style="font-size:9.5px; color:#555;">incl. ${esc(etiquetas.join(', '))}</span>` : ''}` };
     };
+    const sustituidos = window.AnexoSustituidos
+      ? AnexoSustituidos.clasificar((await enVuelo.reemplazos) || []) : new Map();
+    const infoSust = (u) => sustituidos.get(window.AnexoSustituidos ? AnexoSustituidos.norm(u.serial || u.id) : '');
     const filaAnexo = (u, i) => {
       const t = tarifaDe(u.serial || u.id, u.modelo_id || null, u.modelo_label || u.modelo || '', u.propiedad);
+      const sust = infoSust(u);
+      const notaSust = sust
+        ? `<br><span style="font:10px Arial,sans-serif; color:${sust.estado === 'incoherente' ? '#B91C1C' : '#555'};">${esc(AnexoSustituidos.nota(sust))}</span>` : '';
       return `<tr>
-      <td>${i + 1}</td><td class="mono">${esc(u.serial || u.id)}</td>
+      <td>${i + 1}</td><td class="mono">${esc(u.serial || u.id)}${notaSust}</td>
       <td>${esc(u.modelo_label || u.modelo || '—')}</td>
       <td class="right">${u.tarifa_txt || t.txt}</td>
       <td>${u.propiedad === 'cliente' ? 'Del cliente' : 'C COMUNICA'}</td><td>☐</td></tr>`;
@@ -313,6 +325,22 @@
         conjunta con EL CLIENTE:</td></tr>`);
     }
     $('tAnexoA').innerHTML = filasA.join('');
+
+    // Un radio que ya estaba en CECOMUNICA cuando se entregó su reemplazo no
+    // puede salir en un papel para firmar: se bloquea la impresión (también
+    // Ctrl+P, por CSS) y se dice qué serial y a quién avisar. Solo en el
+    // Anexo VIVO — el congelado de la firma es lo que el cliente vio.
+    const rotos = anexoFrozen ? [] : unidades.filter((u) => infoSust(u)?.estado === 'incoherente');
+    if (rotos.length) {
+      document.body.classList.add('no-imprimir');
+      const av = $('avisoEstado');
+      av.style.display = 'block';
+      av.style.background = '#FEE2E2'; av.style.borderColor = '#DC2626'; av.style.color = '#991B1B';
+      av.innerHTML = `<b>No imprimas este documento todavía.</b> El Anexo A lista
+        ${rotos.length === 1 ? 'un radio que ya fue sustituido' : `${rotos.length} radios que ya fueron sustituidos`}
+        (${rotos.map((u) => esc(u.serial || u.id)).join(', ')}) y que estaban en CECOMUNICA al hacer el cambio.
+        Pídele a bodega que los saque del contrato; al recargar, el documento sale correcto.`;
+    }
 
     // Registro ACTUAL cuando difiere del firmado: informativo, sin firma —
     // los cambios constan en los anexos firmados que los originaron.
