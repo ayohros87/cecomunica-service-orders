@@ -45,6 +45,7 @@
             nota_firmada_at: firebase.firestore.FieldValue.serverTimestamp(),
           });
           Toast.show('Nota firmada guardada en la orden.', 'ok');
+          el.textContent = 'Nota guardada';
           if (typeof window.cargarOrdenesYEquipos === 'function') window.cargarOrdenesYEquipos(true);
         } catch (err) {
           console.error('[subir-nota-firmada]', err);
@@ -705,7 +706,8 @@ function mostrarEntregaRecepcion(ordenId) {
   const cliente = (typeof nombreClienteDe === 'function' ? nombreClienteDe(o) : (o.cliente_nombre || '—'));
 
   const tieneRecepcion = !!(o.firma_recepcion_url || o.receptor_recepcion_nombre || o.fecha_recepcion);
-  const tieneEntrega   = !!(o.firma_url || o.receptor_nombre || o.fecha_entrega || o.sin_id || o.identificacion_path || o.identificacion_url);
+  const tieneEntrega   = !!(o.firma_url || o.receptor_nombre || o.fecha_entrega || o.sin_id || o.identificacion_path || o.identificacion_url
+    || o.no_recibido || o.entrega_persona_interna);
   // Cierre de visita técnica (firma en sitio o motivo) — ordenes-visita.js.
   const tieneCierreVisita = !!(o.firma_visita_url || o.visita_sin_firma || o.fecha_cierre_visita);
 
@@ -746,11 +748,29 @@ function mostrarEntregaRecepcion(ordenId) {
     }
   }
 
+  // Firma en papel (`no_recibido`, nombre histórico del flag): quien recibió
+  // está en `entrega_persona_interna`, no en `receptor_nombre`, y la prueba
+  // es la nota impresa (auditoría de módulos 2026-09-30, R1: 38 entregas del
+  // mes decían "Recibido por —").
+  const enPapel = !!o.no_recibido;
+  let papelHtml = '';
+  if (enPapel) {
+    const esPdf = /\.pdf(\?|$)/i.test(String(o.nota_firmada_path || o.nota_firmada_url || ''));
+    const notaHtml = o.nota_firmada_url
+      ? (esPdf
+          ? `<div style="margin-top:8px;"><a class="btn btn-sm" href="${esc(o.nota_firmada_url)}" target="_blank" rel="noopener"><i data-lucide="file-text"></i> Ver la nota firmada (PDF)</a></div>`
+          : _faseFirma(o.nota_firmada_url, 'Nota firmada por el cliente'))
+      : `<div class="muted" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+           <span><i data-lucide="alert-triangle"></i> Falta subir la nota firmada${o.nota_firmada_omitida_motivo ? ' — ' + esc(o.nota_firmada_omitida_motivo) : ''}.</span>
+           <button type="button" class="btn btn-sm" data-action="subir-nota-firmada" data-orden="${esc(ordenId)}">Subir la nota</button>
+         </div>`;
+    papelHtml = `<div class="muted" style="margin-top:8px;"><i data-lucide="pen-off"></i> Firmó en papel${o.no_recibido_motivo ? ' — ' + esc(o.no_recibido_motivo) : ''}.</div>` + notaHtml;
+  }
   const entregaHtml = tieneEntrega ? faseCard('Entrega al cliente', 'package-check',
     _faseFilas([
-      ['Recibido por', esc(o.receptor_nombre || '—')],
+      ['Recibido por', esc((enPapel ? (o.entrega_persona_interna || o.receptor_nombre) : o.receptor_nombre) || '—')],
       ['Fecha y hora', esc(_entregaFecha(o.fecha_entrega) || '—')],
-    ]) + _faseFirma(o.firma_url, 'Firma del receptor') + idHtml
+    ]) + (enPapel ? papelHtml : _faseFirma(o.firma_url, 'Firma del receptor')) + idHtml
   ) : '';
 
   // Cierre de visita técnica: quién recibió conforme en el sitio (o el
