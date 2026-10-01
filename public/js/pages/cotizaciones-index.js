@@ -419,8 +419,8 @@
           <td class="td-actions">
             <span class="cc-row-actions">
               ${mutable ? botonBorrador(c) : ''}
-              ${mutable && (c.estado === 'aprobada' || c.estado === 'enviada') ? (esTallerC(c)
-                ? `<button class="btn btn-ghost btn-icon btn-sm" title="Respuesta del cliente (aceptó → a facturar)" data-action="cerrar"><i data-lucide="circle-check"></i></button>`
+              ${mutable && (c.estado === 'aprobada' || c.estado === 'enviada' || (esTallerC(c) && c.estado === 'vencida' && !c.gestion_id)) ? (esTallerC(c)
+                ? `<button class="btn btn-ghost btn-icon btn-sm" title="Respuesta del cliente (aceptó o sin respuesta → a facturar)" data-action="cerrar"><i data-lucide="circle-check"></i></button>`
                 : `<button class="btn btn-ghost btn-icon btn-sm" title="Cerrar cotización" data-action="cerrar"><i data-lucide="flag"></i></button>`) : ''}
               <button class="btn btn-ghost btn-icon btn-sm" title="Ver" data-action="detalle"><i data-lucide="eye"></i></button>
               ${mutable && CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Editar" data-action="editar"><i data-lucide="pencil"></i></button>` : ''}
@@ -520,6 +520,7 @@
       cliente: cot.cliente_nombre || '',
       taller,
       reposicion: !!cot.gestion_id,
+      vencida: cot.estado === 'vencida',
     });
     if (!cierre) return;
     const desenlace = cierre.estado;
@@ -529,7 +530,7 @@
       // La fila se repinta desde `cotizaciones` en memoria: entra el patch
       // completo para que el chip muestre el motivo en su tooltip.
       Object.assign(cot, patch);
-      Toast.show(CotState.cierreToast(desenlace, { taller }), desenlace === 'convertida' ? 'ok' : 'warn');
+      Toast.show(CotState.cierreToast(desenlace, { taller, sinRespuesta: cierre.aceptacion?.medio === 'sin_respuesta' }), desenlace === 'convertida' ? 'ok' : 'warn');
       render();
     } catch (e) {
       Toast.show('No se pudo cerrar: ' + (e?.message || e), 'bad');

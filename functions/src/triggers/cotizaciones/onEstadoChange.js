@@ -195,6 +195,10 @@ module.exports = onDocumentUpdated(
     let emitida = null;
     if (ESTADOS_BLOQUEAN.includes(estadoDespues)) emitida = true;
     else if (ESTADOS_REABREN.includes(estadoDespues)) emitida = false;
+    // Una VENCIDA que el taller pasa a facturar (2026-10-01, "sin respuesta
+    // del cliente"): el vencimiento reabrió los materiales, y lo que se va a
+    // facturar tiene que volver a quedar fijo.
+    else if (estadoDespues === "convertida" && ESTADOS_REABREN.includes(estadoAntes)) emitida = true;
     if (emitida === null) return null; // borrador/convertida no tocan el candado
 
     try {

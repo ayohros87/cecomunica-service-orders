@@ -668,10 +668,10 @@
   //
   // Devuelve Promise<{ estado, motivo } | null>. `motivo` solo llega con
   // 'descartada' y nunca vacío: el botón no cierra la hoja sin texto.
-  function cerrarPrompt({ cotizacionId, total, totalTexto, cliente, taller = false, reposicion = false } = {}) {
+  function cerrarPrompt({ cotizacionId, total, totalTexto, cliente, taller = false, reposicion = false, vencida = false } = {}) {
     const esc = FMT.esc; // helper canónico (core/formatting.js)
     const importe = totalTexto ? esc(totalTexto) : (total != null ? window.FMT.money(total) : '');
-    if (taller) return cerrarPromptTaller({ cotizacionId, importe, cliente, reposicion });
+    if (taller) return cerrarPromptTaller({ cotizacionId, importe, cliente, reposicion, vencida });
     return Modal.sheet({
       title: 'Cerrar cotización', icon: 'flag', size: 'sm',
       html: `
@@ -764,7 +764,16 @@
   // cliente (gestión de reemplazo por daño). Aceptarla libera a bodega;
   // rechazarla cierra el reemplazo y lo manda a cobranza. El texto lo dice
   // antes del clic, que es cuando sirve.
-  function cerrarPromptTaller({ cotizacionId, importe, cliente, reposicion }) {
+  //
+  // "Pasar a facturar sin respuesta del cliente" (2026-10-01, pedido de
+  // Solangel): muchas veces el cliente no acepta ni rechaza, la validez de 3
+  // días se cumple y la cotización se vence sola — y vencida no llegaba nunca
+  // a Facturación pendiente, ni siquiera al entregar el equipo. Cuando el
+  // vendedor dice que se factura, el taller la pasa a mano EN CUALQUIER
+  // MOMENTO (enviada, aprobada o ya vencida). Se exige quién lo autorizó: es
+  // lo único que sostiene esa factura si el cliente después pregunta.
+  // `vencida`: la hoja se abre sobre una cotización ya vencida.
+  function cerrarPromptTaller({ cotizacionId, importe, cliente, reposicion, vencida = false }) {
     const esc = FMT.esc;
     const T = window.CotizacionTaller;
     const medios = (T?.MEDIOS_ACEPTACION || [['correo', 'Por correo'], ['verbal', 'Verbalmente'], ['otro', 'Otro medio']]);
@@ -775,6 +784,8 @@
         <p style="margin:0 0 12px; font-size:14px; color:var(--fg-2);">
           ${cotizacionId ? '<b>' + esc(cotizacionId) + '</b> · ' : ''}${esc(cliente || '')}${importe ? ' · ' + importe : ''}
         </p>
+        ${vencida ? `<p style="margin:0 0 12px; font-size:13px; color:var(--fg-2); line-height:1.5;">
+          Se venció la validez sin respuesta. Si ya corresponde facturarla, pásala a facturar aquí.</p>` : ''}
         <div id="ctOpciones" style="display:flex; flex-direction:column; gap:10px;">
           <button type="button" class="btn btn-secondary" data-act="acepto"
                   style="background:#065F46; color:#fff; border-color:#065F46; justify-content:flex-start; text-align:left;">
@@ -784,6 +795,12 @@
                 ? 'Recepción recibe la fila para facturar y Bodega el aviso para asignar el radio de reposición.'
                 : 'Recepción recibe la fila en Facturación pendiente, aunque el equipo siga en el taller.'}</span></span>
           </button>
+          ${reposicion ? '' : `<button type="button" class="btn btn-secondary" data-act="sin-respuesta"
+                  style="background:#0B2A47; color:#fff; border-color:#0B2A47; justify-content:flex-start; text-align:left;">
+            <i data-lucide="receipt"></i>
+            <span style="margin-left:8px;"><b>Pasar a facturar sin respuesta del cliente</b><br>
+              <span style="font-size:12.5px; opacity:.9;">El cliente no contestó, pero ya corresponde facturar (p. ej. lo autorizó el vendedor).</span></span>
+          </button>`}
           <button type="button" class="btn btn-secondary" data-act="rechazada"
                   style="background:#991B1B; color:#fff; border-color:#991B1B; justify-content:flex-start; text-align:left;">
             <i data-lucide="circle-x"></i>
@@ -812,6 +829,17 @@
             <button type="button" class="btn btn-ghost" data-act="volver">Volver</button>
           </div>
         </div>
+        <div id="ctSinResp" style="display:none;">
+          <label class="form-label" for="ctAutorizo">¿Quién autorizó facturarla?</label>
+          <input id="ctAutorizo" class="form-input" maxlength="200"
+                 placeholder="Ej.: lo autorizó Juan Pérez (vendedor) el 1-oct · el equipo ya se entregó">
+          <p style="margin:6px 0 0; font-size:12px; color:var(--fg-3);">Recepción la recibe en Facturación pendiente. Queda en el historial que el cliente no respondió.</p>
+          <p id="ctSinRespError" style="display:none; margin:8px 0 0; font-size:12.5px; color:#991B1B;"></p>
+          <div style="display:flex; gap:8px; margin-top:12px;">
+            <button type="button" class="btn btn-primary" data-act="confirmar-sin-respuesta"><i data-lucide="check"></i> Pasar a facturar</button>
+            <button type="button" class="btn btn-ghost" data-act="volver">Volver</button>
+          </div>
+        </div>
         <div id="ctOtros" style="display:none;">
           <label class="form-label" for="ctMotivo">¿Por qué se cierra?</label>
           <textarea id="ctMotivo" class="form-input form-textarea" rows="3" maxlength="300"
@@ -824,14 +852,26 @@
         </div>`,
       buttons: [{ action: 'cancel', label: 'Cancelar' }],
       onMount: (root, api) => {
-        const panel = (id) => ['ctOpciones', 'ctAcepta', 'ctOtros']
+        const panel = (id) => ['ctOpciones', 'ctAcepta', 'ctSinResp', 'ctOtros']
           .forEach(p => { root.querySelector('#' + p).style.display = p === id ? '' : 'none'; });
         root.addEventListener('click', (e) => {
           const act = e.target.closest('[data-act]')?.dataset.act;
           if (!act) return;
           if (act === 'acepto') { panel('ctAcepta'); root.querySelector('#ctMedio').focus(); return; }
+          if (act === 'sin-respuesta') { panel('ctSinResp'); root.querySelector('#ctAutorizo').focus(); return; }
           if (act === 'otros')  { panel('ctOtros'); root.querySelector('#ctMotivo').focus(); return; }
           if (act === 'volver') { panel('ctOpciones'); return; }
+          if (act === 'confirmar-sin-respuesta') {
+            const quien = String(root.querySelector('#ctAutorizo').value || '').trim();
+            if (quien.length < 3) {
+              const err = root.querySelector('#ctSinRespError');
+              err.textContent = 'Escribe quién autorizó facturarla — es lo que respalda la factura si el cliente pregunta.';
+              err.style.display = '';
+              return;
+            }
+            api.close({ estado: 'convertida', motivo: '', aceptacion: { medio: 'sin_respuesta', nota: quien.slice(0, 200) } });
+            return;
+          }
           if (act === 'rechazada') { api.close({ estado: 'rechazada', motivo: '' }); return; }
           if (act === 'confirmar-acepto') {
             api.close({
@@ -894,7 +934,8 @@
     return patch;
   }
 
-  function cierreToast(estado, { taller = false } = {}) {
+  function cierreToast(estado, { taller = false, sinRespuesta = false } = {}) {
+    if (taller && estado === 'convertida' && sinRespuesta) return '✅ Pasada a facturación — Recepción la recibe en Facturación pendiente';
     if (taller && estado === 'convertida') return '✅ Aceptada — Recepción la recibe en Facturación pendiente';
     if (taller && estado === 'rechazada') return 'Registrado: el cliente no aceptó';
     if (estado === 'convertida') return '🏆 Aceptada por el cliente';

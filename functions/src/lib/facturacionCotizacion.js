@@ -26,6 +26,12 @@ const MEDIOS = {
   pagina: "desde el enlace de la cotización",
   otro: "por otro medio",
 };
+// La otra puerta manual (2026-10-01, pedido de Solangel): el cliente no
+// contestó —a menudo ni dentro de la validez de 3 días, y la cotización ya se
+// venció— y el vendedor dice que se factura. Entra como 'convertida' igual que
+// una aceptación, pero la fila NO dice que el cliente aceptó: dice quién lo
+// autorizó (va en `aceptacion.nota`, obligatoria en la UI).
+const SIN_RESPUESTA = "sin_respuesta";
 
 /**
  * Abre la fila de facturación de UNA cotización de taller.
@@ -69,7 +75,15 @@ async function abrirFacturacionCotizacion(d, { momento = "entrega", orden = null
     const ac = cot.aceptacion || {};
     const como = MEDIOS[ac.medio] || "";
     fechaEfectiva = ac.at?.toDate ? ac.at.toDate() : new Date();
-    if (esReposicion) {
+    if (ac.medio === SIN_RESPUESTA && !esReposicion) {
+      tituloTxt = "Cotización de taller sin respuesta del cliente — autorizada para facturar";
+      asuntoTxt = "cotización de taller autorizada sin respuesta del cliente";
+      queTxt = `el cliente <b>no respondió</b> la cotización y el taller la pasó a facturar porque ya corresponde`
+        + (ac.nota ? ` (autorizó: ${esc(ac.nota)})` : "") + ". "
+        + (salio ? (esVisita ? "La visita ya se cerró en sitio." : "El equipo ya se entregó.")
+          : "<b>El equipo sigue en el taller</b>: decide si se factura ya o al retirarlo");
+      origenTxt = `Sin respuesta del cliente · autorizada internamente · ${salio ? "trabajo entregado" : "equipo en el taller"} · cotización ${legible}`;
+    } else if (esReposicion) {
       tituloTxt = "Reposición por daño aceptada — hay que facturarla";
       asuntoTxt = "reposición por daño aceptada";
       queTxt = `el cliente aceptó ${como ? `(${esc(como)}) ` : ""}pagar la <b>reposición del radio que dañó</b>. Bodega ya recibió el aviso para asignar el equipo que lo sustituye`;
@@ -90,7 +104,8 @@ async function abrirFacturacionCotizacion(d, { momento = "entrega", orden = null
     queTxt = esVisita ? "la visita ya se cerró en sitio" : "el equipo ya se entregó";
     origenTxt = `${esVisita ? "Visita cerrada" : "Reparación entregada"} · cotización ${legible}`;
   }
-  const nota = momento === "aceptacion" && cot.aceptacion?.nota
+  // En "sin respuesta" la nota (quién autorizó) ya va dentro del texto.
+  const nota = momento === "aceptacion" && cot.aceptacion?.nota && cot.aceptacion.medio !== SIN_RESPUESTA
     ? `<p style="margin:8px 0 0;font:13px/1.5 Arial,sans-serif;color:#40525f;">Nota de la aceptación: ${esc(cot.aceptacion.nota)}</p>` : "";
 
   const r = CS.resumenCotizacion(cot);
@@ -173,4 +188,4 @@ async function abrirFacturacionCotizacion(d, { momento = "entrega", orden = null
   return true;
 }
 
-module.exports = { abrirFacturacionCotizacion, TRABAJO_SALIO, MEDIOS };
+module.exports = { abrirFacturacionCotizacion, TRABAJO_SALIO, MEDIOS, SIN_RESPUESTA };

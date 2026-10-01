@@ -68,8 +68,12 @@ module.exports = onSchedule(
                 <b>${c.cliente_nombre || "—"}</b> alcanzó su período de validez de ${validezDias} días
                 sin respuesta del cliente.</p>
                 <p style="margin:0 0 12px;"><b>Total:</b> $${Number(c.total || 0).toFixed(2)}</p>
-                <p style="font-size:13px;color:#6B7884;">Si la propuesta sigue vigente, puedes reenviarla
-                o crear una nueva versión desde el panel de cotizaciones.</p>
+                ${c.origen === "orden" && !c.gestion_id
+                  ? `<p style="margin:0 0 12px;">Al vencer <b>no pasa a Facturación pendiente</b>, ni siquiera al entregar el equipo.
+                     Si ya corresponde facturarla (por ejemplo, lo autorizó el vendedor), ábrela y usa
+                     <b>Respuesta del cliente → Pasar a facturar sin respuesta del cliente</b>.</p>`
+                  : `<p style="font-size:13px;color:#6B7884;">Si la propuesta sigue vigente, puedes reenviarla
+                o crear una nueva versión desde el panel de cotizaciones.</p>`}
               </div>
             `,
           });

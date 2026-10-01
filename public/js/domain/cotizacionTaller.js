@@ -82,9 +82,16 @@
     ['pagina', 'Desde el enlace de la cotización'],
     ['otro', 'Otro medio'],
   ];
+  // 'sin_respuesta' NO va en el selector de "¿Cómo aceptó?": es la otra
+  // puerta (2026-10-01, pedido de Solangel). El cliente no contestó —a veces
+  // ni dentro de la validez de 3 días— y el vendedor dice que se factura; la
+  // cotización pasa a facturación igual, pero sin decir que el cliente aceptó.
+  const SIN_RESPUESTA = 'sin_respuesta';
   function medioLabel(k) {
+    if (k === SIN_RESPUESTA) return 'Sin respuesta del cliente · autorizada internamente';
     return (MEDIOS_ACEPTACION.find(([c]) => c === k) || [null, k || '—'])[1];
   }
+  const sinRespuesta = (doc) => doc?.aceptacion?.medio === SIN_RESPUESTA;
 
   // El nombre de cada estado DEPENDE del tipo. En el taller 'convertida'
   // significa "el cliente aceptó y ya está en facturación": decir "Convertida
@@ -92,7 +99,7 @@
   // base (los reportes y la bandeja de facturación no cambian); cambia lo que
   // se lee.
   function estadoLabel(estado, doc, fallback) {
-    if (esTaller(doc) && estado === 'convertida') return 'Aceptada';
+    if (esTaller(doc) && estado === 'convertida') return sinRespuesta(doc) ? 'A facturar' : 'Aceptada';
     return fallback || estado || '—';
   }
 
@@ -105,7 +112,7 @@
     return [
       { k: 'borrador', t: 'Preparada', done: e !== 'borrador' },
       { k: 'enviada', t: 'Enviada al cliente', done: ['enviada', 'convertida'].includes(e) || !!doc?.enviada_en },
-      { k: 'aceptada', t: 'Aceptada · en facturación', done: e === 'convertida' },
+      { k: 'aceptada', t: sinRespuesta(doc) ? 'En facturación · sin respuesta del cliente' : 'Aceptada · en facturación', done: e === 'convertida' },
       { k: 'facturada', t: fact === 'facturada' && doc?.facturacion?.factura
           ? `Facturada · ${doc.facturacion.factura}` : 'Facturada', done: fact === 'facturada' },
     ].map((p) => ({ ...p, cortada: cerradaMal && !p.done }));
@@ -113,7 +120,7 @@
 
   const api = {
     esTaller, CONDICIONES_TALLER, CARGO_POR_ROL, cargoPorRol, cargoFirmante,
-    tituloDocumento, asunto, notaLegal, MEDIOS_ACEPTACION, medioLabel, estadoLabel, pasos,
+    tituloDocumento, asunto, notaLegal, MEDIOS_ACEPTACION, SIN_RESPUESTA, sinRespuesta, medioLabel, estadoLabel, pasos,
   };
   if (typeof window !== 'undefined') window.CotizacionTaller = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

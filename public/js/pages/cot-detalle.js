@@ -61,7 +61,9 @@
           }).join('')}
         </div>
         ${cerrada ? `<div class="cc-panel-body" style="padding-top:0; font-size:12.5px; color:var(--fg-3);">
-          Cerrada como <b>${esc(CotState.estadoLabel(cot.estado, cot))}</b>${cot.cierre_motivo ? ' — ' + esc(cot.cierre_motivo) : ''}. No va a facturación.</div>` : ''}
+          Cerrada como <b>${esc(CotState.estadoLabel(cot.estado, cot))}</b>${cot.cierre_motivo ? ' — ' + esc(cot.cierre_motivo) : ''}. ${cot.estado === 'vencida' && !cot.gestion_id
+            ? 'Si ya corresponde facturarla, usa <b>Respuesta del cliente</b> → <b>Pasar a facturar sin respuesta del cliente</b>.'
+            : 'No va a facturación.'}</div>` : ''}
         ${cot.gestion_id ? `<div class="cc-panel-body" style="padding-top:0; font-size:12.5px; color:var(--fg-2);">
           <b>Reposición por daño</b> · gestión <span style="font-family:var(--font-mono);">${esc(cot.gestion_id)}</span>.
           Al aceptarla, Bodega recibe el aviso para asignar el radio de reposición; si el cliente no la acepta, el caso pasa a cobranza.</div>` : ''}
@@ -102,7 +104,9 @@
       const ac = cot.aceptacion;
       h.push(CotizacionTaller.esTaller(cot)
         ? {
-            act: 'Aceptada por el cliente · pasó a facturación',
+            act: CotizacionTaller.sinRespuesta(cot)
+              ? 'Pasó a facturación sin respuesta del cliente'
+              : 'Aceptada por el cliente · pasó a facturación',
             meta: fmtFechaAny(cot.fecha_conversion)
               + (ac ? ' · ' + CotizacionTaller.medioLabel(ac.medio) + (ac.nota ? ' — ' + ac.nota : '') : '')
               + (ac?.por_email ? ' · anotado por ' + ac.por_email : ''),
@@ -243,7 +247,7 @@
           ${soloLectura ? '' : botonAccionPrincipal(cot.estado)}
           ${soloLectura ? '' : '<button class="btn btn-ghost" id="btnDuplicar"><i data-lucide="copy"></i> Duplicar</button>'}
           ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada' || cot.estado === 'convertida') ? '<button class="btn btn-ghost" id="btnEnviar"><i data-lucide="send"></i> Reenviar al cliente</button>' : ''}
-          ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada') ? (esTaller()
+          ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada' || (esTaller() && cot.estado === 'vencida' && !cot.gestion_id)) ? (esTaller()
             ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#065F46; color:#fff; border-color:#065F46;"><i data-lucide="circle-check"></i> Respuesta del cliente</button>'
             : '<button class="btn btn-secondary" id="btnCerrar" style="background:#0B2A47; color:#fff; border-color:#0B2A47;"><i data-lucide="flag"></i> Cerrar cotización</button>') : ''}
           ${!soloLectura && CotState.esEditable(cot.estado) ? '<button class="btn btn-secondary" id="btnEditar"><i data-lucide="pencil"></i> Editar</button>' : ''}
@@ -526,6 +530,7 @@
       cliente: cli?.razon || cot.cliente_nombre || '',
       taller: esTaller(),
       reposicion: !!cot.gestion_id,
+      vencida: cot.estado === 'vencida',
     });
     if (!cierre) return;
     const desenlace = cierre.estado;
@@ -535,7 +540,7 @@
       // Se mezcla el patch completo (no solo el estado) para que el historial
       // recién renderizado muestre la fecha y el motivo sin recargar.
       Object.assign(cot, patch);
-      Toast.show(CotState.cierreToast(desenlace, { taller: esTaller() }), desenlace === 'convertida' ? 'ok' : 'warn');
+      Toast.show(CotState.cierreToast(desenlace, { taller: esTaller(), sinRespuesta: cierre.aceptacion?.medio === 'sin_respuesta' }), desenlace === 'convertida' ? 'ok' : 'warn');
       render();
     } catch (e) {
       console.error(e);
