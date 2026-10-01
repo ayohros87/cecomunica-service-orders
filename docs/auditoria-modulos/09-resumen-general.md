@@ -163,46 +163,47 @@ Las 51 preguntas completas, con opciones y lo que implica cada una, están al fi
 las que **destrancan más trabajo**:
 
 **Operación diaria**
-1. ¿José usa lector de código de barras o teclea? Cambia la urgencia de B3 y si vale comprar un lector USB
+1. ¿José usa lector de código de barras o teclea? NO Cambia la urgencia de B3 y si vale comprar un lector USB
    (US$30-60; el app ya acepta Enter como sufijo). [04 Q1]
 2. ¿Un SIM puede estar activo en dos radios a la vez (demos, respaldo)? Si nunca, B2 bloquea; si a veces, avisa
-   y pide motivo. Y qué hacer con los 41 de hoy. [03 Q1]
+   y pide motivo. Y qué hacer con los 41 de hoy. [03 Q1] NO DEBERIA- AVISA Y PIDE MOTIVO
 3. Entrega con firma en papel (38 de las entregas del mes): ¿política aceptable (exigir la foto de la nota) o se
-   empuja la tablet? [01 Q1]
-4. Cinco correos por cada entrega (jefa, recepción, técnico, vendedor, cliente): ¿quién los lee? [01 Q3]
-5. ¿Recepción y ventas deben poder recibir o vender radios desde Almacén, e iniciar reemplazos, bajas y
-   terminaciones desde el Centro? Hoy pueden las dos cosas. [04 Q2, 05 Q1]
+   empuja la tablet? [01 Q1] PEDIR LA NOTA. PERMITE CERRAR SIN NOTA CON ADVERTENCIA QUE NO QUEDARA REGISTRO DE LA ENTREGA EN EL SISTEMA Y PEDIR RAZON.
+4. Cinco correos por cada entrega (jefa, recepción, técnico, vendedor, cliente): ¿quién los lee? [01 Q3]  CLIENTE, VENDEDOR, RECEPCION, JEFA DE TALLER
+5. ¿Recepción y ventas deben poder recibir o vender radios desde Almacén NO, e iniciar reemplazos, bajas y
+   terminaciones desde el Centro? SI Hoy pueden las dos cosas . [04 Q2, 05 Q1] 
 
 **Contratos y clientes**
 6. ¿Una cuenta con contrato vigente puede tener otro contrato nuevo? Hoy la ficha solo ofrece anexo, temporal,
-   demo o renovar. [06 Q1]
+   demo o renovar. [06 Q1] SI, PERO DEBE SER UNA FUNCION DE RESPALDO NO PRINCIPAL, PARA ALGUN IMPREVISTO QUE REQUIERA CONTRATO Y PARA NO ENTORPECER LA OPERACION, SE DEBE 
+   PREGUNTAR LA RAZÓN QUE SE CREA UN CONTRATO EN LUGAR DE ANEXO O RENOVACIÓN PARA QUE QUEDE ALMACENADA.
 7. ¿Qué pasa con un contrato aprobado sin firmar a los 45 días (10 de 13 hoy)? Hoy desaparece del trámite y
-   sigue en el home. ¿Y debe caducar el enlace de firma? [06 Q3, Q4]
+   sigue en el home. ¿Y debe caducar el enlace de firma? [06 Q3, Q4] DEBE CADUCAR LA SOLICITUD Y EL ENLACE. DEBE QUEDAR DORMIDA Y REQUERIR INTERVENCION DEL VENDEDOR PARA REACTIVAR, NO DEBE BLOQUEAR OTROS TRAMITES, PARA TODOS LOS EFECTOS QUEDA COMO SI NO EXISTIERA Y COMO UN BORRADOR DE SOLICITUD PARA FUTURO.
 8. "Por clasificar" (cola de bodega): ¿cuenta en el chip de la cuenta y dispara "Regularizar con contrato
-   nuevo"? El plan dice que no; el botón dice que sí. [05 Q3]
+   nuevo"? El plan dice que no; el botón dice que sí. [05 Q3] NO
 9. La deuda de migración del pool (1,223 por clasificar, 1,316 sin modelo, 4,408 sin verificar): ¿script
-   masivo o de a uno (84/mes = 15 meses)? [04 Q3]
+   masivo o de a uno (84/mes = 15 meses)? [04 Q3] MASIVO, SI ES POSIBLE.
 10. Cuando un serial tiene dos fichas PoC vivas, ¿cuál es la buena: la que coincide con la custodia del pool, la
-    más reciente, o lo decide recepción? Con la primera, 541 casos se cierran solos. [03 Q2]
+    más reciente, o lo decide recepción? Con la primera, 541 casos se cierran solos. [03 Q2] DEBERIA SER LA MAS RECIENTE, CRUZA CONTRA LA CUSTODIA DEL POOL PARA VER SI COINCIDEN, EN LOS CASOS QUE LA CUSTODIA DEL POOL ES POR MIGRACIÓN ESA CUSTODIA NO TIENE VALOR.
 
 **Dinero**
-11. ¿Quién aprueba las cotizaciones comerciales fuera de política? El código dice `gerente`, no existe ninguno,
-    y el correo va a `ventas@`. Y la política vigente: el brief dice 15 %/$5,000, la config 20 %/$15,000. [02 Q1, Q4]
+11. ¿Quién aprueba las cotizaciones comerciales fuera de política? ADMINISTRADOR ALBERTO Y ZULEIKA. El código dice `gerente`, no existe ninguno,
+    y el correo va a `ventas@`.VENTAS LE LLEGA A ALBERTO Y ZULEIKA. Y la política vigente: el brief dice 15 %/$5,000, la config 20 %/$15,000. [02 Q1, Q4]
 12. "Vencida" a los 15 días por silencio es el desenlace de 62 de 128 cotizaciones: ¿recordatorio y posponer, o
-    que venza solo el documento y la cotización siga "sin respuesta"? [02 Q2]
+    que venza solo el documento y la cotización siga "sin respuesta"? [02 Q2] EL VENCIMIENTO ES EL FIN DE LA COTIZACION NO SE REQUIERE MAS ACCION, SI LUEGO SE CIERRA ESA VENTA EL VENDEDOR IGUAL LA PUEDE MARCAR COMO VENDIDA PERO NO ES PROBABLE QUE LO HAGA.
 13. ¿Brenda factura en QuickBooks sin marcar la bandeja, o la factura sale tarde? Las marcas se concentran en
-    dos días del mes y hay 8 avisos con más de una semana. [07 Q1]
-14. ¿Esconder "Facturará la app", "Emisión" y "Panorama" hasta que exista la emisión? [07 Q2]
+    dos días del mes y hay 8 avisos con más de una semana. [07 Q1] NO SE PREPARA UN CORREO PARA BRENDA EXPLICANDOLE COMO FUNCIONA LAS GRABACIONES DE FACTURAS, POSIBLEMENTE NO LO SABE USAR CORRECTAMENTE, TAMBIEN VERIFICA A FONDO TODAS LAS INSTANCIAS DE FACTURAS Y NOTIFICACIONES ME DICEN QUE TOMA MUCHO TIEMPO Y NO SE CONECTA BIEN CON LAS PANTALLAS DONDE ESTA TRABAJANDO.
+14. ¿Esconder "Facturará la app", "Emisión" y "Panorama" hasta que exista la emisión? [07 Q2] SI
 15. ¿El refurbished "-R" cobra la misma mensualidad y comparte bundle en QuickBooks que el modelo nuevo? Decide
-    cómo se mapean los 5 modelos que hoy dejan 117 líneas "sin mapeo". [07 Q5]
+    cómo se mapean los 5 modelos que hoy dejan 117 líneas "sin mapeo". [07 Q5] ESTO ES UN PROBLEMA MAS GRANDE QUE NO HABIA PREVISTO. EN QUICKBOOKS SOLO SE FACTURA POR MODELO NO POR ESTADO (ie nuevo o refurbished). LO QUE SE HACE ES QUE EN BASE A LOS CONTRATOS QUE SE AGREGARON AL CONTRATO, ESTOS RADIOS SE SACAN DE INVENTARIO DE QUICKBOOKS MANUALMENTE Y SE ENTRA EN EL PROGRAMA DE DEPRECIACION. 
 16. ¿Quién confirma el primer pago de las 45 comisiones que esperan (0 confirmadas en 20 días): Zuleika en lote
-    o lectura automática de QuickBooks? [07 Q4]
+    o lectura automática de QuickBooks? [07 Q4] CHEILA O ZULEIKA EN LOTE.
 
 **Roles y acceso**
 17. Cobros (Andrea) tiene rol `recepcion` y ve señales que no son su trabajo; contabilidad (Cheila) abre un home
-    vacío. ¿Rol `cobros` propio? ¿Qué debe ver contabilidad al entrar? [08 Q1, Q2]
+    vacío. ¿Rol `cobros` propio? ¿Qué debe ver contabilidad al entrar? [08 Q1, Q2] ANDREA CUBRE EL PUESTO DE RECEPCION A VECES POR ESO TIENE ESE ROL. CONTABILIDAD DEBE VER EL MODULO DE FINANZAS, CENTRO DE GESTION Y CLIENTES.
 18. ¿Bodega puede ver el catálogo de modelos sin precios, y Piezas debe ocultarle el costo (pedido de
-    contabilidad del 30-jun)? [04 Q4, Q7]
+    contabilidad del 30-jun)? [04 Q4, Q7] SI
 
 ---
 
