@@ -20,6 +20,7 @@ import '/js/ui/equipo-ficha.js';
 import '/js/ui/serial-field.js';
 import '/js/pages/poc-state.js';
 import '/js/pages/poc-sim-liberar.js';
+import '/js/pages/poc-sim-conflicto.js'; // SIM en otro radio: avisa y pide motivo (R2/D2)
 import '/js/pages/poc-edit.js';
 import '/js/pages/poc-bulk.js';
 import '/js/pages/poc-sim.js';

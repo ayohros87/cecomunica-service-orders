@@ -39,6 +39,35 @@ window.PocList = {
     this._redespachar();
   },
 
+  // Pinta en el acto un cambio que YA se guardó en una ficha (SIM del pool):
+  // la transacción no produce snapshot local, así que refresh() repintaba con
+  // el SIM viejo hasta la próxima búsqueda (auditoría de módulos 2026-10-01,
+  // PoC B1). Parcha la memoria de búsqueda y reemplaza la fila visible
+  // conservando su casilla de selección.
+  aplicarCambioLocal(id, campos) {
+    const parchar = (arr) => {
+      if (!Array.isArray(arr)) return;
+      const i = arr.findIndex(d => d && d.id === id);
+      if (i >= 0) arr[i] = { ...arr[i], ...campos };
+    };
+    parchar(this._escuchas.vivas?.docs);
+    parchar(this._allDocs?.docs);
+    const base = this._docsPorId.get(id);
+    if (!base) return;
+    const d = { ...base, ...campos };
+    this._docsPorId.set(id, d);
+    const fila = [...document.querySelectorAll('#devicesTable tr[data-id]')].find(r => r.dataset.id === id);
+    if (!fila) return;
+    const nueva = this._buildRow(id, d);
+    if (fila.querySelector('.seleccion-sim')?.checked) {
+      const cb = nueva.querySelector('.seleccion-sim');
+      if (cb) cb.checked = true;
+    }
+    fila.replaceWith(nueva);
+    if (window.Icons) Icons.pintar(nueva);
+    else if (typeof lucide !== 'undefined') lucide.createIcons();
+  },
+
   // Vuelve a pintar según lo que haya en el buscador, SIN tirar la memoria.
   // Es lo que usa ordenar: filtrar() ordena EN MEMORIA (_ordenarDocs), así que
   // el orden no cambia qué fichas hay — tirar la memoria por un clic en una

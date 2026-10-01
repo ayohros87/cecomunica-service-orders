@@ -170,6 +170,16 @@ window.PocBulk = {
       }
     }
 
+    // SIM que ya está en otro radio (auditoría de módulos 2026-10-01, PoC
+    // R2/D2): se revisan solo los SIM que cambiaron, en UN aviso con un solo
+    // motivo para todos; no bloquea.
+    const simItems = filas
+      .filter(f => { const n = SimCardsService.normalizarSim(f.sim_number); return n && n !== SimCardsService.normalizarSim(f.prev.sim_number); })
+      .map(f => ({ id: f.id, sim_number: f.sim_number, serial: f.serial, cliente: PocState.nombreClienteDe(f.prev) }));
+    const simCambiados = new Set(simItems.map(i => i.id));
+    const revisionSim = simItems.length ? await PocSimConflicto.revisar(simItems) : null;
+    if (revisionSim?.cancelado) return;
+
     if (!await Modal.confirm({ message: `Vas a actualizar ${filas.length} equipos. ¿Confirmas continuar?` })) return;
 
     // 3) Escribir fila por fila; un fallo no aborta las demás.
@@ -196,6 +206,11 @@ window.PocBulk = {
             if (k in prevData) newData[k] = firebase.firestore.FieldValue.delete();
           });
         }
+        if (simCambiados.has(f.id)) {
+          const sc = PocSimConflicto.campo(revisionSim, f.id, user);
+          if (sc) newData.sim_conflicto = sc;
+          else if (prevData.sim_conflicto) newData.sim_conflicto = firebase.firestore.FieldValue.delete();
+        }
         await PocService.updatePocDevice(f.id, newData);
 
         // FieldValue sentinels (delete/serverTimestamp) can only appear at the
@@ -207,6 +222,7 @@ window.PocBulk = {
           equipo_id: f.id,
           fecha:     firebase.firestore.FieldValue.serverTimestamp(),
           usuario:   user?.email,
+          ...(cleanFields.sim_conflicto ? { motivo: cleanFields.sim_conflicto.motivo, sim_conflicto: cleanFields.sim_conflicto } : {}),
           cambios:   { antes: prevData, despues: { ...prevData, ...cleanFields } }
         }).catch(e => console.warn('poc_log write failed (non-critical):', e));
 

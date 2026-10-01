@@ -52,25 +52,46 @@ window.PocSim = {
     const user        = firebase.auth().currentUser;
     let actualizados  = 0;
 
+    // Se leen las fichas ANTES de escribir para revisar los SIM que cambian
+    // contra las demás fichas vivas (auditoría de módulos 2026-10-01, PoC
+    // R2/D2): un aviso, un motivo para todas; no bloquea.
+    const filas = [];
     for (let i = 0; i < seleccionados.length; i++) {
-      const simTel = datos[i].split(/\t|,/).map(s => s.trim());
-      const id     = seleccionados[i].id;
+      const id = seleccionados[i].id;
       if (!id) continue;
+      const simTel = datos[i].split(/\t|,/).map(s => s.trim());
       const prevData = (await PocService.getPocDevice(id)) || {};
+      filas.push({ id, prevData, sim_number: simTel[0] || '', sim_phone: simTel[1] || '' });
+    }
+    const simItems = filas
+      .filter(f => { const n = SimCardsService.normalizarSim(f.sim_number); return n && n !== SimCardsService.normalizarSim(f.prevData.sim_number); })
+      .map(f => ({ id: f.id, sim_number: f.sim_number, serial: f.prevData.serial || '', cliente: PocState.nombreClienteDe(f.prevData) }));
+    const simCambiados = new Set(simItems.map(i => i.id));
+    const revisionSim = simItems.length ? await PocSimConflicto.revisar(simItems) : null;
+    if (revisionSim?.cancelado) return;
+
+    for (const { id, prevData, sim_number, sim_phone } of filas) {
       const newData  = {
         operador,
-        sim_number:       simTel[0] || '',
-        sim_phone:        simTel[1] || '',
+        sim_number,
+        sim_phone,
         updated_at:       firebase.firestore.FieldValue.serverTimestamp(),
         updated_by:       user?.uid   || null,
         updated_by_email: user?.email || null
       };
+      if (simCambiados.has(id)) {
+        const sc = PocSimConflicto.campo(revisionSim, id, user);
+        if (sc) newData.sim_conflicto = sc;
+        else if (prevData.sim_conflicto) newData.sim_conflicto = firebase.firestore.FieldValue.delete();
+      }
       await PocService.updatePocDevice(id, newData);
+      const cleanFields = PocService.stripSentinels(newData);
       await PocService.addLog({
         equipo_id: id,
         fecha:     firebase.firestore.FieldValue.serverTimestamp(),
         usuario:   user?.email,
-        cambios:   { antes: prevData, despues: newData }
+        ...(cleanFields.sim_conflicto ? { motivo: cleanFields.sim_conflicto.motivo, sim_conflicto: cleanFields.sim_conflicto } : {}),
+        cambios:   { antes: prevData, despues: cleanFields }
       });
       // SIM pegado a mano que existe disponible en el pool → marcarlo asignado
       // para que no se ofrezca dos veces. Solo si el SIM realmente cambió;

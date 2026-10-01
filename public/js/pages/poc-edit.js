@@ -270,6 +270,23 @@ window.PocEdit = {
         });
       }
 
+      // SIM que ya está en otro radio: avisa con el radio y el cliente y pide
+      // motivo; no bloquea (auditoría de módulos 2026-10-01, PoC R2/D2). Solo
+      // si el SIM cambió, para no trancar la edición de otros campos.
+      let revisionSim = null;
+      const simNuevoN = SimCardsService.normalizarSim(updatePayload.sim_number);
+      const simPrevN  = SimCardsService.normalizarSim(originalData?.sim_number);
+      if (simNuevoN && simNuevoN !== simPrevN) {
+        revisionSim = await PocSimConflicto.revisar([{
+          id: docId, sim_number: updatePayload.sim_number, serial: updatePayload.serial,
+          cliente: PocState.nombreClienteDe(originalData || {}),
+        }]);
+        if (revisionSim.cancelado) return;
+        const sc = PocSimConflicto.campo(revisionSim, docId, user);
+        if (sc) updatePayload.sim_conflicto = sc;
+        else if (originalData?.sim_conflicto) updatePayload.sim_conflicto = firebase.firestore.FieldValue.delete();
+      }
+
       await PocService.updatePocDevice(docId, updatePayload);
 
       // Clean snapshot for the UI row and audit log — strip FieldValue sentinels.
@@ -279,6 +296,7 @@ window.PocEdit = {
         equipo_id: docId,
         fecha:     firebase.firestore.FieldValue.serverTimestamp(),
         usuario:   user?.email,
+        ...(cleanFields.sim_conflicto ? { motivo: cleanFields.sim_conflicto.motivo, sim_conflicto: cleanFields.sim_conflicto } : {}),
         cambios:   { antes: originalData || {}, despues: cleanFields }
       }).catch(e => console.warn('poc_log write failed (non-critical):', e));
 

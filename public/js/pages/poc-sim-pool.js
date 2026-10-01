@@ -132,6 +132,14 @@ window.PocSimPool = {
       Toast.show(`Seleccionaste ${this._devices.length} equipos pero ${simIds.length} SIMs. Deben coincidir.`, 'bad');
       return;
     }
+    // Un SIM "disponible" en el pool puede estar puesto en un radio vivo (24
+    // hoy): avisa con el radio y el cliente y pide motivo, no bloquea
+    // (auditoría de módulos 2026-10-01, PoC R2/D2).
+    const revisionSim = await PocSimConflicto.revisar(this._devices.map((d, i) => ({
+      id: d.id, sim_number: simIds[i], serial: d.serial || '', cliente: PocState.nombreClienteDe(d),
+    })));
+    if (revisionSim.cancelado) return;
+
     if (!await Modal.confirm({
       message: `Vas a asignar ${simIds.length} SIMs del pool a los equipos seleccionados. El operador de cada equipo se tomará del SIM. ¿Continuar?`,
     })) return;
@@ -160,6 +168,17 @@ window.PocSimPool = {
       // Trabajo POST-commit: la asignación ya persistió — un fallo aquí no
       // debe contarla como fallida (el toast de "lo tomó otra sesión" sería
       // falso). Solo se loguea a consola.
+      const simConflicto = PocSimConflicto.campo(revisionSim, device.id, user);
+      try {
+        if (simConflicto) await PocService.updatePocDevice(device.id, { sim_conflicto: simConflicto });
+        else if (device.sim_conflicto) await PocService.updatePocDevice(device.id, { sim_conflicto: firebase.firestore.FieldValue.delete() });
+      } catch (e) {
+        console.warn(`Asignación de ${simIds[i]} OK, pero no se pudo guardar el motivo del SIM:`, e);
+      }
+      // La fila y la memoria de búsqueda se actualizan en el acto: la
+      // transacción no produce snapshot local y refresh() repintaba con el
+      // SIM viejo hasta la próxima búsqueda (B1).
+      PocList.aplicarCambioLocal(device.id, { ...simAsignado, ...(simConflicto ? { sim_conflicto: simConflicto } : {}) });
       try {
         // Si el equipo tenía otro SIM y ese SIM estaba en el pool asignado a
         // este equipo, vuelve como disponible (SIM físicamente intercambiado).
@@ -178,9 +197,10 @@ window.PocSimPool = {
           equipo_id: device.id,
           fecha:     firebase.firestore.FieldValue.serverTimestamp(),
           usuario:   user?.email,
+          ...(simConflicto ? { motivo: simConflicto.motivo, sim_conflicto: simConflicto } : {}),
           cambios:   {
             antes:   device,
-            despues: { ...device, ...simAsignado },
+            despues: { ...device, ...simAsignado, ...(simConflicto ? { sim_conflicto: simConflicto } : {}) },
           },
         }).catch(e => console.warn('poc_log write failed (non-critical):', e));
       } catch (e) {
@@ -194,6 +214,7 @@ window.PocSimPool = {
       Toast.show(`${ok} equipos actualizados con SIM y operador del pool.`, 'ok');
     }
     this.cerrar();
-    PocList.refresh();
+    // Sin refresh(): las filas ya se repintaron con aplicarCambioLocal y la
+    // selección se conserva para Imprimir / Copiar seriales.
   },
 };

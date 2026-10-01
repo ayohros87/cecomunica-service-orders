@@ -288,6 +288,23 @@ const PocService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
+  // Fichas VIVAS que llevan este SIM (auditoría de módulos 2026-10-01, PoC
+  // R2). El SIM se guarda como texto tal cual se tecleó, así que se consulta
+  // por el valor crudo y por los dígitos solos (dos igualdades, sin índice
+  // compuesto) y se unen. Servidor siempre: la caché local no tiene por qué
+  // tener la ficha del otro cliente.
+  async fichasConSim(sim) {
+    const crudo = (sim ?? '').toString().trim();
+    const digitos = crudo.replace(/\D/g, '');
+    if (!digitos) return [];
+    const db = firebase.firestore();
+    const valores = [...new Set([crudo, digitos])];
+    const snaps = await Promise.all(valores.map(v => db.collection('poc_devices').where('sim_number', '==', v).get()));
+    const porId = new Map();
+    snaps.forEach(s => s.docs.forEach(d => { const x = { id: d.id, ...d.data() }; if (x.deleted !== true) porId.set(d.id, x); }));
+    return [...porId.values()];
+  },
+
   // Query devices by client. Cuando se proveen AMBOS clienteId y clienteNombre,
   // corre las DOS queries y combina los resultados (dedup por docId) — los
   // equipos legacy escriben solo `cliente` (string) sin `cliente_id`, así que
