@@ -925,7 +925,7 @@ window.EquiposPool = {
         + 'Se limpian sus vínculos (contrato, orden, device POC) y cada una deja movimiento en el kardex.',
       pideMotivo: true,
       motivoPlaceholder: 'p. ej. conteo físico del 4-ago, estante A2',
-      correr: (eq, motivo) => EquiposPoolService.corregirABodega(eq.id, motivo, firebase.auth().currentUser),
+      correr: (eq, motivo) => EquiposPoolService.corregirABodega(eq.id, motivo, firebase.auth().currentUser, { esperado: eq.estado || null }),
     },
     // ── Salidas de "Listo · el cliente no lo retiró" ────────────────────
     // Radios ajenos que quedaron en nuestro estante al cerrar una reparación
@@ -972,7 +972,7 @@ window.EquiposPool = {
         + 'Escribe la fecha del último contacto.',
       pideMotivo: true,
       motivoPlaceholder: 'p. ej. abandonado — sin respuesta desde 12-mar, avisado por correo 3 veces',
-      correr: (eq, motivo) => EquiposPoolService.darDeBaja(eq.id, motivo, firebase.auth().currentUser),
+      correr: (eq, motivo) => EquiposPoolService.darDeBaja(eq.id, motivo, firebase.auth().currentUser, { esperado: eq.estado || null }),
     },
   },
 
@@ -1330,7 +1330,7 @@ window.EquiposPool = {
     if (motivo === null) return;
     if (!motivo.trim()) { Toast.show('La baja requiere un motivo.', 'bad'); return; }
     try {
-      await EquiposPoolService.darDeBaja(id, motivo.trim(), firebase.auth().currentUser);
+      await EquiposPoolService.darDeBaja(id, motivo.trim(), firebase.auth().currentUser, { esperado: eq?.estado || null });
       Toast.show('Equipo dado de baja.', 'ok');
       this.refrescar(id);
     } catch (e) {
@@ -1471,7 +1471,7 @@ window.EquiposPool = {
     const btn = document.getElementById('btnGuardarCorreccion');
     btn.disabled = true;
     try {
-      const res = await EquiposPoolService.corregirABodega(id, motivo, firebase.auth().currentUser);
+      const res = await EquiposPoolService.corregirABodega(id, motivo, firebase.auth().currentUser, { esperado: eq.estado || null });
       let msg = res?.a_revision
         ? `Estado corregido — la unidad quedó POR REVISAR, no en bodega: la sustituyó ${res.entrante} en un reemplazo.`
         : 'Estado corregido — la unidad quedó en bodega.';

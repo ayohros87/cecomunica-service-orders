@@ -270,12 +270,12 @@ window.EquipoFicha = {
       } else if (accion === 'corregir') {
         const motivo = await Modal.prompt({ title: 'Corregir a bodega', confirmLabel: 'Corregir', message: `Corregir ${serial} a bodega — la unidad está físicamente en bodega y su estado era heredado. Motivo (opcional):` });
         if (motivo === null) return;
-        await EquiposPoolService.corregirABodega(eq.id, motivo || 'Corrección desde la ficha (Almacén)', user);
+        await EquiposPoolService.corregirABodega(eq.id, motivo || 'Corrección desde la ficha (Almacén)', user, { esperado: eq.estado || null });
         aviso(`${serial} → en bodega (verificado).`);
       } else if (accion === 'baja') {
         const motivo = await Modal.prompt({ title: 'Dar de baja', confirmLabel: 'Dar de baja', message: `Dar de baja ${serial} — sale de la flota (reversible con "Reactivar"). Motivo (obligatorio):` });
         if (!motivo) return;
-        await EquiposPoolService.darDeBaja(eq.id, motivo, user);
+        await EquiposPoolService.darDeBaja(eq.id, motivo, user, { esperado: eq.estado || null });
         aviso(`${serial} dado de baja.`);
       } else if (accion === 'reactivar') {
         const motivo = await Modal.prompt({ title: 'Reactivar', confirmLabel: 'Reactivar', message: `Reactivar ${serial} — regresa a bodega como disponible. Motivo:` });

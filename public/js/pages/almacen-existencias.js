@@ -618,7 +618,7 @@ window.AlmacenExistencias = (() => {
       titulo: 'Corregir estado en lote', icono: 'pencil-ruler', labelOk: 'Corregir a bodega',
       pideMotivo: true, motivoPlaceholder: 'p. ej. conteo físico del 4-ago, estante A2',
       cuerpo: (n, f) => `<b>${n}</b> unidad(es) de <b>${esc(f.label)}</b> en "por clasificar" pasarán a <b>En bodega</b>.<br><br>Al confirmar estás <b>afirmando que están físicamente en bodega</b> — normalmente porque acabas de contarlas. No lo uses para “limpiar la lista”.`,
-      correr: (eq, motivo, user) => EquiposPoolService.corregirABodega(eq.id, motivo, user),
+      correr: (eq, motivo, user) => EquiposPoolService.corregirABodega(eq.id, motivo, user, { esperado: eq.estado || null }),
     },
     verificar: {
       titulo: 'Marcar como verificados', icono: 'badge-check', labelOk: 'Verificados',

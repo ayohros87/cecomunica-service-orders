@@ -1033,9 +1033,12 @@ const EquiposPoolService = {
     }, user);
   },
 
-  async darDeBaja(id, motivo, user) {
+  // `esperado` (auditoría de módulos 2026-09-30, B4): el estado que la
+  // pantalla vio al ofrecer la acción; si otra pestaña movió la unidad
+  // mientras tanto, la transacción lanza 'estado-cambio' en vez de pisarla.
+  async darDeBaja(id, motivo, user, { esperado = null } = {}) {
     return this.cambiarEstado(id, this.ESTADOS.BAJA, {
-      tipo: 'baja', notas: motivo,
+      esperado, tipo: 'baja', notas: motivo,
       extra: { baja_motivo: motivo, asignacion: null, orden_actual_id: null,
                pendiente_devolucion: firebase.firestore.FieldValue.delete() },
     }, user);
@@ -1069,11 +1072,12 @@ const EquiposPoolService = {
   // daño: "en bodega" lo ofrecía para alquilar (SERV20260918-01, 22806A0291/
   // 0294 — 12 días disponibles tras una corrección a mano). El resultado trae
   // `a_revision` y el entrante para que quien llama lo diga.
-  async corregirABodega(id, motivo, user) {
+  // `esperado` (B4): ver darDeBaja.
+  async corregirABodega(id, motivo, user, { esperado = null } = {}) {
     const entrante = await this._sustituidoEnSuContrato(id).catch(() => null);
     if (entrante) {
       const r = await this.cambiarEstado(id, this.ESTADOS.DEVUELTO, {
-        tipo: 'correccion_migracion',
+        esperado, tipo: 'correccion_migracion',
         notas: `${motivo} — a revisión y no a bodega: lo sustituyó ${entrante} en un reemplazo`,
         extra: { asignacion: null, poc_device_id: null, orden_actual_id: null,
                  pendiente_devolucion: firebase.firestore.FieldValue.delete() },
@@ -1081,7 +1085,7 @@ const EquiposPoolService = {
       return { ...r, a_revision: true, entrante };
     }
     return this.cambiarEstado(id, this.ESTADOS.EN_BODEGA, {
-      tipo: 'correccion_migracion', notas: motivo,
+      esperado, tipo: 'correccion_migracion', notas: motivo,
       extra: { asignacion: null, poc_device_id: null, orden_actual_id: null,
                verificado: true,
                pendiente_devolucion: firebase.firestore.FieldValue.delete() },
