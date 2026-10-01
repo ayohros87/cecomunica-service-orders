@@ -26,6 +26,7 @@ import '/js/pages/poc-edit.js';
 import '/js/pages/poc-bulk.js';
 import '/js/pages/poc-sim.js';
 import '/js/pages/poc-sim-pool.js';
+import '/js/pages/poc-sim-inline.js'; // SIM en la fila: editor en sitio con lector (P5)
 import '/js/pages/poc-list.js';
 import '/js/pages/poc-index.js';
 import '/js/vendor/lucide.min.js';

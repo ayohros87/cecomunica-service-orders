@@ -38,6 +38,7 @@ window.PocBulk = {
       Toast.show(`El máximo permitido es ${this.MAX_BULK} equipos por edición masiva.`, 'bad');
       return;
     }
+    window.PocSimInline?.cancelar?.();   // un editor de SIM en sitio abierto se cierra antes de tomar las celdas
     this._modo = true;
     const COL  = PocState.COL;
 

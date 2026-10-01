@@ -356,6 +356,16 @@ window.PocList = {
     const simTel = FMT.esc(this._campoVisible(d, 'sim_phone'));
     tdSim.innerHTML = `<i data-lucide="smartphone"></i> ${simNum} / ${simTel}`;
     if (cerrada && (simNum || simTel)) tdSim.title = 'SIM que tenía al cerrarse la ficha (ya liberado del equipo)';
+    // SIM en la fila (P5): clic en la celda → editor en sitio (PocSimInline).
+    if (!cerrada && !PocState.esLectura() && window.PocSimInline) {
+      tdSim.classList.add('sim-cell-editable');
+      tdSim.title = 'Clic para cambiar el SIM, el teléfono o el operador';
+      tdSim.addEventListener('click', (e) => {
+        if (e.target.closest('.sim-inline')) return;      // ya en edición
+        if (window.PocBulk?._modo) return;                // la masiva tiene sus inputs
+        PocSimInline.abrir(row, docId, d);
+      });
+    }
     row.appendChild(tdSim);
 
     // acciones (11)

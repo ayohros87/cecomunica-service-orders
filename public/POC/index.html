@@ -113,6 +113,16 @@
     #devicesTable td:last-child { white-space: nowrap; }
     #devicesTable td:last-child .btn { margin-left: var(--sp-1); }
 
+    /* SIM en la fila (P5): la celda SIM / Teléfono se edita en sitio. */
+    #devicesTable td.sim-cell-editable { cursor: pointer; }
+    #devicesTable td.sim-cell-editable:hover { background: var(--accent-soft, #e0f2fe); }
+    .sim-inline { display: flex; align-items: center; gap: 4px; min-width: 420px; }
+    .sim-inline .table-input { font-size: 12px; padding: 3px 6px; }
+    .sim-inline-iccid { width: 180px; font-family: var(--font-mono, monospace); }
+    .sim-inline-tel { width: 92px; }
+    .sim-inline-op { width: 118px; }
+    .sim-inline-btns { display: inline-flex; gap: 2px; }
+
     /* Duplicados por serial: cabecera de cada grupo (serial · custodia del
        pool · cerrar sobrantes). Auditoría de módulos 2026-10-01, R3/P6. */
     #devicesTable tr.poc-dup-head > td {
