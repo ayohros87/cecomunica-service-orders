@@ -11,12 +11,16 @@
 //   … --aplicar            escribe (en el emulador)
 //   … --aplicar --produccion   escribe en PRODUCCIÓN (sin FIRESTORE_EMULATOR_HOST). Solo con el OK de Alberto.
 //   … --csv <ruta>         además deja el detalle por serial en un CSV
+//   … --sin-prefijo PRUEBA-AUDIT   ignora las fichas cuyo serial empieza así (datos de prueba del emulador)
+//   … --solo-prefijo PRUEBA-AUDIT  SOLO esas fichas (para probar --aplicar en el emulador sin tocar el resto)
 const admin = require('firebase-admin');
 const fs = require('fs');
 const args = process.argv.slice(2);
 const APLICAR = args.includes('--aplicar');
 const PRODUCCION = args.includes('--produccion');
 const csvRuta = args.includes('--csv') ? args[args.indexOf('--csv') + 1] : null;
+const sinPrefijo = args.includes('--sin-prefijo') ? String(args[args.indexOf('--sin-prefijo') + 1] || '').toUpperCase() : '';
+const soloPrefijo = args.includes('--solo-prefijo') ? String(args[args.indexOf('--solo-prefijo') + 1] || '').toUpperCase() : '';
 if (!process.env.FIRESTORE_EMULATOR_HOST && !PRODUCCION) {
   console.error('Sin FIRESTORE_EMULATOR_HOST. Para producción hay que pasar --produccion explícitamente (y tener el OK de Alberto).');
   process.exit(2);
@@ -42,7 +46,9 @@ const MOV_CUSTODIA_REAL = new Set(['asignacion_contrato', 'reasignacion', 'salid
   const t0 = Date.now();
   const [snap, cliSnap] = await Promise.all([db.collection('poc_devices').get(), db.collection('clientes').get()]);
   const cli = new Map(cliSnap.docs.map(d => [d.id, d.data().nombre]));
-  const vivas = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.deleted !== true);
+  const vivas = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.deleted !== true)
+    .filter(d => !sinPrefijo || !String(d.serial || '').toUpperCase().startsWith(sinPrefijo))
+    .filter(d => !soloPrefijo || String(d.serial || '').toUpperCase().startsWith(soloPrefijo));
   console.log(`poc_devices: ${snap.size} (vivas ${vivas.length}) en ${Date.now() - t0} ms`);
 
   // 1) Agrupar por serial normalizado; la buena = la más reciente.
