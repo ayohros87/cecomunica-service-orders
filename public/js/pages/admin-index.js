@@ -119,8 +119,11 @@
   async function loadContratosKPI() {
     try {
       const C = firebase.firestore().collection('contratos');
+      // Sin borrados (auditoría de módulos 2026-09-30, 08 R1): los 49
+      // "pendientes" de la portada eran todos `deleted: true` — el home
+      // (AprobacionesService) decía 0. Misma resta que el KPI de órdenes.
       const [pendientes, aprobados, activos] = await Promise.all(
-        ['pendiente_aprobacion', 'aprobado', 'activo'].map(e => contar(C.where('estado', '==', e))));
+        ['pendiente_aprobacion', 'aprobado', 'activo'].map(e => sinCerradas(C.where('estado', '==', e))));
       state.metrics.contratos_pendientes = pendientes;
       setStat('kpiContratos', pendientes.toLocaleString('es-PA'),
         `<span class="tag">${aprobados}</span> aprobados · <span class="tag">${activos}</span> activos`);
