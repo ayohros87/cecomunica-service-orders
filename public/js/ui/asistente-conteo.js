@@ -32,9 +32,8 @@ window.AsistenteConteo = (() => {
       .filter(m => !q || `${m.marca || ''} ${m.modelo || ''}`.toLowerCase().includes(q))
       .map(m => `
         <tr>
-          <td>${esc(m.marca || '—')}</td>
-          <td class="td-primary">${esc(m.modelo || '—')}</td>
-          <td style="text-align:right;">
+          <td class="td-primary">${esc(m.modelo || '—')}<small style="display:block; font-weight:400; color:var(--fg-3);">${esc(m.marca || '—')}</small></td>
+          <td style="text-align:right; white-space:nowrap;">
             <input type="number" min="0" inputmode="numeric" data-conteo-modelo="${esc(m.id)}"
               value="${ctx.cantidades[m.id] ?? ''}" placeholder="—"
               style="width:82px; text-align:right;" class="cc-input"
@@ -42,7 +41,7 @@ window.AsistenteConteo = (() => {
               onkeydown="AsistenteConteo._teclaCantidad(event, this)">
           </td>
         </tr>`).join('')
-      || '<tr><td colspan="3" style="color:var(--fg-3);">Sin modelos con ese filtro.</td></tr>';
+      || '<tr><td colspan="2" style="color:var(--fg-3);">Sin modelos con ese filtro.</td></tr>';
   }
 
   function paso1(filtro = '') {
@@ -55,9 +54,12 @@ window.AsistenteConteo = (() => {
       <input type="search" class="cc-input" placeholder="Filtrar modelo… (Enter va a la cantidad)" style="width:100%; margin-bottom:8px;"
         value="${esc(filtro)}" oninput="AsistenteConteo._filtrar(this.value)"
         onkeydown="if(event.key==='Enter'){event.preventDefault();AsistenteConteo._focoCantidad(0);}">
+      <!-- Dos columnas (modelo con la marca debajo, cantidad): en teléfono la
+           tercera columna quedaba fuera de pantalla sin pista de scroll y no
+           se podía contar (auditoría de módulos 2026-09-30, R4). -->
       <div style="max-height:46vh; overflow-y:auto;">
-        <table class="app-table compact">
-          <thead><tr><th>Marca</th><th>Modelo</th><th style="text-align:right;">Cantidad contada</th></tr></thead>
+        <table class="app-table compact" style="width:100%; table-layout:fixed;">
+          <thead><tr><th>Modelo</th><th style="text-align:right; width:120px;">Cantidad contada</th></tr></thead>
           <tbody id="conteoTbodyCaptura">${_filasCaptura(filtro)}</tbody>
         </table>
       </div>`,
