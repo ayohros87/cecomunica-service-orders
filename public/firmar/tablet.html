@@ -409,15 +409,23 @@
       _guardando = true;
       _mostrarError('');
       btn.disabled = true; btn.textContent = 'Registrando…';
+      // La solicitud se fija ANTES de los await: el snapshot de escuchar()
+      // dispara en cuanto el update local sale de "pendiente" y llamaba a
+      // aIdle() (_sol = null) mientras esto seguía corriendo → "Cannot read
+      // properties of null (reading 'data')" al pintar el mensaje de gracias
+      // (auditoría de módulos 2026-09-30, 01 R6). Marcarla consumida también
+      // evita el parpadeo a "en espera" entre la firma y el "gracias".
+      const sol = _sol;
+      sol.consumida = true;
       try {
         const blob = await _pad.toBlob();
         if (!blob) throw new Error('La firma quedó vacía.');
-        const path = `ordenes_firmas/${_sol.data.orden_id}_acuse_tablet_${Date.now()}.png`;
+        const path = `ordenes_firmas/${sol.data.orden_id}_acuse_tablet_${Date.now()}.png`;
         const ref = firebase.storage().ref(path);
         await ref.put(blob, { contentType: 'image/png' });
         const url = await ref.getDownloadURL();
         const user = firebase.auth().currentUser;
-        await firebase.firestore().collection('firmas_tablet').doc(_sol.id).update({
+        await firebase.firestore().collection('firmas_tablet').doc(sol.id).update({
           estado: 'firmada',
           firma: {
             nombre,
@@ -427,8 +435,8 @@
             por_uid: user?.uid || null,
           },
         });
-        document.getElementById('listoMsg').innerHTML = _sol.data.copia_a
-          ? `Gracias — le enviamos copia del acuse a <b>${esc(_sol.data.copia_a)}</b>. Puede devolver la tablet.`
+        document.getElementById('listoMsg').innerHTML = sol.data.copia_a
+          ? `Gracias — le enviamos copia del acuse a <b>${esc(sol.data.copia_a)}</b>. Puede devolver la tablet.`
           : 'Gracias — recepción ya tiene el acuse. Puede devolver la tablet.';
         ver('vListo');
         // El snapshot dejará de traer esta solicitud (ya no está pendiente);
@@ -439,6 +447,7 @@
         _pad = null;
       } catch (e) {
         console.error(e);
+        if (_sol === sol) sol.consumida = false;   // sigue viva: el snapshot vuelve a mandar
         _mostrarError('No se pudo registrar la firma — revisa la conexión e intenta de nuevo.');
         btn.textContent = 'Confirmar firma';
         _guardando = false;
