@@ -211,7 +211,9 @@ Object.assign(window.Centro, {
   },
 
   // 'aprobado' también opera (la mayoría del histórico nunca pasa a 'activo').
-  _esVigente(c) { return ['activo', 'aprobado'].includes(c?.estado); },
+  // Un DORMIDO (aprobado sin firmar a los 45 días, decisión 7 de Alberto) no
+  // es vigente: no bloquea otros trámites ni cuenta para el estado de la cuenta.
+  _esVigente(c) { return ['activo', 'aprobado'].includes(c?.estado) && c?.dormido !== true; },
   // Candado de las acciones que se disparan desde onclick en texto (Ahora,
   // menú ⋯, pie del expediente): el mismo gesto sale de varios botones, así
   // que el candado va por CLAVE y el botón que se tocó solo muestra el
@@ -238,6 +240,7 @@ Object.assign(window.Centro, {
   // 2026-09-28, T1). 'aprobado' sin activar ni firmar es el que espera firma.
   _estadoLabel(c) {
     const e = c?.estado || '';
+    if (e === 'aprobado' && c.dormido === true) return 'Dormido (sin firma)';
     if (e === 'aprobado') return (c.fecha_activacion || c.firmado) ? 'Aprobado' : 'Aprobado (sin firma)';
     return ({ pendiente_aprobacion: 'Pendiente de aprobación', activo: 'Activo', vencido: 'Vencido',
       anulado: 'Anulado', inactivo: 'Inactivo' })[e] || e || '—';

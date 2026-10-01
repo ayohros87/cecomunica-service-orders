@@ -90,8 +90,13 @@ Object.assign(window.Centro, {
           created_at: firebase.firestore.FieldValue.serverTimestamp(),
         });
         sid = ref.id;
-        await ContratosService.updateContrato(c.id, { firma_solicitud_id: sid, firma_solicitud_estado: 'pendiente' });
-        c.firma_solicitud_id = sid; c.firma_solicitud_estado = 'pendiente';
+        // firma_solicitud_creada_at: desde cuándo espera el enlace — lo leen
+        // la señal del home, el paso "Firma del cliente" y el cron de los 45 días.
+        await ContratosService.updateContrato(c.id, {
+          firma_solicitud_id: sid, firma_solicitud_estado: 'pendiente',
+          firma_solicitud_creada_at: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        c.firma_solicitud_id = sid; c.firma_solicitud_estado = 'pendiente'; c.firma_solicitud_creada_at = new Date();
       }
       const url = `${location.origin}/firmar/?s=${sid}`;
       const rep = c.representante || this.cliente.representante || '—';
@@ -118,6 +123,38 @@ Object.assign(window.Centro, {
           <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cerrar</button>
         </div>`);
     } catch (e) { console.error(e); Toast.show('No se pudo generar el enlace de firma', 'bad'); }
+  },
+
+  // Reactivar un contrato DORMIDO (decisión 7 de Alberto, 1-oct-2026): el
+  // cron lo durmió a los 45 días sin firma y caducó su enlace. El vendedor (o
+  // administración) lo despierta y en el mismo acto genera un enlace nuevo —
+  // la solicitud vieja sigue caducada, con su rastro.
+  async reactivarContrato(id) {
+    const c = this.contratos.find(x => x.id === id);
+    if (!c || !ContratoFirma.dormido(c)) { Toast.show('Este contrato no está dormido', 'warn'); return; }
+    if (![ROLES.ADMIN, 'admin', ROLES.GERENTE, ROLES.VENDEDOR].includes(this.rol)) {
+      Toast.show('Lo reactiva el vendedor o administración', 'warn'); return;
+    }
+    this._cerrarModal();
+    const dias = c.dormido_dias ? `${c.dormido_dias} días sin firma` : 'más de 45 días sin firma';
+    const ok = await Modal.confirm({
+      title: 'Reactivar la solicitud de firma', confirmLabel: 'Reactivar y generar enlace',
+      message: `El contrato <b class="cg-mono">${this.esc(c.contrato_id || c.id)}</b> quedó dormido por ${this.esc(dias)}.
+        Vuelve a ser un trámite vivo (cuenta otra vez en "Contratos por firmar") y se genera un
+        <b>enlace de firma nuevo</b>; el anterior sigue caducado. Si en 45 días no firma, se vuelve a dormir.`,
+    });
+    if (!ok) { this.abrirGestion(`ct-${c.id}`); return; }
+    try {
+      await ContratosService.updateContrato(c.id, {
+        dormido: false,
+        dormido_reactivado_at: firebase.firestore.FieldValue.serverTimestamp(),
+        dormido_reactivado_por_uid: this.uid || null,
+      });
+      c.dormido = false; c.dormido_reactivado_at = new Date();
+      Toast.show('Contrato reactivado — ahora genera el enlace', 'ok');
+    } catch (e) { console.error(e); Toast.show('No se pudo reactivar: ' + (e.message || e), 'bad'); return; }
+    this.pintarContratos?.(); this.pintarGestiones?.(); this.pintarSenales?.(); this.armarMenu?.();
+    await this.enviarFirma(c.id);
   },
 
   async _enviarFirmaCorreo(contratoDocId, sid) {

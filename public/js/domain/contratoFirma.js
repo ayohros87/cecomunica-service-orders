@@ -53,8 +53,28 @@ window.ContratoFirma = {
   /** ¿Este contrato lleva la firma del cliente? */
   lleva(c) { return !this.SIN_FIRMA[this.codigoTipo(c)]; },
 
-  /** ¿Está esperando esa firma AHORA? (aprobado y todavía sin firmar) */
-  esperando(c) { return this.lleva(c) && c?.estado === 'aprobado' && c.firmado !== true; },
+  /** ¿Está esperando esa firma AHORA? (aprobado, sin firmar y no dormido) */
+  esperando(c) { return this.lleva(c) && c?.estado === 'aprobado' && c.firmado !== true && !this.dormido(c); },
+
+  // DORMIDO (decisión 7 de Alberto, 1-oct-2026): aprobado sin firmar a los 45
+  // días. El cron caduca la solicitud y marca el contrato; para todos los
+  // efectos es como si no existiera — un borrador que el vendedor reactiva
+  // desde el Centro. Espejo de functions/src/domain/contratoDormido.js.
+  DIAS_DORMIDO: 45,
+  dormido(c) { return c?.dormido === true; },
+
+  // Días que lleva esperando la firma, desde lo ÚLTIMO que la acercó: una
+  // reactivación, el enlace enviado, los seriales asignados, la aprobación.
+  // Misma fórmula que el cron: lo que la señal dice que lleva es lo que el
+  // cron mide para dormirlo.
+  diasEsperando(c, now = new Date()) {
+    const aDate = (v) => !v ? null : (v.toDate ? v.toDate() : (typeof v.seconds === 'number' ? new Date(v.seconds * 1000) : new Date(v)));
+    const ts = [c?.dormido_reactivado_at, c?.firma_solicitud_creada_at, c?.seriales_asignados_at, c?.fecha_aprobacion]
+      .map(aDate).filter(d => d && !isNaN(d));
+    const base = ts.length ? new Date(Math.max(...ts.map(d => d.getTime()))) : aDate(c?.fecha_creacion);
+    if (!base || isNaN(base)) return null;
+    return Math.floor((now - base) / 86400000);
+  },
 
   /** Por qué no la lleva, para decirlo en la pantalla. */
   porQue(c) { return this.SIN_FIRMA[this.codigoTipo(c)]?.porQue || ''; },

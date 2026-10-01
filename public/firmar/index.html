@@ -77,6 +77,15 @@
       <p class="nota">Este enlace de firma no existe o fue cancelado. Contacte a su asesor de C Comunica.</p>
     </div>
 
+    <!-- Caducado (decisión 7, 1-oct-2026): a los 45 días sin firma la
+         solicitud caduca y el contrato queda dormido; el enlace ya no firma. -->
+    <div id="caducado" class="estado hidden">
+      <div class="icono">⌛</div>
+      <h2>Este enlace caducó</h2>
+      <p class="nota">Pasaron más de 45 días sin firma y el enlace dejó de ser válido.
+        Si todavía desea firmar <b id="cdContrato"></b>, pídale a su asesor de C Comunica que le envíe un enlace nuevo.</p>
+    </div>
+
     <div id="yaFirmado" class="hidden">
       <div class="estado" style="padding-bottom:16px;">
         <div class="icono">✅</div>
@@ -203,7 +212,7 @@
 
     esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); },
     ver(id) {
-      ['cargando', 'noValido', 'yaFirmado', 'form'].forEach(x =>
+      ['cargando', 'noValido', 'caducado', 'yaFirmado', 'form'].forEach(x =>
         document.getElementById(x).classList.toggle('hidden', x !== id));
     },
 
@@ -216,6 +225,10 @@
         const s = snap.data();
         this.doc = s;
         if (s.estado === 'cancelado') { this.ver('noValido'); return; }
+        if (s.estado === 'caducado') {
+          document.getElementById('cdContrato').textContent = s.titulo || `el contrato ${s.contrato_id || ''}`;
+          this.ver('caducado'); return;
+        }
         if (s.estado !== 'pendiente') {
           document.getElementById('yfContrato').textContent = s.titulo || `El contrato ${s.contrato_id || ''}`;
           // La copia del cliente: el documento congelado + el rastro de SU

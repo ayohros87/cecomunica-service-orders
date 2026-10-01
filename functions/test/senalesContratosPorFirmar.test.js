@@ -18,6 +18,8 @@ const REGISTROS = [
   { id: 'x1', estado: 'aprobado', seriales_estado: 'asignados', tipo_contrato: 'Alquiler', deleted: true },
   { id: 'p1', estado: 'aprobado', seriales_estado: 'pendiente', tipo_contrato: 'Alquiler' },          // es de bodega (S15)
   { id: 'v1', estado: 'activo', seriales_estado: 'asignados', tipo_contrato: 'Alquiler', firmado: true },
+  // Dormido a los 45 días (decisión 7, 1-oct-2026): fuera de la cola hasta que el vendedor lo reactive.
+  { id: 'z1', estado: 'aprobado', seriales_estado: 'asignados', tipo_contrato: 'Alquiler', dormido: true, creado_por_uid: 'u1' },
 ];
 
 function montar({ usuarios } = {}) {
@@ -48,6 +50,12 @@ test('solo cuenta los contratos que de verdad esperan la firma del cliente', asy
   const a1 = filas.find(f => f.id === 'a1');
   assert.equal(a1.con_orden, true, 'con orden: la firma tranca la entrega');
   assert.equal(a1.cliente_id, 'k1', 'la fila sabe a qué ficha del Centro ir');
+});
+
+test('un contrato dormido no cuenta, ni para gerencia ni para su vendedor', async () => {
+  const s = montar();
+  assert.ok(!(await s.listContratosPorFirmar()).some(f => f.id === 'z1'));
+  assert.equal(await s.countContratosPorFirmar({ uid: 'u1' }), 1, 'u1 tiene a1 y el dormido z1: solo cuenta a1');
 });
 
 test('el vendedor solo ve los contratos que elaboró', async () => {

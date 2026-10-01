@@ -213,6 +213,15 @@ Object.assign(window.Centro, {
       }
     }
 
+    // DORMIDO (decisión 7, 1-oct-2026): lo único que avanza es reactivarlo —
+    // vendedor o administración; genera un enlace de firma nuevo.
+    if (ContratoFirma.dormido(c)) {
+      A.push(this._acc({ id: 'reactivar', label: 'Reactivar la solicitud de firma…', primaria: true,
+        hint: `dormido ${c.dormido_dias ? `tras ${c.dormido_dias} días` : 'a los 45 días'} sin firma — vuelve a ser trámite y sale un enlace nuevo`,
+        onclick: `Centro.reactivarContrato('${id}')`,
+        ok: [ROLES.ADMIN, 'admin', ROLES.GERENTE, ROLES.VENDEDOR].includes(this.rol),
+        motivo: 'lo reactiva el vendedor o administración' }));
+    }
     if (c.estado === 'pendiente_aprobacion') {
       A.push(this._acc({ id: 'aprobar', label: 'Aprobar contrato', primaria: true,
         hint: 'después se le manda a firmar al cliente',

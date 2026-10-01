@@ -183,9 +183,17 @@ Object.assign(window.Centro, {
     // (2026-09-15): antes se quedaba para siempre en "Esperando firma", que es
     // justo lo que mandó a Brenda a perseguir una firma inexistente.
     const abierto = (c) => ContratoFirma.lleva(c) ? !c.firmado : c.entrega_confirmada !== true;
+    // Los 45 días ya no ESCONDEN el trámite (C3: la ficha decía "nada
+    // pendiente" mientras el home contaba el contrato). Con seriales
+    // asignados, el cron lo DUERME a los 45 días (decisión 7, 1-oct-2026) y el
+    // dormido se pinta aparte (pintarGestiones); mientras tanto sigue aquí con
+    // su edad. El corte de 45 días queda solo como válvula para lo que el cron
+    // no alcanza (histórico sin circuito de seriales).
+    const sigueVivo = (c) => c.dormido !== true
+      && (c.seriales_estado === 'asignados' || c.seriales_estado === 'pendiente' || (dias(c.fecha_creacion) ?? 999) < 45);
     return (this.contratos || []).filter(c => !c.deleted && (
       c.estado === 'pendiente_aprobacion'
-      || (c.estado === 'aprobado' && abierto(c) && (dias(c.fecha_creacion) ?? 999) < 45)
+      || (c.estado === 'aprobado' && abierto(c) && sigueVivo(c))
       // Renovación ACTIVA pero con la regularización PENDIENTE o PARCIAL
       // (caso C COMUNICA 2026-08-28: el trigger amarró 2 y dejó 2 sin línea,
       // y el check se daba por listo con solo regularizacion.at): el trámite
@@ -277,7 +285,9 @@ Object.assign(window.Centro, {
       pasoEntrega,
     ];
     const done = pasos.filter(p => p[1]).length;
-    const [chipCls, chipTxt] = c.estado === 'pendiente_aprobacion' ? ['cg-chip--warn', 'Esperando aprobación']
+    const dormido = ContratoFirma.dormido(c);
+    const [chipCls, chipTxt] = dormido ? ['cg-chip--warn', `Dormido · ${c.dormido_dias || ContratoFirma.DIAS_DORMIDO}+ días sin firma`]
+      : c.estado === 'pendiente_aprobacion' ? ['cg-chip--warn', 'Esperando aprobación']
       : !llevaFirma ? (c.entrega_confirmada === true ? ['cg-chip--ok', 'Entregado'] : ['cg-chip--info', 'Aprobado — por entregar'])
       : !c.firmado && !this._serialesListos(c) ? ['cg-chip--info', 'Esperando seriales']
       : !c.firmado ? ['cg-chip--warn', 'Esperando firma']
@@ -300,7 +310,7 @@ Object.assign(window.Centro, {
       <div class="cg-row cg-row--g" id="grow-ct-${this.esc(c.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('ct-${this.esc(c.id)}')"
            onkeydown="if(event.key==='Enter')this.click()" style="${abierta ? 'border-color:var(--accent);' : ''}">
         <div class="cg-gmain"><div class="n cg-mono" style="font-size:13px;">${this.esc(c.contrato_id || c.id)}</div>
-          <div class="s">${esRenov ? 'Renovación de cuenta' : 'Contrato nuevo'} · ${unid} unid. · $${Number(c.total_mensual || 0).toFixed(2)}/mes</div></div>
+          <div class="s">${dormido ? `Borrador de solicitud · dormido desde ${this._fmtFecha(c.dormido_at)} · ` : ''}${esRenov ? 'Renovación de cuenta' : 'Contrato nuevo'} · ${unid} unid. · $${Number(c.total_mensual || 0).toFixed(2)}/mes</div></div>
         <div class="cg-gside">
           ${this._progHtml(done, pasos.length)}
           <span class="cg-chip ${chipCls}" style="flex:none;">${chipTxt}</span>
@@ -311,7 +321,10 @@ Object.assign(window.Centro, {
       ${abierta ? `<div class="ds-card" style="padding:var(--sp-4); margin:-4px 0 10px; border-top:none;">
         <div class="cg-exp">
           <div>
-            <p style="font-size:13px; margin:0 0 8px;">${esRenov
+            <p style="font-size:13px; margin:0 0 8px;">${dormido
+              ? `<b>Dormido:</b> pasaron ${this.esc(String(c.dormido_dias || ContratoFirma.DIAS_DORMIDO))} días aprobado sin la firma del cliente; la solicitud y el enlace caducaron.
+                 No cuenta en "Contratos por firmar" ni frena otros trámites de la cuenta. <b>Reactivar</b> genera un enlace nuevo.`
+              : esRenov
               ? `Renueva y <b>consolida la cuenta</b>: sus orígenes quedan marcados como renovados al activarse.`
               : `Contrato nuevo pendiente del ciclo aprobación → seriales de bodega → firma → activo.`}
               <b>Duración:</b> ${this.esc(this._durTxt(c) || '—')}</p>
@@ -419,7 +432,18 @@ Object.assign(window.Centro, {
     const cont = document.getElementById('fGestiones');
     const tramites = this._tramitesContrato();
     const tramHtml = tramites.map(c => this._tramiteHtml(c)).join('');
-    if (!(this.gestiones || []).length && !tramites.length) {
+    // Borradores DORMIDOS (decisión 7, 1-oct-2026): aprobados sin firma a los
+    // 45 días. No son trámites —no cuentan ni bloquean—, pero se ven, con
+    // "Reactivar" en su menú, para que no se pierdan en el histórico.
+    const dormidos = (this.contratos || []).filter(c => !c.deleted && c.estado === 'aprobado' && ContratoFirma.dormido(c));
+    const dormAbierto = dormidos.some(c => this.gSel === 'ct-' + c.id);
+    const dormHtml = dormidos.length ? `
+        <details ${dormAbierto ? 'open' : ''} style="margin-top:10px;">
+          <summary style="cursor:pointer; font-size:12.5px; color:var(--fg-3); padding:4px 2px; user-select:none;">
+            Borradores dormidos — ${dormidos.length} contrato${dormidos.length === 1 ? '' : 's'} aprobado${dormidos.length === 1 ? '' : 's'} sin firma a los 45 días · se reactivan desde su menú</summary>
+          <div style="margin-top:8px;">${dormidos.map(c => this._tramiteHtml(c)).join('')}</div>
+        </details>` : '';
+    if (!(this.gestiones || []).length && !tramites.length && !dormidos.length) {
       cont.innerHTML = `<div class="cg-empty">Sin gestiones registradas todavía.
         ${this.puedeCrearGestion() ? `<div class="cta"><button class="btn btn-primary cg-act"
           onclick="event.stopPropagation(); document.getElementById('btnGestion')?.scrollIntoView({block:'center'}); document.getElementById('btnGestion')?.click()">Nueva gestión</button></div>` : ''}</div>`;
@@ -478,6 +502,7 @@ Object.assign(window.Centro, {
     const histAbierto = historial.some(g => g.id === this.gSel);
     cont.innerHTML = tramHtml
       + vivas.map(g => filaG(g, false)).join('')
+      + dormHtml
       + (historial.length ? `
         <details ${histAbierto ? 'open' : ''} style="margin-top:10px;">
           <summary style="cursor:pointer; font-size:12.5px; color:var(--fg-3); padding:4px 2px; user-select:none;">

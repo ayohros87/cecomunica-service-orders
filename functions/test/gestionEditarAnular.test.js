@@ -245,7 +245,8 @@ test("R2 · el expediente ofrece retirar el enlace solo cuando hay uno vivo", ()
 
   const sinEnlace = Centro._detalleGestion(base);
   assert.ok(!/retirarFirmaAnexo/.test(sinEnlace), "sin enlace enviado no hay nada que retirar");
-  assert.match(sinEnlace, /Enviar anexo para firma digital/);
+  // "por enlace", una sola palabra para esa firma (auditoría de módulos 2026-09-30, C9).
+  assert.match(sinEnlace, /Enviar anexo para firma por enlace/);
 
   // Ya firmado: ni retirar ni reenviar.
   const firmado = Centro._detalleGestion({ ...base, estado: "pendiente_bodega",

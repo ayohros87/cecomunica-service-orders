@@ -583,6 +583,8 @@ Object.assign(window.Centro, {
   // con su comisión por unos radios que solo cambiaron de número de serie.
   _aceptaFirmado(c) {
     if (!ContratoFirma.lleva(c)) return false;
+    // Un dormido se reactiva primero (la firma reabre el trámite).
+    if (ContratoFirma.dormido(c)) return false;
     return (c?.estado === 'aprobado' && !c.firmado)
       || (c?.estado === 'activo' && !c.firmado_url && c.firmado_tipo !== 'digital');
   },

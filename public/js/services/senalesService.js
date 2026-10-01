@@ -303,6 +303,9 @@ const SenalesService = {
       snap.forEach(d => {
         const c = d.data() || {};
         if (c.deleted === true || c.firmado === true || c.entrega_confirmada === true || !lleva(c)) return;
+        // Dormido (decisión 7, 1-oct-2026): a los 45 días sin firma el cron lo
+        // saca de la cola; lo reactiva el vendedor desde el Centro.
+        if (c.dormido === true) return;
         if (uid && c.creado_por_uid !== uid) return;
         rows.push({
           id: d.id, col: 'contratos',
@@ -312,8 +315,12 @@ const SenalesService = {
           clase: c.accion && c.accion !== 'No Aplica' ? `${c.tipo_contrato || 'Contrato'} · ${c.accion}` : (c.tipo_contrato || 'Contrato'),
           con_orden: Number(c.os_count || 0) > 0,
           creado_por_uid: c.creado_por_uid || null,
-          // Espera la firma desde que bodega dejó los seriales listos.
-          dias: Math.floor(PendientesDomain.edadDias(c.seriales_asignados_at || c.fecha_aprobacion || c.fecha_creacion, now) || 0),
+          // Espera la firma desde lo último que la acercó (seriales listos,
+          // enlace enviado, reactivación): la misma cuenta que lleva el cron
+          // que lo duerme a los 45.
+          dias: window.ContratoFirma?.diasEsperando
+            ? (ContratoFirma.diasEsperando(c, now) ?? 0)
+            : Math.floor(PendientesDomain.edadDias(c.seriales_asignados_at || c.fecha_aprobacion || c.fecha_creacion, now) || 0),
         });
       });
       // Vista de supervisión (sin uid, gerencia): la firma la pide el

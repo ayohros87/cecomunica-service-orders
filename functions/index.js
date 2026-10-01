@@ -67,6 +67,8 @@ exports.onCotizacionEstadoChange      = require("./src/triggers/cotizaciones/onE
 exports.markCotizacionesVencidas      = require("./src/triggers/scheduled/markCotizacionesVencidas");
 // Semanal: el espejo público del QR (verificaciones/) dice lo que dice el contrato (auditoría 2026-09-30, Contratos R1)
 exports.cuadreVerificaciones          = require("./src/triggers/scheduled/cuadreVerificaciones");
+// Diario: aprobado sin firmar a los 45 días → solicitud caducada y contrato dormido (decisión 7, 1-oct-2026)
+exports.dormirContratosSinFirma       = require("./src/triggers/scheduled/dormirContratosSinFirma");
 // El cliente acepta o rechaza desde el enlace público (auditoría UX 2026-09-28 §4.5 #12)
 exports.responderCotizacionPublica    = require("./src/callable/responderCotizacionPublica");
 // searchTokens de cotizaciones: un solo punto para los 3 escritores (editor, taller, reposición)
