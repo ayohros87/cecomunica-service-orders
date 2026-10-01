@@ -18,6 +18,7 @@ import '/js/services/equiposDescartadosService.js';
 import '/js/services/equiposCondicionesService.js';
 import '/js/ui/equipo-ficha.js';
 import '/js/ui/serial-field.js';
+import '/js/firebase-aggregates.js'; // totales de la base en la cabecera (count() del servidor, P4)
 import '/js/pages/poc-state.js';
 import '/js/pages/poc-sim-liberar.js';
 import '/js/pages/poc-sim-conflicto.js'; // SIM en otro radio: avisa y pide motivo (R2/D2)

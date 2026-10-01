@@ -275,7 +275,7 @@
         </div>
         <input type="checkbox" id="soloActivos" hidden aria-hidden="true">
         <input type="checkbox" id="soloInactivos" hidden aria-hidden="true">
-        <label class="toggle-pill"><input type="checkbox" id="soloIncompletos" onchange="PocList.manejarCambioIncompletos()"> <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> Solo incompletos</label>
+        <label class="toggle-pill" title="Fichas sin cliente, sin serial o sin Unit ID (las que faltan de SIM se cuentan aparte en la cabecera)"><input type="checkbox" id="soloIncompletos" onchange="PocList.manejarCambioIncompletos()"> <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> Solo incompletos</label>
         <label class="toggle-pill" title="Equipos sin contrato vinculado"><input type="checkbox" id="soloSinContrato" onchange="PocList.manejarCambioSinContrato()"> <i data-lucide="file-x" style="width:14px;height:14px;"></i> Sin contrato</label>
         <!-- Histórico: una devolución CIERRA la ficha de POC (el radio ya no está
              con el cliente). Con esto la búsqueda también trae esas fichas, con el

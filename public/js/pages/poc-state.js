@@ -111,10 +111,21 @@ window.PocState = {
 
   nombreClienteDe(d) {
     const id = d?.cliente_id;
-    return (id && this.clientesMap[id]) || d?.cliente || '';
+    // cliente_nombre: lo que escriben los lotes nuevos (el snapshot `cliente`
+    // es de las fichas legacy). Sin él, el primer paint salía sin nombre
+    // hasta que el mapa de clientes resolvía.
+    return (id && this.clientesMap[id]) || d?.cliente || d?.cliente_nombre || '';
   },
 
-  actualizarResumen({ total = 0, activos = 0, incompletos = 0 } = {}) {
+  // Cabecera con contexto (auditoría de módulos 2026-10-01, PoC P4/C1/C2).
+  // Antes decía "50 equipos ✅50 ⚠️47": contaba lo pintado (la página) y
+  // "incompleta" marcaba sin SIM/operador/IP, o sea todo lote nuevo.
+  // Ahora: qué se está contando (esta página / la búsqueda / el contrato),
+  // activos e inactivos, cuántos sin SIM (eso sí es un pendiente de captura
+  // frecuente), incompletos solo si los hay (sin cliente, sin serial o sin
+  // Unit ID) y los seleccionados en vivo. Sin filtro, además, los totales
+  // de la base del servidor (count(), 3 lecturas, una vez por página).
+  actualizarResumen({ total = 0, activos = 0, incompletos = 0, sinSim = 0, contexto = 'busqueda' } = {}) {
     const footer = document.getElementById('resumenEquipos');
     const top    = document.getElementById('resumenEquiposTop');
 
@@ -124,20 +135,64 @@ window.PocState = {
       return;
     }
 
+    const inactivos = Math.max(0, total - activos);
+    const donde = { pagina: 'en esta página', busqueda: 'en la búsqueda', contrato: 'en el contrato' }[contexto] || '';
     const base = `
-      <strong title="Total de equipos listados (activos e inactivos)">${total}</strong>
-      <span style="color:var(--muted);font-size:12px;">equipos</span>
-      <span class="badge completo" title="Activos">✅ ${activos}</span>
-      <span class="badge asignado" title="Incompletos (faltan campos)">⚠️ ${incompletos}</span>`;
+      <strong title="Radios listados (activos e inactivos)">${total}</strong>
+      <span style="color:var(--muted);font-size:12px;">radio${total === 1 ? '' : 's'}${donde ? ' ' + donde : ''}</span>
+      <span class="badge completo" title="Activos: en servicio con el cliente">${activos} activo${activos === 1 ? '' : 's'}</span>
+      <span class="badge" title="Inactivos: la ficha sigue abierta pero el equipo no está en servicio">${inactivos} inactivo${inactivos === 1 ? '' : 's'}</span>
+      ${sinSim ? `<span class="badge asignado" title="Fichas vivas sin SIM">${sinSim} sin SIM</span>` : ''}
+      ${incompletos ? `<span class="badge" style="color:var(--status-critical);" title="Sin cliente, sin serial o sin Unit ID">${incompletos} incompleto${incompletos === 1 ? '' : 's'}</span>` : ''}`;
+    const totales = contexto === 'pagina' ? this.textoTotalesBase() : '';
 
-    if (footer) footer.innerHTML = base;
+    if (footer) footer.innerHTML = base + totales;
     // The top strip mirrors the footer and adds a live "seleccionados" tally
     // so the user can compare total vs. selected without scrolling/printing.
     if (top) top.innerHTML = base +
-      `\n      <span class="badge" id="resumenSeleccionados" title="Equipos seleccionados">0 seleccionados</span>`;
+      `\n      <span class="badge" id="resumenSeleccionados" title="Equipos seleccionados">0 seleccionados</span>` + totales;
 
     // Reflect any current checkbox selection (normally 0 right after a render).
     window.PocList?.actualizarSeleccion?.();
+    if (contexto === 'pagina' && !this._totalesBase) this.cargarTotalesBase();
+  },
+
+  // Totales de la base del servidor: vivas, activas y cerradas. count() del
+  // SDK modular (FbAgg); si no está disponible, no se baja nada para contar.
+  _totalesBase: null,
+  _totalesCargando: false,
+  textoTotalesBase() {
+    const t = this._totalesBase;
+    if (!t) return '';
+    const n = (v) => Number(v).toLocaleString('es-PA');
+    return `<span style="color:var(--muted);font-size:12px;margin-left:8px;" title="Totales de toda la Base PoC (servidor)">· Base: <strong style="font-size:13px;color:var(--fg-2);">${n(t.vivas)}</strong> vivos · ${n(t.activas)} activos · ${n(t.cerradas)} cerrados</span>`;
+  },
+  async cargarTotalesBase() {
+    if (this._totalesCargando || this._totalesBase) return;
+    this._totalesCargando = true;
+    try {
+      for (let i = 0; i < 20 && !(window.FbAgg && FbAgg.disponible); i++) await new Promise(r => setTimeout(r, 150));
+      if (!(window.FbAgg && FbAgg.disponible)) return;
+      const [total, cerradas, activasTotal, activasCerradas] = await Promise.all([
+        FbAgg.count('poc_devices', []),
+        FbAgg.count('poc_devices', [['deleted', '==', true]]),
+        FbAgg.count('poc_devices', [['activo', '==', true]]),
+        FbAgg.count('poc_devices', [['activo', '==', true], ['deleted', '==', true]]),
+      ]);
+      this._totalesBase = { vivas: total - cerradas, activas: activasTotal - activasCerradas, cerradas };
+      // Si la lista sigue sin filtro, se añade el texto sin repintar la tabla.
+      const v = document.getElementById('filtroValor')?.value.trim();
+      if (!v && !window.PocList?._dupVista) {
+        ['resumenEquipos', 'resumenEquiposTop'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el && el.querySelector('strong') && !el.innerHTML.includes('Base:')) el.insertAdjacentHTML('beforeend', this.textoTotalesBase());
+        });
+      }
+    } catch (e) {
+      console.warn('[PocState] totales de la base no disponibles:', e?.code || e);
+    } finally {
+      this._totalesCargando = false;
+    }
   },
 
   async cargarModelosMap() {

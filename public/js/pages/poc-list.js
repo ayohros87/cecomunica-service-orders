@@ -187,12 +187,24 @@ window.PocList = {
     return v;
   },
 
-  // "Incompleta" es un pendiente de captura, y una ficha cerrada no lo es:
-  // nadie va a volver a llenarle el SIM a un radio que ya devolvieron.
+  // "Incompleta" es un pendiente de captura que sí tranca: sin cliente, sin
+  // serial o sin Unit ID la ficha no sirve para programar ni para pedir
+  // activaciones. Antes también contaba sin SIM / operador / IP / teléfono, y
+  // como los lotes nacen sin SIM, 47 de las 50 fichas más nuevas salían con
+  // el ícono y dejaba de decir algo (auditoría de módulos 2026-10-01, C2).
+  // "Sin SIM" se cuenta aparte en la cabecera. Una ficha cerrada nunca es
+  // incompleta: nadie va a volver a llenarla.
   _incompleta(d) {
     if (d.deleted === true) return false;
-    return [PocState.nombreClienteDe(d), d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone]
-      .some(v => !v || v.trim?.() === '');
+    // Un cliente_id ya es un cliente aunque el mapa de nombres no haya
+    // resuelto todavía (el primer paint no espera a los mapas): si no, las
+    // 50 fichas más nuevas salían "incompletas" un instante y el contador
+    // mentía.
+    const tieneCliente = !!(d.cliente_id || String(d.cliente || d.cliente_nombre || '').trim());
+    return !tieneCliente || [d.serial, d.unit_id].some(v => !v || String(v).trim() === '');
+  },
+  _sinSim(d) {
+    return d.deleted !== true && !String(d.sim_number || '').trim();
   },
 
   // ── Cell builders ───────────────────────────────────────────────
@@ -442,7 +454,7 @@ window.PocList = {
     if (btnCargar) btnCargar.style.display = 'none';
     tbody.appendChild(this._buildRow(d.id, d));
     this._aplicarFocus(tbody);
-    PocState.actualizarResumen({ total: 1, activos: d.activo ? 1 : 0, incompletos: this._incompleta(d) ? 1 : 0 });
+    PocState.actualizarResumen({ total: 1, activos: d.activo ? 1 : 0, incompletos: this._incompleta(d) ? 1 : 0, sinSim: this._sinSim(d) ? 1 : 0, contexto: 'busqueda' });
     this.actualizarFlechitas();
     if (window.Icons) Icons.pintar(tbody);
     else if (typeof lucide !== 'undefined') lucide.createIcons({ root: tbody });
@@ -566,21 +578,20 @@ window.PocList = {
     docs.forEach(d => {
       if (soloInactivos && d.activo) return;
       if (soloSinContrato && (d.contrato_id || d.contrato_doc_id)) return;
-      if (soloIncompletos) {
-        const crit = [PocState.nombreClienteDe(d), d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
-        if (!crit.some(v => !v || v.trim?.() === '')) return;
-      }
+      if (soloIncompletos && !this._incompleta(d)) return;
       tbody.appendChild(this._buildRow(d.id, d));
     });
 
     const total = tbody.rows.length;
     const COL = PocState.COL;
-    let activos = 0, incompletos = 0;
+    let activos = 0, incompletos = 0, sinSim = 0;
     [...tbody.rows].forEach(r => {
       if (r.cells[COL.activo]?.dataset.activo === 'true') activos++;
       if (r.cells[COL.cliente]?.querySelector('[data-incomplete]')) incompletos++;
+      const d = this._docsPorId.get(r.dataset.id);
+      if (d && this._sinSim(d)) sinSim++;
     });
-    PocState.actualizarResumen({ total, activos, incompletos });
+    PocState.actualizarResumen({ total, activos, incompletos, sinSim, contexto: 'pagina' });
     this.actualizarFlechitas();
     if (window.Icons) Icons.pintar(tbody);
     else if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -686,7 +697,7 @@ window.PocList = {
 
     fuente.then(docs => {
         if (ejecucionID !== this._filtroID) return;
-        let total = 0, activos = 0, incompletos = 0;
+        let total = 0, activos = 0, incompletos = 0, sinSim = 0;
         const coincidencias = [];
 
         docs.forEach(d => {
@@ -714,6 +725,7 @@ window.PocList = {
             if (contenido.includes(valor)) {
               total++;
               if (d.activo) activos++;
+              if (this._sinSim(d)) sinSim++;
               coincidencias.push(d);
             }
           }
@@ -727,7 +739,7 @@ window.PocList = {
         // resumen sigue contando TODAS las coincidencias.
         this._pintarTanda(tbody, coincidencias, 0);
         this._aplicarFocus(tbody);
-        PocState.actualizarResumen({ total, activos, incompletos });
+        PocState.actualizarResumen({ total, activos, incompletos, sinSim, contexto: 'busqueda' });
         // "No se encontraron resultados" se leía como "este equipo nunca estuvo
         // en POC", y muchas veces es al revés: la devolución CERRÓ la ficha
         // (Brenda, 2026-09-16). Si el histórico lo tiene, se dice aquí mismo.
@@ -919,10 +931,7 @@ window.PocList = {
       docs.forEach(d => {
         if (soloInactivos && d.activo) return;
         if (soloSinContrato && (d.contrato_id || d.contrato_doc_id)) return;
-        if (soloIncompletos) {
-          const crit = [PocState.nombreClienteDe(d), d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
-          if (!crit.some(v => !v || v.trim?.() === '')) return;
-        }
+        if (soloIncompletos && !this._incompleta(d)) return;
         const row = this._buildRow(d.id, d);
         if (!PocState.esLectura()) {
           const ac = row.querySelector('td:last-child');
@@ -968,8 +977,7 @@ window.PocList = {
       tdCh.appendChild(cb);
       row.appendChild(tdCh);
 
-      const camposCrit = [d.cliente, d.unit_id, d.operador, d.ip, d.sim || d.sim_number, d.sim_phone];
-      const algunoVacio = camposCrit.some(v => !v || v.trim?.() === '');
+      const algunoVacio = this._incompleta(d);
       const tdCliente = document.createElement('td');
       tdCliente.innerHTML = algunoVacio
         ? `<span style="color:var(--status-critical);" data-incomplete="true" title="Falta completar campos obligatorios"><i data-lucide="alert-circle"></i></span> <strong>${FMT.esc(d.cliente)}</strong>`
@@ -1547,12 +1555,13 @@ window.PocList = {
       tbody.querySelectorAll('.seleccion-sim').forEach(cb => { cb.checked = true; });
 
       const COL = PocState.COL;
-      let activos = 0, incompletos = 0;
+      let activos = 0, incompletos = 0, sinSim = 0;
       [...tbody.rows].forEach(r => {
         if (r.cells[COL.activo]?.dataset.activo === 'true') activos++;
         if (r.cells[COL.cliente]?.querySelector('[data-incomplete]')) incompletos++;
       });
-      PocState.actualizarResumen({ total: devices.length, activos, incompletos });
+      devices.forEach(d => { if (this._sinSim(d)) sinSim++; });
+      PocState.actualizarResumen({ total: devices.length, activos, incompletos, sinSim, contexto: 'contrato' });
       this.actualizarSeleccion();
       this.actualizarFlechitas();
       if (typeof lucide !== 'undefined') lucide.createIcons();
