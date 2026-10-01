@@ -68,7 +68,8 @@
       if (!ts) return "";
       const d = ts.toDate ? ts.toDate() : new Date(ts.seconds ? ts.seconds * 1000 : ts);
       if (isNaN(d.getTime())) return "";
-      return d.toLocaleString("es-PA", { timeZone: "America/Panama", dateStyle: "medium", timeStyle: "short" });
+      // Día antes que mes, explícito: con dateStyle Chrome caía en mes/día (06/18/2026).
+      return d.toLocaleString("es-PA", { timeZone: "America/Panama", day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
     }
 
     async function verificar() {
@@ -163,7 +164,8 @@
           <div class="ds-card ds-card-padded">
             <p class="form-section-title" style="margin-bottom:var(--sp-3);"><i data-lucide="file-text"></i> Datos del contrato</p>
             <dl style="display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); font-size:13px; margin:0;">
-              <div><dt style="color:var(--fg-3); margin-bottom:2px;">Contrato</dt><dd style="margin:0; font-weight:500; font-family:var(--font-mono);">${esc(data.contrato_id || contratoId)}</dd></div>
+              <div><dt style="color:var(--fg-3); margin-bottom:2px;">Contrato</dt><dd style="margin:0; font-weight:500; font-family:var(--font-mono);">${esc(data.contrato_id || contratoId)}</dd>
+                ${data.contrato_id && data.contrato_id !== contratoId ? `<dd style="margin:2px 0 0; font-size:11px; color:var(--fg-4); font-family:var(--font-mono); word-break:break-all;">ref. ${esc(contratoId)}</dd>` : ""}</div>
               <div><dt style="color:var(--fg-3); margin-bottom:2px;">Total c/ ITBMS</dt><dd style="margin:0; font-family:var(--font-mono);">$${esc(total)}</dd></div>
               <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Cliente</dt><dd style="margin:0;">${esc(data.cliente_nombre || "—")}</dd></div>
               <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Aprobado por</dt><dd style="margin:0;">${esc(data.aprobado_por_nombre || "—")}</dd></div>

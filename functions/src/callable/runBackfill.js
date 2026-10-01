@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../lib/admin");
 const { buildOrderSearchTokens, tokensEqual } = require("../lib/searchTokens");
+const { cuadrarVerificaciones } = require("../lib/cuadreVerificaciones");
 
 /**
  * runBackfill — admin-only callable to run one-shot data migrations
@@ -43,6 +44,12 @@ const { buildOrderSearchTokens, tokensEqual } = require("../lib/searchTokens");
  *       reports `sospechosos` (pool client differs from device client) and
  *       `ambiguos` (serial shared across models mapping to 2+ contracts) — those
  *       are never written. PLAN_CICLO_VIDA_EQUIPOS.md, sección POC.
+ *   { action: "cuadrarVerificaciones", dryRun? }
+ *     - Repara verificaciones/{id}.estado (y el número de contrato) contra el
+ *       contrato real: anulado, vencido (por estado o por fecha), inactivo si
+ *       está borrado. El QR impreso certificaba 192 contratos muertos como
+ *       vigentes (auditoría de módulos 2026-09-30). Mismo código que el cuadre
+ *       semanal scheduled/cuadreVerificaciones. Idempotente.
  *
  * Returns {action, dryRun, scanned, ...counters}. All actions are
  * idempotent — safe to re-run.
@@ -1060,6 +1067,11 @@ module.exports = onCall(
 
     let result;
     switch (action) {
+      // Verificación pública del QR (auditoría de módulos 2026-09-30, R1+B2):
+      // misma lógica que el cuadre semanal, en lib/cuadreVerificaciones.
+      case "cuadrarVerificaciones":
+        result = await cuadrarVerificaciones({ dryRun, tag: "runBackfill.cuadrarVerificaciones" });
+        break;
       case "linkContratoPoc":
         result = await backfillLinkContratoPoc(dryRun);
         break;

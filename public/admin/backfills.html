@@ -273,6 +273,32 @@
       <div id="result-linkContratoPoc" style="margin-top:var(--sp-3);"></div>
     </div>
 
+    <!-- Backfill: cuadrarVerificaciones -->
+    <div class="ds-card" style="padding:var(--sp-4); margin-bottom:var(--sp-3);">
+      <div class="admin-section-head" style="margin-bottom:var(--sp-2);">
+        <span class="title" style="font-size:15px;"><i data-lucide="shield-check"></i> Cuadrar la verificación pública de contratos (QR)</span>
+        <span class="hint">Repara <code>verificaciones.estado</code> y el número de contrato contra <code>contratos</code></span>
+      </div>
+      <p class="ts" style="margin:0 0 var(--sp-3); line-height:1.5;">
+        El QR impreso en cada contrato abre <code>/c/…</code>, que lee el espejo público
+        <code>verificaciones/</code>. Ese espejo solo se actualizaba al cambiar el estado y desde el
+        28-sep-2026, así que <strong>contratos anulados y vencidos salían como "válido y vigente"</strong>.
+        Este cuadre pone el estado real (anulado, vencido por estado o por fecha, inactivo si el contrato
+        está borrado) y escribe el <strong>número de contrato</strong> donde quedó el ID interno. Un cron
+        semanal (lunes 05:30) repite el mismo cuadre. Idempotente; no crea verificaciones nuevas ni toca
+        las que no tienen contrato (se reportan).
+      </p>
+      <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
+        <button class="btn btn-ghost" data-bf-action="cuadrarVerificaciones" data-bf-mode="dry">
+          <i data-lucide="eye"></i> Vista previa (no escribe)
+        </button>
+        <button class="btn btn-primary" data-bf-action="cuadrarVerificaciones" data-bf-mode="run">
+          <i data-lucide="play"></i> Ejecutar
+        </button>
+      </div>
+      <div id="result-cuadrarVerificaciones" style="margin-top:var(--sp-3);"></div>
+    </div>
+
   </div>
 
   <script>

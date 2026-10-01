@@ -293,7 +293,10 @@ const onContratoActivado = onDocumentUpdated(
     }
 
     await verificRef.set({
-      contrato_id: contratoId,
+      // El NÚMERO del contrato, no el ID interno: es lo que el cliente coteja
+      // con su papel en /c/ (auditoría de módulos 2026-09-30, B2).
+      contrato_id: after.contrato_id || contratoId,
+      contrato_doc_id: contratoId,
       cliente_nombre: after.cliente_nombre || null,
       total_con_itbms: (typeof after.total_con_itbms === "number" ? after.total_con_itbms : (after.total ?? null)),
       aprobado_por_uid: aprobadoPor,

@@ -65,6 +65,8 @@ exports.purgePIIRetention             = require("./src/triggers/scheduled/purgeP
 exports.onCotizacionOpened            = require("./src/triggers/cotizaciones/onOpened");
 exports.onCotizacionEstadoChange      = require("./src/triggers/cotizaciones/onEstadoChange");
 exports.markCotizacionesVencidas      = require("./src/triggers/scheduled/markCotizacionesVencidas");
+// Semanal: el espejo público del QR (verificaciones/) dice lo que dice el contrato (auditoría 2026-09-30, Contratos R1)
+exports.cuadreVerificaciones          = require("./src/triggers/scheduled/cuadreVerificaciones");
 // El cliente acepta o rechaza desde el enlace público (auditoría UX 2026-09-28 §4.5 #12)
 exports.responderCotizacionPublica    = require("./src/callable/responderCotizacionPublica");
 // searchTokens de cotizaciones: un solo punto para los 3 escritores (editor, taller, reposición)

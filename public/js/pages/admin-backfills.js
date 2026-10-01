@@ -64,6 +64,10 @@
       ['PoC enlazados',       data.pocEnlazados],
       ['Órdenes viejas skip', data.ordenesViejasSaltadas],
       ['Inválidos',           data.invalidos],
+      // cuadrarVerificaciones:
+      ['Sin contrato',        data.sinContrato],
+      ['Estado corregido',    data.estadoCorregido],
+      ['Número corregido',    data.numeroCorregido],
       ['Escritos',           data.written],
       ['Errores',            data.errors],
     ].filter(([_, v]) => v != null).map(([k, v]) => `<span class="pill" style="margin-right:6px;">${k}: <strong>${v}</strong></span>`).join('');
