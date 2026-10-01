@@ -56,6 +56,23 @@
        inline-block para que el track/thumb se dibujen bien en la celda. */
     #tabla .toggle-switch { display: inline-block; vertical-align: middle; }
 
+    /* Bodega (rol inventario) en SOLO LECTURA (D18, 2026-10-01): sin precios
+       (col. 5-7), sin mapeo QBO (8-12), sin Editar (14), sin altas ni
+       importaciones. Las columnas que quedan: Modelo, Tipo, ¿Alquiler?, ¿POC?, Activo. */
+    .md-solo-lectura #tabla th:nth-child(n+5):nth-child(-n+12),
+    .md-solo-lectura #tabla td:nth-child(n+5):nth-child(-n+12),
+    .md-solo-lectura #tabla th:nth-child(14),
+    .md-solo-lectura #tabla td:nth-child(14),
+    .md-solo-lectura .md-edit,
+    .md-solo-lectura #qboInfo,
+    .md-solo-lectura #qboHint,
+    .md-solo-lectura #saludCatalogo,
+    .md-solo-lectura #mnuNuevoModelo,
+    .md-solo-lectura #mnuImportarQbo,
+    .md-solo-lectura #mnuProponerQbo,
+    .md-solo-lectura .overflow-menu-item:has(#chk-solo-config) { display: none !important; }
+    .md-solo-lectura #tabla .toggle-switch { pointer-events: none; opacity: .65; }
+
     .modelo-cell { position: relative; padding-left: 16px !important; font-weight: 600; white-space: nowrap; }
     .modelo-sub  { display:block; font-weight:400; font-size:11px; color: var(--fg-4); }
     /* Chip del vínculo variante refurbished → modelo base */
@@ -125,13 +142,13 @@
         <input id="q" type="search" placeholder="Buscar marca o modelo…" aria-label="Buscar modelos">
       </div>`,
     actions: [
-      { label: '<i data-lucide="plus"></i> Nuevo modelo', cls: 'primary', onclick: "abrirModal()" }
+      { label: '<i data-lucide="plus"></i> Nuevo modelo', cls: 'primary md-edit', onclick: "abrirModal()" }
     ],
     menu: [
-      { onclick: 'abrirModal()', label: '<i data-lucide="plus"></i> Nuevo modelo' },
+      { id: 'mnuNuevoModelo', onclick: 'abrirModal()', label: '<i data-lucide="plus"></i> Nuevo modelo' },
       { divider: true },
-      { onclick: 'importarDeQBO()', label: '<i data-lucide="download"></i> Importar de QuickBooks' },
-      { onclick: 'proponerMapeoQBO()', label: '<i data-lucide="git-compare"></i> Proponer mapeo QBO' },
+      { id: 'mnuImportarQbo', onclick: 'importarDeQBO()', label: '<i data-lucide="download"></i> Importar de QuickBooks' },
+      { id: 'mnuProponerQbo', onclick: 'proponerMapeoQBO()', label: '<i data-lucide="git-compare"></i> Proponer mapeo QBO' },
       { onclick: 'exportarExcel()', label: '<i data-lucide="file-spreadsheet"></i> Exportar a Excel' },
       { divider: true },
       { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-solo-config"> Solo sin configurar</label>' },
@@ -168,12 +185,12 @@
         <!-- Segunda puerta a la creación, a la altura del contenido: en la topbar
              el botón compite con Volver/Más/Menú principal/Cerrar sesión y se
              pierde (queja de uso, ago-2026). Aquí está donde se mira la tabla. -->
-        <button type="button" class="btn primary" onclick="abrirModal()">
+        <button type="button" class="btn primary md-edit" onclick="abrirModal()">
           <i data-lucide="plus"></i> Nuevo modelo
         </button>
       </div>
     </div>
-    <div style="margin:0 var(--sp-4) var(--sp-3); padding:8px 12px; background:var(--surface-sunken); border-left:4px solid var(--accent); border-radius:0 8px 8px 0; font-size:12px; color:var(--fg-2);">
+    <div id="qboInfo" style="margin:0 var(--sp-4) var(--sp-3); padding:8px 12px; background:var(--surface-sunken); border-left:4px solid var(--accent); border-radius:0 8px 8px 0; font-size:12px; color:var(--fg-2);">
       <b>Cómo se relaciona inventario ↔ servicios:</b> cada modelo mapea su mensualidad al <b>bundle "Mensualidad"</b> de QuickBooks, que se reparte en <b>Alquiler + Frecuencia + Mantenimiento</b>. El cliente ve una sola línea; contabilidad ve el desglose. <b>Frecuencia y Mantenimiento usan el mismo ítem de QBO para todos</b> (se define aquí una vez); los <b>POC no llevan Frecuencia</b>.
       <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:center; margin-top:8px;">
         <div style="display:flex; align-items:center; gap:6px;">Item QBO Frecuencia (global):

@@ -10,6 +10,7 @@ let showInactivos = false;   // por defecto ocultos para despejar la vista
 let soloConfig = false;
 let soloAlquiler = true;     // por defecto solo los modelos que se alquilan (vista limpia)
 let _terminoBusqueda = '';   // último término tecleado — lo reusa el alta desde el estado vacío
+let _soloLectura = false;    // bodega: consulta sin precios, mapeo QBO ni edición (D18)
 const _savedTimers = {};
 const qboItems = { alquileres: [], bundles: [], servicios: [], loaded: false, loading: false };
 // Frecuencia y Mantenimiento usan el MISMO ítem de QBO para todos los modelos:
@@ -28,14 +29,30 @@ firebase.auth().onAuthStateChanged(async (user) => {
   try{
     const userDoc = await Sesion.miPerfil(user);
     const rol = userDoc ? userDoc.rol : null;
-    // Catálogo + tarifas (info sensible) → solo admin y contabilidad.
-    if (!userDoc || (rol !== ROLES.ADMIN && rol !== ROLES.CONTABILIDAD)) {
+    // Catálogo + tarifas (info sensible) → admin y contabilidad. Bodega
+    // (inventario) lo ve en SOLO LECTURA y sin precios ni mapeo QBO
+    // (decisión de Alberto 2026-10-01, auditoría de módulos D18): es el
+    // catálogo que decide el tipo (Nuevo/Refurbished) de lo que recibe.
+    const esBodega = rol === ROLES.INVENTARIO;
+    if (!userDoc || (rol !== ROLES.ADMIN && rol !== ROLES.CONTABILIDAD && !esBodega)) {
       document.body.innerHTML = "<h3 style='color:red; text-align:center; margin-top:100px;'>Acceso restringido</h3>";
       return;
     }
-
     const q = document.getElementById('q');
     if (q) q.addEventListener('input', debounce(render, 200));
+    if (esBodega) {
+      _soloLectura = true;
+      document.body.classList.add('md-solo-lectura');
+      // Las pestañas de Finanzas no son de bodega: en su lugar, el camino de vuelta.
+      const ws = document.getElementById('wsTabs-mount');
+      if (ws) ws.innerHTML = '<p style="margin:0 0 var(--sp-3); font-size:13px; color:var(--fg-3);"><a href="/almacen/index.html">← Almacén</a> · Catálogo de modelos (solo consulta: marca, modelo, tipo y si se alquila). Los precios y la facturación los administra Finanzas.</p>';
+      const sub = document.getElementById('wsSubTabs-mount');
+      if (sub) sub.innerHTML = '';
+      await cargarModelos();
+      render();
+      return;
+    }
+
     document.addEventListener('change', (e)=>{
       if (e.target.id === 'chk-inactivos'){ showInactivos = e.target.checked; render(); }
       if (e.target.id === 'chk-solo-config'){ soloConfig = e.target.checked; render(); }
@@ -200,15 +217,15 @@ function render(){
     if (term && soloAlquiler){
       hint = `Ningún modelo <b>de alquiler</b> coincide con “${esc(termRaw)}”.`;
       cta = `<button type="button" class="btn btn-sm" onclick="setFiltroAlquiler(false)"><i data-lucide="list"></i> Buscar en todo el catálogo</button>
-             <button type="button" class="btn btn-sm primary" onclick="crearDesdeBusqueda()"><i data-lucide="plus"></i> Crear “${esc(termRaw)}”</button>`;
+             <button type="button" class="btn btn-sm primary md-edit" onclick="crearDesdeBusqueda()"><i data-lucide="plus"></i> Crear “${esc(termRaw)}”</button>`;
     } else if (term){
       hint = `Ningún modelo coincide con “${esc(termRaw)}”.`;
-      cta = `<button type="button" class="btn btn-sm primary" onclick="crearDesdeBusqueda()"><i data-lucide="plus"></i> Crear “${esc(termRaw)}”</button>`;
+      cta = `<button type="button" class="btn btn-sm primary md-edit" onclick="crearDesdeBusqueda()"><i data-lucide="plus"></i> Crear “${esc(termRaw)}”</button>`;
     } else if (soloAlquiler){
       hint = 'No hay modelos marcados como "Se alquila". Apaga <b>Solo alquiler</b> arriba y prende el toggle <b>¿Alquiler?</b> en los que se rentan.';
     } else {
       hint = 'Todavía no hay modelos en el catálogo.';
-      cta = `<button type="button" class="btn btn-sm primary" onclick="abrirModal()"><i data-lucide="plus"></i> Nuevo modelo</button>`;
+      cta = `<button type="button" class="btn btn-sm primary md-edit" onclick="abrirModal()"><i data-lucide="plus"></i> Nuevo modelo</button>`;
     }
     tbody.innerHTML = `<tr><td colspan="14" style="padding:24px; text-align:center; color:var(--fg-3);">
         <p style="margin:0 0 12px;">${hint}</p>
@@ -244,8 +261,8 @@ function renderRow(m){
       ${esc(m.modelo||'—')}${varChip}<span class="modelo-sub">${esc(m.marca||'')}</span>
     </td>
     <td>${mapTipo(m.tipo)}</td>
-    <td style="text-align:center"><label class="toggle-switch" title="¿Se alquila?"><input type="checkbox" data-field="es_alquiler" ${m.es_alquiler===true?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
-    <td style="text-align:center"><label class="toggle-switch" title="¿Es POC? (POC no lleva frecuencia)"><input type="checkbox" data-field="es_poc" ${pocDis?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
+    <td style="text-align:center"><label class="toggle-switch" title="¿Se alquila?"><input type="checkbox" data-field="es_alquiler" ${m.es_alquiler===true?'checked':''} ${_soloLectura?'disabled':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
+    <td style="text-align:center"><label class="toggle-switch" title="¿Es POC? (POC no lleva frecuencia)"><input type="checkbox" data-field="es_poc" ${pocDis?'checked':''} ${_soloLectura?'disabled':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
     <td><input type="number" step="any" min="0" class="td-input td-num" data-field="precio_venta"
           value="${Number.isFinite(m.precio_venta)?m.precio_venta:''}" placeholder="0.00"
           title="Precio sugerido de venta — el editor de cotizaciones lo propone al elegir este modelo"></td>
@@ -258,7 +275,7 @@ function renderRow(m){
     <td style="font-size:12px; color:var(--fg-2);">${itemNombre(factConfig.qbo_item_mantenimiento_id)}</td>
     <td><select class="td-select" data-field="qbo_bundle_id" style="min-width:170px;">${qboOptions(qboItems.bundles, m.qbo_bundle_id)}</select></td>
     <td class="map-cell"><span class="map-badge ${b.cls}">${b.label}</span></td>
-    <td style="text-align:center"><label class="toggle-switch" title="Activo"><input type="checkbox" data-field="activo" ${m.activo!==false?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
+    <td style="text-align:center"><label class="toggle-switch" title="Activo"><input type="checkbox" data-field="activo" ${m.activo!==false?'checked':''} ${_soloLectura?'disabled':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
     <td style="text-align:center"><button class="btn sm btn-ghost" title="Editar identidad" onclick="abrirModal('${id}')"><i data-lucide="pencil"></i></button></td>`;
 
   // Listeners inline (auto-guardado por celda)
@@ -303,6 +320,11 @@ function actualizarResumen(){
   const activos = (listaModelos||[]).filter(m => m.activo !== false);
   const conVenta = activos.filter(m => Number(m.precio_venta) > 0).length;
   const faltaVenta = activos.length - conVenta;
+  if (_soloLectura) {
+    // Bodega: sin tarifas ni cobertura de precios (información financiera).
+    document.getElementById('resumenModelos').innerHTML = `<b>${total}</b> modelos · <b>${alquiler}</b> de alquiler`;
+    return;
+  }
   document.getElementById('resumenModelos').innerHTML =
     `<b>${total}</b> modelos · <b>${alquiler}</b> de alquiler · <b>${conTarifa}</b> con tarifa · `
     + `<span style="color:#92400E"><b>${pend}</b> sin configurar</span> · `

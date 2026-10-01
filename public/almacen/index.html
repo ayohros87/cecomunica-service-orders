@@ -261,6 +261,9 @@
         // La lista por serial (filtros finos, lotes, proveedor/notas, Excel
         // completo) es la pestaña Avanzado de esta página.
         { onclick: "AlmacenPage.setTab('serial')", label: '<i data-lucide="sliders-horizontal"></i> Avanzado (lista por serial)' },
+        // Bodega consulta el catálogo (sin precios; D18, 2026-10-01): es lo
+        // que decide el tipo Nuevo/Refurbished de lo que recibe.
+        { href: '/inventario/modelos.html?volver=almacen', label: '<i data-lucide="book-open"></i> Catálogo de modelos' },
       ],
       showHome: true, homeHref: '../index.html', showLogout: true
     });

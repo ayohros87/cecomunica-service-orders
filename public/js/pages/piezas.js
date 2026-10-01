@@ -14,6 +14,16 @@ function loadUIPrefs(){
     dense = !!p.dense;
     (p.hiddenCols || []).forEach(k => hiddenCols.add(k));
   }catch(e){}
+  // Bodega no ve el costo (pedido de contabilidad G3 del 30-jun, decisión de
+  // Alberto 2026-10-01, D18): columna fuera, sin casilla para mostrarla y sin
+  // el campo en el modal.
+  if (rolActual === ROLES.INVENTARIO) {
+    hiddenCols.add('costo');
+    const lbl = document.getElementById('col-CHK-costo')?.closest('label');
+    if (lbl) lbl.style.display = 'none';
+    const campo = document.getElementById('f-costo')?.closest('.form-field');
+    if (campo) campo.style.display = 'none';
+  }
   document.body.classList.toggle('dense', dense);
 
   // checkboxes
@@ -194,6 +204,7 @@ function updateSortIndicators(){
 
 
 function toggleColumn(key, visible){
+  if (key === 'costo' && rolActual === ROLES.INVENTARIO) return;   // D18: bodega no ve el costo
   if (!visible) hiddenCols.add(key);
   else hiddenCols.delete(key);
   saveUIPrefs();
