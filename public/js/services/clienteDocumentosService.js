@@ -56,7 +56,7 @@ const ClienteDocumentosService = {
     const path = `clientes_documentos/${clienteId}/${docRef.id}.${ext}`;
 
     const task = storage.ref(path).put(file, {
-      contentType: file.type,
+      contentType: file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : ''),  // PDF de WhatsApp/escáner llega sin tipo
       customMetadata: { cliente_id: clienteId, doc_id: docRef.id, tipo },
     });
 

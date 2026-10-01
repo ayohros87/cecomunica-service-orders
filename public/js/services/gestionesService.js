@@ -592,9 +592,11 @@ const GestionesService = {
   // subirla ANTES del create (id reservado) y que el correo del onCreate ya
   // la vea; el flujo post-create usa subirCartaBaja, que además estampa el doc.
   async subirCartaArchivo(gestionId, file) {
-    const ext = /pdf$/i.test(file.type) ? 'pdf' : 'jpg';
+    // Un PDF de WhatsApp/escáner llega sin file.type: se mira también el nombre.
+    const tipo = file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : '');
+    const ext = /pdf$/i.test(tipo) ? 'pdf' : 'jpg';
     const path = `gestiones_anexos/${gestionId}/carta-baja-${Date.now()}.${ext}`;
-    await firebase.storage().ref(path).put(file, { contentType: file.type });
+    await firebase.storage().ref(path).put(file, { contentType: tipo });
     return path;
   },
 
@@ -639,9 +641,11 @@ const GestionesService = {
   // El trigger aplica entonces las líneas al contrato y avisa a Bodega.
   async registrarFirmaAumento(gestionId, file) {
     const user = firebase.auth().currentUser;
-    const ext = /pdf$/i.test(file.type) ? 'pdf' : 'jpg';
+    // Un PDF de WhatsApp/escáner llega sin file.type: se mira también el nombre.
+    const tipo = file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : '');
+    const ext = /pdf$/i.test(tipo) ? 'pdf' : 'jpg';
     const path = `gestiones_anexos/${gestionId}/anexo-firmado-${Date.now()}.${ext}`;
-    await firebase.storage().ref(path).put(file, { contentType: file.type });
+    await firebase.storage().ref(path).put(file, { contentType: tipo });
     await firebase.firestore().collection(this.COL).doc(gestionId).update({
       estado: 'pendiente_bodega',
       'cierre.firma': true,

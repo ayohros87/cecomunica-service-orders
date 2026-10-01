@@ -159,6 +159,13 @@ window.ContratosFirmado = {
       return;
     }
 
+    // storage.rules corta en 10 MiB y responde un 403 mudo: se avisa antes.
+    if (file.size >= 10 * 1024 * 1024) {
+      Toast.show(`El archivo pesa ${(file.size / 1048576).toFixed(1)} MB; el máximo es 10 MB. Comprímelo o escanéalo a menor resolución.`, 'bad', 7000);
+      this._limpiar(e.target);
+      return;
+    }
+
     const modo   = this._modo;
     const previo = this._previo;
     const storage = firebase.storage();
@@ -167,11 +174,13 @@ window.ContratosFirmado = {
       if (!data) throw new Error('Contrato no encontrado.');
       const contratoIdLegible = data?.contrato_id || this._contratoId;
 
-      const ext  = (file.name.split('.').pop() || 'bin').toLowerCase();
-      const path = `contratos_firmados/${contratoIdLegible}_${Date.now()}.${ext}`;
+      // Siempre PDF a esta altura (ver arriba). El tipo se fija a mano: un PDF de
+      // WhatsApp o del escáner llega con file.type vacío u octet-stream, y la
+      // regla de contentType lo rechazaba con 403 (2026-09-30).
+      const path = `contratos_firmados/${contratoIdLegible}_${Date.now()}.pdf`;
 
       const uploadTask = storage.ref(path).put(file, {
-        contentType: file.type,
+        contentType: 'application/pdf',
         customMetadata: { contrato_doc_id: this._contratoId, contrato_id: contratoIdLegible }
       });
 

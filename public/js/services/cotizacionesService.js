@@ -26,7 +26,7 @@ const CotizacionesService = {
     const path = `cotizaciones_adjuntos/${id}.${ext}`;
 
     const task = storage.ref(path).put(file, {
-      contentType: file.type,
+      contentType: file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : ''),  // PDF de WhatsApp/escáner llega sin tipo
       customMetadata: { subido_por: user?.uid || '', nombre_original: file.name },
     });
 

@@ -704,6 +704,8 @@ Object.assign(window.Centro, {
         file = new File([blob], `firmado_${files.length}fotos.pdf`, { type: 'application/pdf' });
       } else { Toast.show('Sube UN PDF, o solo fotos (varias a la vez) — no mezclados', 'warn'); return; }
     } catch (e) { console.error(e); Toast.show('No se pudo preparar el archivo: ' + (e?.message || e), 'bad'); return; }
+    // storage.rules corta en 10 MiB y responde un 403 mudo: se avisa antes.
+    if (file.size >= 10 * 1024 * 1024) { Toast.show(`El archivo pesa ${(file.size / 1048576).toFixed(1)} MB; el máximo es 10 MB. Comprímelo o escanéalo a menor resolución.`, 'warn'); return; }
     // Subir el firmado activa el contrato EN EL MISMO write, y la activación
     // dispara facturación y comisión: se confirma con el nombre del archivo
     // (auditoría UX 2026-09-28, P1).
@@ -716,10 +718,12 @@ Object.assign(window.Centro, {
     }))) return;
     try {
       Toast.show('Subiendo contrato firmado…', '');
-      const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
-      const path = `contratos_firmados/${legible}_${Date.now()}.${ext}`;
+      // Siempre PDF a esta altura (ver arriba). El tipo se fija a mano: un PDF de
+      // WhatsApp o del escáner llega con file.type vacío u octet-stream, y la
+      // regla de contentType lo rechazaba con 403 (2026-09-30, ALQ20260721-01).
+      const path = `contratos_firmados/${legible}_${Date.now()}.pdf`;
       const snap = await firebase.storage().ref(path).put(file, {
-        contentType: file.type,
+        contentType: 'application/pdf',
         customMetadata: { contrato_doc_id: id, contrato_id: legible },
       });
       const url = await snap.ref.getDownloadURL();
