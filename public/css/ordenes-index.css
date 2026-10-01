@@ -1187,7 +1187,7 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
    rail abierto) con overflow visible y se montaba 24 px sobre el cliente;
    TIPO y ESTADO se cortaban en 8 de cada 12 filas. */
 .orders-table col.oc-numero   { width: 136px; }
-.orders-table col.oc-tecnico  { width: 140px; }
+.orders-table col.oc-tecnico  { width: 164px; }
 .orders-table col.oc-tipo     { width: 104px; }
 .orders-table col.oc-estado   { width: 184px; }
 .orders-table col.oc-fecha    { width: 100px; }
