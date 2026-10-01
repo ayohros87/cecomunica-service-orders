@@ -277,6 +277,22 @@ function addRow({ serial = "", modeloId = "", accesorios = {}, observaciones = "
       },
     });
   }
+  // Enter en el serial = fila nueva con el foco en su serial (o la siguiente
+  // fila si ya existe). Es lo que manda un lector de barras al terminar de
+  // leer; antes dejaba el cursor donde estaba y recepción tecleaba "Agregar
+  // fila" por cada radio (auditoría de módulos 2026-09-30, 01 R5). Con el
+  // serial vacío no hace nada: así no se crean filas en blanco por un Enter
+  // de más.
+  if (serieInput) {
+    serieInput.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Enter" || ev.isComposing) return;
+      ev.preventDefault();
+      if (!serieInput.value.trim()) return;
+      const siguiente = tr.nextElementSibling?.querySelector?.(".serie");
+      if (siguiente) siguiente.focus();
+      else addRow({ focus: true });
+    });
+  }
   if (focus) serieInput?.focus();
   return tr;
 }
