@@ -105,6 +105,28 @@ async function estamparLinaje(gid, g, ordenEntregaId) {
             : yaVolvio
               ? `Reemplazada por ${entrante} — el radio ya había vuelto (${rSal.data.estado}), no queda devolución pendiente (gestión ${gid})`
               : `Reemplazada por ${entrante} — pendiente de devolución (gestión ${gid})`));
+        // "En casa" confía en que la orden de taller que lo trajo decida su
+        // destino. Pero si el radio se QUITÓ de esa orden (falló durante la
+        // programación del propio contrato), ninguna orden lo tiene y la
+        // ficha se queda pegada al contrato: la entrega lo marcó en_cliente
+        // y el Anexo A lo listaba junto a su entrante (SERV20260918-01,
+        // 22806A0291/0294, 2026-09-18 — bodega lo corrigió a mano). Se suelta
+        // aquí a revisión, nunca a bodega: es el radio que salió por daño.
+        const enCasaPeroContratado = it.saliente_en_casa
+          && [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE].includes(rSal.data.estado)
+          && it.contrato_doc_id
+          && rSal.data.asignacion?.contrato_doc_id === it.contrato_doc_id;
+        if (enCasaPeroContratado) {
+          await pool.transicionar(saliente, it.modelo_id || null, it.modelo || "", {
+            aEstado: pool.ESTADOS.DEVUELTO,
+            soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
+            condicion: (doc) => doc.asignacion?.contrato_doc_id === it.contrato_doc_id,
+            tipo: "reemplazo",
+            refMov: { tipo: "gestion", id: gid, label: gid },
+            notas: `Sustituido por ${entrante}: ya estaba en CECOMUNICA y ninguna orden lo tenía — sale del contrato ${it.contrato_id || it.contrato_doc_id} y queda por revisar`,
+            extra: { asignacion: null },
+          });
+        }
       }
     } catch (e) {
       logger.warn("[onOrdenWriteGestion] marca del saliente falló", { gid, saliente, message: e.message });

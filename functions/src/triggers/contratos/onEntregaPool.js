@@ -2,6 +2,7 @@ const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
+const G = require("../../lib/gestiones");
 
 // Pool de equipos: cuando el contrato recibe la señal de ENTREGA
 // (`entrega_confirmada` pasa a true — la estampa onOrdenEntregada o el callable
@@ -18,10 +19,16 @@ module.exports = onDocumentUpdated(
     const cid = event.params.cid;
     try {
       const snap = await db.collection("contratos").doc(cid).collection("seriales").get();
+      // Los sustituidos por un reemplazo NO se entregaron: se quitaron de la
+      // orden y salió su entrante (SERV20260918-01, 2026-09-18 — la entrega
+      // marcó en_cliente a 22806A0291/0294 cuando estaban en el taller). Si la
+      // lectura falla (null) se sigue como antes.
+      const sustituidos = new Set(((await G.salientesDeReemplazo(cid)) || []).map(pool.normSerial));
       let movidos = 0;
       for (const d of snap.docs) {
         const s = d.data();
         if (!s.serial) continue;
+        if (sustituidos.has(pool.normSerial(s.serial))) continue;
         const r = await pool.transicionar(s.serial, s.modelo_id, s.modelo, {
           aEstado: pool.ESTADOS.EN_CLIENTE,
           soloDesde: [pool.ESTADOS.ASIGNADO],
