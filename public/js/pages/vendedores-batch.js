@@ -70,23 +70,45 @@ window.VB = {
   },
 
   // ---- Client cache loading ----
-  async cargarClientesCache() {
-    const cached = this.lsGet('cache_clientes_v1');
-    if (cached && Array.isArray(cached) && cached.length) { this.clientesCache = cached; this.clientesCargados = true; return; }
-    const clientes = await ClientesService.getAllClientes();
-    this.clientesCache = clientes.map(c => {
+  // (Auditoría de módulos 2026-10-01, PoC R1.) La lista del combo salía de una
+  // caché local de 6 h que podía estar INCOMPLETA: getAllClientes sin `fresh`
+  // devuelve lo que la persistencia de Firestore tenga en ese navegador (Karla
+  // veía 8 de 421) y solo cae al servidor si la caché está VACÍA. Un cliente
+  // nuevo no aparecía hasta que expirara, el lote salía sin cliente_id y en
+  // recepción no autocompletaba. Ahora la lista completa viene SIEMPRE del
+  // servidor (loadClientes: revalida cada 5 min por pestaña) y localStorage
+  // solo sirve para pintar al instante mientras llega; nunca es "la lista".
+  _mapearClientes(lista) {
+    return (lista || []).map(c => {
       const nombre = (c.nombre || '').toString();
       return { id: c.id, nombre, norm: FMT.normalize(nombre) };
     });
-    this.lsSet('cache_clientes_v1', this.clientesCache);
-    this.clientesCargados = true;
+  },
+
+  // Una sola carga en vuelo: generarJSON, el blur del cliente y el montaje del
+  // combo la piden a la vez al abrir la página.
+  _cargaClientes: null,
+  cargarClientesCache({ fresh = false } = {}) {
+    if (this._cargaClientes && !fresh) return this._cargaClientes;
+    const p = (async () => {
+      const lista = fresh
+        ? await ClientesService.getAllClientes({ fresh: true })
+        : [...(await ClientesService.loadClientes()).values()];
+      this.clientesCache   = this._mapearClientes(lista);
+      this.clientesCargados = true;
+      try { this.lsSet('cache_clientes_v1', this.clientesCache); } catch (_) { /* sin localStorage */ }
+      this._combo?.setItems?.(this.clientesCache);
+      return this.clientesCache;
+    })();
+    this._cargaClientes = p;
+    p.catch(() => { if (this._cargaClientes === p) this._cargaClientes = null; });
+    return p;
   },
 
   async refrescarClientes() {
     try {
       localStorage.removeItem('cache_clientes_v1');
-      this.clientesCargados = false;
-      await this.cargarClientesCache();
+      await this.cargarClientesCache({ fresh: true });
       Toast.show('Lista de clientes actualizada ✅', 'ok');
     } catch (e) { console.error('Error al refrescar clientes:', e); Toast.show('Error al refrescar clientes', 'bad'); }
   },
@@ -95,7 +117,13 @@ window.VB = {
   async montarComboCliente() {
     const input = document.getElementById('clienteGlobal');
     if (!input || typeof EntityCombo === 'undefined') return;
-    if (!this.clientesCargados) { try { await this.cargarClientesCache(); } catch (e) { console.error(e); } }
+    // Pintado provisional desde localStorage (puede ser parcial): el combo
+    // responde al instante y se completa con la lista del servidor en cuanto
+    // llega (cargarClientesCache → setItems).
+    if (!this.clientesCargados) {
+      const cached = this.lsGet('cache_clientes_v1');
+      if (cached && Array.isArray(cached) && cached.length) this.clientesCache = cached;
+    }
     this._combo = EntityCombo.montar(null, {
       input,
       items: this.clientesCache || [],
@@ -107,6 +135,11 @@ window.VB = {
         if (c) VB.buscarGruposCliente();
       },
     });
+    // La lista completa del servidor (reemplaza la provisional en el combo).
+    if (!this.clientesCargados) {
+      try { await this.cargarClientesCache(); }
+      catch (e) { console.error('No se pudo cargar la lista de clientes:', e); Toast.show('No se pudo cargar la lista de clientes. Pulsa el botón de actualizar.', 'bad'); }
+    }
   },
 
   toTitleCase(str) {
