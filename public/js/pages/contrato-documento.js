@@ -337,9 +337,9 @@
       av.style.display = 'block';
       av.style.background = '#FEE2E2'; av.style.borderColor = '#DC2626'; av.style.color = '#991B1B';
       av.innerHTML = `<b>No imprimas este documento todavía.</b> El Anexo A lista
-        ${rotos.length === 1 ? 'un radio que ya fue sustituido' : `${rotos.length} radios que ya fueron sustituidos`}
-        (${rotos.map((u) => esc(u.serial || u.id)).join(', ')}) y que estaban en CECOMUNICA al hacer el cambio.
-        Pídele a bodega que los saque del contrato; al recargar, el documento sale correcto.`;
+        ${rotos.length === 1 ? 'un radio que ya fue sustituido y que estaba' : `${rotos.length} radios que ya fueron sustituidos y que estaban`}
+        en CECOMUNICA al hacer el cambio (${rotos.map((u) => esc(u.serial || u.id)).join(', ')}).
+        Pídele a bodega que ${rotos.length === 1 ? 'lo saque' : 'los saque'} del contrato; al recargar, el documento sale correcto.`;
     }
 
     // Registro ACTUAL cuando difiere del firmado: informativo, sin firma —
