@@ -206,7 +206,8 @@
 
           <div style="flex:1;"></div>
 
-          <label class="toggle-pill" title="Contratos con equipos que el cliente todavía no devuelve, o sin registro de devolución. Incluye anulados aunque «Mostrar inactivos» esté apagado."><input type="checkbox" id="chkSoloDevolucion"> <i data-lucide="package-minus" style="width:14px;height:14px;"></i> Devolución pendiente</label>
+          <label class="toggle-pill" title="Contratos con una devolución abierta y equipos que el cliente todavía no devuelve. Consulta toda la base; incluye anulados aunque «Mostrar inactivos» esté apagado."><input type="checkbox" id="chkSoloDevolucion"> <i data-lucide="package-minus" style="width:14px;height:14px;"></i> Devolución pendiente</label>
+          <label class="toggle-pill" title="Contratos terminados que deberían estar devolviendo equipo y no tienen registro de devolución. Se aplica a los contratos ya cargados."><input type="checkbox" id="chkSinRegistroDevolucion"> <i data-lucide="package-search" style="width:14px;height:14px;"></i> Sin registro de devolución</label>
           <label class="toggle-pill"><input type="checkbox" id="chkMostrarInactivos"> <i data-lucide="archive" style="width:14px;height:14px;"></i> Mostrar inactivos</label>
           <!-- Sigue existiendo porque el deep-link ?estado= y los chips lo
                sincronizan; ya no se ofrece como filtro visible (el archivo no

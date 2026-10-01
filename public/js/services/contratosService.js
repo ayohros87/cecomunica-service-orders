@@ -204,6 +204,22 @@ const ContratosService = {
     return { docs, lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1] };
   },
 
+  // "Devolución pendiente" AL SERVIDOR (auditoría de módulos 2026-09-30, R3):
+  // el chip filtraba sobre las 40 filas cargadas y salía 1 cuando había 14.
+  // devolucion_estado es el espejo que el plan de devolución diseñó para
+  // esto. `deleted` se filtra en el cliente (evita un índice más); "sin
+  // registro" sigue siendo local porque es la AUSENCIA del campo.
+  async listContratosDevolucionPendiente({ creadoPorUid = null, lastDoc = null, limit = 30 } = {}) {
+    const db = firebase.firestore();
+    let q = db.collection('contratos').where('devolucion_estado', '==', 'pendiente');
+    if (creadoPorUid) q = q.where('creado_por_uid', '==', creadoPorUid);
+    q = q.orderBy('fecha_creacion', 'desc').limit(limit);
+    if (lastDoc) q = q.startAfter(lastDoc);
+    const snap = await q.get();
+    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return { docs, lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1] };
+  },
+
   // Fallback list without the searchRange filter (used for JS-side client search).
   async listContratosFallback({
     estadoSel    = null,

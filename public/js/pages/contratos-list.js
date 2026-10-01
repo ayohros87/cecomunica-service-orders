@@ -430,22 +430,27 @@ window.ContratosLista = {
     const mostrarInactivos = document.getElementById('chkMostrarInactivos')?.checked;
     const estadoSel        = document.getElementById('filtroEstado')?.value || '';
     const soloDevolucion   = document.getElementById('chkSoloDevolucion')?.checked;
+    const sinRegistro      = document.getElementById('chkSinRegistroDevolucion')?.checked;
     const composicion      = this.composicionSel();
     const CC               = this._CC();
 
     return data.filter(doc => {
       // Composición (Alquiler / Propio / Mixto): se lee de las líneas, así que
-      // corre sobre lo YA CARGADO, como el de devolución — Firestore no puede
+      // corre sobre lo YA CARGADO, como "sin registro" — Firestore no puede
       // consultar "todas las líneas son propio".
       if (composicion && CC && !CC.coincide(doc, composicion)) return false;
       if (soloDevolucion) {
-        // Los anulados son justo donde más duele un equipo olvidado, así que
-        // este filtro ignora "Mostrar inactivos": esconderlos vaciaría la
-        // bandeja de los casos que más importan.
-        const estado = DevolucionContrato.estado(doc);
-        return estado === 'pendiente'
-            || estado === 'cerrada_con_faltantes'
-            || estado === 'sin_registro';
+        // El servidor ya trajo solo devolucion_estado == 'pendiente' (R3);
+        // aquí se respeta el chip de estado y se ignora "Mostrar inactivos":
+        // los anulados son justo donde más duele un equipo olvidado.
+        return DevolucionContrato.estado(doc) === 'pendiente'
+            && (!estadoSel || doc.estado === estadoSel);
+      }
+      if (sinRegistro) {
+        // "Sin registro" es la AUSENCIA de devolucion_estado en un contrato
+        // que debería estar devolviendo: no se puede consultar — vista local
+        // sobre lo cargado, y el resumen lo dice.
+        return DevolucionContrato.estado(doc) === 'sin_registro';
       }
       // Si el chip de estado pide anulados/inactivos, se muestran aunque el
       // toggle esté apagado: el servidor ya los trajo y "no hay anulados"
@@ -464,6 +469,7 @@ window.ContratosLista = {
         estado: document.getElementById('filtroEstado')?.value || '',
         inactivos: !!document.getElementById('chkMostrarInactivos')?.checked,
         devolucion: !!document.getElementById('chkSoloDevolucion')?.checked,
+        sinRegistro: !!document.getElementById('chkSinRegistroDevolucion')?.checked,
         composicion: this.composicionSel(),
       }));
     } catch (_) { /* sin persistencia */ }
@@ -484,16 +490,19 @@ window.ContratosLista = {
     if (chkIna) chkIna.checked = !!f.inactivos;
     const chkDev = document.getElementById('chkSoloDevolucion');
     if (chkDev) chkDev.checked = !!f.devolucion;
+    const chkSin = document.getElementById('chkSinRegistroDevolucion');
+    if (chkSin) chkSin.checked = !!f.sinRegistro;
     if (['alquiler', 'propio', 'mixto'].includes(f.composicion)) this.setComposicion(f.composicion);
   },
 
-  // Los filtros de devolución y de composición corren sobre lo YA CARGADO, no
+  // Los filtros "sin registro" y de composición corren sobre lo YA CARGADO, no
   // sobre la colección: "sin registro" es la AUSENCIA de devolucion_estado y
   // la composición se lee de las líneas — Firestore no puede consultar ninguna
   // de las dos. Decirlo evita que la bandeja se lea como "estos son todos"
-  // cuando solo son los de las páginas cargadas.
+  // cuando solo son los de las páginas cargadas. ("Devolución pendiente" ya
+  // consulta al servidor y no lleva el aviso.)
   avisoAlcanceDevolucion() {
-    if (!document.getElementById('chkSoloDevolucion')?.checked && !this.composicionSel()) return '';
+    if (!document.getElementById('chkSinRegistroDevolucion')?.checked && !this.composicionSel()) return '';
     return ` · <span class="td-muted" title="El filtro se aplica a los contratos ya cargados. Usa «Cargar más» para ampliar el alcance.">de ${CS.contratos.length} cargado(s)</span>`;
   },
 
@@ -610,7 +619,23 @@ window.ContratosLista = {
           }
         } catch (e) { console.warn('Búsqueda por tokens no disponible aún:', e?.code || e); }
       }
-      if (!tokenHit) {
+      // "Devolución pendiente" consulta al SERVIDOR (auditoría de módulos
+      // 2026-09-30, R3): antes filtraba las 40 filas cargadas y decía 1
+      // cuando la base tenía 14. El chip de estado y "sin registro" se
+      // aplican sobre lo que vuelve (filtrarLocal).
+      const soloDevolucion = !!document.getElementById('chkSoloDevolucion')?.checked;
+      if (!tokenHit && soloDevolucion) {
+        const { docs: devDocs, lastDoc: devCursor } = await ContratosService.listContratosDevolucionPendiente({
+          creadoPorUid, lastDoc: cursor, limit: CS.pageLimit(),
+        });
+        if (devDocs.length > 0) {
+          CS.lastDoc = devCursor;
+          devDocs.filter(c => c.deleted !== true).forEach(data => CS.contratos.push(data));
+        } else if (reset) {
+          CS.contratos = [];
+          CS.lastDoc   = null;
+        }
+      } else if (!tokenHit) {
 
       // Cache-first (solo carga inicial limpia, sin filtros ni búsqueda):
       // pinta al instante lo que haya en la persistencia local de Firestore
@@ -882,11 +907,13 @@ window.ContratosLista = {
         const chkPnd = document.getElementById('chkSoloPendientes');
         const chkIna = document.getElementById('chkMostrarInactivos');
         const chkDev = document.getElementById('chkSoloDevolucion');
+        const chkSin = document.getElementById('chkSinRegistroDevolucion');
         if (inp)    inp.value    = '';
         if (sel)    sel.value    = '';
         if (chkPnd) chkPnd.checked = false;
         if (chkIna) chkIna.checked = false;
         if (chkDev) chkDev.checked = false;
+        if (chkSin) chkSin.checked = false;
         self.setComposicion('');
         self.cargar(true);
       });
@@ -906,8 +933,19 @@ window.ContratosLista = {
     }
 
     const chkSoloDevolucion = document.getElementById('chkSoloDevolucion');
+    const chkSinRegistro = document.getElementById('chkSinRegistroDevolucion');
     if (chkSoloDevolucion) {
-      chkSoloDevolucion.addEventListener('change', () => self.cargar(true));
+      chkSoloDevolucion.addEventListener('change', () => {
+        // Son vistas excluyentes: una consulta al servidor, la otra es local.
+        if (chkSoloDevolucion.checked && chkSinRegistro) chkSinRegistro.checked = false;
+        self.cargar(true);
+      });
+    }
+    if (chkSinRegistro) {
+      chkSinRegistro.addEventListener('change', () => {
+        if (chkSinRegistro.checked && chkSoloDevolucion) chkSoloDevolucion.checked = false;
+        self.cargar(true);
+      });
     }
 
     const filtroClienteInput = document.getElementById('filtroCliente');

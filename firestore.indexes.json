@@ -203,6 +203,38 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "devolucion_estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha_creacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "contratos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "devolucion_estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "creado_por_uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha_creacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "contratos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "deleted",
           "order": "ASCENDING"
         },
