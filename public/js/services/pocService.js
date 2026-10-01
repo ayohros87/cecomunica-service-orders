@@ -230,17 +230,72 @@ const PocService = {
   // device equivocado (RADIO 3 de ERICK REYES, 2026-07-31) la auditoría no tenía
   // dónde verlo y hubo que reconstruirlo por los movimientos del pool. `antes`
   // es el doc tal como lo tenía la pantalla; `origen` dice qué flujo lo borró.
-  async softDeletePocDevice(id, { antes = null, user = null, origen = 'poc' } = {}) {
-    const db = firebase.firestore();
-    await db.collection('poc_devices').doc(id).update({
-      deleted:          true,
+  // Lo que se escribe al cerrar una ficha a mano: misma forma que el cierre
+  // del servidor (functions/src/lib/pocCierre.js). `activo:false` porque el
+  // radio ya no está en servicio con ese cliente: una ficha cerrada seguía
+  // pintando "● Activo" al lado de "Cerrada" (auditoría de módulos
+  // 2026-10-01, PoC B2). `cierre` guarda la foto del SIM y de dónde salió el
+  // cierre (ref), que es lo que recepción necesita después para pedir la
+  // desconexión del airtime.
+  _cierreManual({ antes = null, user = null, motivo = 'Cerrada a mano desde la Base PoC', ref = null } = {}) {
+    return {
+      deleted: true,
+      activo:  false,
+      cierre: {
+        at:         new Date(),
+        motivo,
+        ref:        ref || null,
+        sim_number: antes?.sim_number || '',
+        sim_phone:  antes?.sim_phone  || '',
+        operador:   antes?.operador   || '',
+        por:        user?.email || null,
+      },
       updated_at:       firebase.firestore.FieldValue.serverTimestamp(),
       updated_by:       user?.uid   || null,
       updated_by_email: user?.email || null,
-    });
-    this._logBorrado(id, antes, user, origen, true);
+    };
   },
 
+  async softDeletePocDevice(id, { antes = null, user = null, origen = 'poc', motivo = undefined, ref = null } = {}) {
+    const db = firebase.firestore();
+    await db.collection('poc_devices').doc(id).update(this._cierreManual({ antes, user, motivo, ref }));
+    this._logBorrado(id, antes, user, origen, true, { motivo, ref });
+  },
+
+  // Cierre en LOTE (saneo de duplicados por serial, R3/D10/P6): WriteBatch
+  // por tandas con el log en la misma tanda. items: [{ id, antes, motivo,
+  // ref }]. Un fallo de tanda no deshace las anteriores: se devuelve cuántas
+  // se cerraron y el error, para que la pantalla lo diga.
+  async cerrarFichasEnLote(items, { user = null, origen = 'duplicados', tanda = 200, onProgreso = null } = {}) {
+    const db = firebase.firestore();
+    let cerradas = 0;
+    for (let i = 0; i < items.length; i += tanda) {
+      const batch = db.batch();
+      const parte = items.slice(i, i + tanda);
+      for (const it of parte) {
+        batch.update(db.collection('poc_devices').doc(it.id), this._cierreManual({ antes: it.antes, user, motivo: it.motivo, ref: it.ref }));
+        batch.set(db.collection('poc_logs').doc(), {
+          equipo_id: it.id,
+          fecha:     firebase.firestore.FieldValue.serverTimestamp(),
+          usuario:   user?.email || null,
+          accion:    'eliminar',
+          origen,
+          motivo:    it.motivo || null,
+          ref:       it.ref || null,
+          cambios:   { antes: it.antes || {}, despues: { deleted: true, activo: false } },
+        });
+      }
+      try { await batch.commit(); }
+      catch (e) { return { cerradas, error: e }; }
+      cerradas += parte.length;
+      if (onProgreso) { try { onProgreso(cerradas, items.length); } catch (_) { /* informativo */ } }
+    }
+    return { cerradas, error: null };
+  },
+
+  // Reabrir deja la ficha INACTIVA (como la dejó el cierre): quien la reabre
+  // la activa cuando el radio esté de verdad en servicio. Antes "revivía"
+  // activa aunque el cierre hubiera sido por una devolución.
   async restorePocDevice(id, { antes = null, user = null, origen = 'poc' } = {}) {
     const db = firebase.firestore();
     await db.collection('poc_devices').doc(id).update({
@@ -255,14 +310,16 @@ const PocService = {
   // Best-effort: un log que falle no debe tumbar el borrado (mismo criterio que
   // PocEdit.guardar). `accion` distingue estas entradas de las ediciones, que
   // no traen el campo.
-  _logBorrado(id, antes, user, origen, borrado) {
+  _logBorrado(id, antes, user, origen, borrado, { motivo = null, ref = null } = {}) {
     this.addLog({
       equipo_id: id,
       fecha:     firebase.firestore.FieldValue.serverTimestamp(),
       usuario:   user?.email || null,
       accion:    borrado ? 'eliminar' : 'restaurar',
       origen,
-      cambios:   { antes: antes || {}, despues: { deleted: borrado } },
+      ...(motivo ? { motivo } : {}),
+      ...(ref ? { ref } : {}),
+      cambios:   { antes: antes || {}, despues: borrado ? { deleted: true, activo: false } : { deleted: false } },
     }).catch(e => console.warn('poc_log write failed (non-critical):', e));
   },
 

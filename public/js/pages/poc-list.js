@@ -73,6 +73,14 @@ window.PocList = {
   // el orden no cambia qué fichas hay — tirar la memoria por un clic en una
   // columna obligaba a bajar otra vez las ~4,600 fichas vivas (2026-09-25).
   _redespachar() {
+    // Vista de duplicados abierta: se vuelve a armar desde la memoria (la
+    // ficha recién cerrada ya salió de las vivas) sin tocar el buscador ni
+    // volver a la página 1 (auditoría de módulos 2026-10-01, PoC R3/C4).
+    if (this._dupVista) {
+      if (this._dupVista.tipo === 'serial') this.filtrarDuplicadosSerial();
+      else this.filtrarDuplicados(this._dupVista.tipo);
+      return;
+    }
     const v = document.getElementById('filtroValor')?.value.trim() || '';
     if (v.length >= 2) this.filtrar();
     else if (!v) this.cargar(true);
@@ -351,7 +359,7 @@ window.PocList = {
         restBtn.setAttribute('aria-label', 'Reabrir ficha');
         restBtn.innerHTML = '<i data-lucide="rotate-ccw"></i>';
         restBtn.onclick = async () => {
-          if (!await Modal.confirm({ message: '¿Reabrir esta ficha de POC? El equipo vuelve a contar como activo con el cliente.' })) return;
+          if (!await Modal.confirm({ message: '¿Reabrir esta ficha de POC? Vuelve a la lista como <b>inactiva</b>; actívala cuando el equipo esté en servicio con el cliente.' })) return;
           await PocService.restorePocDevice(docId, {
             antes: d, user: firebase.auth().currentUser, origen: 'poc-lista',
           });
@@ -460,6 +468,7 @@ window.PocList = {
     const tbody      = document.getElementById('devicesTable');
     const btnCargar  = document.getElementById('btnCargarMas');
 
+    this._dupVista = null;   // cualquier carga normal sale de la vista de duplicados
     if (this._tomarFocusDeUrl()) return;
 
     // Guard en vuelo: el botón "Cargar más" tenía doble wiring (onclick del
@@ -652,6 +661,7 @@ window.PocList = {
 
   // ── Filtered search ──────────────────────────────────────────────
   filtrar() {
+    this._dupVista = null;   // buscar sale de la vista de duplicados
     const ejecucionID   = ++this._filtroID;
     const campo         = document.getElementById('filtroCampo').value;
     const valor         = document.getElementById('filtroValor').value.trim().toLowerCase();
@@ -836,19 +846,20 @@ window.PocList = {
       + 'No se borra: se ve con "Incluir cerradas" y se puede <b>reabrir</b> si se cerró por error.'
       + (sim ? `<br><br>Tiene el SIM <b>${FMT.esc(sim)}</b>: al cerrar te preguntamos si lo pones disponible en el pool de SIM o lo conservas en la ficha.` : '');
     if (!await Modal.confirm({ title: 'Cerrar ficha', confirmLabel: 'Cerrar ficha', message: msg, danger: true })) return false;
+    // Las filas de duplicados (SIM / Unit ID) traen el SIM como `sim`, no
+    // `sim_number`: se normaliza para el cierre, el log y la liberación.
+    const antes = { ...d, sim_number: d.sim_number || d.sim || '' };
     try {
       await PocService.softDeletePocDevice(docId, {
-        antes: d, user: firebase.auth().currentUser, origen: 'poc-lista',
+        antes, user: firebase.auth().currentUser, origen: 'poc-lista',
       });
     } catch (e) {
       console.error('[PocList] cerrar ficha', docId, e);
       Toast.show('No se pudo cerrar la ficha: ' + (e.message || e), 'bad');
       return false;
     }
-    // Ficha cerrada con SIM → ofrecer devolver el SIM al pool. Las filas de
-    // duplicados traen el SIM como `sim`, no `sim_number`.
-    const antes = { ...d, sim_number: d.sim_number || d.sim || '' };
-    await SimLiberar.procesarDesactivados([{ id: docId, antes, despues: { ...antes, deleted: true } }]);
+    // Ficha cerrada con SIM → ofrecer devolver el SIM al pool.
+    await SimLiberar.procesarDesactivados([{ id: docId, antes, despues: { ...antes, deleted: true, activo: false } }]);
     return true;
   },
 
@@ -1013,8 +1024,10 @@ window.PocList = {
         btnElim.title = 'Cerrar ficha (el equipo ya no está con el cliente)';
         btnElim.setAttribute('aria-label', 'Cerrar ficha');
         btnElim.innerHTML = '<i data-lucide="archive"></i>';
+        // refresh() (no cargar(true)): la vista de duplicados se rearma desde
+        // la memoria sin volver a la página 1 (auditoría de módulos 2026-10-01).
         btnElim.onclick = async () => {
-          if (await this.cerrarFicha(d.id, d)) this.cargar(true);
+          if (await this.cerrarFicha(d.id, d)) this.refresh();
         };
         acciones.appendChild(btnElim);
 
@@ -1026,7 +1039,7 @@ window.PocList = {
           btnRest.innerHTML = '<i data-lucide="rotate-ccw"></i>';
           btnRest.onclick = () => PocService.restorePocDevice(d.id, {
             antes: d, user: firebase.auth().currentUser, origen: 'poc-lista',
-          }).then(() => this.cargar(true));
+          }).then(() => this.refresh());
           acciones.appendChild(btnRest);
         }
       }
@@ -1038,7 +1051,271 @@ window.PocList = {
     if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
+  // ── Duplicados por serial, agrupados (auditoría de módulos 2026-10-01,
+  // PoC R3 + D10 + P6) ──────────────────────────────────────────────
+  // Un grupo por serial; la ficha BUENA es la MÁS RECIENTE (decisión 10 de
+  // Alberto). Se cruza con la custodia del pool (equipos_pool.asignacion)
+  // solo para decir si coincide: si esa custodia viene de la migración y
+  // nadie la verificó, no vale. Las demás fichas del grupo son "sobrantes" y
+  // se cierran en lote (nunca se borran: quedan en el histórico y se pueden
+  // reabrir). Antes: tabla plana de 1,453 filas y cerrar una volvía a la
+  // página 1.
+  _dupVista: null,          // { tipo, grupos? } — vista de duplicados activa
+  _dupPool:  new Map(),     // serial_norm → docs del pool (caché de la sesión)
+  _DUP_SERIALES_BASURA: ['ND', 'NA', 'CONSOLA', 'SINSERIAL', 'NA0', 'N/D'],
+
+  _serialNorm(s) {
+    if (window.EquiposPoolService?.normalizarSerial) return EquiposPoolService.normalizarSerial(s);
+    return String(s ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  },
+
+  _msCreada(d) {
+    const t = d?.created_at;
+    if (!t) return 0;
+    if (typeof t.toMillis === 'function') return t.toMillis();
+    if (typeof t.seconds === 'number') return t.seconds * 1000;
+    const n = new Date(t).getTime();
+    return Number.isFinite(n) ? n : 0;
+  },
+
+  // Agrupa fichas vivas por serial normalizado. Cada grupo: { clave, serial,
+  // fichas (más reciente primero), buena, sobrantes }.
+  _agruparPorSerial(devices) {
+    const porSerial = new Map();
+    devices.forEach(d => {
+      if (d.deleted === true) return;
+      const k = this._serialNorm(d.serial);
+      if (!k || this._DUP_SERIALES_BASURA.includes(k)) return;
+      if (!porSerial.has(k)) porSerial.set(k, []);
+      porSerial.get(k).push(d);
+    });
+    const grupos = [];
+    porSerial.forEach((fichas, clave) => {
+      if (fichas.length < 2) return;
+      fichas.sort((a, b) => (this._msCreada(b) - this._msCreada(a)) || String(b.id).localeCompare(String(a.id)));
+      grupos.push({ clave, serial: fichas[0].serial || clave, fichas, buena: fichas[0], sobrantes: fichas.slice(1) });
+    });
+    grupos.sort((a, b) => String(a.serial).localeCompare(String(b.serial), 'es', { numeric: true }));
+    return grupos;
+  },
+
+  // Qué dice el pool de ese serial. Devuelve { existe, estado, cliente,
+  // migracion, coincide } — `coincide` es null si no hay custodia que
+  // comparar. "Custodia por migración" = el doc del pool nació en la
+  // migración (origen migracion_*) y nadie lo ha verificado: no vale como
+  // prueba de dónde está el radio (decisión 10).
+  _custodiaPool(grupo) {
+    const docs = this._dupPool.get(grupo.clave);
+    if (docs === undefined) return { existe: null };          // sin consultar
+    if (!docs || !docs.length) return { existe: false };
+    // Con colisión (varios docs por serial) se prefiere el que apunte a una
+    // ficha del grupo; si no, el que esté en cliente; si no, el primero.
+    const ids = new Set(grupo.fichas.map(f => f.id));
+    const eq = docs.find(x => x.poc_device_id && ids.has(x.poc_device_id))
+      || docs.find(x => x.estado === 'en_cliente')
+      || docs[0];
+    const a = eq.asignacion || null;
+    const migracion = String(eq.origen || '').startsWith('migracion') && eq.verificado !== true;
+    let coincide = null;
+    if (a && (a.cliente_id || a.cliente_nombre)) {
+      const b = grupo.buena;
+      const idOk = !!(a.cliente_id && b.cliente_id && a.cliente_id === b.cliente_id);
+      const nomOk = !!a.cliente_nombre && FMT.normalize(a.cliente_nombre) === FMT.normalize(PocState.nombreClienteDe(b) || '');
+      coincide = idOk || nomOk;
+    }
+    return { existe: true, estado: eq.estado || '', cliente: a?.cliente_nombre || '', contrato: a?.contrato_id || '', migracion, coincide, verificado: eq.verificado === true };
+  },
+
+  async filtrarDuplicadosSerial() {
+    // Repintado tras cerrar: se conserva hasta dónde había llegado la vista.
+    const pintadosHasta = this._dupVista?.tipo === 'serial' ? (this._dupVista.pintadosHasta || 0) : 0;
+    this._dupVista = { tipo: 'serial', pintadosHasta };
+    const ejecucionID = ++this._filtroID;
+    const tbody = document.getElementById('devicesTable');
+    const btnCargar = document.getElementById('btnCargarMas');
+    if (btnCargar) btnCargar.style.display = 'none';
+    this._resumenDup('<span class="loader" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;"></span> Agrupando por serial…');
+    let grupos;
+    try {
+      const devices = await this._getAllMemo();
+      if (ejecucionID !== this._filtroID) return;
+      grupos = this._agruparPorSerial(devices);
+      // Custodia del pool: solo los seriales que no estén ya en la caché de
+      // la sesión (tras cerrar una ficha no se vuelve a consultar nada).
+      const faltan = grupos.map(g => g.clave).filter(k => !this._dupPool.has(k));
+      if (faltan.length && window.EquiposPoolService?.findBySeriales) {
+        try {
+          const m = await EquiposPoolService.findBySeriales(faltan, (h, t) => this._resumenDup(`Cruzando con el pool de equipos… ${h}/${t}`));
+          m.forEach((v, k) => this._dupPool.set(k, v));
+        } catch (e) {
+          console.warn('[POC] duplicados: no se pudo cruzar con el pool:', e?.code || e);
+          // Los que sí se pudieron leer vienen en e.fallidos? No: se marca todo
+          // lo que faltaba como "sin consultar" y la vista lo dice.
+          Toast.show('No se pudo cruzar con el pool de equipos: la custodia sale como "sin consultar".', 'warn');
+        }
+      }
+      if (ejecucionID !== this._filtroID) return;
+    } catch (e) {
+      console.error('[POC] duplicados por serial:', e);
+      this._resumenDup('No se pudieron agrupar los duplicados. Revisa tu conexión e intenta de nuevo.');
+      return;
+    }
+    grupos.forEach(g => { g.pool = this._custodiaPool(g); });
+    this._dupVista = { tipo: 'serial', grupos, pintadosHasta };
+    this._pintarDuplicadosSerial(tbody, grupos);
+  },
+
+  _resumenDup(html) {
+    ['resumenEquipos', 'resumenEquiposTop'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = html; });
+  },
+
+  _chipPoolHtml(p) {
+    const esc = FMT.esc;
+    const estilo = (color, fondo) => `display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid var(--line);color:${color};background:${fondo};`;
+    if (!p || p.existe === null) return `<span style="${estilo('var(--fg-3)', 'var(--gray-100,#f1f3f5)')}">Pool: sin consultar</span>`;
+    if (p.existe === false)      return `<span style="${estilo('var(--fg-3)', 'var(--gray-100,#f1f3f5)')}">Sin ficha en el pool</span>`;
+    const estado = (window.EquiposPoolService?.ESTADO_LABELS || {})[p.estado] || p.estado || '—';
+    if (p.migracion) return `<span style="${estilo('#92400e', '#fef3c7')}" title="El doc del pool nació en la migración y nadie lo ha verificado: no sirve como prueba de dónde está el radio">Pool: custodia por migración (no vale)${p.cliente ? ' · ' + esc(p.cliente) : ''}</span>`;
+    if (p.coincide === true)  return `<span style="${estilo('#166534', '#dcfce7')}">Pool: ${esc(estado)} · ${esc(p.cliente)} ✓ coincide</span>`;
+    if (p.coincide === false) return `<span style="${estilo('#991b1b', '#fee2e2')}">Pool: ${esc(estado)} · ${esc(p.cliente)} ✗ no coincide con la más reciente</span>`;
+    return `<span style="${estilo('var(--fg-2)', 'var(--gray-100,#f1f3f5)')}">Pool: ${esc(estado)}</span>`;
+  },
+
+  _DUP_GRUPOS_TANDA: 60,
+  _pintarDuplicadosSerial(tbody, grupos) {
+    tbody.innerHTML = '';
+    const totalFichas = grupos.reduce((n, g) => n + g.fichas.length, 0);
+    const sobrantes   = grupos.reduce((n, g) => n + g.sobrantes.length, 0);
+    const coinciden   = grupos.filter(g => g.pool?.coincide === true).length;
+    const noCoinciden = grupos.filter(g => g.pool?.coincide === false).length;
+    const migracion   = grupos.filter(g => g.pool?.migracion).length;
+    const sinPool     = grupos.filter(g => g.pool?.existe === false).length;
+    const dosActivas  = grupos.filter(g => g.fichas.filter(f => f.activo !== false).length > 1).length;
+    if (!grupos.length) {
+      this._resumenDup('No hay seriales con más de una ficha viva.');
+      Toast.show('No hay seriales duplicados.', 'ok');
+      return;
+    }
+    const puedeCerrar = !PocState.esLectura() && sobrantes > 0;
+    const resumen = `
+      <strong>${grupos.length}</strong> <span style="color:var(--muted);font-size:12px;">seriales con más de una ficha</span>
+      <span class="badge" title="Fichas vivas en esos seriales">${totalFichas} fichas</span>
+      <span class="badge asignado" title="Las que no son la más reciente de su serial">${sobrantes} sobrantes</span>
+      <span class="badge" title="La más reciente coincide con la custodia del pool">pool ✓ ${coinciden}</span>
+      <span class="badge" title="La custodia del pool dice otro cliente">pool ✗ ${noCoinciden}</span>
+      <span class="badge" title="Custodia heredada de la migración, sin verificar: no vale">migración ${migracion}</span>
+      <span class="badge" title="El serial no existe en el pool">sin pool ${sinPool}</span>
+      <span class="badge" title="Seriales con dos o más fichas activas a la vez">${dosActivas} con 2+ activas</span>
+      ${puedeCerrar ? `<button type="button" class="btn btn-danger btn-sm" style="margin-left:6px;" onclick="PocList.cerrarSobrantesDuplicados()"><i data-lucide="archive"></i> Cerrar las ${sobrantes} sobrantes</button>` : ''}`;
+    this._resumenDup(resumen);
+    // Cuántos grupos había a la vista se conserva entre repintados: cerrar
+    // una ficha del grupo 300 no te devuelve al grupo 1.
+    const vistaPrevia = this._dupVista?.pintadosHasta || 0;
+    const pintarTanda = (desde, tanda = this._DUP_GRUPOS_TANDA) => {
+      tbody.querySelector('tr[data-mas]')?.remove();
+      const hasta = Math.min(grupos.length, desde + tanda);
+      for (let i = desde; i < hasta; i++) this._pintarGrupoDup(tbody, grupos[i]);
+      if (this._dupVista) this._dupVista.pintadosHasta = hasta;
+      const faltan = grupos.length - hasta;
+      if (faltan > 0) {
+        const tr = document.createElement('tr');
+        tr.dataset.mas = '1';
+        tr.innerHTML = '<td colspan="12" style="padding:14px;text-align:center;"></td>';
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-secondary btn-sm';
+        btn.textContent = `Mostrar ${Math.min(faltan, this._DUP_GRUPOS_TANDA)} seriales más (quedan ${faltan})`;
+        btn.onclick = () => pintarTanda(hasta);
+        tr.firstChild.appendChild(btn);
+        tbody.appendChild(tr);
+      }
+      if (window.Icons) Icons.pintar(tbody);
+      else if (typeof lucide !== 'undefined') lucide.createIcons();
+    };
+    pintarTanda(0, Math.max(this._DUP_GRUPOS_TANDA, vistaPrevia));
+    this.actualizarFlechitas();
+    if (window.Icons) Icons.pintar(document.getElementById('resumenEquiposTop'));
+  },
+
+  _pintarGrupoDup(tbody, g) {
+    const esc = FMT.esc;
+    const cab = document.createElement('tr');
+    cab.className = 'poc-dup-head';
+    cab.dataset.dupSerial = g.clave;
+    const td = document.createElement('td');
+    td.colSpan = 12;
+    td.innerHTML = `
+      <span class="td-mono" style="font-weight:700;">${esc(g.serial)}</span>
+      <span style="color:var(--fg-3);font-size:12px;margin-left:6px;">${g.fichas.length} fichas · se queda la más reciente</span>
+      <span style="margin-left:8px;">${this._chipPoolHtml(g.pool)}</span>`;
+    if (!PocState.esLectura() && g.sobrantes.length) {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-ghost btn-sm';
+      btn.style.marginLeft = '8px';
+      btn.innerHTML = `<i data-lucide="archive"></i> Cerrar ${g.sobrantes.length === 1 ? 'la sobrante' : 'las ' + g.sobrantes.length + ' sobrantes'}`;
+      btn.onclick = () => this.cerrarSobrantesDuplicados([g]);
+      td.appendChild(btn);
+    }
+    cab.appendChild(td);
+    tbody.appendChild(cab);
+    g.fichas.forEach((d, i) => {
+      const row = this._buildRow(d.id, d);
+      row.dataset.dupSerial = g.clave;
+      const celda = row.cells[PocState.COL.cliente];
+      if (celda) {
+        const chip = document.createElement('span');
+        chip.style.cssText = 'display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;font-size:10.5px;font-weight:600;border:1px solid var(--line);';
+        if (i === 0) { chip.style.color = '#166534'; chip.style.background = '#dcfce7'; chip.textContent = `Más reciente · se queda · ${FMT.date(d.created_at)}`; }
+        else         { chip.style.color = 'var(--fg-3)'; chip.style.background = 'var(--gray-100,#f1f3f5)'; chip.textContent = `Sobrante · ${FMT.date(d.created_at)}`; }
+        celda.appendChild(document.createElement('br'));
+        celda.appendChild(chip);
+      }
+      tbody.appendChild(row);
+    });
+  },
+
+  // Cierra en lote las sobrantes de los grupos dados (o de todos los de la
+  // vista). WriteBatch + poc_logs con origen 'duplicados'. El SIM que tenga
+  // una sobrante se queda en su ficha cerrada (no vuelve al pool): la que
+  // manda es la más reciente.
+  async cerrarSobrantesDuplicados(grupos = null) {
+    if (PocState.esLectura()) { Toast.show('Solo administradores o recepción pueden cerrar fichas.', 'bad'); return; }
+    const lista = (grupos || this._dupVista?.grupos || []).filter(g => g.sobrantes.length);
+    const items = [];
+    lista.forEach(g => {
+      const clienteBuena = PocState.nombreClienteDe(g.buena) || '(sin cliente)';
+      g.sobrantes.forEach(f => items.push({
+        id: f.id, antes: f,
+        motivo: `Duplicado por serial: se queda la ficha más reciente (${clienteBuena}, creada ${FMT.date(g.buena.created_at)})`,
+        ref: { tipo: 'poc_device', id: g.buena.id, label: `ficha ${g.serial} · ${clienteBuena}` },
+      }));
+    });
+    if (!items.length) { Toast.show('No hay fichas sobrantes que cerrar.', 'ok'); return; }
+    const conSim = items.filter(i => (i.antes.sim_number || '').toString().trim()).length;
+    const activas = items.filter(i => i.antes.activo !== false).length;
+    const noCoinciden = lista.filter(g => g.pool?.coincide === false).length;
+    const ok = await Modal.confirm({
+      title: 'Cerrar fichas sobrantes', confirmLabel: `Cerrar ${items.length}`, danger: true,
+      message: `Vas a cerrar <b>${items.length}</b> ficha${items.length === 1 ? '' : 's'} de <b>${lista.length}</b> serial${lista.length === 1 ? '' : 'es'}: en cada serial se queda la <b>más reciente</b>.`
+        + `<br><br>${activas ? `<b>${activas}</b> de las sobrantes están marcadas activas. ` : ''}${conSim ? `<b>${conSim}</b> tienen SIM: se queda en la ficha cerrada, no vuelve al pool. ` : ''}`
+        + (noCoinciden ? `<br><b>${noCoinciden}</b> serial${noCoinciden === 1 ? '' : 'es'} donde el pool dice OTRO cliente: revísalos después en Almacén.` : '')
+        + '<br><br>Las cerradas quedan en el histórico ("Incluir cerradas") y se pueden reabrir.',
+    });
+    if (!ok) return;
+    const user = firebase.auth().currentUser;
+    this._resumenDup(`Cerrando 0/${items.length}…`);
+    const r = await PocService.cerrarFichasEnLote(items, { user, origen: 'duplicados', onProgreso: (h, t) => this._resumenDup(`Cerrando ${h}/${t}…`) });
+    if (r.error) {
+      console.error('[POC] cierre en lote de duplicados:', r.error);
+      Toast.show(`Se cerraron ${r.cerradas} de ${items.length}. Falló una tanda: ${r.error.message || r.error}`, 'bad');
+    } else {
+      Toast.show(`${r.cerradas} ficha${r.cerradas === 1 ? '' : 's'} sobrante${r.cerradas === 1 ? '' : 's'} cerrada${r.cerradas === 1 ? '' : 's'}.`, 'ok');
+    }
+    this.refresh();
+  },
+
   async filtrarDuplicados(tipo) {
+    if (tipo === 'serial') return this.filtrarDuplicadosSerial();
+    this._dupVista = { tipo };
     // Fichas vivas desde la suscripción/memo de la búsqueda (0 lecturas si ya
     // está abierta); antes bajaba las 6,498 con cerradas y las descartaba.
     const devices   = await this._getAllMemo();
