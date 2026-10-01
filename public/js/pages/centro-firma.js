@@ -119,6 +119,9 @@ Object.assign(window.Centro, {
             <input class="form-input" id="wfEmail" type="email" value="${this.esc(this.cliente.representante_email || this.cliente.email || '')}" placeholder="correo del cliente"></div>
           <button class="btn btn-ghost" onclick="Centro._enviarFirmaCorreo('${this.esc(c.id)}','${this.esc(sid)}')">Enviar correo</button>
         </div>
+        <p style="margin:12px 0 0; font-size:12.5px; color:var(--fg-3);">
+          ¿Prefieres <b>papel</b>? Imprime el <b>Documento completo</b> (menú ⋯ del contrato), recoge la firma y
+          sube el firmado desde ese mismo menú: eso también activa el contrato. En la tablet de recepción no se firman contratos.</p>
         <div style="display:flex; justify-content:flex-end; margin-top:14px;">
           <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cerrar</button>
         </div>`);
@@ -181,6 +184,11 @@ Object.assign(window.Centro, {
         status: 'queued',
       });
       Toast.show(`Enlace de firma enviado a ${email}`, 'ok');
+      // A quién y cuándo: lo pinta el paso "Firma del cliente" (P5). Best-effort.
+      try {
+        await ContratosService.updateContrato(contratoDocId, { firma_enviada_a: email, firma_enviada_at: firebase.firestore.FieldValue.serverTimestamp() });
+        if (c) { c.firma_enviada_a = email; c.firma_enviada_at = new Date(); }
+      } catch (_) { /* el correo ya salió */ }
     } catch (e) { console.error(e); Toast.show('No se pudo enviar el correo', 'bad'); }
   },
 

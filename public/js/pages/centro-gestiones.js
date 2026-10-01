@@ -235,6 +235,44 @@ Object.assign(window.Centro, {
           ? `<span class="cg-tl-toca"><span class="cg-chip cg-chip--warn">le toca a ${this.esc(toca)}</span></span>` : ''}</span>
       </div>`;
   },
+  // Paso "Firma del cliente" con la VÍA, a quién se envió, hace cuánto y
+  // cómo reenviar (auditoría de módulos 2026-09-30, C2/P5: "enlace enviado —
+  // esperando" sin fecha ni destinatario, y nadie decía que el papel existe
+  // ni que la tablet no aplica). Las solicitudes viejas no estamparon
+  // firma_solicitud_creada_at en el contrato: se lee la solicitud una vez.
+  _firmaCache: {},
+  async _cargarFirmaSolicitud(cid, sid) {
+    if (!sid || this._firmaCache[sid]) return;
+    this._firmaCache[sid] = { loading: true };
+    try {
+      const s = await firebase.firestore().collection('firma_solicitudes').doc(sid).get();
+      this._firmaCache[sid] = { created_at: s.exists ? (s.data().created_at || null) : null };
+    } catch (e) { this._firmaCache[sid] = { created_at: null, error: true }; }
+    if (this.gSel === 'ct-' + cid) { this.pintarGestiones(); if (window.lucide?.createIcons) lucide.createIcons(); }
+  },
+  _firmaPasoSub(c) {
+    const E = (v) => this.esc(v);
+    const id = E(c.id);
+    const hace = (ts) => { const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null); if (!d || isNaN(d)) return ''; const n = Math.floor((Date.now() - d) / 86400000); return n <= 0 ? 'hoy' : n === 1 ? 'hace 1 día' : `hace ${n} días`; };
+    if (c.firmado) {
+      return c.firmado_tipo === 'digital' ? `firmó por enlace${c.firmado_digital?.firmante_nombre ? ` · ${E(c.firmado_digital.firmante_nombre)}` : ''}`
+        : c.firmado_url ? 'firmó en papel · PDF en el expediente' : 'firmado';
+    }
+    if (c.firmado_pendiente_validacion) return 'firmó por enlace alguien distinto al representante — administración valida al firmante';
+    if (c.firma_solicitud_estado === 'pendiente' && c.firma_solicitud_id) {
+      let creada = c.firma_solicitud_creada_at;
+      if (!creada) { const f = this._firmaCache[c.firma_solicitud_id]; if (!f) this._cargarFirmaSolicitud(c.id, c.firma_solicitud_id); creada = f?.created_at || null; }
+      const edad = hace(creada);
+      const aQuien = c.firma_enviada_a ? `por correo a ${E(c.firma_enviada_a)}${c.firma_enviada_at ? ` (${hace(c.firma_enviada_at)})` : ''}` : 'enlace compartido (WhatsApp o copiado)';
+      return `<b>por enlace</b> · ${aQuien}${edad ? ` · enlace generado ${edad}` : ''}
+        · <a href="#" onclick="event.stopPropagation(); Centro.enviarFirma('${id}'); return false;">reenviar</a>
+        · <span style="color:var(--fg-4);">¿papel? imprime el documento y sube el firmado (menú ⋯)</span>`;
+    }
+    if (c.firma_solicitud_estado === 'caducado') return 'el enlace caducó a los 45 días — reactivar genera uno nuevo';
+    return `sin enlace todavía · <a href="#" onclick="event.stopPropagation(); Centro.enviarFirma('${id}'); return false;">enviar por enlace</a>
+      (el cliente firma con el dedo desde el celular) · o en <b>papel</b>: imprime el documento y sube el firmado (menú ⋯) · en tablet no aplica`;
+  },
+
   _tramiteHtml(c) {
     const abierta = this.gSel === 'ct-' + c.id;
     const reg = this._regPendiente(c);
@@ -274,7 +312,7 @@ Object.assign(window.Centro, {
         c.seriales_estado === 'asignados' ? 'bodega asignó los seriales'
           : this._serialesListos(c) ? 'no hay equipo que asignar'
           : 'bodega los asigna en Almacén · Asignar — sin eso no se envía a firma', 'bodega'],
-      ['Firma del cliente', !!c.firmado, c.firma_solicitud_estado === 'pendiente' ? 'enlace de firma enviado — esperando' : 'enlace digital, o subir el firmado', 'cliente_enlace'],
+      ['Firma del cliente', !!c.firmado, this._firmaPasoSub(c), 'cliente_enlace'],
       ['Activación', c.estado === 'activo', 'automática al validarse la firma', 'sistema'],
       pasoProg,
       pasoEntrega,

@@ -241,6 +241,10 @@ Object.assign(window.Centro, {
   _estadoLabel(c) {
     const e = c?.estado || '';
     if (e === 'aprobado' && c.dormido === true) return 'Dormido (sin firma)';
+    // Histórico que opera sin firma en el sistema (legacy o ya entregado):
+    // "sin firma" sonaba a falta en contratos de 2024-2025 con radios en el
+    // cliente (auditoría de módulos 2026-09-30, C6; igual que el archivo).
+    if (e === 'aprobado' && (c.seriales_estado === 'legacy' || c.entrega_confirmada === true) && !c.firmado) return 'Aprobado · histórico';
     if (e === 'aprobado') return (c.fecha_activacion || c.firmado) ? 'Aprobado' : 'Aprobado (sin firma)';
     return ({ pendiente_aprobacion: 'Pendiente de aprobación', activo: 'Activo', vencido: 'Vencido',
       anulado: 'Anulado', inactivo: 'Inactivo' })[e] || e || '—';
@@ -320,7 +324,26 @@ Object.assign(window.Centro, {
 
   // Vida del contrato al estilo del prototipo: "vence en N días" con semáforo,
   // fecha, y barra de vida transcurrida (vigencia.fecha_inicio → vencimiento).
+  // Vigencia PROYECTADA de un contrato que todavía no arranca (auditoría de
+  // módulos 2026-09-30, C1/P4): fecha_vencimiento no existe hasta activar, y
+  // la fila decía "sin duración" junto a "Duración 18 meses" (o "—" en el
+  // pendiente de aprobación). Null si no aplica.
+  _vidaProyectadaHtml(c) {
+    if (!['pendiente_aprobacion', 'aprobado'].includes(c?.estado) || c.fecha_vencimiento || c.dormido === true) return null;
+    if (!this._aplicaVenc(c)) return null;
+    const diasDur = Number(c.duracion_dias || 0);
+    const meses = diasDur > 0 ? 0 : (Number(c.duracion_meses || 0) || parseInt(String(c.duracion || '').match(/(\d+)\s*mes/)?.[1] || '0', 10));
+    if (!(meses > 0 || diasDur > 0)) return null;
+    const fin = new Date();
+    if (meses > 0) fin.setMonth(fin.getMonth() + meses); else fin.setDate(fin.getDate() + diasDur);
+    const dur = meses > 0 ? `${meses} meses` : `${diasDur} día${diasDur === 1 ? '' : 's'}`;
+    const arranca = c.estado === 'pendiente_aprobacion' ? 'empieza al aprobar y firmar' : 'empieza al firmar';
+    return `<div class="cg-vida"><span class="cg-venc vigente" title="La vigencia arranca con la firma; la fecha es si se firmara hoy">${arranca}</span>
+      <span class="sub">${this.esc(dur)} · vencería ~ ${fin.toLocaleDateString('es-PA', { month: 'short', year: 'numeric' })} si se firma hoy</span></div>`;
+  },
   _vidaHtml(c) {
+    const proyectada = this._vidaProyectadaHtml(c);
+    if (proyectada) return proyectada;
     if (!this._esVigente(c)) return '—';
     if (!this._aplicaVenc(c)) {
       return `<span style="color:var(--fg-4);" title="Los DEMO y TEMP terminan por su propio flujo de devolución — no renuevan">n/a</span>`;
