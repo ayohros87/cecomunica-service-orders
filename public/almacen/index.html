@@ -241,14 +241,18 @@
   <script>
     Layout.renderTopbar({
       title: '<i data-lucide="warehouse"></i> Almacén',
+      // `almacen-op`: acciones que mueven inventario. Se pintan en el parse
+      // (antes de saber el rol) y almacen-hoy.js las QUITA para quien no
+      // opera bodega (recepción, ventas, gerencia): decisión de Alberto
+      // 2026-10-01 — recepción y ventas no reciben ni venden desde Almacén.
       actions: [
-        { label: '<i data-lucide="file-spreadsheet"></i> Importar hoja', cls: 'primary',
+        { label: '<i data-lucide="file-spreadsheet"></i> Importar hoja', cls: 'primary almacen-op',
           onclick: "AlmacenPage.abrirImportar()" },
-        { label: '<i data-lucide="plus"></i> Recibir equipos',
+        { label: '<i data-lucide="plus"></i> Recibir equipos', cls: 'almacen-op',
           onclick: "AlmacenPage.abrirRecibir()" },
-        { label: '<i data-lucide="clipboard-list"></i> Conteo físico',
+        { label: '<i data-lucide="clipboard-list"></i> Conteo físico', cls: 'almacen-op',
           onclick: "AlmacenPage.abrirConteo()" },
-        { label: '<i data-lucide="banknote"></i> Registrar venta',
+        { label: '<i data-lucide="banknote"></i> Registrar venta', cls: 'almacen-op',
           onclick: "AlmacenPage.abrirVenta()" },
       ],
       menu: [

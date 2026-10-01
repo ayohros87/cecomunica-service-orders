@@ -845,7 +845,18 @@ service cloud.firestore {
     match /equipos_pool/{docId} {
       allow read:   if isSignedIn();
       allow create: if isSignedIn() && userRole() in ["administrador", "inventario"];
-      allow update: if puedeGestionarSeriales();
+      // Vender un radio de bodega y traerlo a bodega (recibir, corregir a
+      // bodega, inspección OK, reactivar, anular venta) es de bodega y
+      // administración (decisión de Alberto 2026-10-01, auditoría de módulos
+      // R1/D5). Recepción y ventas conservan las escrituras que su flujo
+      // necesita (factura de venta con contrato, cobros de no devueltos,
+      // kardex): lo que se cierra es el CAMBIO de estado hacia `vendido`
+      // desde bodega y hacia `en_bodega` desde cualquier otro.
+      allow update: if puedeGestionarSeriales()
+        && (userRole() in ["administrador", "inventario"]
+            || request.resource.data.estado == resource.data.estado
+            || !((request.resource.data.estado == "vendido" && resource.data.estado == "en_bodega")
+                 || request.resource.data.estado == "en_bodega"));
       allow delete: if false;
       // Kardex append-only: los movimientos nunca se editan ni se borran.
       match /movimientos/{mid} {

@@ -149,7 +149,9 @@ window.AsistenteConteo = (() => {
       if (typeof ctx.opts?.onDone === 'function') ctx.opts.onDone();
     } catch (e) {
       btn.disabled = false;
-      if (window.Toast) Toast.show('No se pudo guardar: ' + (e.message || e), 'bad');
+      if (window.Toast) Toast.show(/permission.denied/i.test(`${e?.code || ''} ${e?.message || e || ''}`)
+        ? 'No tienes permiso para guardar conteos: es de bodega y administración.'
+        : 'No se pudo guardar: ' + (e.message || e), 'bad');
     }
   }
 

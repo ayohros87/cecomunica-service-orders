@@ -58,6 +58,12 @@ window.AsistenteVenta = {
     if (window.Toast) Toast.show(msg, tipo);
   },
 
+  // ¿El error es un rechazo de firestore.rules? (code 'permission-denied', o
+  // el texto "PERMISSION_DENIED" que trae la transacción).
+  _esPermiso(e) {
+    return /permission.denied/i.test(`${e?.code || ''} ${e?.message || e || ''}`);
+  },
+
   abrir(opts = {}) {
     this._opts = opts || {};
     this._desdeUnidadId = opts.desdeUnidadId || null;
@@ -245,6 +251,14 @@ window.AsistenteVenta = {
           ok++;
           vendidas.push(u);
         } catch (e) {
+          // Las rules de equipos_pool solo dejan vender a bodega y
+          // administración: el mensaje crudo ("PERMISSION_DENIED: evaluation
+          // error at L847…") no le dice nada a quien lo ve.
+          if (AsistenteVenta._esPermiso(e)) {
+            this._cerrarForzado();
+            this._toast('No tienes permiso para registrar ventas: es de bodega y administración.', 'bad');
+            return;
+          }
           errores.push(`${u.serial || u.id}: ${e.message || e}`);
         }
       }
@@ -282,7 +296,9 @@ window.AsistenteVenta = {
       }
     } catch (e) {
       console.error('Error al registrar la venta:', e);
-      this._toast('Error al registrar la venta: ' + (e.message || e), 'bad');
+      this._toast(AsistenteVenta._esPermiso(e)
+        ? 'No tienes permiso para registrar ventas: es de bodega y administración.'
+        : 'Error al registrar la venta: ' + (e.message || e), 'bad');
     } finally {
       this._busy = false;
       btn.disabled = false;

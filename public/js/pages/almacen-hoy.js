@@ -78,23 +78,51 @@ window.AlmacenPage = {
     if (window.EquiposPool && EquiposPool._activo) EquiposPool.cargar();
   },
 
+  // Quién OPERA bodega (recibir, contar, importar, vender): administración e
+  // inventario. Recepción y ventas entran al espacio por su cola de seriales
+  // (gestiones, contratos) pero no mueven inventario (decisión de Alberto
+  // 2026-10-01, auditoría de módulos R1/D5). Las rules de equipos_pool
+  // cierran lo mismo del lado del servidor; esto evita que lleguen al toast
+  // de permiso. `window.userRole` lo fija init().
+  puedeOperar() {
+    const rol = window.userRole;
+    return rol === ROLES.ADMIN || rol === ROLES.INVENTARIO;
+  },
+  _sinPermiso(accion) {
+    if (!window.Toast) return;
+    // Los botones se pintan en el parse: un clic antes de que init() resuelva
+    // el rol no es "sin permiso", es "todavía no sé quién eres".
+    if (!window.userRole) { Toast.show('Un momento: todavía se está cargando tu sesión. Vuelve a intentar.', 'warn'); return; }
+    Toast.show(`${accion} es de bodega y administración. Tu usuario no puede hacerlo.`, 'warn');
+  },
+  // Quita de la topbar las acciones que este rol no puede ejecutar (se
+  // pintan en el parse, antes de saber el rol).
+  _topbarPorRol() {
+    if (this.puedeOperar()) return;
+    document.querySelectorAll('.topbar-actions .almacen-op').forEach(b => b.remove());
+  },
+
   // Asistentes (Fase B): componentes propios del espacio. Mientras alguno no
   // esté cargado (transición), cae al deep-link de la página de Equipos.
   abrirConteo() {
+    if (!this.puedeOperar()) return this._sinPermiso('El conteo físico');
     if (!window.AsistenteConteo) { location.href = '../inventario/cargar-inventario.html?volver=almacen'; return; }
     AsistenteConteo.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
   },
   abrirRecibir() {
+    if (!this.puedeOperar()) return this._sinPermiso('Recibir equipos');
     if (!window.AsistenteRecibir) { if (window.Toast) Toast.show('El asistente de recepción no cargó. Recarga la página.', 'bad'); return; }
     AsistenteRecibir.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
   },
   // Importar la hoja de bodega tal cual llega. Es la vía principal de un conteo:
   // "Recibir equipos" queda para el alta suelta de dos o tres seriales.
   abrirImportar() {
+    if (!this.puedeOperar()) return this._sinPermiso('Importar la hoja de bodega');
     if (!window.AsistenteImportar) { AlmacenPage.abrirRecibir(); return; }
     AsistenteImportar.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
   },
   abrirVenta() {
+    if (!this.puedeOperar()) return this._sinPermiso('Registrar una venta');
     if (!window.AsistenteVenta) { if (window.Toast) Toast.show('El asistente de venta no cargó. Recarga la página.', 'bad'); return; }
     AsistenteVenta.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
   },
@@ -563,6 +591,8 @@ window.AlmacenHoy = (() => {
     ctx.rol = rol;
     // EquipoFicha decide su footer ("Abrir en Inventario") con window.userRole.
     window.userRole = rol;
+    // Antes del gate del cuerpo: el técnico también ve la topbar.
+    AlmacenPage._topbarPorRol();
     // Mismo criterio que las páginas del área: operan admin/inventario, lee
     // gerencia; y quien puede gestionar seriales (recepción/vendedor) puede
     // ver su cola aquí igual que podía en la bandeja vieja.
