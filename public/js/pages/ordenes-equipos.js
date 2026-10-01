@@ -596,9 +596,9 @@ function _trabajoSucio() {
   return !!_trabajoSnapshot && _trabajoEstadoForm() !== _trabajoSnapshot;
 }
 
-// Cierre "blando" (toque fuera del modal o Escape): si hay cambios sin
-// guardar pregunta antes. Cancelar y la X siguen cerrando directo: son una
-// decisión explícita.
+// Cierre del modal (toque fuera, Escape, X y Cancelar): si hay cambios sin
+// guardar pregunta antes. Antes X y Cancelar descartaban directo y el texto
+// del técnico se perdía en silencio (auditoría de módulos 2026-09-30, 01 R4).
 window.solicitarCierreTrabajoEquipo = async function() {
   if (_trabajoConfirmandoCierre) return;
   if (!_trabajoSucio()) { cerrarTrabajoEquipoModal(); return; }

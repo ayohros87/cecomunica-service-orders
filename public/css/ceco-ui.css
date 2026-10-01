@@ -1423,13 +1423,19 @@ input[readonly]#numero_de_serie,
   animation: slideInRight 0.3s ease;
   transition: var(--transition);
 }
+/* La región vive ARRIBA a la derecha, no abajo: abajo caía justo encima de
+   Cancelar/Guardar de los modales en el teléfono y en Almacén→Asignar, y el
+   toque del técnico se lo comía el toast ("Guardar" que no guardaba tras
+   "Guardar y siguiente"; auditoría de módulos 2026-09-30, 01 R4 y 06 L1). */
 .toast-region {
   position: fixed;
-  bottom: var(--sp-6);
-  right: var(--sp-6);
+  top: calc(var(--sp-4) + env(safe-area-inset-top, 0px));
+  right: var(--sp-4);
+  bottom: auto;
   z-index: 9999;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: var(--sp-2);
   pointer-events: none;
 }
@@ -1437,6 +1443,11 @@ input[readonly]#numero_de_serie,
   pointer-events: all;
   min-width: 280px;
   max-width: 400px;
+}
+/* Teléfono: a lo ancho, pegado arriba, debajo de la barra de estado. */
+@media (max-width: 600px) {
+  .toast-region { left: var(--sp-3); right: var(--sp-3); align-items: stretch; }
+  .toast-region .toast { min-width: 0; max-width: none; }
 }
 .toast.toast-success { background: var(--surface-card); color: var(--fg-1); border: 1px solid var(--border-subtle); border-left: 4px solid var(--status-online); }
 .toast.toast-error   { background: var(--surface-card); color: var(--fg-1); border: 1px solid var(--border-subtle); border-left: 4px solid var(--status-critical); }

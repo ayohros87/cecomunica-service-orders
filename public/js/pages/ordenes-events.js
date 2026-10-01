@@ -367,7 +367,9 @@
       if (ordenId) abrirEquiposMobile(ordenId);
     },
     'cerrar-equipos-mobile': () => cerrarEquiposMobile(),
-    'cerrar-trabajo-equipo': () => cerrarTrabajoEquipoModal(),
+    // X y Cancelar preguntan si hay texto sin guardar, igual que el toque
+    // fuera del modal (auditoría de módulos 2026-09-30, 01 R4).
+    'cerrar-trabajo-equipo': () => solicitarCierreTrabajoEquipo(),
     'guardar-trabajo-equipo': () => guardarTrabajoEquipoModal(),
     'guardar-trabajo-equipo-siguiente': () => guardarTrabajoEquipoModal({ siguiente: true }),
     'ver-obs-completa': (el) => {

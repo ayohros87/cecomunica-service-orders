@@ -6,6 +6,11 @@
 // Auditoría UX 2026-09-28 (T10): la región se anuncia a lectores de pantalla
 // (aria-live) y los errores duran el doble que los éxitos: 3 s no alcanzan
 // para leer "No se pudo guardar: …".
+// Auditoría de módulos 2026-09-30 (01 R4, 06 L1): la región .toast-region se
+// posiciona ARRIBA (ceco-ui.css). Abajo tapaba Cancelar/Guardar de los modales
+// en el teléfono y el toque se perdía en silencio. Toda página pasa por aquí,
+// tenga o no su <div id="toasts"> estático: el contenedor siempre lleva la
+// clase para heredar esa posición.
 window.Toast = {
   _container: null,
 
@@ -24,9 +29,9 @@ window.Toast = {
       this._container = document.getElementById('toasts');
       if (!this._container) {
         this._container = document.createElement('div');
-        this._container.className = 'toast-region';
         document.body.appendChild(this._container);
       }
+      this._container.classList.add('toast-region');
       if (!this._container.hasAttribute('aria-live')) {
         this._container.setAttribute('role', 'status');
         this._container.setAttribute('aria-live', 'polite');
