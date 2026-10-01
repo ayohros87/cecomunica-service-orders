@@ -197,6 +197,22 @@ const EquiposPoolService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
+  // Búsqueda por PREFIJO de serial normalizado (auditoría de módulos
+  // 2026-09-30, L1): Avanzado bajaba el pool completo (7,800 lecturas) para
+  // buscar un serial en el navegador. Un rango sobre serial_norm cuesta lo
+  // que devuelve. Cubre docs con ID limpio y sufijado (el campo es el mismo).
+  // Devuelve [] si el texto no parece serial (menos de 3 alfanuméricos).
+  async buscarPorPrefijoSerial(texto, { limite = 100 } = {}) {
+    const norm = this.normalizarSerial(texto);
+    if (!norm || norm.length < 3) return [];
+    const db = firebase.firestore();
+    const snap = await db.collection('equipos_pool')
+      .where('serial_norm', '>=', norm)
+      .where('serial_norm', '<', norm + '\uf8ff')
+      .limit(limite).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
   // findBySerial en LOTE (auditoría UX 2026-09-28, T12): `serial_norm in [...]`
   // de 10 en 10 en vez de una consulta por serial — validar 20 seriales eran
   // 20 idas y vueltas. Devuelve Map serial_norm → docs[] (vacío = no existe).

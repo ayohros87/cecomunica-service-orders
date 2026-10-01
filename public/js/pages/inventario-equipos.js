@@ -93,6 +93,7 @@ window.EquiposPool = {
     const eraCompleto = this._completo;
     this._completo = false;
     this._cargadoEstado = null;
+    this._busquedaServidor = null;
     this._conteos = null;
     this._errorCarga = null;
     try {
@@ -130,7 +131,22 @@ window.EquiposPool = {
   // se cargó el pool entero no se vuelve atrás: sirve para todo.
   _datosListos() {
     if (this._completo) return true;
+    const f = this._filtrosActivos();
+    if (f.q && this._busquedaServidor && this._busquedaServidor === this._claveBusqueda(f.q) && !!this._conteos) return true;
     return this._bastaParcial() && this._cargadoEstado === this._tab && !!this._conteos;
+  },
+
+  // Búsqueda por serial CONTRA EL SERVIDOR (auditoría de módulos 2026-09-30,
+  // L1): buscar un serial bajaba el pool completo (7,834 docs, 5.1 s) para
+  // filtrar en el navegador. Si lo tecleado parece serial (3+ alfanuméricos
+  // con un dígito) se consulta por prefijo de serial_norm y se pintan esos
+  // resultados; `_busquedaServidor` recuerda para qué texto sirven. Si el
+  // prefijo no encuentra nada, se cae al pool completo como antes: la
+  // búsqueda por modelo, cliente o nota sigue funcionando igual.
+  _busquedaServidor: null,
+  _claveBusqueda(q) {
+    const n = EquiposPoolService.normalizarSerial(q);
+    return (n.length >= 3 && /\d/.test(n)) ? n : '';
   },
 
   async _asegurarDatos({ forzarCompleto = false } = {}) {
@@ -148,6 +164,25 @@ window.EquiposPool = {
 
   async _cargarDatos(forzarCompleto) {
     try {
+      const f = this._filtrosActivos();
+      const claveQ = (!forzarCompleto && f.q) ? this._claveBusqueda(f.q) : '';
+      if (claveQ) {
+        const [docs, conteos] = await Promise.all([
+          EquiposPoolService.buscarPorPrefijoSerial(claveQ),
+          this._conteos ? Promise.resolve(this._conteos) : this._cargarConteos(),
+        ]);
+        if (docs.length && conteos) {
+          this._equipos = docs;
+          this._conteos = conteos;
+          this._busquedaServidor = claveQ;
+          this._cargadoEstado = null;
+          this._completo = false;
+          this._errorCarga = null;
+          return;
+        }
+        // Sin resultado por serial: se busca en todo (modelo, cliente, notas).
+      }
+      this._busquedaServidor = null;
       if (!forzarCompleto && this._bastaParcial()) {
         const tab = this._tab;
         const [lista, conteos] = await Promise.all([
@@ -543,7 +578,10 @@ window.EquiposPool = {
       const blob = [eq.serial, eq.serial_norm, eq.modelo_label,
         eq.asignacion?.cliente_nombre, eq.asignacion?.contrato_id, eq.notas]
         .map(x => (x || '').toString().toLowerCase()).join(' ');
-      if (!blob.includes(f.q)) return false;
+      // "2261 0A39" (con espacio o guion) debe encontrar 22610A39…: el
+      // serial se compara también normalizado, como lo busca el servidor.
+      const nq = this._claveBusqueda(f.q);
+      if (!blob.includes(f.q) && !(nq && String(eq.serial_norm || '').startsWith(nq))) return false;
     }
     return true;
   },
