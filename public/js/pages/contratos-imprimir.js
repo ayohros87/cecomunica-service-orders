@@ -68,7 +68,10 @@ if (data.estado === "activo" && data.fecha_aprobacion) {
   document.getElementById("cliente_ruc").textContent = rucdv || "—";
   document.getElementById("firmaClienteLabel").textContent = `Firma del Cliente – ${data.cliente_nombre || ""}`;
   document.getElementById("nombreRepresentante").textContent = data.representante || "____________________";
-  document.getElementById("rucRepresentante").textContent = data.representante_cedula || "________________";
+  // Solo el número: las fichas viejas traen "PASAPORTE: XDB367055" y la
+  // etiqueta ya dice "Pasaporte:" (auditoría de módulos 2026-09-30, B1).
+  const numRep = (window.DocIdentidad && data.representante_cedula) ? DocIdentidad.limpiar(data.representante_cedula) : data.representante_cedula;
+  document.getElementById("rucRepresentante").textContent = numRep || "________________";
   // La etiqueta sigue al documento: cédula panameña o pasaporte.
   const lblRep = document.getElementById("labelRepresentanteDoc");
   if (lblRep && window.DocIdentidad && data.representante_cedula) {
