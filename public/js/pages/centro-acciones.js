@@ -201,10 +201,14 @@ Object.assign(window.Centro, {
       const enCampo = this.equipos.filter(e => e.asignacion?.contrato_doc_id === c.id).length;
       const pide = !!c.cancelacion_pendiente;
       const temporal = ['TEMP', 'DEMO'].includes(this._codigoTipo(c));
+      // Un aprobado que todavía no entregó nada no "terminó": no empezó
+      // (auditoría de módulos 2026-09-30, C5: "Cerrar el contrato…" encabezaba
+      // el menú de un recién aprobado con 0 en campo). Su salida es Anular.
+      const sinEmpezar = c.estado === 'aprobado' && c.entrega_confirmada !== true;
       // Se ofrece cuando el sistema lo pide, cuando es un temporal (no hay otra
       // forma de cerrarlos: "Terminar la cuenta" solo alcanza a los renovables)
       // o cuando no queda un solo radio en campo bajo este contrato.
-      if (pide || temporal || !enCampo) {
+      if (pide || (!sinEmpezar && (temporal || !enCampo))) {
         A.push(this._acc({ id: 'cerrar', label: 'Cerrar el contrato…', primaria: pide,
           hint: pide ? ContratoCierre.porQue(c)
             : enCampo ? `${enCampo} equipo(s) siguen en campo bajo este contrato`
