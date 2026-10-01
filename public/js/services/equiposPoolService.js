@@ -1047,13 +1047,43 @@ const EquiposPoolService = {
   // vínculos falsos, deja movimiento 'correccion_migracion' y marca la unidad
   // como verificada (corregir el estado ES verificarla). No toca `condicion`:
   // la unidad nunca salió de bodega.
+  //
+  // Excepción (2026-10-01): el radio que un REEMPLAZO sacó de su contrato y
+  // que sigue pegado a ESE contrato no va a bodega sino a revisión. Salió por
+  // daño: "en bodega" lo ofrecía para alquilar (SERV20260918-01, 22806A0291/
+  // 0294 — 12 días disponibles tras una corrección a mano). El resultado trae
+  // `a_revision` y el entrante para que quien llama lo diga.
   async corregirABodega(id, motivo, user) {
+    const entrante = await this._sustituidoEnSuContrato(id).catch(() => null);
+    if (entrante) {
+      const r = await this.cambiarEstado(id, this.ESTADOS.DEVUELTO, {
+        tipo: 'correccion_migracion',
+        notas: `${motivo} — a revisión y no a bodega: lo sustituyó ${entrante} en un reemplazo`,
+        extra: { asignacion: null, poc_device_id: null, orden_actual_id: null,
+                 pendiente_devolucion: firebase.firestore.FieldValue.delete() },
+      }, user);
+      return { ...r, a_revision: true, entrante };
+    }
     return this.cambiarEstado(id, this.ESTADOS.EN_BODEGA, {
       tipo: 'correccion_migracion', notas: motivo,
       extra: { asignacion: null, poc_device_id: null, orden_actual_id: null,
                verificado: true,
                pendiente_devolucion: firebase.firestore.FieldValue.delete() },
     }, user);
+  },
+
+  // ¿Un reemplazo sacó este radio del MISMO contrato al que sigue pegado? La
+  // prueba es el entrante: `reemplaza_a` + `reemplazo_origen.contrato_doc_id`
+  // (los estampa onOrdenWriteGestion al entregarlo). Devuelve su serial o null.
+  async _sustituidoEnSuContrato(id) {
+    const db = firebase.firestore();
+    const snap = await db.collection('equipos_pool').doc(id).get();
+    const d = snap.exists ? snap.data() : null;
+    const cid = d?.asignacion?.contrato_doc_id;
+    if (!cid || ![this.ESTADOS.EN_CLIENTE, this.ESTADOS.ASIGNADO].includes(d.estado)) return null;
+    const q = await db.collection('equipos_pool').where('reemplaza_a', '==', id).limit(5).get();
+    const ent = q.docs.find(x => x.data()?.reemplazo_origen?.contrato_doc_id === cid);
+    return ent ? (ent.data().serial || ent.id) : null;
   },
 
   // ── Salidas de `no_retirado` ────────────────────────────────────────────

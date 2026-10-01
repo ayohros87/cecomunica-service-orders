@@ -1433,8 +1433,10 @@ window.EquiposPool = {
     const btn = document.getElementById('btnGuardarCorreccion');
     btn.disabled = true;
     try {
-      await EquiposPoolService.corregirABodega(id, motivo, firebase.auth().currentUser);
-      let msg = 'Estado corregido — la unidad quedó en bodega.';
+      const res = await EquiposPoolService.corregirABodega(id, motivo, firebase.auth().currentUser);
+      let msg = res?.a_revision
+        ? `Estado corregido — la unidad quedó POR REVISAR, no en bodega: la sustituyó ${res.entrante} en un reemplazo.`
+        : 'Estado corregido — la unidad quedó en bodega.';
       if (this._corrPocDevice && document.getElementById('corrDesactivarPoc').checked) {
         try {
           // Relectura antes de borrar: entre abrir el modal y guardar, otra
