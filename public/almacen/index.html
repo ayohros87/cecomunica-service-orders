@@ -318,15 +318,18 @@
           <span class="kpi-card-label">En taller</span>
           <span class="kpi-card-value" id="exKpiTaller">—</span>
         </div>
+        <!-- Los dos siguientes usan el MISMO criterio que la bandeja Hoy
+             (auditoría de módulos 2026-09-30, R2): por inspeccionar = sin
+             ENTRADA de taller; diferencias = solo contra conteos recientes. -->
         <div class="kpi-card">
-          <span class="kpi-card-label">Devuelto · por inspeccionar</span>
+          <span class="kpi-card-label">Por inspeccionar en bodega</span>
           <span class="kpi-card-value" id="exKpiCuarentena">—</span>
-          <span class="kpi-card-sub">esperan inspección de bodega</span>
+          <span class="kpi-card-sub" id="exKpiCuarentenaSub">sin tiquete de taller</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-card-label">Modelos con diferencia</span>
+          <span class="kpi-card-label">Diferencias recientes</span>
           <span class="kpi-card-value" id="exKpiDif">—</span>
-          <span class="kpi-card-sub">registro vs conteo · meta: 0</span>
+          <span class="kpi-card-sub" id="exKpiDifSub">conteos de ≤30 días · meta: 0</span>
         </div>
       </div>
 

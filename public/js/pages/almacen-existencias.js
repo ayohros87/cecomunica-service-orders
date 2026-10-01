@@ -65,7 +65,16 @@ window.AlmacenExistencias = (() => {
     filas: [],
     expandida: null,     // key de la fila expandida
     q: '', filtroEstado: '', soloDif: false,
+    // Devueltos por inspeccionar partidos en dos (auditoría de módulos
+    // 2026-09-30, R2): los que tienen una ENTRADA de taller abierta los
+    // inspecciona el taller; a bodega solo le tocan los que quedaron SIN
+    // tiquete. null = no se pudo consultar (el KPI muestra el total a secas).
+    cuarentena: null,    // { libres, taller }
   };
+
+  // Mismo umbral que Hoy: una diferencia contra un conteo de hace más de 30
+  // días no dice "falta un radio", dice "este modelo no se ha vuelto a contar".
+  const UMBRAL_CONTEO_DIAS = 30;
 
   const $ = (id) => document.getElementById(id);
 
@@ -91,11 +100,19 @@ window.AlmacenExistencias = (() => {
           render();
         }
       } catch { /* sin caché: camino normal */ }
-      const [resumen, modelos, conteos] = await Promise.all([
+      const [resumen, modelos, conteos, devueltos] = await Promise.all([
         EquiposPoolService.resumenPorModelo(),
         ModelosService.getModelos(),
         InventarioService.getInventarioActual(),
+        // ~150 fichas: las mismas que lista Hoy. Sin esto el KPI decía "151
+        // esperan inspección de bodega" cuando 147 estaban en el taller.
+        EquiposPoolService.listar({ estado: 'devuelto_revision' })
+          .catch(e => { console.warn('[Existencias] devueltos:', e?.code || e); return null; }),
       ]);
+      ctx.cuarentena = devueltos
+        ? { libres: devueltos.filter(eq => !eq.orden_actual_id).length,
+            taller: devueltos.filter(eq => !!eq.orden_actual_id).length }
+        : null;
       // Red de seguridad: si el resumen no está (aún sin construir, rules,
       // una reconciliación que lo dejó vacío), la pantalla NO se queda muda —
       // cae al pool completo como antes. Se avisa porque volver a barrer
@@ -181,13 +198,22 @@ window.AlmacenExistencias = (() => {
 
     const usados = new Set();
     const filas = joinRows.map(f => {
+      // StockAgg etiqueta el grupo sin modelo como "(sin modelo)" literal.
+      const tlFila = EquiposPoolService._tightLabel(f.modelo?.modelo || f.label);
+      const sinModelo = !f.modelo_id && (!tlFila || tlFila === 'sinmodelo');
+      // El grupo `sinmodelo` del resumen (fichas sin id ni etiqueta) llegaba
+      // al join como una fila con etiqueta vacía que no casaba con nada, y el
+      // grupo volvía a entrar abajo como "(sin modelo)": dos filas para lo
+      // mismo (auditoría de módulos 2026-09-30, C1). Aquí se casa a mano.
       const g = (f.modelo_id && porId.get(f.modelo_id))
+        || (sinModelo ? grupos.get('sinmodelo') : null)
         || porTight.get(EquiposPoolService._tightLabel(f.modelo?.modelo || f.label)) || null;
       if (g) usados.add(g.key);
       return {
         key: g?.key || `join_${f.modelo_id || f.label}`,
         modelo_id: f.modelo_id || g?.modelo_id || null,
-        label: f.modelo?.modelo || f.label,
+        label: sinModelo ? '(sin modelo)' : (f.modelo?.modelo || f.label),
+        sinModelo,
         marca: f.modelo?.marca || '',
         modelo: f.modelo,
         // Sin grupo en el pool = fila que solo existe por el conteo físico:
@@ -202,12 +228,21 @@ window.AlmacenExistencias = (() => {
       if (usados.has(g.key)) continue;
       filas.push({
         key: g.key, modelo_id: g.modelo_id, label: g.label || '(sin modelo)', marca: '',
+        sinModelo: g.key === 'sinmodelo',
         modelo: { modelo: g.label || '(sin modelo)' },
         est: g.est, docs: g.docs, seriales: g.est['en_bodega'] || 0, conteo: null, dif: null, data: {},
       });
     }
-    filas.sort((a, b) => (a.label || '').toLowerCase().localeCompare((b.label || '').toLowerCase()));
+    // "(sin modelo)" al final: no es un modelo, es la deuda de clasificación.
+    filas.sort((a, b) => (a.sinModelo ? 1 : 0) - (b.sinModelo ? 1 : 0)
+      || (a.label || '').toLowerCase().localeCompare((b.label || '').toLowerCase()));
     return filas;
+  }
+
+  // ¿La diferencia de conteo de esta fila es contra un conteo reciente?
+  function conteoReciente(f) {
+    const ms = f.data?.ultima_actualizacion?.toMillis?.();
+    return !!ms && (Date.now() - ms) <= UMBRAL_CONTEO_DIAS * 86400000;
   }
 
   // ── Filtros ───────────────────────────────────────────────────────────
@@ -299,21 +334,32 @@ window.AlmacenExistencias = (() => {
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
+  // KPIs honestos (auditoría de módulos 2026-09-30, R2): los mismos números
+  // y el mismo criterio que la bandeja Hoy. "Por inspeccionar" es lo que le
+  // toca a bodega (sin ENTRADA de taller); "diferencias" solo contra conteos
+  // de los últimos 30 días; lo demás se dice aparte, no se suma.
   function pintarKpis() {
-    const t = { bodega: 0, cliente: 0, taller: 0, cuarentena: 0, difs: 0 };
+    const t = { bodega: 0, cliente: 0, taller: 0, cuarentena: 0, difs: 0, difsViejas: 0 };
     for (const f of ctx.filas) {
       t.bodega += f.est['en_bodega'] || 0;
       t.cliente += (f.est['en_cliente'] || 0) + (f.est['asignado_contrato'] || 0);
       t.taller += f.est['en_taller'] || 0;
       t.cuarentena += f.est['devuelto_revision'] || 0;
-      if (f.dif != null && f.dif !== 0) t.difs++;
+      if (f.dif != null && f.dif !== 0) { if (conteoReciente(f)) t.difs++; else t.difsViejas++; }
     }
-    const set = (id, v) => { const el = $(id); if (el) el.textContent = v.toLocaleString(); };
+    const set = (id, v) => { const el = $(id); if (el) el.textContent = typeof v === 'number' ? v.toLocaleString() : v; };
     set('exKpiBodega', t.bodega);
     set('exKpiCliente', t.cliente);
     set('exKpiTaller', t.taller);
-    set('exKpiCuarentena', t.cuarentena);
+    const c = ctx.cuarentena;
+    set('exKpiCuarentena', c ? c.libres : t.cuarentena);
+    set('exKpiCuarentenaSub', c
+      ? (c.taller ? `sin tiquete de taller · ${c.taller.toLocaleString()} más en ENTRADA abierta (las inspecciona el taller)` : 'sin tiquete de taller')
+      : 'devueltos (no se pudo separar los que están en taller)');
     set('exKpiDif', t.difs);
+    set('exKpiDifSub', t.difsViejas
+      ? `conteos de ≤${UMBRAL_CONTEO_DIAS} días · meta: 0 · ${t.difsViejas.toLocaleString()} sin recontar desde hace más de ${UMBRAL_CONTEO_DIAS} días`
+      : `conteos de ≤${UMBRAL_CONTEO_DIAS} días · meta: 0`);
     const difCard = $('exKpiDif');
     if (difCard) difCard.classList.toggle('kpi-warn', t.difs !== 0);
   }
@@ -329,16 +375,25 @@ window.AlmacenExistencias = (() => {
   function filaHtml(f) {
     const abierta = ctx.expandida === f.key;
     const otros = OTROS.reduce((s, e) => s + (f.est[e] || 0), 0);
+    // Una diferencia contra un conteo viejo se muestra, pero apagada y
+    // dicha: no es una alarma, es un modelo sin recontar (R2).
+    const vieja = f.dif != null && f.dif !== 0 && !conteoReciente(f);
     const difHtml = f.dif == null
       ? '<td style="text-align:right; color:var(--fg-4);">—</td>'
       : f.dif === 0
         ? '<td style="text-align:right;"><span class="badge completo">0</span></td>'
-        : `<td style="text-align:right;"><span class="badge ${f.dif > 0 ? 'pendiente' : 'danger'}">${f.dif > 0 ? '+' : ''}${f.dif}</span></td>`;
+        : vieja
+          ? `<td style="text-align:right; white-space:nowrap;" title="Contra un conteo de hace más de ${UMBRAL_CONTEO_DIAS} días: se cuadra recontando"><span class="badge" style="opacity:.55;">${f.dif > 0 ? '+' : ''}${f.dif}</span> <small style="color:var(--fg-4);">viejo</small></td>`
+          : `<td style="text-align:right;"><span class="badge ${f.dif > 0 ? 'pendiente' : 'danger'}">${f.dif > 0 ? '+' : ''}${f.dif}</span></td>`;
+    // La fila "(sin modelo)" no es un modelo: dice qué es y qué hacer (C1).
+    const notaSinModelo = f.sinModelo
+      ? `<div style="font-weight:400; font-size:12px; color:var(--fg-3); margin-top:2px;">Fichas sin modelo: no suman en ningún modelo hasta clasificarlas. Despliega la fila o ${linkAvanzado({ estado: 'todos' }, 'búscalas en Avanzado →')}</div>`
+      : '';
     const fila = `
       <tr class="ex-fila${abierta ? ' is-abierta' : ''}" onclick="AlmacenExistencias.toggleFila('${esc(f.key).replace(/'/g, "\\'")}')">
         <td class="td-primary" style="cursor:pointer;">
           <i data-lucide="${abierta ? 'chevron-down' : 'chevron-right'}" style="width:14px;height:14px; vertical-align:-2px;"></i>
-          ${esc(f.marca ? `${f.marca} ` : '')}<b>${esc(f.label)}</b>
+          ${esc(f.marca ? `${f.marca} ` : '')}<b>${esc(f.label)}</b>${notaSinModelo}
         </td>
         ${celda(f.est['en_bodega'] || 0)}
         ${celda(f.est['asignado_contrato'] || 0, false, true)}
