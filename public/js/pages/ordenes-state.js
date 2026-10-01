@@ -340,7 +340,15 @@ function tipoChip(tipo) {
     t.includes('DEVOL')   ? 'tipo-chip--devolucion' :
     t.includes('VISITA')  ? 'tipo-chip--visita'     :
     t.includes('ENTRADA') ? 'tipo-chip--entrada'    : 'tipo-chip--neutro';
-  return `<span class="tipo-chip ${cls}">${tipo.trim()}</span>`;
+  // Nombre corto en pantalla; el valor crudo queda en el title (auditoría de
+  // módulos 2026-09-30, 01 P4: "VISITA TECN", "PROGRAMACI" cortados en la fila).
+  const label =
+    t.includes('DEVOL')   ? 'Devolución'   :
+    t.includes('VISITA')  ? 'Visita'       :
+    t.includes('ENTRADA') ? 'Entrada'      :
+    t.includes('PROGRAM') ? 'Programación' :
+    t.includes('REPARA')  ? 'Reparación'   : tipo.trim();
+  return `<span class="tipo-chip ${cls}" title="${escapeHtml(tipo.trim())}">${escapeHtml(label)}</span>`;
 }
 
 // ── Nombres de estado EN PANTALLA (auditoría UX 2026-09-28, T1) ──────────

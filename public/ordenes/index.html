@@ -396,20 +396,23 @@
 </div>
   <div class="app-table-wrap mt-12">
   <table class="orders-table">
+  <!-- Anchos en ordenes-index.css (.oc-*): fijos en px para que el número, el
+       tipo y el estado nunca se corten; Cliente se queda con lo que sobra.
+       Con % (11 % para el número) a 1280 px con el rail abierto el número se
+       montaba sobre el cliente y TIPO/ESTADO salían "DEVOLUCIO", "POR ASIGNAI"
+       (auditoría de módulos 2026-09-30, 01 C2/P4). Acciones va en px porque
+       la celda puede llevar dos botones de flujo + el menú ⋯ y .app-table-wrap
+       tiene overflow visible para que el desplegable escape; el peor caso
+       real mide 270px + 16px de padding. -->
   <colgroup>
-  <col style="width: 11%;">   <!-- Número -->
-  <col style="width: 24%;">  <!-- Cliente -->
-  <col style="width: 13%;">  <!-- Técnico -->
-  <col style="width: 10%;">  <!-- Tipo -->
-  <col style="width: 12%;">  <!-- Estado -->
-  <col style="width: 10%;">   <!-- Fecha creación -->
-  <col style="width: 10%;" class="col-fecha-entrega">   <!-- Fecha entrega -->
-  <!-- Acciones va en px, no en %: la celda puede llevar dos botones de flujo
-       + el menú ⋯ ("Ver QC"+"Entregar", "Completar"+"Rechazo QC",
-       "Faltan N"+"Check-in") y .app-table-wrap tiene overflow visible para
-       que el desplegable escape — con un % la fila se salía de la tabla en
-       vez de recortarse. El peor caso real mide 270px + 16px de padding. -->
-  <col style="width: 296px;">  <!-- Acciones -->
+  <col class="oc-numero">    <!-- Número -->
+  <col class="oc-cliente">   <!-- Cliente -->
+  <col class="oc-tecnico">   <!-- Técnico -->
+  <col class="oc-tipo">      <!-- Tipo -->
+  <col class="oc-estado">    <!-- Estado -->
+  <col class="oc-fecha">     <!-- Fecha creación -->
+  <col class="oc-fecha col-fecha-entrega">   <!-- Fecha entrega -->
+  <col class="oc-acciones">  <!-- Acciones -->
   </colgroup>
  <thead>
   <!-- Cabeceras ordenables (auditoría P2): click ordena por la columna,

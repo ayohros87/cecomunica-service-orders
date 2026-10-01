@@ -167,8 +167,9 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
       // Reskin F4 slice 3 (propuesta): avatar de iniciales junto al técnico.
       const ini = String(ordenData.tecnico_asignado || '').trim()
         .split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase();
-      return ini ? `<span class="tec-avatar" aria-hidden="true">${ini}</span>` : '';
-    })()}${escapeHtml(ordenData.tecnico_asignado)}${indicadorNota}</td>
+      // El title lleva el nombre: en mesa estrecha solo se ve el avatar (P4).
+      return ini ? `<span class="tec-avatar" title="${escapeHtml(ordenData.tecnico_asignado)}" aria-hidden="true">${ini}</span>` : '';
+    })()}<span class="tec-nombre">${escapeHtml(ordenData.tecnico_asignado)}</span>${indicadorNota}</td>
     <td>${tipoChip(ordenData.tipo_de_servicio)}</td>
     <td><span class="chip-estado ${getEstadoClass(estado, ordenData)}" title="${estadoTooltip(estado, ordenData)}">${estadoCompacto(estado, ordenData)}</span></td>
     <td>${formatFecha(ordenData.fecha_creacion)}${edadChip(ordenData, estado)}</td>

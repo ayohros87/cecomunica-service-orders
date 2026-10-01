@@ -960,7 +960,9 @@ body.hide-fecha-entrega .fecha-entrega { display: none !important; }
   border: 1px solid transparent;
   white-space: nowrap;
   letter-spacing: 0.2px;
-  text-transform: uppercase;
+  /* Sin mayúsculas: tipoChip() ya pone el nombre corto ("Devolución",
+     "Visita", "Programación"); en versales "PROGRAMACIÓN" medía 107 px y se
+     cortaba en la columna (auditoría de módulos 2026-09-30, 01 P4). */
 }
 /* Color SOLO para los tipos con circuito propio (DEVOLUCION/VISITA/ENTRADA):
    el caso común va neutro para que el chip de ESTADO sea el único color
@@ -985,9 +987,18 @@ body.hide-fecha-entrega .fecha-entrega { display: none !important; }
 
 .celda-editable:hover { background: var(--accent-soft-hov); box-shadow: 0 0 0 2px rgba(0, 145, 215,0.1); }
 
-.lapiz { opacity: 0; transition: opacity 0.2s ease; }
+/* Lápiz de editar serial/modelo: visible en reposo y con objetivo táctil de
+   32 px. Estaba a opacity: 0 hasta pasar el mouse y medía 16×20: en la tablet
+   no existía hasta tocar por fe, y es la acción más frecuente del sistema
+   (631 ediciones/mes; auditoría de módulos 2026-09-30, 01 P6). */
+.lapiz {
+  opacity: 0.6; transition: opacity 0.2s ease;
+  min-width: 32px; min-height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+}
 
-.celda-editable:hover .lapiz { opacity: 1; }
+.celda-editable:hover .lapiz, .lapiz:focus-visible { opacity: 1; }
 
 .lapiz:hover { transform: scale(1.1); }
 
@@ -1170,12 +1181,46 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
   text-overflow: ellipsis;
 }
 
-/* First column (Order ID) - wider to accommodate warning icon */
+/* Anchos de columna de la bandeja (auditoría de módulos 2026-09-30, 01 P4).
+   La tabla es table-layout: fixed: los px mandan y Cliente (sin ancho) se
+   queda con lo que sobra. Antes el número tenía 11 % (= 97 px a 1280 con el
+   rail abierto) con overflow visible y se montaba 24 px sobre el cliente;
+   TIPO y ESTADO se cortaban en 8 de cada 12 filas. */
+.orders-table col.oc-numero   { width: 136px; }
+.orders-table col.oc-tecnico  { width: 132px; }
+.orders-table col.oc-tipo     { width: 104px; }
+.orders-table col.oc-estado   { width: 168px; }
+.orders-table col.oc-fecha    { width: 100px; }
+.orders-table col.oc-acciones { width: 296px; }
+
+/* Mesa estrecha (≤1130 px, o hasta 1366 px con el rail abierto, que son los
+   escritorios de recepción y la tablet): el técnico queda en su avatar (el
+   nombre va en el title), el estado puede partir en dos líneas y el tipo se
+   aprieta. El rail solo existe a ≥1025 px y marca html[data-cc-rail="mini"]
+   cuando está plegado. */
+@media (max-width: 1130px) {
+  .orders-table col.oc-tecnico { width: 52px; }
+  .orders-table col.oc-tipo    { width: 106px; }
+  .orders-table col.oc-estado  { width: 122px; }
+  .orders-table .tec-nombre    { display: none; }
+  .orders-table .tec-avatar    { margin-right: 0; }
+  .orders-table td .chip-estado { white-space: normal; line-height: 1.2; padding-top: 3px; padding-bottom: 3px; text-align: left; }
+}
+@media (min-width: 1131px) and (max-width: 1366px) {
+  html:not([data-cc-rail="mini"]) .orders-table col.oc-tecnico { width: 52px; }
+  html:not([data-cc-rail="mini"]) .orders-table col.oc-tipo    { width: 106px; }
+  html:not([data-cc-rail="mini"]) .orders-table col.oc-estado  { width: 122px; }
+  html:not([data-cc-rail="mini"]) .orders-table .tec-nombre    { display: none; }
+  html:not([data-cc-rail="mini"]) .orders-table .tec-avatar    { margin-right: 0; }
+  html:not([data-cc-rail="mini"]) .orders-table td .chip-estado { white-space: normal; line-height: 1.2; padding-top: 3px; padding-bottom: 3px; text-align: left; }
+}
+
+/* First column (Order ID): el ancho lo fija .oc-numero; si algún día no
+   cabe, se recorta en vez de montarse sobre el cliente. */
 #ordersTable th:nth-child(1),
 #ordersTable td:nth-child(1) {
-  min-width: 220px;
   white-space: nowrap;
-  overflow: visible;
+  overflow: hidden;
 }
 
 /* Limit only client name column */
