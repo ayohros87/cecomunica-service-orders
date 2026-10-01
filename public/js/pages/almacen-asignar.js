@@ -431,7 +431,15 @@ window.AlmacenAsignar = (() => {
     const equipos = Array.isArray(contrato.equipos) ? contrato.equipos : [];
     const cancelado = contrato.baja_cancelado || {};
     const savedByModel = {};
-    guardados.forEach(s => { const k = norm(s.modelo); (savedByModel[k] = savedByModel[k] || []).push(String(s.serial || '').trim()); });
+    // `source` viaja con el serial guardado (saveSerialesManual): al volver a
+    // un borrador, lo que salió del estante sigue pidiendo verificación y lo
+    // tecleado no (D1/P7, 2026-10-01).
+    const origenDe = {};
+    guardados.forEach(s => {
+      const k = norm(s.modelo); const ser = String(s.serial || '').trim();
+      (savedByModel[k] = savedByModel[k] || []).push(ser);
+      if (s.source && s.source !== 'manual') origenDe[norm(ser)] = s.source;
+    });
     const omsByModel = {};
     (omisiones || []).forEach(o => { const k = norm(o.modelo); (omsByModel[k] = omsByModel[k] || []).push(String(o.motivo || '')); });
     return equipos.map(eq => {
@@ -444,7 +452,7 @@ window.AlmacenAsignar = (() => {
       const slots = [];
       (savedByModel[k] || []).filter(Boolean).forEach(s => {
         const enCambio = modoReemplazo && cambioSet.has(norm(s));
-        slots.push(enCambio ? { serial: s, dataReemplazo: s, clase: 'reemplazo' } : { serial: s, bloqueado: modoReemplazo });
+        slots.push(enCambio ? { serial: s, dataReemplazo: s, clase: 'reemplazo' } : { serial: s, bloqueado: modoReemplazo, origen: origenDe[norm(s)] || '' });
       });
       (omsByModel[k] || []).forEach(m => slots.push({ omitido: true, motivo: m, bloqueado: modoReemplazo }));
       return { modelo, modelo_id: modeloId, activos, slots };
@@ -489,6 +497,8 @@ window.AlmacenAsignar = (() => {
       picklist_verificada_at: firebase.firestore.FieldValue.serverTimestamp(),
       picklist_verificada_por: uid,
       picklist_verificada_n: verificacion.n,
+      // Tecleados a mano: verificados al teclear, sin segundo escaneo (D1/P7).
+      picklist_manual_n: Number(verificacion.manual || 0),
       picklist_reemplazos: (verificacion.reemplazos || []).map(r => ({ anterior: r.anterior, nuevo: r.nuevo, modelo: r.modelo || '', motivo: r.motivo })),
     } : {};
     await db().collection('contratos').doc(c.docId).collection('seriales_estado').doc('current').set({
@@ -1029,9 +1039,10 @@ window.AlmacenAsignar = (() => {
       }
       // La verificación queda como evento de la gestión (el doc no admite
       // campos nuevos en rules): quién, cuántas y qué sustituyó.
-      if (v) {
+      if (v && (v.n || v.manual)) {
         await GestionesService.registrarEvento(t.gid, 'asignar',
-          `Lista verificada por escaneo: ${v.n} serial(es)`
+          (v.n ? `Lista verificada por escaneo: ${v.n} serial(es)` : 'Lista verificada')
+          + (v.manual ? `${v.n ? '; ' : ': '}${v.manual} tecleado(s) a mano (verificados al teclear)` : '')
           + (v.reemplazos.length ? `. Sustituidos: ${v.reemplazos.map(x => `${x.anterior} → ${x.nuevo} (${x.motivo})`).join('; ')}` : '')).catch(() => {});
       }
       invalidarBodega();
@@ -1162,7 +1173,7 @@ window.AlmacenAsignar = (() => {
 
   // La hoja de verificación. Resuelve { n, reemplazos } al confirmar con todo
   // marcado, o null si se vuelve atrás.
-  async function hojaVerificacion(filas) {
+  async function hojaVerificacion(filas, { manual = 0 } = {}) {
     const pend = new Map(filas.map(f => [norm(f.serial), { ...f, ok: false }]));
     const reemplazos = [];
     const faltan = () => [...pend.values()].filter(f => !f.ok).length;
@@ -1236,7 +1247,7 @@ window.AlmacenAsignar = (() => {
     const r = await Modal.sheet({
       title: 'Verificar la lista', icon: 'scan-line', size: 'md',
       html: `
-        <p style="margin:0 0 10px; font-size:13px; color:var(--fg-2);">Con el radio en la mano, escanea o teclea su serial y pulsa Enter. Cada uno se marca ✓; el que no aparezca se sustituye con <b>No está…</b>.</p>
+        <p style="margin:0 0 10px; font-size:13px; color:var(--fg-2);">Estos ${pend.size} salieron del estante o de una columna pegada: con el radio en la mano, escanea o teclea su serial y pulsa Enter. Cada uno se marca ✓; el que no aparezca se sustituye con <b>No está…</b>.${manual ? ` Los <b>${manual}</b> que tecleaste tú ya cuentan como verificados.` : ''}</p>
         <input class="form-input" data-ver="input" type="text" autocomplete="off" placeholder="Escanea o teclea el serial y pulsa Enter"
                style="font-family:var(--font-mono, monospace); font-size:15px; height:42px; margin-bottom:8px;">
         <div data-ver="aviso" style="display:none; padding:8px 10px; border-radius:8px; font-size:12.5px; margin-bottom:8px;"></div>
@@ -1297,13 +1308,22 @@ window.AlmacenAsignar = (() => {
   }
 
   // El paso completo: filas → hoja → sustitutos aplicados. null = volver.
+  // Solo se verifica lo que NO se tecleó/escaneó a mano (decisión de Alberto
+  // 2026-10-01: José teclea cada serial con el radio en la mano; pedirle que
+  // lo teclee otra vez era 500 teclas por contrato de 50). Lo que llenó el
+  // picker o "Pegar columna" (source ≠ 'manual') sí pasa por la hoja. Si
+  // todo fue a mano, no hay hoja. `manual` = cuántos quedaron sin 2º paso.
   async function verificarPicklist(seriales) {
-    const filas = await filasPicklist(seriales);
-    if (!filas.length) return { n: 0, reemplazos: [] };
-    const v = await hojaVerificacion(filas);
+    const todos = seriales || [];
+    const porVerificar = todos.filter(s => s.source && s.source !== 'manual');
+    const manual = todos.length - porVerificar.length;
+    if (!porVerificar.length) return { n: 0, manual, reemplazos: [] };
+    const filas = await filasPicklist(porVerificar);
+    if (!filas.length) return { n: 0, manual, reemplazos: [] };
+    const v = await hojaVerificacion(filas, { manual });
     if (!v) return null;
     if (v.reemplazos.length) await aplicarReemplazos(v.reemplazos);
-    return v;
+    return { ...v, manual };
   }
 
   /* ═════════ Navegación tras guardar ═════════ */

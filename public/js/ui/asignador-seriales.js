@@ -85,6 +85,7 @@ window.AsignadorSeriales = (() => {
         ${etiqueta}
         <input class="serial-input form-input${slot?.clase ? ' ' + esc(slot.clase) : ''}" data-modelo="${esc(g.modelo)}" data-modelo-id="${esc(g.modelo_id || '')}"
                value="${esc(slot?.serial || '')}" placeholder="Número de serie" ${(omit || bloqueado) ? 'disabled' : ''}
+               ${slot?.origen ? `data-origen="${esc(slot.origen)}"` : ''}
                ${slot?.dataReemplazo ? `data-reemplazo="${esc(slot.dataReemplazo)}"` : ''}>
         <label class="serial-omit" ${permitirOmitir && !bloqueado ? '' : 'style="display:none;"'}><input type="checkbox" class="omit-toggle" ${omit ? 'checked' : ''} ${bloqueado ? 'disabled' : ''}> Sin serial</label>
         <input class="motivo-input form-input" placeholder="Motivo (por qué no lleva serial)"
@@ -110,6 +111,12 @@ window.AsignadorSeriales = (() => {
         if (e.target.classList.contains('omit-toggle')) onOmitToggle(e.target);
       });
       body.addEventListener('input', (e) => {
+        // Origen de la casilla (decisión de Alberto 2026-10-01: José teclea,
+        // y lo tecleado con el radio en la mano ya está verificado). Teclear
+        // o escanear = 'manual'; lo que llena el picker o "Pegar columna" lo
+        // marcan jalarItems/fillFrom. Lo lee collect() → `source`, y con eso
+        // la hoja "Verificar la lista" solo pide lo que no se tecleó.
+        if (e.target.classList.contains('serial-input')) e.target.dataset.origen = 'manual';
         if (e.target.classList.contains('serial-input') || e.target.classList.contains('motivo-input')) refresh();
       });
       body.addEventListener('paste', (e) => {
@@ -195,6 +202,7 @@ window.AsignadorSeriales = (() => {
         if (chk && chk.checked) { chk.checked = false; onOmitToggle(chk); }
         inp.disabled = false;
         inp.value = v;
+        inp.dataset.origen = 'pegado';
         idx++;
         applied++;
       }
@@ -271,7 +279,11 @@ window.AsignadorSeriales = (() => {
           if (motivo) omisiones.push({ modelo, modelo_id: modeloId, motivo });
         } else {
           const serial = inp.value.trim();
-          if (serial) seriales.push({ modelo, modelo_id: modeloId, serial, source: 'manual', ...(clave != null ? { clave } : {}) });
+          // `source`: 'manual' (tecleado/escaneado), 'picker' (del estante) o
+          // 'pegado'. Sin marca (restaurado de un borrador viejo, ítem de
+          // gestión) cuenta como manual: la decisión de Alberto es que lo
+          // tecleado ya está verificado; el picker es la excepción.
+          if (serial) seriales.push({ modelo, modelo_id: modeloId, serial, source: inp.dataset.origen || 'manual', ...(clave != null ? { clave } : {}) });
         }
       });
       return { seriales, omisiones };
@@ -371,7 +383,9 @@ window.AsignadorSeriales = (() => {
         if (!grupo) { sinModelo++; continue; }
         const slot = cupoEn(grupo);
         if (!slot) { sinCupo++; continue; }
-        slot.querySelector('.serial-input').value = serial;
+        const inpSlot = slot.querySelector('.serial-input');
+        inpSlot.value = serial;
+        inpSlot.dataset.origen = 'picker';
         pres.add(key);
         agregados++;
       }
