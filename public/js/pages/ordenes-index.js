@@ -130,10 +130,14 @@ document.addEventListener("DOMContentLoaded", function () {
       // el correo anunciaba órdenes que la página declaraba inexistentes.
       // No se espera: repinta solo cuando llega.
       if (typeof asegurarColaQc === 'function') asegurarColaQc();
-      // Deep-link ?ids= (CTA "Ver órdenes" de los correos): trae del servidor
-      // las órdenes concretas que el correo enumeraba. Mismo motivo que la cola
-      // de QC — son viejas y no caben en la primera página.
+      // Deep-link ?ids= (CTA "Ver órdenes" de los correos, señales del home,
+      // Ctrl+K; `?orden=` es alias): trae del servidor las órdenes concretas.
+      // Mismo motivo que la cola de QC — son viejas y no caben en la primera
+      // página.
       if (typeof asegurarOrdenesDeCorreo === 'function') asegurarOrdenesDeCorreo();
+      // Deep-link ?estado= (señales del home): consulta al servidor como el
+      // chip, en vez de filtrar las 40 recientes en el navegador.
+      if (typeof asegurarEstadoDeURL === 'function') asegurarEstadoDeURL();
       // ?desde=/?hasta= (enlace copiado con rango de fechas): la bandeja viva
       // no filtra por fecha en el servidor, así que se consulta aparte.
       if (typeof asegurarBusquedaDeURL === 'function') asegurarBusquedaDeURL();

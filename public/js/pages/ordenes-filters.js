@@ -677,7 +677,7 @@ function _avisoCorreoHtml() {
   }
   if (!box) return;
   const n = _idsCorreo.size;
-  box.innerHTML = `<span><b>Estás viendo las ${n} orden(es) del correo.</b>
+  box.innerHTML = `<span><b>Estás viendo ${n === 1 ? 'solo la orden del enlace' : `las ${n} órdenes del enlace`}.</b>
       El resto de la bandeja está oculto.</span>
     <button type="button" class="btn btn-secondary btn-sm" id="btnVerTodasCorreo"
             style="margin-left:auto;">Ver todas las órdenes</button>`;
@@ -721,7 +721,9 @@ const _URL_FILTER_KEYS = {
   // url-key  →  DOM element id (advanced/persistent filters only;
   // the quick-search input is ephemeral and intentionally not
   // serialized).
-  orden:   'filtroOrden',
+  // `num` es el campo "Orden" del avanzado (prefijo tecleado). La clave `orden`
+  // quedó reservada para el deep-link por ID exacto (alias de `ids`, abajo).
+  num:     'filtroOrden',
   cliente: 'filtroCliente',
   serial:  'filtroSerial',
   tipo:    'filtroTipo',
@@ -742,6 +744,8 @@ function _syncFiltersToURL() {
   }
   if (document.getElementById('toggleMisOrdenes')?.checked) params.set('mias', '1');
   if (document.getElementById('filtroQcPendiente')?.checked) params.set('qc', '1');
+  // El deep-link por ID sobrevive al refresco y se puede copiar.
+  if (_idsCorreo && _idsCorreo.size) params.set('ids', [..._idsCorreo].join(','));
   const sortField = APP.state.sortField;
   if (sortField && sortField !== 'ordenId') params.set('sort', sortField);
   if (APP.state.sortAscending) params.set('asc', '1');
@@ -778,10 +782,14 @@ function _applyURLToFilters() {
     const q = document.getElementById('filtroQcPendiente');
     if (q) { q.checked = true; touched = true; }
   }
-  // ?ids=a,b,c — las órdenes concretas que enumeraba un correo. Las trae
-  // asegurarOrdenesDeCorreo() del servidor, porque son viejas y no caben en la
-  // primera página. Tope de cordura: el correo manda como mucho 30.
-  const idsRaw = params.get('ids');
+  // ?ids=a,b,c — las órdenes concretas que enumeraba un correo, una señal del
+  // home o el resultado de Ctrl+K. Las trae asegurarOrdenesDeCorreo() del
+  // servidor, porque pueden ser viejas y no caber en la primera página. Tope
+  // de cordura: el correo manda como mucho 30. `?orden=<id>` es alias (los
+  // enlaces viejos de correos, nuevo-batch y editar-orden): antes solo
+  // filtraba por texto las 40 recientes y una orden vieja "no existía"
+  // (auditoría de módulos 2026-09-30, 01 R2).
+  const idsRaw = params.get('ids') || params.get('orden');
   if (idsRaw) {
     const ids = idsRaw.split(',').map(s => s.trim()).filter(Boolean).slice(0, 60);
     if (ids.length) { _idsCorreo = new Set(ids); touched = true; }
@@ -1080,9 +1088,16 @@ window.addEventListener('resize', _cerrarMenusCerradas);
 
 window.filtrarPorChipEstado = function (el) {
   const estado = el.dataset.estado || '';
-  const wasActive = el.classList.contains('active');
-  const next = wasActive ? '' : estado;
+  // Tocar el chip activo RE-CONSULTA, no lo apaga: quien lo toca para
+  // "refrescar" perdía el filtro y caía en "Todas" (auditoría de módulos
+  // 2026-09-30, 01 R7). Para volver a Todas está el chip "Todas".
+  const next = estado;
   _cerrarMenusCerradas();
+  // El chip es una intención nueva: el recorte del deep-link `?ids=` se suelta.
+  if (_idsCorreo) {
+    _idsCorreo = null;
+    document.getElementById('avisoDeepLinkCorreo')?.remove();
+  }
 
   // Mirror into the hidden select.
   const sel = document.getElementById('filtroEstado');
@@ -1121,6 +1136,27 @@ window.syncEstadoChipsFromSelect = function () {
     chip.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
   _pintarChipCerradas(current);
+};
+
+// Lo que trae el chip del servidor pasa por los filtros que siguen vivos en
+// pantalla (mis órdenes, tipo, técnico): el técnico con "Ver solo mis órdenes"
+// veía las 18 ASIGNADO de todos hasta el siguiente repintado del listener.
+function _visiblesDeChip(resultados) {
+  const filters = getActiveFilters();
+  return hasActiveFilters(filters) ? applyActiveFiltersToOrders(resultados, filters) : resultados;
+}
+
+// ?estado= en la URL (señales del home, chip copiado): la misma consulta que
+// tocar el chip. Antes solo se copiaba al select y se filtraban EN EL
+// NAVEGADOR las 40 recientes: "En taller 19" abría con 6 filas (auditoría de
+// módulos 2026-09-30, 01 R2). Se llama tras cargarOrdenesYEquipos, como
+// asegurarColaQc; no se espera.
+window.asegurarEstadoDeURL = function () {
+  const estado = (document.getElementById('filtroEstado')?.value || '').trim();
+  if (!estado) return;
+  if (_hayFechas()) return;                     // asegurarBusquedaDeURL ya consulta con el estado
+  if (_idsCorreo && _idsCorreo.size) return;    // ?ids= manda: son órdenes concretas
+  filtrarPorEstado(estado);
 };
 
 window.filtrarPorEstado = async function (estado, { limite = CHIP_PAGINA } = {}) {
@@ -1186,7 +1222,7 @@ window.filtrarPorEstado = async function (estado, { limite = CHIP_PAGINA } = {})
     // repintado del listener vivo mientras el chip siga encendido.
     entrarModoServidor(resultados);
     APP.state.origenServidor = "estado";
-    renderOrdersList(resultados);
+    renderOrdersList(_visiblesDeChip(resultados));
     _mostrarAvisoChip(estado, resultados.length, limite);
     return;   // el `finally` de abajo apaga el loader
 
@@ -1211,7 +1247,7 @@ window.filtrarPorEstado = async function (estado, { limite = CHIP_PAGINA } = {})
           APP.state.orders = resultados;
           entrarModoServidor(resultados);
           APP.state.origenServidor = "estado";
-          renderOrdersList(resultados);   // ya hace resumen, roles, iconos y truncado
+          renderOrdersList(_visiblesDeChip(resultados));   // ya hace resumen, roles, iconos y truncado
           _mostrarAvisoChip(estado, resultados.length, limite);
         }
 
