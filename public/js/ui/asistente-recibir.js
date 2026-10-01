@@ -235,7 +235,10 @@ window.AsistenteRecibir = {
         }
       }
 
-      this._cerrar();
+      // Forzado: aquí `_busy` sigue en true (lo baja el finally) y `_cerrar()`
+      // sale sin cerrar — la hoja quedaba abierta con los mismos seriales
+      // después de cada recepción (auditoría de módulos 2026-09-30, R3).
+      this._cerrarForzado();
       let msg = `${res.nuevos} equipos recibidos en bodega.`;
       if (res.reubicados) msg += ` ${res.reubicados} traídos de vuelta a bodega.`;
       if (res.existentes) msg += ` ${res.existentes} ya estaban.`;
@@ -268,7 +271,12 @@ window.AsistenteRecibir = {
       this._onDone(res);
     } catch (e) {
       console.error('Error al recibir equipos:', e);
-      this._toast('Error al recibir: ' + (e.message || e), 'bad');
+      // Rechazo de firestore.rules (solo bodega y administración reciben):
+      // el texto crudo "PERMISSION_DENIED: evaluation error at L847…" no le
+      // dice nada a quien lo ve.
+      this._toast(/permission.denied/i.test(`${e?.code || ''} ${e?.message || e || ''}`)
+        ? 'No tienes permiso para recibir equipos: es de bodega y administración.'
+        : 'Error al recibir: ' + (e.message || e), 'bad');
     } finally {
       this._busy = false;
       btn.disabled = false;
@@ -395,7 +403,14 @@ window.AsistenteRecibir = {
     // seriales; Enter en el filtro hace lo mismo o toma la coincidencia exacta.
     overlay.querySelector('#asrModelo').addEventListener('change', (e) => {
       this._sincronizarCondicion();
-      if (e.target.value) overlay.querySelector('#asrSeriales').focus();
+      // No robar el foco mientras se TECLEA el filtro (auditoría de módulos
+      // 2026-09-30, B1): FilteredSelect auto-selecciona con una sola
+      // coincidencia ("PNC360S-") y las teclas que faltaban ("R") caían en el
+      // cuadro de seriales. Tecleando, el salto lo da Enter (abajo); con un
+      // clic o flecha en el select sigue saltando solo.
+      if (e.target.value && document.activeElement !== overlay.querySelector('#asrModeloFiltro')) {
+        overlay.querySelector('#asrSeriales').focus();
+      }
     });
     overlay.querySelector('#asrModeloFiltro').addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
@@ -412,7 +427,7 @@ window.AsistenteRecibir = {
           const soloModelo = m ? t(m.label).slice(t(m.label.split(' ')[0]).length) : '';
           return t(o.textContent) === q || soloModelo === q;
         });
-        if (exacta) { sel.value = exacta.value; sel.dispatchEvent(new Event('change')); return; }
+        if (exacta) { sel.value = exacta.value; sel.dispatchEvent(new Event('change')); overlay.querySelector('#asrSeriales').focus(); return; }
         if (opts.length) sel.focus();
         return;
       }
