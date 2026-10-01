@@ -533,11 +533,12 @@
         <!-- La nota impresa que el cliente firmó (auditoría 2026-09-17): sin
              ella la prueba de la entrega vive en un archivador que el sistema
              no sabe ubicar, y 7 de cada 10 entregas de septiembre salieron por
-             aquí. Opcional para no trancar el mostrador con cola: si no se
-             sube ahora, la orden queda pidiéndola. -->
+             aquí. Se pide siempre; con cola en el mostrador se puede cerrar
+             sin ella, pero con advertencia y razón obligatoria (decisión de
+             Alberto 2026-10-01, plan de ejecución §1 #3). -->
         <div class="form-field">
-          <label class="modal-entrega__label--warn">Foto de la nota firmada
-            <span class="modal-entrega__hint">(se puede subir después, desde la orden)</span>
+          <label class="modal-entrega__label--warn">Foto de la nota firmada <span class="req--warn">*</span>
+            <span class="modal-entrega__hint">(si no la subes ahora, se te pedirá la razón)</span>
           </label>
           <input type="file" id="entregaFotoPapel"
                  accept="image/*,application/pdf" capture="environment"

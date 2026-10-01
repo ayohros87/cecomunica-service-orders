@@ -1773,10 +1773,26 @@ window.copiarSeriales = function (ordenId) {
         if (!personaInterna) { Toast.show('Indique quién recibió los equipos por el cliente', 'bad'); return; }
         firestoreData.no_recibido_motivo = motivo;
         firestoreData.entrega_persona_interna = personaInterna;
-        // La nota impresa que el cliente firmó. Opcional aquí —con cola en el
-        // mostrador no se tranca la entrega—, pero la orden queda pidiéndola
-        // hasta que alguien la suba (auditoría 2026-09-17).
+        // La nota impresa que el cliente firmó. Se pide siempre; con cola en
+        // el mostrador se puede cerrar sin ella, pero avisando que no queda
+        // registro y con la razón obligatoria, que se guarda en la orden
+        // (decisión de Alberto 2026-10-01, plan de ejecución §1 #3). La orden
+        // la sigue pidiendo en su línea de tiempo hasta que alguien la suba.
         const filePapel = document.getElementById('entregaFotoPapel')?.files[0];
+        if (!filePapel) {
+          const razon = await Modal.prompt({
+            title: 'Entrega sin la nota firmada',
+            message: 'No quedará registro de la entrega en el sistema hasta que subas la nota firmada. ¿Por qué no la subes ahora?',
+            placeholder: 'Ej.: hay cola en el mostrador; la subo esta tarde',
+            multiline: true,
+            confirmLabel: 'Cerrar sin nota',
+            cancelLabel: 'Volver',
+          });
+          if (razon !== null && !String(razon).trim()) Toast.show('Indica por qué no subes la nota ahora', 'bad');
+          if (!razon || !String(razon).trim()) return;   // "Volver" o sin razón: el finally reactiva el botón
+          firestoreData.nota_firmada_omitida_motivo = String(razon).trim();
+          firestoreData.nota_firmada_omitida_at = firebase.firestore.FieldValue.serverTimestamp();
+        }
         if (filePapel) {
           await CargaDiferida.storage();
           const { blob, contentType, ext } = await _prepareIdUpload(filePapel);
@@ -1848,10 +1864,12 @@ window.copiarSeriales = function (ordenId) {
       const clienteDocPromise = _clienteDoc
         ? Promise.resolve(_clienteDoc)
         : (orden.cliente_id ? ClientesService.getCliente(orden.cliente_id).catch(() => null) : Promise.resolve(null));
-      const [clienteDoc, vendedorDoc, tecnicoDoc, empresaConfig, consumosOrden] = await Promise.all([
+      // Destinatarios de la nota: cliente, vendedor, recepción y jefa de taller.
+      // El técnico ya no (decisión de Alberto 2026-10-01, plan de ejecución §1
+      // #4): eran cinco correos por entrega y él no los leía.
+      const [clienteDoc, vendedorDoc, empresaConfig, consumosOrden] = await Promise.all([
         clienteDocPromise,
         orden.vendedor_asignado ? UsuariosService.getUsuario(orden.vendedor_asignado).catch(() => null)    : Promise.resolve(null),
-        orden.tecnico_uid      ? UsuariosService.getUsuario(orden.tecnico_uid).catch(() => null)           : Promise.resolve(null),
         // Buzón único de recepción (config de empresa) — lleva el control de entregas.
         EmpresaService.getConfig().catch(() => ({})),
         // Repuestos registrados por el técnico — se agrupan por equipo en el
@@ -1899,7 +1917,6 @@ window.copiarSeriales = function (ordenId) {
       const clienteEmail   = (clienteEmailToUse || '').toLowerCase().trim();
       const internos = new Set();
       if (vendedorDoc?.email) internos.add(vendedorDoc.email.toLowerCase().trim());
-      if (tecnicoDoc?.email)  internos.add(tecnicoDoc.email.toLowerCase().trim());
       if (recepcionEmail)     internos.add(recepcionEmail);
       // Jefe de taller (empresa/config.email_taller — string o array).
       const tallerCfg = empresaConfig?.email_taller;
