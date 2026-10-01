@@ -358,7 +358,7 @@ async function _mostrarCondicionVigente(serial, idx) {
   try { c = await EquiposCondicionesService.buscar(serial); } catch (e) { c = null; }
   // El modal navega entre equipos (Anterior/Siguiente): si ya cambió, no pintar.
   if (!c || _trabajoEquipoIdx !== idx) return;
-  const f = c.registrado_at?.toDate ? c.registrado_at.toDate().toLocaleDateString("es-PA") : "";
+  const f = c.registrado_at?.toDate ? formatFecha(c.registrado_at) : "";
   const meta = [c.por_email, f, c.orden_id ? "orden " + c.orden_id : ""].filter(Boolean).join(" · ");
   box.innerHTML = `⚠ <b>Este equipo ya tiene una condición registrada:</b> ${escapeHtml(String(c.condicion || ""))}
     <div style="font-size:11.5px;margin-top:3px;">${escapeHtml(meta)} — si sigue igual no hace falta volver a marcarla; si cambió, márcala abajo con el texto nuevo.</div>`;
@@ -652,9 +652,8 @@ window.abrirGaleriaDelEquipoActual = function() {
 function _formatFotoTimestamp(ts) {
   if (!ts) return "";
   try {
-    const d = typeof ts.toDate === "function" ? ts.toDate() : new Date(ts);
-    if (!d || Number.isNaN(d.getTime())) return "";
-    return d.toLocaleString("es-CO", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    const s = formatFechaHora(ts);   // hora de Panamá, formato largo del módulo
+    return s === "—" ? "" : s;
   } catch (_) { return ""; }
 }
 

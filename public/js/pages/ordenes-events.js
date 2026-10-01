@@ -647,14 +647,11 @@ function _entregaEsc(v) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// Formato largo del módulo, en hora de Panamá (ordenes-state.js).
 function _entregaFecha(ts) {
   try {
-    const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
-    if (!d || isNaN(d)) return null;
-    return d.toLocaleString('es-PA', {
-      day: '2-digit', month: 'long', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    });
+    const s = formatFechaHora(ts);
+    return s === '—' ? null : s;
   } catch { return null; }
 }
 

@@ -445,7 +445,7 @@
   function _chipEnvioHtml(envio) {
     const st = envio?.status || 'sin_enviar';
     if (st === 'enviado') {
-      const cuando = envio.at?.toDate ? envio.at.toDate().toLocaleString('es-PA', { hour12: false }) : '';
+      const cuando = envio.at?.toDate ? formatFechaHora(envio.at) : '';
       return `<span class="chip-estado" style="background:#e9f7f0;color:#067647;" title="Copia enviada a ${esc(envio.to || '')}${cuando ? ` · ${cuando}` : ''}">✓ Enviado al cliente</span>`;
     }
     if (st === 'solicitado' || st === 'encolado') {
@@ -855,7 +855,7 @@
           const numero = a.numero || `${_ordenId}-A${idx + 1}`;
           const unidadesA = (a.unidades && a.unidades.length)
             ? a.unidades : (a.seriales || []).map(s => ({ serial: s }));
-          const fecha = a.at?.toDate ? a.at.toDate().toLocaleString('es-PA', { hour12: false }) : '';
+          const fecha = a.at?.toDate ? formatFechaHora(a.at) : '';
           const envio = a.envio || null;
           const st = envio?.status || 'sin_enviar';
           const btnEnviar = !puedeEnviar ? '' : (
@@ -2076,9 +2076,7 @@
     const numero = a.numero || `${_ordenId}-A${idx + 1}`;
     const unidades = (a.unidades && a.unidades.length)
       ? a.unidades : (a.seriales || []).map(s => ({ serial: s }));
-    const fecha = a.at?.toDate
-      ? a.at.toDate().toLocaleString('es-PA', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
-      : '';
+    const fecha = a.at?.toDate ? formatFechaHora(a.at) : '';
     const contratoId = dev.origen?.ref_papel || _orden.contrato?.contrato_id || null;
     const filasDoc = unidades.map(u => `
       <tr>

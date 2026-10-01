@@ -87,9 +87,8 @@
   function formatTs(ts) {
     if (!ts) return "";
     try {
-      const d = typeof ts.toDate === "function" ? ts.toDate() : new Date(ts);
-      if (!d || Number.isNaN(d.getTime())) return "";
-      return d.toLocaleString("es-PA", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+      const s = formatFechaHora(ts);   // hora de Panamá, formato largo del módulo
+      return s === "—" ? "" : s;
     } catch (_) { return ""; }
   }
 

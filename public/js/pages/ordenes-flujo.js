@@ -909,7 +909,7 @@ function qcParaNota(orden) {
   if (!qc || qc.resultado !== 'aprobado') return null;
   return {
     por: qc.por_email || '',
-    fecha: qc.fecha?.toDate ? qc.fecha.toDate().toLocaleDateString('es-PA') : ''
+    fecha: qc.fecha?.toDate ? formatFecha(qc.fecha) : ''
   };
 }
 

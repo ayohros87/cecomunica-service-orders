@@ -239,33 +239,48 @@ window.modelosDisponibles = [];
  * Top-level declarations are globally accessible to every page module.
  * ======================================== */
 
-function formatFecha(ts) {
-  if (!ts) return "—";
+// Fechas del módulo: SIEMPRE en hora de Panamá y en dos formatos, uno corto
+// ("30 sep 2026") y uno largo ("30 sep 2026, 4:16 p. m."). Antes la bandeja y
+// la orden impresa usaban toISOString().slice(0,10) —UTC— y una orden creada
+// después de las 7 p. m. salía con la fecha del día siguiente (158 de 529
+// entregas corridas; auditoría de módulos 2026-09-30, 01 R3 y C3). Las partes
+// se piden en en-US numérico para que el resultado no dependa del locale del
+// navegador; el texto se arma aquí.
+const FECHA_TZ_PANAMA = 'America/Panama';
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+function _fechaADate(v) {
+  if (!v) return null;
   try {
-    const d = ts.toDate();
-    return d.toISOString().slice(0, 10);
-  } catch {
-    return "—";
-  }
+    const d = typeof v.toDate === 'function' ? v.toDate() : (v instanceof Date ? v : new Date(v));
+    return (d && !isNaN(d.getTime())) ? d : null;
+  } catch { return null; }
 }
 
-// Compact "Mar 18, 14:32" format for the audit timeline in the
-// expanded row. Falls back to the date-only formatFecha if the
-// Firestore timestamp can't be converted (e.g. unset / null).
+function _partesPanama(d) {
+  const p = {};
+  new Intl.DateTimeFormat('en-US', {
+    timeZone: FECHA_TZ_PANAMA, year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  }).formatToParts(d).forEach(x => { p[x.type] = x.value; });
+  return p;
+}
+
+// "30 sep 2026" — bandeja, tarjetas, orden impresa.
+function formatFecha(ts) {
+  const d = _fechaADate(ts);
+  if (!d) return "—";
+  const p = _partesPanama(d);
+  return `${p.day} ${MESES_CORTOS[Number(p.month) - 1]} ${p.year}`;
+}
+
+// "30 sep 2026, 4:16 p. m." — línea de tiempo, acuses, QC, Ver entrega.
 function formatFechaHora(ts) {
-  if (!ts) return "—";
-  try {
-    const d = ts.toDate();
-    return d.toLocaleString('es-PA', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).replace(',', '');
-  } catch {
-    return formatFecha(ts);
-  }
+  const d = _fechaADate(ts);
+  if (!d) return "—";
+  const p = _partesPanama(d);
+  const ampm = String(p.dayPeriod || '').toUpperCase() === 'PM' ? 'p. m.' : 'a. m.';
+  return `${p.day} ${MESES_CORTOS[Number(p.month) - 1]} ${p.year}, ${p.hour}:${p.minute} ${ampm}`;
 }
 
 function normTxt(s) {

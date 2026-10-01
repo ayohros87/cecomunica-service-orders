@@ -387,7 +387,7 @@
                 <span>${esc(it.label)}</span><span>${chip}</span>
               </div>`;
     }).join('');
-    const fecha = qc.fecha?.toDate ? qc.fecha.toDate().toLocaleString('es-PA') : (qc.fecha_iso || '');
+    const fecha = qc.fecha?.toDate ? formatFechaHora(qc.fecha) : (qc.fecha_iso ? formatFechaHora(qc.fecha_iso) : '');
     const motivosLbl = (qc.motivos || [])
       .map(k => (MOTIVOS_RECHAZO.find(m => m.key === k) || { label: k }).label)
       .join(', ');
@@ -422,7 +422,7 @@
     const hist = Array.isArray(orden?.qc_historial) ? orden.qc_historial : [];
     if (hist.length < 2) return '';
     const filas = hist.slice().reverse().map(h => {
-      const f = h.fecha_iso ? new Date(h.fecha_iso).toLocaleString('es-PA') : '';
+      const f = h.fecha_iso ? formatFechaHora(h.fecha_iso) : '';
       const motivos = (h.motivos || [])
         .map(k => (MOTIVOS_RECHAZO.find(m => m.key === k) || { label: k }).label)
         .join(', ');

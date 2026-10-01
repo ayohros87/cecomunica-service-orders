@@ -50,12 +50,10 @@
   // siempre "¿y qué me falta?").
   const numeroDe = (ordenId, t) => t.numero || `${ordenId}-E${t.n || '?'}`;
 
+  // Formato largo del módulo, en hora de Panamá (ordenes-state.js).
   const fechaLarga = (ts) => {
-    const d = ts?.toDate ? ts.toDate() : (ts instanceof Date ? ts : null);
-    return d ? d.toLocaleString('es-PA', {
-      day: 'numeric', month: 'long', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', hour12: false,
-    }) : '';
+    const s = (ts?.toDate || ts instanceof Date) ? formatFechaHora(ts) : '—';
+    return s === '—' ? '' : s;
   };
 
   // Estado REAL del correo, no "se pidió el envío": lo espeja onMailQueued

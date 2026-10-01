@@ -23,15 +23,30 @@
     const params = new URLSearchParams(window.location.search);
     const ordenId = params.get("id");
 
+    // Fechas en hora de Panamá, mismo formato corto/largo que la bandeja
+    // (ordenes-state.js formatFecha/formatFechaHora; esta página no carga ese
+    // archivo). Antes era toISOString().slice(0,10): UTC, un día corrido
+    // después de las 7 p. m. (auditoría de módulos 2026-09-30, 01 R3).
+    const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const partesPanama = (d) => {
+      const p = {};
+      new Intl.DateTimeFormat('en-US', { timeZone: 'America/Panama', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+        .formatToParts(d).forEach(x => { p[x.type] = x.value; });
+      return p;
+    };
+    const fechaCorta = (ts) => {
+      const d = ts?.toDate ? ts.toDate() : (ts instanceof Date ? ts : null);
+      if (!d || isNaN(d.getTime())) return '—';
+      const p = partesPanama(d);
+      return `${p.day} ${MESES_CORTOS[Number(p.month) - 1]} ${p.year}`;
+    };
+    const fechaLarga = (d) => {
+      const p = partesPanama(d);
+      return `${p.day} ${MESES_CORTOS[Number(p.month) - 1]} ${p.year}, ${p.hour}:${p.minute} ${String(p.dayPeriod || '').toUpperCase() === 'PM' ? 'p. m.' : 'a. m.'}`;
+    };
+
     // Fecha de generación
-    const ahora = new Date();
-    document.getElementById("fechaGeneracion").textContent = ahora.toLocaleString('es-ES', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    document.getElementById("fechaGeneracion").textContent = fechaLarga(new Date());
 
     function firebaseListo() {
       try {
@@ -202,8 +217,8 @@
           cliente: nombreCliente,
           visita: o.visita || null,
           informe_visita: o.informe_visita || null,
-          fechaCreacion: o.fecha_creacion?.toDate ? o.fecha_creacion.toDate().toISOString().slice(0,10) : '—',
-          fechaEntrega: o.fecha_entrega?.toDate ? o.fecha_entrega.toDate().toISOString().slice(0,10) : '—'
+          fechaCreacion: fechaCorta(o.fecha_creacion),
+          fechaEntrega: fechaCorta(o.fecha_entrega)
         }, equipos.map(e => ({
           numero_de_serie: e.numero_de_serie,
           modelo: e.modelo,
