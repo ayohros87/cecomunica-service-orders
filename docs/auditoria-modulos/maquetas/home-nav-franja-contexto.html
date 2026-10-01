@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · franja de contexto con enlaces cruzados</title>
+<link rel="stylesheet" href="../../../public/css/ceco-ui.css">
+<style>
+  body { background: var(--surface-sunken, #f3f5f7); padding: 24px; font-family: var(--font-body, "IBM Plex Sans", sans-serif); }
+  .demo { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+  .demo h2 { font-family: var(--font-display, Barlow, sans-serif); font-size: 15px; margin: 0; color: var(--fg-3, #6b7884); text-transform: uppercase; letter-spacing: .08em; }
+  /* Propuesta: una franja fija bajo la cabecera de CUALQUIER detalle (orden, contrato, gestión, serial):
+     de qué cliente es, con qué contrato va, qué seriales lleva. Cada pieza es un enlace a su módulo. */
+  .ctx { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; background: #fff; border: 1px solid var(--border-default, #dde4eb);
+         border-radius: 10px; padding: 10px 14px; font-size: 13px; }
+  .ctx__k { color: var(--fg-4, #9aa7b4); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin-right: 6px; }
+  .ctx a { color: var(--accent, #0074ac); font-weight: 600; text-decoration: none; border-bottom: 1px dashed rgba(0,116,172,.35); }
+  .ctx a:hover { border-bottom-style: solid; }
+  .ctx .mono { font-family: var(--font-mono, "IBM Plex Mono", monospace); }
+  .ctx .sep { width: 1px; height: 18px; background: var(--border-subtle, #e8edf2); }
+  .ctx .more { color: var(--fg-3); font-size: 12px; }
+  .antes { opacity: .75; }
+  .nota { font-size: 12px; color: var(--fg-3); line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="demo">
+  <h2>Antes (detalle de orden hoy): ningún enlace al cliente, al contrato ni a los seriales</h2>
+  <div class="ds-card ds-card-padded antes">
+    <div style="display:flex;gap:12px;align-items:center;">
+      <div style="width:44px;height:44px;border-radius:8px;background:#0B2A47;color:#fff;display:grid;place-items:center;font-weight:700;">OS</div>
+      <div><div style="font-weight:700;font-size:18px;">2026093002</div><div style="color:var(--fg-3);">SKY CHEFS DE PANAMA, S.A. · PROGRAMACIÓN · ASIGNADO</div></div>
+    </div>
+    <p class="nota" style="margin:12px 0 0;">Para ver el contrato GD20260925-01 o el radio 23706A0608 hay que salir a Ctrl+K y volver a teclear. Medido: 2 pantallas y ~30 caracteres tecleados por salto.</p>
+  </div>
+
+  <h2>Después: franja de contexto (misma en orden, contrato, gestión y serial)</h2>
+  <div class="ds-card ds-card-padded">
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
+      <div style="width:44px;height:44px;border-radius:8px;background:#0B2A47;color:#fff;display:grid;place-items:center;font-weight:700;">OS</div>
+      <div><div style="font-weight:700;font-size:18px;">2026093002</div><div style="color:var(--fg-3);">PROGRAMACIÓN · <span class="badge-status status-assigned">ASIGNADO</span> · Jesús Santos</div></div>
+    </div>
+    <div class="ctx" role="navigation" aria-label="Contexto de la orden">
+      <span><span class="ctx__k">Cliente</span><a href="#">SKY CHEFS DE PANAMA, S.A.</a></span>
+      <span class="sep"></span>
+      <span><span class="ctx__k">Gestión</span><a href="#" class="mono">GD20260925-01</a> <span class="more">Demo · 10 × PNC360S-R</span></span>
+      <span class="sep"></span>
+      <span><span class="ctx__k">Seriales</span><a href="#" class="mono">23706A0608</a> · <a href="#" class="mono">23706A0603</a> · <a href="#" class="mono">22806A0308</a> <a href="#" class="more">+7 más en Almacén</a></span>
+      <span class="sep"></span>
+      <span><span class="ctx__k">Cotización</span><a href="#" class="mono">COT-2026-0136</a></span>
+    </div>
+    <p class="nota" style="margin:12px 0 0;">
+      Cada pieza abre su módulo con el registro ya enfocado: cliente → <code>clientes/centro.html?id=</code>, gestión → <code>centro.html?id=…&amp;gestion=</code>,
+      serial → <code>almacen/index.html?tab=existencias&amp;serial=</code> (deep-link que ya existe en <code>centro-firma.js:796</code>).
+      Con Ctrl+clic se abre en pestaña nueva; "Mantener sesión" ya viene marcado, así que la pestaña nueva no pide login.
+    </p>
+  </div>
+
+  <h2>Y en el otro sentido: la ficha del Centro enlaza a las órdenes</h2>
+  <div class="ds-card ds-card-padded">
+    <div style="font-weight:700;">SKY CHEFS DE PANAMA, S.A.</div>
+    <div class="ctx" style="margin-top:10px;">
+      <span><span class="ctx__k">Órdenes abiertas</span><a href="#" class="mono">2026093002</a> <span class="more">ASIGNADO · 0 días</span></span>
+      <span class="sep"></span>
+      <span><span class="ctx__k">En taller</span><a href="#">11 equipos</a></span>
+      <span class="sep"></span>
+      <span><span class="ctx__k">Historial</span><a href="#">14 órdenes</a></span>
+    </div>
+    <p class="nota" style="margin:12px 0 0;">Hoy la ficha dice "11 equipos en taller o en revisión · le toca al taller" pero no lleva a ninguna orden.</p>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · Clientes ↔ QuickBooks (antes / después)</title>
+<!-- CSS real del app, por ruta relativa (ver 00-metodo.md §2.6). Abrir desde el repo. -->
+<link rel="stylesheet" href="../../../public/css/ceco-ui.css">
+<link rel="stylesheet" href="../../../public/css/ws-tabs.css">
+<style>
+  body { background: var(--surface-page, #F4F7FA); margin: 0; font-family: var(--font-body, system-ui); color: var(--fg-1, #0B2A47); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 4px; } .lead { color: var(--fg-3); font-size: 13.5px; margin: 0 0 20px; }
+  h2 { font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); margin: 28px 0 10px; }
+  .panel { background: #fff; border: 1px solid var(--border-subtle, #E3E9EF); border-radius: 10px; padding: 0; overflow: hidden; }
+  .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--border-subtle, #E3E9EF); }
+  .seg { display: inline-flex; gap: 2px; background: var(--surface-sunken, #F4F7FA); border-radius: 8px; padding: 3px; }
+  .seg-btn { border: 0; background: transparent; padding: 5px 10px; border-radius: 6px; font: 600 12.5px/1 var(--font-body); color: var(--fg-2); cursor: pointer; }
+  .seg-btn.is-on { background: var(--accent, #0091D7); color: #fff; }
+  .seg-btn span { margin-left: 6px; font-weight: 500; opacity: .85; }
+  .r-chip { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 600; line-height: 1.4; }
+  .r-ok { background: #ECFDF5; color: #065F46; } .r-warn { background: #FFFBEB; color: #92400E; } .r-bad { background: #FEF2F2; color: #991B1B; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; } th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--border-subtle, #E3E9EF); vertical-align: middle; }
+  th { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; padding: 6px 11px; font: 600 12.5px/1 var(--font-body); border: 1px solid var(--border-default, #CBD5E0); background: #fff; color: var(--fg-1); cursor: pointer; }
+  .btn-primary { background: var(--accent, #0091D7); border-color: var(--accent, #0091D7); color: #fff; }
+  .btn-ghost { border-color: transparent; color: var(--fg-2); }
+  .sub { font-size: 12px; color: var(--fg-3); }
+  .estado { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin: 12px 14px; }
+  .estado.err { background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
+  .estado.ok { background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; }
+  .estado b { display: block; margin-bottom: 2px; }
+  .lote { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 14px; background: var(--surface-sunken, #F4F7FA); border-bottom: 1px solid var(--border-subtle, #E3E9EF); font-size: 13px; }
+  .lote .push { flex: 1; }
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; } @media (max-width: 860px) { .cmp { grid-template-columns: 1fr; } }
+  .cap { font-size: 12px; color: var(--fg-3); margin: 6px 0 0; }
+  .muted { color: var(--fg-3); } code { font-family: var(--font-mono, monospace); font-size: 12px; }
+  .nota { background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E; border-radius: 8px; padding: 10px 14px; font-size: 13px; margin: 0 0 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Clientes ↔ QuickBooks — antes / después</h1>
+  <p class="lead">Maqueta de la auditoría 2026-09-30 (07-facturacion.md, propuestas P2 y P5). Nombres y RUC inventados. La captura real del "antes" está en <code>capturas/facturacion/30-gerencia-escritorio-clientes-qbo-sin-callable.png</code>.</p>
+  <p class="nota">Tres cambios: (1) cuando QuickBooks no responde, la pantalla lo dice y ofrece reintentar en vez de quedarse en "Consultando QuickBooks…" con un toast "Error al iniciar"; (2) los <b>Sugeridos por RUC exacto y nombre parecido</b> se vinculan en lote con una sola confirmación (145 de los 148 vínculos que Zuleika hizo a mano en septiembre eran exactamente esto); (3) la vista <b>Vinculados</b> acusa el Customer que ya está en dos clientes (hoy hay 1 en producción).</p>
+
+  <h2>1 · Estado de error (hoy: "Consultando QuickBooks…" para siempre)</h2>
+  <div class="cmp">
+    <div>
+      <div class="panel">
+        <div class="bar"><div class="seg"><button class="seg-btn is-on">Sugeridos <span>0</span></button><button class="seg-btn">Múltiples <span>0</span></button><button class="seg-btn">Sin match <span>0</span></button><button class="seg-btn">Vinculados <span>0</span></button></div></div>
+        <div style="padding:18px 14px;color:var(--fg-3)">Consultando QuickBooks…</div>
+      </div>
+      <p class="cap">ANTES. Los contadores en 0 y el texto no cambian nunca; el único aviso es un toast genérico que desaparece.</p>
+    </div>
+    <div>
+      <div class="panel">
+        <div class="bar"><div class="seg"><button class="seg-btn is-on">Sugeridos <span>—</span></button><button class="seg-btn">Múltiples <span>—</span></button><button class="seg-btn">Sin match <span>—</span></button><button class="seg-btn">Vinculados <span>148</span></button></div></div>
+        <div class="estado err"><div><b>QuickBooks no respondió (functions/internal)</b>No se pudieron leer los Customers, así que no hay sugerencias. Los 148 vínculos ya guardados se muestran igual. <span class="muted">Última lectura buena: hoy 8:12 a. m.</span></div><span style="flex:1"></span><button class="btn">Reintentar</button></div>
+      </div>
+      <p class="cap">DESPUÉS. Dice qué falló, qué sigue disponible (los vinculados salen de Firestore, no de QBO) y cómo salir del error.</p>
+    </div>
+  </div>
+
+  <h2>2 · Vincular los sugeridos en lote</h2>
+  <div class="panel">
+    <div class="bar"><div class="seg"><button class="seg-btn is-on">Sugeridos <span>41</span></button><button class="seg-btn">Múltiples <span>3</span></button><button class="seg-btn">Sin match <span>32</span></button><button class="seg-btn">Vinculados <span>148</span></button><button class="seg-btn">Duplicados QBO <span>6</span></button></div><span style="flex:1"></span><input class="form-input" placeholder="Buscar cliente o RUC…" style="height:30px;max-width:200px;font-size:12.5px"><button class="btn btn-ghost">Recargar QBO</button></div>
+    <div class="lote"><b>38 de 41</b> calzan por <b>RUC exacto</b> y el nombre se parece (sin advertencias). <span class="push"></span><button class="btn btn-primary">Vincular esos 38</button><span class="sub">Una confirmación; cada vínculo deja quién y cuándo (<code>qbo_vinculado_por</code>, <code>fuente: 'lote_ruc'</code>) y se puede quitar uno a uno.</span></div>
+    <table>
+      <tr><th>Cliente</th><th>QuickBooks</th><th style="text-align:right">Acción</th></tr>
+      <tr><td><b>Transporte Ejemplo, S.A.</b><div class="sub">RUC/CI: 155600000-2-2020 DV 55</div></td><td>Transporte Ejemplo S.A. <span class="sub">· 155600000-2-2020 · saldo $0.00</span> <span class="r-chip r-ok">RUC + nombre</span></td><td style="text-align:right"><button class="btn btn-primary">Vincular</button></td></tr>
+      <tr><td><b>Seguridad Modelo</b><div class="sub">RUC/CI: 8-000-0000</div></td><td>SEGURIDAD MODELO S.A. <span class="sub">· 8-000-0000 · saldo $0.00</span> <span class="r-chip r-ok">RUC + nombre</span></td><td style="text-align:right"><button class="btn btn-primary">Vincular</button></td></tr>
+      <tr><td><b>Comercial Norte, S.A.</b><div class="sub">RUC/CI: 2000-000-000000</div></td><td>Distribuidora Sur <span class="sub">· 2000-000-000000</span> <span class="r-chip r-bad">⚠ nombre distinto</span></td><td style="text-align:right"><span class="r-chip r-bad">verificar</span> <button class="btn">Vincular…</button></td></tr>
+    </table>
+    <p class="cap" style="padding:8px 14px 12px">Los que llevan advertencia (nombre distinto, múltiples, ya vinculado) quedan fuera del lote y siguen pidiendo confirmación uno por uno, como hoy.</p>
+  </div>
+
+  <h2>3 · Vinculados: acusar el Customer repetido</h2>
+  <div class="panel">
+    <table>
+      <tr><th>Cliente</th><th>QuickBooks</th><th style="text-align:right">Acción</th></tr>
+      <tr><td><b>Hotel Ejemplo — Torre A</b><div class="sub">RUC/CI: 1234-56-7890</div></td><td><span class="r-chip r-ok">✓ HOTEL EJEMPLO S.A.</span> <span class="r-chip r-warn" title="Un Customer se vincula a un solo cliente">también vinculado a Hotel Ejemplo — Torre B</span></td><td style="text-align:right"><button class="btn btn-ghost">Desvincular</button></td></tr>
+      <tr><td><b>Hotel Ejemplo — Torre B</b><div class="sub">RUC/CI: 1234-56-7890</div></td><td><span class="r-chip r-ok">✓ HOTEL EJEMPLO S.A.</span> <span class="r-chip r-warn">también vinculado a Hotel Ejemplo — Torre A</span></td><td style="text-align:right"><button class="btn btn-ghost">Desvincular</button></td></tr>
+      <tr><td><b>Municipio Ejemplo</b><div class="sub">RUC/CI: 3-000-000</div></td><td><span class="r-chip r-ok">✓ MUNICIPIO EJEMPLO</span> <span class="sub">· vinculado por zuleika.diaz · 12 sep</span></td><td style="text-align:right"><button class="btn btn-ghost">Desvincular</button></td></tr>
+    </table>
+    <p class="cap" style="padding:8px 14px 12px">Hoy la regla 1 a 1 se revisa al vincular (desde el 2026-09-28), pero el vínculo repetido que ya existía no se ve en ningún lado. Si son dos clientes duplicados en el app, la salida es consolidarlos; si son dos sedes, hay que decidir con Alberto cómo se factura (pregunta 3 del informe).</p>
+  </div>
+</div>
+</body>
+</html>

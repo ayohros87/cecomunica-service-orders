@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Maqueta · Centro: cabecera de la ficha y selector de seriales (antes / después)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- CSS real del app. Abre este archivo desde el repo para que resuelvan las rutas. -->
+<link rel="stylesheet" href="../../../public/css/ceco-ui.css">
+<link rel="stylesheet" href="../../../public/css/ceco-gestion.css">
+<style>
+  body { background: var(--surface-page, #F4F6F9); margin: 0; padding: 24px; font-family: inherit; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .nota { color: var(--fg-3, #5B6B7B); font-size: 13px; margin: 0 0 18px; max-width: 90ch; }
+  .par { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 32px; }
+  @media (max-width: 900px) { .par { grid-template-columns: 1fr; } }
+  .lado > .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; margin-bottom: 8px; }
+  .antes .tag { background: #FEE2E2; color: #991B1B; }
+  .despues .tag { background: #DCFCE7; color: #166534; }
+  .card { background: #fff; border: 1px solid var(--border-default, #DDE3EA); border-radius: 12px; padding: 18px; }
+  /* Copia mínima de las clases cg-* que viven inline en centro.html */
+  .cg-head { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+  .cg-av { width: 48px; height: 48px; border-radius: 10px; background: #0B2A47; color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 17px; flex: none; }
+  .cg-head h2 { margin: 0; font-size: 20px; }
+  .cg-meta { margin: 4px 0 0; color: var(--fg-3, #5B6B7B); font-size: 13px; }
+  .cg-acts { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .cg-chip { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: #EEF2F6; color: #334155; }
+  .cg-chip--warn { background: #FEF3C7; color: #92400E; }
+  .cg-ahora { background: #fff; border: 1px solid var(--border-default, #DDE3EA); border-radius: 12px; margin-top: 14px; }
+  .cg-ahora .hd { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--fg-3, #5B6B7B); padding: 10px 16px; border-bottom: 1px solid #EEF2F6; }
+  .cg-ahora .row { display: flex; gap: 10px; align-items: center; padding: 10px 16px; border-bottom: 1px solid #EEF2F6; }
+  .cg-ahora .row:last-child { border-bottom: 0; }
+  .cg-ahora .dot { width: 9px; height: 9px; border-radius: 50%; background: #F59E0B; flex: none; }
+  .cg-ahora .row.info .dot { background: #2563EB; }
+  .cg-ahora .row.bad .dot { background: #DC2626; }
+  .cg-ahora .t { flex: 1; font-size: 14px; }
+  .cg-ahora .t .s { display: block; color: var(--fg-3, #5B6B7B); font-size: 13px; }
+  .cg-ahora .toca { font-weight: 700; color: #0B2A47; }
+  .btn { font-size: 13.5px; }
+  /* selector de seriales */
+  table.cg-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .cg-tabla th { text-align: left; font-size: 11px; letter-spacing: .06em; color: var(--fg-3, #5B6B7B); padding: 8px 10px; background: #F8FAFC; }
+  .cg-tabla td { padding: 8px 10px; border-top: 1px solid #EEF2F6; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .gris { color: #94A3B8; }
+  .grupo { display: flex; align-items: center; gap: 10px; background: #F1F5F9; padding: 8px 10px; font-weight: 600; font-size: 13px; }
+  .grupo .n { color: var(--fg-3, #5B6B7B); font-weight: 400; }
+  .filtro { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .filtro input { max-width: 320px; }
+  .sw { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg-2, #334155); }
+  .resumen-sel { position: sticky; bottom: 0; background: #FFFBEB; border-top: 1px solid #FDE68A; padding: 10px 12px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<h1>Centro de gestión · cabecera de la ficha</h1>
+<p class="nota">Caso real del emulador: AGENCIA DE SEGURIDAD UNIDA, 16 contratos vigentes, 273 radios, 52 puntos de regularización de los que 50 son
+radios <i>por clasificar</i> (cola de bodega, D7) y 2 son radios en campo sin contrato (D1). Captura de referencia: <code>capturas/centro/03-admin-escritorio-ficha-grande-pliegue.png</code>.</p>
+
+<div class="par">
+  <div class="lado antes">
+    <span class="tag">Antes (hoy)</span>
+    <div class="card">
+      <div class="cg-head">
+        <div class="cg-av">AD</div>
+        <div style="min-width:0;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <h2>AGENCIA DE SEGURIDAD UNIDA</h2>
+            <span class="cg-chip">Detalle por regularizar · 52</span>
+          </div>
+          <p class="cg-meta">16 contratos vigentes · 273 radios · Vendedor: elvia.onodera · 202882832248499111</p>
+        </div>
+        <div class="cg-acts">
+          <button class="btn btn-primary">Regularizar con contrato nuevo</button>
+          <button class="btn">Nueva gestión ▾</button>
+          <button class="btn btn-ghost">⋯</button>
+        </div>
+      </div>
+      <div class="cg-ahora">
+        <div class="hd">AHORA · 1</div>
+        <div class="row info"><span class="dot"></span>
+          <span class="t"><b>Detalle por regularizar (52): 50 radio(s) por clasificar · 2 radio(s) en campo sin contrato.</b>
+            <span class="s">le toca a <span class="toca">ti</span></span></span>
+          <button class="btn btn-ghost">Qué falta</button>
+        </div>
+      </div>
+      <p class="nota" style="margin-top:12px;">Problemas medidos: el botón primario abre la renovación consolidadora de los 16 contratos
+        (modal de 18,956 px con 273 filas y 282 selects) para cerrar una deuda que en un 96 % es de bodega; "le toca a ti" no es cierto para
+        los 50 por clasificar; el teléfono sale sin formato; el RUC de la cabecera sale como <code>15570307122021-08</code>.</p>
+    </div>
+  </div>
+
+  <div class="lado despues">
+    <span class="tag">Después (propuesta)</span>
+    <div class="card">
+      <div class="cg-head">
+        <div class="cg-av">AD</div>
+        <div style="min-width:0;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <h2>AGENCIA DE SEGURIDAD UNIDA</h2>
+            <span class="cg-chip cg-chip--warn" title="2 radios en campo sin contrato">Por regularizar · 2</span>
+            <span class="cg-chip" title="50 radios por clasificar: cola de bodega">Bodega · 50 por clasificar</span>
+          </div>
+          <p class="cg-meta">RUC 155703071-2-2021 DV 08 · 16 contratos vigentes · 273 radios · Vendedor: elvia.onodera · próximo vence 29 mar 2027</p>
+        </div>
+        <div class="cg-acts">
+          <button class="btn">Nueva gestión ▾</button>
+          <button class="btn btn-ghost">⋯</button>
+        </div>
+      </div>
+      <div class="cg-ahora">
+        <div class="hd">AHORA · 2</div>
+        <div class="row"><span class="dot"></span>
+          <span class="t"><b>2 radios en campo sin contrato (20820A0796, 25512A1885)</b>
+            <span class="s">se amarran al contrato sin firma, sin bodega y sin entrega · le toca a <span class="toca">ti</span></span></span>
+          <button class="btn btn-primary">Actualizar seriales (2)</button>
+          <button class="btn btn-ghost">Qué falta</button>
+        </div>
+        <div class="row info"><span class="dot"></span>
+          <span class="t"><b>50 radios por clasificar</b>
+            <span class="s">bodega decide qué son (cola de por clasificar) · le toca a <span class="toca">bodega</span></span></span>
+          <button class="btn btn-ghost">Ver en Almacén</button>
+        </div>
+      </div>
+      <p class="nota" style="margin-top:12px;">Reglas: el botón primario de la cabecera desaparece; la primera fila de "Ahora" trae su acción
+        y esa es la primaria. D7 (por clasificar) no cuenta como deuda del vendedor ni dispara "Regularizar con contrato nuevo" (plan de
+        regularización §3 y §6). La renovación consolidadora queda en el menú "Nueva gestión" y en la señal de vencimiento, que es donde
+        aplica. El RUC se muestra compuesto (<code>RucPanama.componer</code>), no el normalizado.</p>
+    </div>
+  </div>
+</div>
+
+<h1>Selector de seriales en los wizards (reemplazo, baja, cambio de serial)</h1>
+<p class="nota">Hoy los tres wizards listan las 273 unidades del cliente en una tabla sin buscador, con las 50 "No disponible" primero
+(<code>capturas/centro/09-admin-escritorio-wiz-reemplazo.png</code>). Para encontrar un serial hay que leer 273 filas.</p>
+
+<div class="par">
+  <div class="lado antes">
+    <span class="tag">Antes (hoy)</span>
+    <div class="card">
+      <table class="cg-tabla">
+        <thead><tr><th></th><th>Serial</th><th>Modelo</th><th>Contrato</th><th>Elegibilidad</th></tr></thead>
+        <tbody>
+          <tr><td></td><td class="mono">24220A2235</td><td>—</td><td>—</td><td class="gris">No disponible<br><small>El equipo no está con el cliente (por_clasificar).</small></td></tr>
+          <tr><td></td><td class="mono">24220A2236</td><td>—</td><td>—</td><td class="gris">No disponible<br><small>El equipo no está con el cliente (por_clasificar).</small></td></tr>
+          <tr><td></td><td class="mono">24220A2237</td><td>—</td><td>—</td><td class="gris">No disponible<br><small>El equipo no está con el cliente (por_clasificar).</small></td></tr>
+          <tr><td colspan="5" class="gris" style="text-align:center;">… 47 filas más "No disponible" …</td></tr>
+          <tr><td><input type="checkbox"></td><td class="mono">24813A0580</td><td>HYTERA PNC360S</td><td class="mono">ALQ20250916-01</td><td>Alquiler</td></tr>
+          <tr><td><input type="checkbox"></td><td class="mono">25512A1859</td><td>HYTERA PNC360S</td><td class="mono">ALQ20250908-07</td><td>Alquiler</td></tr>
+          <tr><td colspan="5" class="gris" style="text-align:center;">… 221 filas más …</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="lado despues">
+    <span class="tag">Después (propuesta)</span>
+    <div class="card">
+      <div class="filtro">
+        <input class="form-input" type="search" placeholder="Serial, modelo o contrato… (o escanea el código)" value="2551">
+        <label class="sw"><input type="checkbox"> Mostrar las 50 no disponibles</label>
+        <span class="gris" style="font-size:13px;">223 elegibles · 4 coinciden</span>
+      </div>
+      <table class="cg-tabla">
+        <thead><tr><th></th><th>Serial</th><th>Modelo</th><th>Contrato</th><th>Elegibilidad</th></tr></thead>
+        <tbody>
+          <tr><td colspan="5" class="grupo">ALQ20250908-07 <span class="n">· 53 unid. · vence 29 mar 2027</span></td></tr>
+          <tr><td><input type="checkbox" checked></td><td class="mono"><mark>2551</mark>2A1859</td><td>HYTERA PNC360S</td><td class="mono">ALQ20250908-07</td><td>Alquiler</td></tr>
+          <tr><td colspan="5" class="grupo">ALQ20251031-01 <span class="n">· 2 unid.</span></td></tr>
+          <tr><td><input type="checkbox"></td><td class="mono"><mark>2551</mark>2A1863</td><td>HYTERA PNC360S</td><td class="mono">ALQ20251031-01</td><td>Alquiler</td></tr>
+          <tr><td><input type="checkbox"></td><td class="mono"><mark>2551</mark>2A1864</td><td>HYTERA PNC360S</td><td class="mono">ALQ20251031-01</td><td>Alquiler</td></tr>
+          <tr><td colspan="5" class="grupo">Sin contrato <span class="n">· 2 unid.</span></td></tr>
+          <tr><td><input type="checkbox"></td><td class="mono"><mark>2551</mark>2A1885</td><td>—</td><td class="gris">sin contrato</td><td>Alquiler</td></tr>
+        </tbody>
+      </table>
+      <div class="resumen-sel"><span><b>1 serial marcado</b> · 25512A1859 (ALQ20250908-07)</span><button class="btn btn-primary">Continuar</button></div>
+      <p class="nota" style="margin-top:12px;">Mismo componente para los tres wizards y para la renovación: buscador con lector de barras,
+        no disponibles escondidas con conteo, agrupado por contrato con encabezado plegable, y un resumen pegado abajo con lo marcado.
+        Ahorro: de leer 273 filas a teclear 4 caracteres.</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

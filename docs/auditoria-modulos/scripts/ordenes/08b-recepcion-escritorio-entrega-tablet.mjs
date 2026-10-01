@@ -1,0 +1,50 @@
+// Recorrido 08b · Recepción en ESCRITORIO entrega A y el cliente firma en la TABLET del
+// mostrador (segunda sesión en /firmar/tablet.html). Storage stubeado. SOLO emulador.
+import { abrir, USUARIOS, stubStorage, firmarCanvas, tipear, medir, log, modalAbierto, clicTexto } from './lib-ordenes.mjs';
+import fs from 'node:fs';
+const ids = JSON.parse(fs.readFileSync('C:/Projects/cecomunica-service-orders/docs/auditoria-modulos/capturas/ordenes/_ordenes-prueba.json', 'utf8'));
+
+const t = await abrir({ email: USUARIOS.recepcion, viewport: 'tablet', carpeta: 'ordenes' });
+await t.ir('/firmar/tablet.html');
+const s = await abrir({ email: USUARIOS.recepcion, viewport: 'escritorio', carpeta: 'ordenes' });
+await s.ir(`/ordenes/index.html?orden=${ids.A}`);
+let pasos = 0;
+await medir(s, 'clic Entregar', async () => { await s.page.evaluate((id) => document.querySelector(`[data-action="entregar-orden"][data-orden-id="${id}"]`).click(), ids.A); pasos++; });
+const visible = await s.page.$eval('#modalEntrega', m => !m.classList.contains('hidden') && getComputedStyle(m).display !== 'none');
+if (!visible) { log('BLOQUEADA:', JSON.stringify(await modalAbierto(s))); await s.cerrar(); await t.cerrar(); process.exit(2); }
+await s.captura('08b-recepcion-escritorio-modal-entrega');
+const geo = await s.page.evaluate(() => { const m = document.querySelector('#modalEntrega .modal'); const r = (e) => e ? Math.round(e.getBoundingClientRect().top) : null; return { altoModal: m?.scrollHeight, vh: innerHeight, topPapel: r(document.getElementById('entregaNoRecibido')), topFirma: r(document.getElementById('entregaFirmaCanvas')), topConfirmar: r(document.getElementById('btnConfirmarEntrega')) }; });
+log('geometría modal escritorio:', JSON.stringify(geo));
+await tipear(s, '#entregaReceptorNombre', 'Cliente que recibe (prueba)'); pasos++;
+const ok = await clicTexto(s, 'Firmar en la tablet', '#modalEntrega'); pasos++;
+log('Firmar en la tablet:', ok, '| espera visible:', await s.page.$eval('#entregaTabletEspera', e => !e.classList.contains('hidden')), '| toasts:', JSON.stringify((await s.toasts()).slice(-1)));
+await s.captura('08b-recepcion-escritorio-esperando-tablet');
+await t.quieto(1500, 15000);
+log('tablet ve:', (await t.texto('body')).replace(/\s+/g, ' ').slice(0, 400));
+await t.captura('08b-recepcion-tablet-solicitud');
+let pasosTab = 0;
+await t.page.click('#fNombre', { clickCount: 3 }); await t.page.keyboard.type('Cliente que recibe (prueba)'); pasosTab++;
+await t.page.click('#fCedula', { clickCount: 3 }); await t.page.keyboard.type('8-123-4567'); pasosTab++;
+const canvasInfo = await t.page.evaluate(() => [...document.querySelectorAll('canvas')].map(c => ({ id: c.id, h: c.getBoundingClientRect().height, w: c.getBoundingClientRect().width })));
+log('canvas tablet:', JSON.stringify(canvasInfo));
+const cid = canvasInfo.find(c => c.h > 0)?.id;
+await firmarCanvas(t, cid ? '#' + cid : 'canvas'); pasosTab++;
+await t.quieto(400, 3000);
+log('confirmar habilitado:', await t.page.$eval('#fConfirmar', b => !b.disabled).catch(() => null));
+await t.captura('08b-recepcion-tablet-firmada');
+log('stub storage tablet:', await stubStorage(t));
+await medir(t, 'confirmar firma en tablet', async () => { await t.page.click('#fConfirmar'); pasosTab++; });
+log('tablet tras firmar:', (await t.texto('body')).replace(/\s+/g, ' ').slice(0, 200), '| errores:', t.errores.slice(0, 4));
+await t.captura('08b-recepcion-tablet-listo');
+await s.quieto(1500, 10000);
+log('firma llegó a recepción:', await s.page.$eval('#entregaTabletListo', e => !e.classList.contains('hidden')), '|', await s.texto('#entregaTabletNombre'));
+await s.captura('08b-recepcion-escritorio-firma-recibida');
+await stubStorage(s);
+await medir(s, 'confirmar entrega A', async () => { await s.page.click('#btnConfirmarEntrega'); pasos++; });
+log('toasts:', JSON.stringify((await s.toasts()).slice(-2)), '| errores:', s.errores.slice(0, 5));
+log(`A entregada: ${pasos} interacciones en recepción + ${pasosTab} del cliente en la tablet`);
+log('fila A:', await s.page.$eval(`tr[data-orden-id="${ids.A}"]`, tr => tr.innerText.replace(/\s+/g, ' ')).catch(() => 'no visible'));
+await s.captura('08b-recepcion-escritorio-tras-entregar');
+await s.page.evaluate((id) => document.querySelector(`[data-action="ver-entrega"][data-orden-id="${id}"]`)?.click(), ids.A); await s.quieto(800, 5000);
+await s.captura('08b-recepcion-escritorio-ver-entrega');
+await s.cerrar(); await t.cerrar();

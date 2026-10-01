@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · Base PoC: SIM en la fila, cabecera con contexto y duplicados agrupados</title>
+<!-- CSS real del app (ruta relativa desde docs/auditoria-modulos/maquetas/) -->
+<link rel="stylesheet" href="../../../public/css/ceco-ui.css">
+<style>
+  body { background: var(--surface-page); margin: 0; padding: 24px; font-family: var(--font-sans, 'IBM Plex Sans', system-ui, sans-serif); color: var(--fg-1); }
+  .mq-wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; }
+  .mq-h { display:flex; align-items:baseline; gap:12px; margin:0 0 6px; }
+  .mq-h h2 { margin:0; font-size:18px; }
+  .mq-h .mq-tag { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:2px 8px; border-radius:var(--radius-pill); }
+  .mq-antes .mq-tag { background:#fee2e2; color:#991b1b; }
+  .mq-despues .mq-tag { background:#dcfce7; color:#166534; }
+  .mq-nota { font-size:13px; color: var(--fg-3); margin: 0 0 10px; }
+  .mq-antes img { max-width:100%; border:1px solid var(--border-default); border-radius: var(--radius-md); }
+  table.app-table tbody td { font-size: 14px; vertical-align: top; }
+  .status-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; }
+  .status-activo { background:#22c55e; } .status-inactivo { background:#ef4444; }
+  /* Editor de SIM en la fila */
+  .sim-edit { display:grid; grid-template-columns: 1fr 120px 130px; gap:6px; align-items:center; min-width: 420px; }
+  .sim-edit .form-input, .sim-edit .form-select { padding: 6px 8px; font-size: 13px; }
+  .sim-edit .con-icono { position:relative; }
+  .sim-edit .con-icono .form-input { padding-right: 34px; font-family: var(--font-mono); }
+  .sim-edit .con-icono button { position:absolute; right:4px; top:50%; transform:translateY(-50%); border:0; background:transparent; cursor:pointer; color: var(--accent); font-size:12px; }
+  .sim-val { grid-column: 1 / -1; font-size: 12.5px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .sim-val.ok { color:#166534; } .sim-val.mal { color:#991b1b; }
+  .sim-val .btn { padding: 2px 8px; font-size: 12px; }
+  .sim-acc { grid-column: 1 / -1; display:flex; gap:6px; align-items:center; }
+  .sim-acc .kbd { font-size:10px; }
+  /* Cabecera con contexto */
+  .ctx { display:flex; gap:18px; align-items:center; flex-wrap:wrap; padding: 8px 0; }
+  .ctx .n { font-size: 22px; font-weight: 700; color: var(--accent); }
+  .ctx .l { font-size: 12px; color: var(--fg-3); }
+  .ctx .sep { width:1px; height:28px; background: var(--border-default); }
+  /* Duplicados agrupados */
+  .dup { border:1px solid var(--border-default); border-radius: var(--radius-md); background: var(--surface-card); margin-bottom: 10px; }
+  .dup-h { display:flex; align-items:center; gap:10px; padding: 10px 14px; border-bottom:1px solid var(--border-default); }
+  .dup-h .serial { font-family: var(--font-mono); font-weight:700; font-size:15px; }
+  .dup-h .pool { font-size:12px; color: var(--fg-3); margin-left:auto; }
+  .dup-r { display:grid; grid-template-columns: 24px 1.6fr 1fr 1fr 1fr auto; gap:10px; padding: 8px 14px; align-items:center; font-size:13.5px; border-bottom:1px dashed var(--border-default); }
+  .dup-r:last-child { border-bottom:0; }
+  .dup-r .muted { color: var(--fg-3); font-size: 12px; }
+  .dup-f { display:flex; gap:8px; padding: 8px 14px; background: var(--surface-sunken); border-top:1px solid var(--border-default); border-radius: 0 0 var(--radius-md) var(--radius-md); }
+  .col2 { display:grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 900px) { .col2 { grid-template-columns: 1fr; } .sim-edit { min-width: 0; grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="mq-wrap">
+
+  <div>
+    <div class="mq-h"><h2>Maqueta · Base PoC</h2><span class="mq-nota">Auditoría de módulos 2026-09-30 · tres cambios chicos con el CSS real del app. Las capturas "antes" están en <code>../capturas/poc/</code> (fuera del git).</span></div>
+  </div>
+
+  <!-- ─────────────────────────── 1. SIM en la fila ─────────────────────────── -->
+  <section class="ds-card" style="padding:16px;">
+    <div class="mq-h mq-antes"><span class="mq-tag">Antes</span><h2>Cambiar la SIM = abrir el cajón entero (7 interacciones, sin validar)</h2></div>
+    <p class="mq-nota">Hoy (poc-edit.js): buscar → lápiz → cajón de 14 campos → SIM, teléfono, operador → Guardar. El app aceptó guardar en la ficha 001 el SIM que ya tenía activa la ficha 002 del mismo cliente con "Cambios guardados" (captura 05).</p>
+    <img src="../capturas/poc/04-recepcion-escritorio-cajon-editar.png" alt="Cajón de edición actual" style="max-width:560px;">
+
+    <div class="mq-h mq-despues" style="margin-top:18px;"><span class="mq-tag">Después</span><h2>La SIM se cambia en la fila: 4 interacciones, con validación y lector</h2></div>
+    <p class="mq-nota">Clic en la celda SIM (o Enter con la fila enfocada) abre el editor en sitio. El ICCID se escanea o se pega; si existe en el pool, el teléfono y el operador se llenan solos. Antes de guardar se dice si ese SIM está vivo en otro radio, y se ofrece moverlo (liberar allá, asignar aquí) en una sola confirmación.</p>
+    <div class="app-table-wrap">
+      <table class="app-table" aria-label="Base PoC (maqueta)">
+        <thead><tr><th style="width:36px;"><input type="checkbox" aria-label="Seleccionar todos"></th><th>Cliente</th><th>Activo</th><th>Serial</th><th>Unit ID</th><th>Nombre</th><th>SIM · Teléfono · Operador</th><th style="width:90px;">Acciones</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><strong>NELSON'S CAFE</strong></td>
+            <td><span class="status-dot status-activo"></span>Activo</td>
+            <td class="td-mono">25512A1793</td>
+            <td class="td-mono td-primary">273708</td>
+            <td>CAJA 1</td>
+            <td>
+              <div class="sim-edit">
+                <div class="con-icono"><input class="form-input" value="8950701000002367075" aria-label="ICCID"><button type="button" title="Escanear código de barras del SIM">▮▯▮ escanear</button></div>
+                <input class="form-input" value="69158653" aria-label="Teléfono" style="font-family:var(--font-mono);">
+                <select class="form-select" aria-label="Operador"><option>+ MOVIL</option><option>TIGO</option><option>MAS MOVIL</option><option>CLARO</option></select>
+                <div class="sim-val mal">
+                  <span>&#9888; Este SIM está <b>activo en 24522A0609 · ASAMBLEA NACIONAL</b> (y en 2 radios más).</span>
+                  <button class="btn btn-secondary btn-sm" type="button">Moverlo aquí y liberarlo allá</button>
+                  <button class="btn btn-ghost btn-sm" type="button">Ver los otros radios</button>
+                </div>
+                <div class="sim-acc">
+                  <button class="btn btn-primary btn-sm" type="button">Guardar <span class="kbd">Enter</span></button>
+                  <button class="btn btn-ghost btn-sm" type="button">Cancelar <span class="kbd">Esc</span></button>
+                  <span class="form-hint" style="margin-left:auto;">El SIM anterior 8950702802031365099 vuelve al pool como disponible.</span>
+                </div>
+              </div>
+            </td>
+            <td><button class="btn btn-ghost btn-icon btn-sm" title="Ficha completa">&#9998;</button></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><strong>NELSON'S CAFE</strong></td>
+            <td><span class="status-dot status-activo"></span>Activo</td>
+            <td class="td-mono">25512A1794</td>
+            <td class="td-mono td-primary">273709</td>
+            <td>CAJA 2</td>
+            <td>
+              <div class="sim-edit">
+                <div class="con-icono"><input class="form-input" value="8950799900000000010" aria-label="ICCID"><button type="button" title="Escanear">▮▯▮ escanear</button></div>
+                <input class="form-input" value="6000-0010" aria-label="Teléfono" style="font-family:var(--font-mono);">
+                <select class="form-select" aria-label="Operador"><option>TIGO</option></select>
+                <div class="sim-val ok"><span>&#10003; Disponible en el pool (TIGO) · teléfono y operador tomados del pool.</span></div>
+                <div class="sim-acc"><button class="btn btn-primary btn-sm" type="button">Guardar <span class="kbd">Enter</span></button><button class="btn btn-ghost btn-sm" type="button">Cancelar <span class="kbd">Esc</span></button></div>
+              </div>
+            </td>
+            <td><button class="btn btn-ghost btn-icon btn-sm" title="Ficha completa">&#9998;</button></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><strong>NELSON'S CAFE</strong></td>
+            <td><span class="status-dot status-inactivo"></span>Inactivo</td>
+            <td class="td-mono">25512A1795</td>
+            <td class="td-mono td-primary">273710</td>
+            <td>CAJA 3</td>
+            <td><span class="td-mono">8950702802031365100</span> · 64986429 · TIGO <span class="badge" style="margin-left:6px;" title="Inactivo desde hace 41 días con SIM: probablemente hay que liberarlo">SIM retenido 41 d</span></td>
+            <td><button class="btn btn-ghost btn-icon btn-sm" title="Ficha completa">&#9998;</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="mq-nota" style="margin-top:10px;">Regla de negocio que hay que fijar (pregunta para Alberto): ¿un SIM puede estar en dos fichas <b>activas</b>? Hoy hay 41 SIMs en esa situación. Si la respuesta es no, el editor bloquea y ofrece mover; si es "a veces", solo avisa.</p>
+  </section>
+
+  <!-- ─────────────────────────── 2. Cabecera con contexto ─────────────────────────── -->
+  <section class="ds-card" style="padding:16px;">
+    <div class="col2">
+      <div>
+        <div class="mq-h mq-antes"><span class="mq-tag">Antes</span><h2>"50 equipos" (es la página, no la base)</h2></div>
+        <p class="mq-nota">La tira de arriba cuenta lo pintado: 50 al abrir, 200 en una búsqueda con tope, y ⚠️ 47 "incompletos" porque los 50 más nuevos aún no tienen SIM. Nadie sabe cuántos radios tiene el cliente ni la base.</p>
+        <div class="ctx" style="opacity:.75;"><span class="n">50</span><span class="l">equipos</span><span class="badge completo">✅ 50</span><span class="badge asignado">⚠️ 47</span><span class="l">0 seleccionados</span></div>
+      </div>
+      <div>
+        <div class="mq-h mq-despues"><span class="mq-tag">Después</span><h2>Lo que la persona necesita saber de un vistazo</h2></div>
+        <p class="mq-nota">Sin filtro: totales de la base (conteos de servidor, baratos). Con cliente: total del cliente, activos/inactivos y seleccionados (lo que pidió recepción en <code>02_base_datos_poc_batch.md</code> C2).</p>
+        <div class="ctx"><span class="n">4,590</span><span class="l">fichas vivas</span><span class="sep"></span><span class="n" style="color:#15803d;">3,204</span><span class="l">activas</span><span class="sep"></span><span class="n" style="color:var(--fg-3);">1,386</span><span class="l">inactivas</span><span class="sep"></span><span class="l">1,920 cerradas (histórico)</span></div>
+        <div class="ctx" style="border-top:1px dashed var(--border-default);"><strong>AGENCIA DE SEGURIDAD UNIDA</strong><span class="sep"></span><span class="n">289</span><span class="l">radios</span><span class="badge completo">271 activos</span><span class="badge">18 inactivos</span><span class="badge recibido">13 seleccionados</span><span class="l" style="margin-left:auto;">3 sin SIM · 12 sin modelo</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────── 3. Duplicados agrupados ─────────────────────────── -->
+  <section class="ds-card" style="padding:16px;">
+    <div class="mq-h mq-antes"><span class="mq-tag">Antes</span><h2>"Seriales duplicados" = 1,453 filas sueltas</h2></div>
+    <p class="mq-nota">Hoy la herramienta vuelca 1,453 fichas (566 seriales) en la misma tabla de 12 columnas, sin decir cuál es la buena ni qué hacer; al cerrar una ficha, la vista vuelve a la página 1 y se pierde el trabajo (captura 11).</p>
+    <div class="mq-h mq-despues" style="margin-top:14px;"><span class="mq-tag">Después</span><h2>Un grupo por serial, con la verdad del pool y una acción</h2></div>
+    <p class="mq-nota">La ficha "buena" es la que coincide con la custodia del pool (equipos_pool.asignacion). Las otras se cierran de un clic, en lote, sin salir de la vista. 541 de los 566 grupos tienen una sola ficha activa: se resuelven solos.</p>
+
+    <div class="dup">
+      <div class="dup-h"><span class="serial">24813A0641</span><span class="badge">3 fichas vivas</span><span class="pool">Pool: <b>en cliente · SEGURIDAD IDEAL, S.A.</b> (contrato ALQ20260513-01)</span></div>
+      <div class="dup-r"><input type="checkbox" disabled checked><div><strong>SEGURIDAD IDEAL, S.A.</strong><div class="muted">Unit 275536 · RT-12 · + MOVIL</div></div><div><span class="status-dot status-activo"></span>Activa</div><div class="muted">ficha del 13-may-2026</div><div class="muted">coincide con el pool</div><div><span class="badge completo">Se queda</span></div></div>
+      <div class="dup-r"><input type="checkbox" checked><div><strong>SOCIEDAD ISRAELITA DE BENEFICENCIA</strong><div class="muted">Unit 274890 · RADIO7 · sin operador</div></div><div><span class="status-dot status-inactivo"></span>Inactiva</div><div class="muted">ficha del 02-nov-2025</div><div class="muted">devuelto (OS-4412)</div><div><span class="badge pending">Cerrar</span></div></div>
+      <div class="dup-r"><input type="checkbox" checked><div><strong>CENTRAL AZUCARERA DE ALANJE</strong><div class="muted">Unit 272882 · 4-9BTPIMP · TIGO</div></div><div><span class="status-dot status-inactivo"></span>Inactiva</div><div class="muted">ficha del 19-ago-2024</div><div class="muted">sin devolución registrada</div><div><span class="badge pending">Cerrar</span></div></div>
+      <div class="dup-f"><button class="btn btn-primary btn-sm" type="button">Cerrar las 2 marcadas</button><button class="btn btn-ghost btn-sm" type="button">Ver en Almacén</button><span class="form-hint" style="margin-left:auto;">Los SIM de las cerradas vuelven al pool si nadie más los tiene.</span></div>
+    </div>
+
+    <div class="dup">
+      <div class="dup-h"><span class="serial">23706A0400</span><span class="badge" style="background:#fee2e2;color:#991b1b;">2 fichas ACTIVAS</span><span class="pool">Pool: <b>en cliente · KIBIAN JOSUE GUARDIA</b></span></div>
+      <div class="dup-r"><input type="checkbox" disabled checked><div><strong>KIBIAN JOSUE GUARDIA</strong><div class="muted">Unit 275303 · TIGO</div></div><div><span class="status-dot status-activo"></span>Activa</div><div class="muted">ficha del 04-sep-2026</div><div class="muted">coincide con el pool</div><div><span class="badge completo">Se queda</span></div></div>
+      <div class="dup-r"><input type="checkbox"><div><strong>TOPPNIVA CONSULTING</strong><div class="muted">Unit 274706 · TIGO · SIM 8950701005000338255</div></div><div><span class="status-dot status-activo"></span>Activa</div><div class="muted">ficha del 20-feb-2026</div><div class="muted" style="color:#991b1b;">¿sigue facturándose?</div><div><button class="btn btn-secondary btn-sm" type="button">Revisar</button></div></div>
+      <div class="dup-f"><span class="form-hint">Dos fichas activas del mismo radio: alguien decide (recepción o administración). No se cierra sola.</span></div>
+    </div>
+
+    <div class="ctx" style="justify-content:flex-end;"><button class="btn btn-secondary" type="button">Cerrar en lote las 541 inactivas que sobran</button><span class="form-hint">un solo WriteBatch por tanda, con log en poc_logs (origen: duplicados)</span></div>
+  </section>
+
+</div>
+</body>
+</html>

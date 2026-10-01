@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Maqueta · Cotizaciones · seguimiento y conteos</title>
+<!-- CSS real del app, por ruta relativa (auditoría de módulos 2026-09-30) -->
+<link rel="stylesheet" href="../../../public/css/ceco-ui.css">
+<link rel="stylesheet" href="../../../public/css/cotizaciones-kit.css">
+<style>
+  body { background:#F5F7FA; padding:24px; font-family: var(--font-sans, system-ui, sans-serif); color:#1B2430; }
+  .mq-wrap { max-width:1180px; margin:0 auto; }
+  .mq-h { font-size:12px; letter-spacing:.09em; text-transform:uppercase; color:#6B7884; margin:28px 0 8px; }
+  .mq-dos { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .mq-nota { font-size:12.5px; color:#4A5560; margin:6px 0 0; line-height:1.5; }
+  .mq-etq { display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; margin-bottom:8px; }
+  .mq-antes { background:#FEE2E2; color:#991B1B; } .mq-despues { background:#DCFCE7; color:#166534; }
+  .cc-panel { background:#fff; }
+  .seg-dias { display:inline-block; min-width:26px; text-align:center; font-family:var(--font-mono, ui-monospace); font-size:12px; padding:2px 6px; border-radius:6px; }
+  .seg-ok { background:#ECFDF5; color:#047857; } .seg-warn { background:#FFF7ED; color:#9A3412; } .seg-bad { background:#FEF2F2; color:#B91C1C; }
+</style>
+</head>
+<body>
+<div class="mq-wrap">
+  <h1 style="margin:0 0 4px;">Cotizaciones · dos maquetas chicas</h1>
+  <p class="mq-nota">Lo que cambia está en verde. El CSS es el real (<code>ceco-ui.css</code> + <code>cotizaciones-kit.css</code>); los datos son los de la captura 36 (vista de Taller de Solangel).</p>
+
+  <div class="mq-h">1 · Lista: un solo alcance para los números (captura 36-taller-escritorio-lista-taller.png)</div>
+  <div class="mq-dos">
+    <div>
+      <span class="mq-etq mq-antes">ANTES · la tarjeta dice 12 y el segmento 5 en la misma pantalla</span>
+      <div class="cc-stats" style="grid-template-columns:repeat(2,1fr); margin-bottom:8px;">
+        <div class="cc-stat cc-stat--accent"><div class="cc-stat-body"><div class="cc-stat-value">12</div><div class="cc-stat-label">Enviadas · esperando</div><div class="cc-stat-sub">esperando la respuesta del cliente</div></div></div>
+        <div class="cc-stat cc-stat--green"><div class="cc-stat-body"><div class="cc-stat-value">USD 236.66</div><div class="cc-stat-label">Monto aceptado</div><div class="cc-stat-sub">4 por facturar · todo el histórico</div></div></div>
+      </div>
+      <div class="cc-segments">
+        <button class="cc-seg active">Todas <span class="cc-seg-count">8</span></button>
+        <button class="cc-seg">Enviada <span class="cc-seg-count">5</span></button>
+        <button class="cc-seg">Aceptada <span class="cc-seg-count">3</span></button>
+        <button class="cc-seg">Por facturar <span class="cc-seg-count">2</span></button>
+      </div>
+      <p class="mq-nota">Las tarjetas cuentan en el servidor (todo el histórico); los segmentos cuentan las 30 filas cargadas. Nadie lee la letra chica.</p>
+    </div>
+    <div>
+      <span class="mq-etq mq-despues">DESPUÉS · segmentos y tarjetas cuentan lo mismo; la tarjeta dice qué hacer</span>
+      <div class="cc-stats" style="grid-template-columns:repeat(2,1fr); margin-bottom:8px;">
+        <div class="cc-stat cc-stat--accent"><div class="cc-stat-body"><div class="cc-stat-value">12</div><div class="cc-stat-label">Esperando al cliente</div><div class="cc-stat-sub"><b style="color:#9A3412;">3 llevan más de 10 días</b> · vencen solas a los 15</div></div></div>
+        <div class="cc-stat cc-stat--green"><div class="cc-stat-body"><div class="cc-stat-value">4</div><div class="cc-stat-label">Aceptadas por facturar</div><div class="cc-stat-sub">USD 236.66 aceptado en total</div></div></div>
+      </div>
+      <div class="cc-segments">
+        <button class="cc-seg active">Todas <span class="cc-seg-count">21</span></button>
+        <button class="cc-seg">Enviada <span class="cc-seg-count">12</span></button>
+        <button class="cc-seg">Aceptada <span class="cc-seg-count">2</span></button>
+        <button class="cc-seg">Por facturar <span class="cc-seg-count">4</span></button>
+      </div>
+      <p class="mq-nota">Los segmentos usan los mismos <code>count()</code> que las tarjetas (como los chips de la bandeja de órdenes desde el 30-sep) y al tocar uno se trae esa lista completa del servidor, no lo que quepa en 30.</p>
+    </div>
+  </div>
+
+  <div class="mq-h">2 · Detalle de una cotización enviada: qué sigue (captura 06-vendedor-escritorio-detalle-enviada.png)</div>
+  <div class="mq-dos">
+    <div>
+      <span class="mq-etq mq-antes">ANTES · "Estado final — sin transiciones" y un historial que solo dice "creada"</span>
+      <div class="cc-panel"><div class="cc-panel-head"><h3>Cambiar estado</h3></div>
+        <div class="cc-panel-body"><p style="font-size:12.5px;color:#6B7884;margin:0;">Estado final — sin transiciones disponibles.</p></div></div>
+      <div class="cc-panel" style="margin-top:12px;"><div class="cc-panel-head"><h3>Historial</h3></div>
+        <div class="cc-panel-body">
+          <div style="padding:8px 10px;border-radius:8px;background:#E6F4FA;font-size:13px;margin-bottom:10px;">Sin aperturas registradas del cliente todavía.</div>
+          <ul class="cc-timeline"><li><div class="cc-tl-act">Cotización creada</div><div class="cc-tl-meta">30 Sep 2026 · Elvia Onodera</div></li></ul>
+        </div></div>
+      <p class="mq-nota">Recién enviada, la pantalla no dice que se envió (hasta recargar) ni cuándo vence ni qué le toca hacer a la vendedora.</p>
+    </div>
+    <div>
+      <span class="mq-etq mq-despues">DESPUÉS · un bloque "Seguimiento" que responde las tres preguntas del vendedor</span>
+      <div class="cc-panel"><div class="cc-panel-head"><h3>Seguimiento</h3></div>
+        <div class="cc-panel-body" style="font-size:13px; line-height:1.6;">
+          <div style="display:flex;justify-content:space-between;"><span>Enviada</span><b>hoy · info@wongtransport.net</b></div>
+          <div style="display:flex;justify-content:space-between;"><span>¿La abrió?</span><b style="color:#9A3412;">Todavía no</b></div>
+          <div style="display:flex;justify-content:space-between;"><span>Vence</span><b>15 Oct · en 15 días <span class="seg-dias seg-ok">15</span></b></div>
+          <div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:#FFF7E6;color:#8A5A00;">
+            <b>Qué sigue:</b> si en 7 días no responde, el sistema te avisa por correo. A los 15 se marca vencida sola.
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button class="btn btn-secondary btn-sm">Reenviar</button>
+            <button class="btn btn-secondary btn-sm">Registrar respuesta</button>
+            <button class="btn btn-ghost btn-sm">Posponer 15 días</button>
+          </div>
+        </div></div>
+      <div class="cc-panel" style="margin-top:12px;"><div class="cc-panel-head"><h3>Historial</h3></div>
+        <div class="cc-panel-body">
+          <ul class="cc-timeline">
+            <li><div class="cc-tl-act">Enviada al cliente</div><div class="cc-tl-meta">30 Sep 2026 · por correo a info@wongtransport.net</div></li>
+            <li><div class="cc-tl-act">Cotización creada</div><div class="cc-tl-meta">30 Sep 2026 · Elvia Onodera</div></li>
+          </ul>
+        </div></div>
+      <p class="mq-nota">"Registrar respuesta" es el "Cerrar cotización" de hoy con otro nombre. "Posponer" extiende la validez (hoy la única salida del vencimiento automático es reabrir a borrador o reenviar).</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

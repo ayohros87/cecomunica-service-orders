@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="es-PA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · Órdenes: fila de la bandeja y "Ver entrega" en papel</title>
+<!-- CSS real del app (ruta relativa desde docs/auditoria-modulos/maquetas/) -->
+<link rel="stylesheet" href="../../../public/css/ceco-ui.css">
+<link rel="stylesheet" href="../../../public/css/ordenes-index.css">
+<style>
+  body { background: #f3f6fa; padding: 24px; font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; color: #0f172a; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 28px 0 8px; }
+  .nota { color: #475569; font-size: 13px; margin: 0 0 16px; max-width: 980px; }
+  .marco { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; margin-bottom: 14px; overflow-x: auto; }
+  .marco .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-bottom: 8px; }
+  .tag.antes { background: #fee2e2; color: #991b1b; }
+  .tag.despues { background: #dcfce7; color: #166534; }
+  /* Reproduce la tabla a 1,000 px (1280 con el rail de 236 px abierto) */
+  .sim { width: 1000px; }
+  .sim table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 13px; }
+  .sim th { text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #475569; background: #f8fafc; padding: 10px 8px; border-bottom: 1px solid #e2e8f0; }
+  .sim td { padding: 12px 8px; border-bottom: 1px solid #eef2f7; vertical-align: middle; white-space: nowrap; }
+  .sim .orden-id { font-family: "IBM Plex Mono", ui-monospace, monospace; color: #1d4ed8; font-weight: 600; }
+  .sim .cliente { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+  .sim .tec { color: #475569; overflow: hidden; text-overflow: ellipsis; }
+  .sim .tec-avatar { display: inline-flex; width: 20px; height: 20px; border-radius: 6px; background: #dbeafe; color: #1d4ed8; font-size: 10px; font-weight: 700; align-items: center; justify-content: center; margin-right: 6px; }
+  .chip { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: .02em; border: 1px solid transparent; overflow: hidden; text-overflow: ellipsis; max-width: 100%; vertical-align: middle; }
+  .chip.tipo { background: #f1f5f9; color: #475569; }
+  .chip.tipo.entrada { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+  .chip.tipo.devolucion { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+  .chip.tipo.visita { background: #ecfeff; color: #0e7490; border-color: #a5f3fc; }
+  .chip.estado { border-color: #e2e8f0; }
+  .chip.estado::before { content: "●"; margin-right: 5px; font-size: 9px; }
+  .chip.e-recibir { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+  .chip.e-asignar { color: #6d28d9; background: #f5f3ff; border-color: #ddd6fe; }
+  .chip.e-asignado { color: #1d4ed8; background: #eff6ff; border-color: #bfdbfe; }
+  .chip.e-listo { color: #15803d; background: #f0fdf4; border-color: #bbf7d0; }
+  .chip.e-cerrada { color: #047857; background: #ecfdf5; border-color: #a7f3d0; }
+  .chip.e-entregado { color: #475569; background: #f1f5f9; }
+  .btn-sim { display: inline-block; padding: 5px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 12px; font-weight: 600; margin-right: 4px; }
+  .btn-sim.mas { padding: 5px 8px; }
+  /* ANTES: lo que pasa hoy con el colgroup 11 % y overflow: visible */
+  .antes-tabla td.num { overflow: visible; }
+  .antes-tabla td.num .orden-id { position: relative; z-index: 1; }
+  /* DESPUÉS: "Le toca a" */
+  .toca { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #0f172a; }
+  .toca .quien { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
+  .toca .quien.rec { background: #fde68a; color: #92400e; }
+  .toca .quien.tal { background: #ddd6fe; color: #5b21b6; }
+  .toca .quien.tec { background: #bfdbfe; color: #1e40af; }
+  .toca .quien.cli { background: #e2e8f0; color: #475569; }
+  .toca small { color: #64748b; font-weight: 500; }
+  /* Ver entrega */
+  .fase { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; max-width: 560px; margin-top: 8px; font-size: 13px; }
+  .fase .t { font-weight: 600; margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
+  .fase .fila { display: grid; grid-template-columns: 180px 1fr; gap: 4px 12px; padding: 2px 0; }
+  .fase .k { color: #64748b; }
+  .fase .muted { color: #64748b; margin-top: 8px; }
+  .fase .aviso { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 6px 10px; border-radius: 8px; margin-top: 8px; font-size: 12px; }
+  .fase .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 6px 10px; border-radius: 8px; margin-top: 8px; font-size: 12px; }
+  .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 1180px; }
+  @media (max-width: 900px) { .dos { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<h1>Órdenes · maqueta antes/después</h1>
+<p class="nota">Dos cosas medidas en el emulador el 30-sep (informe <code>01-ordenes.md</code>, hallazgos C2, C4 y R1). Arriba, la fila de la bandeja a 1,000 px de ancho útil (escritorio 1280 con el rail abierto, que es como trabaja recepción): hoy el número de 121 px vive en una columna de 97 px con <code>overflow: visible</code> (<code>ordenes/index.html:400</code>, <code>ordenes-index.css:1174</code>) y los chips de tipo y estado salen cortados. Abajo, el bloque "Entrega al cliente" de "Ver entrega" cuando la firma fue en papel. Compara con las capturas <code>01-recepcion-escritorio-bandeja.png</code> y <code>08-recepcion-tablet-ver-entrega-papel.png</code>.</p>
+
+<h2>1. Fila de la bandeja</h2>
+<div class="marco">
+  <span class="tag antes">Antes · hoy (colgroup 11 % / 24 % / 13 % / 10 % / 12 % / 10 % / 296 px)</span>
+  <div class="sim">
+  <table class="antes-tabla">
+    <colgroup><col style="width:11%"><col style="width:24%"><col style="width:13%"><col style="width:10%"><col style="width:12%"><col style="width:10%"><col style="width:296px"></colgroup>
+    <thead><tr><th>Número</th><th>Cliente</th><th>Técnico</th><th>Tipo</th><th>Estado</th><th>Fecha cr…</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <tr><td class="num"><span class="orden-id">2026093006</span></td><td class="cliente">BEVERLY HILLS S.A.</td><td class="tec"></td><td><span class="chip tipo entrada">ENTRADA</span></td><td><span class="chip estado e-recibir">POR ASIGNA</span></td><td>2026-09-…</td><td><span class="btn-sim">Asignar</span><span class="btn-sim mas">⋯</span></td></tr>
+      <tr><td class="num"><span class="orden-id">2026093005</span></td><td class="cliente">BEVERLY HILLS S.A.</td><td class="tec"></td><td><span class="chip tipo devolucion">DEVOLUCIO</span></td><td><span class="chip estado e-cerrada">CERRADA</span></td><td>2026-09-…</td><td><span class="btn-sim">Ver devolución</span><span class="btn-sim mas">⋯</span></td></tr>
+      <tr><td class="num"><span class="orden-id">2026093003</span></td><td class="cliente">P.H. TORRE GLOBAL</td><td class="tec"><span class="tec-avatar">OA</span>Ovidio Ad…</td><td><span class="chip tipo visita">VISITA TECN</span></td><td><span class="chip estado e-cerrada">CERRADA</span></td><td>2026-09-…</td><td><span class="btn-sim">Ver cierre</span><span class="btn-sim">Cotizar</span><span class="btn-sim mas">⋯</span></td></tr>
+      <tr><td class="num"><span class="orden-id">2026093002</span></td><td class="cliente">SKY CHEFS DE PANAMA, S.A.</td><td class="tec"><span class="tec-avatar">JS</span>Jesus San…</td><td><span class="chip tipo">PROGRAMACI</span></td><td><span class="chip estado e-asignado">ASIGNADO</span></td><td>2026-09-…</td><td><span class="btn-sim">Completar</span><span class="btn-sim mas">⋯</span></td></tr>
+      <tr><td class="num"><span class="orden-id">2026092905</span></td><td class="cliente">INSTITUTO PANAMENO DE DEPORTES</td><td class="tec"><span class="tec-avatar">MP</span>Marcos Pe…</td><td><span class="chip tipo">REPARACIÓN</span></td><td><span class="chip estado e-listo">LISTO PARA E</span></td><td>2026-09-…</td><td><span class="btn-sim">Entregar</span><span class="btn-sim mas">⋯</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="marco">
+  <span class="tag despues">Después · P4 (anchos reales) + P12 ("Le toca a")</span>
+  <div class="sim">
+  <table>
+    <colgroup><col style="width:112px"><col style="width:auto"><col style="width:150px"><col style="width:120px"><col style="width:168px"><col style="width:92px"><col style="width:232px"></colgroup>
+    <thead><tr><th>Número</th><th>Cliente</th><th>Le toca a</th><th>Tipo</th><th>Estado</th><th>Creada</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <tr><td><span class="orden-id">2026093006</span></td><td class="cliente">BEVERLY HILLS S.A.</td><td><span class="toca"><span class="quien tal">SH</span>Solangel <small>asignar</small></span></td><td><span class="chip tipo entrada">Entrada</span></td><td><span class="chip estado e-asignar">Por asignar</span></td><td>30 sep</td><td><span class="btn-sim">Asignar</span><span class="btn-sim mas">⋯</span></td></tr>
+      <tr><td><span class="orden-id">2026093005</span></td><td class="cliente">BEVERLY HILLS S.A.</td><td><span class="toca"><span class="quien cli">—</span><small>cerrada</small></span></td><td><span class="chip tipo devolucion">Devolución</span></td><td><span class="chip estado e-cerrada">Cerrada</span></td><td>30 sep</td><td><span class="btn-sim">Ver devolución</span><span class="btn-sim mas">⋯</span></td></tr>
+      <tr><td><span class="orden-id">2026093003</span></td><td class="cliente">P.H. TORRE GLOBAL</td><td><span class="toca"><span class="quien tal">SH</span>Solangel <small>cotizar</small></span></td><td><span class="chip tipo visita">Visita</span></td><td><span class="chip estado e-cerrada">Cerrada</span></td><td>30 sep</td><td><span class="btn-sim">Cotizar</span><span class="btn-sim mas">⋯</span></td></tr>
+      <tr><td><span class="orden-id">2026093002</span></td><td class="cliente">SKY CHEFS DE PANAMA, S.A.</td><td><span class="toca"><span class="quien tec">JS</span>Jesús <small>en taller</small></span></td><td><span class="chip tipo">Programación</span></td><td><span class="chip estado e-asignado">Asignado</span></td><td>30 sep</td><td><span class="btn-sim">Completar</span><span class="btn-sim mas">⋯</span></td></tr>
+      <tr><td><span class="orden-id">2026092905</span></td><td class="cliente">INSTITUTO PANAMENO DE DEPORTES</td><td><span class="toca"><span class="quien rec">BM</span>Recepción <small>entregar</small></span></td><td><span class="chip tipo">Reparación</span></td><td><span class="chip estado e-listo">Listo para entregar</span></td><td>29 sep</td><td><span class="btn-sim">Entregar</span><span class="btn-sim mas">⋯</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="nota" style="margin:10px 0 0">Qué cambió: número con ancho fijo de 112 px (el monoespaciado de 10 dígitos mide 121 px a 13 px; aquí a 12 px), cliente toma el sobrante con puntos suspensivos, tipo y estado con nombres cortos y ancho que nunca corta, fecha en hora de Panamá y corta, y la columna <b>Le toca a</b> (derivada de estado + tipo + técnico) que absorbe la columna Técnico: la misma persona, pero con el verbo que falta. "Acciones" baja de 296 a 232 px porque el botón de flujo ya dice lo mismo que "Le toca a".</p>
+</div>
+
+<h2>2. "Ver entrega" cuando se firmó en papel (R1)</h2>
+<div class="dos">
+  <div class="marco">
+    <span class="tag antes">Antes · hoy (<code>ordenes-events.js:751</code> lee <code>receptor_nombre</code>, que la rama de papel no escribe)</span>
+    <div class="fase">
+      <div class="t">📦 Entrega al cliente</div>
+      <div class="fila"><span class="k">Recibido por</span><strong>—</strong></div>
+      <div class="fila"><span class="k">Fecha y hora</span><strong>30 de septiembre de 2026 a las 04:29 p. m.</strong></div>
+    </div>
+    <p class="nota" style="margin:10px 0 0">Ni quién recibió, ni por qué no firmó en la tablet, ni si la nota firmada ya se subió. 38 entregas así en el último mes.</p>
+  </div>
+  <div class="marco">
+    <span class="tag despues">Después · P1 (30 min)</span>
+    <div class="fase">
+      <div class="t">📦 Entrega al cliente <span class="chip tipo" style="margin-left:6px">firma en papel</span></div>
+      <div class="fila"><span class="k">Recibió por el cliente</span><strong>Mensajero de MACELLO</strong></div>
+      <div class="fila"><span class="k">Fecha y hora</span><strong>30 sep 2026, 4:29 p. m.</strong></div>
+      <div class="fila"><span class="k">Entregó (Cecomunica)</span><strong>Brenda Martínez</strong></div>
+      <div class="muted">✍️ No firmó en la tablet — <em>la tablet estaba ocupada</em>.</div>
+      <div class="aviso">📄 Falta subir la foto de la nota firmada. <a href="#">Subir ahora</a></div>
+    </div>
+    <div class="fase" style="margin-top:10px">
+      <div class="t">📦 Entrega al cliente <span class="chip tipo" style="margin-left:6px">firma en papel</span></div>
+      <div class="fila"><span class="k">Recibió por el cliente</span><strong>Mensajero de MACELLO</strong></div>
+      <div class="fila"><span class="k">Fecha y hora</span><strong>30 sep 2026, 4:29 p. m.</strong></div>
+      <div class="ok">📄 Nota firmada subida el 1 oct 2026 por Brenda · <a href="#">Ver nota</a></div>
+    </div>
+    <p class="nota" style="margin:10px 0 0">Mismos campos que ya guarda la orden (<code>entrega_persona_interna</code>, <code>no_recibido_motivo</code>, <code>nota_firmada_url</code>, <code>entrega_por_email</code>) y el nombre de quien entregó en vez de su correo (C5).</p>
+  </div>
+</div>
+</body>
+</html>

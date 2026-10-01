@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · Contratos — la firma y la vida del contrato en trámite</title>
+<!-- CSS real del app (ruta relativa desde docs/auditoria-modulos/maquetas/) -->
+<link rel="stylesheet" href="../../../public/css/ceco-ui.css">
+<link rel="stylesheet" href="../../../public/css/ceco-gestion.css">
+<style>
+  body { background: var(--surface-page, #F3F6F9); margin: 0; padding: 24px; font-family: 'Barlow', system-ui, sans-serif; color: var(--fg-1, #0B1F33); }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .lead { color: var(--fg-3, #6B7884); font-size: 13.5px; margin: 0 0 22px; max-width: 90ch; }
+  h2 { font-size: 15px; margin: 28px 0 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--fg-3, #6B7884); }
+  .par { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .par { grid-template-columns: 1fr; } }
+  .caja { background: #fff; border: 1px solid var(--border, #DCE3EA); border-radius: 12px; padding: 16px 18px; }
+  .caja > .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-bottom: 12px; }
+  .tag.antes { background: #FDECEC; color: #B42318; }
+  .tag.despues { background: #E3F6EC; color: #126E3E; }
+  .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+  .cab { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 15px; font-weight: 700; }
+  .cab .sub { font-weight: 400; color: var(--fg-3, #6B7884); font-size: 13.5px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill.alq { background: #E6F4FB; color: #0B5C8A; }
+  .pill.warn { background: #FDF4E1; color: #92400E; }
+  .pill.muted { background: #EEF2F6; color: #6B7884; }
+  .datos { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 24px; font-size: 13px; margin: 10px 0 0; }
+  .datos span:first-child { color: var(--fg-3, #6B7884); display: inline-block; min-width: 110px; }
+  .vida { margin-top: 10px; font-size: 13px; }
+  .vida .bar { display: block; width: 100%; max-width: 320px; height: 6px; border-radius: 999px; background: #EEF2F6; overflow: hidden; margin: 6px 0 2px; }
+  .vida .bar i { display: block; height: 100%; width: 0%; background: #1FA56B; }
+  .paso { border: 1px solid #E8C97A; background: #FFF8E6; border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+  .paso .t { font-weight: 700; margin-bottom: 2px; }
+  .paso .k { font-size: 10.5px; letter-spacing: .08em; font-weight: 700; color: #92400E; }
+  .vias { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
+  @media (max-width: 700px) { .vias { grid-template-columns: 1fr; } }
+  .via { border: 1px solid var(--border, #DCE3EA); border-radius: 8px; padding: 8px 10px; background: #fff; font-size: 12.5px; }
+  .via b { display: block; margin-bottom: 2px; }
+  .via.on { border-color: #0B5C8A; box-shadow: 0 0 0 2px #E6F4FB inset; }
+  .via.off { color: var(--fg-3, #6B7884); background: #F8FAFC; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .btn-sm { font-size: 12.5px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border, #DCE3EA); background: #fff; cursor: default; }
+  .btn-sm.pri { background: #0B5C8A; color: #fff; border-color: #0B5C8A; }
+  .nota { font-size: 12px; color: var(--fg-3, #6B7884); margin-top: 10px; }
+  .verify { max-width: 420px; margin: 0; }
+  .banner { display: flex; gap: 10px; border-radius: 10px; padding: 12px 14px; font-size: 13.5px; }
+  .banner.ok { background: #E3F6EC; color: #126E3E; border: 1px solid #A7E3C3; }
+  .banner.bad { background: #FDECEC; color: #B42318; border: 1px solid #F3B4B4; }
+  .banner b { display: block; margin-bottom: 2px; }
+  .evid { font-size: 12px; color: var(--fg-3, #6B7884); margin-top: 8px; }
+  .evid code { font-size: 11.5px; }
+  .lista { margin: 8px 0 0; padding-left: 18px; font-size: 13px; }
+  .lista li { margin: 3px 0; }
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; background: #FDF4E1; color: #92400E; }
+</style>
+</head>
+<body>
+<h1>Contratos · la firma y la vida del contrato en trámite</h1>
+<p class="lead">Tres pantallas vistas en el emulador el 2026-09-30 con el contrato de prueba <span class="mono">SERV20260930-01</span>
+(capturas 11, 31, 55, 81). A la izquierda lo que se ve hoy; a la derecha la propuesta, con el mismo CSS del app.</p>
+
+<h2>1 · Cabecera de "Ver contrato" — un contrato aprobado sin firmar</h2>
+<div class="par">
+  <div class="caja">
+    <span class="tag antes">Hoy (captura 31)</span>
+    <div class="cab"><span class="mono">SERV20260930-01</span> · <span class="pill alq">Alquiler</span> <span class="sub">· Aprobado (sin firma)</span></div>
+    <div style="margin-top:10px;"><span class="pill warn" title="Fija la duración del contrato para calcular su vencimiento">sin duración</span></div>
+    <div class="datos">
+      <div><span>Acción</span> Nuevo</div><div><span>Duración</span> 18 meses</div>
+      <div><span>Creado</span> 30 sept 2026</div><div><span>Aprobado</span> 30 sept 2026</div>
+      <div style="grid-column:1/-1;"><span>Firma digital</span> enlace enviado — esperando firma</div>
+    </div>
+    <p class="evid">"sin duración" y "Duración 18 meses" a 20 px de distancia. El chip sale de <code>_vidaHtml</code>
+      (<code>centro-regularizacion.js:320-335</code>): mira <code>fecha_vencimiento</code>, que no existe hasta que el contrato se
+      activa. En un pendiente de aprobación la misma función devuelve "—" a secas (captura 11): la línea queda vacía.</p>
+  </div>
+  <div class="caja">
+    <span class="tag despues">Propuesta</span>
+    <div class="cab"><span class="mono">SERV20260930-01</span> · <span class="pill alq">Alquiler</span> <span class="sub">· Aprobado — esperando la firma del cliente</span></div>
+    <div class="vida">
+      <span class="pill muted">La vigencia (18 meses) empieza al firmar</span>
+      <span class="bar" aria-hidden="true"><i></i></span>
+      <span style="color:var(--fg-3,#6B7884); font-size:12px;">vence ~ abril 2028 si se firma hoy</span>
+    </div>
+    <div class="datos">
+      <div><span>Acción</span> Nuevo</div><div><span>Duración</span> 18 meses</div>
+      <div><span>Creado</span> 30 sept 2026</div><div><span>Aprobado</span> 30 sept 2026 · hace 0 días</div>
+    </div>
+    <p class="evid">Una sola frase para el estado + lo que falta. "sin duración" se reserva para contratos VIGENTES sin
+      <code>duracion</code>/<code>duracion_dias</code>; en trámite, la vida se proyecta desde la duración declarada.</p>
+  </div>
+</div>
+
+<h2>2 · El paso "Firma del cliente" en el expediente — qué firma aplica y qué falta</h2>
+<div class="par">
+  <div class="caja">
+    <span class="tag antes">Hoy (capturas 31 y 55)</span>
+    <div class="paso">
+      <div class="k">SIGUIENTE</div>
+      <div class="t">Firma del cliente</div>
+      <div>enlace de firma enviado — esperando</div>
+      <div style="margin-top:6px;"><span class="chip">le toca a el cliente · tú envías el enlace</span></div>
+    </div>
+    <p class="evid">No dice cuándo se envió, a quién, ni que se puede subir el papel en su lugar. "Firmado en tablet" no
+      existe para contratos (la tablet solo firma acuses de entrega y devolución: <code>firestore.rules:1299</code>), pero el
+      archivo lo escribe así para los firmados por enlace (<code>archivo-expediente.js:70</code>, captura 65). Los 13 contratos
+      "por firmar" de producción llevan en promedio 50 días esperando; 5 tienen enlace vivo sin caducidad.</p>
+  </div>
+  <div class="caja">
+    <span class="tag despues">Propuesta</span>
+    <div class="paso">
+      <div class="k">SIGUIENTE · HACE 12 DÍAS</div>
+      <div class="t">Firma del cliente — MARIA PRUEBA AUDITORIA (representante legal)</div>
+      <div class="vias">
+        <div class="via on"><b>Por enlace</b>enviado el 18-sep a prueba-audit@… · abierto 2 veces · sin firmar</div>
+        <div class="via"><b>En papel</b>imprime el documento completo y sube el PDF firmado — eso activa y factura</div>
+        <div class="via off"><b>En tablet</b>no aplica a contratos: la tablet firma la entrega, no el contrato</div>
+      </div>
+      <div class="btns">
+        <span class="btn-sm pri">Reenviar por WhatsApp</span>
+        <span class="btn-sm">Reenviar por correo</span>
+        <span class="btn-sm">Subir el firmado…</span>
+        <span class="btn-sm">Retirar el enlace</span>
+      </div>
+      <div style="margin-top:8px;"><span class="chip">le toca al cliente · si pasan 30 días sin firma, avisa a ventas</span></div>
+    </div>
+    <p class="evid">Lo que cambia: la edad del paso, quién recibió el enlace, cuántas veces lo abrió (ya se audita en
+      <code>firma_solicitudes</code>), y las tres vías con su consecuencia. El vendedor deja de preguntar "¿y esto cómo se firma?".</p>
+  </div>
+</div>
+
+<h2>3 · Verificación pública <span class="mono">/c/&lt;id&gt;?v=</span> de un contrato ANULADO en junio</h2>
+<div class="par">
+  <div class="caja verify">
+    <span class="tag antes">Hoy (captura 81 · ALQ20260618-04)</span>
+    <div class="banner ok"><span>🛡</span><div><b>Contrato válido y vigente</b>La firma digital y el código coinciden con el documento original emitido por Cecomunica.</div></div>
+    <p class="evid">La página sí mira el estado (<code>verify/index.html:135</code>), pero lee <code>verificaciones.estado</code>, que
+      solo se actualiza al CAMBIAR el estado desde el 28-sep (<code>onApproval.js:97-118,157-161</code>). 89 de los 92 anulados y
+      los 7 activos vencidos por fecha siguen con el estado viejo: el QR impreso certifica como vigente un contrato muerto.</p>
+  </div>
+  <div class="caja verify">
+    <span class="tag despues">Propuesta (así sale hoy un anulado reciente: captura 84)</span>
+    <div class="banner bad"><span>⛔</span><div><b>Contrato ANULADO el 18 jun 2026</b>El documento es auténtico, pero el contrato fue anulado y ya no tiene validez.</div></div>
+    <ul class="lista">
+      <li>Backfill de una vez: <span class="mono">verificaciones.estado</span> = estado real de los 192 desfasados (script de 20 líneas, Admin SDK).</li>
+      <li>Y para que no vuelva a pasar: que el trigger propague también cuando <span class="mono">vencimiento_estado</span> lo
+          estampa el cron (ya lo hace) y un job semanal que compare las dos colecciones.</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

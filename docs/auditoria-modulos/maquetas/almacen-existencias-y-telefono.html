@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta Almacén</title>
+<meta name="description" content="Auditoría de módulos 2026-09-30 · Almacén: antes/después de los indicadores de Existencias, la fila (sin modelo), la topbar en teléfono y la verificación de Asignar.">
+<!-- CSS real del app (ruta relativa desde docs/auditoria-modulos/maquetas/) -->
+<link rel="stylesheet" href="../../../public/css/ceco-ui.css">
+<link rel="stylesheet" href="../../../public/css/ws-tabs.css">
+<style>
+  body { background: var(--surface-page, #F7F9FB); color: var(--fg-1, #0E1418); margin: 0; padding: 24px 16px; font-family: var(--font-body, system-ui, sans-serif); }
+  .mq-wrap { max-width: 1180px; margin: 0 auto; }
+  .mq-h1 { font-size: 22px; margin: 0 0 4px; }
+  .mq-intro { color: var(--fg-3, #5B6B77); font-size: 14px; margin: 0 0 28px; }
+  .mq-sec { margin: 0 0 40px; }
+  .mq-sec h2 { font-size: 17px; margin: 0 0 4px; }
+  .mq-sec .mq-why { font-size: 13.5px; color: var(--fg-2, #35444F); margin: 0 0 14px; max-width: 900px; }
+  .mq-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 860px) { .mq-pair { grid-template-columns: 1fr; } }
+  .mq-tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; margin-bottom: 8px; }
+  .mq-tag.antes { background: #FEF2F2; color: #991B1B; }
+  .mq-tag.despues { background: #D1FAE5; color: #065F46; }
+  .mq-panel { background: #fff; border: 1px solid var(--border-subtle, #E3E8ED); border-radius: 12px; padding: 16px; }
+  .mq-nota { font-size: 12.5px; color: var(--fg-3, #5B6B77); margin-top: 10px; }
+  .mq-nota b { color: var(--fg-2, #35444F); }
+  /* KPI "después": dos cifras en una tarjeta */
+  .kpi-card .kpi-split { display: flex; gap: 14px; align-items: baseline; }
+  .kpi-card .kpi-split .kpi-card-value { font-size: 28px; }
+  .kpi-card .kpi-split small { font-size: 12px; color: var(--fg-3, #5B6B77); font-weight: 600; }
+  .kpi-card .kpi-cta { font-size: 12.5px; color: var(--accent, #0091D7); text-decoration: underline; margin-top: 6px; }
+  /* tabla mini de existencias */
+  .mq-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .mq-tabla th { text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3, #5B6B77); padding: 8px 6px; border-bottom: 1px solid #E3E8ED; }
+  .mq-tabla td { padding: 10px 6px; border-bottom: 1px solid #EEF2F6; font-family: var(--font-mono, ui-monospace, monospace); }
+  .mq-tabla td:first-child { font-family: inherit; }
+  .mq-tabla .num { text-align: right; }
+  .mq-tabla .cta { font-family: inherit; }
+  /* marcos de teléfono */
+  .mq-phone { width: 300px; height: 540px; border: 10px solid #0E1418; border-radius: 28px; overflow: hidden; background: #fff; margin: 0 auto; position: relative; }
+  .mq-phone .ph { padding: 10px 12px; }
+  .mq-phone .ph-title { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 18px; margin: 4px 0 10px; }
+  .mq-phone .ph-logo { width: 26px; height: 26px; border-radius: 7px; background: #061829; }
+  .mq-phone .btn { font-size: 13px; padding: 9px 12px; }
+  .mq-phone .ph-links { display: flex; gap: 16px; font-size: 13px; color: var(--accent, #0091D7); margin: 10px 2px 6px; }
+  .mq-phone .ws-tabs { margin: 0 -12px; padding: 0 12px; border-top: 3px solid var(--accent, #0091D7); overflow-x: auto; white-space: nowrap; }
+  .mq-phone .ph-body { padding: 10px 2px; font-size: 13px; color: var(--fg-2, #35444F); }
+  .mq-phone .ph-item { border: 1px solid #E3E8ED; border-radius: 10px; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .mq-phone .ph-item .badge { font-size: 10.5px; }
+  .mq-phone .ph-fab { position: absolute; right: 14px; bottom: 14px; width: 52px; height: 52px; border-radius: 50%; background: var(--accent-hover, #0074AC); color: #fff; font-size: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 16px rgba(0,0,0,.25); }
+  .mq-phone .ph-ruler { position: absolute; left: 0; right: 0; border-top: 2px dashed #991B1B; font-size: 10px; color: #991B1B; padding-left: 6px; }
+  /* hoja de verificación */
+  .mq-sheet { border: 1px solid #E3E8ED; border-radius: 12px; overflow: hidden; }
+  .mq-sheet .sh-h { padding: 12px 16px; font-weight: 700; border-bottom: 1px solid #E3E8ED; }
+  .mq-sheet .sh-b { padding: 14px 16px; font-size: 13.5px; }
+  .mq-sheet .sh-f { padding: 12px 16px; background: #F7F9FB; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .mq-sheet .sh-row { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid #EEF2F6; font-family: var(--font-mono, monospace); font-size: 13px; }
+  .mq-sheet .ok { color: #065F46; }
+  .mq-sheet .muted { color: var(--fg-3, #5B6B77); font-family: inherit; }
+  .mq-sheet input { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #CBD5E1; border-radius: 8px; font-family: var(--font-mono, monospace); margin: 6px 0 10px; }
+</style>
+</head>
+<body>
+<div class="mq-wrap">
+  <h1 class="mq-h1">Almacén · maquetas de la auditoría 2026-09-30</h1>
+  <p class="mq-intro">Cuatro antes/después con el CSS real del app (<code>ceco-ui.css</code>, <code>ws-tabs.css</code>). Los números son los del emulador con la exportación de producción de hoy. Las capturas reales están en <code>../capturas/almacen/</code> (fuera del git).</p>
+
+  <!-- ───────────────────────── 1. KPIs de Existencias ───────────────────────── -->
+  <section class="mq-sec">
+    <h2>1. Indicadores de Existencias: que cada número diga de quién es el trabajo</h2>
+    <p class="mq-why">Hoy "Devuelto · por inspeccionar: 151 — esperan inspección de bodega" cuenta 147 radios que están dentro de una orden de ENTRADA del taller (la pestaña Hoy lo dice bien y solo le pone 4 a bodega). "Modelos con diferencia: 34" sale en ámbar como si fuera urgente, pero los 34 son conteos de hace más de 30 días. "En bodega: 3,015" no es lo mismo que "disponibles" (hay dañados, con condición y descartados que Asignar sí excluye). Propuesta: la misma tarjeta, con la cifra que importa primero y la otra al lado.</p>
+    <div class="mq-pair">
+      <div class="mq-panel">
+        <span class="mq-tag antes">Antes (captura 02-inventario-escritorio-existencias.png)</span>
+        <div class="kpi-grid">
+          <div class="kpi-card"><span class="kpi-card-label">En bodega</span><span class="kpi-card-value kpi-accent">3,015</span></div>
+          <div class="kpi-card"><span class="kpi-card-label">Con clientes</span><span class="kpi-card-value">3,015</span><span class="kpi-card-sub">asignados + entregados</span></div>
+          <div class="kpi-card"><span class="kpi-card-label">En taller</span><span class="kpi-card-value">349</span></div>
+          <div class="kpi-card"><span class="kpi-card-label">Devuelto · por inspeccionar</span><span class="kpi-card-value">151</span><span class="kpi-card-sub">esperan inspección de bodega</span></div>
+          <div class="kpi-card"><span class="kpi-card-label">Modelos con diferencia</span><span class="kpi-card-value kpi-warn">34</span><span class="kpi-card-sub">registro vs conteo · meta: 0</span></div>
+        </div>
+        <p class="mq-nota">Dos cifras iguales (3,015 y 3,015) una al lado de la otra, un "151" que no es de bodega y un "34" ámbar que no es de hoy.</p>
+      </div>
+      <div class="mq-panel">
+        <span class="mq-tag despues">Después</span>
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-card-label">Disponibles para asignar</span>
+            <div class="kpi-split"><span class="kpi-card-value kpi-accent">2,934</span><small>de 3,015 en bodega</small></div>
+            <span class="kpi-card-sub">81 no se ofrecen: 6 dañados · 2 con condición · 17 descartados · 56 sin verificar</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-card-label">Con clientes</span>
+            <div class="kpi-split"><span class="kpi-card-value">2,995</span><small>+ 20 reservados</small></div>
+            <span class="kpi-card-sub">entregados · asignados sin entregar</span>
+          </div>
+          <div class="kpi-card"><span class="kpi-card-label">En taller</span><span class="kpi-card-value">349</span><span class="kpi-card-sub">+ 147 devueltos con ENTRADA abierta</span></div>
+          <div class="kpi-card">
+            <span class="kpi-card-label">Por inspeccionar en bodega</span>
+            <div class="kpi-split"><span class="kpi-card-value kpi-warn">4</span><small>el más viejo: 29 días</small></div>
+            <span class="kpi-card-cta">Ver en Hoy →</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-card-label">Diferencias contra conteo</span>
+            <div class="kpi-split"><span class="kpi-card-value kpi-ok">0</span><small>de los últimos 30 días</small></div>
+            <span class="kpi-card-sub">34 modelos sin recontar desde julio</span>
+          </div>
+        </div>
+        <p class="mq-nota">Mismas clases (<code>.kpi-card</code>, <code>.kpi-split</code> es nuevo). El color solo se usa cuando la cifra es trabajo de bodega. Costo: medio día; los datos ya existen (<code>agregados_pool</code> + <code>orden_actual_id</code> + <code>equipos_descartados</code> + notas DAÑADA).</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── 2. Fila (sin modelo) ───────────────────────── -->
+  <section class="mq-sec">
+    <h2>2. Las dos filas "(sin modelo)" de Existencias</h2>
+    <p class="mq-why">La tabla abre con dos filas que se llaman igual: una vacía (el agregado de <code>modelo_id = null</code> sin unidades) y otra con 2 en bodega, 284 en cliente y 1,030 en "otros". Son 1,316 fichas sin modelo (1,028 de ellas "por clasificar", residuo de la migración PoC). Nadie sabe qué hacer con esa fila.</p>
+    <div class="mq-pair">
+      <div class="mq-panel">
+        <span class="mq-tag antes">Antes</span>
+        <table class="mq-tabla">
+          <thead><tr><th>Modelo</th><th class="num">Bodega</th><th class="num">Asignado</th><th class="num">Cliente</th><th class="num">Taller</th><th class="num">Devueltos</th><th class="num">Otros</th><th class="num">Conteo</th><th class="num">Dif.</th></tr></thead>
+          <tbody>
+            <tr><td>› (sin modelo)</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+            <tr><td>› (sin modelo)</td><td class="num">2</td><td class="num">—</td><td class="num">284</td><td class="num">—</td><td class="num">—</td><td class="num">1030</td><td class="num">—</td><td class="num">—</td></tr>
+            <tr><td>› HYTERA AP32X</td><td class="num">27</td><td class="num">1</td><td class="num">—</td><td class="num">1</td><td class="num">—</td><td class="num">1</td><td class="num">28</td><td class="num">-1</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="mq-panel">
+        <span class="mq-tag despues">Después</span>
+        <table class="mq-tabla">
+          <thead><tr><th>Modelo</th><th class="num">Bodega</th><th class="num">Asignado</th><th class="num">Cliente</th><th class="num">Taller</th><th class="num">Devueltos</th><th class="num">Otros</th><th class="num">Conteo</th><th class="num">Dif.</th></tr></thead>
+          <tbody>
+            <tr><td>› HYTERA AP32X</td><td class="num">27</td><td class="num">1</td><td class="num">—</td><td class="num">1</td><td class="num">—</td><td class="num">1</td><td class="num">28</td><td class="num">-1</td></tr>
+            <tr><td>› HYTERA AP516U</td><td class="num">68</td><td class="num">—</td><td class="num">49</td><td class="num">—</td><td class="num">—</td><td class="num">10</td><td class="num">78</td><td class="num">-10</td></tr>
+            <tr style="background:#FFFBEB;"><td class="cta">⚠ Sin modelo en la ficha · <b>1,316</b> radios<br><small style="color:#92400E">2 en bodega · 284 en cliente · 1,028 por clasificar — no cuentan en ningún modelo</small></td><td colspan="8" class="cta" style="text-align:right;"><a href="#" class="btn btn-sm">Clasificar por lotes →</a></td></tr>
+          </tbody>
+        </table>
+        <p class="mq-nota">Una sola fila, al final, con el total y la acción. La fila vacía (<code>est</code> sin unidades) no se pinta.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── 3. Topbar en teléfono ───────────────────────── -->
+  <section class="mq-sec">
+    <h2>3. Almacén en el teléfono: las pestañas por encima de los botones</h2>
+    <p class="mq-why">En 390×844 la cabecera ocupa 410 px (cuatro botones, "Menú principal", "Cerrar sesión") antes de la primera pestaña; la bandeja Hoy empieza a mitad de pantalla y las pestañas se recorren con scroll horizontal (Hoy desaparece cuando estás en Existencias). Los cuatro botones abren asistentes que en teléfono se usan poco; un solo botón "+" los junta.</p>
+    <div class="mq-pair">
+      <div class="mq-panel">
+        <span class="mq-tag antes">Antes (captura 01-inventario-telefono-hoy.png)</span>
+        <div class="mq-phone">
+          <div class="ph">
+            <div class="ph-title"><span class="ph-logo"></span> Almacén</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              <button class="btn btn-ghost btn-sm">🔍</button>
+              <button class="btn btn-primary">Importar hoja</button>
+              <button class="btn">+ Recibir equipos</button>
+              <button class="btn">Conteo físico</button>
+              <button class="btn">Registrar venta</button>
+              <button class="btn btn-ghost">⋮</button>
+            </div>
+            <div class="ph-links"><span>⌂ Menú principal</span><span>⇥ Cerrar sesión</span></div>
+            <nav class="ws-tabs"><span class="ws-tab is-active">Hoy <span class="ws-tab-badge">15</span></span><span class="ws-tab">Asignar <span class="ws-tab-badge">8</span></span><span class="ws-tab">Existencias</span><span class="ws-tab">Avanzado</span></nav>
+            <div class="ph-body">
+              <div style="font-size:11px;letter-spacing:.08em;color:#5B6B77;margin:6px 0;">DE CONTRATOS · 5</div>
+              <div class="ph-item"><span><span class="badge warn">Seriales</span> ALQ2026…</span><span class="badge danger">49 días</span></div>
+              <div class="ph-item"><span><span class="badge warn">Seriales</span> ALQ2026…</span><span class="badge danger">33 días</span></div>
+            </div>
+          </div>
+          <div class="ph-ruler" style="top:270px;">410 px de cabecera antes de la primera pestaña</div>
+        </div>
+      </div>
+      <div class="mq-panel">
+        <span class="mq-tag despues">Después</span>
+        <div class="mq-phone">
+          <div class="ph">
+            <div class="ph-title"><span class="ph-logo"></span> Almacén <span style="margin-left:auto;font-size:18px;color:#0091D7;">🔍</span></div>
+            <nav class="ws-tabs"><span class="ws-tab is-active">Hoy <span class="ws-tab-badge">15</span></span><span class="ws-tab">Asignar <span class="ws-tab-badge">8</span></span><span class="ws-tab">Existencias</span><span class="ws-tab">Más ▾</span></nav>
+            <div class="ph-body">
+              <div style="font-size:11px;letter-spacing:.08em;color:#5B6B77;margin:6px 0;">DE CONTRATOS · 5</div>
+              <div class="ph-item"><span><span class="badge warn">Seriales</span> ALQ20260812-02 · 0/22</span><span class="badge danger">49 días</span></div>
+              <div class="ph-item"><span><span class="badge warn">Seriales</span> ALQ20260826-01 · 32/33</span><span class="badge danger">33 días</span></div>
+              <div class="ph-item"><span><span class="badge warn">Seriales</span> SERV20260918-02 · 0/22</span><span class="badge warn">8 días</span></div>
+              <div style="font-size:11px;letter-spacing:.08em;color:#5B6B77;margin:10px 0 6px;">DE GESTIONES · 3</div>
+              <div class="ph-item"><span><span class="badge info">Aumento</span> GA20260925-01 · 5 × PNC360S-R</span></div>
+              <div class="ph-item"><span><span class="badge pending">Reemplazo</span> GR20260917-03 · 1</span></div>
+              <div style="font-size:11px;letter-spacing:.08em;color:#5B6B77;margin:10px 0 6px;">DEL INVENTARIO · 7</div>
+              <div class="ph-item"><span><span class="badge warn">Inspección</span> 23411A1112</span><span class="badge danger">28 días</span></div>
+            </div>
+          </div>
+          <div class="ph-fab" title="Recibir · Conteo · Venta · Importar">+</div>
+          <div class="ph-ruler" style="top:84px;">la bandeja empieza a los 100 px</div>
+        </div>
+        <p class="mq-nota">"Menú principal" y "Cerrar sesión" ya viven en el menú ☰ del rail móvil. El "+" abre una hoja con las cuatro acciones (la misma <code>Modal.sheet</code>). Pestañas: las 3 de trabajo + "Más" para Avanzado, Piezas, Descartados, Con condición, No devueltos.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── 4. Verificación de Asignar ───────────────────────── -->
+  <section class="mq-sec">
+    <h2>4. Asignar: no escanear dos veces lo que ya se escaneó con el radio en la mano</h2>
+    <p class="mq-why">Hoy "Listo para programar" abre siempre la hoja "Verificar la lista" y el botón "Lista verificada" queda deshabilitado hasta escanear (o teclear) cada serial otra vez: 25 radios = 25 + 25 escaneos; 50 = 100. Tiene sentido cuando los seriales los eligió el sistema ("Tomar del estante", selección automática FIFO) y bodega tiene que ir a buscarlos; no tiene sentido cuando bodega ya los escaneó uno por uno en las casillas. Propuesta: la verificación se exige solo para las unidades que vinieron del picker o de "Pegar columna"; las tecleadas o escaneadas a mano ya están verificadas.</p>
+    <div class="mq-pair">
+      <div class="mq-panel">
+        <span class="mq-tag antes">Antes (captura 23-inventario-escritorio-asignar-verificar-lista.png)</span>
+        <div class="mq-sheet">
+          <div class="sh-h">Verificar la lista</div>
+          <div class="sh-b">
+            <div class="muted">Con el radio en la mano, escanea o teclea su serial y pulsa Enter. Cada uno se marca ✓; el que no aparezca se sustituye con No está….</div>
+            <input placeholder="Escanea o teclea el serial y pulsa Enter">
+            <div class="muted"><b>Faltan 25 de 25</b> · PRUEBA-AUDIT-almacen CLIENTE</div>
+            <div class="sh-row"><span>22610A3919</span><span class="muted">PNC360S-R · Bodega · desde 07/24/2026</span><span style="margin-left:auto">No está…</span></div>
+            <div class="sh-row"><span>22610A3922</span><span class="muted">PNC360S-R · Bodega · desde 07/24/2026</span><span style="margin-left:auto">No está…</span></div>
+            <div class="sh-row"><span>22610A3934</span><span class="muted">PNC360S-R · Bodega · desde 07/24/2026</span><span style="margin-left:auto">No está…</span></div>
+            <div class="muted" style="padding-top:6px">… 22 más</div>
+          </div>
+          <div class="sh-f"><button class="btn">Volver</button><button class="btn btn-primary" disabled>✓ Lista verificada</button></div>
+        </div>
+      </div>
+      <div class="mq-panel">
+        <span class="mq-tag despues">Después</span>
+        <div class="mq-sheet">
+          <div class="sh-h">Verificar la lista</div>
+          <div class="sh-b">
+            <div class="muted"><b>22 ya verificados</b>: los escaneaste tú en las casillas. Faltan por confirmar con el radio en la mano <b>3</b> que eligió el sistema ("Tomar del estante").</div>
+            <input placeholder="Escanea los 3 que faltan y pulsa Enter">
+            <div class="sh-row"><span class="ok">✓</span><span>22610A3919</span><span class="muted">escaneado en la casilla 1</span></div>
+            <div class="sh-row"><span class="ok">✓</span><span>22610A3922</span><span class="muted">escaneado en la casilla 2</span></div>
+            <div class="muted" style="padding:4px 0">… 20 más ✓</div>
+            <div class="sh-row"><span>&nbsp;&nbsp;</span><span>22610A4046</span><span class="muted">del estante · estante PNC360S-R</span><span style="margin-left:auto">No está…</span></div>
+            <div class="sh-row"><span>&nbsp;&nbsp;</span><span>22610A4047</span><span class="muted">del estante</span><span style="margin-left:auto">No está…</span></div>
+            <div class="sh-row"><span>&nbsp;&nbsp;</span><span>22610A4049</span><span class="muted">del estante</span><span style="margin-left:auto">No está…</span></div>
+          </div>
+          <div class="sh-f"><button class="btn">Volver</button><button class="btn btn-primary" disabled>✓ Lista verificada (faltan 3)</button></div>
+        </div>
+        <p class="mq-nota">El asignador ya sabe de dónde vino cada serial (<code>jalarItems(items, origen)</code> en <code>asignador-seriales.js</code>). Ahorro: 25 escaneos por contrato de 25 cuando se escanea a mano; 0 cuando todo salió del picker (ahí la verificación sigue siendo obligatoria). Costo: 1 día. Riesgo: ninguno sobre el dato; <code>picklist_verificada_n</code> se sigue escribiendo.</p>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

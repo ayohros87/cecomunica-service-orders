@@ -117,3 +117,6 @@ dist/
 
 # Export de producción para el emulador (datos reales: NUNCA al repo)
 tools/emulador-almacen/emu-data.json
+
+# Capturas de la auditoria de modulos: llevan datos reales de clientes, no van al repo
+docs/auditoria-modulos/capturas/
