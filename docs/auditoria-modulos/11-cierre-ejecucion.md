@@ -39,3 +39,17 @@ Probado en el emulador, **no corrido en producción**:
 - **Cotizaciones:** desde vencida siguen "Marcar Enviada/Borrador". ¿Se quitan?
 - **Catálogo:** el "1-19000-00011 SC2020" es un Sepura con el número de parte en la marca (corregir a SEPURA). ¿"HYTERA NO APLICA" sale del catálogo seleccionable?
 - **Accesos:** ¿José (bodega) debe ver el Centro? ¿Admin quiere las dos tarjetas de Finanzas en su home?
+
+## 4. Respuestas del 2-oct y lo hecho con ellas
+
+| Pregunta | Respuesta | Hecho |
+|---|---|---|
+| Deuda de migración del pool | Dejarla por ahora | Sin cambios |
+| Política de cotizaciones | 20 % y $15,000 | Código, defaults y docs alineados (5c2e53a) |
+| Saneo PoC con la más reciente inactiva | No aplicar la regla | 134 seriales quedan "para revisar" a mano; el saneo cierra 681 fichas en 432 seriales (f0f997d) |
+| PoC donde Almacén dice otro cliente | Explicado de nuevo | Quedan 63; en todos la custodia de Almacén viene de la migración sin verificar. Pendiente de respuesta |
+| Contratos dormidos | Desde la aprobación; los anexos también caducan | 0492703, desplegado 2-oct |
+| Bajas desde Almacén | Recepción y ventas no | Rules a admin/inventario (3de66fd), desplegado 2-oct |
+| SC2020 | Es el modelo; la marca es SEPURA | Catálogo y 12 fichas corregidos en producción el 2-oct (15 escrituras) |
+| "HYTERA NO APLICA" | Retirarlo | `activo:false` en producción; los selectores lo respetan (3b832d7); los 33 contratos quedan como estaban |
+
