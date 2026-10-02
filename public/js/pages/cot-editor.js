@@ -519,6 +519,7 @@
     const pop = row.querySelector('.cc-cat-pop');
     const t = (term || '').toLowerCase();
     const matches = (catalogos.catalogo || [])
+      .filter(c => c.activo !== false)
       .filter(c => !t || (c.nombre + ' ' + c.modelo + ' ' + c.cat).toLowerCase().includes(t))
       .slice(0, 8);
     if (!matches.length) { pop.hidden = true; pop.innerHTML = ''; return; }

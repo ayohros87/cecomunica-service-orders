@@ -134,6 +134,9 @@
       precioAlquiler,
       esAlquiler: m?.es_alquiler === true,
       cat: m?.categoria || m?.tipo || 'Equipos',
+      // Un modelo retirado del catálogo (activo:false) ya no se ofrece al
+      // escribir, pero sigue en la lista para resolver renglones viejos.
+      activo: m?.activo !== false,
     };
   }
 

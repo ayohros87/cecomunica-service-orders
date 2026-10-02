@@ -206,7 +206,7 @@
               // el cliente NO devuelve (itemización al cerrar) sin releer el
               // catálogo. Sin precio en el catálogo el campo nace vacío.
               .map(m => ({ id: m.id, nombre: (m.modelo || m.nombre || '').trim(),
-                           precio_venta: Number(m.precio_venta) || 0 }))
+                           precio_venta: Number(m.precio_venta) || 0, activo: m.activo !== false }))
               .filter(m => m.nombre)
               .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
           : [];
@@ -1035,7 +1035,7 @@
           <button type="button" class="btn btn-ghost btn-sm" id="devCerrarModal"><i data-lucide="x"></i></button>
         </div>
         <div style="padding:14px 18px;overflow:auto;flex:1;">
-          <datalist id="devModelosList">${(_modelos || []).map(m => `<option value="${esc(m.nombre)}"></option>`).join('')}</datalist>
+          <datalist id="devModelosList">${(_modelos || []).filter(m => m.activo !== false).map(m => `<option value="${esc(m.nombre)}"></option>`).join('')}</datalist>
           <p style="margin:0 0 10px;font-size:13px;color:var(--fg-2,#374151);">${intro}</p>
           ${progreso}
           ${bannerPendientes}
@@ -1545,7 +1545,7 @@
         _modelos = (typeof ModelosService !== 'undefined')
           ? (await ModelosService.getModelos())
               .map(m => ({ id: m.id, nombre: (m.modelo || m.nombre || '').trim(),
-                           precio_venta: Number(m.precio_venta) || 0 }))
+                           precio_venta: Number(m.precio_venta) || 0, activo: m.activo !== false }))
               .filter(m => m.nombre)
               .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
           : [];

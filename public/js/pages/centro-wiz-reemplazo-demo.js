@@ -13,11 +13,16 @@ Object.assign(window.Centro, {
     if (this.modelos) return this.modelos;
     try {
       const todos = await ModelosService.getModelos();
+      const aLabel = (m) => ({ id: m.id, label: `${m.marca || ''} ${m.modelo || ''}`.trim() });
       this.modelos = (todos || [])
         .filter(m => m.activo !== false)
-        .map(m => ({ id: m.id, label: `${m.marca || ''} ${m.modelo || ''}`.trim() }))
+        .map(aLabel)
         .filter(m => m.label)
         .sort((a, b) => a.label.localeCompare(b.label));
+      // Retirados del catálogo (activo:false): no se ofrecen, pero una línea
+      // que ya los trae (contrato viejo, serial de la cuenta) los conserva
+      // como opción elegida en vez de quedar en "— Modelo —" y perder el dato.
+      this._modelosRetirados = new Map((todos || []).filter(m => m.activo === false).map(aLabel).map(m => [m.id, m]));
     } catch (e) {
       console.warn('[centro] catálogo de modelos no disponible:', e?.message || e);
       this.modelos = [];
@@ -32,20 +37,22 @@ Object.assign(window.Centro, {
   _selModelo(attrs, selId, selLabel) {
     const up = String(selLabel || '').trim().toUpperCase();
     const lista = this.modelos || [];
-    let elegido = selId && lista.some(m => m.id === selId) ? selId : null;
+    const retirado = selId && !lista.some(m => m.id === selId) ? this._modelosRetirados?.get(selId) : null;
+    let elegido = selId && (lista.some(m => m.id === selId) || retirado) ? selId : null;
     if (!elegido && !selId && up) {
       const exacto = lista.find(m => m.label.toUpperCase() === up);
       const parciales = exacto ? [] : lista.filter(m => m.label.toUpperCase().includes(up));
       elegido = exacto ? exacto.id : (parciales.length === 1 ? parciales[0].id : null);
     }
-    const opts = lista.map(m =>
+    const opts = (retirado ? `<option value="${this.esc(retirado.id)}" selected>${this.esc(retirado.label)} (retirado)</option>` : '')
+      + lista.map(m =>
       `<option value="${this.esc(m.id)}" ${m.id === elegido ? 'selected' : ''}>${this.esc(m.label)}</option>`).join('');
     return `<select class="form-select" ${attrs}><option value="" ${elegido ? '' : 'selected'}>— Modelo —</option>${opts}</select>`;
   },
   _modeloDeSelect(sel) {
     const id = sel?.value || '';
     if (!id) return null;
-    const m = (this.modelos || []).find(x => x.id === id);
+    const m = (this.modelos || []).find(x => x.id === id) || this._modelosRetirados?.get(id);
     return m ? { id: m.id, label: m.label } : null;
   },
 

@@ -94,13 +94,15 @@ let _serialesContratoEnVuelo = null;
 async function cargarModelos() {
   const raw = await ModelosService.getModelos();
   modelos = raw
-    .map(m => ({ id: m.id, nombre: (m.modelo || m.nombre || "(sin nombre)").trim() }))
+    .map(m => ({ id: m.id, nombre: (m.modelo || m.nombre || "(sin nombre)").trim(), activo: m.activo !== false }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
 }
 
 function modelOptionsHtml(selectedId = "") {
+  // Un modelo retirado del catálogo (activo:false) no se ofrece; si la fila
+  // ya lo trae, se queda como opción para no perder el dato.
   return `<option value="">Seleccione modelo</option>` +
-    modelos.map(m => `<option value="${m.id}" ${m.id === selectedId ? 'selected' : ''}>${escHtml(m.nombre)}</option>`).join('');
+    modelos.filter(m => m.activo !== false || m.id === selectedId).map(m => `<option value="${m.id}" ${m.id === selectedId ? 'selected' : ''}>${escHtml(m.nombre)}</option>`).join('');
 }
 
 async function cargarOrden(modelosEnVuelo = null) {
@@ -190,7 +192,7 @@ async function cargarOrden(modelosEnVuelo = null) {
   if (modelosEnVuelo) await modelosEnVuelo;
   // Modelo común (defaults para filas pegadas / "aplicar a todas").
   $("comunModelo").innerHTML = `<option value="">— Sin modelo —</option>` +
-    modelos.map(m => `<option value="${m.id}">${escHtml(m.nombre)}</option>`).join('');
+    modelos.filter(m => m.activo !== false).map(m => `<option value="${m.id}">${escHtml(m.nombre)}</option>`).join('');
 }
 
 // Conjunto de seriales (en minúsculas) ya presentes en la tabla, para deduplicar.
