@@ -90,6 +90,7 @@ Object.assign(window.Centro, {
       `${vig.length} contrato${vig.length === 1 ? '' : 's'} vigente${vig.length === 1 ? '' : 's'}`,
       `${this.equipos.length} radio${this.equipos.length === 1 ? '' : 's'}`,
       c.vendedor_email ? `Vendedor: ${c.vendedor_email.split('@')[0]}` : null,
+      this._rucLegible(c),
       c.telefono || null,
     ].filter(Boolean).join(' · ');
     this._pintarChipReg(c);
@@ -803,9 +804,42 @@ Object.assign(window.Centro, {
   aprobarContrato(id) {
     return this._candado('aprobarContrato:' + id, () => this._aprobarContrato(id), 'Aprobando…');
   },
+  // Resumen de lo que se aprueba (auditoría de módulos 2026-09-30, C7): un
+  // clic aprobaba sin ver líneas ni total: un TEMP con el modelo equivocado
+  // pasaba a bodega sin que nadie lo notara. Cuatro líneas y confirmación.
+  _resumenAprobacionHtml(c) {
+    const esc = (v) => this.esc(v);
+    const tipoTxt = c.accion === 'Renovación' ? 'Renovación de cuenta'
+      : this._codigoTipo(c) === 'TEMP' ? 'Contrato temporal'
+      : this._codigoTipo(c) === 'DEMO' ? 'Demo' : this._codigoTipo(c) === 'REEMP' ? 'Reemplazo' : 'Contrato nuevo';
+    const lineas = (c.equipos || []).map(l =>
+      `${esc(l.modelo || '—')} × ${Number(l.cantidad || 0)}${Number(l.precio) > 0 ? ` · $${Number(l.precio).toFixed(2)}/mes` : ''}${l.modalidad === 'propio' ? ' (del cliente)' : ''}`);
+    const unid = (c.equipos || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
+    const dur = this._durTxt(c);
+    const seriales = this._serialesListos(c)
+      ? (c.accion === 'Renovación' && c.renovacion_sin_equipo ? 'renovación sin equipo: no pide seriales a bodega' : 'sin seriales que asignar')
+      : `bodega asigna ${unid} serial${unid === 1 ? '' : 'es'} después de aprobar`;
+    const plan = c.transicion_plan && window.TransicionPlan?.resumen ? TransicionPlan.resumen(c.transicion_plan) : '';
+    const despues = ContratoFirma.lleva(c) ? 'luego el cliente firma' : 'luego sigue la entrega de los equipos (sin firma)';
+    // Spans en bloque: Modal.confirm pinta el mensaje dentro de un <p>.
+    const fila = (k, v) => `<span style="display:flex; gap:10px; padding:3px 0; border-bottom:1px solid var(--border-subtle);"><span style="min-width:92px; flex:none; color:var(--fg-3);">${k}</span><span>${v}</span></span>`;
+    return `<span style="display:block; font-size:13.5px; line-height:1.45;">
+      ${fila('Contrato', `<b class="cg-mono">${esc(c.contrato_id || c.id)}</b> · ${esc(tipoTxt)}${dur ? ` · ${esc(dur)}` : ''}<br><span style="color:var(--fg-3);">${esc(c.cliente_nombre || this.cliente?.nombre || '')}${c.motivo_contrato_nuevo ? ` · motivo: ${esc(c.motivo_contrato_nuevo)}` : ''}</span>`)}
+      ${fila('Equipos', lineas.length ? lineas.join('<br>') : '<span style="color:var(--warn-deep, #92400E);">sin líneas de equipo</span>')}
+      ${fila('Mensual', `<b class="num">$${Number(c.total_mensual ?? c.total_con_itbms ?? 0).toFixed(2)}</b>${c.itbms_aplica === false ? ' · sin ITBMS' : ' con ITBMS'}${Number(c.subtotal_cargos_unicos || 0) > 0 ? ` · cargos únicos $${Number(c.subtotal_cargos_unicos).toFixed(2)}` : ''}`)}
+      ${fila('Seriales', `${esc(seriales)}${plan ? `<br><span style="color:var(--fg-3);">${esc(plan)}</span>` : ''}`)}
+      <span style="display:block; margin:10px 0 0; font-size:12.5px; color:var(--fg-3);">Al aprobar: ${seriales.startsWith('bodega') ? 'bodega recibe el aviso para asignar; ' : ''}${despues}.</span>
+    </span>`;
+  },
   async _aprobarContrato(id) {
     const c = this.contratos.find(x => x.id === id);
     if (!c || c.estado !== 'pendiente_aprobacion') { Toast.show('El contrato no está pendiente de aprobación', 'warn'); return; }
+    const ok = await Modal.confirm({
+      title: 'Aprobar el contrato',
+      message: this._resumenAprobacionHtml(c),
+      confirmLabel: 'Aprobar contrato',
+    });
+    if (!ok) return;
     try {
       await ContratosService.updateContrato(id, {
         estado: 'aprobado',

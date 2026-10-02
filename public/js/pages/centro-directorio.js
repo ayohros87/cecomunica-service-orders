@@ -198,7 +198,7 @@ Object.assign(window.Centro, {
   // lo que el doc de cliente YA trae (activo, regularizacion, vendedor). No
   // hay conteo cacheado de contratos/gestiones en el doc: no se pinta ninguno.
   _filaCliente(c) {
-    const sub = [c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null, c.telefono || null].filter(Boolean);
+    const sub = [this._rucLegible(c), c.telefono || null].filter(Boolean);
     const r = c.regularizacion;
     // Sin D7: "por clasificar" es cola de bodega, no deuda de la cuenta
     // (decisión 8, 1-oct-2026). Se dice aparte, en gris.

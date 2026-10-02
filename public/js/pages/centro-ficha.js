@@ -114,7 +114,7 @@ Object.assign(window.Centro, {
     document.getElementById('fNombre').textContent = c.nombre || '(sin nombre)';
     // Meta en piezas (2026-09-28): en escritorio una línea con " · " (CSS);
     // en el teléfono cada pieza es una línea corta y el vendedor va sin dominio.
-    const ident = [c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null, c.telefono || null].filter(Boolean);
+    const ident = [this._rucLegible(c), c.telefono || null].filter(Boolean);
     const [vUser, vDom] = String(c.vendedor_email || '').split('@');
     const meta = [
       ident.length ? `<span class="m">${this.esc(ident.join(' · '))}</span>` : '',

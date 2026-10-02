@@ -34,6 +34,17 @@ window.Centro = {
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   },
 
+  // El RUC como está en el documento del cliente ("155703071-2-2021 · DV 08"),
+  // no el normalizado ("15570307122021-08") que nadie puede cotejar
+  // (auditoría de módulos 2026-09-30, C5). El normalizado queda de respaldo
+  // para fichas viejas sin `ruc`.
+  _rucLegible(c) {
+    if (!c) return null;
+    const ruc = String(c.ruc || '').trim();
+    if (ruc) return `RUC ${ruc}${c.dv ? ` · DV ${String(c.dv).trim()}` : ''}`;
+    return c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null;
+  },
+
   // "Le toca a" — QUIÉN destraba una fila de "Ahora" o el siguiente paso de
   // una línea de tiempo. Es un DATO que declara la fuente ({rol}), no una
   // regex sobre el texto (auditoría UX 2026-09-28, §4.3 #13): el texto sale
