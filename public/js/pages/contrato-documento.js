@@ -24,14 +24,24 @@
 
   // Enseña "Documentos del cliente ›" cuando el usuario puede verlos. Espera
   // a que la sesión resuelva; si el rol no aplica, el enlace se queda oculto.
-  function mostrarEnlaceDocs(clienteId) {
+  function mostrarEnlaceDocs(clienteId, contratoNumero) {
     // Mismos roles que el Centro (_puedeVerDocs): faltaba gerente (auditoría UX 2026-09-28).
     const PERMITIDOS = ['administrador', 'recepcion', 'gerente'];
+    // Bandeja "Facturación pendiente": los mismos roles que la trabajan
+    // (FacturacionAvisosService.ROLES). D13 de la auditoría de módulos: desde
+    // el contrato se llega a su aviso con la búsqueda puesta (?q=), y de vuelta.
+    const BANDEJA = ['administrador', 'recepcion', 'contabilidad'];
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) return;
       try {
         const u = await UsuariosService.getUsuario(user.uid);
-        if (!u || !PERMITIDOS.includes(u.rol) || u.activo === false) return;
+        if (!u || u.activo === false) return;
+        const f = $('lnkFacturacion');
+        if (f && contratoNumero && BANDEJA.includes(u.rol)) {
+          f.href = `../facturacion/bandeja.html?q=${encodeURIComponent(contratoNumero)}`;
+          f.hidden = false;
+        }
+        if (!PERMITIDOS.includes(u.rol)) return;
         const a = $('lnkDocs');
         if (!a) return;
         a.href = `../clientes/centro.html?id=${encodeURIComponent(clienteId)}&docs=1`;
@@ -72,7 +82,7 @@
     // ALLOWED_ROLES de la callable getClienteDocUrl (y del menú del Centro).
     // El rol se pide dentro y no por `window.userRole`, que a esta altura del
     // arranque puede no estar puesto todavía.
-    if (c.cliente_id) mostrarEnlaceDocs(c.cliente_id);
+    if (c.cliente_id) mostrarEnlaceDocs(c.cliente_id, c.contrato_id || '');
     // "Formato anterior" solo tiene sentido para lo de ANTES del corte
     // (2026-09-09): en un contrato nacido después, ese enlace ofrecía imprimir
     // un papel que el cliente nunca firmó. Se esconde, no se borra — los

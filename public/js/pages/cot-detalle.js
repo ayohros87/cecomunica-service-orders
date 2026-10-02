@@ -210,6 +210,18 @@
       </div>`;
   }
 
+  // De la cotización de taller a SU fila en "Facturación pendiente" y de vuelta
+  // (D13, auditoría de módulos 2026-09-30). El puntero lo escribe el servidor
+  // al abrir la fila (facturacion.aviso_id); solo lo ven los roles que
+  // trabajan la bandeja (FacturacionAvisosService.ROLES). Dice si ya se
+  // facturó para que Recepción no la busque entre los pendientes.
+  function enlaceFacturacionHtml() {
+    const f = rawDoc?.facturacion;
+    if (!f?.aviso_id || !['administrador', 'recepcion', 'contabilidad'].includes(userRol)) return '';
+    const facturada = f.estado === 'facturada';
+    return `<a class="btn btn-ghost" href="../facturacion/bandeja.html?aviso=${encodeURIComponent(f.aviso_id)}" title="${facturada ? 'Ya se marcó facturada en la bandeja' : 'Está en la bandeja de Facturación pendiente'}"><i data-lucide="inbox"></i> ${facturada ? `Facturada${f.factura ? ' · ' + esc(f.factura) : ''}` : 'Ver en Facturación pendiente'}</a>`;
+  }
+
   // Importe para encabezados y avisos de una línea. Una cotización mixta no
   // tiene UN importe: se enseñan los dos en vez de un total proyectado que el
   // cliente nunca va a ver en la propuesta.
@@ -255,6 +267,7 @@
             ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#065F46; color:#fff; border-color:#065F46;"><i data-lucide="circle-check"></i> Respuesta del cliente</button>'
             : '<button class="btn btn-secondary" id="btnCerrar" style="background:#0B2A47; color:#fff; border-color:#0B2A47;"><i data-lucide="flag"></i> Cerrar cotización</button>') : ''}
           ${!soloLectura && CotState.esEditable(cot.estado) ? '<button class="btn btn-secondary" id="btnEditar"><i data-lucide="pencil"></i> Editar</button>' : ''}
+          ${enlaceFacturacionHtml()}
           <button class="btn btn-primary" id="btnImprimir"><i data-lucide="printer"></i> Imprimir / PDF</button>
         </div>
       </div>

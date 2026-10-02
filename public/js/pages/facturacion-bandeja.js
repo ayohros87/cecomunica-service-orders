@@ -629,6 +629,35 @@ window.FacturacionBandeja = (() => {
     document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && popAbierto) { popAbierto = null; render(); } });
   }
 
+  // ?q=ALQ20260920-99 (D13, 2026-10-02): el documento del contrato y la
+  // cotización llegan aquí con la búsqueda puesta. Prende "Ver hechos" para
+  // contestar también "¿esto ya se facturó?" — lo cerrado no sale en pendientes.
+  function aplicarBusquedaUrl() {
+    const q = (new URLSearchParams(location.search).get('q') || '').trim();
+    if (!q) return;
+    busqueda = q;
+    const inp = document.getElementById('fbBuscar'); if (inp) inp.value = q;
+    verCerrados = true;
+    const chk = document.getElementById('fbVerHechos'); if (chk) chk.checked = true;
+  }
+
+  // Ya cargada la bandeja con ?q=: si lo único que coincide está "En espera"
+  // (contrato con equipo por entregar), cambia a ese chip en vez de decir
+  // "Nada coincide"; si coincide un solo aviso, lo abre — un clic menos.
+  function ajustarBusquedaUrl() {
+    if (!new URLSearchParams(location.search).get('q') || !busqueda) return;
+    const pend = pendientes.filter(coincide);
+    const vivos = pend.filter(a => a.estado !== 'esperando');
+    if (!vivos.length && pend.length) filtro = 'espera';
+    const hits = pend.concat(cerrados.filter(coincide));
+    if (hits.length === 1) abierto = hits[0].id;
+    render();
+    if (abierto) {
+      const row = document.querySelector(`[data-row="${CSS.escape(abierto)}"]`);
+      if (row) row.scrollIntoView({ block: 'center' });
+    }
+  }
+
   async function abrirDeepLink() {
     const id = new URLSearchParams(location.search).get('aviso');
     if (!id) return;
@@ -666,7 +695,9 @@ window.FacturacionBandeja = (() => {
           else mount.innerHTML = '';
         }
         wire();
+        aplicarBusquedaUrl();
         await cargar();
+        ajustarBusquedaUrl();
         await abrirDeepLink();
       } catch (e) { console.error(e); Toast.show('Error al iniciar', 'bad'); }
     });
