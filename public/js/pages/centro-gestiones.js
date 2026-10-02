@@ -182,7 +182,13 @@ Object.assign(window.Centro, {
     // uno que NO la lleva (REEMPLAZO), hasta que los equipos se entregan
     // (2026-09-15): antes se quedaba para siempre en "Esperando firma", que es
     // justo lo que mandó a Brenda a perseguir una firma inexistente.
-    const abierto = (c) => ContratoFirma.lleva(c) ? !c.firmado : c.entrega_confirmada !== true;
+    // ENTREGADO = fuera del trámite, lleve firma o no (2026-10-02, COMPAÑÍA
+    // GOLY): cuatro renovaciones entregadas en agosto sin `firmado` seguían
+    // "en trámite" —la firma solo es candado en la entrega, y ya pasó—, y una
+    // renovación en trámite esconde "Agregar equipos" y "Actualizar seriales"
+    // del menú. Mismo criterio que la señal "Contratos por firmar" y el cron
+    // que los duerme: con la entrega confirmada ya nadie espera esa firma.
+    const abierto = (c) => c.entrega_confirmada !== true && (!ContratoFirma.lleva(c) || !c.firmado);
     // Los 45 días ya no ESCONDEN el trámite (C3: la ficha decía "nada
     // pendiente" mientras el home contaba el contrato). Con seriales
     // asignados, el cron lo DUERME a los 45 días (decisión 7, 1-oct-2026) y el
