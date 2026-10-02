@@ -538,16 +538,43 @@ const SenalesService = {
     };
   },
 
+  /* Lee una consulta de órdenes por páginas de 100 en orden de doc ID (= fecha,
+     las más viejas primero), hasta `maxDocs`. Antes era `limit(150)` sin
+     orderBy: con 152 abiertas el tope ya se había pasado y las 13 estancadas
+     caían dentro por casualidad — el día que una quedara fuera, el número
+     bajaría en silencio (auditoría de módulos 2026-09-30, 08 R4). El tope
+     sigue existiendo por costo (cada doc pesa ~8KB), pero ahora es explícito:
+     `topado` se vuelve "N+" en la tarjeta. */
+  _ORDENES_MAX_DOCS: 600,
+  async _leerOrdenesPaginado(base, { maxDocs = this._ORDENES_MAX_DOCS } = {}) {
+    const q0 = base.orderBy(firebase.firestore.FieldPath.documentId());
+    const docs = [];
+    let cursor = null, topado = false;
+    do {
+      const snap = await (cursor ? q0.startAfter(cursor) : q0).limit(100).get();
+      snap.forEach(d => docs.push(d));
+      cursor = snap.size === 100 ? snap.docs[snap.docs.length - 1] : null;
+      if (cursor && docs.length >= maxDocs) { topado = true; cursor = null; }
+    } while (cursor);
+    return { docs, topado };
+  },
+  // "N" o "N+" según la lista haya topado el máximo de documentos leídos.
+  _conteo(rows, filtro) {
+    const n = rows.filter(filtro).length;
+    return rows.topado ? `${n}+` : n;
+  },
+
   /** Terminadas con QC listo que nadie marco ENTREGADO (cron seccion E). */
   listListasParaEntregar() {
     return this._memoList('entregar', async () => {
       const { entregaDias, staleMax } = await this._config();
       const now = new Date();
-      const snap = await firebase.firestore().collection('ordenes_de_servicio')
-        .where('estado_reparacion', '==', 'COMPLETADO (EN OFICINA)')
-        .limit(150).get();
+      const { docs, topado } = await this._leerOrdenesPaginado(
+        firebase.firestore().collection('ordenes_de_servicio')
+          .where('estado_reparacion', '==', 'COMPLETADO (EN OFICINA)'));
       const rows = [];
-      snap.forEach(d => {
+      rows.topado = topado;
+      docs.forEach(d => {
         const o = d.data() || {};
         if (!PendientesDomain.esListaParaEntregar(o, now, entregaDias)) return;
         rows.push({
@@ -560,6 +587,7 @@ const SenalesService = {
         });
         rows[rows.length - 1].viejo = this._vieja(rows[rows.length - 1].dias, staleMax);
       });
+      // sort() devuelve el mismo array: `topado` sobrevive.
       return rows.sort((a, b) => b.dias - a.dias);
     });
   },
@@ -569,15 +597,16 @@ const SenalesService = {
     return this._memoList('estancadas', async () => {
       const { staleDias, staleMax } = await this._config();
       const now = new Date();
-      const snap = await firebase.firestore().collection('ordenes_de_servicio')
-        // Sin orderBy la query sale por doc ID = fecha (YYYYMMDD...): las más
-        // viejas primero, que es exactamente donde viven las estancadas. El
-        // tope bajó de 600 (2026-09-02): cada doc de orden pesa ~8KB y estos
-        // scans eran el grueso del egreso de la factura de agosto.
-        .where('estado_reparacion', 'in', PendientesDomain.ESTADOS_ABIERTOS)
-        .limit(150).get();
+      // Por doc ID = fecha (YYYYMMDD...): las más viejas primero, que es
+      // exactamente donde viven las estancadas. Paginado con tope explícito
+      // (_leerOrdenesPaginado); el tope de 150 de 2026-09-02 era por costo —
+      // cada doc pesa ~8KB — y hoy las abiertas (152) ya lo pasaban.
+      const { docs, topado } = await this._leerOrdenesPaginado(
+        firebase.firestore().collection('ordenes_de_servicio')
+          .where('estado_reparacion', 'in', PendientesDomain.ESTADOS_ABIERTOS));
       const rows = [];
-      snap.forEach(d => {
+      rows.topado = topado;
+      docs.forEach(d => {
         const o = d.data() || {};
         if (!PendientesDomain.esOrdenEstancada(o, now, { staleDias, staleMax })) return;
         const base = o.fecha_modificacion || o.fecha_actualizacion || o.updatedAt || o.fecha_entrada || o.fecha_creacion;
@@ -746,8 +775,8 @@ const SenalesService = {
   async countComisionesListas() { return (await this.listComisionesListas()).length; },
 
   // Conteos derivados de las filas (excluyen pospuestas, como el correo).
-  async countListasParaEntregar() { return (await this.listListasParaEntregar()).filter(r => !r.pospuesto && !r.viejo).length; },
-  async countEstancadas()         { return (await this.listEstancadas()).filter(r => !r.pospuesto).length; },
+  async countListasParaEntregar() { return this._conteo(await this.listListasParaEntregar(), r => !r.pospuesto && !r.viejo); },
+  async countEstancadas()         { return this._conteo(await this.listEstancadas(), r => !r.pospuesto); },
 
   /* ── Posponer (fase 3) ─────────────────────────────────────────────────
      Escribe pendiente_snooze EN EL DOCUMENTO FUENTE (orden o unidad del

@@ -168,12 +168,16 @@
     }).sort((a, b) => (AdminMetrics.ageInHours(b.fecha_entrada || b.fecha_creacion, now) || 0) -
                       (AdminMetrics.ageInHours(a.fecha_entrada || a.fecha_creacion, now) || 0));
 
-    // ALTA — Cotizaciones vencidas sin cerrar (estado=enviada o aprobada AND days < 0)
+    // ALTA — Cotizaciones ENVIADAS que vencieron hace poco (≤ orden_stale_max_dias).
+    // Mismo corte que el home (auditoría de módulos 2026-09-30, 08 C8: aquí
+    // encabezaba "COT-2026-0003 vencida hace 106 días (estado: aprobada)").
+    // Vencida es terminal y no pide acción (Alberto 2026-10-01, D12): una
+    // aprobada que venció no es alerta, y una vencida hace meses es limpieza.
     const cotVencidas = d.cotizaciones.filter(c => {
       const e = (c.estado || '').toLowerCase();
-      if (e !== 'enviada' && e !== 'aprobada') return false;
+      if (e !== 'enviada') return false;
       const dleft = AdminMetrics.daysUntilExpiry(c.fecha, c.validezDias || c.validez_dias || 15, now);
-      return dleft != null && dleft < 0;
+      return dleft != null && dleft < 0 && -dleft <= staleMaxDias();
     }).sort((a, b) => (AdminMetrics.daysUntilExpiry(a.fecha, a.validezDias || 15, now) || 0) -
                       (AdminMetrics.daysUntilExpiry(b.fecha, b.validezDias || 15, now) || 0));
 
@@ -282,7 +286,7 @@
 
     // Cotizaciones vencidas
     if (a.cotVencidas.length) {
-      altaItems.push(`<li class="att-section-header">${a.cotVencidas.length} cotización${a.cotVencidas.length !== 1 ? 'es' : ''} vencida${a.cotVencidas.length !== 1 ? 's' : ''} sin cerrar</li>`);
+      altaItems.push(`<li class="att-section-header">${a.cotVencidas.length} cotización${a.cotVencidas.length !== 1 ? 'es' : ''} vencida${a.cotVencidas.length !== 1 ? 's' : ''} en los últimos ${staleMaxDias()} días</li>`);
       for (const c of a.cotVencidas.slice(0, 5)) {
         const dleft = AdminMetrics.daysUntilExpiry(c.fecha, c.validezDias || 15, now);
         altaItems.push(attRow({
