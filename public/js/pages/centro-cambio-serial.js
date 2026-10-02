@@ -24,12 +24,14 @@ Object.assign(window.Centro, {
     document.getElementById('cgMenu')?.classList.add('hidden');
     const flota = this._flotaCorregible();
     const enDemo = this._enDemo();
+    this._ssReset('cs');
     if (!flota.length) {
       Toast.show(enDemo.length
         ? 'Los equipos que este cliente tiene salieron en un demo: para cambiarlos, anula el demo y ábrelo con los radios correctos.'
         : 'Este cliente no tiene equipos registrados en campo que corregir.', 'warn');
       return;
     }
+    const cuerpoCs = this._csFilasHtml(flota);
     this._abrirModal(`
       <h3 style="margin:0 0 6px;">Corregir un serial mal registrado — ${this.esc(this.cliente.nombre)}</h3>
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:72ch;">
@@ -42,13 +44,15 @@ Object.assign(window.Centro, {
         Un demo no tiene contrato, así que corregirlo aquí dejaría el expediente del demo y su orden
         diciendo los seriales viejos. Para cambiar los radios de un demo: <b>anula el demo y ábrelo
         con los correctos</b>.</span></div>` : ''}
+      ${this._csBarra}
       <div class="cg-twrap" style="max-height:44vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
         <th style="width:34px;"></th><th>Figura en el sistema</th><th>Modelo</th><th>Contrato</th>
-        </tr></thead><tbody>${this._csFilasHtml(flota)}</tbody></table></div>
+        </tr></thead><tbody data-sscuerpo="cs">${cuerpoCs}</tbody></table></div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
         <button class="btn btn-primary" onclick="Centro.crearCambioSerial(this)">Enviar a bodega</button>
       </div>`);
+    this._ssMontar('cs');
   },
 
   // Lo que se puede corregir: lo que el sistema dice que el cliente tiene.
@@ -77,15 +81,20 @@ Object.assign(window.Centro, {
       && e.asignacion?.gestion_doc_id && !e.asignacion?.contrato_doc_id);
   },
 
+  // Filas por el selector compartido (P4): buscador y un grupo por contrato.
+  _csBarra: '',
   _csFilasHtml(flota) {
-    return flota.map((e, ix) => `<tr>
+    const filas = flota.map((e, ix) => ({
+      grupo: e.asignacion?.contrato_doc_id || '__sin', grupoLabel: e.asignacion?.contrato_id || 'Sin contrato',
+      ok: true, busca: `${e.serial || e.id} ${e.modelo_label || ''} ${e.asignacion?.contrato_id || ''}`,
+      celdas: `
       <td><input type="checkbox" data-cssel="${ix}" onchange="Centro._csFila(${ix}, this.checked)"></td>
       <td class="cg-mono">${this.esc(e.serial || e.id)}</td>
       <td>${this.esc(e.modelo_label || '—')}</td>
       <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || '')
-        || '<span style="color:var(--fg-4); font-family:inherit;">sin contrato</span>'}</td>
-    </tr>
-    <tr id="cscfg-${ix}" class="hidden"><td></td><td colspan="3" style="background:var(--surface-sunken, #EEF2F6);">
+        || '<span style="color:var(--fg-4); font-family:inherit;">sin contrato</span>'}</td>`,
+      cfgAttrs: `id="cscfg-${ix}" class="hidden"`,
+      cfg: `<td></td><td colspan="3" style="background:var(--surface-sunken, #EEF2F6);">
       <div style="display:flex; gap:10px; flex-wrap:wrap; padding:4px 0;">
         <select class="form-select" data-csmot="${ix}" style="max-width:300px;">
           <option value="">— Qué pasó —</option>
@@ -97,7 +106,11 @@ Object.assign(window.Centro, {
       </div>
       <div style="font-size:11.5px; color:var(--fg-4); padding-bottom:4px;">
         Si no tienes el serial real a mano, déjalo en blanco: bodega lo confirma contra el radio.</div>
-    </td></tr>`).join('');
+    </td>`,
+    }));
+    const { barra, cuerpo } = this._ssHtml('cs', filas, { colspan: 4, placeholder: 'Serial que figura mal, modelo o contrato…' });
+    this._csBarra = barra;
+    return cuerpo;
   },
 
   _csFila(ix, on) {

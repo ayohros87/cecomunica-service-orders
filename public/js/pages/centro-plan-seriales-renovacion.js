@@ -72,6 +72,7 @@ Object.assign(window.Centro, {
     const f = q('data-wcpf-wrap'); if (f) f.style.display = sel.value === 'continua' ? '' : 'none';
     sel.style.borderColor = sel.value ? '' : 'var(--warn, #F59E0B)';
     this._wcConciliar();
+    this._ssContar('wcp');
   },
 
   // Estado vivo del plan mientras el wizard está abierto: destino, modelo de
@@ -97,13 +98,27 @@ Object.assign(window.Centro, {
     const ids = this._wcOrigenIds();
     const unidades = this._wcUnidadesCuenta(ids);
     const agregados = S.agregados;
+    // Selector compartido (P4): buscador, un grupo por contrato de origen,
+    // luego custodia y migración; "Todos continúan" también por grupo. Con
+    // 273 radios el modal medía 18,956 px y nadie revisaba 273 destinos.
+    const grupoDe = (fuente, u) => fuente === 'origen'
+      ? { grupo: u.asignacion?.contrato_doc_id || '__sin', grupoLabel: `Contrato ${u.asignacion?.contrato_id || ''}`.trim(), orden: 0 }
+      : fuente === 'custodia' ? { grupo: '__custodia', grupoLabel: 'En campo · sin contrato', orden: 8e8 }
+      : { grupo: '__migracion', grupoLabel: 'Migración · sin verificar', orden: 8.5e8 };
     const filas = [
-      ...unidades.map(({ u, fuente }) => `<tr>
+      ...unidades.map(({ u, fuente }) => ({
+        ...grupoDe(fuente, u), ok: true,
+        busca: `${u.serial || u.id} ${u.modelo_label || ''} ${u.asignacion?.contrato_id || ''}`,
+        celdas: `
         <td class="cg-mono">${this.esc(u.serial || u.id)}</td>
         <td>${this.esc(u.modelo_label || '—')}${u.propiedad === 'cliente' ? ' <span style="color:var(--fg-4); font-size:11px;">del cliente</span>' : ''}</td>
         <td style="font-size:12.5px;">${this._wcFuenteHtml(fuente, u)}</td>
-        <td>${this._wcDestinoCelda(u.id, { destino: S.destinos[u.id] || '', reemplazo: S.reemplazos[u.id] || '', refurbished: !!S.refurb[u.id] })}</td></tr>`),
-      ...agregados.map((a, i) => `<tr>
+        <td>${this._wcDestinoCelda(u.id, { destino: S.destinos[u.id] || '', reemplazo: S.reemplazos[u.id] || '', refurbished: !!S.refurb[u.id] })}</td>`,
+      })),
+      ...agregados.map((a, i) => ({
+        grupo: '__agregados', grupoLabel: 'Agregados por ti', orden: -1, grupoAbierto: true, ok: true,
+        busca: `${a.serial} ${a.modelo || ''}`,
+        celdas: `
         <td class="cg-mono">${this.esc(a.serial)}</td>
         <td>${a.pool ? this.esc(a.modelo || '—') : this._selModelo(`data-wcpa-modelo="${i}" onchange="Centro._wcConciliar()" style="min-width:180px;"`, a.modelo_id, a.modelo)}
           ${a.aviso ? `<div style="font-size:11.5px; color:var(--warn-deep, #92400E);">${this.esc(a.aviso)}</div>` : ''}</td>
@@ -112,15 +127,20 @@ Object.assign(window.Centro, {
           <label class="cg-toggle" style="font-size:12px; padding:3px 8px; margin-left:6px;" title="Refurbished de batería, antena, clip y piezas para este radio">
             <input type="checkbox" data-wcpaf="${i}" ${a.refurbished ? 'checked' : ''} onchange="Centro._wcConciliar()"> refurbished</label>
           <button type="button" class="btn btn-ghost" style="padding:2px 8px; margin-left:6px;" title="Quitar"
-            onclick="Centro._wcQuitarAgregado(${i})">✕</button></td></tr>`),
+            onclick="Centro._wcQuitarAgregado(${i})">✕</button></td>`,
+      })),
     ];
     const vacio = !filas.length;
+    const ss = vacio ? { barra: '', cuerpo: '' } : this._ssHtml('wcp', filas, { colspan: 4, modo: 'destinos', placeholder: 'Serial, modelo o contrato…',
+      accionesGrupo: (k) => k === '__agregados' ? '' : `
+        <button type="button" class="btn btn-ghost cg-act" style="padding:1px 8px; font-size:12px;" onclick="Centro._wcMarcarGrupo('${this.esc(k)}','continua')">Todos continúan</button>
+        <button type="button" class="btn btn-ghost cg-act" style="padding:1px 8px; font-size:12px;" onclick="Centro._wcMarcarGrupo('${this.esc(k)}','no_tiene')">Ninguno lo tiene</button>` });
     cont.innerHTML = `
       ${vacio ? `<p style="font-size:12.5px; color:var(--fg-3); margin:0 0 8px;">El sistema no le atribuye ningún serial a este cliente. Agrega abajo los que tiene, o confirma que la cuenta no tiene equipos con serial.</p>
           <label class="cg-toggle" style="margin-bottom:8px;"><input type="checkbox" id="wcSinSeriales" ${S.sinSeriales ? 'checked' : ''} onchange="Centro._wcPlanState.sinSeriales=this.checked; Centro._wcConciliar()"> Confirmo que el cliente no tiene equipos con serial que declarar</label>`
-        : `<table class="cg-tabla"><thead><tr>
+        : `${ss.barra}<table class="cg-tabla"><thead><tr>
             <th>Serial</th><th>Modelo</th><th>Según el sistema</th><th>Destino <span style="font-weight:400; text-transform:none; letter-spacing:0;">(obligatorio en cada serial)</span></th></tr></thead>
-          <tbody>${filas.join('')}</tbody></table>`}
+          <tbody data-sscuerpo="wcp">${ss.cuerpo}</tbody></table>`}
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
         <input class="form-input" id="wcSerialNuevo" placeholder="Serial que el cliente tiene y no aparece…" style="max-width:280px;"
           aria-label="Serial a agregar" onkeydown="if(event.key==='Enter'){event.preventDefault();Centro._wcAgregarSerial();}">
@@ -130,6 +150,7 @@ Object.assign(window.Centro, {
           <button type="button" class="btn btn-ghost cg-act" onclick="Centro._wcMarcarTodos('no_tiene')">Ninguno lo tiene</button>` : ''}
       </div>
       <div id="wcPlanConc" style="margin-top:8px;"></div>`;
+    if (!vacio) this._ssMontar('wcp');
     this._wcConciliar();
   },
 
@@ -138,6 +159,15 @@ Object.assign(window.Centro, {
       if ([...s.options].some(o => o.value === destino)) { s.value = destino; this._wcDestinoChange(s); }
     });
     this._wcConciliar();
+    this._ssContar('wcp');
+  },
+  // Lo mismo, para un solo grupo del selector (un contrato de origen, la custodia…).
+  _wcMarcarGrupo(k, destino) {
+    document.querySelectorAll(`[data-sscuerpo="wcp"] tr[data-ssg="${this._cssEsc(k)}"] select[data-wcp]`).forEach(s => {
+      if ([...s.options].some(o => o.value === destino)) { s.value = destino; this._wcDestinoChange(s); }
+    });
+    this._wcConciliar();
+    this._ssContar('wcp');
   },
 
   _wcQuitarAgregado(i) {
@@ -312,6 +342,7 @@ Object.assign(window.Centro, {
       }
     });
     this._wcPlanState = { destinos, reemplazos, refurb, agregados };
+    this._ssReset('wcp');
     this._wcSoloPlan = true;
     this._abrirModalA({
       titulo: `Seriales de la cuenta — <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>`,

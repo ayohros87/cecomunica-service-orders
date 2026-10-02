@@ -182,15 +182,17 @@ Object.assign(window.Centro, {
     document.getElementById('cgMenu')?.classList.add('hidden');
     await this._cargarModelos();
     this._wrExtras = [];
+    this._ssReset('wr');
     const filas = this._wrFilasHtml();
     this._abrirModal(`
       <h3 style="margin:0 0 6px;">Nueva solicitud de reemplazo — ${this.esc(this.cliente.nombre)}</h3>
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
-        Marca los seriales a reemplazar (pueden ser de contratos distintos) e indica motivo y modelo.
+        Busca el serial (o abre su contrato) y márcalo; pueden ser de contratos distintos. Indica motivo y modelo.
         Todo reemplazo pasa por aprobación de administración antes de que bodega lo prepare.</p>
+      ${this._wrBarra}
       <div class="cg-twrap" style="max-height:44vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
         <th style="width:34px;"></th><th>Serial</th><th>Modelo</th><th>Contrato</th><th>Elegibilidad</th>
-        </tr></thead><tbody id="wrCuerpo">${filas}</tbody></table></div>
+        </tr></thead><tbody id="wrCuerpo" data-sscuerpo="wr">${filas}</tbody></table></div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px;">
         <input class="form-input" id="wrSerialNuevo" style="max-width:230px;" aria-label="Serial a declarar"
           placeholder="Serial dañado que no aparece…"
@@ -204,26 +206,37 @@ Object.assign(window.Centro, {
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
         <button class="btn btn-primary" onclick="Centro.crearReemplazo(this)">Enviar solicitud</button>
       </div>`);
+    this._ssMontar('wr');
   },
 
   // Cuerpo de la tabla del wizard: la flota del pool + los seriales que el
   // vendedor declaró a mano. Los índices son estables (los extras van al
   // final), así que lo ya tecleado se restaura tal cual al re-pintar.
+  // Las filas van por el selector compartido (centro-selector-seriales.js):
+  // buscador, un grupo por contrato, "No disponible" al final y cerrado.
+  _wrBarra: '',
   _wrFilasHtml() {
     const unidades = [...this.equipos, ...this._wrExtras];
     const filas = unidades.map((e, ix) => {
       const extra = ix >= this.equipos.length;
       const el = extra ? { ok: true, code: 'alquiler', label: 'Declarado por ti', why: 'El sistema no lo conocía: la ficha nace con esta solicitud, en campo y sin contrato.' } : this._eleg(e);
-      return `<tr style="${el.ok ? '' : 'opacity:.5;'}">
+      const contrato = extra ? '' : (e.asignacion?.contrato_id || '');
+      return {
+        grupo: extra ? '__declarados' : (e.asignacion?.contrato_doc_id || '__sin'),
+        grupoLabel: extra ? 'Declarados por ti' : (contrato || 'Sin contrato'),
+        orden: extra ? -1 : undefined, grupoAbierto: extra, ok: el.ok,
+        busca: `${e.serial || e.id} ${e.modelo_label || ''} ${contrato}`,
+        trAttrs: el.ok ? '' : 'style="opacity:.5;"',
+        celdas: `
         <td>${el.ok ? `<input type="checkbox" data-wsel="${ix}" ${extra ? 'checked' : ''} onchange="Centro._wizFila(${ix}, this.checked)">` : ''}</td>
         <td class="cg-mono">${this.esc(e.serial || e.id)}</td>
         <td>${this.esc(e.modelo_label || '—')}</td>
-        <td class="cg-mono" style="font-size:12px;">${extra ? '<span style="color:var(--fg-4);">sin contrato</span>' : this.esc(e.asignacion?.contrato_id || '—')}</td>
+        <td class="cg-mono" style="font-size:12px;">${extra ? '<span style="color:var(--fg-4);">sin contrato</span>' : this.esc(contrato || '—')}</td>
         <td style="font-size:12.5px;">${this.esc(el.label)}${el.why ? `<br><span style="color:var(--fg-4);font-size:11.5px;">${this.esc(el.why)}</span>` : ''}
           ${extra ? `<button type="button" class="btn btn-ghost" style="padding:1px 7px; margin-left:6px;" title="Quitar"
-            onclick="Centro._wrQuitarSerial(${ix - this.equipos.length})">✕</button>` : ''}</td>
-      </tr>
-      <tr id="wcfg-${ix}" class="${extra ? '' : 'hidden'}"><td></td><td colspan="4" style="background:var(--surface-sunken, #EEF2F6);">
+            onclick="Centro._wrQuitarSerial(${ix - this.equipos.length})">✕</button>` : ''}</td>`,
+        cfgAttrs: `id="wcfg-${ix}" class="${extra ? '' : 'hidden'}"`,
+        cfg: `<td></td><td colspan="4" style="background:var(--surface-sunken, #EEF2F6);">
         <div style="display:flex; gap:10px; flex-wrap:wrap; padding:4px 0;">
           <select class="form-select" data-wmot="${ix}" style="max-width:280px;">
             <option value="">— Motivo —</option>
@@ -231,9 +244,12 @@ Object.assign(window.Centro, {
           </select>
           ${this._selModelo(`data-wmod="${ix}" style="max-width:220px;"`, e.modelo_id, e.modelo_label)}
           <input class="form-input" data-wdet="${ix}" style="flex:1; min-width:180px;" placeholder="Detalle (opcional)">
-        </div></td></tr>`;
-    }).join('');
-    return filas || '<tr><td colspan="5" class="cg-empty">El cliente no tiene equipos en campo — declara abajo el serial dañado.</td></tr>';
+        </div></td>`,
+      };
+    });
+    const { barra, cuerpo } = this._ssHtml('wr', filas, { colspan: 5, placeholder: 'Serial dañado, modelo o contrato…' });
+    this._wrBarra = barra;
+    return cuerpo || '<tr><td colspan="5" class="cg-empty">El cliente no tiene equipos en campo — declara abajo el serial dañado.</td></tr>';
   },
 
   _wrRepintar() {
@@ -253,6 +269,7 @@ Object.assign(window.Centro, {
       const mod = document.querySelector(`select[data-wmod="${p.ix}"]`); if (mod && p.mod) mod.value = p.mod;
       const det = document.querySelector(`input[data-wdet="${p.ix}"]`); if (det) det.value = p.det;
     }
+    this._ssMontar('wr');
   },
 
   _wrQuitarSerial(i) {

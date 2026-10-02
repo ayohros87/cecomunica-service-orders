@@ -64,6 +64,8 @@ import '/js/pages/centro-gestiones.js';
 import '/js/pages/centro-acciones.js';
 import '/js/pages/centro-menu-gestion.js';
 import '/js/pages/centro-wiz-reemplazo-demo.js';
+// Buscador + grupos por contrato para los selectores de seriales de los wizards (auditoría de módulos 2026-09-30, P4).
+import '/js/pages/centro-selector-seriales.js';
 import '/js/pages/centro-cambio-serial.js';
 import '/js/pages/centro-wiz-aumento.js';
 import '/js/pages/centro-wiz-ajuste.js';

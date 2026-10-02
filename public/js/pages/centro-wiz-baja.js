@@ -87,6 +87,19 @@ Object.assign(window.Centro, {
       return !!e.asignacion?.contrato_doc_id;
     });
     const finMes = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10); })();
+    // Selector compartido (P4): buscador + un grupo por contrato. En la
+    // terminación todo va marcado y deshabilitado, igual que antes.
+    this._ssReset('wb');
+    const { barra, cuerpo } = this._ssHtml('wb', elegibles.map((e) => ({
+      grupo: e.asignacion?.contrato_doc_id || '__sin', grupoLabel: e.asignacion?.contrato_id || 'Sin contrato',
+      ok: true, busca: `${e.serial || e.id} ${e.modelo_label || ''} ${e.asignacion?.contrato_id || ''}`,
+      celdas: `
+          <td><input type="checkbox" data-bsel="${this.equipos.indexOf(e)}" ${esTerm ? 'checked disabled' : ''} onchange="Centro._bajaPreview()"></td>
+          <td class="cg-mono">${this.esc(e.serial || e.id)}</td>
+          <td>${this.esc(e.modelo_label || '—')}</td>
+          <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || 'sin contrato')}</td>
+          <td style="font-size:12px;">${e.propiedad === 'cliente' ? 'del cliente <span style="color:var(--fg-4);">(no se recupera)</span>' : 'CECOMUNICA'}</td>`,
+    })), { colspan: 5, marcarTodos: !esTerm });
     this._abrirModalA({
       titulo: termCuenta
         ? `Terminación de la cuenta — ${this.esc(this.cliente.nombre)}`
@@ -102,16 +115,11 @@ Object.assign(window.Centro, {
           : termDe
           ? 'Se desconectan <b>todos</b> los seriales del contrato. Requiere la carta de cancelación del cliente; al aprobarse, la orden de devolución se crea de inmediato (los equipos propios del cliente no se recuperan).'
           : 'Marca los seriales a dar de baja (pueden ser de contratos distintos — una sola aprobación con el desglose). Requiere la carta de solicitud del cliente; al aprobarse, la orden de devolución se crea de inmediato.'}</p>
+      ${elegibles.length ? barra : ''}
       <div class="cg-twrap" style="max-height:32vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
         <th style="width:34px;"></th><th>Serial</th><th>Modelo</th><th>Contrato</th><th>Propiedad</th>
-        </tr></thead><tbody>
-        ${elegibles.map((e) => `<tr>
-          <td><input type="checkbox" data-bsel="${this.equipos.indexOf(e)}" ${esTerm ? 'checked disabled' : ''} onchange="Centro._bajaPreview()"></td>
-          <td class="cg-mono">${this.esc(e.serial || e.id)}</td>
-          <td>${this.esc(e.modelo_label || '—')}</td>
-          <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || 'sin contrato')}</td>
-          <td style="font-size:12px;">${e.propiedad === 'cliente' ? 'del cliente <span style="color:var(--fg-4);">(no se recupera)</span>' : 'CECOMUNICA'}</td>
-        </tr>`).join('') || '<tr><td colspan="5" class="cg-empty">Sin equipos en campo.</td></tr>'}
+        </tr></thead><tbody data-sscuerpo="wb">
+        ${cuerpo || '<tr><td colspan="5" class="cg-empty">Sin equipos en campo.</td></tr>'}
       </tbody></table></div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
         <select class="form-select" id="wbMotivo" style="max-width:230px;">
@@ -154,6 +162,7 @@ Object.assign(window.Centro, {
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
         <button class="${termCuenta || termDe ? 'btn-danger cg-act' : 'btn btn-primary'}" onclick="Centro.crearBaja(this)">Enviar a aprobación</button>`,
     });
+    this._ssMontar('wb');
     if (esTerm) this._bajaPreview();
   },
 

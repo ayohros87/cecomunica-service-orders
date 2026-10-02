@@ -428,6 +428,7 @@ Object.assign(window.Centro, {
     });
     this._wcRepMontar();
     this._wcPlanState = { destinos: {}, reemplazos: {}, refurb: {}, agregados: [] };
+    this._ssReset('wcp');
     // Precarga (plan 2026-09-08 §5): al regularizar/renovar la cuenta, los
     // radios en campo SIN contrato (D1) entran como "Continúa" — es lo que la
     // deuda dice que el cliente tiene. El vendedor los corrige si no es así;
