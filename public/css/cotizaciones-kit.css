@@ -61,7 +61,12 @@
 
 /* ── Editor grid + panels ──────────────────────────────────── */
 .cc-editor-grid { display: grid; grid-template-columns: 1fr 360px; gap: var(--sp-6); align-items: start; }
-@media (max-width: 1100px) { .cc-editor-grid { grid-template-columns: 1fr; } }
+/* Hasta 1366 px (laptops de la oficina, 1280×800) la columna lateral de 360 px
+   dejaba la descripción del renglón en 72 px ("HYTER" de "HYTERA PDC550") y
+   la página con scroll horizontal; en cotizar-orden la descripción de la
+   pieza quedaba en 83 px (auditoría de módulos 2026-09-30, C9). El resumen
+   baja debajo de los renglones, como ya pasaba en la tablet. */
+@media (max-width: 1366px) { .cc-editor-grid { grid-template-columns: 1fr; } }
 
 .cc-panel {
   background: var(--surface-card); border: 1px solid var(--border-subtle);
