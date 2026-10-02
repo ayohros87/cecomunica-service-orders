@@ -82,6 +82,10 @@ Object.assign(window.Centro, {
       porClasificar ? `<button type="button" onclick="Centro.abrirBloque('blkEquipos')" title="${porClasificar} radio(s) por clasificar: los revisa bodega, no cuentan como deuda de la cuenta">Bodega <b>${porClasificar}</b></button>` : '',
       L('blkGestiones', `En trámite <b>${abiertas}</b>`),
       taller ? L('blkEquipos', `En taller <b>${taller}</b>`) : '',
+      // Órdenes abiertas del cliente, enlazadas a la bandeja con ?ids= (08 P8):
+      // antes la ficha no llevaba a ninguna orden.
+      (this.ordenesAbiertas || []).length
+        ? `<a href="../ordenes/index.html?ids=${this.ordenesAbiertas.slice(0, 60).map(o => encodeURIComponent(o.id)).join(',')}" title="${this.ordenesAbiertas.slice(0, 6).map(o => `${o.id} · ${o.estado_reparacion || ''}`).join('\n')}">Órdenes abiertas <b>${this.ordenesAbiertas.length}</b></a>` : '',
     ].filter(Boolean).join('');
     // La cabecera resume la cuenta en una línea y los chips dicen el estado.
     const meta = document.getElementById('fMeta');
@@ -333,8 +337,13 @@ Object.assign(window.Centro, {
     }
     const pendDev = this.equipos.filter(e => e.pendiente_devolucion).length;
     if (pendDev) out.push({ tipo: 'warn', rol: 'cliente', txt: `${pendDev} equipo(s) pendiente(s) de devolución.` });
-    const enTaller = this.equipos.filter(e => ['en_taller', 'devuelto_revision'].includes(e.estado)).length;
-    if (enTaller) out.push({ tipo: 'info', rol: 'taller', txt: `${enTaller} equipo(s) en taller o en revisión.` });
+    const eqTaller = this.equipos.filter(e => ['en_taller', 'devuelto_revision'].includes(e.estado));
+    if (eqTaller.length) {
+      // Las órdenes donde están esos radios, enlazadas (08 P8).
+      const ids = [...new Set(eqTaller.map(e => e.orden_actual_id).filter(Boolean))].slice(0, 60);
+      out.push({ tipo: 'info', rol: 'taller', txt: `${eqTaller.length} equipo(s) en taller o en revisión.`,
+        extra: ids.length ? `<a class="btn btn-ghost cg-act" href="../ordenes/index.html?ids=${ids.map(encodeURIComponent).join(',')}">Ver ${ids.length === 1 ? 'la orden' : `las ${ids.length} órdenes`}</a>` : '' });
+    }
     // Las gestiones abiertas NO se repiten aquí: ya viven en el KPI, en
     // "Requiere tu acción" y en la lista de Gestiones con su fila accionable.
     return out;
@@ -413,8 +422,15 @@ Object.assign(window.Centro, {
     const enCampoOrd = [...enCampo].sort((a, b) =>
       (b.propiedad === 'cliente' ? 1 : 0) - (a.propiedad === 'cliente' ? 1 : 0)
       || String(a.serial || '').localeCompare(String(b.serial || '')));
+    // Cada serial también abre en Almacén (ficha sobre Existencias) para quien
+    // puede entrar ahí (08 P8): el kardex del Centro es la vista rápida.
+    const aAlmacen = [ROLES.ADMIN, ROLES.GERENTE, ROLES.INVENTARIO].includes(this.rol)
+      || (typeof canRole === 'function' && canRole(this.rol, 'gestionar-seriales'));
+    const lnkAlmacen = (e) => aAlmacen
+      ? ` <a href="../almacen/index.html?tab=existencias&serial=${encodeURIComponent(e.serial || e.id)}" title="Abrir ${this.esc(e.serial || e.id)} en Almacén" style="color:var(--fg-4); text-decoration:none; font-size:11px;">Almacén ↗</a>`
+      : '';
     const filasCampo = enCampoOrd.map(e => `<tr>
-      <td class="cg-mono"><a href="#" onclick="Centro.verKardex('${this.esc(e.id)}'); return false;">${this.esc(e.serial || e.id)}</a>${P?.origenReemplazoHtml ? P.origenReemplazoHtml(e) : ''}</td>
+      <td class="cg-mono"><a href="#" onclick="Centro.verKardex('${this.esc(e.id)}'); return false;">${this.esc(e.serial || e.id)}</a>${P?.origenReemplazoHtml ? P.origenReemplazoHtml(e) : ''}${lnkAlmacen(e)}</td>
       <td>${this.esc(e.modelo_label || '—')}</td>
       <td>${P?.chipPropiedadHtml ? P.chipPropiedadHtml(e) : this.esc(e.propiedad || '')}</td>
       <td>${P?.chipEstadoHtml ? P.chipEstadoHtml(e.estado) : this.esc(e.estado || '')}</td></tr>`).join('');

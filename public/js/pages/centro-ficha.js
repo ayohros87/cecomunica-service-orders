@@ -36,6 +36,15 @@ Object.assign(window.Centro, {
           console.warn('[centro] gestiones no disponibles:', e?.message || e);
           return [];
         }),
+        // Órdenes del cliente para la franja de contexto (auditoría de módulos
+        // 2026-09-30, 08 P8): la ficha decía "11 equipos en taller" y no
+        // enlazaba ninguna orden. El estado se filtra en el servidor: con
+        // limit(80) a secas, un cliente con 106 órdenes (SEPROSA) perdía la
+        // abierta más reciente. Igualdad + `in` se sirve mezclando índices de
+        // un campo (sin compuesto); si falla, la ficha sigue.
+        db.collection('ordenes_de_servicio').where('cliente_id', '==', clienteId)
+          .where('estado_reparacion', 'in', ['POR ASIGNAR', 'RECIBIDO EN MOSTRADOR', 'ASIGNADO', 'COMPLETADO (EN OFICINA)']).limit(80).get()
+          .catch(e => { console.warn('[centro] órdenes del cliente no disponibles:', e?.message || e); return null; }),
       ]);
       enVuelo.catch(() => {}); // si el cliente no existe, nadie espera esto
       const c = await ClientesService.getCliente(clienteId);
@@ -67,10 +76,14 @@ Object.assign(window.Centro, {
       // Contratos + flota + gestiones ya venían en vuelo desde arriba. Las
       // gestiones NO tumban la ficha si fallan (p. ej. reglas aún sin
       // desplegar en un entorno): el cliente completo vale más que esa sección.
-      const [conSnap, equipos, , gestiones] = await enVuelo;
+      const [conSnap, equipos, , gestiones, osSnap] = await enVuelo;
       this.contratos = this._mapContratos(conSnap);
       this.equipos = Array.isArray(equipos) ? equipos : [];
       this.gestiones = gestiones;
+      const ABIERTAS = ['POR ASIGNAR', 'RECIBIDO EN MOSTRADOR', 'ASIGNADO', 'COMPLETADO (EN OFICINA)'];
+      this.ordenesAbiertas = osSnap ? osSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(o => o.eliminado !== true && ABIERTAS.includes(String(o.estado_reparacion || '').toUpperCase()))
+        .sort((a, b) => String(b.id).localeCompare(String(a.id))) : [];
 
       this.pintarKpis();
       this.pintarSenales();
