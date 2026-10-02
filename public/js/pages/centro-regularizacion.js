@@ -98,8 +98,7 @@ Object.assign(window.Centro, {
     return String(v);
   },
   _histCuando(fv) {
-    const d = fv?.toDate ? fv.toDate() : null;
-    return d ? d.toLocaleString('es-PA', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+    return this._fmtFechaHora(fv);
   },
   async verHistorial() {
     if (!this.cliente) return;
@@ -197,9 +196,44 @@ Object.assign(window.Centro, {
     if (!d || isNaN(d)) return null;
     return Math.ceil((d - new Date()) / 86400000);
   },
+  // UN formato de fecha en todo el Centro (auditoría de módulos 2026-09-30,
+  // C6: convivían "09/30/2026", "2026-09-30" y "29 mar 2027"). Es el mismo
+  // de Órdenes (formatFecha / formatFechaHora, f56de9f): "30 sep 2026" y
+  // "30 sep 2026, 4:16 p. m.", en hora de Panamá y armado aquí para no
+  // depender del locale del navegador. Acepta Timestamp, Date, ISO y
+  // "YYYY-MM-DD"; la fecha sola es un día de calendario, no un instante:
+  // new Date("2026-09-30") es medianoche UTC y en Panamá saldría el 29.
+  _MESES_CORTOS: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'],
+  _partesFecha(fv) {
+    if (!fv) return null;
+    if (typeof fv === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fv)) {
+      const [y, m, d] = fv.split('-').map(Number);
+      return { year: String(y), month: m, day: String(d), soloDia: true };
+    }
+    let d;
+    try { d = fv?.toDate ? fv.toDate() : (fv instanceof Date ? fv : new Date(fv)); } catch { return null; }
+    if (!d || isNaN(d.getTime())) return null;
+    const p = {};
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Panama', year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true,
+    }).formatToParts(d).forEach(x => { p[x.type] = x.value; });
+    return { ...p, month: Number(p.month) };
+  },
   _fmtFecha(fv) {
-    const d = fv?.toDate ? fv.toDate() : (fv ? new Date(fv) : null);
-    return d && !isNaN(d) ? d.toLocaleDateString('es-PA', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const p = this._partesFecha(fv);
+    return p ? `${p.day} ${this._MESES_CORTOS[p.month - 1]} ${p.year}` : '—';
+  },
+  _fmtFechaCorta(fv) {
+    const p = this._partesFecha(fv);
+    return p ? `${p.day} ${this._MESES_CORTOS[p.month - 1]}` : null;
+  },
+  _fmtFechaHora(fv) {
+    const p = this._partesFecha(fv);
+    if (!p) return '—';
+    const dia = `${p.day} ${this._MESES_CORTOS[p.month - 1]} ${p.year}`;
+    if (p.soloDia) return dia;
+    return `${dia}, ${p.hour}:${p.minute} ${String(p.dayPeriod || '').toUpperCase() === 'PM' ? 'p. m.' : 'a. m.'}`;
   },
   _vencInfo(c) {
     // Preferir el estado estampado por el cron; derivar solo si aún no existe.

@@ -857,7 +857,7 @@ Object.assign(window.Centro, {
       if (!movs.length) { cont.innerHTML = '<p style="color:var(--fg-3); font-size:13px;">Sin movimientos registrados.</p>'; return; }
       const L = (window.EquiposPoolService?.ESTADO_LABELS) || {};
       cont.innerHTML = movs.map(m => {
-        const fecha = m.at?.toDate ? (window.FMT?.datetime ? FMT.datetime(m.at.toDate()) : m.at.toDate().toLocaleString()) : '—';
+        const fecha = this._fmtFechaHora(m.at);
         const trans = (m.de_estado || m.a_estado)
           ? ` <span style="color:var(--fg-3);">${this.esc(L[m.de_estado] || m.de_estado || '·')} → ${this.esc(L[m.a_estado] || m.a_estado || '·')}</span>` : '';
         const ref = m.ref ? ` · <span style="color:var(--fg-3);">${this.esc(m.ref.tipo || '')}: ${this.esc(m.ref.label || m.ref.id || '')}</span>` : '';

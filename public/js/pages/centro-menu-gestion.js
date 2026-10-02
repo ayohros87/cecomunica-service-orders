@@ -302,7 +302,7 @@ Object.assign(window.Centro, {
   _docFilaHtml(d) {
     const kb = Number(d.size) || 0;
     const tam = !kb ? '' : kb < 1024 * 1024 ? `${Math.round(kb / 1024)} KB` : `${(kb / 1024 / 1024).toFixed(1)} MB`;
-    const f = d.subido_en?.toDate ? (window.FMT?.datetime ? FMT.datetime(d.subido_en.toDate()) : d.subido_en.toDate().toLocaleString('es-PA', { hour12: false })) : '';
+    const f = d.subido_en ? this._fmtFechaHora(d.subido_en) : '';
     const meta = [this.esc(d.nombre_archivo || ''), tam, this.esc(f)].filter(Boolean).join(' · ');
     return `<div style="display:flex; gap:10px; align-items:center; padding:9px 2px; border-bottom:1px solid var(--border-subtle);">
       <i data-lucide="${(d.content_type || '').includes('pdf') ? 'file-text' : 'camera'}" style="width:18px; height:18px; color:var(--fg-3); flex:none;"></i>

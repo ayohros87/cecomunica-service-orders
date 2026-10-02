@@ -215,7 +215,7 @@ Object.assign(window.Centro, {
     this._cerrarModal();
     document.getElementById('cgMenu')?.classList.add('hidden');
     await this._cargarModelos();
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = FMT.hoyISOPanama(); // no UTC: después de las 7 p. m. ya sería mañana
     this._abrirModal(`
       <h3 style="margin:0 0 6px;">Nueva solicitud de demo — ${this.esc(this.cliente.nombre)}</h3>
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:66ch;">

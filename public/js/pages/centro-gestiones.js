@@ -437,7 +437,7 @@ Object.assign(window.Centro, {
     if (out.length) { this.pintarAcciones(); if (window.lucide?.createIcons) lucide.createIcons(); }
   },
   _osPasos(o) {
-    const f = (ts) => { const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null); return d && !isNaN(d) ? d.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit' }) : null; };
+    const f = (ts) => this._fmtFechaCorta(ts);
     return [
       ['Creada', f(o.fecha_creacion || o.creado_en)],
       ['Recibida', f(o.fecha_recepcion)],
@@ -498,7 +498,7 @@ Object.assign(window.Centro, {
       // "3/4" en un aumento cerrado con sus 6 pasos completos).
       const defsG = this._defsGestion(g);
       const done = defsG.filter(([k]) => this._pasoDone(g, k)).length;
-      const fecha = g.fecha_solicitud?.toDate ? g.fecha_solicitud.toDate().toLocaleDateString('es-PA') : '—';
+      const fecha = this._fmtFecha(g.fecha_solicitud);
       const abierta = this.gSel === g.id;
       return `
       <div class="cg-row cg-row--g${atenuada && !abierta ? ' cg-tenue' : ''}" id="grow-${this.esc(g.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('${this.esc(g.id)}')"
@@ -766,7 +766,7 @@ Object.assign(window.Centro, {
       const pen = g.penalidad_estimada;
       const esTerm = Array.isArray(g.terminacion_total_de) && g.terminacion_total_de.length;
       const cartaHtml = g.carta_path
-        ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:0 0 8px;">✓ Carta del cliente adjunta${g.fecha_nota_cliente ? ` (nota del ${this.esc(g.fecha_nota_cliente)})` : ''}
+        ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:0 0 8px;">✓ Carta del cliente adjunta${g.fecha_nota_cliente ? ` (nota del ${this.esc(this._fmtFecha(g.fecha_nota_cliente))})` : ''}
              <button class="btn btn-ghost cg-act" onclick="Centro.verAnexo('${this.esc(g.carta_path)}')">Ver carta</button></p>`
         : `<div class="cg-senal warn" style="margin:0 0 8px;">
              <span><b>Falta la carta de solicitud del cliente</b> — la aprobación queda bloqueada hasta adjuntarla
@@ -781,7 +781,7 @@ Object.assign(window.Centro, {
           <td>${this.esc(it.modelo || '—')}</td>
           <td class="cg-mono" style="font-size:12px;">${this.esc(it.contrato_id || '—')}</td>
           <td style="font-size:12.5px;">${this.esc(it.motivo_detalle || it.motivo_codigo || '—')}</td>
-          <td class="num" style="font-size:12.5px;">${this.esc(it.fecha_fin_facturacion || g.fecha_fin_facturacion || '—')}</td>
+          <td class="num" style="font-size:12.5px;">${this.esc(this._fmtFecha(it.fecha_fin_facturacion || g.fecha_fin_facturacion))}</td>
         </tr>`).join('')}</tbody></table></div>
         ${pen?.por_contrato?.length ? `
           <p style="font-size:13px; margin:10px 0 4px;"><b>Liquidación estimada por contrato — 3 meses en cualquier caso</b>
@@ -887,8 +887,8 @@ Object.assign(window.Centro, {
       const asignando = this.puedeAsignar() && g.estado === 'pendiente_bodega';
       cuerpo = `
         <p style="font-size:13px; margin:0 0 8px;"><b>Finalidad:</b> ${this.esc(g.demo?.finalidad || '—')} ·
-          <b>Salida:</b> ${this.esc(g.demo?.fecha_salida || '—')} ·
-          <b>Devolución estimada:</b> ${this.esc(g.demo?.fecha_devolucion_estimada || 'sin fecha')}</p>
+          <b>Salida:</b> ${this.esc(this._fmtFecha(g.demo?.fecha_salida))} ·
+          <b>Devolución estimada:</b> ${this.esc(g.demo?.fecha_devolucion_estimada ? this._fmtFecha(g.demo.fecha_devolucion_estimada) : 'sin fecha')}</p>
         <p style="font-size:13px; margin:0;"><b>Seriales:</b> ${asignados.length
               ? asignados.map(s => `<span class="cg-mono">${this.esc(s.serial)}</span>`).join(', ')
                 + (total > asignados.length ? ` <span style="color:var(--fg-3);">· ${asignados.length} de ${total}</span>` : '')
@@ -961,7 +961,7 @@ Object.assign(window.Centro, {
     // Pie del expediente: el siguiente paso y "Acciones ⋯" — la MISMA lista
     // del "⋯" de la fila. Nada de botoneras por estado repartidas por el
     // cuerpo (M.A.M. PROTECTION, 2026-09-09).
-    const fEd = g.editada?.at?.toDate ? g.editada.at.toDate().toLocaleDateString('es-PA') : '';
+    const fEd = g.editada?.at ? this._fmtFecha(g.editada.at) : '';
     const editada = g.editada
       ? `<span style="font-size:12px; color:var(--fg-3);">✎ Corregida por ${this.esc(g.editada.por_email || '—')}${fEd ? ` el ${fEd}` : ''}</span>` : '';
     const pie = `<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
@@ -1293,7 +1293,7 @@ Object.assign(window.Centro, {
       title: esTerm ? 'Aprobar la terminación' : 'Aprobar la baja', danger: !!esTerm,
       confirmLabel: esTerm ? 'Aprobar terminación' : 'Aprobar baja',
       message: `${esTerm ? '<b>TERMINACIÓN TOTAL</b>: se desconectan todos los seriales del contrato. ' : ''}Salen
-        <b>${nSer} serial(es)</b>${contratos.length ? ` de <b class="cg-mono">${this.esc(contratos.join(', '))}</b>` : ''}${g?.fecha_fin_facturacion ? `; la facturación termina el <b>${this.esc(g.fecha_fin_facturacion)}</b>` : ''}.
+        <b>${nSer} serial(es)</b>${contratos.length ? ` de <b class="cg-mono">${this.esc(contratos.join(', '))}</b>` : ''}${g?.fecha_fin_facturacion ? `; la facturación termina el <b>${this.esc(this._fmtFecha(g.fecha_fin_facturacion))}</b>` : ''}.
         ${pen ? `<br>Liquidación estimada: <b>$${pen.toFixed(2)}</b>.` : ''}
         <br><br>Al aprobar, el sistema deriva la facturación y crea la <b>orden de DEVOLUCIÓN</b> por serial para recoger los equipos.`,
     });

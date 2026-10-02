@@ -185,8 +185,8 @@ Object.assign(window.Centro, {
     const t = document.getElementById('wbTermino')?.value || 'fin_mes';
     const d = new Date();
     if (t === 'fin_mes') return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
-    if (t === '30_dias') return new Date(d.getTime() + 30 * 86400000).toISOString().slice(0, 10);
-    if (t === '60_dias') return new Date(d.getTime() + 60 * 86400000).toISOString().slice(0, 10);
+    if (t === '30_dias') return FMT.fechaISOPanama(new Date(d.getTime() + 30 * 86400000));
+    if (t === '60_dias') return FMT.fechaISOPanama(new Date(d.getTime() + 60 * 86400000));
     return document.getElementById('wbFin')?.value || '';
   },
 
