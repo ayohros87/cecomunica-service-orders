@@ -122,14 +122,14 @@ Colección `cotizaciones`. Estados: `borrador → enviada → aprobada → recha
 | Servicio | `cotizar-orden-formal.js` desde una orden (`origen='orden'`) | `jefe_taller` (o admin) |
 
 ```
-borrador ──(dentro de política: desc ≤15% y total ≤$5,000)──▶ el vendedor envía él mismo
+borrador ──(dentro de política: desc ≤20% y total ≤$15,000)──▶ el vendedor envía él mismo
     │
     └─(fuera de política)──▶ correo al aprobador ──▶ aprobada ──▶ enviada al cliente
                                                         (link público /verify/cotizacion.html + PDF)
 enviada ──▶ convertida (venta) | rechazada | vencida (cron 06:00)
 ```
 
-- Política en `cotizacionesTotales.js` (`POLICY_DEFAULT` 15% / $5,000; configurable en `empresa/config`).
+- Política en `cotizacionesTotales.js` (`POLICY_DEFAULT` 20% / $15,000, los mismos valores vivos de `empresa/config`, donde se configura).
 - Al aprobar: `confirmarAprobacion()` crea mirror en `cotizacion_verificaciones`, encola correo al cliente (BCC supervisión `mail_bcc_cotizacion`), marca `enviada`.
 - Apertura del link público → `cotizacion_opens` → `onCotizacionOpened` avisa al vendedor (throttle 6h).
 - **Candado de materiales**: `onCotizacionEstadoChange` — cotización de servicio `enviada`/`aprobada` escribe `cotizacion_emitida:true` en la orden (bloquea consumos); `rechazada`/`vencida` lo revierte.

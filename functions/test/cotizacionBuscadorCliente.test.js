@@ -219,7 +219,7 @@ test("B3 · las tres puertas a borrador deciden la aprobación con la misma regl
 test("B3 · el predicado: umbral primero, rol después", () => {
   const CotState = cargarCotState();
   const dentro = { total: 160.5, descuentoPct: 0 };   // el caso COT-2026-0042
-  const pol = { descuentoMaxPct: 15, totalMax: 5000 };
+  const pol = { descuentoMaxPct: 20, totalMax: 15000 };
 
   // Vendedora, dentro de umbral → nadie tiene que aprobar nada.
   assert.equal(
@@ -229,7 +229,7 @@ test("B3 · el predicado: umbral primero, rol después", () => {
   );
 
   // Fuera de umbral por total o por descuento → sí.
-  assert.equal(CotState.requiereAprobacionPara({ doc: { total: 6420, descuentoPct: 0 }, rol: "vendedor", policy: pol }).requiere, true);
+  assert.equal(CotState.requiereAprobacionPara({ doc: { total: 16050, descuentoPct: 0 }, rol: "vendedor", policy: pol }).requiere, true);
   assert.equal(CotState.requiereAprobacionPara({ doc: { total: 508.6, descuentoPct: 30 }, rol: "vendedor", policy: pol }).requiere, true);
 
   // Dentro de umbral pero con un rol que no envía al cliente → también.
@@ -240,7 +240,7 @@ test("B3 · el predicado: umbral primero, rol después", () => {
   // El umbral por defecto que decide todo esto.
   assert.match(
     leer("public", "js", "domain", "cotizacionesTotales.js"),
-    /POLICY_DEFAULT: \{ descuentoMaxPct: 15, totalMax: 5000 \}/,
+    /POLICY_DEFAULT: \{ descuentoMaxPct: 20, totalMax: 15000 \}/,
   );
 });
 

@@ -53,8 +53,8 @@ const onPolitica = require("../src/triggers/cotizaciones/onPolitica");
 Module._load = origLoad;
 const { decidir, rolAprueba, MAIL_MIN_MS } = onPolitica._interno;
 
-// Config viva: 15% / $5,000. tallerEmailTo lee email_taller de aquí.
-store.docs["empresa/config"] = { cotizacion_descuento_max_pct: 15, cotizacion_total_max: 5000, email_taller: "jefa@cecomunica.com" };
+// Config viva: 20% / $15,000. tallerEmailTo lee email_taller de aquí.
+store.docs["empresa/config"] = { cotizacion_descuento_max_pct: 20, cotizacion_total_max: 15000, email_taller: "jefa@cecomunica.com" };
 store.docs["usuarios/uAdmin"] = { rol: "administrador" };
 store.docs["usuarios/uJefa"] = { rol: "jefe_taller" };
 store.docs["usuarios/uGerente"] = { rol: "gerente" };
@@ -192,7 +192,7 @@ test("P4 · sin eco: lo que el trigger escribió no vuelve a escribir; el correo
   assert.equal(store.mail.length, 0);
 
   // El cliente insiste 5 minutos después: se regresa otra vez, pero sin correo.
-  const policy = { descuentoMaxPct: 15, totalMax: 5000 };
+  const policy = { descuentoMaxPct: 20, totalMax: 15000 };
   const d1 = decidir(bloqueada, { ...bloqueada, estado: "enviada", requiere_aprobacion: false }, policy,
     { ahoraMs: FIJO.getTime() + 5 * 60 * 1000 });
   assert.equal(d1.bloquea, true);

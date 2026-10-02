@@ -164,7 +164,7 @@
                 <td style="text-align:center;">${esc(it.cant)}</td>
                 ${tot.hayAlquiler ? `<td style="text-align:center;"><span class="cc-mod-chip ${esAlq ? 'es-alquiler' : 'es-venta'}">${esAlq ? 'Alquiler' : 'Venta'}</span></td>` : ''}
                 <td style="text-align:right;">${FMT.money(it.precio)}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</td>
-                <td style="text-align:right;${Number(it.desc || 0) > Number(policyCfg?.descuentoMaxPct ?? 15) ? ' color:#B91C1C; font-weight:600;' : ''}">${Number(it.desc || 0) > 0 ? Number(it.desc) + '%' : '—'}</td>
+                <td style="text-align:right;${Number(it.desc || 0) > Number(policyCfg?.descuentoMaxPct ?? T.POLICY_DEFAULT.descuentoMaxPct) ? ' color:#B91C1C; font-weight:600;' : ''}">${Number(it.desc || 0) > 0 ? Number(it.desc) + '%' : '—'}</td>
                 <td style="text-align:right;">${FMT.money(T.lineTotal(it))}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</td>
               </tr>`;
             }).join('')}

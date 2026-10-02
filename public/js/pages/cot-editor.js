@@ -746,7 +746,7 @@
           <label class="form-label">Descuento global %</label>
           <input type="number" class="form-input" id="inpDesc" min="0" max="100" value="${esc(draft.descuentoPct)}">
           <span style="display:block; font-size:11.5px; color:var(--fg-3); margin-top:2px;">
-            Sobre ${Number(policyCfg?.descuentoMaxPct ?? 15)}% de descuento —global <b>o en cualquier renglón</b>— o ${FMT.money(Number(policyCfg?.totalMax ?? 5000))} requiere aprobación.${t.hayAlquiler ? ' El alquiler cuenta hasta 12 meses.' : ''}
+            Sobre ${Number(policyCfg?.descuentoMaxPct ?? T.POLICY_DEFAULT.descuentoMaxPct)}% de descuento —global <b>o en cualquier renglón</b>— o ${FMT.money(Number(policyCfg?.totalMax ?? T.POLICY_DEFAULT.totalMax))} requiere aprobación.${t.hayAlquiler ? ' El alquiler cuenta hasta 12 meses.' : ''}
           </span>
         </div>
         <div class="form-field">

@@ -166,9 +166,10 @@ const CotizacionTotales = {
   // Dentro de límites, el vendedor envía la cotización él mismo; fuera de
   // límites, requiere aprobación. Umbrales configurables en empresa/config;
   // los defaults se mantienen aquí para sobrevivir una caída de Firestore.
-  // Se dejan por debajo de los valores vivos a propósito: ante una caída de
-  // Firestore la política falla CERRADA (más aprobaciones, nunca menos).
-  POLICY_DEFAULT: { descuentoMaxPct: 15, totalMax: 5000 },
+  // Son los mismos valores vivos de empresa/config (20 % / $15,000, decisión
+  // de Alberto 2026-10-02): sin config, la política es la misma, ni más
+  // floja ni más estricta.
+  POLICY_DEFAULT: { descuentoMaxPct: 20, totalMax: 15000 },
 
   // Mapea el doc empresa/config (EmpresaService.getConfig) a la forma de política.
   policyFromConfig(cfg) {

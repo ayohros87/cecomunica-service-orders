@@ -30,7 +30,7 @@ Probado en el emulador, **no corrido en producción**:
 
 **De antes (sin respuesta):**
 - Regla para la deuda de migración del pool: baja masiva, apartar de los contadores, o cruzar antes con PoC.
-- Política de cotizaciones: ¿15 %/$5,000 o 20 %/$15,000?
+- ~~Política de cotizaciones: ¿15 %/$5,000 o 20 %/$15,000?~~ **20 %/$15,000** (Alberto, 2026-10-02).
 
 **Nuevas, de los agentes:**
 - **PoC:** en 134 seriales la ficha más reciente está inactiva y se cerraría una vieja activa. ¿Se aplica la regla igual? En 144 el pool dice otro cliente. ¿Se cierran o se apartan?

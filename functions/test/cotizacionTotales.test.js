@@ -207,9 +207,12 @@ test("con items, el recalculo puede SUBIR el total pero nunca bajarlo", () => {
   assert.equal(T.evaluarPolitica(cot, POL).requiere, true);
 });
 
-test("los defaults fallan CERRADO si Firestore no responde", () => {
-  // Sin política explícita se usan los literales del módulo (15% / $5,000),
-  // más estrictos que los valores vivos: una caída no puede soltar aprobaciones.
-  const r = T.evaluarPolitica({ items: [{ cant: 1, precio: 8000 }], itbmsPct: 0 }, null);
-  assert.equal(r.requiere, true);
+test("sin config, los defaults son la política viva (20% / $15,000)", () => {
+  // Sin política explícita se usan los literales del módulo, iguales a
+  // empresa/config (decisión de Alberto 2026-10-02).
+  assert.deepEqual({ ...T.POLICY_DEFAULT }, { descuentoMaxPct: 20, totalMax: 15000 });
+  assert.equal(T.evaluarPolitica({ items: [{ cant: 1, precio: 8000 }], itbmsPct: 0 }, null).requiere, false);
+  assert.equal(T.evaluarPolitica({ items: [{ cant: 1, precio: 15001 }], itbmsPct: 0 }, null).requiere, true);
+  assert.equal(T.evaluarPolitica({ items: [{ cant: 1, precio: 100, desc: 21 }], itbmsPct: 0 }, null).requiere, true);
+  assert.equal(T.evaluarPolitica({ items: [{ cant: 1, precio: 100, desc: 20 }], itbmsPct: 0 }, null).requiere, false);
 });
