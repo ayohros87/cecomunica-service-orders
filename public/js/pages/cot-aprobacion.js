@@ -60,12 +60,12 @@
     const T = window.CotizacionTotales;
     const doc = await CotizacionesService.getCotizacion(docId);
     if (!doc) { Toast.show('Cotización no encontrada', 'bad'); return; }
-    // Permiso según TIPO: servicio → jefe de mantenimiento; comercial → gerente
-    // (ambas también el admin).
+    // Permiso según TIPO: servicio → jefe de mantenimiento (o admin);
+    // comercial → administración (D11, 2026-10-01: no hay gerentes).
     if (!puedeAprobarCotizacion(ctx.rol, doc)) {
       Toast.show(esCotizacionServicio(doc)
         ? 'Las cotizaciones de servicio las aprueba el jefe de mantenimiento o un administrador.'
-        : 'Las cotizaciones comerciales las aprueba un gerente o un administrador.', 'warn');
+        : 'Las cotizaciones comerciales las aprueba administración.', 'warn');
       return;
     }
     _ctx = { ...ctx, docId };
@@ -324,7 +324,7 @@
   }
 
   // ── Rechazo del aprobador ─────────────────────────────────────
-  // Auditoría UX 2026-09-28 (P0 #17): el rechazo del gerente quedaba como
+  // Auditoría UX 2026-09-28 (P0 #17): el rechazo del aprobador quedaba como
   // "Rechazada · cliente declinó", sin motivo ni aviso, y contaba como
   // oportunidad perdida del vendedor. Ahora pide el motivo (obligatorio),
   // marca rechazo_origen:'aprobador' y avisa al vendedor por correo.

@@ -81,7 +81,7 @@
     if (cot.fecha_aprobacion) {
       // aprobado_por_email existe desde 2026-07-17; docs previos no lo traen
       // y no se inventa el rol (antes decía "por administrador" fijo aunque
-      // aprobara jefe de taller o gerente).
+      // aprobara jefe de taller o administración).
       h.push({
         act: 'Aprobada internamente',
         meta: fmtFechaAny(cot.fecha_aprobacion) + (cot.aprobado_por_email ? ' · por ' + cot.aprobado_por_email : ''),
@@ -738,7 +738,7 @@
       // Modo supervisión: una cotización ajena abierta gracias a la allowlist se
       // muestra sin acciones — las reglas de Firestore denegarían la escritura.
       soloLectura = esSupervisor
-        && ![ROLES.ADMIN, ROLES.JEFE_TALLER, ROLES.GERENTE].includes(rol)
+        && ![ROLES.ADMIN, ROLES.JEFE_TALLER].includes(rol)
         && doc.creado_por_uid !== user.uid;
 
       catalogos = await catalogosEnVuelo;

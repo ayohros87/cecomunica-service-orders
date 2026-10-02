@@ -27,9 +27,10 @@ service cloud.firestore {
     function isAdmin()    { return isSignedIn() && userRole() == "administrador"; }
     // Cotizaciones: aprobación separada por TIPO (ver match /cotizaciones).
     //   puedeCotizar → crear/listar;  verTodasCot → ver/editar/borrar cualquiera (como admin).
-    //   gerente: incluido para que pueda revisar y aprobar cotizaciones comerciales.
+    //   Las comerciales las aprueba administración (auditoría de módulos
+    //   2026-10-01, D11): el rol gerente no existe en producción y salió de aquí.
     function puedeCotizar() { return isSignedIn() && userRole() in ["administrador", "vendedor", "jefe_taller", "recepcion", "gerente"]; }
-    function verTodasCot()  { return isSignedIn() && userRole() in ["administrador", "jefe_taller", "gerente"]; }
+    function verTodasCot()  { return isSignedIn() && userRole() in ["administrador", "jefe_taller"]; }
     // Supervisión de cotizaciones (coordinación de ventas): emails en
     // empresa/config.cotizaciones_supervisores pueden VER todas las
     // cotizaciones (get/list) sin importar su rol. Solo lectura: no se
@@ -224,7 +225,7 @@ service cloud.firestore {
 
       // Envío del dueño (estado→enviada) no es aprobacionTocada → vendedor envía lo
       // suyo. La APROBACIÓN se separa por tipo: servicio la aprueba el jefe de
-      // mantenimiento (jefe_taller); comercial, el gerente; admin cualquiera.
+      // mantenimiento (jefe_taller); comercial, administración (admin).
       // Un técnico de taller solo puede mantener SU borrador (editarlo): no puede
       // moverlo a 'enviada' ni 'aprobada' — eso lo hace el supervisor.
       allow update: if (verTodasCot() || esDueno())
@@ -232,15 +233,13 @@ service cloud.firestore {
                      && (!esTecnicoTaller() || request.resource.data.estado == "borrador")
                      && (isAdmin()
                          || !aprobacionTocada()
-                         || (userRole() == "jefe_taller" && cotEsServicio())
-                         || (userRole() == "gerente" && !cotEsServicio()))
+                         || (userRole() == "jefe_taller" && cotEsServicio()))
                      // Política de envío ENFORCED: fuera de umbral y sin
                      // aprobación previa, el envío queda para el aprobador
-                     // del tipo (jefe_taller→servicio, gerente→comercial).
+                     // del tipo (jefe_taller→servicio, admin→comercial).
                      && (!envioTocado()
                          || isAdmin()
                          || (userRole() == "jefe_taller" && cotEsServicio())
-                         || (userRole() == "gerente" && !cotEsServicio())
                          || aprobadaAntes()
                          || politicaEnvioOk());
 

@@ -118,7 +118,7 @@ Colección `cotizaciones`. Estados: `borrador → enviada → aprobada → recha
 
 | Tipo | Origen | Aprueba |
 |---|---|---|
-| Comercial | `cot-editor.js` (módulo ventas) | `gerente` (o admin) — correo a `empresa/config.cotizacion_aprobacion_to` |
+| Comercial | `cot-editor.js` (módulo ventas) | administración (`administrador`: Alberto y Zuleika; D11 2026-10-01) — correo a `empresa/config.cotizacion_aprobacion_to` (vacío → `ventas@`) |
 | Servicio | `cotizar-orden-formal.js` desde una orden (`origen='orden'`) | `jefe_taller` (o admin) |
 
 ```
@@ -133,7 +133,7 @@ enviada ──▶ convertida (venta) | rechazada | vencida (cron 06:00)
 - Al aprobar: `confirmarAprobacion()` crea mirror en `cotizacion_verificaciones`, encola correo al cliente (BCC supervisión `mail_bcc_cotizacion`), marca `enviada`.
 - Apertura del link público → `cotizacion_opens` → `onCotizacionOpened` avisa al vendedor (throttle 6h).
 - **Candado de materiales**: `onCotizacionEstadoChange` — cotización de servicio `enviada`/`aprobada` escribe `cotizacion_emitida:true` en la orden (bloquea consumos); `rechazada`/`vencida` lo revierte.
-- Supervisión: `verTodasCot()` (admin+jefe_taller+gerente) + allowlist `cotizaciones_supervisores` (solo lectura, enforced en rules).
+- Supervisión: `verTodasCot()` (admin+jefe_taller) + allowlist `cotizaciones_supervisores` (solo lectura, enforced en rules).
 - No hay aceptación del cliente en línea: el vendedor cierra manualmente como `convertida`/`rechazada`.
 
 ### 3.3 Contratos, seriales y entrega

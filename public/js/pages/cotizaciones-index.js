@@ -355,7 +355,7 @@
   // (allowlist cotizaciones_supervisores) ve todas las filas pero las ajenas en
   // solo-lectura — las reglas de Firestore le denegarían la escritura de todos modos.
   function puedeMutarFila(c) {
-    return [ROLES.ADMIN, ROLES.JEFE_TALLER, ROLES.GERENTE].includes(userRol)
+    return [ROLES.ADMIN, ROLES.JEFE_TALLER].includes(userRol)
         || c.creado_por_uid === userUid;
   }
 

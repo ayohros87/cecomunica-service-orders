@@ -59,11 +59,13 @@ const _PERMISOS = {
   // Aprobación FUERA de política, separada por TIPO de cotización:
   //   · servicio  (origen === 'orden', sale de una orden de taller) → jefe de
   //     mantenimiento (rol jefe_taller) + admin.
-  //   · comercial (cotización directa del módulo de ventas)         → gerente + admin.
+  //   · comercial (cotización directa del módulo de ventas)         → administración (admin).
+  //     (Auditoría de módulos 2026-10-01, D11: aprueban Alberto y Zuleika; el
+  //     rol `gerente` no existe en producción y sobraba en los textos.)
   // No usar estos permisos sueltos en la UI: pasar por puedeAprobarCotizacion(rol, cot),
   // que elige el correcto según cot.origen.
   'aprobar-cotizacion-servicio':  ['administrador', 'jefe_taller'],
-  'aprobar-cotizacion-comercial': ['administrador', 'gerente'],
+  'aprobar-cotizacion-comercial': ['administrador'],
 };
 
 // canRole(rol, accion) → boolean
@@ -82,7 +84,7 @@ window.esCotizacionServicio = function(cot) {
 };
 
 // ¿El rol puede APROBAR esta cotización? Elige el permiso según el tipo:
-// servicio → jefe de mantenimiento/admin; comercial → gerente/admin.
+// servicio → jefe de mantenimiento/admin; comercial → administración.
 window.puedeAprobarCotizacion = function(rol, cot) {
   return canRole(rol, esCotizacionServicio(cot)
     ? 'aprobar-cotizacion-servicio'

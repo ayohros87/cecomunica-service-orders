@@ -51,12 +51,12 @@ function tieneAprobacion(cot) {
 }
 
 // Mismo criterio que firestore.rules (allow update → envioTocado):
-// admin siempre; jefe_taller aprueba servicio; gerente aprueba comercial.
+// admin siempre; jefe_taller aprueba servicio; comercial solo admin (D11,
+// 2026-10-01: el rol gerente no existe y salió de rules).
 function rolAprueba(rol, cot) {
   const r = String(rol || "");
   if (r === "administrador") return true;
   if (r === "jefe_taller") return esServicio(cot);
-  if (r === "gerente") return !esServicio(cot);
   return false;
 }
 

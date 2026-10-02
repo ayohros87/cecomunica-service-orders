@@ -151,8 +151,6 @@ test("P3 · se respeta: con aprobación registrada, dentro de política, o escri
     evento({ before: { ...DENTRO, estado: "borrador" }, after: { ...DENTRO, estado: "enviada", requiere_aprobacion: false } }),
     // admin envía sin estampar aprobación (rules lo permiten)
     evento({ before: { ...FUERA, estado: "borrador" }, after: { ...FUERA, estado: "enviada", requiere_aprobacion: true }, authId: "uAdmin" }),
-    // gerente en comercial
-    evento({ before: { ...FUERA, estado: "borrador" }, after: { ...FUERA, estado: "enviada", requiere_aprobacion: true }, authId: "uGerente" }),
     // jefe_taller en servicio
     evento({ before: { ...FUERA, origen: "orden", estado: "borrador" }, after: { ...FUERA, origen: "orden", estado: "enviada", requiere_aprobacion: true }, authId: "uJefa" }),
     // escritura del servidor (Admin SDK)
@@ -168,6 +166,8 @@ test("P3 · se respeta: con aprobación registrada, dentro de política, o escri
   // Los roles que NO aprueban ese tipo sí se bloquean
   assert.equal(rolAprueba("jefe_taller", { origen: "comercial" }), false);
   assert.equal(rolAprueba("gerente", { origen: "orden" }), false);
+  // D11 (2026-10-01): comercial la aprueba administración; gerente ya no.
+  assert.equal(rolAprueba("gerente", { origen: "comercial" }), false);
   assert.equal(rolAprueba("vendedor", {}), false);
   const { ev, patches } = evento({ before: { ...FUERA, estado: "borrador" }, after: { ...FUERA, estado: "enviada", requiere_aprobacion: true }, authId: "uJefa" });
   await onPolitica(ev);
