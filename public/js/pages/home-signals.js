@@ -74,7 +74,7 @@ window.HomeSignals = (() => {
       row: (r, esc) => ({
         txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.id)}</span> · ${esc(r.tipo)}`,
         dias: r.dias,
-        cta: { label: 'Abrir orden', href: `ordenes/editar-orden.html?id=${encodeURIComponent(r.id)}` },
+        cta: { label: 'Abrir orden', href: `ordenes/index.html?ids=${encodeURIComponent(r.id)}` },
       }),
       hrefLabel: 'Ver todas →',
       vacio: 'No hay órdenes pendientes de asignar.',
@@ -109,7 +109,7 @@ window.HomeSignals = (() => {
       row: (r, esc) => ({
         txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.id)}</span> · ${esc(r.motivo)}`,
         dias: r.dias,
-        cta: { label: 'Abrir orden', href: `ordenes/editar-orden.html?id=${encodeURIComponent(r.id)}` },
+        cta: { label: 'Abrir orden', href: `ordenes/index.html?ids=${encodeURIComponent(r.id)}` },
       }),
       vacio: 'Nada en cola. El taller está al día.',
     },
@@ -156,7 +156,7 @@ window.HomeSignals = (() => {
         txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.id)}</span>`
           + ` · ${esc(r.estado.toLowerCase())}${r.tecnico ? ' · ' + esc(r.tecnico) : ''}`,
         dias: r.dias,
-        cta: { label: 'Abrir orden', href: `ordenes/editar-orden.html?id=${encodeURIComponent(r.id)}` },
+        cta: { label: 'Abrir orden', href: `ordenes/index.html?ids=${encodeURIComponent(r.id)}` },
       }),
       vacio: 'Ninguna orden parada. Buen ritmo.',
     },

@@ -132,7 +132,7 @@ window.EquipoFicha = {
     const linkContrato = asig && asig.contrato_id
       ? `<a href="/contratos/index.html?buscar=${encodeURIComponent(asig.contrato_id)}">${esc(asig.contrato_id)}</a>` : '—';
     const linkOrden = eq.orden_actual_id
-      ? `<a href="/ordenes/editar-orden.html?id=${encodeURIComponent(eq.orden_actual_id)}">${esc(eq.orden_actual_id)}</a>` : '—';
+      ? `<a href="/ordenes/index.html?ids=${encodeURIComponent(eq.orden_actual_id)}">${esc(eq.orden_actual_id)}</a>` : '—';
 
     const chips = [
       EquiposPoolService.chipEstadoHtml(eq.estado),
@@ -168,7 +168,7 @@ window.EquipoFicha = {
       // la entrega es la prueba del cambio (2026-09-17).
       eq.reemplaza_a ? ['Reemplaza a', `<span style="font-family:var(--mono, monospace);">${esc(eq.reemplaza_a)}</span>`
         + (eq.reemplazo_origen?.orden_entrega_id
-          ? ` <span style="font-size:12px; color:var(--fg-3);">· entregado con la <a href="/ordenes/editar-orden.html?id=${encodeURIComponent(eq.reemplazo_origen.orden_entrega_id)}">orden ${esc(eq.reemplazo_origen.orden_entrega_id)}</a></span>`
+          ? ` <span style="font-size:12px; color:var(--fg-3);">· entregado con la <a href="/ordenes/index.html?ids=${encodeURIComponent(eq.reemplazo_origen.orden_entrega_id)}">orden ${esc(eq.reemplazo_origen.orden_entrega_id)}</a></span>`
           : '')] : null,
       (eq.venta && eq.venta.factura) ? ['Factura QBO', esc(eq.venta.factura)] : null,
       eq.baja_motivo ? ['Motivo de baja', esc(eq.baja_motivo)] : null,
@@ -183,7 +183,7 @@ window.EquipoFicha = {
       const deA = (m.de_estado || m.a_estado)
         ? `<span style="color:var(--fg-3);">${esc(EquiposPoolService.ESTADO_LABELS[m.de_estado] || m.de_estado || '·')} → ${esc(EquiposPoolService.ESTADO_LABELS[m.a_estado] || m.a_estado || '·')}</span>` : '';
       const refHtml = m.ref && m.ref.tipo === 'orden' && m.ref.id
-        ? ` · <a href="/ordenes/editar-orden.html?id=${encodeURIComponent(m.ref.id)}">${esc(m.ref.label || m.ref.id)}</a>`
+        ? ` · <a href="/ordenes/index.html?ids=${encodeURIComponent(m.ref.id)}">${esc(m.ref.label || m.ref.id)}</a>`
         : (m.ref && m.ref.label ? ` · ${esc(m.ref.label)}` : '');
       return `
         <li style="position:relative; padding:0 0 12px 18px; font-size:12.5px; line-height:1.5;">

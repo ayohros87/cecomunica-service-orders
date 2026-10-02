@@ -551,9 +551,9 @@ const EquiposPoolService = {
     const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => (
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const saliente = o.saliente || eq.reemplaza_a || '';
-    const base = desdeRaiz ? 'ordenes/editar-orden.html' : '../ordenes/editar-orden.html';
+    const base = desdeRaiz ? 'ordenes/index.html' : '../ordenes/index.html';
     const orden = o.orden_entrega_id
-      ? ` · entregado con la <a href="${base}?id=${encodeURIComponent(o.orden_entrega_id)}" onclick="event.stopPropagation()">orden ${esc(o.orden_entrega_id)}</a>`
+      ? ` · entregado con la <a href="${base}?ids=${encodeURIComponent(o.orden_entrega_id)}" onclick="event.stopPropagation()">orden ${esc(o.orden_entrega_id)}</a>`
       : '';
     const gestion = o.gestion_id ? ` (${esc(o.gestion_id)})` : '';
     return `<div class="eq-sub" style="font-size:11.5px; color:var(--fg-3);"

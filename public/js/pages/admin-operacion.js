@@ -273,7 +273,7 @@
         altaItems.push(attRow({
           title: `${escapeHtml(o.numero_orden || o.ordenId)} <span class="att-cliente">— ${escapeHtml(o.cliente_nombre || o.clienteNombre || '—')}</span>`,
           sub:   `Recibida hace ${age} h`,
-          link:  `../ordenes/editar-orden.html?id=${encodeURIComponent(o.ordenId)}`,
+          link:  `../ordenes/index.html?ids=${encodeURIComponent(o.ordenId)}`,
           badge: '<span style="color:#b91c1c;">sin técnico</span>',
         }));
       }
@@ -306,7 +306,7 @@
         mediaItems.push(attRow({
           title: `${escapeHtml(o.numero_orden || o.ordenId)} <span class="att-cliente">— ${escapeHtml(o.cliente_nombre || o.clienteNombre || '—')}</span>`,
           sub:   `Estado: ${escapeHtml(o.estado_reparacion || '—')} · sin movimiento ${age}d`,
-          link:  `../ordenes/editar-orden.html?id=${encodeURIComponent(o.ordenId)}`,
+          link:  `../ordenes/index.html?ids=${encodeURIComponent(o.ordenId)}`,
         }));
       }
       if (a.ordenesEstancadas.length > 5) mediaItems.push(`<li class="att-more">y ${a.ordenesEstancadas.length - 5} más…</li>`);
@@ -334,7 +334,7 @@
         mediaItems.push(attRow({
           title: `${escapeHtml(o.numero_orden || o.ordenId)} <span class="att-cliente">— ${escapeHtml(o.cliente_nombre || o.clienteNombre || '—')}</span>`,
           sub:   `Completada hace ${age} días`,
-          link:  `../ordenes/editar-orden.html?id=${encodeURIComponent(o.ordenId)}`,
+          link:  `../ordenes/index.html?ids=${encodeURIComponent(o.ordenId)}`,
         }));
       }
       if (a.completadasSinEntregar.length > 5) mediaItems.push(`<li class="att-more">y ${a.completadasSinEntregar.length - 5} más…</li>`);

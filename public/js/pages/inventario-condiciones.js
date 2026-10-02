@@ -84,7 +84,7 @@
         </td>
         <td>
           ${r.orden_id
-            ? `<a href="../ordenes/editar-orden.html?id=${encodeURIComponent(r.orden_id)}">${esc(r.orden_id)}</a>`
+            ? `<a href="../ordenes/index.html?ids=${encodeURIComponent(r.orden_id)}">${esc(r.orden_id)}</a>`
             : '—'}
           ${r.cliente ? `<div class="cnd-meta">${esc(r.cliente)}</div>` : ''}
         </td>

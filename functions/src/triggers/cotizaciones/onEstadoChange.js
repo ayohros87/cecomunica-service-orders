@@ -130,7 +130,7 @@ async function enviarResumenABodega(docId, cot) {
           ${fueraCat.map((p) => `<li>${esc(p.nombre)}${p.sku ? ` <span style="font-family:monospace;">(${esc(p.sku)})</span>` : ""} — ${p.total} unidad(es)</li>`).join("")}
         </ul>
       </div>` : ""}`,
-    ctaUrl: `${APP_BASE_URL}/ordenes/editar-orden.html?id=${encodeURIComponent(ordenId)}`,
+    ctaUrl: `${APP_BASE_URL}/ordenes/index.html?ids=${encodeURIComponent(ordenId)}`,
     ctaLabel: "Ver la orden",
     meta: { source: "onCotizacionEstadoChange", seccion: "piezas_a_bodega", ordenId, tipos: piezas.length, unidades: totalUnidades, fuera_catalogo: fueraCat.length },
     createdAt: admin.firestore.FieldValue.serverTimestamp(),

@@ -458,7 +458,7 @@ Object.assign(window.Centro, {
       }).join('<span style="color:var(--fg-4);"> › </span>');
       const nSer = (o.equipos || []).length;
       return `<div class="cg-os" style="margin-bottom:6px;">
-        <a href="../ordenes/editar-orden.html?id=${encodeURIComponent(o.id)}">
+        <a href="../ordenes/index.html?ids=${encodeURIComponent(o.id)}">
           <b>${this.esc(o.tipo_de_servicio || 'ORDEN')}</b>&nbsp;<span class="cg-mono">${this.esc(o.id)}</span></a>
         <span style="font-size:12px; color:var(--fg-3);">${nSer} equipo(s) · ${this.esc(o.estado_reparacion || '—')}</span>
         <div style="flex-basis:100%; font-size:12px; margin-top:3px; display:flex; flex-wrap:wrap; gap:2px 4px;">${flujo}</div>
@@ -678,7 +678,7 @@ Object.assign(window.Centro, {
     ];
     const osHtml = ordenes.length
       ? `<div class="cg-os">${ordenes.map(o =>
-          `<a href="../ordenes/editar-orden.html?id=${encodeURIComponent(o.id)}">
+          `<a href="../ordenes/index.html?ids=${encodeURIComponent(o.id)}">
              <b>${o.tipo}</b>&nbsp;<span class="cg-mono">${this.esc(o.id)}</span></a>`).join('')}</div>`
       : '';
 

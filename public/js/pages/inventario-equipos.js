@@ -781,7 +781,7 @@ window.EquiposPool = {
       const puede = this.puedeEscribir();
       tbody.innerHTML = mostrar.map(eq => {
         // "Asignado a" navegable: cliente → ficha, contrato → lista con búsqueda
-        // precargada (?buscar=), orden → editar-orden. Puede haber asignación Y
+        // precargada (?buscar=), orden → la bandeja con ?ids=. Puede haber asignación Y
         // orden a la vez (unidad de contrato que está en taller): se muestran ambas.
         const linkCliente = eq.asignacion
           ? (eq.asignacion.cliente_id
@@ -792,7 +792,7 @@ window.EquiposPool = {
           ? `<a class="eq-sub eq-link" href="../contratos/index.html?buscar=${encodeURIComponent(eq.asignacion.contrato_id)}" title="Buscar el contrato en la lista">${esc(eq.asignacion.contrato_id)}</a>`
           : '';
         const linkOrden = eq.orden_actual_id
-          ? `<a class="eq-sub eq-link" href="../ordenes/editar-orden.html?id=${encodeURIComponent(eq.orden_actual_id)}" title="Abrir la orden de servicio">orden en taller</a>`
+          ? `<a class="eq-sub eq-link" href="../ordenes/index.html?ids=${encodeURIComponent(eq.orden_actual_id)}" title="Abrir la orden de servicio">orden en taller</a>`
           : '';
         // POC es plataforma, no ubicación: la membresía se muestra como
         // atributo (tag), nunca como estado.
@@ -1397,7 +1397,7 @@ window.EquiposPool = {
       avisos.push(`El contrato <a class="eq-link" href="../contratos/index.html?buscar=${encodeURIComponent(eq.asignacion.contrato_id || '')}" target="_blank">${esc(eq.asignacion.contrato_id || eq.asignacion.contrato_doc_id)}</a> seguirá listando este serial: quítalo o corrígelo también en Seriales del contrato, o una edición futura de esos seriales re-asignaría la unidad.`);
     }
     if (eq.orden_actual_id) {
-      avisos.push(`La <a class="eq-link" href="../ordenes/editar-orden.html?id=${encodeURIComponent(eq.orden_actual_id)}" target="_blank">orden en taller</a> seguirá listando este serial: remuévelo de la orden si sigue abierta.`);
+      avisos.push(`La <a class="eq-link" href="../ordenes/index.html?ids=${encodeURIComponent(eq.orden_actual_id)}" target="_blank">orden en taller</a> seguirá listando este serial: remuévelo de la orden si sigue abierta.`);
     }
     const divAvisos = document.getElementById('corrAvisos');
     divAvisos.innerHTML = avisos.map(a => `<p style="margin:0 0 var(--sp-2);">${a}</p>`).join('');

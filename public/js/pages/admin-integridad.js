@@ -70,7 +70,7 @@
         numero: o.numero_orden || `<code>${o.ordenId}</code>`,
         contrato_id: `<code style="color:#991b1b;">${escapeHtml(o.contrato_id)}</code>`,
         cliente: escapeHtml(o.cliente_nombre || o.clienteNombre || '—'),
-        link: `<a href="../ordenes/editar-orden.html?id=${encodeURIComponent(o.ordenId)}" class="btn btn-ghost btn-sm">Abrir</a>`,
+        link: `<a href="../ordenes/index.html?ids=${encodeURIComponent(o.ordenId)}" class="btn btn-ghost btn-sm">Abrir</a>`,
       })),
     };
   }
@@ -135,7 +135,7 @@
         numero: o.numero_orden || `<code>${o.ordenId}</code>`,
         cliente: escapeHtml(o.cliente_nombre || o.clienteNombre || '—'),
         fecha: o.fecha_entrega ? new Date(o.fecha_entrega.toMillis ? o.fecha_entrega.toMillis() : o.fecha_entrega).toLocaleDateString('es-PA') : '—',
-        link: `<a href="../ordenes/editar-orden.html?id=${encodeURIComponent(o.ordenId)}" class="btn btn-ghost btn-sm">Abrir</a>`,
+        link: `<a href="../ordenes/index.html?ids=${encodeURIComponent(o.ordenId)}" class="btn btn-ghost btn-sm">Abrir</a>`,
       })),
     };
   }

@@ -121,7 +121,7 @@ const BusquedaGlobalService = {
       id: o.ordenId,
       title: o.numero_orden || o.ordenId,
       subtitle: [o.cliente_nombre || o.clienteNombre, o.estado_reparacion].filter(Boolean).join(' · '),
-      link: `/ordenes/index.html?orden=${encodeURIComponent(o.ordenId)}`,
+      link: `/ordenes/index.html?ids=${encodeURIComponent(o.ordenId)}`,
     }));
   },
 

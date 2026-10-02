@@ -159,7 +159,7 @@ Object.assign(window.Centro, {
     ];
     for (const [tipo, oid] of ordenes) {
       A.push(this._acc({ id: `os-${oid}`, grupo: 'Documentos', label: `Ver la orden ${tipo}`, hint: oid,
-        href: `../ordenes/editar-orden.html?id=${encodeURIComponent(oid)}` }));
+        href: `../ordenes/index.html?ids=${encodeURIComponent(oid)}` }));
     }
 
     // ── Corregir: SIEMPRE las dos, con el motivo cuando no se puede ──

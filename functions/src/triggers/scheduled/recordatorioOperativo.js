@@ -94,10 +94,12 @@ function idsCta(arr) {
   return ids.length ? `?ids=${encodeURIComponent(ids.join(","))}` : "";
 }
 
-// Enlace de una fila a su orden. Llegar a la orden nombrada no debería exigir
+// Enlace de una fila a su orden (la bandeja con ?ids=, que la trae del servidor
+// aunque sea vieja; editar-orden.html rebotaba a una lista vacía fuera de POR
+// ASIGNAR — auditoría de módulos 2026-09-30, 08 R2). Llegar a la orden nombrada no debería exigir
 // buscarla a mano en la bandeja.
 function linkOrden(id, texto) {
-  return `<a href="${APP_BASE_URL}/ordenes/editar-orden.html?id=${encodeURIComponent(id)}">${esc(texto)}</a>`;
+  return `<a href="${APP_BASE_URL}/ordenes/index.html?ids=${encodeURIComponent(id)}">${esc(texto)}</a>`;
 }
 
 function tablaHtml(headers, rows) {
@@ -166,7 +168,7 @@ module.exports = onSchedule(
         // fila no había forma de llegar a la orden que el correo nombra.
         // Mismo patrón que la sección E, que sí lo hacía.
         const filas = estancadas.slice(0, MAX_FILAS).map(o => [
-          `<a href="${APP_BASE_URL}/ordenes/editar-orden.html?id=${encodeURIComponent(o.id)}">${esc(o.orden)}</a>`,
+          `<a href="${APP_BASE_URL}/ordenes/index.html?ids=${encodeURIComponent(o.id)}">${esc(o.orden)}</a>`,
           esc(o.cliente), esc(o.estado), esc(o.tecnico), `<b>${o.dias}</b>`,
         ]);
         const extra = estancadas.length > MAX_FILAS
@@ -394,7 +396,7 @@ module.exports = onSchedule(
         // cola completa desde el servidor, pero llegar a UNA orden concreta
         // desde el correo sigue siendo lo más directo.
         const filas = esperando.slice(0, MAX_FILAS).map(o => [
-          `<a href="${APP_BASE_URL}/ordenes/editar-orden.html?id=${encodeURIComponent(o.id)}">${esc(o.orden)}</a>`,
+          `<a href="${APP_BASE_URL}/ordenes/index.html?ids=${encodeURIComponent(o.id)}">${esc(o.orden)}</a>`,
           esc(o.cliente), esc(o.tipo), esc(o.tecnico), esc(o.estadoQc), `<b>${o.dias}</b>`,
         ]);
         const extra = esperando.length > MAX_FILAS
@@ -457,7 +459,7 @@ module.exports = onSchedule(
       const to = (await recepcionEmails()).join(",");
       if (listas.length && to) {
         const filas = listas.slice(0, MAX_FILAS).map(o => [
-          `<a href="${APP_BASE_URL}/ordenes/editar-orden.html?id=${encodeURIComponent(o.id)}">${esc(o.orden)}</a>`,
+          `<a href="${APP_BASE_URL}/ordenes/index.html?ids=${encodeURIComponent(o.id)}">${esc(o.orden)}</a>`,
           esc(o.cliente), esc(o.tipo), esc(o.contrato), `<b>${o.dias}</b>`,
         ]);
         const extra = listas.length > MAX_FILAS
@@ -662,7 +664,7 @@ module.exports = onSchedule(
         const filas = abiertos.slice(0, MAX_FILAS).map(c => [
           esc(c.cliente), esc(c.equipo),
           c.orden === "—" ? "—"
-            : `<a href="${APP_BASE_URL}/ordenes/editar-orden.html?id=${encodeURIComponent(c.orden)}">${esc(c.orden)}</a>`,
+            : `<a href="${APP_BASE_URL}/ordenes/index.html?ids=${encodeURIComponent(c.orden)}">${esc(c.orden)}</a>`,
           `<b>${c.dias}</b>`,
           c.sinPrecio ? '<span style="color:#b91c1c;">sin precio</span>' : `$${c.monto.toFixed(2)}`,
           c.etapa === cobros.ETAPAS.EN_COBRANZA

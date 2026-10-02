@@ -128,10 +128,10 @@
         <td>
           ${esc(r.cliente_nombre || '—')}
           ${r.orden_devolucion_id
-            ? `<div class="nd-meta"><a href="../ordenes/editar-orden.html?id=${encodeURIComponent(r.orden_devolucion_id)}">devolución ${esc(r.orden_devolucion_id)}</a></div>`
+            ? `<div class="nd-meta"><a href="../ordenes/index.html?ids=${encodeURIComponent(r.orden_devolucion_id)}">devolución ${esc(r.orden_devolucion_id)}</a></div>`
             : ''}
           ${r.gestion_id
-            ? `<div class="nd-meta">reposición por daño ${esc(r.gestion_id)}${r.orden_id ? ` · <a href="../ordenes/editar-orden.html?id=${encodeURIComponent(r.orden_id)}">orden ${esc(r.orden_id)}</a>` : ''}</div>`
+            ? `<div class="nd-meta">reposición por daño ${esc(r.gestion_id)}${r.orden_id ? ` · <a href="../ordenes/index.html?ids=${encodeURIComponent(r.orden_id)}">orden ${esc(r.orden_id)}</a>` : ''}</div>`
             : ''}
         </td>
         <td>${_equipoHtml(r)}</td>
