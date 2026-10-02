@@ -149,9 +149,13 @@ test("R5 · el trámite sin firma se cierra con la entrega, no con la firma", ()
     C.contratos = [{ ...c, entrega_confirmada: true }];
     assert.equal(C._tramitesContrato().length, 0, `entregado, el trámite de ${c.codigo_tipo} se cierra`);
   }
-  // El contrato con firma no cambia de criterio: lo cierra la firma.
+  // El contrato con firma lo cierra la firma… o la entrega (cf515cc,
+  // 2026-10-02, COMPAÑÍA GOLY): la firma solo es candado EN la entrega, así
+  // que con la entrega confirmada ya nadie espera esa firma.
+  C.contratos = [{ ...ALQ }];
+  assert.equal(C._tramitesContrato().length, 1, "un alquiler aprobado, sin firmar y sin entregar sigue en trámite");
   C.contratos = [{ ...ALQ, entrega_confirmada: true }];
-  assert.equal(C._tramitesContrato().length, 1, "un alquiler entregado pero SIN firmar sigue en trámite");
+  assert.equal(C._tramitesContrato().length, 0, "entregado, el alquiler sale del trámite aunque no tenga la firma marcada");
   C.contratos = [{ ...ALQ, firmado: true }];
   assert.equal(C._tramitesContrato().length, 0, "firmado, el trámite del alquiler se cierra");
 });

@@ -42,8 +42,10 @@ Object.assign(window.Centro, {
         // limit(80) a secas, un cliente con 106 órdenes (SEPROSA) perdía la
         // abierta más reciente. Igualdad + `in` se sirve mezclando índices de
         // un campo (sin compuesto); si falla, la ficha sigue.
-        db.collection('ordenes_de_servicio').where('cliente_id', '==', clienteId)
-          .where('estado_reparacion', 'in', ['POR ASIGNAR', 'RECIBIDO EN MOSTRADOR', 'ASIGNADO', 'COMPLETADO (EN OFICINA)']).limit(80).get()
+        // async: un error al ARMAR la consulta (no solo al resolverla) también
+        // cae al catch; si no, tumbaba la ficha entera.
+        (async () => db.collection('ordenes_de_servicio').where('cliente_id', '==', clienteId)
+          .where('estado_reparacion', 'in', ['POR ASIGNAR', 'RECIBIDO EN MOSTRADOR', 'ASIGNADO', 'COMPLETADO (EN OFICINA)']).limit(80).get())()
           .catch(e => { console.warn('[centro] órdenes del cliente no disponibles:', e?.message || e); return null; }),
       ]);
       enVuelo.catch(() => {}); // si el cliente no existe, nadie espera esto

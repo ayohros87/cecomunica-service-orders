@@ -209,12 +209,24 @@
     };
   }
 
-  // Texto corto del chip: "Por regularizar · 131".
+  // Puntos que SÍ son deuda de la cuenta: todo menos D7. "Por clasificar" es
+  // la cola de bodega (fichas de la migración POC que nadie verificó): no
+  // cuenta en el chip de la cuenta ni dispara "Regularizar con contrato
+  // nuevo" (decisión 8 de Alberto, 1-oct-2026; auditoría de módulos R3).
+  // `puntos` se queda como está (lo lee la bandeja y el home): esto es la
+  // lectura para la cabecera, el directorio y el botón primario.
+  function puntosCuenta(reg) {
+    const r = reg || {};
+    return Math.max(0, (Number(r.puntos) || 0) - (Number(r.d7) || 0));
+  }
+
+  // Texto corto del chip: "Por regularizar · 131". Sin D7.
   function chip(reg) {
     const r = reg || {};
-    if (!r.nivel || r.nivel === "al_dia" || !(r.puntos > 0)) return null;
+    const n = puntosCuenta(r);
+    if (!r.nivel || r.nivel === "al_dia" || !(n > 0)) return null;
     const tono = r.nivel === "critica" ? "bad" : r.nivel === "por_regularizar" ? "warn" : "muted";
-    return { tono, texto: `${NIVEL_LABEL[r.nivel] || r.nivel} · ${r.puntos}` };
+    return { tono, texto: `${NIVEL_LABEL[r.nivel] || r.nivel} · ${n}` };
   }
 
   // Desglose legible por componente, en orden de peso.
@@ -228,11 +240,12 @@
   }
 
   // Resumen en una frase para correos y expedientes.
+  // Sin D7: lo de bodega se dice aparte ("Bodega · n"), no como deuda.
   function resumen(reg) {
     const r = reg || {};
-    if (!r.nivel || r.nivel === "al_dia") return "";
-    const partes = desglose(r).map(x => `${x.n} ${x.label}`);
-    return `${NIVEL_LABEL[r.nivel] || r.nivel} (${r.puntos}): ${partes.join(" · ")}`;
+    if (!r.nivel || r.nivel === "al_dia" || !(puntosCuenta(r) > 0)) return "";
+    const partes = desglose(r).filter(x => x.codigo !== "d7").map(x => `${x.n} ${x.label}`);
+    return `${NIVEL_LABEL[r.nivel] || r.nivel} (${puntosCuenta(r)}): ${partes.join(" · ")}`;
   }
 
   // ¿Cambió lo que importa? Evita reescribir el doc del cliente cada barrido.
@@ -242,5 +255,5 @@
     return ka.every(k => (x[k] === undefined ? null : x[k]) === (y[k] === undefined ? null : y[k]));
   }
 
-  return { DEFAULTS, NIVELES, NIVEL_LABEL, COMPONENTES, codigoTipo, esVigente, esPuntual, calcular, estampa, chip, desglose, resumen, igual };
+  return { DEFAULTS, NIVELES, NIVEL_LABEL, COMPONENTES, codigoTipo, esVigente, esPuntual, calcular, estampa, puntosCuenta, chip, desglose, resumen, igual };
 });
