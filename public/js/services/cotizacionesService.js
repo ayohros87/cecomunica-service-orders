@@ -154,24 +154,41 @@ const CotizacionesService = {
     }
   },
 
+  // El enlace del cliente (cotizacion_verificaciones/{id}) tiene que saber
+  // que la cotización se eliminó: sin esto, una enviada y luego eliminada
+  // seguía "Vigente" con el panel "¿Aceptas?" (auditoría de módulos
+  // 2026-09-30, R1; en producción había tres así). Best-effort: sin espejo
+  // (nunca se envió) no hay nada que avisar.
+  _espejarEliminada(id, deleted) {
+    const db = firebase.firestore();
+    const FV = firebase.firestore.FieldValue;
+    return db.collection('cotizacion_verificaciones').doc(id)
+      .update({ deleted, deleted_at: deleted ? FV.serverTimestamp() : FV.delete() })
+      .catch(() => { /* espejo inexistente o sin permiso: no bloquea */ });
+  },
+
   // Marca la cotización como eliminada (soft delete). El listado oculta por defecto.
   async softDelete(id) {
     const db = firebase.firestore();
-    return db.collection('cotizaciones').doc(id).update({
+    const r = await db.collection('cotizaciones').doc(id).update({
       deleted: true,
       deleted_at: firebase.firestore.FieldValue.serverTimestamp(),
     });
+    await this._espejarEliminada(id, true);
+    return r;
   },
 
   // Restaura una cotización previamente eliminada.
   async restore(id) {
     const db = firebase.firestore();
-    return db.collection('cotizaciones').doc(id).update({
+    const r = await db.collection('cotizaciones').doc(id).update({
       deleted: false,
       // `delete()` es la API compat; `deleteField()` es del SDK modular y aquí
       // no existe (restore lanzaba TypeError y nadie lo notó porque nadie lo llamaba).
       deleted_at: firebase.firestore.FieldValue.delete(),
     });
+    await this._espejarEliminada(id, false);
+    return r;
   },
 
   // Copia oculta de supervisión (empresa/config.mail_bcc_cotizacion) para cada

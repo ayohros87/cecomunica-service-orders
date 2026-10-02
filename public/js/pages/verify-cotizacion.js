@@ -197,6 +197,9 @@
     const vence = fecha && dias ? T.addDays(fecha, dias) : '';
     const hoy = (FMT.hoyISOPanama && FMT.hoyISOPanama()) || new Date().toISOString().slice(0, 10);
     const e = String(data.estado || '');
+    // Eliminada en la app (softDelete espeja `deleted`): para el cliente es
+    // una cotización cerrada, diga lo que diga el estado que tenía.
+    if (data.deleted === true) return { k: 'cerrada', vence };
     if (e === 'convertida') return { k: 'aceptada', vence };
     // La declinó el propio cliente desde este enlace: se le dice eso, no
     // "cerrada" como si la hubiera cerrado la empresa.

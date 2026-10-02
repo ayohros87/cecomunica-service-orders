@@ -260,6 +260,17 @@
       fecha_aprobacion: doc.fecha_aprobacion || null,
       fecha_conversion: doc.fecha_conversion || null,
       fecha_rechazo: doc.fecha_rechazo || null,
+      // Quién y por qué (auditoría de módulos 2026-09-30, R2): el detalle
+      // lee estos siete campos de este objeto y, al no viajar, decía "el
+      // cliente declinó" cuando rechazó el aprobador, "Descartada —" sin
+      // motivo ni fecha y "Aprobada internamente" sin quién.
+      rechazo_origen: doc.rechazo_origen || null,
+      rechazo_motivo: doc.rechazo_motivo || '',
+      rechazado_por_email: doc.rechazado_por_email || null,
+      cierre_motivo: doc.cierre_motivo || '',
+      fecha_descarte: doc.fecha_descarte || null,
+      aprobado_por_email: doc.aprobado_por_email || null,
+      respuesta_cliente: doc.respuesta_cliente || null,
       deleted: !!doc.deleted,
     };
   }
