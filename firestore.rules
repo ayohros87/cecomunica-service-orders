@@ -850,12 +850,14 @@ service cloud.firestore {
       // R1/D5). Recepción y ventas conservan las escrituras que su flujo
       // necesita (factura de venta con contrato, cobros de no devueltos,
       // kardex): lo que se cierra es el CAMBIO de estado hacia `vendido`
-      // desde bodega y hacia `en_bodega` desde cualquier otro.
+      // desde bodega y hacia `en_bodega` desde cualquier otro. Dar de BAJA
+      // (desde cualquier estado) también es solo de bodega y administración
+      // (decisión de Alberto 2026-10-02); condonar ya era solo-admin.
       allow update: if puedeGestionarSeriales()
         && (userRole() in ["administrador", "inventario"]
             || request.resource.data.estado == resource.data.estado
             || !((request.resource.data.estado == "vendido" && resource.data.estado == "en_bodega")
-                 || request.resource.data.estado == "en_bodega"));
+                 || request.resource.data.estado in ["en_bodega", "baja"]));
       allow delete: if false;
       // Kardex append-only: los movimientos nunca se editan ni se borran.
       match /movimientos/{mid} {
