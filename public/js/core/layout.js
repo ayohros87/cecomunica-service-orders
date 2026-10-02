@@ -476,7 +476,7 @@ const Layout = (() => {
   const asegurarPalette = () => {
     if (window.SearchPalette && window.BusquedaGlobalService) return Promise.resolve();
     if (!cargando) {
-      _css('/css/search-palette.css?v=sp3');
+      _css('/css/search-palette.css?v=sp4');
       cargando = (async () => {
         // OrdenesService es opcional para el palette (guard interno), pero
         // sin él no salen órdenes en los resultados — se trae también.
@@ -484,8 +484,8 @@ const Layout = (() => {
           try { await _script('/js/services/ordenesService.js?v=sp1'); }
           catch (_) { /* palette sin resultados de órdenes */ }
         }
-        if (!window.BusquedaGlobalService) await _script('/js/services/busquedaGlobalService.js?v=sp3');
-        if (!window.SearchPalette) await _script('/js/ui/searchPalette.js?v=sp3');
+        if (!window.BusquedaGlobalService) await _script('/js/services/busquedaGlobalService.js?v=sp4');
+        if (!window.SearchPalette) await _script('/js/ui/searchPalette.js?v=sp4');
       })();
     }
     return cargando;

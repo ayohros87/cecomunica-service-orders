@@ -68,6 +68,8 @@
   font-size: 13px;
 }
 .search-palette-results .sp-err { color: #b91c1c; }
+/* Aviso de permiso bajo los resultados (08 P5): compacto, no compite con las filas. */
+.search-palette-results .sp-hint--permiso { padding: 8px 16px 12px; font-size: 12px; }
 .sp-group { padding: 4px 0; }
 .sp-group-head {
   display: flex; align-items: center; gap: 6px;

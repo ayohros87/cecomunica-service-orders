@@ -7,6 +7,9 @@
  *  - contratos       (índice searchTokens; escaneo de respaldo)
  *  - cotizaciones    (escaneo: sus searchTokens aún no están en producción)
  *  - poc_devices     (escaneo: serial, unit_id, radio_name, sim)
+ *  - equipos_pool    (rango por prefijo de serial_norm: una lectura por hit,
+ *                     sin escaneo; auditoría de módulos 2026-09-30, 08 P5 —
+ *                     bodega no encontraba un radio del pool con Ctrl+K)
  *
  * Índice primero (P2 auditoría UX 2026-09-28, §4.1 #14): clientes, contratos
  * y órdenes ya llevan `searchTokens` (prefijos de palabra / número completo /
@@ -58,36 +61,101 @@ const BusquedaGlobalService = {
     return escaneo();
   },
 
+  // Rol del usuario, síncrono: lo deja firebase-init en window.userRole; antes
+  // de que llegue, la caché anónima de sesión. Solo decide DESTINOS y qué
+  // colecciones vale la pena consultar — el piso de permisos es firestore.rules.
+  _rol() {
+    return window.userRole || (window.Sesion?.cacheAnonima?.()?.rol) || null;
+  },
+  // Mismo criterio que el guard de almacen/index.html (almacen-hoy.js):
+  // operan admin/inventario, lee gerencia, y quien gestiona seriales.
+  _puedeAbrirAlmacen(rol) {
+    return ['administrador', 'inventario', 'gerente'].includes(rol)
+      || (typeof canRole === 'function' && canRole(rol, 'gestionar-seriales'));
+  },
+  // Mismo criterio que el guard de clientes/centro.html (centro-core.js).
+  _puedeAbrirCentro(rol) {
+    return ['administrador', 'gerente', 'vendedor', 'recepcion', 'inventario'].includes(rol);
+  },
+
   async searchAll(query) {
     const q = this._norm(query);
     if (q.length < 2) return { query, results: {} };
 
-    const [clientes, ordenes, contratos, cotizaciones, poc] = await Promise.all([
-      this._searchClientes(q).catch(e => { console.warn('[busqueda] clientes', e); return []; }),
-      this._searchOrdenes(query).catch(e => { console.warn('[busqueda] ordenes', e); return []; }),
-      this._searchContratos(q).catch(e => { console.warn('[busqueda] contratos', e); return []; }),
-      this._searchCotizaciones(q).catch(e => { console.warn('[busqueda] cotizaciones', e); return []; }),
-      this._searchPoc(q).catch(e => { console.warn('[busqueda] poc', e); return []; }),
+    // Colecciones que las reglas le niegan a este rol (bodega y contabilidad
+    // no listan cotizaciones): el palette lo dice en vez de callar.
+    const sinPermiso = [];
+    const permiso = (nombre) => (e) => {
+      if (e?.code === 'permission-denied') sinPermiso.push(nombre);
+      else console.warn(`[busqueda] ${nombre}`, e);
+      return [];
+    };
+    const [clientes, ordenes, contratos, cotizaciones, poc, pool] = await Promise.all([
+      this._searchClientes(q).catch(permiso('clientes')),
+      this._searchOrdenes(query).catch(permiso('ordenes')),
+      this._searchContratos(q).catch(permiso('contratos')),
+      this._searchCotizaciones(q).catch(permiso('cotizaciones')),
+      this._searchPoc(q).catch(permiso('poc')),
+      this._searchPool(query).catch(permiso('pool')),
     ]);
 
     return {
       query,
-      results: { clientes, ordenes, contratos, cotizaciones, poc },
-      total: clientes.length + ordenes.length + contratos.length + cotizaciones.length + poc.length,
+      results: { clientes, ordenes, contratos, cotizaciones, poc, pool },
+      total: clientes.length + ordenes.length + contratos.length + cotizaciones.length + poc.length + pool.length,
+      sinPermiso,
     };
+  },
+
+  // Pool de equipos por serial: el doc ID es el serial normalizado y el campo
+  // serial_norm es el índice, así que un rango por prefijo cuesta lo que
+  // devuelve (misma consulta que Almacén · Avanzado, EquiposPoolService
+  // .buscarPorPrefijoSerial; aquí sin depender de que ese servicio esté
+  // cargado). Solo para quien puede abrir Almacén: el resultado aterriza en
+  // Existencias con la ficha del serial encima (?serial=, almacen-hoy.js).
+  async _searchPool(query) {
+    if (!this._puedeAbrirAlmacen(this._rol())) return [];
+    const norm = (query || '').toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    // Un serial lleva dígito; un nombre de cliente no — sin esto cada palabra
+    // tecleada costaría una consulta al pool que no va a dar nada.
+    if (norm.length < 4 || !/\d/.test(norm)) return [];
+    const db = firebase.firestore();
+    const snap = await db.collection('equipos_pool')
+      .where('serial_norm', '>=', norm)
+      .where('serial_norm', '<', norm + '')
+      .limit(this.MAX_PER_COLLECTION).get();
+    const labels = (window.EquiposPoolService && EquiposPoolService.ESTADO_LABELS) || {};
+    return snap.docs.map(d => {
+      const u = d.data() || {};
+      const serial = u.serial || u.serial_norm || d.id;
+      return {
+        id: d.id,
+        title: serial,
+        subtitle: [u.modelo_label, labels[u.estado] || u.estado, u.asignacion?.cliente_nombre].filter(Boolean).join(' · '),
+        link: `/almacen/index.html?tab=existencias&serial=${encodeURIComponent(serial)}`,
+      };
+    });
   },
 
   async _searchClientes(q) {
     const db = firebase.firestore();
     const pasa = (c) => c.deleted !== true &&
       this._matchTodas([c.nombre, c.empresa, c.email, c.correo, c.ruc, c.telefono, c.cedula], q);
+    // El cliente abre en el Centro de gestión, su pantalla de trabajo y la
+    // única entrada al mundo clientes desde el home (2026-09-03). Antes iba a
+    // clientes/editar.html → redirección → ficha de solo lectura: dos cargas
+    // para no llegar a donde se trabaja (auditoría 2026-09-30, 08 C6). Los
+    // roles que el Centro no admite siguen a la ficha.
+    const alCentro = this._puedeAbrirCentro(this._rol());
     const aHit = (d) => {
       const c = d.data();
       return {
         id: d.id,
         title: c.nombre || c.empresa || '(sin nombre)',
         subtitle: [c.email || c.correo, c.ruc, c.telefono].filter(Boolean).join(' · '),
-        link: `/clientes/editar.html?id=${encodeURIComponent(d.id)}`,
+        link: alCentro
+          ? `/clientes/centro.html?id=${encodeURIComponent(d.id)}`
+          : `/clientes/editar.html?id=${encodeURIComponent(d.id)}`,
       };
     };
     return this._indexadoOEscaneo('clientes', async () => {

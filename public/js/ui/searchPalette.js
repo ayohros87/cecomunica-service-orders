@@ -55,14 +55,27 @@
       contratos:    { icon: 'file-text',   label: 'Contratos' },
       cotizaciones: { icon: 'receipt',     label: 'Cotizaciones' },
       poc:          { icon: 'radio-tower', label: 'PoC' },
+      // Pool de equipos por serial (auditoría 2026-09-30, 08 P5): el grupo
+      // se llama como el módulo donde aterriza.
+      pool:         { icon: 'warehouse',   label: 'Almacén' },
     };
     try {
       (window.MODULOS?.CATALOGO || []).forEach(g => (g.items || []).forEach(it => {
         if (base[it.id]) base[it.id] = { icon: it.icon, label: it.label };
+        if (it.id === 'almacen') base.pool = { icon: it.icon, label: it.label };
       }));
     } catch (_) { /* fallback literal */ }
     return base;
   })();
+
+  // Colecciones que las reglas le niegan al rol: se dice, no se calla
+  // (bodega buscaba una cotización y veía "Sin resultados").
+  const SIN_PERMISO_LABEL = { cotizaciones: 'cotizaciones', clientes: 'clientes', contratos: 'contratos', ordenes: 'órdenes', poc: 'la Base PoC', pool: 'el pool de equipos' };
+  function sinPermisoHtml(res) {
+    const lista = (res.sinPermiso || []).map(k => SIN_PERMISO_LABEL[k] || k);
+    if (!lista.length) return '';
+    return `<div class="sp-hint sp-hint--permiso">Tu rol no ve ${lista.join(' ni ')}: si lo que buscas está ahí, pídelo a quien sí.</div>`;
+  }
 
   function escapeHtml(s) {
     return String(s == null ? '' : s)
@@ -78,7 +91,7 @@
       <div class="search-palette">
         <div class="search-palette-input-row">
           <i data-lucide="search"></i>
-          <input id="sp-input" type="search" placeholder="Buscar cliente, orden, contrato, cotización, serial PoC…" autocomplete="off" spellcheck="false" aria-label="Buscar en todo el sistema">
+          <input id="sp-input" type="search" placeholder="Buscar cliente, orden, contrato, cotización, serial (PoC o Almacén)…" autocomplete="off" spellcheck="false" aria-label="Buscar en todo el sistema">
           <button type="button" class="sp-kbd sp-cerrar" aria-label="Cerrar la búsqueda" title="Cerrar (Esc)">Esc</button>
         </div>
         <div class="search-palette-results" id="sp-results">
@@ -175,7 +188,7 @@
   function renderResults(res) {
     const groups = res.results || {};
     if (!res.total) {
-      resultsEl.innerHTML = `<div class="sp-hint">Sin resultados para “${escapeHtml(res.query)}”.</div>`;
+      resultsEl.innerHTML = `<div class="sp-hint">Sin resultados para “${escapeHtml(res.query)}”.</div>${sinPermisoHtml(res)}`;
       flatResults = [];
       activeIdx = -1;
       return;
@@ -197,7 +210,7 @@
         ${rows}
       </div>`;
     }).join('');
-    resultsEl.innerHTML = html;
+    resultsEl.innerHTML = html + sinPermisoHtml(res);
     if (window.lucide) lucide.createIcons();
     activeIdx = flatResults.length ? 0 : -1;
     highlightActive();
