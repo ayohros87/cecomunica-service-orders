@@ -1078,6 +1078,10 @@ window.PocList = {
   // se cierran en lote (nunca se borran: quedan en el histórico y se pueden
   // reabrir). Antes: tabla plana de 1,453 filas y cerrar una volvía a la
   // página 1.
+  // Excepción (Alberto, 2-oct-2026): si la más reciente está INACTIVA la
+  // regla no se aplica. Ese grupo va aparte, "para revisar", al final de la
+  // lista: sin "se queda", sin cierre en lote; recepción decide ficha por
+  // ficha con el cierre individual de la fila.
   _dupVista: null,          // { tipo, grupos? } — vista de duplicados activa
   _dupPool:  new Map(),     // serial_norm → docs del pool (caché de la sesión)
   _DUP_SERIALES_BASURA: ['ND', 'NA', 'CONSOLA', 'SINSERIAL', 'NA0', 'N/D'],
@@ -1097,7 +1101,8 @@ window.PocList = {
   },
 
   // Agrupa fichas vivas por serial normalizado. Cada grupo: { clave, serial,
-  // fichas (más reciente primero), buena, sobrantes }.
+  // fichas (más reciente primero), buena, sobrantes, revisar }. Con
+  // `revisar` (la más reciente está inactiva) no hay buena ni sobrantes.
   _agruparPorSerial(devices) {
     const porSerial = new Map();
     devices.forEach(d => {
@@ -1111,9 +1116,12 @@ window.PocList = {
     porSerial.forEach((fichas, clave) => {
       if (fichas.length < 2) return;
       fichas.sort((a, b) => (this._msCreada(b) - this._msCreada(a)) || String(b.id).localeCompare(String(a.id)));
-      grupos.push({ clave, serial: fichas[0].serial || clave, fichas, buena: fichas[0], sobrantes: fichas.slice(1) });
+      const revisar = fichas[0].activo === false;
+      grupos.push({ clave, serial: fichas[0].serial || clave, fichas, revisar,
+        buena: revisar ? null : fichas[0], sobrantes: revisar ? [] : fichas.slice(1) });
     });
-    grupos.sort((a, b) => String(a.serial).localeCompare(String(b.serial), 'es', { numeric: true }));
+    // Los "para revisar" van al final, después de los que se resuelven solos.
+    grupos.sort((a, b) => (a.revisar - b.revisar) || String(a.serial).localeCompare(String(b.serial), 'es', { numeric: true }));
     return grupos;
   },
 
@@ -1135,7 +1143,7 @@ window.PocList = {
     const a = eq.asignacion || null;
     const migracion = String(eq.origen || '').startsWith('migracion') && eq.verificado !== true;
     let coincide = null;
-    if (a && (a.cliente_id || a.cliente_nombre)) {
+    if (grupo.buena && a && (a.cliente_id || a.cliente_nombre)) {
       const b = grupo.buena;
       const idOk = !!(a.cliente_id && b.cliente_id && a.cliente_id === b.cliente_id);
       const nomOk = !!a.cliente_nombre && FMT.normalize(a.cliente_nombre) === FMT.normalize(PocState.nombreClienteDe(b) || '');
@@ -1196,7 +1204,7 @@ window.PocList = {
     if (p.migracion) return `<span style="${estilo('#92400e', '#fef3c7')}" title="El doc del pool nació en la migración y nadie lo ha verificado: no sirve como prueba de dónde está el radio">Pool: custodia por migración (no vale)${p.cliente ? ' · ' + esc(p.cliente) : ''}</span>`;
     if (p.coincide === true)  return `<span style="${estilo('#166534', '#dcfce7')}">Pool: ${esc(estado)} · ${esc(p.cliente)} ✓ coincide</span>`;
     if (p.coincide === false) return `<span style="${estilo('#991b1b', '#fee2e2')}">Pool: ${esc(estado)} · ${esc(p.cliente)} ✗ no coincide con la más reciente</span>`;
-    return `<span style="${estilo('var(--fg-2)', 'var(--gray-100,#f1f3f5)')}">Pool: ${esc(estado)}</span>`;
+    return `<span style="${estilo('var(--fg-2)', 'var(--gray-100,#f1f3f5)')}">Pool: ${esc(estado)}${p.cliente ? ' · ' + esc(p.cliente) : ''}</span>`;
   },
 
   _DUP_GRUPOS_TANDA: 60,
@@ -1204,6 +1212,7 @@ window.PocList = {
     tbody.innerHTML = '';
     const totalFichas = grupos.reduce((n, g) => n + g.fichas.length, 0);
     const sobrantes   = grupos.reduce((n, g) => n + g.sobrantes.length, 0);
+    const paraRevisar = grupos.filter(g => g.revisar).length;
     const coinciden   = grupos.filter(g => g.pool?.coincide === true).length;
     const noCoinciden = grupos.filter(g => g.pool?.coincide === false).length;
     const migracion   = grupos.filter(g => g.pool?.migracion).length;
@@ -1218,7 +1227,8 @@ window.PocList = {
     const resumen = `
       <strong>${grupos.length}</strong> <span style="color:var(--muted);font-size:12px;">seriales con más de una ficha</span>
       <span class="badge" title="Fichas vivas en esos seriales">${totalFichas} fichas</span>
-      <span class="badge asignado" title="Las que no son la más reciente de su serial">${sobrantes} sobrantes</span>
+      <span class="badge asignado" title="Las que no son la más reciente de su serial (sin contar los seriales para revisar)">${sobrantes} sobrantes</span>
+      ${paraRevisar ? `<span class="badge" style="color:#92400e;background:#fef3c7;" title="La ficha más reciente está inactiva: no se cierran solas, se decide ficha por ficha. Van al final de la lista.">${paraRevisar} para revisar</span>` : ''}
       <span class="badge" title="La más reciente coincide con la custodia del pool">pool ✓ ${coinciden}</span>
       <span class="badge" title="La custodia del pool dice otro cliente">pool ✗ ${noCoinciden}</span>
       <span class="badge" title="Custodia heredada de la migración, sin verificar: no vale">migración ${migracion}</span>
@@ -1232,7 +1242,10 @@ window.PocList = {
     const pintarTanda = (desde, tanda = this._DUP_GRUPOS_TANDA) => {
       tbody.querySelector('tr[data-mas]')?.remove();
       const hasta = Math.min(grupos.length, desde + tanda);
-      for (let i = desde; i < hasta; i++) this._pintarGrupoDup(tbody, grupos[i]);
+      for (let i = desde; i < hasta; i++) {
+        if (grupos[i].revisar && (i === 0 || !grupos[i - 1].revisar)) this._pintarSeparadorRevisar(tbody, grupos.length - i);
+        this._pintarGrupoDup(tbody, grupos[i]);
+      }
       if (this._dupVista) this._dupVista.pintadosHasta = hasta;
       const faltan = grupos.length - hasta;
       if (faltan > 0) {
@@ -1254,6 +1267,15 @@ window.PocList = {
     if (window.Icons) Icons.pintar(document.getElementById('resumenEquiposTop'));
   },
 
+  _pintarSeparadorRevisar(tbody, n) {
+    const tr = document.createElement('tr');
+    tr.className = 'poc-dup-revisar';
+    tr.innerHTML = `<td colspan="12" style="padding:12px 10px;background:#fef3c7;color:#92400e;font-size:13px;">
+      <strong>Para revisar · ${n} serial${n === 1 ? '' : 'es'}</strong> — la ficha más reciente está inactiva, así que no se sabe cuál es la buena.
+      No se cierran en lote: revisa cada ficha y cierra a mano la que sobre.</td>`;
+    tbody.appendChild(tr);
+  },
+
   _pintarGrupoDup(tbody, g) {
     const esc = FMT.esc;
     const cab = document.createElement('tr');
@@ -1263,7 +1285,7 @@ window.PocList = {
     td.colSpan = 12;
     td.innerHTML = `
       <span class="td-mono" style="font-weight:700;">${esc(g.serial)}</span>
-      <span style="color:var(--fg-3);font-size:12px;margin-left:6px;">${g.fichas.length} fichas · se queda la más reciente</span>
+      <span style="color:var(--fg-3);font-size:12px;margin-left:6px;">${g.fichas.length} fichas · ${g.revisar ? 'la más reciente está inactiva: decide tú' : 'se queda la más reciente'}</span>
       <span style="margin-left:8px;">${this._chipPoolHtml(g.pool)}</span>`;
     if (!PocState.esLectura() && g.sobrantes.length) {
       const btn = document.createElement('button');
@@ -1282,7 +1304,8 @@ window.PocList = {
       if (celda) {
         const chip = document.createElement('span');
         chip.style.cssText = 'display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;font-size:10.5px;font-weight:600;border:1px solid var(--line);';
-        if (i === 0) { chip.style.color = '#166534'; chip.style.background = '#dcfce7'; chip.textContent = `Más reciente · se queda · ${FMT.date(d.created_at)}`; }
+        if (g.revisar) { chip.style.color = 'var(--fg-2)'; chip.style.background = 'var(--gray-100,#f1f3f5)'; chip.textContent = `${i === 0 ? 'Más reciente' : 'Creada'} · ${FMT.date(d.created_at)} · ${d.activo === false ? 'inactiva' : 'activa'}`; }
+        else if (i === 0) { chip.style.color = '#166534'; chip.style.background = '#dcfce7'; chip.textContent = `Más reciente · se queda · ${FMT.date(d.created_at)}`; }
         else         { chip.style.color = 'var(--fg-3)'; chip.style.background = 'var(--gray-100,#f1f3f5)'; chip.textContent = `Sobrante · ${FMT.date(d.created_at)}`; }
         celda.appendChild(document.createElement('br'));
         celda.appendChild(chip);
@@ -1297,7 +1320,8 @@ window.PocList = {
   // manda es la más reciente.
   async cerrarSobrantesDuplicados(grupos = null) {
     if (PocState.esLectura()) { Toast.show('Solo administradores o recepción pueden cerrar fichas.', 'bad'); return; }
-    const lista = (grupos || this._dupVista?.grupos || []).filter(g => g.sobrantes.length);
+    // Los "para revisar" nunca entran al lote (no tienen buena ni sobrantes).
+    const lista = (grupos || this._dupVista?.grupos || []).filter(g => !g.revisar && g.buena && g.sobrantes.length);
     const items = [];
     lista.forEach(g => {
       const clienteBuena = PocState.nombreClienteDe(g.buena) || '(sin cliente)';

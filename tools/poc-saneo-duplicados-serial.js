@@ -5,6 +5,9 @@
 // nunca se borran. Se cruza con la custodia del pool (equipos_pool) solo para
 // informar si coincide; si esa custodia viene de la migración y nadie la
 // verificó ni la movió un flujo real, no vale.
+// Excepción (Alberto, 2-oct-2026): si la ficha más reciente está INACTIVA, la
+// regla NO se aplica. Ese serial queda "para revisar": el script no lo toca y
+// recepción decide a mano, ficha por ficha, desde la pantalla de Duplicados.
 //
 // Por defecto SOLO CUENTA (no escribe). Correr desde functions/:
 //   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 NODE_PATH=./node_modules node ../tools/poc-saneo-duplicados-serial.js
@@ -56,10 +59,14 @@ const MOV_CUSTODIA_REAL = new Set(['asignacion_contrato', 'reasignacion', 'salid
   for (const d of vivas) { const k = norm(d.serial); if (BASURA.has(k)) continue; (porSerial.get(k) || porSerial.set(k, []).get(k)).push(d); }
   const grupos = [...porSerial.entries()].filter(([, a]) => a.length > 1).map(([clave, fichas]) => {
     fichas.sort((a, b) => (ms(b.created_at) - ms(a.created_at)) || String(b.id).localeCompare(String(a.id)));
-    return { clave, serial: fichas[0].serial, fichas, buena: fichas[0], sobrantes: fichas.slice(1) };
+    return { clave, serial: fichas[0].serial, fichas, buena: fichas[0], sobrantes: fichas.slice(1), revisar: fichas[0].activo === false };
   }).sort((a, b) => a.clave.localeCompare(b.clave));
-  const sobrantes = grupos.reduce((n, g) => n + g.sobrantes.length, 0);
-  console.log(`seriales con >1 ficha viva: ${grupos.length} · fichas ${grupos.reduce((n, g) => n + g.fichas.length, 0)} · SOBRANTES A CERRAR: ${sobrantes}`);
+  const aplican = grupos.filter(g => !g.revisar);
+  const revisar = grupos.filter(g => g.revisar);
+  const sobrantes = aplican.reduce((n, g) => n + g.sobrantes.length, 0);
+  console.log(`seriales con >1 ficha viva: ${grupos.length} · fichas ${grupos.reduce((n, g) => n + g.fichas.length, 0)}`);
+  console.log(`  se aplica la regla: ${aplican.length} seriales · SOBRANTES A CERRAR: ${sobrantes}`);
+  console.log(`  PARA REVISAR (la más reciente está inactiva; no se tocan): ${revisar.length} seriales · ${revisar.reduce((n, g) => n + g.fichas.length, 0)} fichas`);
 
   // 2) Cruce con el pool: doc(s) por serial_norm y su kardex.
   const claves = grupos.map(g => g.clave);
@@ -68,7 +75,7 @@ const MOV_CUSTODIA_REAL = new Set(['asignacion_contrato', 'reasignacion', 'salid
     const s = await db.collection('equipos_pool').where('serial_norm', 'in', claves.slice(i, i + 10)).get();
     s.docs.forEach(d => { const x = { id: d.id, ref: d.ref, ...d.data() }; (pool.get(x.serial_norm) || pool.set(x.serial_norm, []).get(x.serial_norm)).push(x); });
   }
-  const C = { sinPool: 0, coincideId: 0, coincideNombre: 0, noCoincide: 0, sinCustodia: 0, migracionSinVerificar: 0, migracionSinMovReal: 0, migracionNoValeAmbas: 0, coincideYvale: 0, dosActivas: 0, buenaInactiva: 0, sobrantesConSim: 0, sobrantesActivas: 0, mismoCliente: 0 };
+  const C = { sinPool: 0, coincideId: 0, coincideNombre: 0, noCoincide: 0, sinCustodia: 0, migracionSinVerificar: 0, migracionSinMovReal: 0, migracionNoValeAmbas: 0, coincideYvale: 0, noCoincideMigracion: 0, noCoincideReal: 0, dosActivas: 0, buenaInactiva: 0, sobrantesConSim: 0, sobrantesActivas: 0, mismoCliente: 0 };
   const filas = [];
   let kardexLeidos = 0;
   for (const g of grupos) {
@@ -78,9 +85,16 @@ const MOV_CUSTODIA_REAL = new Set(['asignacion_contrato', 'reasignacion', 'salid
     const activas = g.fichas.filter(f => f.activo !== false).length;
     if (activas > 1) C.dosActivas++;
     if (g.buena.activo === false) C.buenaInactiva++;
+    if (new Set(g.fichas.map(f => f.cliente_id || 'n:' + normNombre(nombreCliente(f, cli)))).size === 1) C.mismoCliente++;
+    // Para revisar: va al CSV marcado, pero no entra al cruce ni a los conteos de sobrantes.
+    if (g.revisar) {
+      filas.push({ serial: g.serial, fichas: g.fichas.length, activas, buena_id: '', buena_cliente: '', buena_creada: '',
+        sobrantes: g.fichas.map(f => `${f.id}:${nombreCliente(f, cli)}:${f.activo === false ? 'inact' : 'ACT'}:${fecha(f.created_at)}`).join(' | '),
+        pool: '', pool_cliente: '', coincide: 'PARA REVISAR (la más reciente está inactiva)', custodia_vale: '' });
+      continue;
+    }
     C.sobrantesConSim += g.sobrantes.filter(f => String(f.sim_number || '').trim()).length;
     C.sobrantesActivas += g.sobrantes.filter(f => f.activo !== false).length;
-    if (new Set(g.fichas.map(f => f.cliente_id || 'n:' + normNombre(nombreCliente(f, cli)))).size === 1) C.mismoCliente++;
     const fila = { serial: g.serial, fichas: g.fichas.length, activas, buena_id: g.buena.id, buena_cliente: nombreCliente(g.buena, cli), buena_creada: fecha(g.buena.created_at),
       sobrantes: g.sobrantes.map(f => `${f.id}:${nombreCliente(f, cli)}:${f.activo === false ? 'inact' : 'ACT'}:${fecha(f.created_at)}`).join(' | '),
       pool: '', pool_cliente: '', coincide: '', custodia_vale: '' };
@@ -105,21 +119,21 @@ const MOV_CUSTODIA_REAL = new Set(['asignacion_contrato', 'reasignacion', 'salid
     if (!a || !(a.cliente_id || a.cliente_nombre)) { C.sinCustodia++; fila.coincide = 'sin custodia'; filas.push(fila); continue; }
     const idOk = !!(a.cliente_id && g.buena.cliente_id && a.cliente_id === g.buena.cliente_id);
     const nomOk = !!a.cliente_nombre && normNombre(a.cliente_nombre) === normNombre(nombreCliente(g.buena, cli));
-    if (idOk) C.coincideId++; else if (nomOk) C.coincideNombre++; else C.noCoincide++;
+    if (idOk) C.coincideId++; else if (nomOk) C.coincideNombre++; else { C.noCoincide++; if (noValeA) C.noCoincideMigracion++; else C.noCoincideReal++; }
     fila.coincide = (idOk || nomOk) ? 'sí' : 'NO';
     if ((idOk || nomOk) && !noValeB) C.coincideYvale++;
     filas.push(fila);
   }
-  console.log(`\nCruce con el pool (${kardexLeidos} kardex leídos):`);
+  console.log(`\nCruce con el pool, solo los ${aplican.length} seriales donde se aplica la regla (${kardexLeidos} kardex leídos):`);
   console.log(`  sin doc en el pool: ${C.sinPool}`);
   console.log(`  con doc pero sin custodia (asignacion vacía): ${C.sinCustodia}`);
   console.log(`  la MÁS RECIENTE coincide con la custodia del pool: ${C.coincideId + C.coincideNombre} (por id ${C.coincideId}, por nombre ${C.coincideNombre})`);
-  console.log(`  NO coincide (el pool dice otro cliente): ${C.noCoincide}`);
+  console.log(`  NO coincide (el pool dice otro cliente): ${C.noCoincide} · custodia por migración sin verificar (no vale) ${C.noCoincideMigracion} · custodia real ${C.noCoincideReal}`);
   console.log(`  custodia heredada de la migración: sin verificar ${C.migracionSinVerificar} · sin ningún movimiento real en el kardex ${C.migracionSinMovReal} · ambas ${C.migracionNoValeAmbas}`);
   console.log(`  coincide Y la custodia vale (hay movimiento real): ${C.coincideYvale}`);
-  console.log(`\nGrupos: con 2+ activas ${C.dosActivas} · la más reciente está INACTIVA ${C.buenaInactiva} · todas del mismo cliente ${C.mismoCliente}`);
-  console.log(`Sobrantes: activas ${C.sobrantesActivas} · con SIM ${C.sobrantesConSim} (el SIM se queda en la ficha cerrada)`);
-  console.log('\nEjemplos:', filas.slice(0, 5).map(f => `${f.serial}: buena ${f.buena_cliente} (${f.buena_creada}) · pool ${f.pool} ${f.pool_cliente} · coincide ${f.coincide} · vale ${f.custodia_vale}`).join('\n  '));
+  console.log(`\nGrupos (todos): con 2+ activas ${C.dosActivas} · la más reciente está INACTIVA ${C.buenaInactiva} (para revisar) · todas del mismo cliente ${C.mismoCliente}`);
+  console.log(`Sobrantes a cerrar: activas ${C.sobrantesActivas} · con SIM ${C.sobrantesConSim} (el SIM se queda en la ficha cerrada)`);
+  console.log('\nEjemplos:', filas.filter(f => f.buena_id).slice(0, 5).map(f => `${f.serial}: buena ${f.buena_cliente} (${f.buena_creada}) · pool ${f.pool} ${f.pool_cliente} · coincide ${f.coincide} · vale ${f.custodia_vale}`).join('\n  '));
   if (csvRuta) {
     const cab = Object.keys(filas[0] || {});
     const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -132,7 +146,7 @@ const MOV_CUSTODIA_REAL = new Set(['asignacion_contrato', 'reasignacion', 'salid
   // 3) Aplicar: cerrar sobrantes por tandas de 200 (update + log en la misma tanda).
   const FV = admin.firestore.FieldValue;
   const items = [];
-  for (const g of grupos) {
+  for (const g of aplican) {
     const clienteBuena = nombreCliente(g.buena, cli) || '(sin cliente)';
     for (const f of g.sobrantes) items.push({ f, motivo: `Duplicado por serial: se queda la ficha más reciente (${clienteBuena}, creada ${fecha(g.buena.created_at)})`, ref: { tipo: 'poc_device', id: g.buena.id, label: `ficha ${g.serial} · ${clienteBuena}` } });
   }
