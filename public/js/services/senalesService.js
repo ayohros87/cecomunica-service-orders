@@ -58,11 +58,16 @@ const SenalesService = {
         // (tipo + eliminada) que se restó dos veces.
         const partes = [[+1, spec.wheres]];
         if (spec.restarEliminadas) partes.push([-1, [...spec.wheres, ['eliminado', '==', true]]]);
-        for (const tipo of (spec.excluirTipos || [])) {
-          partes.push([-1, [...spec.wheres, ['tipo_de_servicio', '==', tipo]]]);
-          if (spec.restarEliminadas) {
-            partes.push([+1, [...spec.wheres, ['tipo_de_servicio', '==', tipo], ['eliminado', '==', true]]]);
-          }
+        // Todos los tipos excluidos en UNA consulta con `in` (2026-10-02):
+        // antes una por tipo (y otra por tipo eliminada), y la lista trae las
+        // variantes de escritura de los datos (PROGRAMACIÓN/PROGRAMACION,
+        // ENTRADA/Entrada…): por_recibir costaba 16 conteos, ahora 4.
+        // Verificado contra producción ese día: mismos números.
+        const excluir = spec.excluirTipos || [];
+        if (excluir.length) {
+          const tipoW = excluir.length === 1 ? ['tipo_de_servicio', '==', excluir[0]] : ['tipo_de_servicio', 'in', excluir];
+          partes.push([-1, [...spec.wheres, tipoW]]);
+          if (spec.restarEliminadas) partes.push([+1, [...spec.wheres, tipoW, ['eliminado', '==', true]]]);
         }
         const valores = await Promise.all(partes.map(([, w]) => window.FbAgg.count(spec.col, w)));
         const n = valores.reduce((acc, v, i) => acc + partes[i][0] * v, 0);
@@ -124,13 +129,16 @@ const SenalesService = {
         { col: 'ordenes_de_servicio', wheres: [['estado_reparacion', '==', PA]], restarEliminadas: true,
           excluirTipos: [...EB.TIPOS_SIN_MOSTRADOR, ...EB.TIPOS_FUERA_DE_COLA] });
     }
+    // Los tipos sin mostrador en UNA consulta con `in` (2026-10-02): antes una
+    // por tipo y variante de escritura (12 conteos), ahora 2.
+    const sinMostrador = EB.TIPOS_SIN_MOSTRADOR;
     const partes = await Promise.all([
       this.countOrdenesPorEstado('RECIBIDO EN MOSTRADOR'),
-      ...EB.TIPOS_SIN_MOSTRADOR.map(t => this._count(
-        col.where('estado_reparacion', '==', PA).where('tipo_de_servicio', '==', t),
+      this._count(
+        col.where('estado_reparacion', '==', PA).where('tipo_de_servicio', 'in', sinMostrador),
         this._viva,
-        { col: 'ordenes_de_servicio', wheres: [['estado_reparacion', '==', PA], ['tipo_de_servicio', '==', t]],
-          restarEliminadas: true })),
+        { col: 'ordenes_de_servicio', wheres: [['estado_reparacion', '==', PA], ['tipo_de_servicio', 'in', sinMostrador]],
+          restarEliminadas: true }),
     ]);
     return this.sumaConteos(partes);
   },

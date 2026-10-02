@@ -1568,9 +1568,15 @@ function _pintarConteosChips() {
   pinta('cerradas', cerradas);
 }
 
+// Freno de 3 min (2026-10-02; antes 45 s): el listener vivo repinta seguido y
+// cada recuento eran ~46 conteos (hoy ~22). Con la bandeja abierta, cobros
+// llegó a 1,039 conteos en una hora y disparó el tripwire. Pestaña oculta: no
+// se recuenta (se recuenta al volver, en el siguiente repintado).
+const CONTEOS_CHIPS_MIN_MS = 3 * 60 * 1000;
 async function _refrescarConteosServidor() {
   if (!window.SenalesService) return;
-  if (_conteosSrvEnVuelo || (Date.now() - _conteosSrvTs) < 45000) return;
+  if (document.hidden && _conteosSrvTs) return;
+  if (_conteosSrvEnVuelo || (Date.now() - _conteosSrvTs) < CONTEOS_CHIPS_MIN_MS) return;
   _conteosSrvEnVuelo = true;
   try {
     const claves = [...CHIPS_ABIERTOS, ...CHIPS_CERRADOS];
