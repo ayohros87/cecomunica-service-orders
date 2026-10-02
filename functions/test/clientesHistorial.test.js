@@ -75,3 +75,23 @@ test("atribución del soft-delete: deleted_by manda sobre updated_by", () => {
     { deleted: true, deleted_by: "u9", updated_at: ts(2), updated_by: "u1" },
   ), "u9");
 });
+
+test("relleno de valores implícitos NO es cambio: sin itbms_exento → false, sin tags → [], sin activo → true (R2 auditoría 2026-09-30)", () => {
+  // Doc viejo sin los campos; el payload canónico los rellena en cada guardado.
+  assert.equal(diffCliente(
+    { nombre: "ACME" },
+    { nombre: "ACME", itbms_exento: false, tags: [], activo: true, deleted: false, representante_doc_tipo: "cedula" },
+  ), null);
+  // Pero el valor NO implícito sí cuenta (exento, con etiqueta, inactivo, pasaporte).
+  const d = diffCliente(
+    { nombre: "ACME" },
+    { nombre: "ACME", itbms_exento: true, tags: ["gob"], activo: false, representante_doc_tipo: "pasaporte" },
+  );
+  assert.deepEqual(Object.keys(d).sort(), ["activo", "itbms_exento", "representante_doc_tipo", "tags"]);
+  // Y si el campo existía, false → true o true → false sigue siendo cambio.
+  assert.deepEqual(diffCliente({ activo: true }, { activo: false }), { activo: { antes: true, despues: false } });
+  // Un relleno que sí es dato (vendedor, tipo de contribuyente) se sigue anotando.
+  assert.deepEqual(diffCliente({ nombre: "ACME" }, { nombre: "ACME", ruc_tipo: "juridica" }), { ruc_tipo: { antes: null, despues: "juridica" } });
+  // En el alta todo lo que trae valor se anota, implícito o no.
+  assert.ok(diffCliente(null, { nombre: "ACME", activo: true }).activo);
+});

@@ -29,6 +29,25 @@ function _plano(v) {
   return v;
 }
 
+// Lo que el app YA entendía cuando el campo no existía: `activo !== false`
+// es activo, sin `itbms_exento` paga, sin `tags` no tiene etiquetas, sin
+// `representante_doc_tipo` es cédula. buildClientePayload los rellena en
+// cada guardado y el historial contaba "ITBMS: — → Paga" y "Etiquetas: — →
+// []" como cambios (135 y 134 líneas en 30 días, auditoría de módulos
+// 2026-09-30, R2). Campo ausente → su valor implícito NO es un cambio.
+const VALOR_IMPLICITO = {
+  activo: true,
+  deleted: false,
+  itbms_exento: false,
+  tags: [],
+  representante_doc_tipo: "cedula",
+};
+function _relleno(campo, antes, despues) {
+  if (antes !== undefined && antes !== null) return false;
+  if (!(campo in VALOR_IMPLICITO)) return false;
+  return _igual(VALOR_IMPLICITO[campo], despues);
+}
+
 function _igual(a, b) {
   a = _plano(a); b = _plano(b);
   if (a === null || b === null) return a === b;
@@ -43,6 +62,8 @@ function diffCliente(before, after) {
   for (const campo of CAMPOS_AUDITADOS) {
     const antes = before ? before[campo] : undefined;
     const despues = after ? after[campo] : undefined;
+    // En el alta (before null) sí se anota todo lo que trae valor.
+    if (before && _relleno(campo, antes, despues)) continue;
     if (!_igual(antes, despues)) {
       cambios[campo] = { antes: _plano(antes), despues: _plano(despues) };
     }
