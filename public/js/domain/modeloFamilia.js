@@ -205,6 +205,44 @@
     return { valor: null, origen: null, fila };
   }
 
+  // Datos de FACTURACIÓN de una referencia. Decisión 15 de Alberto (1-oct-2026):
+  // QuickBooks factura POR MODELO, no por estado (nuevo/refurbished). Una fila
+  // R toma la tarifa, el ítem y el bundle de su modelo BASE; lo propio de la
+  // fila R queda como respaldo solo donde la base no tiene el dato (y en una
+  // fila N, o una R sin base, es lo único que hay). No escribe nada en
+  // `modelos`: readiness, preview, cron y badge leen de aquí.
+  //   → { fila, base, precio_alquiler, precio_frecuencia, qbo_item_alquiler_id,
+  //       qbo_bundle_id, heredado (algún dato vino de la base), ok (tarifa + ítem + bundle) }
+  function facturacionDe(ref) {
+    const fila = resolver(ref);
+    const vacio = { fila: null, base: null, precio_alquiler: null, precio_frecuencia: null,
+      qbo_item_alquiler_id: null, qbo_bundle_id: null, heredado: false, ok: false };
+    if (!fila) return vacio;
+    const base = _baseDe(fila);
+    const deBase = base && base.id !== fila.id ? base : null;
+    let heredado = false;
+    const numero = (campo) => {
+      const b = deBase ? num(deBase[campo]) : null;
+      if (b) { heredado = true; return b; }
+      return num(fila[campo]);
+    };
+    const texto = (campo) => {
+      const b = deBase && deBase[campo] ? String(deBase[campo]) : null;
+      if (b) { heredado = true; return b; }
+      return fila[campo] ? String(fila[campo]) : null;
+    };
+    const out = {
+      fila, base: deBase,
+      precio_alquiler: numero("precio_alquiler"),
+      precio_frecuencia: numero("precio_frecuencia"),
+      qbo_item_alquiler_id: texto("qbo_item_alquiler_id"),
+      qbo_bundle_id: texto("qbo_bundle_id"),
+    };
+    out.heredado = heredado;
+    out.ok = !!(out.precio_alquiler && out.qbo_item_alquiler_id && out.qbo_bundle_id);
+    return out;
+  }
+
   const modalidadDe = (u) => (u && u.modalidad) || (u && u.propiedad === "cliente" ? "propio" : "alquiler");
 
   // Líneas del contrato compatibles con una unidad, exactas primero
@@ -246,7 +284,7 @@
     cargar, listo, tight, sinR, esTextoR, sinMarca, claveTexto,
     filaPorId, filaPorTexto, resolver, familiaDe, familiaLabel, mismaFamilia,
     condicionDe, condicionDerivada, esRefurbished, filaDe, filaRefurbishedDe,
-    precioReferencia, campoReferencia, modalidadDe, lineasCompatibles, lineaPara,
+    precioReferencia, campoReferencia, facturacionDe, modalidadDe, lineasCompatibles, lineaPara,
     claveFamilia, etiqueta,
   };
 });

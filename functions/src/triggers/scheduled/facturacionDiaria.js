@@ -8,20 +8,23 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
+const { catalogo, ModeloFamilia } = require("../../domain/modeloCatalogo");
 
 const TS = admin.firestore.Timestamp;
 const DIAS_FUGA = 7;
-const norm = (s) => String(s || "").trim().toLowerCase();
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
 const esc = (v) => String(v ?? "").replace(/[<>&]/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[ch]));
 const toMillis = (ts) => (ts?.toMillis ? ts.toMillis() : (ts ? new Date(ts).getTime() : 0));
 
-function readiness(c, modelosById, modelosByName) {
+// Mismo criterio que facturacion-activacion.js (readiness): el mapeo QBO de
+// cada equipo, propio o HEREDADO del modelo base para los -R (decisión 15 de
+// Alberto, 1-oct-2026, ModeloFamilia.facturacionDe). Requiere el catálogo
+// cargado (`await catalogo()`).
+function readiness(c) {
   const vigente = ["activo", "aprobado"].includes(c.estado);
   let mapeo = true;
   for (const e of (c.equipos || [])) {
-    const m = (e.modelo_id && modelosById[e.modelo_id]) || modelosByName[norm(e.modelo)] || null;
-    if (!m || !(Number(m.precio_alquiler) > 0) || !m.qbo_item_alquiler_id || !m.qbo_bundle_id) { mapeo = false; break; }
+    if (!ModeloFamilia.facturacionDe({ modelo_id: e.modelo_id || null, modelo: e.modelo || "" }).ok) { mapeo = false; break; }
   }
   const total = (c.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
   const activos = Math.max(0, total - Number(c.baja_cancelado_total || 0));
@@ -49,13 +52,8 @@ module.exports = onSchedule(
       alertasOff = !!d.alertas_off;
     } catch (e) { logger.warn("[facturacionDiaria] sin config", { message: e.message }); }
 
-    // Catálogo de modelos
-    const modelosById = {}, modelosByName = {};
-    (await db.collection("modelos").get()).forEach((d) => {
-      const m = { id: d.id, ...d.data() };
-      modelosById[m.id] = m;
-      if (m.modelo) modelosByName[norm(m.modelo)] = m;
-    });
+    // Catálogo de modelos (carga ModeloFamilia: el -R resuelve a su base)
+    await catalogo({ force: true });
 
     // Contratos vigentes
     const snap = await db.collection("contratos").where("estado", "in", ["aprobado", "activo"]).get();
@@ -68,7 +66,7 @@ module.exports = onSchedule(
 
     for (const c of contratos) {
       const facturable = c.facturable !== false && c.facturacion_estado !== "no_aplica";
-      const r = readiness(c, modelosById, modelosByName);
+      const r = readiness(c);
       const enCiclo = ["activa", "en_espera"].includes(c.facturacion_estado);
 
       // 1) Auto-activación. RMW del array `equipos` dentro de una transacción con
@@ -83,7 +81,7 @@ module.exports = onSchedule(
             if (!fresh.exists) return false;
             const cc = fresh.data();
             const facturableNow = cc.facturable !== false && cc.facturacion_estado !== "no_aplica";
-            const rNow = readiness(cc, modelosById, modelosByName);
+            const rNow = readiness(cc);
             const enCicloNow = ["activa", "en_espera"].includes(cc.facturacion_estado);
             if (!(facturableNow && rNow.requeridosOk && !enCicloNow)) return false;
 

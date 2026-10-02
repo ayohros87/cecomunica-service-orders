@@ -35,9 +35,13 @@ async function calcularSaludCatalogo() {
     if (String(m.estado || "N").toUpperCase() !== "R") continue;
     const fam = ModeloFamilia.familiaDe({ modelo_id: m.id });
     if (!m.variante_de && fam && fam !== m.id) r_sin_base.push({ id: m.id, modelo: label(m), base_id: fam, base: ModeloFamilia.familiaLabel(fam) });
-    if (!m.qbo_item_alquiler_id) r_sin_qbo.push({ id: m.id, modelo: label(m) });
+    // Ítem y tarifa de alquiler: propios o heredados de la base (decisión 15
+    // de Alberto, 1-oct-2026: QuickBooks factura por modelo). Solo es
+    // problema cuando NI la fila NI su base los tienen.
+    const fact = ModeloFamilia.facturacionDe({ modelo_id: m.id });
+    if (!fact.qbo_item_alquiler_id) r_sin_qbo.push({ id: m.id, modelo: label(m) });
     if (!(Number(m.precio_venta) > 0)) r_sin_precio_venta.push({ id: m.id, modelo: label(m), base_tiene: !!ModeloFamilia.precioReferencia({ modelo_id: m.id }, "precio_venta").valor });
-    if (m.es_alquiler === true && !(Number(m.precio_alquiler) > 0)) r_sin_precio_alquiler.push({ id: m.id, modelo: label(m) });
+    if (m.es_alquiler === true && !fact.precio_alquiler) r_sin_precio_alquiler.push({ id: m.id, modelo: label(m) });
   }
 
   // ── Pool ──

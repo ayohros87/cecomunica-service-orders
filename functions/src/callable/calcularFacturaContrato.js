@@ -42,11 +42,12 @@ module.exports = onCall(
 
     // Catálogo de modelos (desglose).
     // Resolución por ModeloFamilia: id, texto con o sin marca, alias
-    // ("una familia, dos filas", 2026-09-07). La fila resuelta conserva su
-    // propio precio_alquiler / mapeo QBO (la -R es otro ítem en QBO).
+    // ("una familia, dos filas", 2026-09-07). Tarifa, ítem y bundle salen de
+    // ModeloFamilia.facturacionDe: la -R hereda los de su modelo base
+    // (decisión 15 de Alberto, 1-oct-2026: QuickBooks factura POR MODELO).
     const lista = (await db.collection("modelos").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
     ModeloFamilia.cargar(lista);
-    const modeloDe = (e) => ModeloFamilia.resolver({ modelo_id: e.modelo_id || null, modelo: e.modelo || "" });
+    const facturacionDe = (e) => ModeloFamilia.facturacionDe({ modelo_id: e.modelo_id || null, modelo: e.modelo || "" });
 
     const itbmsAplica = (typeof c.itbms_aplica !== "undefined") ? !!c.itbms_aplica : true;
     const itbmsPorc = Number(c.itbms_porcentaje || 0.07);
@@ -71,9 +72,9 @@ module.exports = onCall(
       const importe = r2(mensual * factor);
 
       // Desglose por unidad (fijo desde el modelo) × cantidad × factor.
-      const m = modeloDe(e);
-      const alquilerU = m ? Number(m.precio_alquiler || 0) : 0;
-      const frecU = m ? Number(m.precio_frecuencia || 0) : 0;
+      const f = facturacionDe(e);
+      const alquilerU = Number(f.precio_alquiler || 0);
+      const frecU = Number(f.precio_frecuencia || 0);
       const alquiler = r2(alquilerU * cantidad * factor);
       const frecuencia = r2(frecU * cantidad * factor);
       const mantenimiento = r2(importe - alquiler - frecuencia);
@@ -86,8 +87,11 @@ module.exports = onCall(
         dias, factor, parcial: factor < 1,
         importe,
         desglose: { alquiler, frecuencia, mantenimiento },
-        qbo_bundle_id: m ? (m.qbo_bundle_id || "") : "",
-        mapeo_ok: !!(m && Number(m.precio_alquiler) > 0 && m.qbo_item_alquiler_id && m.qbo_bundle_id),
+        qbo_bundle_id: f.qbo_bundle_id || "",
+        qbo_item_alquiler_id: f.qbo_item_alquiler_id || "",
+        mapeo_ok: f.ok,
+        // true cuando la tarifa o el mapeo vinieron del modelo base (-R).
+        mapeo_heredado: f.heredado,
         advertencia: mantenimiento < 0 ? "mantenimiento negativo (alquiler+frecuencia > mensualidad)" : null,
       });
     }

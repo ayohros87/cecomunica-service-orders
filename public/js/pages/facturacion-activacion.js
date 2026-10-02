@@ -105,6 +105,8 @@ async function cargar(){
   contratos = cs || [];
   modelosById = {}; modelosByName = {};
   (ms||[]).forEach(m=>{ if(m.id) modelosById[m.id]=m; if(m.modelo) modelosByName[_norm(m.modelo)]=m; });
+  // "Una familia, dos filas": el -R resuelve a su base por catálogo.
+  if (window.ModeloFamilia) ModeloFamilia.cargar(ms || []);
 }
 
 function activosDe(c){
@@ -113,14 +115,27 @@ function activosDe(c){
 }
 function modeloDe(e){ return (e.modelo_id && modelosById[e.modelo_id]) || modelosByName[_norm(e.modelo)] || null; }
 
+// Decisión 15 de Alberto (1-oct-2026): QuickBooks factura POR MODELO. Un -R
+// hereda tarifa, ítem y bundle de su modelo base (ModeloFamilia.facturacionDe)
+// sin que nadie los copie en `modelos`. "213 sin mapeo QBO" era en su mayoría
+// PNC360S-R con la base PNC360S ya mapeada. Sin ModeloFamilia se cae a la
+// fila propia, como antes.
+function mapeoDe(e){
+  if (window.ModeloFamilia?.facturacionDe) return ModeloFamilia.facturacionDe({ modelo_id: e.modelo_id || null, modelo: e.modelo || '' });
+  const m = modeloDe(e);
+  return { fila: m, base: null, heredado: false, ok: !!(m && Number(m.precio_alquiler)>0 && m.qbo_item_alquiler_id && m.qbo_bundle_id) };
+}
+
 function readiness(c){
   const vigente = ['activo','aprobado'].includes(c.estado);
-  // Mapeo QBO: cada equipo del contrato mapeado (precio + item + bundle). Sin equipos
-  // (servicio/renovación) → no aplica el mapeo de alquiler, pasa.
+  // Mapeo QBO: cada equipo del contrato mapeado (precio + item + bundle), propio
+  // o heredado del modelo base. Sin equipos (servicio/renovación) → no aplica el
+  // mapeo de alquiler, pasa. `sinMapeo` dice CUÁLES faltan (el enlace "Mapeo"
+  // antes mandaba al catálogo sin decir qué modelo).
   let mapeo = true;
+  const sinMapeo = [];
   for(const e of (c.equipos||[])){
-    const m = modeloDe(e);
-    if(!m || !(Number(m.precio_alquiler)>0) || !m.qbo_item_alquiler_id || !m.qbo_bundle_id){ mapeo=false; break; }
+    if(!mapeoDe(e).ok){ mapeo=false; const n = String(e.modelo||'—').trim(); if(!sinMapeo.includes(n)) sinMapeo.push(n); }
   }
   const entrega = c.entrega_confirmada===true;
   const act = activosDe(c);
@@ -129,7 +144,7 @@ function readiness(c){
   // ignoraba y el contrato se veía completo en la lista pero incompleto aquí.
   const seriales = act>0 && (Number(c.seriales_count||0) + Number(c.seriales_omitidos_count||0)) >= act;
   const firmado = !!c.firmado_url;
-  return { vigente, mapeo, entrega, seriales, firmado, requeridosOk: vigente && mapeo };
+  return { vigente, mapeo, sinMapeo, entrega, seriales, firmado, requeridosOk: vigente && mapeo };
 }
 
 function bucketDe(c){
@@ -153,13 +168,14 @@ function emptyState(msg){
 // de lo que falta (rojo = requerido, ámbar = recomendado). Más denso y escaneable.
 function checklistCell(r){
   const items = [
-    ['Vigente', r.vigente, true], ['Mapeo QBO', r.mapeo, true],
+    ['Vigente', r.vigente, true],
+    ['Mapeo QBO', r.mapeo, true, (r.sinMapeo||[]).length ? `Falta mapear: ${r.sinMapeo.join(', ')}` : ''],
     ['Entrega', r.entrega, false], ['Seriales', r.seriales, false], ['Firmado', r.firmado, false],
   ];
   const faltan = items.filter(([,ok])=>!ok);
   if(!faltan.length) return '<span class="r-chip r-ok">✓ completo</span>';
-  return '<div class="r-chips">' + faltan.map(([label,,req]) =>
-    `<span class="r-chip ${req?'r-bad':'r-warn'}" title="${req?'Requerido':'Recomendado'}">${req?'✗':'⚠'} ${label}</span>`).join('') + '</div>';
+  return '<div class="r-chips">' + faltan.map(([label,,req,detalle]) =>
+    `<span class="r-chip ${req?'r-bad':'r-warn'}" title="${esc(detalle || (req?'Requerido':'Recomendado'))}">${req?'✗':'⚠'} ${label}</span>`).join('') + '</div>';
 }
 
 let filtroTexto = '';
@@ -228,7 +244,7 @@ function filaContrato(c){
       <button class="btn btn-sm btn-ghost" onclick="accion('${id}','no_facturable')" title="No factura"><i data-lucide="ban"></i></button>`;
   } else if(vista==='pendientes'){
     acciones = `${!r.entrega?`<button class="btn btn-sm btn-ghost" onclick="accion('${id}','confirmar_entrega')"><i data-lucide="truck"></i> Entrega</button>`:''}
-      ${!r.mapeo?`<a class="btn btn-sm btn-ghost" href="../inventario/modelos.html"><i data-lucide="git-compare"></i> Mapeo</a>`:''}
+      ${!r.mapeo?`<a class="btn btn-sm btn-ghost" href="../inventario/modelos.html?q=${encodeURIComponent((r.sinMapeo||[])[0]||'')}" title="Falta mapear: ${esc((r.sinMapeo||[]).join(', '))}"><i data-lucide="git-compare"></i> Mapeo</a>`:''}
       <button class="btn btn-sm btn-ghost" onclick="accion('${id}','no_facturable')" title="No factura"><i data-lucide="ban"></i></button>`;
   } else if(vista==='activos'){
     acciones = `<button class="btn btn-sm btn-ghost" onclick="vistaPrevia('${id}')"><i data-lucide="file-text"></i> Vista previa</button>

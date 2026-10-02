@@ -40,6 +40,9 @@ firebase.auth().onAuthStateChanged(async (user) => {
     }
     const q = document.getElementById('q');
     if (q) q.addEventListener('input', debounce(render, 200));
+    // ?q=PNC460-R: el enlace "Mapeo" de Activación llega al modelo que falta.
+    const qUrl = new URLSearchParams(location.search).get('q');
+    if (q && qUrl && !q.value) q.value = qUrl;
     if (esBodega) {
       _soloLectura = true;
       document.body.classList.add('md-solo-lectura');
@@ -104,6 +107,14 @@ async function loadQboItems(){
 /* ===== Estado de mapeo ===== */
 function mapeoBadge(m){
   const alq = Number(m.precio_alquiler) || 0;
+  // Decisión 15 de Alberto (1-oct-2026): QuickBooks factura POR MODELO. Una
+  // fila -R toma tarifa, ítem y bundle de su base (ModeloFamilia.facturacionDe)
+  // sin que nadie los copie aquí: el badge lo dice en vez de pedir que se mapee
+  // dos veces lo mismo. (Activación, preview y cron leen del mismo resolver.)
+  if (window.ModeloFamilia?.facturacionDe && (m.estado||'N').toUpperCase()==='R') {
+    const f = ModeloFamilia.facturacionDe({ modelo_id: m.id });
+    if (f.ok && f.heredado && f.base) return { cls:'map-ok', label:`✓ del modelo base (${f.base.modelo})` };
+  }
   if(!alq && !m.qbo_item_alquiler_id && !m.qbo_bundle_id) return { cls:'map-none', label:'—' };
   if(!alq)                      return { cls:'map-warn', label:'⚠ sin tarifa' };
   if(!m.qbo_item_alquiler_id)   return { cls:'map-warn', label:'⚠ sin item' };
@@ -195,6 +206,8 @@ window.editarGlobal = editarGlobal;
 /* ===== Render ===== */
 function render(){
   const tbody = document.getElementById('tablaModelos');
+  // El badge de mapeo resuelve el -R a su base por catálogo (123 filas: barato).
+  if (window.ModeloFamilia && listaModelos) ModeloFamilia.cargar(listaModelos);
   const termRaw = (document.getElementById('q')?.value || '').trim();
   const term = termRaw.toLowerCase();
   _terminoBusqueda = termRaw;   // lo usa el atajo "Crear «…»" del estado vacío
@@ -819,8 +832,10 @@ async function renderSalud(){
   const nombre = (m) => `${m.marca||''} ${m.modelo||''}`.trim();
   const esR = (m) => (m.estado||'N').toUpperCase() === 'R';
   const rSinBase = activos.filter(m => esR(m) && !m.variante_de && ModeloFamilia.familiaDe({ modelo_id: m.id }) !== m.id);
-  const rSinQbo = activos.filter(m => esR(m) && m.es_alquiler === true && !m.qbo_item_alquiler_id);
-  const rSinPrecio = activos.filter(m => esR(m) && m.es_alquiler === true && !(Number(m.precio_alquiler) > 0));
+  // Propio o heredado de la base (decisión 15): solo es problema si ninguno lo tiene.
+  const fact = (m) => ModeloFamilia.facturacionDe({ modelo_id: m.id });
+  const rSinQbo = activos.filter(m => esR(m) && m.es_alquiler === true && !fact(m).qbo_item_alquiler_id);
+  const rSinPrecio = activos.filter(m => esR(m) && m.es_alquiler === true && !fact(m).precio_alquiler);
   const nombreR = activos.filter(m => !esR(m) && /[\s-]R$/i.test(String(m.modelo||'').trim()));
 
   let rep = null;
@@ -834,8 +849,8 @@ async function renderSalud(){
   fila(rSinBase.length, 'refurbished sin vincular a su modelo base (existe por nombre)', 'bad',
     rSinBase.map(m => `${esc(nombre(m))} → ${esc(ModeloFamilia.familiaLabel(ModeloFamilia.familiaDe({ modelo_id: m.id })))}`).join(' · '));
   fila(nombreR.length, 'con nombre "-R" pero estado Nuevo', 'bad', nombreR.map(m => esc(nombre(m))).join(' · '));
-  fila(rSinQbo.length, 'refurbished que se alquilan sin ítem de QuickBooks', 'warn', rSinQbo.map(m => esc(nombre(m))).join(' · '));
-  fila(rSinPrecio.length, 'refurbished que se alquilan sin precio de alquiler', 'warn', rSinPrecio.map(m => esc(nombre(m))).join(' · '));
+  fila(rSinQbo.length, 'refurbished que se alquilan sin ítem de QuickBooks (ni propio ni del modelo base)', 'warn', rSinQbo.map(m => esc(nombre(m))).join(' · '));
+  fila(rSinPrecio.length, 'refurbished que se alquilan sin precio de alquiler (ni propio ni del modelo base)', 'warn', rSinPrecio.map(m => esc(nombre(m))).join(' · '));
   if (rep) {
     fila(Number(rep.fichas_condicion_total||0), 'fichas del pool cuya condición contradice su fila', 'bad',
       (rep.fichas_condicion||[]).map(x => `${esc(x.modelo)}: ${x.n} (fila ${x.fila}, ficha ${x.ficha})`).join(' · '));

@@ -113,3 +113,54 @@ test("resolver prefiere la fila activa cuando hay duplicados del catálogo", () 
   assert.equal(MF.etiqueta({ modelo_id: "r360" }), "HYTERA PNC360S-R");
   assert.equal(MF.familiaLabel("n360"), "HYTERA PNC360S");
 });
+
+// Decisión 15 de Alberto (1-oct-2026): QuickBooks factura POR MODELO, no por
+// estado. El -R hereda tarifa, ítem y bundle de su base SIN escribir en `modelos`.
+test("facturacionDe: la fila R factura con la tarifa, el ítem y el bundle de su base", () => {
+  MF.cargar([
+    { id: "n360", marca: "HYTERA", modelo: "PNC360S", estado: "N", precio_alquiler: 20, precio_frecuencia: 2, qbo_item_alquiler_id: "32", qbo_bundle_id: "B32" },
+    // Caso real: PNC360S-R tiene su propio ítem "R" y nada más. El ítem de la BASE manda.
+    { id: "r360", marca: "HYTERA", modelo: "PNC360S-R", estado: "R", variante_de: "n360", qbo_item_alquiler_id: "32R" },
+    { id: "n460", marca: "HYTERA", modelo: "PNC460", estado: "N" },
+    { id: "r460", marca: "HYTERA", modelo: "PNC460-R", estado: "R", variante_de: "n460" },
+    // Caso real: NX-420-R mapeada completa por su cuenta; NX-420 con ítem/bundle y sin tarifa.
+    { id: "k420", marca: "KENWOOD", modelo: "NX-420", estado: "N", qbo_item_alquiler_id: "41", qbo_bundle_id: "B41" },
+    { id: "k420r", marca: "KENWOOD", modelo: "NX-420-R", estado: "R", precio_alquiler: 15, qbo_item_alquiler_id: "41R", qbo_bundle_id: "B41R" },
+  ]);
+  const r = MF.facturacionDe({ modelo_id: "r360" });
+  assert.equal(r.ok, true);
+  assert.equal(r.heredado, true);
+  assert.equal(r.base.id, "n360");
+  assert.deepEqual([r.precio_alquiler, r.precio_frecuencia, r.qbo_item_alquiler_id, r.qbo_bundle_id], [20, 2, "32", "B32"]);
+  // Por texto también (líneas de contrato legacy sin modelo_id).
+  assert.equal(MF.facturacionDe({ modelo: "HYTERA PNC360S-R" }).ok, true);
+  // Base sin mapeo: no hay herencia que valga — es dato del catálogo (PNC460).
+  const r2 = MF.facturacionDe({ modelo_id: "r460" });
+  assert.equal(r2.ok, false);
+  assert.equal(r2.heredado, false);
+  // R con mapeo propio y base incompleta: de la base lo que la base tiene, propio donde falta.
+  const r3 = MF.facturacionDe({ modelo_id: "k420r" });
+  assert.equal(r3.ok, true);
+  assert.deepEqual([r3.precio_alquiler, r3.qbo_item_alquiler_id, r3.qbo_bundle_id], [15, "41", "B41"]);
+  // Una fila N es ella misma; sin referencia no hay nada.
+  const n = MF.facturacionDe({ modelo_id: "n360" });
+  assert.equal(n.heredado, false);
+  assert.equal(n.ok, true);
+  assert.equal(MF.facturacionDe({ modelo: "" }).ok, false);
+});
+
+test("facturacionDe es la ÚNICA fuente del mapeo en readiness, preview, cron, badge y salud", () => {
+  const leer = (...p) => fs.readFileSync(path.join(__dirname, "..", "..", ...p), "utf8");
+  for (const [archivo, n] of [
+    [["public", "js", "pages", "facturacion-activacion.js"], 1],
+    [["functions", "src", "callable", "calcularFacturaContrato.js"], 1],
+    [["functions", "src", "triggers", "scheduled", "facturacionDiaria.js"], 1],
+    [["functions", "src", "triggers", "scheduled", "saludCatalogo.js"], 1],
+    [["public", "js", "pages", "inventario-modelos.js"], 2],
+  ]) {
+    const src = leer(...archivo);
+    assert.ok((src.match(/facturacionDe\(/g) || []).length >= n, `${archivo.join("/")} no usa ModeloFamilia.facturacionDe`);
+  }
+  // El cron ya no arma su propio índice por nombre: el mapeo sale del catálogo.
+  assert.ok(!leer("functions", "src", "triggers", "scheduled", "facturacionDiaria.js").includes("modelosByName["));
+});

@@ -7,6 +7,7 @@ import '/js/services/empresaService.js'; // memo de sesión de empresa/* (2026-0
 import '/js/services/usuariosService.js';
 import '/js/services/contratosService.js';
 import '/js/services/modelosService.js';
+import '/js/domain/modeloFamilia.js'; // el -R hereda tarifa e ítem QBO de su base (decisión 15, 1-oct-2026)
 import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';
 import '/js/ui/toast.js';
