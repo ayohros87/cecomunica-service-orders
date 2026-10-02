@@ -51,6 +51,9 @@
     .fb-chip--cambia  .dot { background: #0369A1; }
     .fb-chip--termina .dot { background: #9A3412; }
     .fb-chip--espera  .dot { background: transparent; border: 2px solid var(--gray-400, #9AA7B4); width: 6px; height: 6px; }
+    /* QBO marcado por una persona SIN número de factura (P5): mismo ámbar que el "?" de la pastilla. */
+    .fb-chip--sinnum  .dot { background: #E9C46A; }
+    .fb-chip--sinnum.active  { background: var(--soft-warn, #FBF3E0); border-color: #8A6415; color: #8A6415; }
     .fb-chip--arranca.active { background: #F0FDF4; border-color: #166534; color: #166534; }
     .fb-chip--cambia.active  { background: #F0F9FF; border-color: #0369A1; color: #0369A1; }
     .fb-chip--termina.active { background: #FFF7ED; border-color: #9A3412; color: #9A3412; }
@@ -215,6 +218,7 @@
     <button type="button" class="fb-chip fb-chip--cambia" data-f="cambia" role="tab"><span class="dot"></span>Cambia cobro <span class="cnt" data-cnt="cambia">0</span><span class="errdot" data-err="cambia" hidden></span></button>
     <button type="button" class="fb-chip fb-chip--termina" data-f="termina" role="tab"><span class="dot"></span>Termina cobro <span class="cnt" data-cnt="termina">0</span><span class="errdot" data-err="termina" hidden></span></button>
     <button type="button" class="fb-chip fb-chip--espera" data-f="espera" role="tab" title="Esperando la entrega de los equipos: todavía no hay nada que facturar"><span class="dot"></span>En espera <span class="cnt" data-cnt="espera">0</span><span class="errdot" data-err="espera" hidden></span></button>
+    <button type="button" class="fb-chip fb-chip--sinnum" data-f="sinnum" role="tab" title="QBO marcado sin número de factura: sin él no se puede verificar el pago contra QuickBooks. Clic en la pastilla con ? para anotarlo"><span class="dot"></span>Sin número <span class="cnt" data-cnt="sinnum">0</span></button>
     <span class="push"></span>
     <input type="search" id="fbBuscar" class="form-input" placeholder="Buscar cliente o contrato…" style="max-width:220px;" autocomplete="off">
     <label class="fb-toggle"><input type="checkbox" id="fbVerHechos"> Ver hechos y no aplica</label>

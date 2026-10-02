@@ -62,11 +62,22 @@ window.FacturacionComisiones = (() => {
   const est = (a) => S().estadoComision(a.comision || {});
   const esAbierta = (a) => ['esperando', 'listo'].includes(est(a));
   const sinVendedor = (a) => a.comision?.aplica === true && !a.comision.vendedor_email;
+  // Solo falta el PAGO (firma y entrega ya están, o no aplican): es la fila
+  // que Cheila o Zuleika confirman en lote con el estado de cuenta (decisión
+  // 16 de Alberto, 1-oct-2026). 37 de las 45 abiertas estaban así.
+  const soloFaltaPago = (a) => {
+    if (est(a) !== 'esperando' || !a.comision?.vendedor_email) return false;
+    const f = S().faltantes(a.comision);
+    return f.length > 0 && f.every(x => x.paso === 'pago');
+  };
+  // Qué fila lleva casilla en el modo lote de la vista actual.
+  const elegible = (a) => (filtro === 'listo' ? est(a) === 'listo' : (filtro === 'pago' ? soloFaltaPago(a) : false));
 
   function pasaFiltro(a) {
     const e = est(a);
     if (filtro === 'abiertas') return esAbierta(a);
     if (filtro === 'sinvend') return sinVendedor(a) && esAbierta(a);
+    if (filtro === 'pago') return soloFaltaPago(a);
     return e === filtro;
   }
   function pasaPeriodo(a) {
@@ -112,8 +123,8 @@ window.FacturacionComisiones = (() => {
     const ref = a.contrato_id || a.gestion_id || a.id;
     const estTxt = { listo: 'Listo', esperando: 'Esperando', pagada: 'Pagada', no_aplica: 'No aplica' }[e] || e;
     const conSel = modoLote();
-    const sel = conSel && e === 'listo'
-      ? `<label class="cm-sel" onclick="event.stopPropagation()" title="Incluir en el cierre en lote"><input type="checkbox" data-sel="${esc(a.id)}" ${seleccion.has(a.id) ? 'checked' : ''} aria-label="Seleccionar para cerrar"></label>`
+    const sel = conSel && elegible(a)
+      ? `<label class="cm-sel" onclick="event.stopPropagation()" title="${filtro === 'pago' ? 'Incluir en la confirmación de pagos en lote' : 'Incluir en el cierre en lote'}"><input type="checkbox" data-sel="${esc(a.id)}" ${seleccion.has(a.id) ? 'checked' : ''} aria-label="Seleccionar"></label>`
       : (conSel ? '<span></span>' : '');
     return `<div class="cm-row ${abiertaFila ? 'is-open' : ''} ${e === 'pagada' ? 'is-pagada' : ''}" data-row="${esc(a.id)}">
       <div class="cm-main${conSel ? ' cm-main--sel' : ''}" onclick="FacturacionComisiones.toggle('${esc(a.id)}')">
@@ -211,20 +222,22 @@ window.FacturacionComisiones = (() => {
     const abiertas = filas.filter(esAbierta);
     const total = abiertas.reduce((s, a) => s + Number(a.comision.base || 0), 0);
     const listas = filas.filter(a => est(a) === 'listo').length;
+    const elegibles = filas.filter(elegible).length;
     return `<div class="cm-grupo">
       <div class="cm-gh">
         <span class="who ${sin ? 'sin' : ''}" title="${esc(sin ? 'estas comisiones no tienen a quién pagarse' : vendedor)}">${
           esc(sin ? 'SIN VENDEDOR ASIGNADO' : vendedorCorto(vendedor))}</span>
         <span class="meta">${filas.length} evento${filas.length === 1 ? '' : 's'}${listas ? ` · ${listas} lista${listas === 1 ? '' : 's'} para pago` : ''}</span>
         ${abiertas.length ? `<span class="tot">${money(total)} en base abierta</span>` : ''}
-        ${modoLote() && !sin && listas ? `<button type="button" class="btn btn-ghost btn-sm" data-sel-vendedor="${esc(vendedor)}">Seleccionar sus ${listas}</button>` : ''}
+        ${modoLote() && !sin && elegibles ? `<button type="button" class="btn btn-ghost btn-sm" data-sel-vendedor="${esc(vendedor)}">Seleccionar sus ${elegibles}</button>` : ''}
       </div>
       <div class="cm-rows">${filas.map(filaHtml).join('')}</div>
     </div>`;
   }
 
-  // El lote solo existe en "Listas para pago" y para quien puede liberar.
-  function modoLote() { return filtro === 'listo' && S().puedeComisionar(rol); }
+  // El lote existe en "Listas para pago" (cerrar período) y en "Falta el pago"
+  // (confirmar el primer pago), solo para quien puede liberar.
+  function modoLote() { return ['listo', 'pago'].includes(filtro) && S().puedeComisionar(rol); }
 
   function pintarLote() {
     const box = document.getElementById('cmLote');
@@ -232,6 +245,23 @@ window.FacturacionComisiones = (() => {
     if (!modoLote()) { box.hidden = true; box.innerHTML = ''; return; }
     const elegidas = todas.filter(a => seleccion.has(a.id));
     const base = elegidas.reduce((s, a) => s + Number(a.comision?.base || 0), 0);
+    if (filtro === 'pago') {
+      // Confirmación del primer pago en lote (decisión 16 de Alberto, 1-oct-2026):
+      // una fecha para el lote y el número de factura por fila en la hoja.
+      const hoy = FMT.hoyISOPanama();
+      const fAnterior = document.getElementById('cmLoteF')?.value || hoy;
+      box.hidden = false;
+      box.innerHTML = `
+        <span class="cm-lote-n"><b>${elegidas.length}</b> seleccionada${elegidas.length === 1 ? '' : 's'}${elegidas.length ? ` · base ${money(base)}` : ''}</span>
+        <button type="button" class="btn btn-ghost btn-sm" data-lote="todas">Todas las visibles</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-lote="ninguna" ${elegidas.length ? '' : 'disabled'}>Ninguna</button>
+        <span class="sep"></span>
+        <label for="cmLoteF">Fecha del pago</label>
+        <input type="date" id="cmLoteF" class="form-input" value="${esc(fAnterior)}" max="${hoy}" style="width:150px;">
+        <button type="button" class="btn btn-primary btn-sm" id="cmLotePagoBtn" ${elegidas.length ? '' : 'disabled'}>
+          <i data-lucide="check"></i> Confirmar ${elegidas.length || ''} pago${elegidas.length === 1 ? '' : 's'}…</button>`;
+      return;
+    }
     const meses = [...new Set([mesHoy(), ...elegidas.map(a => mesDe(a.fecha_efectiva)).filter(Boolean)])].sort().reverse();
     const pAnterior = document.getElementById('cmLoteP')?.value;
     const nAnterior = document.getElementById('cmLoteN')?.value || '';
@@ -281,6 +311,63 @@ window.FacturacionComisiones = (() => {
     }, { label: 'Cerrando…', rethrow: false });
   }
 
+  // Primer pago en LOTE (decisión 16 + P9 de la auditoría de módulos): la hoja
+  // lista las seleccionadas con el número de factura que Recepción ya anotó en
+  // la bandeja (pasos.qbo.factura) para no pedirlo dos veces; se completa el
+  // que falte. Sin número no se confirma (marcarPago lo exige: es con lo que
+  // se verifica contra QuickBooks). Una fecha para todo el lote.
+  async function confirmarPagosLote() {
+    const elegidas = todas.filter(a => seleccion.has(a.id) && soloFaltaPago(a));
+    if (!elegidas.length) { Toast.show('Selecciona al menos una comisión a la que solo le falte el pago.', 'warn'); return; }
+    const fecha = document.getElementById('cmLoteF')?.value || FMT.hoyISOPanama();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) { Toast.show('Escribe la fecha del pago.', 'warn'); return; }
+    const fechaTxt = fecha.split('-').reverse().join('/');
+    const filas = elegidas.map(a => {
+      const num = a.pasos?.qbo?.factura || '';
+      const monto = a.resumen?.con_itbms != null ? money(a.resumen.con_itbms) : (a.comision?.base != null ? money(a.comision.base) : '—');
+      return `<tr>
+        <td><b>${esc(a.cliente_nombre || '—')}</b><br><span style="font-family:var(--font-mono);font-size:12px;color:var(--fg-3);">${esc(a.contrato_id || a.gestion_id || '')}</span></td>
+        <td style="font-family:var(--font-mono);text-align:right;">${monto}</td>
+        <td><input class="form-input" data-lf="${esc(a.id)}" value="${esc(num)}" placeholder="N.° factura" maxlength="40" style="width:130px;height:30px;" autocomplete="off">
+          ${num ? '<div style="font-size:11px;color:var(--fg-3);">de la bandeja</div>' : '<div style="font-size:11px;color:#8A6415;">sin número en la bandeja</div>'}</td>
+      </tr>`;
+    }).join('');
+    const numeros = await Modal.sheet({
+      title: `Confirmar ${elegidas.length} primer${elegidas.length === 1 ? '' : 'os'} pago${elegidas.length === 1 ? '' : 's'}`, icon: 'check',
+      html: `<p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;">Fecha del pago: <b>${esc(fechaTxt)}</b>. El número viene de la bandeja de facturación cuando Recepción lo anotó; completa el que falte.
+          <b>Sin número no se confirma</b>: es con lo que el sistema verifica el pago contra QuickBooks. Cuenta solo la factura en cero.</p>
+        <div class="table-scroll" style="max-height:55vh;overflow:auto;"><table class="app-table" style="font-size:13px;">
+          <thead><tr><th>Cliente</th><th style="text-align:right;">Mensual c/ITBMS</th><th>Factura</th></tr></thead>
+          <tbody>${filas}</tbody></table></div>`,
+      buttons: [{ action: 'cancelar', label: 'Cancelar' }, { action: 'ok', label: 'Confirmar los pagos', primary: true }],
+      onMount: (root) => setTimeout(() => root.querySelector('[data-lf]:not([value]), [data-lf][value=""]')?.focus(), 30),
+      onAction: (action, root) => action === 'ok'
+        ? Object.fromEntries([...root.querySelectorAll('[data-lf]')].map(i => [i.getAttribute('data-lf'), i.value.trim()]))
+        : null,
+    });
+    if (!numeros) return;
+    const btn = document.getElementById('cmLotePagoBtn');
+    const errores = [], sinNum = [];
+    let hechas = 0;
+    await withBusy(btn, async () => {
+      enVuelo = true;
+      try {
+        for (const a of elegidas) {
+          const num = numeros[a.id] || '';
+          if (!num) { sinNum.push(a); continue; }
+          try { await S().marcarPago(a, { factura: num, fecha }); hechas++; seleccion.delete(a.id); }
+          catch (e) { console.error('[comisiones] lote pago', a.id, e); errores.push({ a, msg: e.message || String(e) }); }
+        }
+      } finally { enVuelo = false; }
+    }, { label: 'Confirmando…', rethrow: false });
+    await cargar();
+    if (!errores.length && !sinNum.length) { Toast.show(`${hechas} pago${hechas === 1 ? '' : 's'} confirmado${hechas === 1 ? '' : 's'} — ${hechas === 1 ? 'la comisión queda' : 'las comisiones quedan'} LISTA${hechas === 1 ? '' : 'S'} para pago`, 'ok'); return; }
+    await Modal.alert({ title: 'Confirmación en lote incompleta', icon: 'alert-triangle',
+      message: `Se confirmaron ${hechas} de ${elegidas.length}.`
+        + (sinNum.length ? `<br><br><b>Sin número de factura (siguen seleccionadas):</b><ul style="margin:6px 0 0 18px;">${sinNum.map(a => `<li>${esc(a.cliente_nombre || a.id)}</li>`).join('')}</ul>` : '')
+        + (errores.length ? `<br><b>No se pudieron guardar:</b><ul style="margin:6px 0 0 18px;">${errores.map(({ a, msg }) => `<li><b>${esc(a.cliente_nombre || a.id)}</b>: ${esc(msg)}</li>`).join('')}</ul>` : '') });
+  }
+
   function render() {
     // Contadores: siempre sobre TODO (con período y búsqueda aplicados), para
     // que el chip diga cuántas hay y no cuántas se están viendo.
@@ -289,6 +376,7 @@ window.FacturacionComisiones = (() => {
       abiertas: base.filter(esAbierta).length,
       listo: base.filter(a => est(a) === 'listo').length,
       esperando: base.filter(a => est(a) === 'esperando').length,
+      pago: base.filter(soloFaltaPago).length,
       pagada: base.filter(a => est(a) === 'pagada').length,
       sinvend: base.filter(a => sinVendedor(a) && esAbierta(a)).length,
     };
@@ -317,9 +405,9 @@ window.FacturacionComisiones = (() => {
       grupos.get(v).sort((a, b) => (toDate(a.fecha_efectiva) || 0) - (toDate(b.fecha_efectiva) || 0));
     }
 
-    // La selección solo guarda lo que sigue visible y listo.
-    const idsListos = new Set(filas.filter(a => est(a) === 'listo').map(a => a.id));
-    [...seleccion].forEach(id => { if (!modoLote() || !idsListos.has(id)) seleccion.delete(id); });
+    // La selección solo guarda lo que sigue visible y elegible en esta vista.
+    const idsElegibles = new Set(filas.filter(elegible).map(a => a.id));
+    [...seleccion].forEach(id => { if (!modoLote() || !idsElegibles.has(id)) seleccion.delete(id); });
     pintarLote();
 
     const cont = document.getElementById('cmRows');
@@ -334,9 +422,12 @@ window.FacturacionComisiones = (() => {
     const a = todas.find(x => x.id === id); if (!a) return;
     const hoy = FMT.hoyISOPanama(); // hora de Panamá, no UTC (T8)
     const el = document.getElementById(`cmForm-${id}`); if (!el) return;
+    // El número que Recepción ya anotó en la bandeja (pasos.qbo.factura) viene
+    // puesto: no se pide dos veces (P5 de la auditoría de módulos 2026-09-30).
+    const numBandeja = a.pasos?.qbo?.factura || '';
     el.innerHTML = `<div class="cm-form">
-      <div><label for="pgF-${esc(id)}">Factura (QuickBooks)</label>
-        <input id="pgF-${esc(id)}" class="form-input" style="width:140px;" placeholder="1234" autocomplete="off"></div>
+      <div><label for="pgF-${esc(id)}">Factura (QuickBooks)${numBandeja ? ' · de la bandeja' : ''}</label>
+        <input id="pgF-${esc(id)}" class="form-input" style="width:140px;" placeholder="1234" autocomplete="off" value="${esc(numBandeja)}"></div>
       <div><label for="pgD-${esc(id)}">Fecha del pago</label>
         <input id="pgD-${esc(id)}" type="date" class="form-input" value="${hoy}" max="${hoy}"></div>
       <div><label for="pgM-${esc(id)}">Monto pagado</label>
@@ -553,14 +644,15 @@ window.FacturacionComisiones = (() => {
     document.getElementById('cmRows')?.addEventListener('click', (ev) => {
       const b = ev.target.closest('[data-sel-vendedor]'); if (!b) return;
       const v = b.getAttribute('data-sel-vendedor');
-      visibles().filter(a => est(a) === 'listo' && (a.comision.vendedor_email || '') === v).forEach(a => seleccion.add(a.id));
+      visibles().filter(a => elegible(a) && (a.comision.vendedor_email || '') === v).forEach(a => seleccion.add(a.id));
       render();
     });
     document.getElementById('cmLote')?.addEventListener('click', (ev) => {
       const b = ev.target.closest('button'); if (!b) return;
       if (b.id === 'cmLoteBtn') { cerrarLote(); return; }
+      if (b.id === 'cmLotePagoBtn') { confirmarPagosLote(); return; }
       const q = b.getAttribute('data-lote');
-      if (q === 'todas') visibles().filter(a => est(a) === 'listo').forEach(a => seleccion.add(a.id));
+      if (q === 'todas') visibles().filter(elegible).forEach(a => seleccion.add(a.id));
       if (q === 'ninguna') seleccion.clear();
       if (q) render();
     });
@@ -590,5 +682,5 @@ window.FacturacionComisiones = (() => {
 
   document.addEventListener('DOMContentLoaded', init);
   return { render, cargar, toggle, formPago, formCierre, cerrarForm,
-    guardarPago, guardarCierre, deshacerPago, reabrir };
+    guardarPago, guardarCierre, deshacerPago, reabrir, confirmarPagosLote };
 })();

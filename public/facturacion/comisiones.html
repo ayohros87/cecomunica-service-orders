@@ -45,6 +45,9 @@
     .cm-chip--esperando .dot { background: transparent; border: 2px solid var(--gray-400, #9AA7B4); width: 6px; height: 6px; }
     .cm-chip--pagada .dot    { background: var(--gray-400, #9AA7B4); }
     .cm-chip--sinvend .dot   { background: #991B1B; }
+    /* Solo falta el primer pago (decisión 16, 1-oct-2026): lo que Cheila/Zuleika confirman en lote. */
+    .cm-chip--pago .dot      { background: #B45309; }
+    .cm-chip--pago.active    { background: #FFFBEB; border-color: #B45309; color: #92400E; }
     .cm-chip--listo.active     { background: #F0FDF4; border-color: #166534; color: #166534; }
     .cm-chip--esperando.active { background: var(--surface-sunken); border-color: var(--gray-400, #9AA7B4); color: var(--fg-2); }
     .cm-chip--pagada.active    { background: var(--surface-sunken); border-color: var(--gray-400, #9AA7B4); color: var(--fg-3); }
@@ -189,7 +192,7 @@
     Un renglón por hecho comisionable: contrato nuevo, adición, renovación, aumento entregado o venta con contrato Propio.
     El chip verde <b>no lo prende nadie</b> — se pone solo cuando los tres requisitos ya están escritos:
     <b>firma del cliente</b>, <b>entrega de los equipos</b> (cuando aplica) y <b>primer pago</b> (factura en cero).
-    Lo único que se decide aquí es <b>cerrar el período</b>.
+    Aquí se decide <b>confirmar el primer pago</b> (uno por uno o en lote, con el estado de cuenta) y <b>cerrar el período</b>.
   </p>
 
   <div id="cmAviso" class="cm-aviso" hidden></div>
@@ -198,6 +201,7 @@
     <button type="button" class="cm-chip cm-chip--all active" data-f="abiertas" role="tab">Abiertas <span class="cnt" data-cnt="abiertas">0</span></button>
     <button type="button" class="cm-chip cm-chip--listo" data-f="listo" role="tab"><span class="dot"></span>Listas para pago <span class="cnt" data-cnt="listo">0</span></button>
     <button type="button" class="cm-chip cm-chip--esperando" data-f="esperando" role="tab"><span class="dot"></span>Esperando <span class="cnt" data-cnt="esperando">0</span></button>
+    <button type="button" class="cm-chip cm-chip--pago" data-f="pago" role="tab" title="Firma y entrega ya están: solo falta confirmar el primer pago. Aquí se confirma en lote con el estado de cuenta"><span class="dot"></span>Falta el pago <span class="cnt" data-cnt="pago">0</span></button>
     <button type="button" class="cm-chip cm-chip--pagada" data-f="pagada" role="tab"><span class="dot"></span>Pagadas <span class="cnt" data-cnt="pagada">0</span></button>
     <button type="button" class="cm-chip cm-chip--sinvend" data-f="sinvend" role="tab"><span class="dot"></span>Sin vendedor <span class="cnt" data-cnt="sinvend">0</span></button>
     <span class="push"></span>
@@ -206,7 +210,8 @@
     <button type="button" class="btn btn-ghost btn-sm" id="cmCsv"><i data-lucide="download"></i> CSV</button>
   </div>
 
-  <!-- Cierre en lote: solo en "Listas para pago" (auditoría UX 2026-09-28). -->
+  <!-- Lote: cierre en "Listas para pago" (auditoría UX 2026-09-28) y confirmación
+       del primer pago en "Falta el pago" (decisión 16 de Alberto, 1-oct-2026). -->
   <div id="cmLote" class="cm-lote" hidden></div>
   <div id="cmRows"><div class="cm-vacio">Cargando…</div></div>
 </div>

@@ -22,6 +22,7 @@ window.FacturacionBandeja = (() => {
   let rol = null;
   let pendientes = [];
   let cerrados = [];
+  let sinNumero = [];       // QBO hecho por una persona SIN número (P5): vista propia
   let filtro = 'all';
   let verCerrados = false;
   let busqueda = '';
@@ -403,6 +404,7 @@ window.FacturacionBandeja = (() => {
       if (cnt[a.efecto] != null) cnt[a.efecto]++;
       if (conError) { err.all++; if (err[a.efecto] != null) err[a.efecto]++; }
     });
+    cnt.sinnum = sinNumero.length;
     document.querySelectorAll('#fbChips [data-cnt]').forEach(el => { el.textContent = cnt[el.getAttribute('data-cnt')] ?? 0; });
     document.querySelectorAll('#fbChips [data-err]').forEach(el => {
       const n = err[el.getAttribute('data-err')] || 0;
@@ -415,13 +417,21 @@ window.FacturacionBandeja = (() => {
     });
     if (window.WorkspaceTabs) WorkspaceTabs.setBadge('bandeja', cnt.all);
 
-    const lista = pendientes.filter(pasaFiltro).filter(coincide).sort(orden);
+    // "Sin número" es una vista aparte (P5): avisos ya hechos o pendientes
+    // cuyo paso QBO lo marcó una persona sin el número de factura. La pastilla
+    // con "?" abre el formulario para anotarlo.
+    const lista = filtro === 'sinnum'
+      ? sinNumero.filter(coincide).sort((a, b) => (toDate(a.pasos?.qbo?.at)?.getTime() || 0) - (toDate(b.pasos?.qbo?.at)?.getTime() || 0))
+      : pendientes.filter(pasaFiltro).filter(coincide).sort(orden);
     let html = lista.map(filaHtml).join('');
     if (!lista.length) {
       const enEspera = filtro === 'all' && cnt.espera ? ` Hay ${cnt.espera} en espera de la entrega (chip "En espera").` : '';
-      html = `<div class="fb-vacio"><i data-lucide="check-circle-2"></i><div>${busqueda ? 'Nada coincide con la búsqueda.' : 'Nada pendiente de facturar. Los avisos nuevos aparecen aquí y por correo a activaciones@.'}${enEspera}</div></div>`;
+      const vacio = filtro === 'sinnum'
+        ? 'Todos los pasos QBO marcados tienen su número de factura.'
+        : 'Nada pendiente de facturar. Los avisos nuevos aparecen aquí y por correo a activaciones@.';
+      html = `<div class="fb-vacio"><i data-lucide="check-circle-2"></i><div>${busqueda ? 'Nada coincide con la búsqueda.' : vacio}${enEspera}</div></div>`;
     }
-    if (verCerrados) {
+    if (verCerrados && filtro !== 'sinnum') {
       const cl = cerrados.filter(coincide).sort((a, b) => (toDate(b.updated_at)?.getTime() || 0) - (toDate(a.updated_at)?.getTime() || 0));
       html += `<div class="fb-sep">Hechos y no aplica <span style="font-weight:500;letter-spacing:0">(${cl.length})</span></div>` +
         (cl.length ? cl.map(filaHtml).join('') : `<div class="fb-vacio">Todavía no hay avisos cerrados.</div>`);
@@ -433,7 +443,12 @@ window.FacturacionBandeja = (() => {
 
   async function cargar() {
     try {
-      pendientes = await S().listPendientes();
+      // Pendientes y "sin número" en paralelo (los dos son decenas de docs).
+      // Si la consulta de "sin número" falla, la bandeja sigue: el chip queda en 0.
+      [pendientes, sinNumero] = await Promise.all([
+        S().listPendientes(),
+        S().listSinNumero().catch(e => { console.warn('[bandeja] sin número:', e?.message || e); return []; }),
+      ]);
       cerrados = verCerrados ? await S().listCerrados() : cerrados;
     } catch (e) {
       console.error(e);
@@ -443,7 +458,7 @@ window.FacturacionBandeja = (() => {
     render();
   }
 
-  function todos() { return pendientes.concat(cerrados); }
+  function todos() { return pendientes.concat(cerrados, sinNumero); }
   function porId(id) { return todos().find(a => a.id === id); }
 
   // ── Acciones ──────────────────────────────────────────────────────────
@@ -499,7 +514,9 @@ window.FacturacionBandeja = (() => {
       await conCandado(async () => {
         try {
           const num = await S().anotarFactura(a, txt);
-          a.pasos.qbo.factura = num;
+          // El mismo aviso puede vivir en dos listas (pendientes y sin número).
+          todos().filter(x => x.id === a.id).forEach(x => { x.pasos.qbo.factura = num; });
+          sinNumero = sinNumero.filter(x => x.id !== a.id);
           popAbierto = null;
           Toast.show(`Factura ${num} anotada`, 'ok');
           render();
@@ -519,10 +536,22 @@ window.FacturacionBandeja = (() => {
         ref: pop.querySelector('[data-f="ref"]')?.value,
         nota: pop.querySelector('[data-f="nota"]')?.value,
       };
+      // P5 (auditoría de módulos 2026-09-30): marcar QBO sin número pasaba en
+      // silencio y 9 de 15 marcas quedaron sin él. No se vuelve obligatorio
+      // (decisión 2026-09-14: no trancar a Recepción); deja de ser invisible.
+      if (paso === 'qbo' && !String(datos.factura || '').trim()) {
+        const ok = await Modal.confirm({
+          title: '¿Marcar sin número de factura?',
+          message: 'Sin el número, el sistema no puede confirmar el pago contra QuickBooks y el taller no recibe el aviso de "ya quedó facturada". Se puede anotar después desde la pastilla <b>QBO</b> con el <b>?</b>, o en el chip <b>Sin número</b>.',
+          confirmLabel: 'Marcar sin número',
+        });
+        if (!ok) { pop.querySelector('[data-f="factura"]')?.focus(); return; }
+      }
       await conCandado(async () => {
         try {
           const r = await S().marcarPaso(a, paso, datos);
           a.pasos[paso] = r.paso; a.estado = r.estado;
+          if (paso === 'qbo' && !r.paso.factura && !sinNumero.some(x => x.id === a.id)) sinNumero.push(a);
           a.historial = (a.historial || []).concat([{ accion: `${paso}_hecho`, detalle: paso === 'qbo' ? `QuickBooks hecho · ${a.efecto === 'termina' ? 'deja de cobrarse el' : 'facturar desde'} ${datos.facturar_desde}` : 'Plataforma PoC hecha', fecha_iso: new Date().toISOString(), por_email: firebase.auth().currentUser?.email }]);
           popAbierto = null;
           if (a.estado === 'hecho') {

@@ -74,6 +74,20 @@ window.FacturacionAvisosService = {
     return out;
   },
 
+  // Pasos QBO marcados por una PERSONA sin número de factura (P5 de la
+  // auditoría de módulos 2026-09-30: 9 de los 15 que marcó Recepción). Dos
+  // igualdades sobre campos anidados: sin índice compuesto. La siembra
+  // histórica (fuente 'siembra') y los descartados no cuentan — nadie los
+  // tecleó.
+  async listSinNumero() {
+    const snap = await this._col()
+      .where('pasos.qbo.hecho', '==', true)
+      .where('pasos.qbo.factura', '==', null)
+      .limit(200).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(a => a.pasos?.qbo?.fuente !== 'siembra' && a.estado !== 'descartado');
+  },
+
   // ── Comisiones (docs/plans/PLAN_COMISIONES.md F2) ─────────────────────────
   // Liberar una comisión es otra decisión (y otra plata) que marcar un paso de
   // facturación: rules solo dejan tocar `comision` a admin/contabilidad.
