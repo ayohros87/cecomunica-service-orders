@@ -348,14 +348,28 @@ Object.assign(window.Centro, {
     if (esPapel && !refPapel) { Toast.show('Escribe el número del contrato en papel', 'warn'); document.getElementById('waContratoPapel')?.focus(); return; }
     if (!esPapel && !contrato) { Toast.show('Elige el contrato destino', 'warn'); return; }
     const lineas = this._aumLineas();
+    // Cargo elegido SIN monto (2026-10-02, COMPAÑÍA GOLY: "Consola" trae $0 en
+    // el catálogo): _aumCargos lo descarta y el vendedor recibía "indica al
+    // menos un modelo", que no dice nada de lo que le falta.
+    const sinMonto = !lineas.length && !this._aumCargos().length
+      && [...document.querySelectorAll('.wa-cargo [data-wac-sel]')].find(s => s.value);
+    if (sinMonto) {
+      Toast.show(`Pon el monto de «${(sinMonto.selectedOptions[0]?.textContent || 'el cargo').trim()}»`, 'warn');
+      sinMonto.closest('.wa-cargo')?.querySelector('[data-wac-monto]')?.focus();
+      return;
+    }
     // Sin equipos pero CON cargos = un AJUSTE DE TARIFA (2026-09-02): en vez
     // de regañar, se redirige al wizard correcto — ahí se amarran los cargos
     // por serial y el flujo cierra sin bodega. En papel no hay contrato que
     // ajustar: la adenda necesita al menos un equipo.
-    if (!lineas.length && this._aumCargos().length) {
+    // Los cargos viajan al ajuste ya cargados (2026-10-02, GOLY): el wizard
+    // abría en blanco, la vendedora creía haber fallado y lo intentó dos
+    // veces más por "Agregar equipos" sin que nada se guardara.
+    const cargosSolos = this._aumCargos();
+    if (!lineas.length && cargosSolos.length) {
       if (esPapel) { Toast.show('El anexo a contrato en papel necesita al menos un equipo — los cargos solos no tienen contrato al que aplicarse', 'warn'); return; }
-      Toast.show('Solo cargos, sin equipos — eso es un Ajuste de tarifa: te llevo al wizard correcto', 'ok');
-      this.wizAjuste(contratoDocId);
+      Toast.show(`${cargosSolos.map(c => c.concepto).join(', ')} no es un radio: va como cargo del contrato. Te paso al anexo de consola o servicio, también lleva aprobación y firma del cliente`, 'ok');
+      this.wizAjuste(contratoDocId, { cargos: cargosSolos });
       return;
     }
     if (!lineas.length) { Toast.show('Indica al menos un modelo (de la lista)', 'warn'); return; }

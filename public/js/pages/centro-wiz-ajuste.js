@@ -13,7 +13,9 @@ Object.assign(window.Centro, {
   // anexo de regularización. Los cargos recurrentes quedan AMARRADOS POR
   // SERIAL (cargo.seriales[]): la cantidad sale de la selección, y la baja de
   // un serial descuenta el cargo sola (onGestionWrite B2).
-  async wizAjuste(preselId) {
+  // `opts.cargos`: cargos ya elegidos en "Agregar equipos" (solo cargos, sin
+  // radios) — el ajuste abre con ellos cargados en vez de en blanco.
+  async wizAjuste(preselId, opts = {}) {
     if (!this.puedeCrearGestion()) { Toast.show('Tu rol no crea gestiones desde aquí', 'warn'); return; }
     this._cerrarModal();
     document.getElementById('cgMenu')?.classList.add('hidden');
@@ -23,10 +25,10 @@ Object.assign(window.Centro, {
     const cBase = activos.find(c => c.id === preselId) || this._cuentaAncla() || activos[0];
     const itbmsDefault = this.cliente?.itbms_exento === true ? false : (cBase?.itbms_aplica !== false);
     this._abrirModalA({
-      titulo: `Ajuste de tarifa / servicios (anexo) — ${this.esc(this.cliente.nombre)}`,
+      titulo: `Consola, servicio o ajuste de tarifa (anexo) — ${this.esc(this.cliente.nombre)}`,
       cuerpo: `
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
-        Agrega <b>cargos del catálogo</b> (servicios como GPS, o ajustes) a un contrato vigente —
+        Agrega <b>cargos del catálogo</b> (consolas, servicios como GPS, o ajustes) a un contrato vigente —
         <b>sin equipos nuevos</b>: no pasa por bodega ni genera entrega. Requiere aprobación
         comercial y la <b>firma del cliente</b>; al firmarse se aplica y cierra solo.</p>
       <div class="cg-paso">
@@ -62,7 +64,24 @@ Object.assign(window.Centro, {
         <button class="btn btn-primary" onclick="Centro.crearAjuste(this)">Enviar a aprobación</button>`,
     });
     this._wjSyncFlota();
+    if (Array.isArray(opts.cargos) && opts.cargos.length) this._wjPrecargar(opts.cargos);
     this._wjPreview();
+  },
+  _wjPrecargar(cargos) {
+    const cont = document.getElementById('wjCargos');
+    if (!cont) return;
+    cont.innerHTML = cargos.map(() => this._wjCargoRow()).join('');
+    [...cont.querySelectorAll('.wj-cargo')].forEach((fila, i) => {
+      const c = cargos[i];
+      const sel = fila.querySelector('[data-wjc-sel]');
+      sel.value = c.cargo_id;
+      if (sel.value !== c.cargo_id) return;   // ya no está en el catálogo
+      this._wjRowSel(sel);
+      fila.querySelector('[data-wjc-monto]').value = c.monto;
+      fila.querySelector('[data-wjc-tipo]').value = c.recurrente ? 'recurrente' : 'unico';
+      const cant = fila.querySelector('[data-wjc-cant]');
+      if (!cant.readOnly) cant.value = c.cantidad || 1;
+    });
   },
   // Tarifas actuales del contrato destino, editables (renegociación de
   // precio, 2026-09-02): cada línea muestra su precio vigente y un campo

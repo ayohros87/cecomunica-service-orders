@@ -69,7 +69,12 @@ Object.assign(window.Centro, {
             : 'declara los que el sistema no conoce o saca los que el cliente ya no tiene — sin firma') : '',
     ]);
     const dar = grupo('Dar equipos', [
-      hayContrato && !tram ? item('Centro.wizAgregarEquipos()', 'Agregar equipos', 'anexo al contrato de la cuenta') : '',
+      hayContrato && !tram ? item('Centro.wizAgregarEquipos()', 'Agregar equipos', 'radios — anexo al contrato de la cuenta') : '',
+      // La consola es un CARGO, no un radio (2026-10-02, COMPAÑÍA GOLY: la
+      // vendedora la buscó aquí, la mandó como "Agregar equipos" y nada se
+      // guardaba). Mismo wizard que "Ajustar tarifa", nombrado por lo que da.
+      hayContrato ? item(est.tipo === 'consolidada' ? `Centro.wizAjuste('${this.esc(est.maestro.id)}')` : 'Centro.wizAjuste()',
+        'Agregar consola o servicio', 'consola, GPS y otros cargos — anexo con firma, sin bodega') : '',
       // TEMP (evento) y DEMO son independientes de la cuenta: no cuentan para
       // _cuentaEstado ni renuevan nada (caso Arraiján / Elvia, 2026-09-07).
       item('Centro.wizContrato({temporal:true})', 'Contrato temporal', 'por evento, días o meses'),
@@ -83,7 +88,7 @@ Object.assign(window.Centro, {
       hayRadios ? item('Centro.wizCambioSerial()', 'Corregir un serial mal registrado',
         'el cliente tiene otro radio del que dice el sistema — no mueve equipo') : '',
       hayContrato ? item(est.tipo === 'consolidada' ? `Centro.wizAjuste('${this.esc(est.maestro.id)}')` : 'Centro.wizAjuste()',
-        'Ajustar tarifa / servicios', 'cargos como GPS, amarrados por serial') : '',
+        'Ajustar tarifa', 'cambia el precio de las líneas o agrega cargos') : '',
     ]);
     const retirar = grupo('Retirar', [
       hayRadios ? item('Centro.wizBaja()', 'Baja parcial por serial') : '',
