@@ -8,9 +8,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
+const hace = (dias) => new Date(Date.now() - dias * 86400000 - 60000);
 const REGISTROS = [
-  { id: 'a1', contrato_id: 'ALQ20260826-02', estado: 'aprobado', seriales_estado: 'asignados', tipo_contrato: 'Alquiler', codigo_tipo: 'ALQ', os_count: 1, cliente_id: 'k1', creado_por_uid: 'u1' },
-  { id: 'a2', contrato_id: 'PROP20260820-01', estado: 'aprobado', seriales_estado: 'asignados', tipo_contrato: 'Propio', os_count: 0, cliente_id: 'k2', creado_por_uid: 'u2' },
+  // Aprobado hace 40 días; los seriales y el enlace son posteriores y NO
+  // reinician la cuenta (Alberto, 2-oct-2026: los 45 días van desde la aprobación).
+  { id: 'a1', contrato_id: 'ALQ20260826-02', estado: 'aprobado', seriales_estado: 'asignados', tipo_contrato: 'Alquiler', codigo_tipo: 'ALQ', os_count: 1, cliente_id: 'k1', creado_por_uid: 'u1',
+    fecha_aprobacion: hace(40), seriales_asignados_at: hace(20), firma_solicitud_creada_at: hace(2) },
+  // Reactivado hace 3 días tras dormirse: la reactivación es la nueva fecha base.
+  { id: 'a2', contrato_id: 'PROP20260820-01', estado: 'aprobado', seriales_estado: 'asignados', tipo_contrato: 'Propio', os_count: 0, cliente_id: 'k2', creado_por_uid: 'u2',
+    fecha_aprobacion: hace(90), dormido_reactivado_at: hace(3) },
   { id: 'l1', estado: 'aprobado', seriales_estado: 'legacy', tipo_contrato: 'Alquiler' },             // histórico
   { id: 'r1', estado: 'aprobado', seriales_estado: 'asignados', tipo_contrato: 'Reemplazo', codigo_tipo: 'REEMP' }, // no lleva firma
   { id: 'd1', estado: 'aprobado', seriales_estado: 'asignados', tipo_contrato: 'Demo' },               // no lleva firma
@@ -56,6 +62,12 @@ test('un contrato dormido no cuenta, ni para gerencia ni para su vendedor', asyn
   const s = montar();
   assert.ok(!(await s.listContratosPorFirmar()).some(f => f.id === 'z1'));
   assert.equal(await s.countContratosPorFirmar({ uid: 'u1' }), 1, 'u1 tiene a1 y el dormido z1: solo cuenta a1');
+});
+
+test('los días de espera cuentan desde la aprobación, o desde la reactivación', async () => {
+  const filas = await montar().listContratosPorFirmar();
+  assert.equal(filas.find(f => f.id === 'a1').dias, 40, 'el enlace de hace 2 días no reinicia la cuenta');
+  assert.equal(filas.find(f => f.id === 'a2').dias, 3, 'reactivado hace 3 días');
 });
 
 test('el vendedor solo ve los contratos que elaboró', async () => {

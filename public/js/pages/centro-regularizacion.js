@@ -542,6 +542,8 @@ Object.assign(window.Centro, {
         it('info', `Esperando que el cliente acepte el cobro de la reposición ${gid}`,
           `Cotización ${this.esc(g.cobro?.cotizacion_id || 'en preparación')} · $${Number(g.cobro?.monto || 0).toFixed(2)} + ITBMS — Bodega asigna cuando el cliente acepte`,
           ver + (cot ? `<a class="btn btn-primary cg-act" href="../cotizaciones/detalle-cotizacion.html?id=${encodeURIComponent(cot)}">Abrir la cotización</a>` : ''), 'cliente');
+      } else if (g.tipo === 'aumento' && g.estado === 'pendiente_firma' && GestionesService.dormida(g)) {
+        // Dormido (2-oct-2026): no es trámite; se reactiva desde su menú.
       } else if (g.tipo === 'aumento' && g.estado === 'pendiente_firma' && !g.firma_pendiente_validacion && this.puedeCrearGestion()) {
         it('warn', `El anexo de aumento ${gid} espera la firma del cliente`,
           g.firma_solicitud_estado === 'pendiente' ? 'El enlace de firma ya se envió — se puede reenviar' : 'Envíale el enlace de firma digital (o imprime y sube el firmado)',

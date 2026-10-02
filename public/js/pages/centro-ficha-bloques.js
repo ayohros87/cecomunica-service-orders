@@ -70,7 +70,7 @@ Object.assign(window.Centro, {
     const sinContrato = this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id).length;
     const porClasificar = this.equipos.filter(e => e.estado === 'por_clasificar').length;
     const taller = this.equipos.filter(e => ['en_taller', 'devuelto_revision'].includes(e.estado)).length;
-    const abiertas = (this.gestiones || []).filter(g => GestionesService.ABIERTAS.includes(g.estado)).length + this._tramitesContrato().length;
+    const abiertas = (this.gestiones || []).filter(g => GestionesService.enTramite(g)).length + this._tramitesContrato().length;
     const L = (blk, html) => `<button type="button" onclick="Centro.abrirBloque('${blk}')">${html}</button>`;
     cont.innerHTML = [
       L('blkContratos', `Vigentes <b>${vig.length}</b>`),
@@ -138,7 +138,7 @@ Object.assign(window.Centro, {
       chips.push(`<button type="button" class="cg-chip ${cls}" onclick="Centro.verRegularizacion()"
         style="border:0; cursor:pointer; font:inherit; font-size:12px;" title="Qué le falta a esta cuenta para estar bien registrada">${this.esc(chip.texto)}</button>`);
     }
-    const tram = (this.gestiones || []).filter(g => GestionesService.ABIERTAS.includes(g.estado)).length + this._tramitesContrato().length;
+    const tram = (this.gestiones || []).filter(g => GestionesService.enTramite(g)).length + this._tramitesContrato().length;
     if (tram) chips.push(`<button type="button" class="cg-chip cg-chip--info" style="border:0; cursor:pointer; font:inherit; font-size:12px;" onclick="Centro.abrirBloque('blkGestiones')">${tram} en trámite</button>`);
     if (!chips.length && this.contratos.length) chips.push(`<span class="cg-chip cg-chip--ok" style="font-size:12px;">Al día</span>`);
     el.innerHTML = chips.join(' ');
@@ -212,7 +212,7 @@ Object.assign(window.Centro, {
   _abrirBloques(clienteId) {
     if (this._bloquesDe === clienteId) return;
     this._bloquesDe = clienteId;
-    const vivas = (this.gestiones || []).some(g => GestionesService.ABIERTAS.includes(g.estado)) || this._tramitesContrato().length > 0;
+    const vivas = (this.gestiones || []).some(g => GestionesService.enTramite(g)) || this._tramitesContrato().length > 0;
     const ids = ['blkGestiones', 'blkContratos', 'blkEquipos', 'blkActividad'];
     const abrir = this.gSel ? 'blkGestiones' : vivas ? 'blkGestiones' : 'blkContratos';
     ids.forEach(id => { const d = document.getElementById(id); if (d) d.open = id === abrir; });

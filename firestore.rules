@@ -1131,6 +1131,17 @@ service cloud.firestore {
           && request.resource.data.get("sin_firma", {}).get("por_uid", "") == request.auth.uid
           && soloTocaG(["estado","cierre","sin_firma"]);
       }
+      // Reactivar un anexo de aumento DORMIDO (2-oct-2026): el cron lo marcó a
+      // los 45 días de aprobado sin firma; lo despierta el vendedor o
+      // administración. Solo apaga la marca y estampa quién y cuándo.
+      function esReactivarAnexoGestion() {
+        return userRole() in ["administrador","gerente","vendedor"]
+          && resource.data.estado == "pendiente_firma"
+          && resource.data.get("dormido", false) == true
+          && request.resource.data.dormido == false
+          && request.resource.data.dormido_reactivado_por_uid == request.auth.uid
+          && soloTocaG(["dormido","dormido_reactivado_at","dormido_reactivado_por_uid"]);
+      }
       // Vincular el enlace de firma digital del anexo.
       function esEnlaceFirmaGestion() {
         return userRole() in ["administrador","gerente","vendedor","recepcion"]
@@ -1222,7 +1233,7 @@ service cloud.firestore {
                       esAprobacionGestion() || esAnulacionGestion() || esCartaGestion()
                       || esFirmaAnexoGestion() || esRegularizacionSinFirmaGestion()
                       || esAprobacionActualizacionSeriales()
-                      || esEnlaceFirmaGestion() || esAsignacionGestion()
+                      || esEnlaceFirmaGestion() || esAsignacionGestion() || esReactivarAnexoGestion()
                       || esCorreccionSerialesGestion() || esMarcaTallerGestion()
                       || esEdicionGestion());
       allow delete: if false;

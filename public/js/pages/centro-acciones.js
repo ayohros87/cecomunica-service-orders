@@ -82,7 +82,17 @@ Object.assign(window.Centro, {
         hint: 'las actualizaciones de seriales ya no se firman — se aplican',
         onclick: `Centro.cerrarRegSinFirma('${id}')`, ok: puedeG, motivo: 'tu rol no mueve gestiones' }));
     }
-    if (esAum && !esAct && g.estado === 'pendiente_firma') {
+    // Anexo DORMIDO (2-oct-2026): lo único que avanza es reactivarlo, como el
+    // contrato dormido — genera un enlace de firma nuevo.
+    const dormida = GestionesService.dormida(g);
+    if (dormida) {
+      A.push(this._acc({ id: 'reactivar', label: 'Reactivar la solicitud de firma…', primaria: true,
+        hint: `dormido ${g.dormido_dias ? `tras ${g.dormido_dias} días` : 'a los 45 días'} sin firma — vuelve a ser trámite y sale un enlace nuevo`,
+        onclick: `Centro.reactivarAnexo('${id}')`,
+        ok: [ROLES.ADMIN, 'admin', ROLES.GERENTE, ROLES.VENDEDOR].includes(this.rol),
+        motivo: 'lo reactiva el vendedor o administración' }));
+    }
+    if (esAum && !esAct && g.estado === 'pendiente_firma' && !dormida) {
       const conEnlace = g.firma_solicitud_estado === 'pendiente';
       A.push(this._acc({ id: 'firma', label: conEnlace ? 'Ver o reenviar el enlace de firma' : 'Enviar anexo para firma por enlace',
         primaria: !conEnlace, hint: conEnlace ? 'el cliente ya lo tiene — se puede reenviar' : 'el cliente firma con el dedo, desde el celular',
@@ -100,7 +110,7 @@ Object.assign(window.Centro, {
     // Bodega. El formulario vive en Almacén · Asignar desde 2026-09-03.
     const esCS = g.tipo === 'cambio_serial';
     const faltanSeriales = !g.ordenes?.programacion_id && !esAct && !g.aumento?.es_ajuste
-      && (g.estado === 'pendiente_bodega' || (esAum && g.estado === 'pendiente_firma'));
+      && (g.estado === 'pendiente_bodega' || (esAum && g.estado === 'pendiente_firma' && !dormida));
     if (faltanSeriales) {
       const yaHay = (g.aumento?.seriales_asignados || []).length || (g.demo?.seriales_asignados || []).length
         || (g.items || []).some(i => i.serial_nuevo);

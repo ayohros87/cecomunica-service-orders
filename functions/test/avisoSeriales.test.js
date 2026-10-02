@@ -230,5 +230,5 @@ test("F3 · la solicitud y el recordatorio usan la misma definición del pedido"
 
 test("F4 · el eco de los contadores de aviso no vuelve a correr la máquina de la gestión", () => {
   const src = leer("src", "triggers", "gestiones", "onGestionWrite.js");
-  assert.ok(/"bodega_aviso", "firma_recordatorio_at"\]/.test(src));
+  assert.ok(/"bodega_aviso", "firma_recordatorio_at"[\],]/.test(src));
 });

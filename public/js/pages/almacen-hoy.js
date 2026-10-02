@@ -228,6 +228,7 @@ window.AlmacenHoy = (() => {
         || (g.estado === 'en_proceso' && ['reemplazo', 'demo'].includes(g.tipo) && !g.cierre?.asignacion)
         || (g.estado === 'pendiente_firma' && g.tipo === 'aumento'
             && g.aumento?.es_ajuste !== true && g.aumento?.es_regularizacion !== true
+            && g.dormido !== true   // anexo dormido a los 45 días (2-oct-2026): no es cola
             && !serialesCompletos(g));
       if (espera) out.push(g);
     });

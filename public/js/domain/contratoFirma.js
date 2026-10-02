@@ -63,13 +63,13 @@ window.ContratoFirma = {
   DIAS_DORMIDO: 45,
   dormido(c) { return c?.dormido === true; },
 
-  // Días que lleva esperando la firma, desde lo ÚLTIMO que la acercó: una
-  // reactivación, el enlace enviado, los seriales asignados, la aprobación.
-  // Misma fórmula que el cron: lo que la señal dice que lleva es lo que el
-  // cron mide para dormirlo.
+  // Días que lleva esperando la firma, desde la APROBACIÓN (Alberto,
+  // 2-oct-2026) — o desde la reactivación, si el vendedor despertó un
+  // dormido. Un enlace reenviado ya no reinicia el reloj. Misma fórmula que
+  // el cron: lo que la señal dice que lleva es lo que el cron mide.
   diasEsperando(c, now = new Date()) {
     const aDate = (v) => !v ? null : (v.toDate ? v.toDate() : (typeof v.seconds === 'number' ? new Date(v.seconds * 1000) : new Date(v)));
-    const ts = [c?.dormido_reactivado_at, c?.firma_solicitud_creada_at, c?.seriales_asignados_at, c?.fecha_aprobacion]
+    const ts = [c?.dormido_reactivado_at, c?.fecha_aprobacion]
       .map(aDate).filter(d => d && !isNaN(d));
     const base = ts.length ? new Date(Math.max(...ts.map(d => d.getTime()))) : aDate(c?.fecha_creacion);
     if (!base || isNaN(base)) return null;

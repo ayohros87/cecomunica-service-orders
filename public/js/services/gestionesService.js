@@ -43,6 +43,13 @@ const GestionesService = {
   },
   ABIERTAS: ['pendiente_aprobacion', 'pendiente_cliente', 'pendiente_firma', 'pendiente_bodega', 'en_proceso', 'en_demo', 'retorno'],
 
+  // Anexo de aumento DORMIDO (Alberto, 2-oct-2026): a los 45 días de aprobado
+  // sin la firma del cliente el cron caduca su enlace y lo marca; el estado
+  // sigue 'pendiente_firma'. No es trámite de la cuenta ni cola de bodega;
+  // lo reactiva el vendedor. Espejo de functions/src/domain/contratoDormido.js.
+  dormida(g) { return g?.dormido === true && g?.estado === 'pendiente_firma'; },
+  enTramite(g) { return this.ABIERTAS.includes(g?.estado) && !this.dormida(g); },
+
   // ¿Reemplazo por daño causado por el cliente? ¿Se le cobra? (la cortesía
   // aprobada sin cargo sigue siendo por daño, pero no cobra).
   esReposicionDano(g) { return g?.tipo === 'reemplazo' && g?.causa === 'dano_cliente'; },

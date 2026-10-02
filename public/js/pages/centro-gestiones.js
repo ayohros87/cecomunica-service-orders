@@ -479,13 +479,18 @@ Object.assign(window.Centro, {
     // Borradores DORMIDOS (decisión 7, 1-oct-2026): aprobados sin firma a los
     // 45 días. No son trámites —no cuentan ni bloquean—, pero se ven, con
     // "Reactivar" en su menú, para que no se pierdan en el histórico.
+    // Desde el 2-oct-2026 también los ANEXOS de aumento dormidos (siguen en
+    // 'pendiente_firma' con la marca): mismo pliegue, misma salida.
     const dormidos = (this.contratos || []).filter(c => !c.deleted && c.estado === 'aprobado' && ContratoFirma.dormido(c));
-    const dormAbierto = dormidos.some(c => this.gSel === 'ct-' + c.id);
-    const dormHtml = dormidos.length ? `
+    const anexosDorm = (this.gestiones || []).filter(g => GestionesService.dormida(g));
+    const dormAbierto = dormidos.some(c => this.gSel === 'ct-' + c.id) || anexosDorm.some(g => this.gSel === g.id);
+    const dormN = [dormidos.length ? `${dormidos.length} contrato${dormidos.length === 1 ? '' : 's'}` : '',
+      anexosDorm.length ? `${anexosDorm.length} anexo${anexosDorm.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' y ');
+    const dormHtml = (filaG) => (dormidos.length || anexosDorm.length) ? `
         <details ${dormAbierto ? 'open' : ''} style="margin-top:10px;">
           <summary style="cursor:pointer; font-size:12.5px; color:var(--fg-3); padding:4px 2px; user-select:none;">
-            Borradores dormidos — ${dormidos.length} contrato${dormidos.length === 1 ? '' : 's'} aprobado${dormidos.length === 1 ? '' : 's'} sin firma a los 45 días · se reactivan desde su menú</summary>
-          <div style="margin-top:8px;">${dormidos.map(c => this._tramiteHtml(c)).join('')}</div>
+            Borradores dormidos — ${dormN} sin firma a los 45 días de aprobado${dormidos.length + anexosDorm.length === 1 ? '' : 's'} · se reactivan desde su menú</summary>
+          <div style="margin-top:8px;">${dormidos.map(c => this._tramiteHtml(c)).join('')}${anexosDorm.map(g => filaG(g, false)).join('')}</div>
         </details>` : '';
     if (!(this.gestiones || []).length && !tramites.length && !dormidos.length) {
       cont.innerHTML = `<div class="cg-empty">Sin gestiones registradas todavía.
@@ -522,7 +527,9 @@ Object.assign(window.Centro, {
             // Las actualizaciones de seriales ya no se firman (2026-09-09): no
             // "esperan firma" (auditoría UX 2026-09-28).
             g.estado === 'pendiente_firma' && g.tipo === 'aumento' && g.aumento?.es_regularizacion
-              ? 'Por aplicar (sin firma)' : GestionesService.estadoLabel(g.estado))}</span>
+              ? 'Por aplicar (sin firma)'
+              : GestionesService.dormida(g) ? `Dormido · ${g.dormido_dias || ContratoFirma.DIAS_DORMIDO}+ días sin firma`
+              : GestionesService.estadoLabel(g.estado))}</span>
           ${this._masFila(g.id, this._accionesGestion(g), g.id)}
           <span class="arr">${abierta ? '▾' : '›'}</span>
         </div>
@@ -537,7 +544,7 @@ Object.assign(window.Centro, {
     const PESO = { pendiente_aprobacion: 0, pendiente_cliente: 1, pendiente_firma: 1, pendiente_bodega: 2, en_proceso: 3, retorno: 4, en_demo: 5 };
     const ts = (g) => (g.fecha_solicitud?.toDate ? g.fecha_solicitud.toDate().getTime() : 0);
     const todas = this.gestiones || [];
-    const vivas = todas.filter(g => !['cerrada', 'anulada'].includes(g.estado))
+    const vivas = todas.filter(g => !['cerrada', 'anulada'].includes(g.estado) && !GestionesService.dormida(g))
       .sort((a, b) => ((PESO[a.estado] ?? 9) - (PESO[b.estado] ?? 9)) || (ts(b) - ts(a)));
     const historial = todas.filter(g => ['cerrada', 'anulada'].includes(g.estado))
       .sort((a, b) => (a.estado === 'anulada' ? 1 : 0) - (b.estado === 'anulada' ? 1 : 0) || (ts(b) - ts(a)));
@@ -546,7 +553,7 @@ Object.assign(window.Centro, {
     const histAbierto = historial.some(g => g.id === this.gSel);
     cont.innerHTML = tramHtml
       + vivas.map(g => filaG(g, false)).join('')
-      + dormHtml
+      + dormHtml(filaG)
       + (historial.length ? `
         <details ${histAbierto ? 'open' : ''} style="margin-top:10px;">
           <summary style="cursor:pointer; font-size:12.5px; color:var(--fg-3); padding:4px 2px; user-select:none;">
@@ -701,7 +708,7 @@ Object.assign(window.Centro, {
       // anexo siga en firma — 2026-09-03) los seriales dejan de editarse aquí:
       // pool y orden ya los tienen amarrados.
       const preAsignando = g.estado === 'pendiente_firma' && !a.es_ajuste && !a.es_regularizacion
-        && !g.ordenes?.programacion_id;
+        && !g.ordenes?.programacion_id && !GestionesService.dormida(g);
       const asignando = this.puedeAsignar() && !g.ordenes?.programacion_id
         && (g.estado === 'pendiente_bodega' || preAsignando);
       cuerpo = `
@@ -950,6 +957,11 @@ Object.assign(window.Centro, {
       aprobacion = `<div class="cg-senal warn" style="margin:10px 0 0;">
            <span><b>Quedó esperando firma de antes.</b> Las actualizaciones de seriales ya no se firman
              (2026-09-09): dale <b>Aplicar sin firma</b> y el contrato gana las líneas de una vez.</span></div>`;
+    } else if (GestionesService.dormida(g)) {
+      aprobacion = `<div class="cg-senal warn" style="margin:10px 0 0;">
+           <span><b>Dormido:</b> pasaron ${this.esc(String(g.dormido_dias || ContratoFirma.DIAS_DORMIDO))} días aprobado sin la firma del cliente;
+             la solicitud y el enlace caducaron. No cuenta como trámite de la cuenta. <b>Reactivar</b> genera un enlace nuevo;
+             si el cliente ya no lo quiere, anula la gestión para soltar los equipos.</span></div>`;
     } else if (g.estado === 'pendiente_firma' && g.tipo === 'aumento') {
       aprobacion = `<div class="cg-senal info" style="margin:10px 0 0;">
            <span><b>Esperando la firma del cliente.</b> Imprime el anexo (deja explícito el período propio

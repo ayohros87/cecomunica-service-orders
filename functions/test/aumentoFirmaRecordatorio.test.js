@@ -14,12 +14,16 @@ const path = require("node:path");
 const cron = fs.readFileSync(
   path.join(__dirname, "..", "src", "triggers", "scheduled", "recordatorioOperativo.js"), "utf8");
 const i = cron.indexOf("── J) Aumentos esperando la firma del anexo");
-const bloque = cron.slice(i, i + 4200);
+const bloque = cron.slice(i, i + 4600);
 
 test("la sección existe y mira solo aumentos en pendiente_firma", () => {
   assert.ok(i > 0, "la sección J está en el cron");
   assert.match(bloque, /\.where\("estado", "==", "pendiente_firma"\)/);
   assert.match(bloque, /if \(g\.deleted \|\| g\.tipo !== "aumento"\) continue;/);
+});
+
+test("el anexo DORMIDO (45 días, 2-oct-2026) ya no se persigue: lo avisó el cron que lo durmió", () => {
+  assert.match(bloque, /if \(g\.dormido === true\) continue;/);
 });
 
 test("el reloj corre desde la aprobación, que es cuando la firma queda pendiente", () => {

@@ -722,8 +722,11 @@ module.exports = onDocumentWritten(
     // y eso sí pasa.
     // `bodega_aviso` y `firma_recordatorio_at` son los contadores que escribe
     // recordatorioOperativo (secciones K y J): marcan que se avisó, no deciden.
+    // La marca de anexo DORMIDO (2-oct-2026, cron dormirContratosSinFirma) y su
+    // reactivación tampoco: el estado sigue 'pendiente_firma'.
     if (soloCambiaron(before, after, ["seriales_norm", "correccion_en_curso", "cobro",
-      "bodega_aviso", "firma_recordatorio_at"])) return null;
+      "bodega_aviso", "firma_recordatorio_at",
+      ...require("../../domain/contratoDormido").CAMPOS_GESTION])) return null;
 
     // ── A0) ANULADA → revertir los efectos regados (caso P223344) ────────
     // Órdenes creadas sin trabajar se eliminan; flags del pool se limpian;

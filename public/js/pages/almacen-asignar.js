@@ -723,7 +723,8 @@ window.AlmacenAsignar = (() => {
     const esperaBodega = !cerrada && !conOS && !(esCambio(g) && g.cierre?.derivacion) && (
       g.estado === 'pendiente_bodega'
       || (g.estado === 'en_proceso' && ['reemplazo', 'demo'].includes(g.tipo) && !g.cierre?.asignacion)
-      || (g.estado === 'pendiente_firma' && g.tipo === 'aumento' && !g.aumento?.es_ajuste && !g.aumento?.es_regularizacion));
+      || (g.estado === 'pendiente_firma' && g.tipo === 'aumento' && !g.aumento?.es_ajuste && !g.aumento?.es_regularizacion
+          && g.dormido !== true));   // anexo dormido (2-oct-2026): se reactiva antes
     const guardadosObj = serialesGuardadosGestion(g);
     st.trabajo = { tipo: 'gestion', g, gid, guardadosObj, corrigiendo, actuales };
 

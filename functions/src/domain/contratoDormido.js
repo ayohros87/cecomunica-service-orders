@@ -17,10 +17,20 @@
 // que esperan seriales son de bodega (recordatorioSeriales los escala); los
 // legacy no esperan nada.
 //
-// Desde cuándo corren los 45 días: desde lo ÚLTIMO que acercó el contrato a
-// la firma — la aprobación, la asignación de seriales, el enlace enviado o
-// una reactivación anterior. Un enlace enviado hace 5 días sobre seriales
-// asignados hace 50 no está abandonado.
+// Desde cuándo corren los 45 días (Alberto, 2-oct-2026): desde la APROBACIÓN.
+// Antes (9c93b13) corrían desde lo último que acercó la firma (aprobación,
+// seriales, enlace enviado, reactivación); un enlace reenviado reiniciaba el
+// reloj sin que el cliente firmara nada. La única excepción es la
+// REACTIVACIÓN: si el vendedor despierta un dormido, el reloj vuelve a
+// empezar desde ahí — si no, se volvería a dormir en el próximo cron.
+//
+// ANEXOS de aumento (Alberto, 2-oct-2026): mismo trato. Un aumento aprobado
+// en 'pendiente_firma' que a los 45 días de su aprobación sigue sin la firma
+// del cliente queda dormido (marca en la gestión, el estado NO cambia), su
+// solicitud y enlace caducan, no cuenta como trámite de la cuenta y lo
+// reactiva el vendedor. No entran las actualizaciones de seriales
+// (es_regularizacion: ya no se firman, se aplican) ni el anexo ya firmado que
+// espera la validación del firmante.
 const { llevaFirma } = require("./contratoFirma");
 
 const DIAS_DORMIDO = 45;
@@ -46,32 +56,76 @@ function esperaFirmaViva(c) {
     && x.entrega_confirmada !== true;
 }
 
-// Lo último que movió el contrato hacia la firma. `solicitud` es la
-// firma_solicitudes pendiente, si la hay (su created_at vale aunque el
-// contrato viejo no traiga firma_solicitud_creada_at).
-function baseEspera(c, solicitud) {
-  const x = c || {};
-  const candidatos = [
-    x.dormido_reactivado_at, x.firma_solicitud_creada_at, solicitud?.created_at,
-    x.seriales_asignados_at, x.fecha_aprobacion,
-  ].map(_aDate).filter(Boolean);
-  if (candidatos.length) return new Date(Math.max(...candidatos.map(d => d.getTime())));
-  return _aDate(x.fecha_creacion);
+// Fecha base de la espera: la aprobación, o la reactivación si es posterior.
+// Sin aprobación registrada (histórico), la creación.
+function _maxFecha(vals) {
+  const ds = vals.map(_aDate).filter(Boolean);
+  return ds.length ? new Date(Math.max(...ds.map(d => d.getTime()))) : null;
 }
 
-function diasEsperando(c, solicitud, now = new Date()) {
-  const base = baseEspera(c, solicitud);
+function baseEspera(c) {
+  const x = c || {};
+  return _maxFecha([x.dormido_reactivado_at, x.fecha_aprobacion]) || _aDate(x.fecha_creacion);
+}
+
+function diasEsperando(c, now = new Date()) {
+  const base = baseEspera(c);
   if (!base) return null;
   return Math.floor((now - base) / 86400000);
 }
 
 // { dormir, dias, porQue }
-function decidirDormir({ contrato, solicitud = null, now = new Date(), dias = DIAS_DORMIDO } = {}) {
-  if (!esperaFirmaViva(contrato)) return { dormir: false, dias: null, porQue: "no espera firma" };
-  const edad = diasEsperando(contrato, solicitud, now);
+function _decidir(viva, edad, dias) {
+  if (!viva) return { dormir: false, dias: null, porQue: "no espera firma" };
   if (edad == null) return { dormir: false, dias: null, porQue: "sin fecha base" };
   if (edad < dias) return { dormir: false, dias: edad, porQue: `lleva ${edad} días (umbral ${dias})` };
   return { dormir: true, dias: edad, porQue: `${edad} días sin firma` };
+}
+
+function decidirDormir({ contrato, now = new Date(), dias = DIAS_DORMIDO } = {}) {
+  const viva = esperaFirmaViva(contrato);
+  return _decidir(viva, viva ? diasEsperando(contrato, now) : null, dias);
+}
+
+// ── Anexos de aumento (gestiones tipo 'aumento' en 'pendiente_firma') ──
+
+function anexoEsperaFirmaViva(g) {
+  const x = g || {};
+  return x.tipo === "aumento"
+    && x.estado === "pendiente_firma"
+    && x.deleted !== true
+    && x.dormido !== true
+    && x.aumento?.es_regularizacion !== true
+    && x.cierre?.firma !== true
+    && x.firma_pendiente_validacion !== true;
+}
+
+// Desde la aprobación comercial (aprobacion.at), o la reactivación si es
+// posterior. Sin aprobación registrada, desde que se pidió.
+function baseEsperaAnexo(g) {
+  const x = g || {};
+  return _maxFecha([x.dormido_reactivado_at, x.aprobacion?.at]) || _aDate(x.fecha_solicitud);
+}
+
+function diasEsperandoAnexo(g, now = new Date()) {
+  const base = baseEsperaAnexo(g);
+  if (!base) return null;
+  return Math.floor((now - base) / 86400000);
+}
+
+function decidirDormirAnexo({ gestion, now = new Date(), dias = DIAS_DORMIDO } = {}) {
+  const viva = anexoEsperaFirmaViva(gestion);
+  return _decidir(viva, viva ? diasEsperandoAnexo(gestion, now) : null, dias);
+}
+
+// Parche de la gestión al dormirla: SOLO la marca (el estado sigue
+// 'pendiente_firma' — cambiarlo correría la máquina de onGestionWrite).
+function patchDormirAnexo({ gestion, dias, ahora, teniaEnlace }) {
+  const patch = { dormido: true, dormido_at: ahora, dormido_motivo: MOTIVO, dormido_dias: dias };
+  if (teniaEnlace || (gestion || {}).firma_solicitud_estado === "pendiente") {
+    patch.firma_solicitud_estado = "caducado";
+  }
+  return patch;
 }
 
 // Parche del contrato al dormirlo. `ahora` = FieldValue.serverTimestamp().
@@ -98,16 +152,23 @@ function patchCaducarSolicitud(ahora) {
 
 // Parche del contrato al reactivarlo (lo hace el vendedor desde el Centro).
 // La solicitud vieja sigue caducada; el vendedor genera un enlace nuevo.
-function patchReactivar({ ahora, uid }) {
+// dormido_reactivado_at es la nueva fecha base de los 45 días.
+function patchReactivar({ ahora, uid, esGestion = false }) {
   return {
     dormido: false,
     dormido_reactivado_at: ahora,
     dormido_reactivado_por_uid: uid || null,
-    fecha_modificacion: ahora,
+    ...(esGestion ? {} : { fecha_modificacion: ahora }),
   };
 }
 
+// Campos que escribe el dormir/reactivar sobre una gestión: onGestionWrite
+// los trata como eco (no deciden nada en la máquina de estados).
+const CAMPOS_GESTION = ["dormido", "dormido_at", "dormido_motivo", "dormido_dias",
+  "dormido_reactivado_at", "dormido_reactivado_por_uid", "firma_solicitud_estado"];
+
 module.exports = {
-  DIAS_DORMIDO, MOTIVO, esperaFirmaViva, baseEspera, diasEsperando,
+  DIAS_DORMIDO, MOTIVO, CAMPOS_GESTION, esperaFirmaViva, baseEspera, diasEsperando,
   decidirDormir, patchDormir, patchCaducarSolicitud, patchReactivar,
+  anexoEsperaFirmaViva, baseEsperaAnexo, diasEsperandoAnexo, decidirDormirAnexo, patchDormirAnexo,
 };

@@ -936,6 +936,9 @@ module.exports = onSchedule(
       for (const d of snap.docs) {
         const g = d.data() || {};
         if (g.deleted || g.tipo !== "aumento") continue;
+        // Dormido a los 45 días (2-oct-2026): ya avisó el cron que lo durmió;
+        // hasta que el vendedor lo reactive no se persigue.
+        if (g.dormido === true) continue;
 
         // Se cuenta desde que se aprobó (que es cuando la firma queda
         // pendiente de verdad); sin aprobación, desde que se pidió.

@@ -160,6 +160,39 @@ Object.assign(window.Centro, {
     await this.enviarFirma(c.id);
   },
 
+  // Reactivar un ANEXO de aumento DORMIDO (Alberto, 2-oct-2026): mismo trato
+  // que el contrato. La gestión sigue en 'pendiente_firma'; se apaga la marca
+  // (dormido_reactivado_at es la nueva fecha base de los 45 días) y en el
+  // mismo acto sale un enlace nuevo — la solicitud vieja sigue caducada.
+  async reactivarAnexo(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    if (!g || !GestionesService.dormida(g)) { Toast.show('Este anexo no está dormido', 'warn'); return; }
+    if (![ROLES.ADMIN, 'admin', ROLES.GERENTE, ROLES.VENDEDOR].includes(this.rol)) {
+      Toast.show('Lo reactiva el vendedor o administración', 'warn'); return;
+    }
+    this._cerrarModal();
+    const dias = g.dormido_dias ? `${g.dormido_dias} días sin firma` : 'más de 45 días sin firma';
+    const ok = await Modal.confirm({
+      title: 'Reactivar la solicitud de firma', confirmLabel: 'Reactivar y generar enlace',
+      message: `El anexo <b class="cg-mono">${this.esc(g.id)}</b> quedó dormido por ${this.esc(dias)}.
+        Vuelve a ser un trámite vivo y se genera un <b>enlace de firma nuevo</b>; el anterior sigue caducado.
+        Si en 45 días no firma, se vuelve a dormir.`,
+    });
+    if (!ok) { this.abrirGestion?.(g.id); return; }
+    try {
+      await firebase.firestore().collection('gestiones').doc(g.id).update({
+        dormido: false,
+        dormido_reactivado_at: firebase.firestore.FieldValue.serverTimestamp(),
+        dormido_reactivado_por_uid: this.uid || null,
+      });
+      g.dormido = false; g.dormido_reactivado_at = new Date();
+      GestionesService.registrarEvento(g.id, 'reactivar', 'Anexo dormido reactivado — se genera un enlace de firma nuevo.').catch(() => {});
+      Toast.show('Anexo reactivado — ahora genera el enlace', 'ok');
+    } catch (e) { console.error(e); Toast.show('No se pudo reactivar: ' + (e.message || e), 'bad'); return; }
+    this.pintarGestiones?.(); this.pintarSenales?.(); this.pintarResumen?.(); this.armarMenu?.();
+    await this.enviarFirmaAnexo(g.id);
+  },
+
   async _enviarFirmaCorreo(contratoDocId, sid) {
     const email = (document.getElementById('wfEmail')?.value || '').trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { Toast.show('Escribe un correo válido', 'warn'); return; }
@@ -375,6 +408,7 @@ Object.assign(window.Centro, {
   async enviarFirmaAnexo(gid) {
     const g = (this.gestiones || []).find(x => x.id === gid);
     if (!g || g.estado !== 'pendiente_firma') { Toast.show('El anexo debe estar aprobado y pendiente de firma', 'warn'); return; }
+    if (GestionesService.dormida(g)) { Toast.show('El anexo está dormido — reactívalo primero', 'warn'); return; }
     const a = g.aumento || {};
     this._cerrarModal();
     let sid = (g.firma_solicitud_id && g.firma_solicitud_estado === 'pendiente') ? g.firma_solicitud_id : null;
