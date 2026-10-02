@@ -136,3 +136,47 @@ test("numeroFactura: expone los candidatos para que la pantalla pregunte", () =>
   assert.equal(m.numero, "10791");
   assert.equal(m.fuente, "marcador");
 });
+
+// ── R3 (auditoría de módulos 2026-09-30): el contrato murió → sus avisos ──
+const fs = require("node:fs");
+const path = require("node:path");
+const leer = (...p) => fs.readFileSync(path.join(__dirname, "..", "..", ...p), "utf8");
+const av = (id, estado, extra = {}) => ({ id, data: { estado, ...extra } });
+
+test("planCierreAvisos: cierra pendiente y esperando; hecho y descartado no se tocan", () => {
+  const p = FA.planCierreAvisos([
+    av("a", "pendiente"), av("b", "esperando"), av("c", "hecho"), av("d", "descartado"),
+  ]);
+  assert.deepEqual(p.cerrar.map(x => x.id), ["a", "b"]);
+  assert.deepEqual(p.intactos.map(x => x.id), ["c", "d"]);
+  // Idempotente: lo que ya se cerró queda fuera en la segunda pasada.
+  const otra = FA.planCierreAvisos(p.cerrar.map(x => ({ ...x, data: { ...x.data, estado: "descartado" } })));
+  assert.equal(otra.cerrar.length, 0);
+});
+
+test("planCierreAvisos: vencido POR FECHA (contrato que sigue operando) solo cierra lo que espera entrega", () => {
+  const p = FA.planCierreAvisos([av("a", "pendiente"), av("b", "esperando")], { soloEsperando: true });
+  assert.deepEqual(p.cerrar.map(x => x.id), ["b"]);
+  assert.deepEqual(p.intactos.map(x => x.id), ["a"]);
+});
+
+test("MOTIVOS_AUTO: el navegador lleva las mismas etiquetas y son distintas de los motivos humanos", () => {
+  assert.deepEqual(FA.MOTIVOS_AUTO, { contrato_anulado: "Contrato anulado", contrato_vencido: "Contrato vencido" });
+  const front = leer("public", "js", "services", "facturacionAvisosService.js");
+  for (const [k, v] of Object.entries(FA.MOTIVOS_AUTO)) {
+    assert.ok(front.includes(`${k}: '${v}'`), `facturacionAvisosService.MOTIVOS_AUTO no trae ${k}`);
+  }
+  assert.ok(!front.includes("codigo: 'contrato_anulado'"), "el motivo automático no debe ofrecerse en el select");
+});
+
+test("R3 · onContratoActivado cierra los avisos al anular, al vencer y al vencer por fecha (solo esperando)", () => {
+  const src = leer("functions", "src", "triggers", "contratos", "onApproval.js");
+  assert.ok(src.includes('cerrarAvisosDelContratoMuerto(event.params.docId, after, "contrato_vencido", { soloEsperando: true })'),
+    "vencimiento_estado → vencido debe cerrar solo lo que espera entrega");
+  assert.ok(src.includes('estadoAfter === "anulado" ? "contrato_anulado" : "contrato_vencido"'),
+    "anulado / vencido terminal deben cerrar los avisos abiertos");
+  assert.ok(src.includes("FA.cerrarAvisosDeContrato("), "el helper debe delegar en la lib");
+  // La bandeja acusa el correo en error en la fila y en el chip.
+  const bandeja = leer("public", "js", "pages", "facturacion-bandeja.js");
+  assert.ok(bandeja.includes('data-act="reenviar"') && bandeja.includes("[data-err]"));
+});

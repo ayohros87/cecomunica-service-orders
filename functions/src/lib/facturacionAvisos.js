@@ -543,10 +543,97 @@ async function vincularCorreo(id, mailQueueId) {
   }, { merge: true });
 }
 
+// ── El contrato murió: sus avisos abiertos se cierran solos ─────────────────
+// Auditoría de módulos 2026-09-30 (07-facturacion R3): nada cerraba un aviso
+// cuando su contrato se anulaba o vencía. El chip "En espera" arrastraba uno
+// de un contrato DEMO ya vencido que nunca iba a entregarse, y el único que
+// escribía facturacion_avisos aparte de los creadores era el espejo del
+// correo. Una cola que no se vacía sola deja de ser una cola.
+//
+// Motivos AUTOMÁTICOS de descarte: distintos de los que elige una persona
+// (ya_en_qbo / no_factura / duplicado / otro) para que el historial diga que
+// fue el sistema. El navegador (facturacionAvisosService.MOTIVOS_AUTO) lleva
+// las mismas etiquetas; el test exige que coincidan.
+const MOTIVOS_AUTO = {
+  contrato_anulado: "Contrato anulado",
+  contrato_vencido: "Contrato vencido",
+};
+const ABIERTOS = ["pendiente", "esperando"];
+
+/**
+ * Qué avisos se cierran. Lógica pura (se prueba sin emulador).
+ *   · abiertos (pendiente / esperando) → se cierran; hecho / descartado no se tocan.
+ *   · soloEsperando: un contrato que venció POR FECHA sigue operando (los ALQ
+ *     se cobran mes a mes después del vencimiento): ahí solo se cierra lo que
+ *     espera una entrega que ya no va a pasar; un pendiente real sigue siendo
+ *     trabajo de Recepción.
+ * @param {Array<{id, data}>} avisos
+ * @returns {{cerrar: Array, intactos: Array}}
+ */
+function planCierreAvisos(avisos, { soloEsperando = false } = {}) {
+  const cerrar = [], intactos = [];
+  for (const a of (Array.isArray(avisos) ? avisos : [])) {
+    const d = (a && a.data) || {};
+    if (!ABIERTOS.includes(d.estado) || (soloEsperando && d.estado !== "esperando")) { intactos.push(a); continue; }
+    cerrar.push(a);
+  }
+  return { cerrar, intactos };
+}
+
+/**
+ * Cierra (no_aplica, motivo automático) los avisos abiertos de un contrato.
+ * La comisión que todavía no se pagó pasa a no_aplica con el mismo motivo:
+ * un contrato que murió no va a tener primer pago (en el camino "venció por
+ * fecha" la comisión no se toca, porque el contrato sigue cobrándose).
+ * Idempotente: un aviso ya descartado queda fuera por `planCierreAvisos`.
+ * Un fallo por aviso no aborta el resto.
+ *
+ * @returns {Promise<{cerrados: string[], intactos: number}>}
+ */
+async function cerrarAvisosDeContrato(contratoDocId, { motivo, detalle = "", soloEsperando = false } = {}) {
+  if (!contratoDocId || !MOTIVOS_AUTO[motivo]) return { cerrados: [], intactos: 0 };
+  const snap = await db.collection(COL).where("contrato_doc_id", "==", contratoDocId).get();
+  const plan = planCierreAvisos(
+    snap.docs.map((d) => ({ id: d.id, ref: d.ref, data: d.data() || {} })),
+    { soloEsperando });
+  const res = { cerrados: [], intactos: plan.intactos.length };
+  const etiqueta = MOTIVOS_AUTO[motivo];
+  const nota = String(detalle || "").trim().slice(0, 140);
+  for (const a of plan.cerrar) {
+    try {
+      const ahoraIso = new Date().toISOString();
+      const entradas = [{
+        accion: "descartado",
+        detalle: `${etiqueta}${nota ? ` · ${nota}` : ""} — cerrado por el sistema`,
+        fecha_iso: ahoraIso, por_email: null,
+      }];
+      const patch = {
+        estado: "descartado",
+        descarte: { motivo, nota, at: admin.firestore.Timestamp.now(), por_email: null, automatico: true },
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      const com = a.data.comision;
+      if (!soloEsperando && com && com.aplica === true && com.estado !== "pagada" && !com.liberada_at) {
+        patch.comision = { aplica: false, estado: "no_aplica", motivo: `${etiqueta.toLowerCase()}: no habrá primer pago` };
+        entradas.push({ accion: "comision_no_aplica", detalle: `${etiqueta}: la comisión deja de esperar el primer pago`,
+          fecha_iso: ahoraIso, por_email: null });
+      }
+      patch.historial = admin.firestore.FieldValue.arrayUnion(...entradas);
+      await a.ref.set(patch, { merge: true });
+      res.cerrados.push(a.id);
+    } catch (e) {
+      logger.warn("[facturacionAvisos] no se pudo cerrar el aviso del contrato", { aviso: a.id, contratoDocId, motivo, message: e.message });
+    }
+  }
+  if (res.cerrados.length) logger.info("[facturacionAvisos] avisos cerrados por el contrato", { contratoDocId, motivo, cerrados: res.cerrados });
+  return res;
+}
+
 module.exports = {
   COL, TIPOS, ESTADOS, ITBMS,
   mensualDeContrato, equiposTexto, avisoId, pasosIniciales, estadoDerivado,
   crearAviso, promoverPorEntrega, vincularCorreo,
+  MOTIVOS_AUTO, planCierreAvisos, cerrarAvisosDeContrato,
   // Comisiones (PLAN_COMISIONES.md F2)
   COMISIONABLE, ESTADOS_COMISION,
   numeroFactura,

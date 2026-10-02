@@ -41,6 +41,12 @@
       border-radius: 999px; background: rgba(0,0,0,.06); font-variant-numeric: tabular-nums; }
     .fb-chip.active { font-weight: 600; border-width: 1.5px; color: var(--fg-1); }
     .fb-chip--all.active { background: var(--fg-1); color: #fff; border-color: var(--fg-1); }
+    /* Correo en error dentro del chip (R3): punto rojo, conteo en el title. */
+    .fb-chip .errdot { width: 8px; height: 8px; border-radius: 50%; background: #DC2626; display: inline-block; margin-left: 2px; }
+    .fb-chip .errdot[hidden] { display: none; }
+    .fb-t2 .fb-reenviar { height: 20px; padding: 0 8px; margin-left: 2px; border-radius: 999px; border: 1px solid #FECACA;
+      background: #FEF2F2; color: #991B1B; font: 600 11px/1 var(--font-body); cursor: pointer; vertical-align: 1px; }
+    .fb-t2 .fb-reenviar:hover { background: #FEE2E2; border-color: #991B1B; }
     .fb-chip--arranca .dot { background: #166534; }
     .fb-chip--cambia  .dot { background: #0369A1; }
     .fb-chip--termina .dot { background: #9A3412; }
@@ -204,11 +210,11 @@
   <div id="fbAviso" class="fb-aviso" hidden></div>
 
   <div class="fb-chips" id="fbChips" role="tablist" aria-label="Filtrar por efecto">
-    <button type="button" class="fb-chip fb-chip--all active" data-f="all" role="tab">Pendientes <span class="cnt" data-cnt="all">0</span></button>
-    <button type="button" class="fb-chip fb-chip--arranca" data-f="arranca" role="tab"><span class="dot"></span>Arranca cobro <span class="cnt" data-cnt="arranca">0</span></button>
-    <button type="button" class="fb-chip fb-chip--cambia" data-f="cambia" role="tab"><span class="dot"></span>Cambia cobro <span class="cnt" data-cnt="cambia">0</span></button>
-    <button type="button" class="fb-chip fb-chip--termina" data-f="termina" role="tab"><span class="dot"></span>Termina cobro <span class="cnt" data-cnt="termina">0</span></button>
-    <button type="button" class="fb-chip fb-chip--espera" data-f="espera" role="tab" title="Esperando la entrega de los equipos: todavía no hay nada que facturar"><span class="dot"></span>En espera <span class="cnt" data-cnt="espera">0</span></button>
+    <button type="button" class="fb-chip fb-chip--all active" data-f="all" role="tab">Pendientes <span class="cnt" data-cnt="all">0</span><span class="errdot" data-err="all" hidden></span></button>
+    <button type="button" class="fb-chip fb-chip--arranca" data-f="arranca" role="tab"><span class="dot"></span>Arranca cobro <span class="cnt" data-cnt="arranca">0</span><span class="errdot" data-err="arranca" hidden></span></button>
+    <button type="button" class="fb-chip fb-chip--cambia" data-f="cambia" role="tab"><span class="dot"></span>Cambia cobro <span class="cnt" data-cnt="cambia">0</span><span class="errdot" data-err="cambia" hidden></span></button>
+    <button type="button" class="fb-chip fb-chip--termina" data-f="termina" role="tab"><span class="dot"></span>Termina cobro <span class="cnt" data-cnt="termina">0</span><span class="errdot" data-err="termina" hidden></span></button>
+    <button type="button" class="fb-chip fb-chip--espera" data-f="espera" role="tab" title="Esperando la entrega de los equipos: todavía no hay nada que facturar"><span class="dot"></span>En espera <span class="cnt" data-cnt="espera">0</span><span class="errdot" data-err="espera" hidden></span></button>
     <span class="push"></span>
     <input type="search" id="fbBuscar" class="form-input" placeholder="Buscar cliente o contrato…" style="max-width:220px;" autocomplete="off">
     <label class="fb-toggle"><input type="checkbox" id="fbVerHechos"> Ver hechos y no aplica</label>

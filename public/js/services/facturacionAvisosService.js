@@ -20,9 +20,14 @@ window.FacturacionAvisosService = {
     { codigo: 'duplicado',  label: 'Aviso duplicado' },
     { codigo: 'otro',       label: 'Otro (explica en la nota)' },
   ],
+  // Motivos que escribe el SERVIDOR cuando el contrato muere (anulado o
+  // vencido): el aviso sale solo de la bandeja. No se ofrecen en el select;
+  // solo se leen. Mismas etiquetas que lib/facturacionAvisos.MOTIVOS_AUTO
+  // (el test de allá lo exige).
+  MOTIVOS_AUTO: { contrato_anulado: 'Contrato anulado', contrato_vencido: 'Contrato vencido' },
   motivoLabel(codigo) {
     const m = this.MOTIVOS_DESCARTE.find(x => x.codigo === codigo);
-    return m ? m.label : (codigo || '—');
+    return m ? m.label : (this.MOTIVOS_AUTO[codigo] || codigo || '—');
   },
 
   puedeGestionar(rol) { return this.ROLES.includes(rol); },

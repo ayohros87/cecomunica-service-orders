@@ -117,6 +117,24 @@ async function propagarEstadoVerificacion(contratoId, contrato, estado) {
   }
 }
 
+// Facturación pendiente: los avisos abiertos de un contrato que murió salen de
+// la bandeja con motivo automático (lib/facturacionAvisos.cerrarAvisosDeContrato).
+// Nunca lanza: un fallo aquí no debe frenar lo demás del trigger.
+async function cerrarAvisosDelContratoMuerto(contratoId, contrato, motivo, opts = {}) {
+  try {
+    const FA = require("../../lib/facturacionAvisos");
+    const detalle = motivo === "contrato_anulado"
+      ? String(contrato.anulado_motivo || "").trim()
+      : "";
+    const r = await FA.cerrarAvisosDeContrato(contratoId, { motivo, detalle, ...opts });
+    if (r.cerrados.length) {
+      logger.info("[onContratoActivado] avisos de facturación cerrados", { contratoId, motivo, cerrados: r.cerrados });
+    }
+  } catch (e) {
+    logger.warn("[onContratoActivado] no se pudieron cerrar los avisos de facturación (no crítico)", { contratoId, motivo, message: e.message });
+  }
+}
+
 const onContratoActivado = onDocumentUpdated(
   {
     document: "contratos/{docId}",
@@ -143,6 +161,10 @@ const onContratoActivado = onDocumentUpdated(
     if (["activo", "aprobado"].includes(estadoAfter) && vencBefore !== vencAfter) {
       if (vencAfter === "vencido") {
         await propagarEstadoVerificacion(event.params.docId, after, "vencido");
+        // Facturación pendiente (auditoría de módulos 2026-09-30, R3): el
+        // contrato sigue operando después de la fecha, así que solo se cierra
+        // lo que ESPERA una entrega que ya no va a pasar. No crítico.
+        await cerrarAvisosDelContratoMuerto(event.params.docId, after, "contrato_vencido", { soloEsperando: true });
       } else if (vencBefore === "vencido") {
         await propagarEstadoVerificacion(event.params.docId, after, estadoAfter);
       }
@@ -156,6 +178,13 @@ const onContratoActivado = onDocumentUpdated(
       // se aprobó).
       if (estadoBefore !== estadoAfter) {
         await propagarEstadoVerificacion(event.params.docId, after, estadoAfter);
+        // Un contrato anulado o vencido (DEMO/TEMP cerrado) no va a facturar
+        // nada: sus avisos abiertos salen de la bandeja con motivo automático
+        // (auditoría de módulos 2026-09-30, R3). No crítico.
+        if (estadoAfter === "anulado" || estadoAfter === "vencido") {
+          await cerrarAvisosDelContratoMuerto(event.params.docId, after,
+            estadoAfter === "anulado" ? "contrato_anulado" : "contrato_vencido");
+        }
       }
       return null;
     }

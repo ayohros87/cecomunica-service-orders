@@ -69,7 +69,14 @@ window.FacturacionBandeja = (() => {
     const c = a.contexto || {};
     const r = a.resumen || {};
     const partes = [];
-    if (a.correo?.status === 'error') partes.push(`<span class="alerta">El correo no salió</span>`);
+    // El correo en error se ve EN LA FILA con su botón, no solo al abrir el
+    // detalle (auditoría de módulos 2026-09-30, R3: dos avisos llevaban el
+    // correo caído desde septiembre y nadie lo vio).
+    if (a.correo?.status === 'error') {
+      partes.push(`<span class="alerta">El correo no salió</span>`
+        + (a.correo?.mail_queue_id && a.estado !== 'descartado'
+          ? ` <button type="button" class="fb-reenviar" data-act="reenviar" data-id="${esc(a.id)}" title="Vuelve a encolar el correo a activaciones@">Reenviar</button>` : ''));
+    }
     switch (a.tipo) {
       case 'contrato_activo':
       case 'renovacion_activa':
@@ -315,7 +322,9 @@ window.FacturacionBandeja = (() => {
     let pie = '';
     if (a.estado === 'descartado') {
       const ds = a.descarte || {};
-      pie = `<div class="fb-detfoot"><span class="fb-descartado">No aplica: <b>${esc(S().motivoLabel(ds.motivo))}</b>${ds.nota ? ` · ${esc(ds.nota)}` : ''} — ${esc((ds.por_email || '').split('@')[0])} · ${fHora(ds.at)}</span>
+      // Sin por_email es un cierre AUTOMÁTICO del servidor (contrato anulado o
+      // vencido, R3): lo dice en vez de dejar un guion vacío.
+      pie = `<div class="fb-detfoot"><span class="fb-descartado">No aplica: <b>${esc(S().motivoLabel(ds.motivo))}</b>${ds.nota ? ` · ${esc(ds.nota)}` : ''} — ${ds.por_email ? esc(ds.por_email.split('@')[0]) : 'el sistema'} · ${fHora(ds.at)}</span>
         <span class="push"></span><button type="button" class="btn btn-sm" data-act="reactivar" data-id="${esc(a.id)}"><i data-lucide="undo-2"></i> Reactivar</button></div>`;
     } else if (descartando === a.id) {
       const opts = S().MOTIVOS_DESCARTE.map(m => `<option value="${esc(m.codigo)}">${esc(m.label)}</option>`).join('');
@@ -384,12 +393,22 @@ window.FacturacionBandeja = (() => {
   function render() {
     // Conteos (sobre pendientes, sin la búsqueda)
     const cnt = { all: 0, arranca: 0, cambia: 0, termina: 0, espera: 0 };
+    // Correos en error por chip (R3): el chip lleva un punto rojo con el
+    // conteo en el title, para no tener que abrir cada fila.
+    const err = { all: 0, arranca: 0, cambia: 0, termina: 0, espera: 0 };
     pendientes.forEach(a => {
-      if (a.estado === 'esperando') { cnt.espera++; return; }
+      const conError = a.correo?.status === 'error';
+      if (a.estado === 'esperando') { cnt.espera++; if (conError) err.espera++; return; }
       cnt.all++;
       if (cnt[a.efecto] != null) cnt[a.efecto]++;
+      if (conError) { err.all++; if (err[a.efecto] != null) err[a.efecto]++; }
     });
     document.querySelectorAll('#fbChips [data-cnt]').forEach(el => { el.textContent = cnt[el.getAttribute('data-cnt')] ?? 0; });
+    document.querySelectorAll('#fbChips [data-err]').forEach(el => {
+      const n = err[el.getAttribute('data-err')] || 0;
+      el.hidden = !n;
+      el.title = n ? `${n} con el correo sin salir` : '';
+    });
     document.querySelectorAll('#fbChips .fb-chip').forEach(el => {
       const on = el.getAttribute('data-f') === filtro;
       el.classList.toggle('active', on); el.setAttribute('aria-selected', on ? 'true' : 'false');
