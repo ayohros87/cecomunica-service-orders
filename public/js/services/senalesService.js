@@ -714,15 +714,17 @@ const SenalesService = {
 
   /* ── Finanzas: el home de contabilidad (plan de ejecución §3.8 D17) ──────
      Contabilidad abría un home sin señales (auditoría 2026-09-30, 08 C2).
-     TODO(facturacion-senales): el agente de Facturación (plan §3.7 P8) deja
-     aquí los predicados definitivos "avisos con más de 7 días" y "comisiones
-     listas". Estos dos son el MÍNIMO con el que HomeSignals (FAV / COM) pinta
-     algo hoy: cámbialos por dentro sin tocar la firma (list…/count…).
+     Predicados definitivos del agente de Facturación (plan §3.7 P8,
+     2026-10-02): la misma edad y el mismo criterio que las pantallas a las
+     que llevan, para que el número del home y el de la pestaña no peleen.
      Piso: facturacion_avisos lo leen admin, recepción y contabilidad. */
 
   /** Avisos de facturación PENDIENTES con más de `dias` desde la fecha
-      efectiva (mismo corte rojo de la bandeja: > 7 d). Los 'esperando' no
-      tienen edad (aguardan la entrega) y no cuentan. */
+      efectiva: el mismo corte rojo y la misma edad que la bandeja
+      (facturacion-bandeja.js ageHtml: días desde `fecha_efectiva`, > 7).
+      Los 'esperando' no tienen edad (aguardan la entrega) y no cuentan; un
+      aviso sin fecha efectiva cae a `created_at` para no quedar invisible.
+      Son decenas de docs (13 pendientes al 30-sep): el tope es de seguridad. */
   listAvisosFacturacionViejos({ dias = 7 } = {}) {
     return this._memoList('avisos_viejos', async () => {
       const now = new Date();
@@ -733,11 +735,17 @@ const SenalesService = {
         const a = d.data() || {};
         const edad = Math.floor(PendientesDomain.edadDias(a.fecha_efectiva || a.created_at, now) || 0);
         if (edad <= dias) return;
+        // Qué falta, en el vocabulario de las pastillas de la bandeja.
+        const p = a.pasos || {};
+        const falta = [p.qbo?.aplica && !p.qbo?.hecho ? 'QBO' : null,
+          p.poc?.aplica && !p.poc?.hecho ? 'Plataforma PoC' : null].filter(Boolean);
         rows.push({
           id: d.id, col: 'facturacion_avisos',
           cliente: a.cliente_nombre || '—',
-          referencia: a.contrato_id || a.gestion_id || a.orden_id || d.id,
-          titulo: a.titulo || a.tipo || 'Aviso',
+          // La cotización de taller no trae contrato: su número legible va en
+          // el contexto (el mismo que muestra la fila de la bandeja).
+          referencia: a.contrato_id || a.contexto?.cotizacion_id || a.gestion_id || a.orden_id || '',
+          titulo: [a.titulo || a.tipo || 'Aviso', falta.length ? `falta ${falta.join(' y ')}` : ''].filter(Boolean).join(' · '),
           dias: edad,
         });
       });
@@ -746,9 +754,13 @@ const SenalesService = {
   },
   async countAvisosFacturacionViejos(opts) { return (await this.listAvisosFacturacionViejos(opts)).length; },
 
-  /** Comisiones LISTAS para el primer pago: todos los requisitos que aplican
-      están hechos y nadie la liberó. Mismo criterio que
-      FacturacionAvisosService.estadoComision / lib/facturacionAvisos. */
+  /** Comisiones listas para CONFIRMAR EL PRIMER PAGO: firma y entrega ya
+      están (o no aplican), solo falta el pago, y tienen vendedor. Es el chip
+      "Falta el pago" de Comisiones (soloFaltaPago en facturacion-comisiones.js),
+      donde se confirman en lote con el estado de cuenta (decisión 16 de
+      Alberto, 1-oct-2026). Las 'listo' (pago ya confirmado, falta cerrar el
+      período) NO van aquí: esas las cierra quien paga, no quien concilia.
+      Edad: desde el último requisito cumplido (lo que dejó la fila lista). */
   listComisionesListas() {
     return this._memoList('comisiones_listas', async () => {
       const now = new Date();
@@ -758,15 +770,18 @@ const SenalesService = {
       snap.forEach(d => {
         const a = d.data() || {};
         const com = a.comision || {};
-        if (com.liberada_at || com.periodo) return;
-        const req = Object.values(com.requisitos || {}).filter(x => x && x.aplica);
-        if (!req.length || !req.every(x => x.hecho)) return;
+        if (com.liberada_at || com.periodo || !com.vendedor_email) return;
+        const req = Object.entries(com.requisitos || {}).filter(([, x]) => x && x.aplica);
+        const faltan = req.filter(([, x]) => !x.hecho);
+        if (!faltan.length || !faltan.every(([k]) => k === 'pago')) return;
+        const listoDesde = req.filter(([, x]) => x.hecho && x.at)
+          .map(([, x]) => x.at).sort((x, y) => (PendientesDomain.edadDias(x, now) || 0) - (PendientesDomain.edadDias(y, now) || 0))[0];
         rows.push({
           id: d.id, col: 'facturacion_avisos',
           cliente: a.cliente_nombre || '—',
-          referencia: a.contrato_id || a.gestion_id || d.id,
-          vendedor: (com.vendedor_email || a.vendedor_email || '').split('@')[0],
-          dias: Math.floor(PendientesDomain.edadDias(a.updated_at || a.fecha_efectiva, now) || 0),
+          referencia: a.contrato_id || a.gestion_id || '',
+          vendedor: String(com.vendedor_email || '').split('@')[0],
+          dias: Math.floor(PendientesDomain.edadDias(listoDesde || a.fecha_efectiva || a.updated_at, now) || 0),
         });
       });
       return rows.sort((a, b) => b.dias - a.dias);

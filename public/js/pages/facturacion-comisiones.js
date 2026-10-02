@@ -672,6 +672,9 @@ window.FacturacionComisiones = (() => {
         }
         const mount = document.getElementById('wsTabs-mount');
         if (mount && !mount.children.length && window.FinanzasNav) FinanzasNav.render('comisiones');
+        // ?f=pago (señal "Comisiones listas" del home, P8): abre en ese chip.
+        const f0 = new URLSearchParams(location.search).get('f');
+        if (f0 && document.querySelector(`#cmChips [data-f="${CSS.escape(f0)}"], .cm-chip[data-f="${CSS.escape(f0)}"]`)) filtro = f0;
         wire();
         await cargar();
         const id = new URLSearchParams(location.search).get('aviso');

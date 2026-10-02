@@ -373,10 +373,11 @@ window.HomeSignals = (() => {
     // Cheila abría un home sin señales (auditoría 2026-09-30, 08 C2). Las dos
     // colas que son suyas: lo que lleva más de una semana sin facturar y las
     // comisiones que ya puede confirmar. Cada fila abre el aviso (?aviso=).
-    // Los predicados viven en SenalesService (TODO(facturacion-senales): el
-    // agente de Facturación los afina por dentro sin cambiar la firma).
+    // Los predicados viven en SenalesService (plan §3.7 P8, 2026-10-02).
+    // FAV también es de recepción, que es quien trabaja la bandeja: su gate
+    // es el módulo suelto 'facturacion_bandeja' (sin el resto de Finanzas).
     FAV: {
-      modulo: 'facturacion', icon: 'inbox', alert: true, moreIsBad: true,
+      modulo: ['facturacion', 'facturacion_bandeja'], icon: 'inbox', alert: true, moreIsBad: true,
       label: 'Avisos sin facturar', sub: 'más de 7 días',
       href: 'facturacion/bandeja.html',
       count: () => SenalesService.countAvisosFacturacionViejos(),
@@ -392,7 +393,8 @@ window.HomeSignals = (() => {
     COM: {
       modulo: 'facturacion', icon: 'badge-dollar-sign', moreIsBad: true,
       label: 'Comisiones listas', sub: 'para confirmar el primer pago',
-      href: 'facturacion/comisiones.html',
+      // ?f=pago abre el chip "Falta el pago", donde se confirman en lote.
+      href: 'facturacion/comisiones.html?f=pago',
       count: () => SenalesService.countComisionesListas(),
       items: () => SenalesService.listComisionesListas(),
       row: (r, esc) => ({
@@ -436,7 +438,9 @@ window.HomeSignals = (() => {
     // veían en rojo sin poder hacer nada con él (repaso del home 2026-09-29).
     gerente:           ['APR', 'SAP', 'FIR', 'REGG'],
     jefe_taller:       ['S1', 'EST', 'S4Q', 'SAP'],
-    recepcion:         ['OPC', 'S1', 'S2', 'ENT', 'LPC'],
+    // FAV (avisos sin facturar > 7 d, P8 de Facturación 2026-10-02): la
+    // bandeja envejecía porque nadie la veía envejecer (8 de 13 al 30-sep).
+    recepcion:         ['OPC', 'S1', 'S2', 'ENT', 'LPC', 'FAV'],
     vendedor:          ['S7', 'FIRV', 'REGV'],
     // S4P (mis completadas en oficina) salió el 2026-09-29: lo terminado ya
     // no es trabajo del técnico — espera a recepción — y el número solo crecía
