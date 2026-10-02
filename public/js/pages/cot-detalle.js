@@ -249,6 +249,7 @@
         <div class="app-page-header-actions">
           ${soloLectura ? '' : botonAccionPrincipal(cot.estado)}
           ${soloLectura ? '' : '<button class="btn btn-ghost" id="btnDuplicar"><i data-lucide="copy"></i> Duplicar</button>'}
+          ${!soloLectura && ['enviada', 'aprobada', 'vencida'].includes(cot.estado) ? '<button class="btn btn-ghost" id="btnRehacer" title="La descarta con motivo y abre la copia para corregirla"><i data-lucide="refresh-cw"></i> Rehacer</button>' : ''}
           ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada' || cot.estado === 'convertida') ? '<button class="btn btn-ghost" id="btnEnviar"><i data-lucide="send"></i> Reenviar al cliente</button>' : ''}
           ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada' || (cot.estado === 'vencida' && !cot.gestion_id)) ? (esTaller()
             ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#065F46; color:#fff; border-color:#065F46;"><i data-lucide="circle-check"></i> Respuesta del cliente</button>'
@@ -411,6 +412,8 @@
 
     const btnDup = $('btnDuplicar');
     if (btnDup) btnDup.addEventListener('click', duplicar);
+    const btnReh = $('btnRehacer');
+    if (btnReh) btnReh.addEventListener('click', () => CotState.rehacer({ ui: cot, raw: rawDoc, rol: userRol, policy: policyCfg, catalogos }));
     const btnEnv = $('btnEnviar');
     if (btnEnv) btnEnv.addEventListener('click', () => enviarPorCorreo(cli, ej, btnEnv));
     const btnCer = $('btnCerrar');

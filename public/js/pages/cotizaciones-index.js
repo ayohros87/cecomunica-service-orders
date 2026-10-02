@@ -299,6 +299,12 @@
     return `<span class="chip-estado chip-cot-porfacturar" title="Está en la bandeja de Facturación pendiente de Recepción">Por facturar</span>`;
   }
 
+  // Eliminar es solo para BORRADORES (auditoría de módulos 2026-09-30, C2):
+  // 8 de las 22 eliminadas ya estaban enviadas al cliente, y el enlace les
+  // seguía vivo. Lo que ya salió se cierra con motivo (banderita) o se
+  // REHACE: la original queda descartada diciendo adónde fue y se abre la copia.
+  const REHACIBLES = ['enviada', 'aprobada', 'vencida'];
+
   // ¿El usuario puede operar esta fila? Los roles con vista global mantienen sus
   // acciones sobre cualquier fila; el resto solo sobre las propias. Un supervisor
   // (allowlist cotizaciones_supervisores) ve todas las filas pero las ajenas en
@@ -375,8 +381,9 @@
               ${mutable && CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Editar" data-action="editar"><i data-lucide="pencil"></i></button>` : ''}
               ${mutable && (c.estado === 'aprobada' || c.estado === 'enviada' || c.estado === 'convertida') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Reenviar al cliente" data-action="enviar"><i data-lucide="send"></i></button>` : ''}
               ${mutable ? `<button class="btn btn-ghost btn-icon btn-sm" title="Duplicar" data-action="duplicar"><i data-lucide="copy"></i></button>` : ''}
+              ${mutable && REHACIBLES.includes(c.estado) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Rehacer (la descarta y abre la copia)" data-action="rehacer"><i data-lucide="refresh-cw"></i></button>` : ''}
               <button class="btn btn-ghost btn-icon btn-sm" title="Imprimir / PDF" data-action="imprimir"><i data-lucide="printer"></i></button>
-              ${mutable ? `<button class="btn btn-ghost btn-icon btn-sm" title="Eliminar" data-action="eliminar"><i data-lucide="trash-2"></i></button>` : ''}
+              ${mutable && (c.estado || 'borrador') === 'borrador' ? `<button class="btn btn-ghost btn-icon btn-sm" title="Eliminar el borrador" data-action="eliminar"><i data-lucide="trash-2"></i></button>` : ''}
             </span>
           </td>
         </tr>
@@ -433,6 +440,7 @@
     if (action === 'editar')   { location.href = `editar-cotizacion.html?id=${encodeURIComponent(docId)}`; return; }
     if (action === 'imprimir') { window.open(`imprimir-cotizacion.html?id=${encodeURIComponent(docId)}`, '_blank'); return; }
     if (action === 'duplicar') { return await duplicar(cot); }
+    if (action === 'rehacer')  { return await CotState.rehacer({ raw: cot, rol: userRol, policy: policyCfg }); }
     if (action === 'eliminar') { return await eliminar(cot); }
     if (action === 'enviar')   { return await enviar(cot, btn); }
     if (action === 'enviar-directo') { return await enviar(cot, btn); } // envío directo del vendedor (borrador→enviada)
@@ -565,9 +573,13 @@
   }
 
   async function eliminar(cot) {
+    if ((cot.estado || 'borrador') !== 'borrador') {
+      Toast.show('Solo se eliminan borradores. Una cotización que ya salió se cierra con motivo o se rehace.', 'warn');
+      return;
+    }
     const ok = await Modal.confirm({
-      title: 'Eliminar cotización',
-      message: '¿Seguro que deseas eliminar ' + (cot.cotizacion_id || cot.id) + '? Podrás restaurarla desde "Mostrar eliminadas".',
+      title: 'Eliminar borrador',
+      message: '¿Seguro que deseas eliminar el borrador ' + (cot.cotizacion_id || cot.id) + '? Podrás restaurarlo desde "Mostrar eliminadas".',
       danger: true,
     });
     if (!ok) return;

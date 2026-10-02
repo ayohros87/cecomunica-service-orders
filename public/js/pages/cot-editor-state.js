@@ -525,15 +525,20 @@
   //   ui  → forma UI (toUi). raw → doc crudo: de ahí salen los datos del
   //         cliente cuando la página no cargó el catálogo (la lista no lo carga).
   let _duplicando = false;
-  async function duplicar({ ui, raw = null, rol, policy, catalogos = null }) {
+  // Devuelve { id, numero } del borrador nuevo (o null). `confirmar:false` y
+  // `navegar:false` los usa rehacer(), que confirma por su cuenta y navega
+  // después de descartar la original.
+  async function duplicar({ ui, raw = null, rol, policy, catalogos = null, confirmar = true, navegar = true }) {
     if (_duplicando) return null;
     const src = ui || toUi(raw);
-    const ok = await Modal.confirm({
-      title: 'Duplicar cotización',
-      message: `Se creará una copia de ${src.id || 'esta cotización'} como nueva cotización en borrador (consume un número COT nuevo). ¿Continuar?`,
-      confirmLabel: 'Duplicar',
-    });
-    if (!ok) return null;
+    if (confirmar) {
+      const ok = await Modal.confirm({
+        title: 'Duplicar cotización',
+        message: `Se creará una copia de ${src.id || 'esta cotización'} como nueva cotización en borrador (consume un número COT nuevo). ¿Continuar?`,
+        confirmLabel: 'Duplicar',
+      });
+      if (!ok) return null;
+    }
     _duplicando = true;
     try {
       const nuevoId = await nextCotizacionId();
@@ -561,16 +566,63 @@
       if (pol.requiere) {
         try { await enqueueAprobacionMail({ doc: copia, docId: ref.id, user }); }
         catch (e) { console.warn('No se pudo encolar correo de aprobación al duplicar:', e); }
-        Toast.show('Cotización duplicada como ' + nuevoId + ' · solicitud de aprobación enviada', 'ok');
-      } else {
+        if (navegar) Toast.show('Cotización duplicada como ' + nuevoId + ' · solicitud de aprobación enviada', 'ok');
+      } else if (navegar) {
         Toast.show('Cotización duplicada como ' + nuevoId + ' · lista para enviar al cliente', 'ok');
       }
-      location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(ref.id);
-      return ref.id;
+      if (navegar) location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(ref.id);
+      else _duplicando = false;
+      return { id: ref.id, numero: nuevoId };
     } catch (err) {
       console.error(err);
       Toast.show('Error al duplicar: ' + (err?.message || err), 'bad');
       _duplicando = false;
+      return null;
+    }
+  }
+
+  // ── Rehacer (auditoría de módulos 2026-09-30, C2) ────────────────────────
+  // "La mandé mal, la rehago": en septiembre pasó tres veces y las tres se
+  // resolvieron con Eliminar, que no pedía motivo y dejaba vivo el enlace del
+  // cliente. Eliminar quedó solo para borradores; esto es el camino para una
+  // enviada/aprobada/vencida: la original queda DESCARTADA con el motivo
+  // escrito (quién lea el historial sabe adónde fue) y se abre la copia.
+  // Comercial: copia en borrador (duplicar) y al editor. Taller: la copia se
+  // arma desde la orden (cotizar-orden precarga piezas y enlaza la orden con
+  // la cotización nueva), así que se descarta y se va allá.
+  async function rehacer({ ui, raw = null, rol, policy, catalogos = null }) {
+    const src = ui || toUi(raw);
+    const esc = FMT.esc;
+    const taller = esCotizacionDeTaller(src);
+    const docId = src._docId || raw?.id;
+    if (!docId) return null;
+    const ok = await Modal.confirm({
+      title: 'Rehacer cotización',
+      message: `${esc(src.id || 'Esta cotización')} quedará <b>Descartada</b> ("se rehace") y ${taller
+        ? `volverás a cotizar la orden ${esc(src.orden_id || '')} con las piezas precargadas.`
+        : 'se abrirá una copia en borrador con un número COT nuevo para corregirla.'}<br><br>El enlace que ya tiene el cliente dirá "Cotización cerrada".`,
+      confirmLabel: 'Rehacer',
+    });
+    if (!ok) return null;
+    try {
+      let destino, motivo;
+      if (taller) {
+        motivo = 'Se rehace desde la orden ' + (src.orden_id || '');
+        destino = '../ordenes/cotizar-orden.html?id=' + encodeURIComponent(src.orden_id || '');
+      } else {
+        const nueva = await duplicar({ ui: src, raw, rol, policy, catalogos, confirmar: false, navegar: false });
+        if (!nueva) return null;
+        motivo = 'Se rehace como ' + nueva.numero;
+        destino = 'editar-cotizacion.html?id=' + encodeURIComponent(nueva.id);
+      }
+      const uid = firebase.auth().currentUser?.uid || null;
+      await CotizacionesService.updateCotizacion(docId, patchCierre('descartada', motivo, uid));
+      Toast.show((src.id || 'Cotización') + ' descartada · ' + motivo, 'ok');
+      location.href = destino;
+      return destino;
+    } catch (err) {
+      console.error(err);
+      Toast.show('No se pudo rehacer: ' + (err?.message || err), 'bad');
       return null;
     }
   }
@@ -1295,6 +1347,6 @@
     CONDICIONES_TALLER: (window.CotizacionTaller?.CONDICIONES_TALLER) || [],
     enqueueAprobacionMail,
     adjuntosToAttachments,
-    duplicar,
+    duplicar, rehacer,
   };
 })();
