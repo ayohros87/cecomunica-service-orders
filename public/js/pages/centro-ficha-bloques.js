@@ -174,6 +174,9 @@ Object.assign(window.Centro, {
       btn.classList.toggle('hidden', !P);
       if (P) { btn.textContent = P.label; btn.setAttribute('onclick', P.onclick); btn.title = P.hint || ''; }
     }
+    // El "Nueva gestión" de la cabecera sigue la misma regla que el del dock:
+    // quien no crea gestiones (bodega, contabilidad) no ve el botón (D17).
+    document.getElementById('btnGestion')?.classList.toggle('hidden', !this.puedeCrearGestion());
     const dock = document.getElementById('cgDock');
     if (dock) dock.innerHTML = !this.puedeCrearGestion() ? '' : `<span aria-hidden="true"></span>
       <button class="btn" onclick="Centro.abrirMenuDesdeDock()">Nueva gestión ▾</button>

@@ -683,6 +683,68 @@ const SenalesService = {
     });
   },
 
+  /* ── Finanzas: el home de contabilidad (plan de ejecución §3.8 D17) ──────
+     Contabilidad abría un home sin señales (auditoría 2026-09-30, 08 C2).
+     TODO(facturacion-senales): el agente de Facturación (plan §3.7 P8) deja
+     aquí los predicados definitivos "avisos con más de 7 días" y "comisiones
+     listas". Estos dos son el MÍNIMO con el que HomeSignals (FAV / COM) pinta
+     algo hoy: cámbialos por dentro sin tocar la firma (list…/count…).
+     Piso: facturacion_avisos lo leen admin, recepción y contabilidad. */
+
+  /** Avisos de facturación PENDIENTES con más de `dias` desde la fecha
+      efectiva (mismo corte rojo de la bandeja: > 7 d). Los 'esperando' no
+      tienen edad (aguardan la entrega) y no cuentan. */
+  listAvisosFacturacionViejos({ dias = 7 } = {}) {
+    return this._memoList('avisos_viejos', async () => {
+      const now = new Date();
+      const snap = await firebase.firestore().collection('facturacion_avisos')
+        .where('estado', '==', 'pendiente').limit(300).get();
+      const rows = [];
+      snap.forEach(d => {
+        const a = d.data() || {};
+        const edad = Math.floor(PendientesDomain.edadDias(a.fecha_efectiva || a.created_at, now) || 0);
+        if (edad <= dias) return;
+        rows.push({
+          id: d.id, col: 'facturacion_avisos',
+          cliente: a.cliente_nombre || '—',
+          referencia: a.contrato_id || a.gestion_id || a.orden_id || d.id,
+          titulo: a.titulo || a.tipo || 'Aviso',
+          dias: edad,
+        });
+      });
+      return rows.sort((a, b) => b.dias - a.dias);
+    });
+  },
+  async countAvisosFacturacionViejos(opts) { return (await this.listAvisosFacturacionViejos(opts)).length; },
+
+  /** Comisiones LISTAS para el primer pago: todos los requisitos que aplican
+      están hechos y nadie la liberó. Mismo criterio que
+      FacturacionAvisosService.estadoComision / lib/facturacionAvisos. */
+  listComisionesListas() {
+    return this._memoList('comisiones_listas', async () => {
+      const now = new Date();
+      const snap = await firebase.firestore().collection('facturacion_avisos')
+        .where('comision.aplica', '==', true).limit(500).get();
+      const rows = [];
+      snap.forEach(d => {
+        const a = d.data() || {};
+        const com = a.comision || {};
+        if (com.liberada_at || com.periodo) return;
+        const req = Object.values(com.requisitos || {}).filter(x => x && x.aplica);
+        if (!req.length || !req.every(x => x.hecho)) return;
+        rows.push({
+          id: d.id, col: 'facturacion_avisos',
+          cliente: a.cliente_nombre || '—',
+          referencia: a.contrato_id || a.gestion_id || d.id,
+          vendedor: (com.vendedor_email || a.vendedor_email || '').split('@')[0],
+          dias: Math.floor(PendientesDomain.edadDias(a.updated_at || a.fecha_efectiva, now) || 0),
+        });
+      });
+      return rows.sort((a, b) => b.dias - a.dias);
+    });
+  },
+  async countComisionesListas() { return (await this.listComisionesListas()).length; },
+
   // Conteos derivados de las filas (excluyen pospuestas, como el correo).
   async countListasParaEntregar() { return (await this.listListasParaEntregar()).filter(r => !r.pospuesto && !r.viejo).length; },
   async countEstancadas()         { return (await this.listEstancadas()).filter(r => !r.pospuesto).length; },

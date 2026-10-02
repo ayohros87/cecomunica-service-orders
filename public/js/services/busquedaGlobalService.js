@@ -75,7 +75,7 @@ const BusquedaGlobalService = {
   },
   // Mismo criterio que el guard de clientes/centro.html (centro-core.js).
   _puedeAbrirCentro(rol) {
-    return ['administrador', 'gerente', 'vendedor', 'recepcion', 'inventario'].includes(rol);
+    return ['administrador', 'gerente', 'vendedor', 'recepcion', 'inventario', 'contabilidad'].includes(rol);
   },
 
   async searchAll(query) {

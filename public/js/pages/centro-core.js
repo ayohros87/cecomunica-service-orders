@@ -76,7 +76,9 @@ window.Centro = {
         this.email = user.email || null;
         // inventario entra para ASIGNAR seriales a las gestiones (llega por el
         // correo de bodega con deep-link ?id=&g=); no crea gestiones.
-        const permitido = [ROLES.ADMIN, ROLES.GERENTE, ROLES.VENDEDOR, ROLES.RECEPCION, ROLES.INVENTARIO];
+        // contabilidad (D17, Alberto 2026-10-01) entra de CONSULTA: ve la ficha,
+        // los contratos y las gestiones; ningún puede* la incluye.
+        const permitido = [ROLES.ADMIN, ROLES.GERENTE, ROLES.VENDEDOR, ROLES.RECEPCION, ROLES.INVENTARIO, ROLES.CONTABILIDAD];
         if (!u || !permitido.includes(this.rol)) {
           document.body.innerHTML = "<h3 style='color:red;text-align:center;margin-top:100px;'>Acceso restringido</h3>";
           return;

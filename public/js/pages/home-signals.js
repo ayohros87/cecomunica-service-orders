@@ -369,6 +369,40 @@ window.HomeSignals = (() => {
       }),
       vacio: 'Ninguna cuenta con deuda de regularización.',
     },
+    // ── Finanzas (plan de ejecución §3.8 D17): el home de contabilidad ──
+    // Cheila abría un home sin señales (auditoría 2026-09-30, 08 C2). Las dos
+    // colas que son suyas: lo que lleva más de una semana sin facturar y las
+    // comisiones que ya puede confirmar. Cada fila abre el aviso (?aviso=).
+    // Los predicados viven en SenalesService (TODO(facturacion-senales): el
+    // agente de Facturación los afina por dentro sin cambiar la firma).
+    FAV: {
+      modulo: 'facturacion', icon: 'inbox', alert: true, moreIsBad: true,
+      label: 'Avisos sin facturar', sub: 'más de 7 días',
+      href: 'facturacion/bandeja.html',
+      count: () => SenalesService.countAvisosFacturacionViejos(),
+      items: () => SenalesService.listAvisosFacturacionViejos(),
+      row: (r, esc) => ({
+        txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.referencia)}</span> · ${esc(r.titulo)}`,
+        dias: r.dias,
+        cta: { label: 'Abrir aviso', href: `facturacion/bandeja.html?aviso=${encodeURIComponent(r.id)}` },
+      }),
+      hrefLabel: 'Abrir la bandeja →',
+      vacio: 'Nada lleva más de una semana sin facturar.',
+    },
+    COM: {
+      modulo: 'facturacion', icon: 'badge-dollar-sign', moreIsBad: true,
+      label: 'Comisiones listas', sub: 'para confirmar el primer pago',
+      href: 'facturacion/comisiones.html',
+      count: () => SenalesService.countComisionesListas(),
+      items: () => SenalesService.listComisionesListas(),
+      row: (r, esc) => ({
+        txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.referencia)}</span>${r.vendedor ? ' · ' + esc(r.vendedor) : ''}`,
+        dias: r.dias,
+        cta: { label: 'Abrir comisión', href: `facturacion/comisiones.html?aviso=${encodeURIComponent(r.id)}` },
+      }),
+      hrefLabel: 'Abrir comisiones →',
+      vacio: 'Ninguna comisión espera confirmación.',
+    },
   };
 
   // Rol efectivo → señales (hasta 8; la rejilla se ajusta con data-n, ver
@@ -418,7 +452,9 @@ window.HomeSignals = (() => {
     // gente esperando. (La fila ya no tiene tope fijo de 4: se ajusta a data-n.)
     inventario:        ['S15', 'S13', 'S14', 'S9'],
     vista:             ['S1', 'S3', 'S4'],
-    contabilidad:      [],
+    // Contabilidad (D17, 2026-10-01): sus dos colas de Finanzas en vez de un
+    // home vacío. El gate de módulo ('facturacion') ya es suyo.
+    contabilidad:      ['FAV', 'COM'],
   };
 
   // Por rol: señales que se quitan (en vez de ir a "Al día") cuando están
