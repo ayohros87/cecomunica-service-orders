@@ -201,3 +201,7 @@ html[data-cc-rail="mini"]{--cc-rail-cur:var(--cc-rail-mini-w)}
 @media (max-width:640px){.topbar-search__txt{display:none}}
 /* El FAB con bottom-nav se oculta con [hidden] mientras la barra se ve. */
 .rail-fab[hidden]{display:none !important}
+/* Táctil (auditoría de módulos 2026-09-30, 08 P4): los enlaces del cajón medían
+   34 px (padding 8px) — por debajo de los 44 px que pide un dedo. Solo con
+   puntero grueso: en escritorio el rail se queda compacto. */
+@media (pointer:coarse){.rail__link{min-height:44px}}

@@ -703,6 +703,15 @@
 
 <!-- MOBILE ONLY: Bottom Nav -->
 <nav id="mobileBottomNav" aria-label="Mobile navigation">
+  <!-- "Menú" abre el cajón del rail (Layout.initRail lo cablea por el id
+       #ccRailToggle). En teléfono la barra escondía el botón flotante y salir
+       de Órdenes era Filtros → desplazar → "Menú principal" → home → módulo:
+       3 toques y un scroll (auditoría de módulos 2026-09-30, 08 §2.2 / P4). -->
+  <button class="mnav-item" type="button" id="ccRailToggle" aria-label="Menú de navegación">
+    <span class="mnav-ico"><i data-lucide="menu"></i></span>
+    <span class="mnav-label">Menú</span>
+  </button>
+
   <button class="mnav-item" type="button" data-action="mobile-scroll-top">
     <span class="mnav-ico"><i data-lucide="clipboard-list"></i></span>
     <span class="mnav-label">Órdenes</span>
