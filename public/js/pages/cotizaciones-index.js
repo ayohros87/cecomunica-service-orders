@@ -419,7 +419,7 @@
           <td class="td-actions">
             <span class="cc-row-actions">
               ${mutable ? botonBorrador(c) : ''}
-              ${mutable && (c.estado === 'aprobada' || c.estado === 'enviada' || (esTallerC(c) && c.estado === 'vencida' && !c.gestion_id)) ? (esTallerC(c)
+              ${mutable && (c.estado === 'aprobada' || c.estado === 'enviada' || (c.estado === 'vencida' && !c.gestion_id)) ? (esTallerC(c)
                 ? `<button class="btn btn-ghost btn-icon btn-sm" title="Respuesta del cliente (aceptó o sin respuesta → a facturar)" data-action="cerrar"><i data-lucide="circle-check"></i></button>`
                 : `<button class="btn btn-ghost btn-icon btn-sm" title="Cerrar cotización" data-action="cerrar"><i data-lucide="flag"></i></button>`) : ''}
               <button class="btn btn-ghost btn-icon btn-sm" title="Ver" data-action="detalle"><i data-lucide="eye"></i></button>

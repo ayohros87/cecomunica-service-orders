@@ -114,8 +114,11 @@
         : {
             // "Orden de venta" no existe como documento (glosario T2, auditoría UX 2026-09-28).
             act: 'Aceptada por el cliente',
+            // Marcada después de vencida (D12): la nota de cómo se cerró viaja
+            // en `aceptacion`, como en el taller.
             meta: fmtFechaAny(cot.fecha_conversion) + (rc?.respuesta === 'aceptada'
-              ? porEnlace + (rc.comentario ? ' — ' + rc.comentario : '') : ' · venta cerrada'),
+              ? porEnlace + (rc.comentario ? ' — ' + rc.comentario : '')
+              : ' · venta cerrada' + (ac?.nota ? ' — ' + ac.nota : '') + (ac?.por_email ? ' · anotado por ' + ac.por_email : '')),
           });
     }
     if (cot.facturacion?.estado === 'facturada') {
@@ -247,7 +250,7 @@
           ${soloLectura ? '' : botonAccionPrincipal(cot.estado)}
           ${soloLectura ? '' : '<button class="btn btn-ghost" id="btnDuplicar"><i data-lucide="copy"></i> Duplicar</button>'}
           ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada' || cot.estado === 'convertida') ? '<button class="btn btn-ghost" id="btnEnviar"><i data-lucide="send"></i> Reenviar al cliente</button>' : ''}
-          ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada' || (esTaller() && cot.estado === 'vencida' && !cot.gestion_id)) ? (esTaller()
+          ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada' || (cot.estado === 'vencida' && !cot.gestion_id)) ? (esTaller()
             ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#065F46; color:#fff; border-color:#065F46;"><i data-lucide="circle-check"></i> Respuesta del cliente</button>'
             : '<button class="btn btn-secondary" id="btnCerrar" style="background:#0B2A47; color:#fff; border-color:#0B2A47;"><i data-lucide="flag"></i> Cerrar cotización</button>') : ''}
           ${!soloLectura && CotState.esEditable(cot.estado) ? '<button class="btn btn-secondary" id="btnEditar"><i data-lucide="pencil"></i> Editar</button>' : ''}

@@ -677,8 +677,11 @@
   //     marcarla "Rechazada" — una mentira que además ensuciaba la tasa de
   //     cierre contando como perdida una oportunidad que sigue viva.
   //
-  // Devuelve Promise<{ estado, motivo } | null>. `motivo` solo llega con
-  // 'descartada' y nunca vacío: el botón no cierra la hoja sin texto.
+  // Devuelve Promise<{ estado, motivo, aceptacion? } | null>. `motivo` solo
+  // llega con 'descartada' y nunca vacío: el botón no cierra la hoja sin texto.
+  // `vencida` (D12, 2026-10-01): la validez venció sola y nadie tiene que
+  // hacer nada más; pero si el cliente la acepta después, el vendedor la marca
+  // Aceptada igual, anotando cómo se cerró (viaja en `aceptacion.nota`).
   function cerrarPrompt({ cotizacionId, total, totalTexto, cliente, taller = false, reposicion = false, vencida = false } = {}) {
     const esc = FMT.esc; // helper canónico (core/formatting.js)
     const importe = totalTexto ? esc(totalTexto) : (total != null ? window.FMT.money(total) : '');
@@ -690,7 +693,9 @@
           ${cotizacionId ? '<b>' + esc(cotizacionId) + '</b> · ' : ''}${esc(cliente || '')}${importe ? ' · ' + importe : ''}
         </p>
         <p style="margin:0 0 16px; font-size:13.5px; color:var(--fg-2); line-height:1.5;">
-          ¿Cómo terminó esta cotización? Solo las cotizaciones convertidas a venta cuentan en el "Monto cerrado" del tablero.
+          ${vencida
+            ? 'La validez ya venció. Si el cliente la aceptó después, márcala <b>Aceptada</b> y anota cómo se cerró; si no, no hace falta hacer nada más.'
+            : '¿Cómo terminó esta cotización? Solo las cotizaciones convertidas a venta cuentan en el "Monto cerrado" del tablero.'}
         </p>
         <div id="cpOpciones" style="display:flex; flex-direction:column; gap:10px;">
           <button type="button" class="btn btn-secondary" data-act="convertida"
@@ -703,16 +708,26 @@
             <i data-lucide="x-circle"></i>
             <span style="margin-left:8px;"><b>Rechazada</b> — el cliente declinó la cotización</span>
           </button>
-          <button type="button" class="btn btn-secondary" data-act="vencida"
+          ${vencida ? '' : `<button type="button" class="btn btn-secondary" data-act="vencida"
                   style="justify-content:flex-start; text-align:left;">
             <i data-lucide="hourglass"></i>
             <span style="margin-left:8px;"><b>Validez vencida</b> — pasó el plazo y el cliente no respondió</span>
-          </button>
+          </button>`}
           <button type="button" class="btn btn-secondary" data-act="otros"
                   style="justify-content:flex-start; text-align:left;">
             <i data-lucide="pencil"></i>
             <span style="margin-left:8px;"><b>Otro motivo</b> — se rehace con otra cantidad, cambió el alcance…</span>
           </button>
+        </div>
+        <div id="cpTarde" style="display:none;">
+          <label class="form-label" for="cpComo">¿Cómo se cerró la venta después de vencida?</label>
+          <textarea id="cpComo" class="form-input form-textarea" rows="2" maxlength="200"
+                    placeholder="Ej.: el cliente confirmó por correo el 3 de octubre; se mantuvo el precio."></textarea>
+          <p id="cpErrorTarde" style="display:none; margin:8px 0 0; font-size:12.5px; color:#991B1B;"></p>
+          <div style="display:flex; gap:8px; margin-top:12px;">
+            <button type="button" class="btn btn-primary" data-act="guardar-tarde">Marcar Aceptada</button>
+            <button type="button" class="btn btn-ghost" data-act="volver">Volver</button>
+          </div>
         </div>
         <div id="cpOtros" style="display:none;">
           <label class="form-label" for="cpMotivo">¿Por qué se cierra?</label>
@@ -731,8 +746,21 @@
       onMount: (root, api) => {
         const opciones = root.querySelector('#cpOpciones');
         const otros    = root.querySelector('#cpOtros');
+        const tarde    = root.querySelector('#cpTarde');
+        const taComo   = root.querySelector('#cpComo');
+        const errTarde = root.querySelector('#cpErrorTarde');
         const ta       = root.querySelector('#cpMotivo');
         const error    = root.querySelector('#cpError');
+        const guardarTarde = () => {
+          const nota = (taComo.value || '').trim();
+          if (nota.length < 5) {
+            errTarde.textContent = 'Anota cómo se cerró — es lo que sostiene esta venta sobre una cotización vencida.';
+            errTarde.style.display = '';
+            taComo.focus();
+            return;
+          }
+          api.close({ estado: 'convertida', motivo: '', aceptacion: { medio: 'otro', nota } });
+        };
         const guardar = () => {
           const motivo = (ta.value || '').trim();
           // Un motivo de tres letras no le sirve a nadie que lea el historial
@@ -750,14 +778,19 @@
           if (!act) return;
           // 'vencida' entra aquí (auditoría UX 2026-09-28, remate): antes vivía
           // aparte en "Cambiar estado" y eran dos caminos para cerrar.
+          if (act === 'convertida' && vencida) { opciones.style.display = 'none'; tarde.style.display = ''; taComo.focus(); return; }
           if (act === 'convertida' || act === 'rechazada' || act === 'vencida') { api.close({ estado: act, motivo: '' }); return; }
           if (act === 'otros')  { opciones.style.display = 'none'; otros.style.display = ''; ta.focus(); return; }
-          if (act === 'volver') { otros.style.display = 'none'; opciones.style.display = ''; error.style.display = 'none'; return; }
+          if (act === 'volver') { otros.style.display = 'none'; tarde.style.display = 'none'; opciones.style.display = ''; error.style.display = 'none'; errTarde.style.display = 'none'; return; }
           if (act === 'guardar-otros') guardar();
+          if (act === 'guardar-tarde') guardarTarde();
         });
         // Ctrl/⌘+Enter cierra desde el propio textarea.
         ta.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); guardar(); }
+        });
+        taComo.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); guardarTarde(); }
         });
       },
       onAction: () => null,
