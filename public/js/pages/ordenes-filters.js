@@ -644,8 +644,13 @@ async function asegurarOrdenesDeCorreo() {
       .filter(id => !(APP.state.orders || []).some(o => o.ordenId === id));
     if (faltantes.length) {
       const traidas = await OrdenesService.listByIds(faltantes);
-      if (traidas.length) {
-        APP.state.orders = [...(APP.state.orders || []), ...traidas];
+      // La primera página en vivo puede llegar MIENTRAS se espera: si la orden
+      // pedida es reciente ya está en la lista y se pintaba dos veces
+      // ("Total: 2" con un solo id). Se filtra contra la lista de AHORA.
+      const yaHay = new Set((APP.state.orders || []).map(o => o.ordenId));
+      const nuevas = traidas.filter(o => !yaHay.has(o.ordenId));
+      if (nuevas.length) {
+        APP.state.orders = [...(APP.state.orders || []), ...nuevas];
         APP.state.chipBase = APP.state.orders;
       }
     }
