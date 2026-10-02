@@ -122,7 +122,7 @@ Object.assign(window.Centro, {
     document.getElementById('btnMas').classList.add('hidden');
     const n = visibles.length;
     document.getElementById('cgResumen').textContent =
-      `${n} cliente${n === 1 ? '' : 's'}${this.soloActivos ? ' activos' : ''} en tu cartera`;
+      `${n} cliente${n === 1 ? '' : 's'}${this.soloActivos ? (n === 1 ? ' activo' : ' activos') : ''} en tu cartera`;
     if (window.lucide?.createIcons) lucide.createIcons();
   },
 
@@ -182,8 +182,10 @@ Object.assign(window.Centro, {
       }
       document.getElementById('btnMas').classList.toggle('hidden', !lastDoc);
       const n = cont.querySelectorAll('.cg-row').length;
+      // "1 cliente activos (hay más)" con un resultado (auditoría de módulos
+      // 2026-09-30, B2): concordancia, y "(hay más)" solo si la página vino llena.
       document.getElementById('cgResumen').textContent =
-        `${n} cliente${n === 1 ? '' : 's'}${this.soloActivos ? ' activos' : ''}${this.cartera === 'mios' ? ' en tu cartera' : ''}${lastDoc ? ' (hay más)' : ''}`;
+        `${n} cliente${n === 1 ? '' : 's'}${this.soloActivos ? (n === 1 ? ' activo' : ' activos') : ''}${this.cartera === 'mios' ? ' en tu cartera' : ''}${lastDoc ? ' (hay más)' : ''}`;
       if (window.lucide?.createIcons) lucide.createIcons();
     }
   },

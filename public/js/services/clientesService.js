@@ -25,12 +25,38 @@ function _tokensFrom(text){
 function _rucNorm(s){
   return String(s || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
 }
+// Prefijos (≥ 4) de un RUC compacto: "15570307122021" → 1557, 15570, … Así un
+// RUC a medias ("155703071") también encuentra (auditoría de módulos
+// 2026-09-30, R1). Un RUC entero son ~11 tokens más por ficha.
+function _rucPrefijos(compacto){
+  const s = String(compacto || "").toLowerCase();
+  const out = [];
+  for (let i = 4; i <= s.length; i++) out.push(s.slice(0, i));
+  return out;
+}
+// Letras que puede traer un RUC/cédula panameño entre guiones.
+const _RUC_LETRAS = /^(nt|av|pi|e|n|pe)$/;
+// El término de búsqueda, partido IGUAL que los tokens guardados: por todo lo
+// que no sea letra o número. "PRUEBA-AUDIT" → [prueba, audit]; antes se
+// partía por espacios y "prueba-audit" nunca era un token (R1).
+// Un RUC tecleado como en el documento ("155799999-2-2026", "8-NT-1-21875")
+// se busca COMPACTO ("15579999922026", "8nt121875"), que es como se guarda.
+function _palabras(term){
+  const t = _norm(term);
+  const partes = t.split(/[^a-z0-9]+/).filter(Boolean);
+  if (partes.length <= 1) return partes;
+  const compacto = partes.join("");
+  const pareceRuc = !/\s/.test(t) && /^\d/.test(compacto) && /\d{4,}/.test(compacto)
+    && partes.every(p => /^\d+$/.test(p) || _RUC_LETRAS.test(p));
+  return pareceRuc ? [compacto] : partes;
+}
 
 const ClientesService = {
   // ── Pure helpers exposed for callers ─────────────────────────────────
   norm: _norm,
   tokensFrom: _tokensFrom,
   rucNorm: _rucNorm,
+  palabrasBusqueda: _palabras,
 
   // Build the searchTokens array from a cliente object.
   buildSearchTokens(cliente){
@@ -43,8 +69,13 @@ const ClientesService = {
       for (const x of cliente.tags) _tokensFrom(x).forEach(k => t.add(k));
     }
     if (cliente.ruc){
-      t.add(String(cliente.ruc).replace(/\D/g, ""));
-      t.add(_rucNorm(cliente.ruc).toLowerCase());   // la búsqueda llega en minúsculas
+      const digitos = String(cliente.ruc).replace(/\D/g, "");
+      const compacto = _rucNorm(cliente.ruc).toLowerCase();   // la búsqueda llega en minúsculas
+      t.add(digitos);
+      t.add(compacto);
+      // Con y sin letras, por prefijos: "155703" y "8nt12" encuentran (R1).
+      _rucPrefijos(digitos).forEach(k => t.add(k));
+      if (compacto !== digitos) _rucPrefijos(compacto).forEach(k => t.add(k));
     }
     if (cliente.rucdv_norm){
       t.add(cliente.rucdv_norm.toLowerCase());
@@ -300,7 +331,10 @@ const ClientesService = {
   // corrige con el servidor. Sin caché devuelve vacío, no falla.
   async listClientesPage({ term = '', onlyActive = false, cursorDoc = null, limit = 20, source = null } = {}) {
     const db = firebase.firestore();
-    const words = _norm(term).split(/\s+/).filter(Boolean);
+    const words = _palabras(term);
+    // Página corta = no hay más: antes el cursor salía igual y el directorio
+    // decía "1 cliente (hay más)" con un solo resultado (auditoría 2026-09-30, B2).
+    const cursorDe = (snap) => (snap.empty || snap.size < limit) ? null : snap.docs[snap.docs.length - 1];
 
     // Sin término: lista ordenada por nombre.
     if (words.length === 0) {
@@ -310,7 +344,7 @@ const ClientesService = {
       const snap = source ? await q.get({ source }) : await q.get();
       return {
         docs: snap.docs.map(d => ({ id: d.id, ...d.data() })),
-        lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1],
+        lastDoc: cursorDe(snap),
         count: snap.size,
       };
     }
@@ -326,7 +360,7 @@ const ClientesService = {
       const snap = await q.get();
       return {
         docs: snap.docs.map(d => ({ id: d.id, ...d.data() })),
-        lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1],
+        lastDoc: cursorDe(snap),
         count: snap.size,
       };
     }
@@ -376,7 +410,7 @@ const ClientesService = {
   // Count all matching clients via paginated scan (no data loaded).
   async countClientes({ term = '', onlyActive = false } = {}) {
     const db = firebase.firestore();
-    const words = _norm(term).split(/\s+/).filter(Boolean);
+    const words = _palabras(term);
 
     // Sin término / una palabra: agregación count() en el servidor (1 lectura).
     // Si el SDK/índice no la soporta, cae al escaneo por lotes.

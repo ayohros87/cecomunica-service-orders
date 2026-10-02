@@ -388,8 +388,12 @@ async function updateStats(term, onlyActive, total){
   if(!$t) return;
   try{
     if(onlyActive){
-      // El total ya está filtrado a activos.
-      $t.textContent = total; $a.textContent = total; $i.textContent = 0;
+      // El total ya está filtrado a activos; los inactivos se cuentan aparte
+      // (decía "0 inactivos" con 207 — auditoría de módulos 2026-09-30, B1).
+      $t.textContent = total; $a.textContent = total; $i.textContent = '…';
+      const todos = await ClientesService.countClientes({ term, onlyActive: false });
+      $t.textContent = todos;
+      $i.textContent = Math.max(0, todos - total);
       return;
     }
     $t.textContent = total;
