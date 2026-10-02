@@ -276,6 +276,14 @@ table tbody tr:nth-child(4n+4):hover { background: #f0f9ff; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Franja de contexto (08 P8): cliente y contrato son enlaces a su módulo. */
+.orden-ctx-link { color: var(--navy); text-decoration: none; border-bottom: 1px dashed rgba(0,116,172,.45); }
+.orden-ctx-link:hover { border-bottom-style: solid; color: var(--accent); }
+.orden-ctx-link--mono { font-family: var(--font-mono, "IBM Plex Mono", monospace); font-size: 12px; white-space: nowrap; }
+/* En la tarjeta del teléfono el contrato se suma a la fila 3: que baje de línea
+   en vez de partir la fecha en cuatro renglones. */
+.card-contrato__tier3 { flex-wrap: wrap; }
+.card-contrato__tier3 > span:first-child { white-space: nowrap; }
 
 .resumen-compacto {
   display: flex;

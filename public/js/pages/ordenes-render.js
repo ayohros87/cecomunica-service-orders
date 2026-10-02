@@ -257,7 +257,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     //          + ··· overflow (Fotos, Notas, Imprimir, Editar, Eliminar)
     card.innerHTML = `
       <div class="card-contrato__tier1">
-        <div class="card-contrato__cliente">${nombreClienteDe(ordenData)}</div>
+        <div class="card-contrato__cliente">${_enlacesContexto(ordenData).cliente}</div>
         <span class="chip-estado ${getEstadoClass(estadoDisplay, ordenData)}" title="${estadoTooltip(estadoDisplay, ordenData)}">${estadoCompacto(estadoDisplay, ordenData)}</span>
       </div>
       <div class="card-contrato__tier2">
@@ -271,6 +271,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
       <div class="card-contrato__tier3">
         <span>Inicio: ${formatFecha(ordenData.fecha_creacion)}${edadChip(ordenData, estado)}</span>
         ${progresoHtml}
+        ${(() => { const k = _enlacesContexto(ordenData); return k.contrato ? `<span style="font-size:12px;">${k.contrato}</span>` : ''; })()}
         ${ordenData.gestion?.id ? `<a class="orden-gestion-link" data-stop-propagation="true" style="color:#1d4ed8;text-decoration:none;font-size:12px;"
             href="../clientes/centro.html?id=${encodeURIComponent(ordenData.cliente_id || '')}&g=${encodeURIComponent(String(ordenData.gestion.id))}"
             title="Abrir el expediente de la gestión">Gestión ${escapeHtml(String(ordenData.gestion.id))}</a>` : ''}
@@ -1760,9 +1761,35 @@ window.renderEmptyState = renderEmptyState;
 // oculta casi toda); ahora SOLO la llama _toggleOrdenRow al primer expand
 // (y al re-expandir tras un re-render, vía renderOrdersList). Devuelve el
 // <tr class="filaDetalle"> listo; renderEquiposTabla llena .equipos-container.
+// Franja de contexto de la orden (auditoría de módulos 2026-09-30, 08 P8):
+// el detalle no enlazaba al cliente ni al contrato — cada salto era Ctrl+K y
+// teclear. Cliente → su ficha en el Centro; contrato → el Centro con el
+// contrato abierto (?contrato=). Solo para los roles que ven el Centro
+// (MODULOS, misma fuente que el rail): el técnico sigue viendo texto. Misma
+// pestaña (Alberto no pidió pestaña nueva).
+function _enlacesContexto(ordenData) {
+  const rol = APP.state.userRole || '';
+  const alCentro = !!(window.MODULOS && MODULOS.puedeVer(rol, 'centro') && ordenData.cliente_id);
+  const nombre = escapeHtml(nombreClienteDe(ordenData));
+  const base = `../clientes/centro.html?id=${encodeURIComponent(ordenData.cliente_id || '')}`;
+  const cliente = alCentro
+    ? `<a class="cliente-nombre orden-ctx-link" href="${base}" data-stop-propagation="true" title="Abrir el cliente en el Centro de gestión">${nombre}</a>`
+    : `<span class="cliente-nombre">${nombre}</span>`;
+  const c = ordenData.contrato || {};
+  const numero = c.contrato_id || '';
+  let contrato = '';
+  if (c.aplica === true && numero) {
+    contrato = alCentro && c.contrato_doc_id
+      ? `<a class="orden-ctx-link orden-ctx-link--mono" href="${base}&contrato=${encodeURIComponent(c.contrato_doc_id)}" data-stop-propagation="true" title="Abrir el contrato ${escapeHtml(numero)} en el Centro de gestión">${escapeHtml(numero)}</a>`
+      : `<span class="orden-ctx-link--mono" title="Contrato">${escapeHtml(numero)}</span>`;
+  }
+  return { cliente, contrato };
+}
+
 function _crearFilaDetalle(ordenId, ordenData, equiposNormalizados) {
   const estado = (ordenData.estado_reparacion || "POR ASIGNAR").toUpperCase();
   const ordenCerrada = estado.includes('ENTREGAD') || estado.includes('ENTREGADA');
+  const ctx = _enlacesContexto(ordenData);
 
   const filaDetalle = document.createElement("tr");
   filaDetalle.style.display = "none";
@@ -1777,7 +1804,8 @@ function _crearFilaDetalle(ordenId, ordenData, equiposNormalizados) {
           <div class="header-col-izq header-line" title="Cliente: ${escapeHtml(nombreClienteDe(ordenData))} · Técnico: ${escapeHtml(ordenData.tecnico_asignado || 'Sin asignar')}">
             <span class="orden-numero"><strong>Orden ${ordenId}</strong></span>
             <span class="separador">•</span>
-            <span class="cliente-nombre">${escapeHtml(nombreClienteDe(ordenData))}</span>
+            ${ctx.cliente}
+            ${ctx.contrato ? `<span class="separador">•</span>${ctx.contrato}` : ''}
             <span class="separador">•</span>
             <div class="progreso-intervenciones-inline ${ordenCerrada ? 'contexto-historico' : 'contexto-activo'}" data-orden-id="${ordenId}">
               <span class="icon"><i data-lucide="wrench"></i></span>

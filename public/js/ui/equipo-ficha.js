@@ -126,11 +126,20 @@ window.EquipoFicha = {
     const condicionHtml = await this._condicionHtml(eq.serial || eq.serial_norm);
 
     const asig = eq.asignacion || null;
+    // Franja de contexto (auditoría de módulos 2026-09-30, 08 P8): cliente y
+    // contrato abren en el Centro de gestión —la pantalla de trabajo— para
+    // los roles que lo ven (MODULOS, misma fuente que el rail); los demás
+    // siguen a la ficha de solo lectura y al archivo de contratos.
+    const rolActual = window.userRole || (window.Sesion?.cacheAnonima?.()?.rol) || '';
+    const alCentro = !!(asig && asig.cliente_id && window.MODULOS && MODULOS.puedeVer(rolActual, 'centro'));
+    const hrefCentro = alCentro ? `/clientes/centro.html?id=${encodeURIComponent(asig.cliente_id)}` : '';
     const linkCliente = asig && asig.cliente_id
-      ? `<a href="/clientes/editar.html?id=${encodeURIComponent(asig.cliente_id)}">${esc(asig.cliente_nombre || '—')}</a>`
+      ? `<a href="${hrefCentro || `/clientes/editar.html?id=${encodeURIComponent(asig.cliente_id)}`}">${esc(asig.cliente_nombre || '—')}</a>`
       : esc((asig && asig.cliente_nombre) || '—');
     const linkContrato = asig && asig.contrato_id
-      ? `<a href="/contratos/index.html?buscar=${encodeURIComponent(asig.contrato_id)}">${esc(asig.contrato_id)}</a>` : '—';
+      ? `<a href="${alCentro && asig.contrato_doc_id
+          ? `${hrefCentro}&contrato=${encodeURIComponent(asig.contrato_doc_id)}`
+          : `/contratos/index.html?buscar=${encodeURIComponent(asig.contrato_id)}`}">${esc(asig.contrato_id)}</a>` : '—';
     const linkOrden = eq.orden_actual_id
       ? `<a href="/ordenes/index.html?ids=${encodeURIComponent(eq.orden_actual_id)}">${esc(eq.orden_actual_id)}</a>` : '—';
 
