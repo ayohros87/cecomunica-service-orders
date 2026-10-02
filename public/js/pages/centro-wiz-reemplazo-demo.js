@@ -24,15 +24,23 @@ Object.assign(window.Centro, {
     }
     return this.modelos;
   },
-  // <select> del catálogo. Preselecciona por id del catálogo o por label.
+  // <select> del catálogo. Preselecciona por id del catálogo o por label;
+  // sin dato, arranca en "— Modelo —" (auditoría de módulos 2026-09-30, B3:
+  // nunca un modelo por defecto). El label parcial solo cuenta si apunta a UN
+  // modelo: "AP32X" casaba con "HYTERA AP32X" y "Hytera AP32X R" y se quedaba
+  // con el primero del orden alfabético.
   _selModelo(attrs, selId, selLabel) {
     const up = String(selLabel || '').trim().toUpperCase();
-    const opts = (this.modelos || []).map(m => {
-      const sel = (selId && m.id === selId)
-        || (!selId && up && (m.label.toUpperCase() === up || (up && m.label.toUpperCase().includes(up))));
-      return `<option value="${this.esc(m.id)}" ${sel ? 'selected' : ''}>${this.esc(m.label)}</option>`;
-    }).join('');
-    return `<select class="form-select" ${attrs}><option value="">— Modelo —</option>${opts}</select>`;
+    const lista = this.modelos || [];
+    let elegido = selId && lista.some(m => m.id === selId) ? selId : null;
+    if (!elegido && !selId && up) {
+      const exacto = lista.find(m => m.label.toUpperCase() === up);
+      const parciales = exacto ? [] : lista.filter(m => m.label.toUpperCase().includes(up));
+      elegido = exacto ? exacto.id : (parciales.length === 1 ? parciales[0].id : null);
+    }
+    const opts = lista.map(m =>
+      `<option value="${this.esc(m.id)}" ${m.id === elegido ? 'selected' : ''}>${this.esc(m.label)}</option>`).join('');
+    return `<select class="form-select" ${attrs}><option value="" ${elegido ? '' : 'selected'}>— Modelo —</option>${opts}</select>`;
   },
   _modeloDeSelect(sel) {
     const id = sel?.value || '';
