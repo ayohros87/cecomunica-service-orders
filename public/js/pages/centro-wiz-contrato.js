@@ -418,6 +418,8 @@ Object.assign(window.Centro, {
       </div>
       </div>`,
       footer: `
+        <button type="button" id="wcGuardarMotivo" class="btn btn-ghost cg-act hidden" style="color:var(--warn-deep, #92400E); font-size:12.5px;"
+          onclick="Centro._wcIrAlCheck()" title="Ir al paso 5">Falta validar el representante legal (paso 5) ↓</button>
         <span class="sep"></span>
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
         <button class="btn btn-primary" id="wcGuardar" onclick="Centro.crearContrato()">Guardar contrato</button>`,

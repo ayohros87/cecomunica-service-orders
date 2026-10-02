@@ -478,8 +478,19 @@ Object.assign(window.Centro, {
     const btn = document.getElementById('wcGuardar');
     const chk = document.getElementById('wcRepValidado');
     if (!btn) return;
-    btn.disabled = !(chk && chk.checked);
-    btn.title = btn.disabled ? 'Marca la validación del representante legal para continuar' : '';
+    const falta = !(chk && chk.checked);
+    btn.disabled = falta;
+    btn.title = falta ? 'Marca la validación del representante legal para continuar' : '';
+    // El motivo del gris, al lado del botón y con camino (auditoría de
+    // módulos 2026-09-30, C4): el check vivía 878 px más abajo en un cuerpo
+    // de 565 y el clic en el botón gris era silencio.
+    document.getElementById('wcGuardarMotivo')?.classList.toggle('hidden', !falta);
+  },
+  _wcIrAlCheck() {
+    const chk = document.getElementById('wcRepValidado');
+    if (!chk) return;
+    chk.closest('.cg-paso, label')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => chk.focus(), 350);
   },
 
   // Contexto que hace útil el check: la última validación estampada en la
