@@ -20,6 +20,17 @@ window.FinanzasNav = {
     { id: 'comisiones', label: 'Comisiones',          icon: 'badge-dollar-sign', href: '/facturacion/comisiones.html' },
     { id: 'catalogo',   label: 'Catálogo',            icon: 'book-open',    href: '/inventario/modelos.html' },
     { id: 'quickbooks', label: 'QuickBooks',          icon: 'link-2',       href: '/facturacion/clientes-qbo.html' },
+  ],
+
+  // Pestañas de un futuro que no ha llegado (decisión 14 de Alberto,
+  // 1-oct-2026): "Facturará la app" (0 contratos activados en 3 meses),
+  // "Emisión desde la app" (la app todavía no emite) y "Panorama" (números
+  // comerciales con nombre de factura; a contabilidad le reventaba por reglas)
+  // ocupaban el 43 % de la barra y competían con la Bandeja, que es lo que se
+  // usa. Se ESCONDEN para todos hasta que exista la emisión: las páginas
+  // siguen vivas por URL y el código se queda. Para reactivarlas, muévelas de
+  // vuelta a TABS.
+  TABS_FUTURO: [
     { id: 'activacion', label: 'Facturará la app',    icon: 'zap',          href: '/facturacion/activacion.html' },
     { id: 'emision',    label: 'Emisión desde la app', icon: 'file-output', href: '/facturacion/emision.html' },
     // ?volver=finanzas: financiero.html vive en el panel de administración y su
@@ -36,7 +47,11 @@ window.FinanzasNav = {
   // render('catalogo', 'modelos') — sub solo aplica dentro de Catálogo.
   render(active, sub) {
     if (!window.WorkspaceTabs) return;
-    WorkspaceTabs.render('wsTabs-mount', { active, tabs: this.TABS });
+    // Una página escondida (activacion/emision/panorama, abierta por URL)
+    // pinta la barra con su propia pestaña al final, para que no quede sin
+    // nombre ni sin regreso al espacio.
+    const extra = this.TABS_FUTURO.filter(t => t.id === active);
+    WorkspaceTabs.render('wsTabs-mount', { active, tabs: this.TABS.concat(extra) });
     if (active === 'catalogo' && document.getElementById('wsSubTabs-mount')) {
       WorkspaceTabs.render('wsSubTabs-mount', { active: sub, tabs: this.SUB_CATALOGO, variant: 'sub' });
     }

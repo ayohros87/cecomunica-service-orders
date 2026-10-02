@@ -305,7 +305,7 @@ window.FacturacionBandeja = (() => {
     }
     const links = [];
     if (c.cotizacion_doc_id) links.push(`<a class="btn btn-sm" href="../cotizaciones/detalle-cotizacion.html?id=${encodeURIComponent(c.cotizacion_doc_id)}"><i data-lucide="receipt"></i> Ver la cotización</a>`);
-    if (a.tipo === 'cotizacion_servicio' && a.orden_id) links.push(`<a class="btn btn-sm" href="../ordenes/editar-orden.html?id=${encodeURIComponent(a.orden_id)}"><i data-lucide="wrench"></i> Ver la orden</a>`);
+    if (a.tipo === 'cotizacion_servicio' && a.orden_id) links.push(`<a class="btn btn-sm" href="../ordenes/index.html?ids=${encodeURIComponent(a.orden_id)}"><i data-lucide="wrench"></i> Ver la orden</a>`);
     if (a.contrato_doc_id) links.push(`<a class="btn btn-sm" href="../contratos/documento.html?id=${encodeURIComponent(a.contrato_doc_id)}"><i data-lucide="file-text"></i> Ver el contrato</a>`);
     if (a.gestion_id && a.cliente_id) links.push(`<a class="btn btn-sm" href="../clientes/centro.html?id=${encodeURIComponent(a.cliente_id)}&g=${encodeURIComponent(a.gestion_id)}"><i data-lucide="folder-open"></i> Ver el expediente</a>`);
     if (a.cliente_id) links.push(`<a class="btn btn-sm" href="../clientes/centro.html?id=${encodeURIComponent(a.cliente_id)}"><i data-lucide="user"></i> Ficha del cliente</a>`);
@@ -570,7 +570,12 @@ window.FacturacionBandeja = (() => {
     document.getElementById('fbBuscar').addEventListener('input', (ev) => { busqueda = ev.target.value.trim(); render(); });
     document.getElementById('fbVerHechos').addEventListener('change', async (ev) => {
       verCerrados = ev.target.checked;
-      if (verCerrados && !cerrados.length) { try { cerrados = await S().listCerrados(); } catch (e) { Toast.show(e.message, 'bad'); } }
+      // SIEMPRE del servidor (auditoría de módulos 2026-09-30, R2): antes solo
+      // consultaba si `cerrados` estaba vacío, y al marcar el último paso de un
+      // aviso la fila se metía ahí localmente — "Hechos y no aplica (1)" cuando
+      // en producción había 45, justo cuando uno quiere comprobar "¿ya cerré
+      // esto?".
+      if (verCerrados) { try { cerrados = await S().listCerrados(); } catch (e) { Toast.show(e.message, 'bad'); } }
       render();
     });
     document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && popAbierto) { popAbierto = null; render(); } });
