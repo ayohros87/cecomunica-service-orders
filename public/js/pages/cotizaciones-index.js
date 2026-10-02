@@ -34,23 +34,33 @@
   function fmtFechaCorta(iso) { return FMT.dateShort(iso); } // delega en el helper canónico
 
   // ── Carga ─────────────────────────────────────────────────────
+  // UNA sola lectura del alcance (auditoría de módulos 2026-09-30, C1/L1 ·
+  // propuesta 4): antes la página traía 30 filas y luego hacía 7 count() × 2
+  // bloques para las tarjetas (36 viajes), y tarjetas y segmentos contaban
+  // cosas distintas ("12 Enviadas" arriba, "Enviada 5" abajo). Con ~150
+  // cotizaciones en total (72 al mes), bajar el alcance completo en un viaje
+  // es más barato en tiempo y deja un solo número para cada cosa: tarjetas,
+  // segmentos y tabla cuentan sobre la MISMA lista en memoria. Si algún día
+  // el alcance pasa de TAM_ALCANCE, "Cargar más" sigue ahí y el subtítulo
+  // dice que se ven las más recientes.
+  const TAM_ALCANCE = 400;
+  let todoCargado = false;  // la última página vino incompleta: el alcance está entero en memoria
   async function cargarCotizaciones(esInicial = true) {
     if (isLoading) return;
     isLoading = true;
     const btn = $('btnCargarMas');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i data-lucide="loader"></i> Cargando...'; }
-    if (esInicial) { cotizaciones = []; lastDoc = null; }
+    if (esInicial) { cotizaciones = []; lastDoc = null; todoCargado = false; }
 
     // Vendedor (forzado a "solo mías"): filtro EN EL SERVIDOR — antes
     // descargaba las de toda la empresa y veía 3-4 suyas por página de 30
     // (además de privacidad: docs ajenos en su navegador). El toggle de
     // admin/supervisor sigue siendo client-side sobre lo cargado.
     const uidFiltro = (userRol === ROLES.VENDEDOR && !esSupervisor) ? userUid : null;
-    // Rango de fechas (auditoría UX 2026-09-28 §4.5 #12): va al servidor sobre
-    // fecha_creacion, con el mismo índice que la paginación.
-    const { desde, hasta } = rangoFechas();
-    if (esInicial) { kpiSrv = null; _busqUltima = ''; }
-    const args = { lastDoc, limit: 30, creadoPorUid: uidFiltro, desde, hasta };
+    // El rango de fechas se aplica en memoria (getFiltradas) sobre el alcance
+    // ya cargado: cambiarlo no vuelve al servidor.
+    if (esInicial) { _busqUltima = ''; }
+    const args = { lastDoc, limit: TAM_ALCANCE, creadoPorUid: uidFiltro };
     // Primera página: pintar YA con la caché local de Firestore y repintar con
     // el servidor (2026-09-30). Sin caché viene vacía y se espera.
     if (esInicial && !lastDoc) {
@@ -62,11 +72,12 @@
     const { docs, lastDoc: cursor } = await CotizacionesService.listCotizaciones(args);
     if (esInicial && !args.lastDoc) cotizaciones.length = 0;
     if (docs.length) { lastDoc = cursor; cotizaciones.push(...docs); }
+    todoCargado = docs.length < TAM_ALCANCE;
     render();
 
     if (btn) {
       btn.disabled = false;
-      btn.style.display = docs.length ? 'inline-flex' : 'none';
+      btn.style.display = todoCargado ? 'none' : 'inline-flex';
       btn.innerHTML = '<i data-lucide="chevron-down"></i> Cargar más';
     }
     isLoading = false;
@@ -74,26 +85,21 @@
   }
 
   // ── Filtros / orden ───────────────────────────────────────────
-  function getFiltradas() {
+  // El ALCANCE es lo que comparten tarjetas, segmentos y tabla: lo cargado
+  // menos eliminadas, acotado por "solo mías", tipo (Taller/Ventas), rango de
+  // fechas y texto. El segmento de estado se aplica DESPUÉS, solo a la tabla,
+  // y por eso el número de cada segmento es exactamente lo que la tabla
+  // muestra al tocarlo.
+  //   conEliminadas → incluye las eliminadas (solo la tabla, con el toggle)
+  //   sinTipo       → no aplica Taller/Ventas (para contar los tres tipos)
+  function alcance({ conEliminadas = false, sinTipo = false } = {}) {
     const term = ($('filtroTexto').value || '').trim().toLowerCase();
-    const mostrarEliminadas = $('toggleEliminadas').checked;
     let list = cotizaciones.slice();
-    if (!mostrarEliminadas) list = list.filter(c => !c.deleted);
+    if (!conEliminadas) list = list.filter(c => !c.deleted);
     // Vendedor solo ve las propias (forzado). Admin con toggle.
     if (soloMias) list = list.filter(c => c.creado_por_uid === userUid);
     if (soloPorAprobar) list = list.filter(c => c.requiere_aprobacion === true && (c.estado || 'borrador') === 'borrador');
-    list = list.filter(pasaTipo);
-    // Los dos últimos segmentos no filtran por estado sino por FACTURACIÓN: es
-    // el control que el taller llevaba a mano ("cuáles ya se facturaron y
-    // cuáles no"). Solo aplican a cotizaciones de taller, que son las únicas
-    // que abren fila en la bandeja al entregarse la orden.
-    if (filtroEstado === 'por_facturar')      list = list.filter(c => facturacionEstado(c) === 'pendiente');
-    else if (filtroEstado === 'facturadas')   list = list.filter(c => facturacionEstado(c) === 'facturada');
-    // 'activas' (señal S7 del home): lo que todavía está en juego.
-    else if (filtroEstado === 'activas')      list = list.filter(esActiva);
-    else if (filtroEstado !== 'todas')        list = list.filter(c => (c.estado || 'borrador') === filtroEstado);
-    // El rango también se aplica aquí: lo que entra por la búsqueda por tokens
-    // o por "activas" no pasó por el filtro de fechas del servidor.
+    if (!sinTipo) list = list.filter(pasaTipo);
     const { desde, hasta } = rangoFechas();
     if (desde || hasta) {
       list = list.filter(c => {
@@ -107,6 +113,20 @@
         return blob.toLowerCase().includes(term);
       });
     }
+    return list;
+  }
+
+  function getFiltradas() {
+    let list = alcance({ conEliminadas: $('toggleEliminadas').checked });
+    // Los dos últimos segmentos no filtran por estado sino por FACTURACIÓN: es
+    // el control que el taller llevaba a mano ("cuáles ya se facturaron y
+    // cuáles no"). Solo aplican a cotizaciones de taller, que son las únicas
+    // que abren fila en la bandeja al entregarse la orden.
+    if (filtroEstado === 'por_facturar')      list = list.filter(c => facturacionEstado(c) === 'pendiente');
+    else if (filtroEstado === 'facturadas')   list = list.filter(c => facturacionEstado(c) === 'facturada');
+    // 'activas' (señal S7 del home): lo que todavía está en juego.
+    else if (filtroEstado === 'activas')      list = list.filter(esActiva);
+    else if (filtroEstado !== 'todas')        list = list.filter(c => (c.estado || 'borrador') === filtroEstado);
     list.sort((a, b) => {
       let av, bv;
       if (sortKey === 'total') { av = Number(a.total || 0); bv = Number(b.total || 0); }
@@ -132,14 +152,14 @@
     if (avisoPA) avisoPA.style.display = soloPorAprobar ? '' : 'none';
     $('emptyState').style.display = filtradas.length ? 'none' : '';
     $('footerResumen').textContent = filtradas.length + ' de ' + cotizaciones.length + ' cotizaciones';
-    $('headerSubtitle').textContent = cotizaciones.length + ' cotizaciones cargadas';
+    $('headerSubtitle').textContent = cotizaciones.length + (todoCargado ? ' cotizaciones' : ' cotizaciones · las más recientes; "Cargar más" trae el resto');
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
   function renderTipo() {
     const wrap = $('tipoSeg');
     if (!wrap) return;
-    const base = cotizaciones.filter(c => !c.deleted && (!soloMias || c.creado_por_uid === userUid));
+    const base = alcance({ sinTipo: true });
     const n = { todas: base.length, taller: base.filter(esTallerC).length };
     n.ventas = n.todas - n.taller;
     wrap.innerHTML = [['taller', 'Taller'], ['ventas', 'Ventas'], ['todas', 'Todas']].map(([k, l]) => `
@@ -151,11 +171,10 @@
   function renderSegments() {
     const wrap = $('segments');
     if (!wrap) return;
-    // Los conteos respetan los mismos filtros que la tabla (soloMias + visibles),
-    // para que el segmento "Borrador 3" siempre coincida con lo que muestra el listado
-    // al hacer click. Antes el segmento contaba globalmente y la tabla filtraba por
-    // vendedor → "Borrador 3" vs "Sin resultados".
-    const base = cotizaciones.filter(c => !c.deleted && (!soloMias || c.creado_por_uid === userUid) && pasaTipo(c));
+    // Los conteos salen del MISMO alcance que la tabla y las tarjetas, para
+    // que el segmento "Borrador 3" siempre coincida con lo que muestra el
+    // listado al hacer click (y con la tarjeta de arriba).
+    const base = alcance();
     const counts = { todas: base.length };
     CotState.ESTADO_ORDEN.forEach(e => {
       counts[e] = base.filter(c => (c.estado || 'borrador') === e).length;
@@ -188,135 +207,65 @@
     `).join('');
   }
 
-  // ── KPIs del servidor (auditoría UX 2026-09-28 §4.5 #12) ─────────
-  // Antes salían de lo CARGADO (páginas de 30) y el subtítulo decía "de las
-  // N cargadas" para que el número no pareciera absoluto (P0 #20). Ahora son
-  // count()/sum() sobre TODAS las del alcance (CotAgg, puente modular del
-  // entry): el mismo alcance que la tabla (soloMias) y el mismo corte por tipo
-  // (Taller = origen 'orden'; Ventas = todas menos taller). Lo cargado sigue
-  // siendo el respaldo mientras llegan o si la agregación falla. El rango de
-  // fechas NO los recorta: son el histórico completo, y el subtítulo lo dice.
-  // Solo igualdades (deleted, creado_por_uid, estado, origen…): Firestore
-  // combina los índices de un campo y no hace falta un compuesto por
-  // combinación. `deleted` lo escriben las tres puertas desde el primer día
-  // del módulo (toDoc, cotizar-orden y lib/reposicionDano).
-  let kpiSrv = null;      // { key, datos|null }
-  let kpiSrvPend = null;
-  const kpiKey = () => (soloMias ? userUid : '') + '|' + filtroTipo;
-
-  async function cargarKpisServidor() {
-    if (!window.CotAgg) return;
-    const key = kpiKey();
-    if ((kpiSrv && kpiSrv.key === key) || kpiSrvPend === key) return;
-    kpiSrvPend = key;
-    const base = [['deleted', '==', false]];
-    if (soloMias) base.push(['creado_por_uid', '==', userUid]);
-    const bloque = async (extra) => {
-      const w = (...m) => [...base, ...extra, ...m];
-      const [enviada, aprobada, convertida, rechazada, rechAprob, vencida, porFacturar] = await Promise.all([
-        CotAgg.contar(w(['estado', '==', 'enviada'])),
-        CotAgg.contar(w(['estado', '==', 'aprobada'])),
-        CotAgg.contar(w(['estado', '==', 'convertida']), { conMonto: true }),
-        CotAgg.contar(w(['estado', '==', 'rechazada'])),
-        // Un rechazo del APROBADOR no es una oportunidad perdida (P0 #17).
-        CotAgg.contar(w(['estado', '==', 'rechazada'], ['rechazo_origen', '==', 'aprobador'])),
-        CotAgg.contar(w(['estado', '==', 'vencida'])),
-        CotAgg.contar(w(['facturacion.estado', '==', 'pendiente'])),
-      ]);
-      return {
-        enviadas: enviada.n, aprobadas: aprobada.n,
-        convertidas: convertida.n, montoCerrado: convertida.monto,
-        oportunidades: enviada.n + convertida.n + (rechazada.n - rechAprob.n) + vencida.n,
-        porFacturar: porFacturar.n,
-      };
-    };
-    try {
-      const [todas, taller] = await Promise.all([
-        filtroTipo !== 'taller' ? bloque([]) : null,
-        filtroTipo !== 'todas'  ? bloque([['origen', '==', 'orden']]) : null,
-      ]);
-      let datos = todas;
-      if (filtroTipo === 'taller') datos = taller;
-      else if (filtroTipo === 'ventas') {
-        datos = {};
-        Object.keys(todas).forEach(k => { datos[k] = todas[k] - taller[k]; });
-      }
-      kpiSrv = { key, datos };
-    } catch (e) {
-      console.warn('KPIs del servidor no disponibles; se muestran los de lo cargado:', e?.code || e);
-      kpiSrv = { key, datos: null };
-    } finally {
-      if (kpiSrvPend === key) kpiSrvPend = null;
-    }
-    if (kpiKey() === key) renderStats(getFiltradas());
-  }
-
+  // ── Tarjetas ──────────────────────────────────────────────────
+  // Mismo alcance que segmentos y tabla (auditoría de módulos 2026-09-30,
+  // C1 + P4). Hasta hoy salían de count()/sum() del servidor sobre TODO el
+  // histórico (7 agregados × 2 bloques) mientras los segmentos contaban las
+  // 30 filas cargadas: a 3 cm de distancia decían "12 Enviadas" y "Enviada
+  // 5". Ahora todo se cuenta sobre la misma lista en memoria, que es el
+  // alcance completo (ver cargarCotizaciones), y el rango de fechas o la
+  // búsqueda recortan las tres cosas por igual. El subtítulo dice sobre qué
+  // se contó.
   function renderStats(filtradas) {
-    // Los KPIs de negocio (enviadas / monto cerrado / tasa) reflejan el alcance del
-    // usuario (soloMias forzado para vendedores), no el de toda la empresa.
-    const visibles = cotizaciones.filter(c => !c.deleted && (!soloMias || c.creado_por_uid === userUid));
-    const srv = (kpiSrv && kpiSrv.key === kpiKey()) ? kpiSrv.datos : null;
-    if (!srv && !(kpiSrv && kpiSrv.key === kpiKey())) cargarKpisServidor();
-    const alcance = srv ? 'todo el histórico' : `de las ${cotizaciones.length} cargadas`;
+    const base = alcance();
+    const { desde, hasta } = rangoFechas();
+    const term = ($('filtroTexto').value || '').trim();
+    const sobre = (desde || hasta) ? 'en el rango de fechas'
+      : term ? 'de la búsqueda'
+      : todoCargado ? 'todo el histórico' : `de las ${cotizaciones.length} más recientes`;
     // Un rechazo del APROBADOR no es una oportunidad perdida con el cliente:
     // la cotización nunca le llegó (auditoría UX 2026-09-28, P0 #17).
     const esOportunidad = (c) => ['enviada', 'convertida', 'rechazada', 'vencida'].includes(c.estado)
       && !(c.estado === 'rechazada' && c.rechazo_origen === 'aprobador');
-    // Vista de TALLER: sus propios números. Lo que el cliente todavía no
-    // contesta, lo que se aceptó y cuánto de eso ya se facturó.
-    if (filtroTipo === 'taller') {
-      const taller = visibles.filter(esTallerC);
-      const aceptadas = taller.filter(c => c.estado === 'convertida');
-      const esperando = srv ? srv.enviadas + srv.aprobadas : taller.filter(c => c.estado === 'enviada' || c.estado === 'aprobada').length;
-      const nAceptadas = srv ? srv.convertidas : aceptadas.length;
-      const montoAceptado = srv ? srv.montoCerrado : aceptadas.reduce((s, c) => s + Number(c.total || 0), 0);
-      const oportunidadesT = srv ? srv.oportunidades : taller.filter(esOportunidad).length;
-      const porFacturar = srv ? srv.porFacturar : taller.filter(c => facturacionEstado(c) === 'pendiente').length;
-      $('statTotal').textContent = filtradas.length;
-      $('statPendientes').textContent = esperando;
-      $('statPendSub').textContent = 'esperando la respuesta del cliente';
-      $('statMontoLbl').textContent = 'Monto aceptado';
-      $('statMontoAprobado').textContent = FMT.money(montoAceptado);
-      $('statMontoSub').textContent = (porFacturar ? `${porFacturar} por facturar` : 'todo lo aceptado ya se facturó') + ' · ' + alcance;
-      $('statTasaLbl').textContent = 'Tasa de aceptación';
-      $('statTasa').textContent = (oportunidadesT ? Math.round(nAceptadas / oportunidadesT * 100) : 0) + '%';
-      $('statTasaSub').textContent = 'aceptadas / enviadas · ' + alcance;
-      return;
-    }
-    $('statPendSub').textContent = 'requieren seguimiento';
-    $('statMontoLbl').textContent = 'Monto cerrado';
-    $('statTasaLbl').textContent = 'Tasa de cierre';
-    $('statTasaSub').textContent = 'aceptadas / oportunidades · ' + alcance;
-    // Los números de VENTAS no cuentan las reparaciones del taller: una
-    // reparación aceptada no es una venta cerrada del vendedor.
-    const ventas = visibles.filter(c => !esTallerC(c));
-    const enviadas = srv ? srv.enviadas : ventas.filter(c => c.estado === 'enviada').length;
+    const aceptadas = base.filter(c => c.estado === 'convertida');
+    // "Enviadas · esperando" cuenta exactamente lo mismo que el segmento
+    // "Enviada": una aprobada que todavía no salió tiene su propio segmento.
+    const enviadas = base.filter(c => c.estado === 'enviada').length;
     // "Monto cerrado": solo cotizaciones convertidas a venta efectiva.
     // `c.total` es el valor evaluado, así que una cotización de alquiler entra
     // con su primer año de renta — es la única forma de sumarla con las ventas
-    // de pago único. El subtítulo lo dice cuando hay alguna (eso sí se mira en
-    // lo cargado: un rango sobre total_mensual pediría un índice compuesto).
-    const convertidasList = ventas.filter(c => c.estado === 'convertida');
-    const montoCerrado = srv ? srv.montoCerrado : convertidasList.reduce((s, c) => s + Number(c.total || 0), 0);
-    const hayRentaCerrada = convertidasList.some(c => Number(c.total_mensual || 0) > 0);
-    // Tasa de cierre: convertidas / oportunidades activas (enviadas + convertidas + rechazadas + vencidas).
-    // Excluye borrador (en proceso) y aprobada (aún no llegó al cliente), y
-    // también 'descartada': esa cotización se cerró por otro motivo (típico:
-    // se rehace con otra cantidad) y contarla como perdida castigaría al
-    // vendedor dos veces por la misma oportunidad.
-    const convertidas = srv ? srv.convertidas : convertidasList.length;
-    // Sin los rechazos del aprobador (ver esOportunidad).
-    const oportunidades = srv ? srv.oportunidades : ventas.filter(esOportunidad).length;
-    const tasa = oportunidades > 0 ? Math.round(convertidas / oportunidades * 100) : 0;
-    // "Total emitidas" debe ser consonante con lo que el usuario ve: cuenta
-    // exactamente las filas listadas (respeta filtros de estado/texto/eliminadas
-    // y la paginación), no el set completo `visibles`.
+    // de pago único. El subtítulo lo dice cuando hay alguna.
+    const monto = aceptadas.reduce((s, c) => s + Number(c.total || 0), 0);
+    // Tasa: convertidas / oportunidades (enviadas + convertidas + rechazadas
+    // por el cliente + vencidas). Excluye borrador (en proceso), aprobada
+    // (aún no llegó al cliente) y 'descartada': esa se cerró por otro motivo
+    // (típico: se rehace con otra cantidad) y contarla como perdida
+    // castigaría al vendedor dos veces por la misma oportunidad.
+    const oportunidades = base.filter(esOportunidad).length;
+    const tasa = oportunidades > 0 ? Math.round(aceptadas.length / oportunidades * 100) : 0;
+    // "Total emitidas" cuenta exactamente las filas listadas (segmento,
+    // eliminadas y orden incluidos).
     $('statTotal').textContent = filtradas.length;
     $('statPendientes').textContent = enviadas;
-    $('statMontoAprobado').textContent = FMT.money(montoCerrado);
-    const sub = $('statMontoSub');
-    if (sub) sub.textContent = (hayRentaCerrada ? 'aceptadas · alquiler a 12 meses' : 'solo aceptadas por el cliente') + ' · ' + alcance;
+    $('statMontoAprobado').textContent = FMT.money(monto);
     $('statTasa').textContent = tasa + '%';
+    // Vista de TALLER: sus propias palabras. Lo que el cliente todavía no
+    // contesta, lo que se aceptó y cuánto de eso ya se facturó.
+    if (filtroTipo === 'taller') {
+      const porFacturar = base.filter(c => facturacionEstado(c) === 'pendiente').length;
+      $('statPendSub').textContent = 'esperando la respuesta del cliente';
+      $('statMontoLbl').textContent = 'Monto aceptado';
+      $('statMontoSub').textContent = (porFacturar ? `${porFacturar} por facturar` : 'todo lo aceptado ya se facturó') + ' · ' + sobre;
+      $('statTasaLbl').textContent = 'Tasa de aceptación';
+      $('statTasaSub').textContent = 'aceptadas / enviadas · ' + sobre;
+      return;
+    }
+    const hayRentaCerrada = aceptadas.some(c => Number(c.total_mensual || 0) > 0);
+    $('statPendSub').textContent = 'requieren seguimiento';
+    $('statMontoLbl').textContent = 'Monto cerrado';
+    $('statMontoSub').textContent = (hayRentaCerrada ? 'aceptadas · alquiler a 12 meses' : 'solo aceptadas por el cliente') + ' · ' + sobre;
+    $('statTasaLbl').textContent = 'Tasa de cierre';
+    $('statTasaSub').textContent = 'aceptadas / oportunidades · ' + sobre;
   }
 
   function estadoChip(estado, motivo, doc) {
@@ -772,7 +721,8 @@
   // ── Eventos ───────────────────────────────────────────────────
   function bindEvents() {
     $('filtroTexto').addEventListener('input', onBuscarInput);
-    ['filtroDesde', 'filtroHasta'].forEach(id => $(id)?.addEventListener('change', () => cargarCotizaciones(true)));
+    // El rango recorta en memoria el alcance ya cargado (tarjetas, segmentos y tabla por igual).
+    ['filtroDesde', 'filtroHasta'].forEach(id => $(id)?.addEventListener('change', render));
     $('toggleEliminadas').addEventListener('change', render);
     $('toggleMias').addEventListener('change', (e) => { soloMias = e.target.checked; render(); });
     $('btnCargarMas').addEventListener('click', () => cargarCotizaciones(false));
