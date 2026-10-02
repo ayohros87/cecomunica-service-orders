@@ -200,14 +200,20 @@ Object.assign(window.Centro, {
   _filaCliente(c) {
     const sub = [c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null, c.telefono || null].filter(Boolean);
     const r = c.regularizacion;
-    const nivel = r?.puntos > 0 ? ((window.Regularizacion?.NIVEL_LABEL || {})[r.nivel] || r.nivel || '') : '';
+    // Sin D7: "por clasificar" es cola de bodega, no deuda de la cuenta
+    // (decisión 8, 1-oct-2026). Se dice aparte, en gris.
+    const puntos = window.Regularizacion?.puntosCuenta ? Regularizacion.puntosCuenta(r) : Number(r?.puntos || 0);
+    const nivel = puntos > 0 ? ((window.Regularizacion?.NIVEL_LABEL || {})[r.nivel] || r.nivel || '') : '';
     // Con el filtro de regularización, la fila dice además el nivel de la deuda.
     if (this.filtroReg && nivel) sub.unshift(nivel);
     const inactivo = c.activo === false;
     const vendedor = c.vendedor_email ? c.vendedor_email.split('@')[0] : '';
     const chips = [];
-    if (r?.puntos > 0) {
-      chips.push(`<span class="cg-chip cg-chip--warn" title="${this.esc(`${nivel ? nivel + ' · ' : ''}${r.puntos} punto${r.puntos === 1 ? '' : 's'} por regularizar`)}">Por regularizar · ${Number(r.puntos)}</span>`);
+    if (puntos > 0) {
+      chips.push(`<span class="cg-chip cg-chip--warn" title="${this.esc(`${nivel ? nivel + ' · ' : ''}${puntos} punto${puntos === 1 ? '' : 's'} por regularizar`)}">Por regularizar · ${puntos}</span>`);
+    }
+    if (r?.d7 > 0) {
+      chips.push(`<span class="cg-chip cg-chip--muted" title="${this.esc(`${r.d7} radio(s) por clasificar: los revisa bodega, no cuentan como deuda de la cuenta`)}">Bodega · ${Number(r.d7)}</span>`);
     }
     if (!c.vendedor_asignado && !c.vendedor_email) chips.push(`<span class="cg-chip cg-chip--warn" title="Nadie la atiende: asígnale un vendedor">Sin vendedor</span>`);
     if (inactivo) chips.push(`<span class="cg-chip cg-chip--muted">Inactivo</span>`);

@@ -17,13 +17,31 @@ Object.assign(window.Centro, {
   // "Le toca a" ya no se adivina con regex sobre el texto: cada fila trae su
   // {rol} desde la fuente (_itemsAccion, _itemsSenal) y TOCA le pone nombre.
   _ahoraTodo: false,
-  pintarAhora() {
-    const cont = document.getElementById('fAhora');
-    if (!cont) return;
+  // Las filas de "Ahora", ya fundidas y ordenadas (bad → warn → info). La
+  // primera es lo que la cuenta pide primero: de ahí sale también el botón
+  // primario de la cabecera (_accionPrimaria).
+  _itemsAhora() {
     const acc = this._itemsAccion().map(x => ({ tono: x.tono === 'info' ? 'info' : 'warn', t: x.t, s: x.s, btns: x.btns, rol: x.rol }));
     const sen = this._itemsSenal().map(x => ({ tono: x.tipo, t: this.esc(x.txt), s: '', btns: x.extra || '', rol: x.rol }));
     const peso = { bad: 0, warn: 1, info: 2 };
-    const items = [...acc, ...sen].sort((a, b) => (peso[a.tono] ?? 3) - (peso[b.tono] ?? 3));
+    return [...acc, ...sen].sort((a, b) => (peso[a.tono] ?? 3) - (peso[b.tono] ?? 3));
+  },
+  // El botón primario de una fila de "Ahora" ({label, onclick}), o null si
+  // la fila no tiene uno (solo "Ver contrato", o es de bodega/cliente).
+  _primariaDe(btns) {
+    const m = String(btns || '').match(/<(button|a)\b([^>]*\bbtn-primary\b[^>]*)>([^<]*)<\/\1>/);
+    if (!m) return null;
+    const attrs = m[2], label = m[3].trim();
+    const on = attrs.match(/\bonclick="([^"]*)"/);
+    const href = attrs.match(/\bhref="([^"]*)"/);
+    if (on && on[1]) return { label, onclick: on[1] };
+    if (href && href[1]) return { label, onclick: `location.href='${href[1].replace(/'/g, '')}'` };
+    return null;
+  },
+  pintarAhora() {
+    const cont = document.getElementById('fAhora');
+    if (!cont) return;
+    const items = this._itemsAhora();
     if (!items.length) {
       cont.innerHTML = `<div class="ok"><i data-lucide="check-circle-2" style="width:15px;height:15px;"></i> Nada pendiente en esta cuenta.</div>`;
       return;
@@ -59,7 +77,9 @@ Object.assign(window.Centro, {
       `<span>Mensual <b class="num">$${mensual.toFixed(2)}</b></span>`,
       L('blkEquipos', `En contrato <b>${enContrato}</b>`),
       sinContrato ? L('blkEquipos', `Sin contrato <b>${sinContrato}</b>`) : '',
-      porClasificar ? L('blkEquipos', `Por clasificar <b>${porClasificar}</b>`) : '',
+      // "Por clasificar" es cola de BODEGA, no deuda de la cuenta (decisión 8,
+      // 1-oct-2026): se dice como tal y no dispara nada.
+      porClasificar ? `<button type="button" onclick="Centro.abrirBloque('blkEquipos')" title="${porClasificar} radio(s) por clasificar: los revisa bodega, no cuentan como deuda de la cuenta">Bodega <b>${porClasificar}</b></button>` : '',
       L('blkGestiones', `En trámite <b>${abiertas}</b>`),
       taller ? L('blkEquipos', `En taller <b>${taller}</b>`) : '',
     ].filter(Boolean).join('');
@@ -123,17 +143,26 @@ Object.assign(window.Centro, {
   // el destacado del menú y el dock móvil salen de aquí (una sola regla).
   _accionPrimaria() {
     if (!this.puedeCrearGestion()) return null;
+    // Lo primero de "Ahora" manda (auditoría de módulos 2026-09-30, R3): si la
+    // cuenta tiene algo esperando a alguien, ESE botón es el primario — no
+    // una renovación de 16 contratos por 2 radios sin contrato. Si la fila no
+    // trae botón primario (le toca a bodega o al cliente), se sigue abajo.
+    const primera = this._itemsAhora()[0];
+    const deAhora = primera ? this._primariaDe(primera.btns) : null;
+    if (deAhora) return { ...deAhora, hint: String(primera.t || '').replace(/<[^>]+>/g, '') };
     const est = this._cuentaEstado();
     const tram = this._renovacionEnTramite();
     const reg = this._reg();
-    const deuda = !!(reg && reg.puntos > 0);
+    // Deuda SIN D7: "por clasificar" es de bodega (decisión 8, 1-oct-2026).
+    const puntos = (typeof Regularizacion !== 'undefined') ? Regularizacion.puntosCuenta(reg) : Number(reg?.puntos || 0);
+    const deuda = puntos > 0;
     if (tram) return { onclick: `Centro.abrirGestion('ct-${this.esc(tram.id)}')`, label: `Ver renovación en trámite`, hint: `${this.esc(tram.contrato_id || '')} — abre el expediente para ver en qué paso va` };
     if (est.tipo === 'nueva') return { onclick: 'Centro.wizContrato()', label: 'Nuevo contrato', hint: '' };
     if (est.tipo === 'sin_contrato') return { onclick: 'Centro.wizContrato({renovarCuenta:true})', label: 'Regularizar: contrato nuevo', hint: `cubre los ${est.custodia} radio${est.custodia === 1 ? '' : 's'} que el cliente aún tiene` };
     // Ojo con el nombre: "Regularizar cuenta" a secas se confundía con el
     // anexo del menú ("Regularizar lo que el cliente tiene"). Este camino
     // hace un CONTRATO NUEVO; el otro cuelga un anexo del contrato vigente.
-    if (deuda) return { onclick: 'Centro.wizContrato({renovarCuenta:true})', label: 'Regularizar con contrato nuevo', hint: `${reg.puntos} punto${reg.puntos === 1 ? '' : 's'} — renovación consolidadora con el plan por serial` };
+    if (deuda) return { onclick: 'Centro.wizContrato({renovarCuenta:true})', label: 'Regularizar con contrato nuevo', hint: `${puntos} punto${puntos === 1 ? '' : 's'} — renovación consolidadora con el plan por serial` };
     if (est.tipo === 'fragmentada') return { onclick: 'Centro.wizContrato({renovarCuenta:true})', label: 'Renovar cuenta', hint: `consolida ${est.renovables.length} contratos en uno` };
     if (est.tipo === 'consolidada' && this._wcEnVentana(est.maestro)) return { onclick: `Centro.wizContrato('${this.esc(est.maestro.id)}')`, label: 'Renovar cuenta', hint: 'entra en ventana de renovación' };
     return null;
@@ -263,13 +292,20 @@ Object.assign(window.Centro, {
     // voz: el chip de la cabecera + esta señal que abre "Qué falta". La señal
     // vieja de custodia (abajo) queda solo mientras el job no haya pasado.
     const reg = this._reg();
-    if (reg && reg.puntos > 0) {
+    const puntosCuenta = reg ? Regularizacion.puntosCuenta(reg) : 0;
+    if (reg && puntosCuenta > 0) {
       const tram = this._renovacionEnTramite();
       out.unshift({
         tipo: reg.nivel === 'critica' ? 'bad' : reg.nivel === 'leve' ? 'info' : 'warn', rol: 'cuenta',
         txt: `${Regularizacion.resumen(reg)}${tram ? ` — la renovación en trámite (${tram.contrato_id || ''}) cubre la custodia al activarse.` : '.'}`,
         extra: `<button class="btn btn-ghost cg-act cg-senal-cta" onclick="Centro.verRegularizacion()">Qué falta</button>`,
       });
+      if (reg.d7 > 0) out.push({ tipo: 'info', rol: 'bodega', txt: `${reg.d7} radio(s) por clasificar — cola de bodega, no cuentan como deuda de la cuenta.` });
+    } else if (reg && reg.d7 > 0) {
+      // Solo D7 (decisión 8, 1-oct-2026): se informa, le toca a bodega y no
+      // empuja ninguna gestión de la cuenta.
+      out.push({ tipo: 'info', rol: 'bodega', txt: `${reg.d7} radio(s) por clasificar — cola de bodega, no cuentan como deuda de la cuenta.`,
+        extra: `<button class="btn btn-ghost cg-act cg-senal-cta" onclick="Centro.verRegularizacion()">Cuáles</button>` });
     } else if (sinContrato) {
       const tram = this._renovacionEnTramite();
       out.unshift(tram ? {

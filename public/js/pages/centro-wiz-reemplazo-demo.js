@@ -96,12 +96,15 @@ Object.assign(window.Centro, {
   // puntual (#n). banda:false para los modales que no crean nada.
   _bandaReg() {
     const r = this._reg();
-    if (!r || !(r.puntos > 0) || typeof Regularizacion === 'undefined') return '';
+    if (!r || typeof Regularizacion === 'undefined') return '';
+    // Sin D7 (decisión 8, 1-oct-2026): lo de bodega no es deuda de la cuenta.
+    const puntos = Regularizacion.puntosCuenta(r);
+    if (!(puntos > 0)) return '';
     const n = (Number(r.gestiones_puntuales) || 0) + 1;
     const bad = r.nivel === 'critica' || r.excede_margen;
     // UN renglón de contexto bajo el título (2026-09-08): el campo va primero.
     return `<div class="cg-banda-reg" style="display:flex; gap:10px; align-items:center; margin:-4px 0 12px; font-size:12.5px; color:${bad ? 'var(--cg-bad-deep, #991B1B)' : 'var(--cg-warn-deep, #92400E)'};">
-      <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><b>Cuenta por regularizar · ${r.puntos}</b> · gestión puntual #${n}${r.excede_margen ? ' · excede el margen' : ''}</span>
+      <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><b>Cuenta por regularizar · ${puntos}</b> · gestión puntual #${n}${r.excede_margen ? ' · excede el margen' : ''}</span>
       <button type="button" style="background:none; border:0; padding:0; font:inherit; font-weight:600; color:var(--accent); cursor:pointer; white-space:nowrap;" onclick="Centro.verRegularizacion()">Qué falta</button>
     </div>`;
   },
