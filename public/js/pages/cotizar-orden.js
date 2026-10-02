@@ -46,7 +46,13 @@
   // debounce en ordenes_de_servicio/{id}/borradores_cotizacion/{uid} para
   // sobrevivir cierre de pestaña y cambio de dispositivo (los técnicos usan
   // iPad). Se borra al generar la cotización con éxito.
-  const DRAFT_DEBOUNCE_MS = 600;
+  // Debounce de 2.5 s (auditoría de módulos 2026-09-30, P6): con 600 ms cada
+  // pausa entre campo y campo era una escritura del borrador entero (34 por
+  // cotización, 679 al mes: la segunda acción más frecuente del sistema por
+  // puro ruido). Lo que no alcanza a guardarse por el debounce sale al
+  // cambiar de pestaña o ventana (blur / visibilitychange) y al cerrar
+  // (pagehide), así que no se pierde nada.
+  const DRAFT_DEBOUNCE_MS = 2500;
   const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // borradores más viejos se descartan
   let draftTimer = null;
   let draftDirty = false;
@@ -118,8 +124,12 @@
     return false;
   }
 
-  // Flush al salir de la página si quedó un guardado pendiente del debounce.
-  window.addEventListener('pagehide', () => { if (draftDirty) saveDraft(); });
+  // Flush al salir de la página o al dejar de mirarla si quedó un guardado
+  // pendiente del debounce.
+  function flushDraft() { if (!draftDirty) return; clearTimeout(draftTimer); saveDraft(); }
+  window.addEventListener('pagehide', flushDraft);
+  window.addEventListener('blur', flushDraft);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushDraft(); });
 
   // ── Dedup de equipos (mismo criterio que prepararEquiposParaNota) ──────────
   function prepararEquipos(od) {
@@ -1022,6 +1032,16 @@
     orden = await OrdenesService.getOrder(ordenId);
     if (!orden) { Toast.show('Orden no encontrada', 'bad'); location.href = 'index.html'; return; }
     equipos = prepararEquipos(orden);
+    // Sin intervención registrada y sin haber pasado por el taller (auditoría
+    // de módulos 2026-09-30, C10): el ⋯ de la bandeja ya no ofrece Cotizar en
+    // ese caso; por URL directa se avisa y se deja seguir (presupuesto previo).
+    {
+      const estadoU = String(orden.estado_reparacion || '').toUpperCase();
+      const conIntervencion = equipos.some(e => e.intervencion) || !!(orden.informe_visita?.trabajo_realizado || '').trim();
+      if (!conIntervencion && !/COMPLETADO|ENTREGAD|CERRADA/.test(estadoU)) {
+        Toast.show('Esta orden no tiene intervención registrada todavía: lo que cotices aquí no sale del trabajo del técnico.', 'warn');
+      }
+    }
 
     // ¿Ya hay cotización? (auditoría UX 2026-09-28, 4.2 #4): "Cotizar" no
     // revisaba cotizacion_doc_id y se armaban cotizaciones duplicadas de la

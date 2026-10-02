@@ -1503,9 +1503,17 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
       ? { icon: '<i data-lucide="receipt"></i>', label: `Ver cotización${o.cotizacion_id ? ' ' + escapeHtml(String(o.cotizacion_id)) : ''}`, action: "ver-cotizacion", dataAttributes: `data-cotizacion-id="${escapeHtml(String(o.cotizacion_doc_id))}"`, class: "" }
       : { icon: '<i data-lucide="receipt"></i>', label: "Cotización ya preparada", action: "", dataAttributes: "", class: "disabled" });
   } else if (canRole(rol, 'preparar-cotizacion')) {
-    menuItems.push(
-      { icon: '<i data-lucide="receipt"></i>', label: "Cotizar", action: "cotizar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
-    );
+    // Solo cuando hay algo que cotizar (auditoría de módulos 2026-09-30,
+    // Cotizaciones C10): una intervención registrada en algún equipo (el
+    // informe, en una visita) o una orden que ya pasó del taller. Antes el
+    // ⋯ ofrecía "Cotizar" igual en POR ASIGNAR que en ENTREGADO.
+    const hayIntervencion = esVisita
+      ? !!(o.informe_visita?.trabajo_realizado || "").trim()
+      : (Array.isArray(o.equipos) && o.equipos.some(e => e && e.eliminado !== true && String(e.trabajo_tecnico || "").trim()));
+    const pasoElTaller = /COMPLETADO|ENTREGAD|CERRADA/.test(estadoUpper);
+    menuItems.push(hayIntervencion || pasoElTaller
+      ? { icon: '<i data-lucide="receipt"></i>', label: "Cotizar", action: "cotizar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
+      : { icon: '<i data-lucide="receipt"></i>', label: "Cotizar · sin intervención registrada", action: "", dataAttributes: "", class: "disabled" });
   }
 
   if (itemEliminar) {
