@@ -120,8 +120,16 @@ function decidirDormirAnexo({ gestion, now = new Date(), dias = DIAS_DORMIDO } =
 
 // Parche de la gestión al dormirla: SOLO la marca (el estado sigue
 // 'pendiente_firma' — cambiarlo correría la máquina de onGestionWrite).
-function patchDormirAnexo({ gestion, dias, ahora, teniaEnlace }) {
+// `borrar` (FieldValue.delete()): el ciclo nuevo empieza limpio — sin la
+// retención, los avisos ni la marca de bodega de un sueño anterior
+// (domain/anexoDormido, 5-oct-2026).
+function patchDormirAnexo({ gestion, dias, ahora, teniaEnlace, borrar }) {
   const patch = { dormido: true, dormido_at: ahora, dormido_motivo: MOTIVO, dormido_dias: dias };
+  if (borrar !== undefined) {
+    for (const k of require("./anexoDormido").CAMPOS_ECO) {
+      if ((gestion || {})[k] !== undefined) patch[k] = borrar;
+    }
+  }
   if (teniaEnlace || (gestion || {}).firma_solicitud_estado === "pendiente") {
     patch.firma_solicitud_estado = "caducado";
   }
@@ -165,7 +173,10 @@ function patchReactivar({ ahora, uid, esGestion = false }) {
 // Campos que escribe el dormir/reactivar sobre una gestión: onGestionWrite
 // los trata como eco (no deciden nada en la máquina de estados).
 const CAMPOS_GESTION = ["dormido", "dormido_at", "dormido_motivo", "dormido_dias",
-  "dormido_reactivado_at", "dormido_reactivado_por_uid", "firma_solicitud_estado"];
+  "dormido_reactivado_at", "dormido_reactivado_por_uid", "firma_solicitud_estado",
+  // Desde el 5-oct-2026 también la retención, los avisos y la marca de bodega
+  // del plazo para soltar los equipos (domain/anexoDormido).
+  ...require("./anexoDormido").CAMPOS_ECO];
 
 module.exports = {
   DIAS_DORMIDO, MOTIVO, CAMPOS_GESTION, esperaFirmaViva, baseEspera, diasEsperando,

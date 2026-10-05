@@ -110,9 +110,12 @@ async function dormirContratosSinFirma({ dryRun = false, now = new Date(), dias 
   }
 
   const anexos = await dormirAnexosSinFirma({ dryRun, now, dias, tag });
+  // Lo que apartan los anexos dormidos: avisos, retención vencida, soltar
+  // o dejar a bodega (Alberto, 5-oct-2026 — domain/anexoDormido).
+  const anexosPlazo = await soltarAnexosDormidos({ dryRun, now, tag });
 
   const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
-  return { scanned, candidatos, dormidos, enlacesCaducados, mails, errors, muestra, anexos, elapsedSec };
+  return { scanned, candidatos, dormidos, enlacesCaducados, mails, errors, muestra, anexos, anexosPlazo, elapsedSec };
 }
 
 // Anexos de aumento aprobados sin firmar a los 45 días (Alberto, 2-oct-2026):
@@ -150,7 +153,7 @@ async function dormirAnexosSinFirma({ dryRun = false, now = new Date(), dias = D
     if (dryRun) continue;
     try {
       const batch = db.batch();
-      batch.update(doc.ref, D.patchDormirAnexo({ gestion: g, dias: dec.dias, ahora: FV.serverTimestamp(), teniaEnlace: !!solRef }));
+      batch.update(doc.ref, D.patchDormirAnexo({ gestion: g, dias: dec.dias, ahora: FV.serverTimestamp(), teniaEnlace: !!solRef, borrar: FV.delete() }));
       if (solRef) batch.update(solRef, D.patchCaducarSolicitud(FV.serverTimestamp()));
       await batch.commit();
     } catch (e) {
@@ -177,8 +180,9 @@ async function dormirAnexosSinFirma({ dryRun = false, now = new Date(), dias = D
             <b>dormido</b>: ya no cuenta como trámite de la cuenta.</p>
           <p style="margin:0;font:14px/1.5 Arial,sans-serif;">
             Si el cliente todavía va a firmar, reactívalo desde la ficha del cliente
-            (<b>Reactivar la solicitud</b>): se genera un enlace nuevo. Si ya no lo quiere, anula la gestión
-            para soltar los equipos apartados.</p>`,
+            (<b>Reactivar la solicitud</b>): se genera un enlace nuevo. Si no, tienes <b>15 días</b> para decidir qué
+            pasa con los equipos apartados: <b>Retenerlos</b> (30 días más) o <b>Soltarlos</b>. Si nadie decide,
+            el anexo se anula solo y los equipos vuelven a bodega.</p>`,
         ctaUrl: G.urlGestion(g, doc.id),
         ctaLabel: "Abrir la gestión",
         meta: { tipo: "anexo_dormido", gestion: doc.id, dias: dec.dias },
@@ -191,4 +195,107 @@ async function dormirAnexosSinFirma({ dryRun = false, now = new Date(), dias = D
   return { scanned, candidatos, dormidos, enlacesCaducados, mails, errors, muestra };
 }
 
-module.exports = { dormirContratosSinFirma, dormirAnexosSinFirma };
+// Lo que APARTA un anexo dormido (Alberto, 5-oct-2026): plazo de 15 días para
+// que el vendedor lo retenga o lo suelte; avisos a los 10 días y un día antes;
+// al vencer, se anula solo (la anulación de siempre libera los radios y
+// elimina la OS sin trabajar en onGestionWrite → limpiarAnulacion) o, si el
+// taller ya trabajó su orden, queda marcado para que bodega decida. La regla
+// vive en domain/anexoDormido.
+async function soltarAnexosDormidos({ dryRun = false, now = new Date(), tag = "dormirContratos" } = {}) {
+  const G = require("./gestiones");
+  const A = require("../domain/anexoDormido");
+  const FV = admin.firestore.FieldValue;
+  const snap = await db.collection("gestiones").where("dormido", "==", true).limit(500).get();
+
+  const cuenta = { scanned: 0, dormidos: 0, avisos10: 0, avisosPrevios: 0, soltados: 0, aBodega: 0, esperanBodega: 0, retenidos: 0, mails: 0, errors: 0 };
+  const muestra = [];
+  for (const doc of snap.docs) {
+    cuenta.scanned++;
+    const g = doc.data() || {};
+    if (!A.esAnexoDormido(g)) continue;
+    cuenta.dormidos++;
+    if (A.esperaBodega(g)) cuenta.esperanBodega++;
+    if (A.retenciones(g) > 0) cuenta.retenidos++;
+    // Las órdenes solo importan al vencer: se leen entonces.
+    let dec = A.decidir({ gestion: g, now });
+    if (dec.accion === "soltar") {
+      const ordenes = [];
+      let fallo = false;
+      for (const oid of A.ordenesProgramacion(g)) {
+        try {
+          const s = await db.collection("ordenes_de_servicio").doc(oid).get();
+          if (s.exists) ordenes.push({ id: oid, data: s.data() || {} });
+        } catch (e) {
+          // Sin poder leer la orden no se suelta nada: mejor un día más
+          // apartado que anular sobre trabajo del taller.
+          logger.warn(`[${tag}] orden del anexo no leída`, { gid: doc.id, oid, err: e.message });
+          fallo = true;
+        }
+      }
+      if (fallo) { cuenta.errors++; continue; }
+      dec = A.decidir({ gestion: g, ordenes, now });
+    }
+    if (dec.accion === "nada") continue;
+    if (muestra.length < 25) muestra.push(`${doc.id}: ${dec.accion} — ${dec.porQue}`);
+    const k = { aviso_10: "avisos10", aviso_previo: "avisosPrevios", soltar: "soltados", bodega: "aBodega" }[dec.accion];
+    cuenta[k]++;
+    if (dryRun) continue;
+    const ahora = FV.serverTimestamp();
+    try {
+      if (dec.accion === "soltar") {
+        // estado → 'anulada': onGestionWrite (A0) corre limpiarAnulacion.
+        await doc.ref.update(A.patchSoltarAuto({ ahora, porQue: dec.porQue }));
+        await G.registrarEvento(doc.id, "anular",
+          `Anulada sola: ${A.MOTIVO_AUTO} (${dec.porQue}). La anulación libera los radios apartados y elimina la orden de programación sin trabajar.`);
+      } else if (dec.accion === "bodega") {
+        await doc.ref.update(A.patchBodega({ ahora, trabajadas: dec.trabajadas, porQue: dec.porQue }));
+        await G.registrarEvento(doc.id, "dormido_bodega",
+          `Venció el plazo sin firma ni retención, pero la orden ${dec.trabajadas.join(", ")} ya la trabajó el taller: no se anula ni se sueltan los radios. Decide bodega (Almacén · Hoy).`);
+      } else {
+        await doc.ref.update(A.patchAviso({ accion: dec.accion, ahora, plazo: dec.plazo }));
+      }
+    } catch (e) {
+      cuenta.errors++;
+      logger.error(`[${tag}] anexo dormido no actualizado`, { gid: doc.id, accion: dec.accion, err: e.message });
+      continue;
+    }
+    if (dec.accion !== "aviso_10" && dec.accion !== "aviso_previo") continue;
+    // Aviso al vendedor (best-effort, mismo buzón que el correo de dormido).
+    try {
+      const to = g.responsable_email || await G.vendedorEmailDeCliente(g.cliente_id);
+      if (!to) continue;
+      const a = g.aumento || {};
+      const nEq = (a.seriales_asignados || []).filter(s => String(s.serial || "").trim()).length;
+      const fecha = A.diaPanama(dec.plazo).split("-").reverse().join("/");
+      const previo = dec.accion === "aviso_previo";
+      await G.encolarCorreo({
+        to,
+        subject: previo
+          ? `Anexo ${doc.id}: mañana se sueltan sus equipos — ${g.cliente_nombre || "Cliente"}`
+          : `Anexo ${doc.id} dormido: decide antes del ${fecha} — ${g.cliente_nombre || "Cliente"}`,
+        preheader: previo ? "Si nadie decide, el anexo se anula solo" : "Retener o soltar los equipos apartados",
+        bodyContent: `
+          <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">${previo ? "Mañana se sueltan los equipos" : "Anexo dormido: falta tu decisión"}</h2>
+          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+            El anexo de aumento <b>${G.escapeHtml(doc.id)}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>
+            ${a.contrato_id ? `(contrato <b>${G.escapeHtml(a.contrato_id)}</b>) ` : ""}sigue dormido sin la firma del cliente
+            ${nEq ? `y aparta <b>${nEq} equipo(s)</b> en bodega` : ""}.
+            ${previo
+              ? `El <b>${fecha}</b> se anula solo y los equipos vuelven a bodega (si el taller ya trabajó la orden, lo decide bodega).`
+              : `Si nadie decide, el <b>${fecha}</b> se anula solo y los equipos vuelven a bodega.`}</p>
+          <p style="margin:0;font:14px/1.5 Arial,sans-serif;">
+            Desde la ficha del cliente: <b>Retener los equipos</b> (motivo y fecha probable de firma; 30 días más),
+            <b>Soltar los equipos</b> si el cliente ya no lo quiere, o <b>Reactivar la solicitud</b> si va a firmar.</p>`,
+        ctaUrl: G.urlGestion(g, doc.id),
+        ctaLabel: "Abrir la gestión",
+        meta: { tipo: previo ? "anexo_dormido_previo" : "anexo_dormido_10d", gestion: doc.id },
+      });
+      cuenta.mails++;
+    } catch (e) {
+      logger.warn(`[${tag}] no se pudo encolar el aviso del anexo dormido`, { gid: doc.id, err: e.message });
+    }
+  }
+  return { ...cuenta, muestra };
+}
+
+module.exports = { dormirContratosSinFirma, dormirAnexosSinFirma, soltarAnexosDormidos };
