@@ -528,7 +528,7 @@ Object.assign(window.Centro, {
             // "esperan firma" (auditoría UX 2026-09-28).
             g.estado === 'pendiente_firma' && g.tipo === 'aumento' && g.aumento?.es_regularizacion
               ? 'Por aplicar (sin firma)'
-              : GestionesService.dormida(g) ? `Dormido · ${g.dormido_dias || ContratoFirma.DIAS_DORMIDO}+ días sin firma`
+              : GestionesService.dormida(g) ? `Dormido · ${window.AnexoDormido?.resumen(g) || `${g.dormido_dias || ContratoFirma.DIAS_DORMIDO}+ días sin firma`}`
               : GestionesService.estadoLabel(g.estado))}</span>
           ${this._masFila(g.id, this._accionesGestion(g), g.id)}
           <span class="arr">${abierta ? '▾' : '›'}</span>
@@ -960,8 +960,8 @@ Object.assign(window.Centro, {
     } else if (GestionesService.dormida(g)) {
       aprobacion = `<div class="cg-senal warn" style="margin:10px 0 0;">
            <span><b>Dormido:</b> pasaron ${this.esc(String(g.dormido_dias || ContratoFirma.DIAS_DORMIDO))} días aprobado sin la firma del cliente;
-             la solicitud y el enlace caducaron. No cuenta como trámite de la cuenta. <b>Reactivar</b> genera un enlace nuevo;
-             si el cliente ya no lo quiere, anula la gestión para soltar los equipos.</span></div>`;
+             la solicitud y el enlace caducaron. No cuenta como trámite de la cuenta. <b>Reactivar</b> genera un enlace nuevo.
+             ${this._plazoDormidoHtml(g)}</span></div>`;
     } else if (g.estado === 'pendiente_firma' && g.tipo === 'aumento') {
       aprobacion = `<div class="cg-senal info" style="margin:10px 0 0;">
            <span><b>Esperando la firma del cliente.</b> Imprime el anexo (deja explícito el período propio
@@ -1315,6 +1315,24 @@ Object.assign(window.Centro, {
       Toast.show('Baja aprobada — el sistema deriva la facturación y crea la devolución por serial', 'ok');
       await this.recargarGestiones();   // el avance del trigger llega solo por la escucha en vivo
     } catch (e) { console.error(e); Toast.show('No se pudo aprobar la baja', 'bad'); }
+  },
+
+  // Qué pasa con los equipos de un anexo dormido (Alberto, 5-oct-2026):
+  // la fecha en que se sueltan, la retención vigente o la espera de bodega.
+  _plazoDormidoHtml(g) {
+    if (!window.AnexoDormido) return '';
+    const n = AnexoDormido.equiposApartados(g);
+    const eq = n ? `Los <b>${n} equipo(s)</b> apartados` : 'El anexo';
+    if (AnexoDormido.esperaBodega(g)) {
+      const os = (g.dormido_bodega?.ordenes || []).join(', ');
+      return `<br>Venció el plazo sin firma ni retención, pero el taller ya trabajó la orden ${this.esc(os)}:
+        no se soltó nada solo. <b>Lo decide bodega</b> (Almacén · Hoy); aquí todavía se puede reactivar o soltar.`;
+    }
+    const r = g.dormido_retencion;
+    const ret = r ? ` Retenido${r.n > 1 ? ` (${r.n}ª vez)` : ''}: ${this.esc(r.motivo || '')}
+      · firma probable ${this.esc(String(r.fecha_firma || '').split('-').reverse().join('/'))}.` : '';
+    return `<br>${eq} se sueltan el <b>${this.esc(AnexoDormido.fecha(AnexoDormido.plazo(g)))}</b> si nadie decide:
+      <b>Retener los equipos</b> (30 días más) o <b>Soltar los equipos</b>.${ret}`;
   },
 
   anularGestion(gid) {

@@ -30,6 +30,7 @@ import '/js/services/clientesService.js';
 import '/js/core/xlsx-loader.js';
 import '/js/services/contratosService.js';
 import '/js/services/gestionesService.js';
+import '/js/domain/anexoDormido.js';
 import '/js/services/equiposDescartadosService.js';
 import '/js/services/equiposCondicionesService.js';
 import '/js/ui/serial-field.js';

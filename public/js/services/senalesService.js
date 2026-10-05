@@ -347,6 +347,41 @@ const SenalesService = {
   },
   async countContratosPorFirmar(opts) { return (await this.listContratosPorFirmar(opts)).length; },
 
+  // Equipos apartados por ANEXOS DORMIDOS (Alberto, 5-oct-2026;
+  // window.AnexoDormido): el anexo sin firma a los 45 días sigue reservando
+  // sus radios hasta que el vendedor lo retiene o lo suelta, o hasta que el
+  // cron lo suelta solo. Bodega ve la fecha de liberación, y arriba los que
+  // le tocan decidir (plazo vencido con la orden ya trabajada en el taller).
+  listAnexosDormidos() {
+    return this._memoList('anexosDormidos', async () => {
+      const snap = await firebase.firestore().collection('gestiones')
+        .where('dormido', '==', true).limit(200).get();
+      const AD = window.AnexoDormido;
+      const now = new Date();
+      const rows = [];
+      snap.forEach(d => {
+        const g = { id: d.id, ...d.data() };
+        if (!AD || !AD.es(g)) return;
+        const n = AD.equiposApartados(g);
+        const conOS = !!(g.ordenes?.programacion_id || (g.ordenes?.programacion_ids || []).length);
+        if (!n && !conOS) return;   // un ajuste de tarifa no aparta equipos
+        const plazo = AD.plazo(g);
+        rows.push({
+          id: d.id, col: 'gestiones',
+          cliente: g.cliente_nombre || 'Cliente sin nombre',
+          equipos: n,
+          bodega: AD.esperaBodega(g),
+          resumen: AD.resumen(g, now),
+          plazo_ms: plazo ? plazo.getTime() : null,
+          ordenes: g.dormido_bodega?.ordenes || g.ordenes?.programacion_ids || [],
+          dias: Math.max(0, Math.floor(PendientesDomain.edadDias(g.dormido_at, now) || 0)),
+        });
+      });
+      return rows.sort((a, b) => (b.bodega - a.bodega) || ((a.plazo_ms ?? 9e15) - (b.plazo_ms ?? 9e15)));
+    });
+  },
+  async countAnexosDormidos() { return (await this.listAnexosDormidos()).length; },
+
   // Cola de bodega: contratos vigentes esperando que inventario asigne los
   // seriales (la marca la estampa onContratoAprobadoSolicitaSeriales). Es el
   // conteo exacto de la primera cola de inventario/pendientes.html; las otras

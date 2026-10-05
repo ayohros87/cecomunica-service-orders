@@ -416,6 +416,47 @@ const GestionesService = {
     await this.registrarEvento(gestionId, 'anular', motivo ? `Anulada: ${motivo}` : 'Anulada.');
   },
 
+  // Anexo DORMIDO (Alberto, 5-oct-2026; window.AnexoDormido): RETENER los
+  // equipos 30 días más con motivo y fecha probable de firma. Rules:
+  // esRetenerAnexoDormido (la segunda retención, solo administración).
+  async retenerDormido(g, { motivo, fechaFirma }) {
+    motivo = String(motivo || '').trim().slice(0, 300);
+    if (motivo.length < 5) throw new Error('Escribe por qué se retienen los equipos');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fechaFirma || ''))) throw new Error('Indica la fecha probable de firma');
+    const user = firebase.auth().currentUser;
+    const hasta = AnexoDormido.retenerHasta(g);
+    const n = AnexoDormido.retenciones(g) + 1;
+    await firebase.firestore().collection(this.COL).doc(g.id).update({
+      dormido_retencion: {
+        n, motivo, fecha_firma: fechaFirma,
+        por_uid: user?.uid || null, por_email: user?.email || null,
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      dormido_retener_hasta: firebase.firestore.Timestamp.fromDate(hasta),
+    });
+    await this.registrarEvento(g.id, 'retener',
+      `Equipos retenidos${n > 1 ? ` (retención ${n})` : ''} hasta el ${AnexoDormido.fecha(hasta)}: ${motivo} · firma probable ${fechaFirma.split('-').reverse().join('/')}`);
+    return hasta;
+  },
+
+  // SOLTAR los equipos de un anexo dormido = anularlo con motivo. La
+  // anulación de siempre (onGestionWrite → limpiarAnulacion) libera los radios
+  // y elimina la orden de programación sin trabajar. Rules: esSoltarAnexoDormido.
+  async soltarDormido(g, motivo) {
+    motivo = String(motivo || '').trim().slice(0, 300);
+    if (motivo.length < 5) throw new Error('Escribe por qué se sueltan los equipos');
+    const user = firebase.auth().currentUser;
+    const ahora = firebase.firestore.FieldValue.serverTimestamp();
+    await firebase.firestore().collection(this.COL).doc(g.id).update({
+      estado: 'anulada',
+      anulada_motivo: motivo,
+      anulada_por_uid: user?.uid || null,
+      anulada_at: ahora,
+      dormido_soltado: { modo: 'manual', por_uid: user?.uid || null, por_email: user?.email || null, at: ahora },
+    });
+    await this.registrarEvento(g.id, 'anular', `Equipos soltados (anexo dormido): ${motivo}`);
+  },
+
   /* ── Corregir / anular un expediente que todavía no surtió efecto ── */
 
   // Estados en los que la gestión sigue BLANDA: nada se aplicó al contrato,

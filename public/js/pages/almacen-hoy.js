@@ -237,6 +237,19 @@ window.AlmacenHoy = (() => {
     return out.map(g => ({ ...g, _at: ms(g) })).sort((a, b) => a._at - b._at);
   }
 
+  // Anexos DORMIDOS que apartan equipos (Alberto, 5-oct-2026; AnexoDormido):
+  // bodega ve cuándo vuelven sus radios y decide los que vencieron con la
+  // orden de programación ya trabajada en el taller (dormido_bodega).
+  async function cargarAnexosDormidos() {
+    const snap = await firebase.firestore().collection('gestiones').where('dormido', '==', true).limit(200).get();
+    const AD = window.AnexoDormido;
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(g => AD && AD.es(g) && (AD.equiposApartados(g) > 0
+        || !!(g.ordenes?.programacion_id || (g.ordenes?.programacion_ids || []).length)))
+      .map(g => ({ ...g, _bodega: AD.esperaBodega(g), _plazo: AD.plazo(g)?.getTime() ?? null }))
+      .sort((a, b) => (b._bodega - a._bodega) || ((a._plazo ?? 9e15) - (b._plazo ?? 9e15)));
+  }
+
   async function cargarDiferencias() {
     const [modelos, conteos, poolMap] = await Promise.all([
       ModelosService.getModelos(),
@@ -255,7 +268,7 @@ window.AlmacenHoy = (() => {
     try {
       // Cada carga cae por su lado: un permiso o índice roto no tumba la bandeja
       // — se muestra lo que sí se pudo leer y se avisa del hueco (null = falló).
-      const [colas, gestiones, devueltos, clasificar, conflictos, sinVerificarN, difs] = await Promise.all([
+      const [colas, gestiones, devueltos, clasificar, conflictos, sinVerificarN, difs, dormidos] = await Promise.all([
         ColaInventarioService.todo(),
         cargarGestionesBodega().catch(e => { console.warn('[Hoy] gestiones:', e?.code || e); return null; }),
         EquiposPoolService.listar({ estado: 'devuelto_revision' }).catch(e => { console.warn('[Hoy] devueltos:', e?.code || e); return null; }),
@@ -269,8 +282,9 @@ window.AlmacenHoy = (() => {
         cargarConflictos().catch(e => { console.warn('[Hoy] conflictos:', e?.code || e); return null; }),
         contarSinVerificar().catch(e => { console.warn('[Hoy] sin verificar:', e?.code || e); return null; }),
         cargarDiferencias().catch(e => { console.warn('[Hoy] diferencias:', e?.code || e); return null; }),
+        cargarAnexosDormidos().catch(e => { console.warn('[Hoy] anexos dormidos:', e?.code || e); return null; }),
       ]);
-      ctx.datos = { colas, gestiones, devueltos, clasificar, conflictos, sinVerificarN, difs };
+      ctx.datos = { colas, gestiones, devueltos, clasificar, conflictos, sinVerificarN, difs, dormidos };
       render();
     } catch (e) {
       console.error('[Hoy] no se pudo cargar:', e);
@@ -359,6 +373,36 @@ window.AlmacenHoy = (() => {
     ));
     // Badge de la pestaña Asignar = lo que bodega tiene que poner.
     if (window.WorkspaceTabs) WorkspaceTabs.setBadge('asignar', colas.seriales.length + colas.cambios.length + gestiones.length);
+
+    // ── De anexos dormidos ──
+    // Solo los que bodega tiene que DECIDIR suman al día; los demás son la
+    // fecha en que sus radios vuelven, para no contar con ellos antes.
+    if (d.dormidos === null) fallidas.push('anexos dormidos');
+    const dormidos = d.dormidos || [];
+    const aDecidir = dormidos.filter(g => g._bodega).length;
+    total += aDecidir;
+    if (dormidos.length) {
+      const AD = window.AnexoDormido;
+      partes.push(grupo('Equipos apartados por anexos dormidos', aDecidir,
+        dormidos.map(g => {
+          const n = AD.equiposApartados(g);
+          const os = (g.dormido_bodega?.ordenes || g.ordenes?.programacion_ids || []).join(', ');
+          return fila({
+            chip: g._bodega ? 'Decide' : 'Apartado', chipCls: g._bodega ? 'conflicto' : 'clasificar',
+            txt: `<b>${esc(g.id)}</b> · ${esc(g.cliente_nombre || '—')} — ${n ? `${n} equipo(s)` : 'sin seriales'}${os ? ` · orden ${esc(os)}` : ''}: `
+              + (g._bodega
+                ? '<b>venció sin firma ni retención con la orden ya trabajada</b> — suéltalos o espera a que el vendedor lo reactive'
+                : esc(AD.resumen(g))),
+            at: g.dormido_at?.toMillis?.() || null,
+            ctaHtml: g._bodega && AD.puedeSoltar(g, ctx.rol, firebase.auth().currentUser?.uid).ok
+              ? `<button type="button" class="btn btn-sm btn-accent bj-cta" data-soltar-anexo="${esc(g.id)}">
+                  <i data-lucide="package-x" style="width:14px;height:14px;"></i> Soltar los equipos</button>`
+              : '',
+          });
+        }).join(''),
+        nota('Un anexo de aumento sin firma a los 45 días se duerme; a los 15 días (o al final de una retención del vendedor) sus equipos se sueltan solos. Si el taller ya trabajó la orden, lo decides tú.'),
+      ));
+    }
 
     // ── Del pool ──
     let poolHtml = '';
@@ -499,6 +543,32 @@ window.AlmacenHoy = (() => {
 
   function recargar() { return cargar(); }
 
+  // Bodega SUELTA los equipos de un anexo dormido vencido con la orden ya
+  // trabajada (5-oct-2026): anular el anexo con motivo — la anulación de
+  // siempre (onGestionWrite → limpiarAnulacion) devuelve a bodega los radios
+  // apartados y elimina la orden si sigue abierta (POR ASIGNAR / RECIBIDO /
+  // ASIGNADO); la que el taller ya completó queda anotada para Órdenes.
+  async function soltarAnexo(gid, btn) {
+    const g = (ctx.datos?.dormidos || []).find(x => x.id === gid);
+    const p = g ? AnexoDormido.puedeSoltar(g, ctx.rol, firebase.auth().currentUser?.uid) : { ok: false, motivo: 'No encontrado.' };
+    if (!p.ok) { if (window.Toast) Toast.show(p.motivo, 'warn'); return; }
+    const os = (g.dormido_bodega?.ordenes || []).join(', ');
+    const motivo = await Modal.prompt({ title: 'Soltar los equipos', confirmLabel: 'Soltar y anular el anexo', multiline: true,
+      message: `El anexo ${g.id} (${g.cliente_nombre || '—'}) se anula y sus ${AnexoDormido.equiposApartados(g)} equipo(s) apartados vuelven a bodega. Si la orden ${os} sigue abierta (por asignar o asignada) se elimina con la anulación; si el taller ya la completó, queda anotada en el expediente para cerrarla desde Órdenes. Motivo (obligatorio):` });
+    if (motivo === null || motivo === undefined) return;
+    if (String(motivo).trim().length < 5) { if (window.Toast) Toast.show('Escribe el motivo (5 letras o más).', 'warn'); return; }
+    if (btn) btn.disabled = true;
+    try {
+      await GestionesService.soltarDormido(g, motivo);
+      if (window.Toast) Toast.show('Anexo anulado — los equipos vuelven a bodega en unos segundos', 'ok');
+      setTimeout(() => cargar(), 1800);
+    } catch (e) {
+      console.error(e);
+      if (btn) btn.disabled = false;
+      if (window.Toast) Toast.show('No se pudo soltar: ' + (e.message || e), 'bad');
+    }
+  }
+
   // ── Conflictos: resolver desde la bandeja (Fase C) ─────────────────────
   // Mismo circuito que la cola de Equipos: elegir la ficha real → callable
   // fusionarPoolFicha (conserva kardex, absorbe duplicados), o marcar que son
@@ -635,6 +705,8 @@ window.AlmacenHoy = (() => {
     document.getElementById('hoyGrupos')?.addEventListener('click', (e) => {
       const c = e.target.closest('[data-conflicto]');
       if (c) { e.preventDefault(); abrirConflicto(c.dataset.conflicto); return; }
+      const sa = e.target.closest('[data-soltar-anexo]');
+      if (sa) { e.preventDefault(); soltarAnexo(sa.dataset.soltarAnexo, sa); return; }
       // Ficha y Existencias en la misma página (auditoría UX 2026-09-28).
       const fi = e.target.closest('a[data-ficha]');
       if (fi && window.EquipoFicha && !(e.ctrlKey || e.metaKey || e.button !== 0)) {

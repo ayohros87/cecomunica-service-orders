@@ -176,7 +176,7 @@ Object.assign(window.Centro, {
       title: 'Reactivar la solicitud de firma', confirmLabel: 'Reactivar y generar enlace',
       message: `El anexo <b class="cg-mono">${this.esc(g.id)}</b> quedó dormido por ${this.esc(dias)}.
         Vuelve a ser un trámite vivo y se genera un <b>enlace de firma nuevo</b>; el anterior sigue caducado.
-        Si en 45 días no firma, se vuelve a dormir.`,
+        El plazo para soltar los equipos deja de correr. Si en 45 días no firma, se vuelve a dormir.`,
     });
     if (!ok) { this.abrirGestion?.(g.id); return; }
     try {
@@ -191,6 +191,75 @@ Object.assign(window.Centro, {
     } catch (e) { console.error(e); Toast.show('No se pudo reactivar: ' + (e.message || e), 'bad'); return; }
     this.pintarGestiones?.(); this.pintarSenales?.(); this.pintarResumen?.(); this.armarMenu?.();
     await this.enviarFirmaAnexo(g.id);
+  },
+
+  // Equipos que aparta un anexo DORMIDO (Alberto, 5-oct-2026; AnexoDormido):
+  // RETENER 30 días más con motivo + fecha probable de firma, o SOLTAR (anula
+  // el anexo; la anulación de siempre libera los radios). Si nadie decide en
+  // 15 días, el cron los suelta solo.
+  retenerAnexo(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    const rol = this.rol === 'admin' ? ROLES.ADMIN : this.rol;
+    const p = g ? AnexoDormido.puedeRetener(g, rol) : { ok: false, motivo: 'Expediente no encontrado' };
+    if (!p.ok) { Toast.show(p.motivo, 'warn'); return; }
+    const hasta = AnexoDormido.retenerHasta(g);
+    const n = AnexoDormido.equiposApartados(g);
+    const hoy = new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10);
+    this._abrirModalA({
+      banda: false, size: 'md',
+      titulo: `Retener los equipos — <span class="cg-mono">${this.esc(g.id)}</span>`,
+      cuerpo: `
+        <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:60ch;">
+          ${n ? `Los <b>${n} equipo(s)</b> apartados` : 'El anexo'} sigue${n ? 'n' : ''} reservado${n ? 's' : ''} hasta el
+          <b>${this.esc(AnexoDormido.fecha(hasta))}</b> (30 días más). Si para entonces el cliente no firma, se sueltan solos.
+          ${AnexoDormido.retenciones(g) ? '<br><b>Segunda retención</b>: solo administración.' : 'Se retiene <b>una sola vez</b>; otra retención la hace administración.'}</p>
+        <div class="form-field" style="margin-bottom:10px;">
+          <label class="form-label" for="rdMotivo">Motivo (obligatorio)</label>
+          <textarea class="form-input" id="rdMotivo" rows="2" maxlength="300" placeholder="Por qué el cliente todavía va a firmar"></textarea></div>
+        <div class="form-field" style="margin:0; max-width:220px;">
+          <label class="form-label" for="rdFecha">Fecha probable de firma</label>
+          <input class="form-input" type="date" id="rdFecha" min="${hoy}"></div>`,
+      footer: `<span class="sep"></span>
+        <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="Centro._confirmarRetener('${this.esc(g.id)}')">Retener los equipos</button>`,
+    });
+  },
+  _confirmarRetener(gid) {
+    return this._candado('retenerAnexo:' + gid, async () => {
+      const g = (this.gestiones || []).find(x => x.id === gid);
+      const motivo = (document.getElementById('rdMotivo')?.value || '').trim();
+      const fecha = document.getElementById('rdFecha')?.value || '';
+      if (motivo.length < 5) { Toast.show('Escribe el motivo de la retención', 'warn'); return; }
+      if (!fecha) { Toast.show('Indica la fecha probable de firma', 'warn'); return; }
+      try {
+        const hasta = await GestionesService.retenerDormido(g, { motivo, fechaFirma: fecha });
+        g.dormido_retencion = { n: AnexoDormido.retenciones(g) + 1, motivo, fecha_firma: fecha };
+        g.dormido_retener_hasta = hasta;
+        this._cerrarModal();
+        Toast.show(`Equipos retenidos hasta el ${AnexoDormido.fecha(hasta)}`, 'ok');
+      } catch (e) { console.error(e); Toast.show('No se pudo retener: ' + (e.message || e), 'bad'); return; }
+      this.pintarGestiones?.(); this.armarMenu?.();
+    }, 'Reteniendo…');
+  },
+
+  soltarAnexo(gid) {
+    return this._candado('soltarAnexo:' + gid, () => this._soltarAnexo(gid), 'Soltando…');
+  },
+  async _soltarAnexo(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    const rol = this.rol === 'admin' ? ROLES.ADMIN : this.rol;
+    const p = g ? AnexoDormido.puedeSoltar(g, rol, firebase.auth().currentUser?.uid) : { ok: false, motivo: 'Expediente no encontrado' };
+    if (!p.ok) { Toast.show(p.motivo, 'warn'); return; }
+    const n = AnexoDormido.equiposApartados(g);
+    const motivo = await Modal.prompt({ title: 'Soltar los equipos', confirmLabel: 'Soltar y anular el anexo', multiline: true,
+      message: `El anexo ${g.id} se anula${n ? ` y sus ${n} equipo(s) apartados vuelven a bodega` : ''}; la orden de programación sin trabajar se elimina. Motivo (obligatorio, queda en el expediente):` });
+    if (motivo === null || motivo === undefined) return;
+    if (String(motivo).trim().length < 5) { Toast.show('Escribe el motivo (5 letras o más).', 'warn'); return; }
+    try {
+      await GestionesService.soltarDormido(g, motivo);
+      Toast.show('Anexo anulado — el sistema suelta los equipos…', 'ok');
+      setTimeout(() => { if (this.cliente) this.abrir(this.cliente.id, { push: false }); }, 1800);
+    } catch (e) { console.error(e); Toast.show('No se pudo soltar: ' + (e.message || e), 'bad'); }
   },
 
   async _enviarFirmaCorreo(contratoDocId, sid) {

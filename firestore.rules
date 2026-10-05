@@ -1142,6 +1142,56 @@ service cloud.firestore {
           && request.resource.data.dormido_reactivado_por_uid == request.auth.uid
           && soloTocaG(["dormido","dormido_reactivado_at","dormido_reactivado_por_uid"]);
       }
+      // Anexo DORMIDO: qué pasa con los equipos que aparta (Alberto, 5-oct-2026;
+      // domain/anexoDormido). RETENER: motivo + fecha probable de firma, 30
+      // días más; la primera vez vendedor/gerencia/admin, la segunda solo
+      // administración. No cuando el plazo ya venció y lo decide bodega.
+      function esRetenerAnexoDormido() {
+        let n = resource.data.get("dormido_retencion", {}).get("n", 0);
+        let r = request.resource.data.dormido_retencion;
+        // El plazo vigente (fin de la retención anterior, o dormido_at + 15) o
+        // ahora si ya pasó: la retención nueva no puede ir más de 30 días allá.
+        let plazo = resource.data.get("dormido_retener_hasta", null) != null
+          ? resource.data.dormido_retener_hasta
+          : resource.data.dormido_at + duration.value(15, "d");
+        let desde = plazo > request.time ? plazo : request.time;
+        return resource.data.tipo == "aumento"
+          && resource.data.estado == "pendiente_firma"
+          && resource.data.get("dormido", false) == true
+          && resource.data.get("dormido_bodega", null) == null
+          && (userRole() == "administrador" || (n == 0 && userRole() in ["gerente","vendedor"]))
+          && r.n == n + 1
+          && r.por_uid == request.auth.uid
+          && r.motivo is string && r.motivo.size() >= 5 && r.motivo.size() <= 300
+          && r.fecha_firma is string && r.fecha_firma.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+          && request.resource.data.dormido_retener_hasta is timestamp
+          && request.resource.data.dormido_retener_hasta > request.time
+          && request.resource.data.dormido_retener_hasta <= desde + duration.value(31, "d")
+          && soloTocaG(["dormido_retencion","dormido_retener_hasta"]);
+      }
+      // SOLTAR = anular el anexo dormido con motivo (onGestionWrite →
+      // limpiarAnulacion libera los radios). Aunque ya tenga seriales y orden
+      // (gestionBlanda no aplica): el vendedor que lo pidió, administración o
+      // gerencia; bodega solo cuando el plazo venció con la orden trabajada.
+      function esSoltarAnexoDormido() {
+        return resource.data.tipo == "aumento"
+          && resource.data.estado == "pendiente_firma"
+          && resource.data.get("dormido", false) == true
+          && resource.data.get("cierre", {}).get("entrega", false) != true
+          && (userRole() in ["administrador","gerente"]
+              || (userRole() == "vendedor" && resource.data.get("responsable_uid", "") == request.auth.uid)
+              || (userRole() == "inventario" && resource.data.get("dormido_bodega", null) != null))
+          && request.resource.data.estado == "anulada"
+          && request.resource.data.anulada_por_uid == request.auth.uid
+          && request.resource.data.anulada_motivo is string && request.resource.data.anulada_motivo.size() >= 5
+          && request.resource.data.dormido_soltado.modo == "manual"
+          && request.resource.data.dormido_soltado.por_uid == request.auth.uid
+          && soloTocaG(["estado","anulada_motivo","anulada_por_uid","anulada_at","dormido_soltado"]);
+      }
+      function esDecisionAnexoDormido() {
+        return resource.data.get("dormido", false) == true
+          && (esReactivarAnexoGestion() || esRetenerAnexoDormido() || esSoltarAnexoDormido());
+      }
       // Vincular el enlace de firma digital del anexo.
       function esEnlaceFirmaGestion() {
         return userRole() in ["administrador","gerente","vendedor","recepcion"]
@@ -1229,11 +1279,17 @@ service cloud.firestore {
                     && reemplazoNaceEnAprobacion()
                     && cambioSerialNaceEnBodega()
                     && request.resource.data.deleted == false;
+      // Las decisiones del anexo DORMIDO van PRIMERO, tras una sola condición
+      // barata: lo que no está dormido paga una comparación, y lo dormido no
+      // depende de que el resto falle barato. Ojo: un RECHAZO de un admin
+      // recorre la cadena entera y llega al tope de 1,000 expresiones (visto
+      // el 5-oct-2026 en el emulador, igual que ordenes_de_servicio).
       allow update: if isSignedIn() && (
-                      esAprobacionGestion() || esAnulacionGestion() || esCartaGestion()
+                      esDecisionAnexoDormido()
+                      || esAprobacionGestion() || esAnulacionGestion() || esCartaGestion()
                       || esFirmaAnexoGestion() || esRegularizacionSinFirmaGestion()
                       || esAprobacionActualizacionSeriales()
-                      || esEnlaceFirmaGestion() || esAsignacionGestion() || esReactivarAnexoGestion()
+                      || esEnlaceFirmaGestion() || esAsignacionGestion()
                       || esCorreccionSerialesGestion() || esMarcaTallerGestion()
                       || esEdicionGestion());
       allow delete: if false;

@@ -91,6 +91,21 @@ Object.assign(window.Centro, {
         onclick: `Centro.reactivarAnexo('${id}')`,
         ok: [ROLES.ADMIN, 'admin', ROLES.GERENTE, ROLES.VENDEDOR].includes(this.rol),
         motivo: 'lo reactiva el vendedor o administración' }));
+      // Qué pasa con los equipos que aparta (Alberto, 5-oct-2026): retener o
+      // soltar dentro del plazo; si nadie decide, el cron los suelta solo.
+      if (window.AnexoDormido) {
+        const rolN = this.rol === 'admin' ? ROLES.ADMIN : this.rol;
+        const uid = firebase.auth().currentUser?.uid;
+        const pR = AnexoDormido.puedeRetener(g, rolN);
+        const pS = AnexoDormido.puedeSoltar(g, rolN, uid);
+        const resumen = AnexoDormido.resumen(g);
+        A.push(this._acc({ id: 'retener', label: 'Retener los equipos…',
+          hint: `30 días más con motivo y fecha probable de firma${resumen ? ` — hoy ${resumen}` : ''}`,
+          onclick: `Centro.retenerAnexo('${id}')`, ok: pR.ok, motivo: pR.motivo }));
+        A.push(this._acc({ id: 'soltar', label: 'Soltar los equipos…', danger: true,
+          hint: 'anula el anexo con motivo; los radios vuelven a bodega',
+          onclick: `Centro.soltarAnexo('${id}')`, ok: pS.ok, motivo: pS.motivo }));
+      }
     }
     if (esAum && !esAct && g.estado === 'pendiente_firma' && !dormida) {
       const conEnlace = g.firma_solicitud_estado === 'pendiente';

@@ -337,6 +337,25 @@ window.HomeSignals = (() => {
       href: 'almacen/index.html',
       count: () => SenalesService.countSerialesPorAsignar(),
     },
+    // Equipos apartados por anexos dormidos (Alberto, 5-oct-2026): la fecha
+    // en que vuelven a bodega, y arriba los que bodega tiene que decidir (el
+    // plazo venció con la orden ya trabajada en el taller).
+    ADB: {
+      modulo: ['almacen', 'pendientes'], icon: 'package-x', moreIsBad: true,
+      label: 'Equipos apartados por anexos dormidos', sub: 'anexos sin firma a los 45 días',
+      href: 'almacen/index.html',
+      count: () => SenalesService.countAnexosDormidos(),
+      items: () => SenalesService.listAnexosDormidos(),
+      row: (r, esc) => ({
+        txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.id)}</span>`
+          + (r.equipos ? ` · ${r.equipos} equipo(s)` : '')
+          + (r.bodega ? ` · <b>orden trabajada: decide</b>` : ` · ${esc(r.resumen)}`),
+        dias: r.dias,
+        cta: { label: r.bodega ? 'Decidir' : 'Ver en Almacén', href: 'almacen/index.html' },
+      }),
+      hrefLabel: 'Abrir Almacén →',
+      vacio: 'Ningún anexo dormido aparta equipos.',
+    },
     // ── Regularización de cuentas (plan 2026-09-08) ──
     // La deuda D1–D7 la calcula el job en clientes.regularizacion; aquí solo
     // se lee. El vendedor ve SU cartera; gerencia/admin ven todas (REGG).
@@ -454,7 +473,9 @@ window.HomeSignals = (() => {
     // S15 (seriales por asignar) desplaza a S11 (equipos en bodega): S11 es un
     // dato de estado —ya está en los KPI de Inventario— y S15 es una cola con
     // gente esperando. (La fila ya no tiene tope fijo de 4: se ajusta a data-n.)
-    inventario:        ['S15', 'S13', 'S14', 'S9'],
+    // ADB (anexos dormidos, 5-oct-2026): los radios que aparta un anexo sin
+    // firma y cuándo vuelven; los vencidos con orden trabajada los decide bodega.
+    inventario:        ['S15', 'ADB', 'S13', 'S14', 'S9'],
     vista:             ['S1', 'S3', 'S4'],
     // Contabilidad (D17, 2026-10-01): sus dos colas de Finanzas en vez de un
     // home vacío. El gate de módulo ('facturacion') ya es suyo.
