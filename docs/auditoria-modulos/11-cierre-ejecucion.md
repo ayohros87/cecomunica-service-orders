@@ -53,3 +53,15 @@ Probado en el emulador, **no corrido en producción**:
 | SC2020 | Es el modelo; la marca es SEPURA | Catálogo y 12 fichas corregidos en producción el 2-oct (15 escrituras) |
 | "HYTERA NO APLICA" | Retirarlo | `activo:false` en producción; los selectores lo respetan (3b832d7); los 33 contratos quedan como estaban |
 
+## 5. Respuestas del 5-oct y lo hecho con ellas
+
+| Pregunta | Respuesta | Hecho |
+|---|---|---|
+| PoC: los 63 donde Almacén dice otro cliente | Procede | Incluidos en el saneo |
+| Saneo de duplicados PoC | Procede | 679 fichas cerradas en producción el 5-oct; segunda pasada 0. Quedan 130 seriales "para revisar" |
+| Cuadre del QR | Procede | Ya lo había hecho el cron del lunes 5-oct 05:30; 90 verificaciones anuladas |
+| Enlaces de cotizaciones eliminadas | Cerrarlos | 8 espejos marcados en producción |
+| Anexos dormidos | Retener o soltar | 15 días para decidir, retener 30 (la 2.ª solo admin), si nadie decide se sueltan; con orden trabajada decide bodega (db9186f, b2be3e7, desplegado 5-oct) |
+| Ajustes de tarifa | También se duermen | Ya incluidos |
+| Descuento de no devueltos | 20 % | 87b631a, desplegado 5-oct |
+
