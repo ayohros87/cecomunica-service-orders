@@ -211,7 +211,7 @@ Object.assign(window.Centro, {
   // Candado contra el doble submit (auditoría UX 2026-09-28, P0 #10): cada
   // click consumía un correlativo y mandaba un correo de aprobación.
   crearBaja(btn) {
-    return withBusy(btn || null, () => this._crearBaja(), { key: 'crearBaja', label: 'Enviando…', rethrow: false });
+    return withBusy(btn || null, () => this._crearBaja(), { key: 'crearBaja', label: 'Enviando…', rethrow: false, intento: this._intento('crearBaja', 'Baja') });
   },
   async _crearBaja() {
     const termIds = Array.isArray(this._wbTermIds) ? this._wbTermIds : [];

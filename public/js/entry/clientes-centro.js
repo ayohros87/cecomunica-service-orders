@@ -46,6 +46,8 @@ import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';
 import '/js/ui/toast.js';
 import '/js/ui/busy.js';
+// Envío frenado = motivo fijo en el modal + intentos_fallidos (2026-10-05).
+import '/js/ui/intento.js';
 import '/js/ui/modal.js';
 import '/js/pages/contratos-upload.js';
 import '/js/domain/garantiaEquipo.js';

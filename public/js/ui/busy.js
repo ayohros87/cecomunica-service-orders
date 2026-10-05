@@ -59,14 +59,24 @@
         }
       };
     }
-    try {
-      return await fn();
-    } catch (err) {
-      if (opts.toast !== false && window.Toast && !opts.silencioso) {
-        Toast.show(opts.mensajeError || (err && err.message) || 'No se pudo completar la acción', 'bad');
+    const correr = async () => {
+      try {
+        return await fn();
+      } catch (err) {
+        if (opts.intento) console.error('[withBusy]', err);
+        if (opts.toast !== false && window.Toast && !opts.silencioso) {
+          Toast.show(opts.mensajeError || (err && err.message) || 'No se pudo completar la acción', 'bad');
+        }
+        if (opts.rethrow !== false) throw err;
+        return undefined;
       }
-      if (opts.rethrow !== false) throw err;
-      return undefined;
+    };
+    try {
+      // opts.intento (2026-10-05, js/ui/intento.js): un envío frenado deja el
+      // motivo fijo en el modal y queda registrado en intentos_fallidos.
+      return (opts.intento && window.IntentoEnvio)
+        ? await IntentoEnvio.vigilar({ ...opts.intento, btn }, correr)
+        : await correr();
     } finally {
       _ocupados.delete(key);
       if (restaurar) restaurar();

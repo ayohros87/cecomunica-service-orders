@@ -120,7 +120,7 @@ Object.assign(window.Centro, {
   // Candado contra el doble submit (auditoría UX 2026-09-28, P0 #10): cada
   // click consumía un correlativo y mandaba un correo de aprobación.
   crearCambioSerial(btn) {
-    return withBusy(btn || null, () => this._crearCambioSerial(), { key: 'crearCambioSerial', label: 'Enviando…', rethrow: false });
+    return withBusy(btn || null, () => this._crearCambioSerial(), { key: 'crearCambioSerial', label: 'Enviando…', rethrow: false, intento: this._intento('crearCambioSerial', 'Cambio de serial') });
   },
   async _crearCambioSerial() {
     const flota = this._flotaCorregible();
@@ -245,7 +245,7 @@ Object.assign(window.Centro, {
   // Candado contra el doble submit (auditoría UX 2026-09-28, P0 #10): cada
   // click consumía un correlativo y mandaba un correo de aprobación.
   crearDemo(btn) {
-    return withBusy(btn || null, () => this._crearDemo(), { key: 'crearDemo', label: 'Enviando…', rethrow: false });
+    return withBusy(btn || null, () => this._crearDemo(), { key: 'crearDemo', label: 'Enviando…', rethrow: false, intento: this._intento('crearDemo', 'Demo') });
   },
   async _crearDemo() {
     const selects = [...document.querySelectorAll('select[data-wdl-modelo]')];

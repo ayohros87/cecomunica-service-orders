@@ -513,7 +513,15 @@ Object.assign(window.Centro, {
     nodo.dataset.tono = r.tono;
   },
 
-  async crearContrato() {
+  // Envuelto en IntentoEnvio (2026-10-05, caso GOLY): si se frena, el motivo
+  // queda fijo encima de "Guardar contrato" y en intentos_fallidos.
+  crearContrato() {
+    const fn = () => this._crearContrato();
+    return window.IntentoEnvio
+      ? IntentoEnvio.vigilar({ ...this._intento('crearContrato', 'Contrato nuevo'), btn: document.getElementById('wcGuardar') }, fn)
+      : fn();
+  },
+  async _crearContrato() {
     if (this._wcGuardando) return;
     // Segundo candado del check (el botón ya sale deshabilitado): esta función
     // es la única vía de creación y no debe depender de que la llamen bien.

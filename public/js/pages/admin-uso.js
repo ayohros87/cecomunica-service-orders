@@ -76,6 +76,11 @@ window.AdminUso = (() => {
         </tbody></table>`
       : '<div class="uso-vacio">Todavía no hay datos en este rango. Se empezó a contar el 30 de septiembre de 2026.</div>';
 
+    pintarIntentos(desde, mapaNombres).catch((e) => {
+      console.error('[admin/uso] intentos', e);
+      $('usoIntentos').innerHTML = '<div class="uso-vacio">No se pudieron cargar los intentos.</div>';
+    });
+
     // Usuarios.
     const usuarios = [...porUsuario].sort((a, b) => b[1].vistas - a[1].vistas);
     $('usoUsuarios').innerHTML = usuarios.length
@@ -87,6 +92,27 @@ window.AdminUso = (() => {
         }).join('')}
         </tbody></table>`
       : '<div class="uso-vacio">Sin datos en este rango.</div>';
+  }
+
+  // Envíos frenados o fallidos (intentos_fallidos, 2026-10-05): lo que un
+  // vendedor creyó enviar y no se guardó, con el motivo exacto.
+  async function pintarIntentos(desde, mapaNombres) {
+    const snap = await firebase.firestore().collection('intentos_fallidos')
+      .where('fecha', '>=', desde).orderBy('fecha', 'desc').limit(200).get();
+    const filas = snap.docs.map((d) => d.data())
+      .sort((a, b) => (b.at?.toMillis?.() || 0) - (a.at?.toMillis?.() || 0));
+    const hora = (t) => t?.toDate ? t.toDate().toLocaleString('es-PA', { timeZone: 'America/Panama', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    $('usoIntentos').innerHTML = filas.length
+      ? `<table><thead><tr><th>Cuándo</th><th>Quién</th><th>Trámite</th><th>Cliente</th><th>Qué pasó</th></tr></thead><tbody>
+        ${filas.map((f) => `<tr>
+          <td style="white-space:nowrap;">${esc(hora(f.at) || f.fecha)}</td>
+          <td>${esc(mapaNombres.get(f.uid) || f.email || f.uid)}</td>
+          <td>${esc(f.etiqueta || f.accion)}</td>
+          <td>${f.cliente_id ? `<a href="../clientes/centro.html?id=${encodeURIComponent(f.cliente_id)}">${esc(f.cliente_nombre || f.cliente_id)}</a>` : '—'}</td>
+          <td style="font-size:12.5px;">${f.resultado === 'error' ? '<b style="color:#991B1B;">Error</b> · ' : ''}${(f.mensajes || []).map(esc).join(' · ')}${f.error ? `<div class="ts">${esc(f.error)}</div>` : ''}</td>
+        </tr>`).join('')}
+        </tbody></table>`
+      : '<div class="uso-vacio">Ningún envío frenado en este rango.</div>';
   }
 
   function init() {

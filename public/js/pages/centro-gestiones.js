@@ -52,6 +52,12 @@ Object.assign(window.Centro, {
   puedeAprobarBaja() { return [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol); },
   puedeCrearGestion() { return [ROLES.ADMIN, ROLES.GERENTE, ROLES.VENDEDOR, ROLES.RECEPCION].includes(this.rol); },
 
+  // opts.intento de withBusy (js/ui/intento.js, 2026-10-05, caso GOLY): si el
+  // envío se frena, el motivo queda fijo en el modal y en intentos_fallidos.
+  _intento(accion, etiqueta) {
+    return { accion, etiqueta, contexto: () => ({ cliente_id: Centro.cliente?.id, cliente_nombre: Centro.cliente?.nombre }) };
+  },
+
   async recargarGestiones() {
     window.AprobacionesService?.invalidarHome();
     this.gestiones = await GestionesService.listarPorCliente(this.cliente.id).catch(() => this.gestiones || []);

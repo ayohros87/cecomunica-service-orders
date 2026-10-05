@@ -1463,6 +1463,20 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['fecha', 'paginas', 'usuarios']);
       allow delete: if false;
     }
+    // Envíos frenados o fallidos de los wizards (2026-10-05, caso GOLY: una
+    // gestión "hecha" que nunca existió). Cada quien registra los suyos; solo
+    // admin lee (admin/uso.html). Inmutable: es un registro.
+    match /intentos_fallidos/{id} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'accion', 'etiqueta', 'resultado',
+             'mensajes', 'error', 'pagina', 'cliente_id', 'cliente_nombre', 'fecha', 'at'])
+        && request.resource.data.resultado in ['frenado', 'error']
+        && request.resource.data.mensajes is list && request.resource.data.mensajes.size() <= 5
+        && request.resource.data.at == request.time;
+      allow update, delete: if false;
+    }
     // La cola de correo contiene PII (destinatarios, cuerpos con datos de
     // clientes/contratos). Lectura y administración solo admin/gerente; el
     // `create` queda abierto al staff autenticado porque cotizaciones y órdenes

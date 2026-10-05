@@ -223,7 +223,7 @@ Object.assign(window.Centro, {
   // Candado contra el doble submit (auditoría UX 2026-09-28, P0 #10): cada
   // click consumía un correlativo y mandaba un correo de aprobación.
   crearAjuste(btn) {
-    return withBusy(btn || null, () => this._crearAjuste(), { key: 'crearAjuste', label: 'Enviando…', rethrow: false });
+    return withBusy(btn || null, () => this._crearAjuste(), { key: 'crearAjuste', label: 'Enviando…', rethrow: false, intento: this._intento('crearAjuste', 'Consola, servicio o ajuste de tarifa') });
   },
   async _crearAjuste() {
     const cid = document.getElementById('wjContrato')?.value || '';
