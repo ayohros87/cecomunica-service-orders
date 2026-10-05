@@ -385,6 +385,7 @@ function abrirModal(id=null){
   document.getElementById('f-es-alquiler').checked = creando ? true : false; // en esta página, nuevo = de alquiler
   document.getElementById('f-alto').checked=false;
   document.getElementById('f-activo').checked=true;
+  document.getElementById('f-sin-serial').checked=false;
   setVal('f-aliases','');
   setVal('f-descripcion','');
   setVal('f-notas','');
@@ -399,6 +400,7 @@ function abrirModal(id=null){
       document.getElementById('f-es-alquiler').checked = m.es_alquiler===true;
       document.getElementById('f-alto').checked = m.alto_movimiento===true;
       document.getElementById('f-activo').checked = m.activo!==false;
+      document.getElementById('f-sin-serial').checked = m.sin_serial===true;
       setVal('f-aliases', Array.isArray(m.aliases) ? m.aliases.join(', ') : (m.aliases||m.alias||''));
       setVal('f-descripcion', m.descripcion||'');
       setVal('f-notas', m.notas||'');
@@ -482,6 +484,9 @@ async function guardarModelo(){
     es_alquiler: document.getElementById('f-es-alquiler').checked,
     alto_movimiento: document.getElementById('f-alto').checked,
     activo: document.getElementById('f-activo').checked,
+    // Accesorio sin serial (fuentes, cargadores): el pool lo ignora, así que el
+    // cierre de una ENTRADA no lo reporta como "no existe en inventario".
+    sin_serial: document.getElementById('f-sin-serial').checked,
     // Aliases: grafías alternativas (coma/; separadas), sin duplicados ni vacíos.
     // Las usa el backfill linkModeloIdPoc para enlazar equipos con nombre viejo.
     aliases: [...new Set((document.getElementById('f-aliases').value||'')

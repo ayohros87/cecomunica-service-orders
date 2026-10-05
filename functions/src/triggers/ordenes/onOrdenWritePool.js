@@ -7,6 +7,7 @@ const { decidirCierreTrasEntrada, buildCierre } = require("../../domain/cierreCo
 const G = require("../../lib/gestiones");
 const tandas = require("../../domain/entregaTandas");
 const { incidenciaSuperada } = require("../../lib/incidenciasEntrada");
+const { separarSinSerial } = require("../../domain/accesorioSinSerial");
 const { admin, db } = require("../../lib/admin");
 
 // Pool de equipos ↔ órdenes de servicio ("migración por contacto", plan
@@ -192,8 +193,24 @@ module.exports = onDocumentWritten(
     if (!after && !before) return null;
 
     try {
-      const antes   = equiposDe(before);
-      const despues = after ? equiposDe(after) : [];
+      let antes   = equiposDe(before);
+      let despues = after ? equiposDe(after) : [];
+      // Accesorios sin serial (catálogo `sin_serial`): no son unidades del
+      // pool. Se apartan aquí para que ningún bloque de abajo los busque, los
+      // cree ni los reporte. Sin catálogo se sigue como antes.
+      let ignorados = new Set();
+      if (antes.length || despues.length) {
+        try {
+          const { porId } = await catalogo();
+          const a = separarSinSerial(antes, porId);
+          const d = separarSinSerial(despues, porId);
+          antes = a.conSerial;
+          despues = d.conSerial;
+          ignorados = new Set(d.sinSerial.map((e) => pool.normSerial(e.serial)));
+        } catch (err) {
+          logger.warn("[onOrdenWritePool] catálogo no disponible para apartar accesorios", { ordenId, message: err.message });
+        }
+      }
       const keysDespues = new Set(despues.map((e) => pool.normSerial(e.serial)));
       const keysAntes   = new Set(antes.map((e) => pool.normSerial(e.serial)));
 
@@ -242,6 +259,9 @@ module.exports = onDocumentWritten(
           const k = pool.normSerial(e.serial);
           return seriales.has(k) || !keysAntes.has(k);
         });
+        // Incidencia de una fila que resultó ser accesorio sin serial (el
+        // modelo se marcó después del cierre): no hay nada que aterrizar.
+        const accesorios = [...seriales].filter((k) => ignorados.has(k));
         // Un radio que alguien ya ubicó después del cierre NO se reintenta:
         // aterrizarlo ahora lo sacaría del cliente que lo tiene (23905A0441,
         // entregado a SEPROSA). Su incidencia sale de la lista y ya.
@@ -256,12 +276,12 @@ module.exports = onDocumentWritten(
           }
         }
         const aReintentar = candidatos.filter((e) => !superados.has(pool.normSerial(e.serial)));
-        if (candidatos.length) {
+        if (candidatos.length || accesorios.length) {
           const { incidencias, aterrizados } = aReintentar.length
             ? await aterrizarEntrada(ordenId, after, aReintentar, { reintento: true })
             : { incidencias: [], aterrizados: 0 };
           // Lo que ya no falla sale de la lista; lo que sigue fallando se queda.
-          const resueltos = new Set(candidatos.map((e) => pool.normSerial(e.serial)));
+          const resueltos = new Set([...candidatos.map((e) => pool.normSerial(e.serial)), ...accesorios]);
           const restantes = (after.cierre_entrada_incidencias || [])
             .filter((i) => !resueltos.has(pool.normSerial(i.serial)))
             .concat(incidencias);
