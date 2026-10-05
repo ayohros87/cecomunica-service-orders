@@ -232,6 +232,13 @@ async function traspasarASustituto({ origenId, origen, sustitutoId, unidades }) 
     }, { merge: true });
   }
 
+  // La PoC guarda su propio vínculo al contrato (`poc_devices.contrato_doc_id`)
+  // y nadie más lo mueve: sin esto la Base PoC seguía enseñando el número
+  // anulado (MAGEN DAVID, ALQ20260720-02 → ALQ20260812-02, 2026-10-05).
+  await reapuntarPoc({ origenId, origen, sustitutoId, sustituto: s })
+    .catch((e) => logger.warn("[sustitucionContrato] PoC no reapuntada (no crítico)",
+      { sustitutoId, message: e.message }));
+
   // Bodega se entera SIEMPRE: unos seriales aparecieron solos en un contrato
   // que ellos no tocaron. Sin este aviso, el traspaso automático es justo el
   // tipo de magia que hace que nadie confíe en la pantalla de seriales.
@@ -245,6 +252,55 @@ async function traspasarASustituto({ origenId, origen, sustitutoId, unidades }) 
     origenId, sustitutoId, copiados, faltan, sinCupo: pendientes.length,
   });
   return { ok: true, copiados, faltan, completo, pendientes, restantes };
+}
+
+/**
+ * Reapunta al sustituto los equipos de la Base PoC que seguían vinculados al
+ * contrato anulado. Solo los que de verdad pasaron: el serial tiene que estar
+ * ya en `contratos/{sustituto}/seriales` — lo que no cupo sigue ligado al
+ * anulado en el pool y en la PoC por igual. Escribir el vínculo no dispara
+ * onPocDeviceWritePool (solo reacciona a cambios de serial). Idempotente.
+ * @returns {Promise<{reapuntados:number, seriales:string[]}>}
+ */
+async function reapuntarPoc({ origenId, origen, sustitutoId, sustituto, escribir = true }) {
+  const norm = (v) => String(v || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const sers = new Set();
+  (await db.collection("contratos").doc(sustitutoId).collection("seriales").get())
+    .forEach((d) => { const n = norm(d.data().serial); if (n) sers.add(n); });
+  if (!sers.size) return { reapuntados: 0, seriales: [] };
+
+  // Los devices viejos pueden traer solo el número visible, sin el doc id.
+  const consultas = [db.collection("poc_devices").where("contrato_doc_id", "==", origenId).get()];
+  if (origen.contrato_id) {
+    consultas.push(db.collection("poc_devices").where("contrato_id", "==", origen.contrato_id).get());
+  }
+  const docs = new Map();
+  for (const snap of await Promise.all(consultas)) snap.forEach((d) => docs.set(d.id, d));
+
+  const seriales = [];
+  let batch = db.batch(), ops = 0;
+  for (const d of docs.values()) {
+    const x = d.data() || {};
+    if (x.deleted === true) continue;
+    if (x.contrato_doc_id && x.contrato_doc_id !== origenId) continue;
+    if (!sers.has(norm(x.serial))) continue;
+    seriales.push(x.serial);
+    if (!escribir) continue;
+    batch.set(d.ref, {
+      contrato_doc_id: sustitutoId,
+      contrato_id: sustituto.contrato_id || null,
+      contrato_vinculado_por: "system:sustitucion",
+      contrato_reapuntado_de: origen.contrato_id || origenId,
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    if (++ops >= 400) { await batch.commit(); batch = db.batch(); ops = 0; }
+  }
+  if (ops) await batch.commit();
+  if (seriales.length) {
+    logger.info("[sustitucionContrato] PoC reapuntada al sustituto",
+      { origenId, sustitutoId, reapuntados: seriales.length, escribir });
+  }
+  return { reapuntados: seriales.length, seriales };
 }
 
 const esc = (v) => String(v ?? "").replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
@@ -322,4 +378,4 @@ async function avisarBodega({ sustitutoId, sustituto, origen, origenId, copiados
   logger.info("[sustitucionContrato] Aviso a bodega encolado", { sustitutoId, copiados, completo });
 }
 
-module.exports = { traspasarASustituto, cupoPorModelo };
+module.exports = { traspasarASustituto, cupoPorModelo, reapuntarPoc };
