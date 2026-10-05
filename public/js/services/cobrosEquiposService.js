@@ -41,9 +41,10 @@ const CobrosEquiposService = {
   ABIERTAS: ['pendiente', 'en_cobranza'],
 
   // Descuento que puede aplicar quien registra, sin pedirle permiso a nadie.
-  // 15% es el MISMO umbral que ya usa el auto-envío de cotizaciones: el equipo
-  // ya conoce el número y no hace falta enseñar dos reglas distintas.
-  DESCUENTO_LIBRE_PCT: 15,
+  // 20% es el MISMO umbral que ya usa el auto-envío de cotizaciones (política
+  // 20 % / $15,000, Alberto 2-oct-2026): el equipo ya conoce el número y no
+  // hace falta enseñar dos reglas distintas.
+  DESCUENTO_LIBRE_PCT: 20,
 
   // Días antes de escalar a cobranza (decidido con el usuario 2026-08-20).
   // El escalado real lo hace el cron recordatorioOperativo; esta constante está

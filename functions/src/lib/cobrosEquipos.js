@@ -23,9 +23,9 @@ const ETAPAS = {
 // Etapas ABIERTAS: las que hay que perseguir (bandeja + correo diario).
 const ABIERTAS = [ETAPAS.PENDIENTE, ETAPAS.EN_COBRANZA];
 
-// Mismo umbral que el auto-envío de cotizaciones (15%): el equipo ya conoce
-// el número y no hace falta enseñar dos reglas distintas.
-const DESCUENTO_LIBRE_PCT = 15;
+// Mismo umbral que el auto-envío de cotizaciones (20%, Alberto 2-oct-2026):
+// el equipo ya conoce el número y no hace falta enseñar dos reglas distintas.
+const DESCUENTO_LIBRE_PCT = 20;
 
 // Días antes de escalar a cobranza (decidido con el usuario 2026-08-20).
 const DIAS_A_COBRANZA = 10;

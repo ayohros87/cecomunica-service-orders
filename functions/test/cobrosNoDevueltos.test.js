@@ -51,7 +51,7 @@ test("el umbral de descuento y el plazo a cobranza no divergen", () => {
   assert.equal(backend.DIAS_A_COBRANZA, front.DIAS_A_COBRANZA);
   // Reglas decididas con el usuario el 2026-08-20: cambiarlas es una decisión
   // de negocio, no un refactor.
-  assert.equal(backend.DESCUENTO_LIBRE_PCT, 15);
+  assert.equal(backend.DESCUENTO_LIBRE_PCT, 20);
   assert.equal(backend.DIAS_A_COBRANZA, 10);
 });
 
@@ -85,8 +85,8 @@ test("el descuento se calcula igual en el navegador y en el servidor", () => {
 });
 
 test("solo pasa el umbral lo que de verdad lo pasa", () => {
-  assert.equal(front.requiereAprobacion(100, 85), false, "15% es el margen libre");
-  assert.equal(front.requiereAprobacion(100, 84.99), true, "por encima del 15% pide aprobación");
+  assert.equal(front.requiereAprobacion(100, 80), false, "20% es el margen libre");
+  assert.equal(front.requiereAprobacion(100, 79.99), true, "por encima del 20% pide aprobación");
   assert.equal(front.requiereAprobacion(100, 0), true, "condonar por monto pide aprobación");
   // Sin precio de catálogo el descuento es 0: no se puede exigir aprobación
   // contra una referencia que no existe (la línea se marca sin_referencia).
