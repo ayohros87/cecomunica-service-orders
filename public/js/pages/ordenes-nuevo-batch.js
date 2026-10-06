@@ -205,6 +205,18 @@ function serialesActuales() {
   return set;
 }
 
+// Retira las filas sin serial antes de una carga en bloque (pegar, duplicar
+// con seriales, jalar del contrato/gestión/POC). La página abre con una fila
+// en blanco para escanear; si recepción pega 75 seriales, esa fila quedaba de
+// #1 vacía, el conteo llegaba a 76 y el guardado la rechazaba porque "Aplicar
+// a todas" ya le había puesto modelo y observación (Brenda, 2026-10-06).
+function quitarFilasSinSerial() {
+  document.querySelectorAll("#filasBatch tr").forEach(tr => {
+    if (!tr.querySelector(".serie")?.value.trim()) tr.remove();
+  });
+  renumber();
+}
+
 // `obsComun` marca que la observación de la fila la puso "Aplicar a todas" y no
 // una mano — es lo que permite volver a aplicarla corregida sin borrar fila por
 // fila (ver aplicarComunes).
@@ -346,6 +358,7 @@ window.aplicarDuplicarMultiples = () => {
 
   let agregados = 0, duplicados = 0;
   if (lineas.length) {
+    quitarFilasSinSerial();
     const presentes = serialesActuales();
     lineas.forEach(serial => {
       const k = serial.toLowerCase();
@@ -522,6 +535,7 @@ window.jalarSerialesDesdeContrato = async ({ auto = false } = {}) => {
 
     const modeloPorNombre = new Map(modelos.map(m => [normName(m.nombre), m.id]));
     const idsValidos = new Set(modelos.map(m => m.id));
+    quitarFilasSinSerial();
     const presentes = serialesActuales();
     let agregados = 0, omitidos = 0;
     for (const s of conSerial) {
@@ -557,6 +571,7 @@ window.jalarSerialesDesdeGestion = async () => {
   try {
     const modeloPorNombre = new Map(modelos.map(m => [normName(m.nombre), m.id]));
     const idsValidos = new Set(modelos.map(m => m.id));
+    quitarFilasSinSerial();
     const presentes = serialesActuales();
     let agregados = 0, omitidos = 0;
     for (const s of lista) {
@@ -715,6 +730,7 @@ function mostrarOrigenEquipos(texto) {
 // serial Y el modelo reconocido automáticamente. Deduplica contra la tabla.
 function volcarDevicesEnTabla(devices, origen = "") {
   const modeloPorNombre = new Map(modelos.map(m => [normName(m.nombre), m.id]));
+  if ((devices || []).some(d => String(d.serial || "").trim())) quitarFilasSinSerial();
   const yaPresentes = serialesActuales();
 
   let agregados = 0, reconocidos = 0, omitidos = 0;
@@ -770,6 +786,7 @@ window.agregarDesdePegado = () => {
   const lineas = $("pegarSeriales").value.split("\n").map(s => s.trim()).filter(Boolean);
   if (!lineas.length) { Toast.show("Pega al menos un serial.", "warn"); return; }
 
+  quitarFilasSinSerial();
   const yaPresentes = serialesActuales();
   const defaults = leerComunes();
 
