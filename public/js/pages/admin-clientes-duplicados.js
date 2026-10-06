@@ -166,9 +166,14 @@
     const ok = await Modal.confirm({ title: 'Fusionar clientes', confirmLabel: 'Fusionar', danger: true, message:
       `Fusionar en "<strong>${esc(canonical.nombre)}</strong>":<br><br>` +
       `• Se marcarán como eliminados ${dups.length} duplicado(s): ${dups.map(d => '"' + esc(d.nombre) + '"').join(', ')}<br>` +
-      `• Se re-apuntarán ${c.contratos} contrato(s), ${c.ordenes} orden(es) y ${c.poc} equipo(s) PoC${porNombreTxt}<br>` +
+      `• Se re-apuntarán ${c.contratos} contrato(s), ${c.ordenes} orden(es), ${c.poc} equipo(s) PoC${porNombreTxt} y ${c.pool || 0} serial(es) del pool<br>` +
       (porNombre ? '' : '• Grupo por similitud: lo que solo coincide por nombre <strong>no</strong> se toca<br>') +
-      `• El que conservas ganará: ${fillTxt}<br><br>` +
+      `• El que conservas ganará: ${fillTxt}<br>` +
+      (plan.catalogoPoc
+        ? `• Catálogo de grupos PoC: ${plan.catalogoPoc.nuevos} grupo(s) pasan al que conservas` +
+          (plan.catalogoPoc.despues.poc_grupo_prefix ? `, con el prefijo ${esc(plan.catalogoPoc.despues.poc_grupo_prefix)}` : '') + '<br>'
+        : '') +
+      '<br>' +
       `<strong>No se deshace con un clic.</strong> Antes de escribir se guarda en Auditoría un registro con los valores anteriores de cada cambio. ¿Continuar?` });
     if (!ok) { btn.disabled = false; btn.innerHTML = '<i data-lucide="git-merge"></i> Fusionar'; if (typeof lucide !== 'undefined') lucide.createIcons(); return; }
 
@@ -177,7 +182,7 @@
       const r = await Svc().ejecutarFusion(plan);
       Toast.show(
         `Fusionado ✅ — ${r.eliminados} duplicado(s), ` +
-        `${r.contratosRepointed} contratos, ${r.ordenesRepointed} órdenes, ${r.pocRepointed} equipos re-apuntados.`,
+        `${r.contratosRepointed} contratos, ${r.ordenesRepointed} órdenes, ${r.pocRepointed} equipos PoC y ${r.poolRepointed} seriales del pool re-apuntados.`,
         'ok'
       );
       // Quita el clúster fusionado de la vista.

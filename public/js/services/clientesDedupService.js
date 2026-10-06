@@ -100,6 +100,18 @@ function _sonSucursales(na, nb){
   return _ratio(colaA, colaB) < COLA_TYPO;
 }
 
+// ¿`corto` es la sigla de `largo`? Una sola palabra de 3–8 letras, misma
+// inicial, y sus letras aparecen en orden dentro del nombre largo de 3+ palabras.
+function _esSigla(corto, largo){
+  const s = _dnorm(corto).replace(/[^a-z0-9]/g, "");
+  const l = _dnorm(largo).replace(/[^a-z0-9 ]/g, "").trim();
+  if (_dnorm(corto).includes(" ") || s.length < 3 || s.length > 8) return false;
+  if (l.split(" ").filter(Boolean).length < 3 || s[0] !== l[0]) return false;
+  let i = 0;
+  for (const ch of l.replace(/ /g, "")) if (ch === s[i]) i++;
+  return i === s.length;
+}
+
 // Nivel de enlace entre dos clientes: 'exacta' | 'fuzzy' | null.
 // CLAVE: mismo RUC NO basta — una empresa con varias sucursales comparte RUC.
 // Para ser duplicado se exige RUC compatible Y nombre parecido, y que la
@@ -110,6 +122,10 @@ function _edge(a, b){
   const ns = _nameSim(a.nombre, b.nombre);
   const mismoNombre = _dnorm(a.nombre) && _dnorm(a.nombre) === _dnorm(b.nombre);
   if (mismoNombre) return "exacta";
+  // Sigla del mismo contribuyente ("ANATI" / "AUTORIDAD NACIONAL DE
+  // ADMINISTRACION DE TIERRAS"): no se parece en nada y las colas parecen de
+  // sede, pero con el RUC idéntico se propone para revisar (caso 2026-10-06).
+  if (rs === 1 && (_esSigla(a.nombre, b.nombre) || _esSigla(b.nombre, a.nombre))) return "fuzzy";
   if (_sonSucursales(a.nombre, b.nombre)) return null; // sedes del mismo grupo → NO agrupar
   if (rs === 1){
     // Mismo RUC: duplicado solo si el nombre también se parece.
@@ -318,6 +334,34 @@ const ClientesDedupService = {
       }
     }
 
+    // 2b) Pool: `asignacion.cliente_id` (dónde está hoy el radio) y
+    // `venta.cliente_id`. Sin esto la flota del cliente se quedaba colgando del
+    // duplicado borrado (caso ANATI, 2026-10-06: 36 equipos). El kardex
+    // (movimientos) es histórico y no se toca.
+    cuenta.pool = 0;
+    for (const dup of dups){
+      for (const campo of ["asignacion", "venta"]){
+        const pSnap = await db.collection("equipos_pool").where(`${campo}.cliente_id`, "==", dup.id).get();
+        for (const doc of pSnap.docs){
+          const sub = doc.data()[campo] || {};
+          const despues = { [`${campo}.cliente_id`]: canonical.id };
+          if (canonical.nombre && "cliente_nombre" in sub && sub.cliente_nombre !== canonical.nombre){
+            despues[`${campo}.cliente_nombre`] = canonical.nombre;
+          }
+          const ya = refs.find(r => r.col === "equipos_pool" && r.id === doc.id);
+          if (ya){
+            Object.assign(ya.despues, despues);
+            Object.keys(despues).forEach(k => { ya.antes[k] = k.endsWith("_id") ? dup.id : (sub.cliente_nombre ?? null); });
+            continue;
+          }
+          const antes = { [`${campo}.cliente_id`]: dup.id };
+          if (despues[`${campo}.cliente_nombre`]) antes[`${campo}.cliente_nombre`] = sub.cliente_nombre ?? null;
+          refs.push({ col: "equipos_pool", id: doc.id, via: "id", antes, despues });
+          cuenta.pool++;
+        }
+      }
+    }
+
     // 3) Soft-delete de los duplicados (con su estado anterior).
     const bajas = dups.map(dup => ({ id: dup.id, nombre: dup.nombre || "",
       antes: antesDe(dup, ["deleted", "merged_into", "merged_at", "merged_by"]) }));
@@ -336,7 +380,29 @@ const ClientesDedupService = {
       relleno = { payload, antes: antesDe(canonical, Object.keys(payload)) };
     }
 
-    return { canonical, dups, fill, porNombre, refs, bajas, relleno, cuenta };
+    // 5) Catálogo de grupos PoC (clientes/{id}.poc_grupos + prefijo). Vive en
+    // la ficha, no en los equipos: si se queda en el duplicado, los radios
+    // re-apuntados llegan a un cliente sin catálogo (caso ANATI, 2026-10-06).
+    let catalogoPoc = null;
+    const gruposCanon = Array.isArray(canonical.poc_grupos) ? canonical.poc_grupos : [];
+    const union = gruposCanon.slice();
+    for (const dup of dups){
+      for (const g of (Array.isArray(dup.poc_grupos) ? dup.poc_grupos : [])){
+        if (g && !union.includes(g)) union.push(g);
+      }
+    }
+    const despuesCat = {};
+    if (union.length !== gruposCanon.length) despuesCat.poc_grupos = union.slice().sort((a, b) => a.localeCompare(b, "es"));
+    if (!canonical.poc_grupo_prefix){
+      const pref = dups.map(d => d.poc_grupo_prefix).find(Boolean);
+      if (pref) despuesCat.poc_grupo_prefix = pref;
+    }
+    if (Object.keys(despuesCat).length){
+      catalogoPoc = { antes: antesDe(canonical, Object.keys(despuesCat)), despues: despuesCat,
+        nuevos: union.length - gruposCanon.length };
+    }
+
+    return { canonical, dups, fill, porNombre, refs, bajas, relleno, catalogoPoc, cuenta };
   },
 
   async ejecutarFusion(plan){
@@ -363,6 +429,7 @@ const ClientesDedupService = {
       refs: limpio(refs.slice(0, TANDA_REG)),
       refs_partes: Math.max(1, Math.ceil(refs.length / TANDA_REG)),
       relleno: relleno ? { antes: limpio(relleno.antes), campos: Object.keys(relleno.payload) } : null,
+      catalogo_poc: plan.catalogoPoc ? { antes: limpio(plan.catalogoPoc.antes), despues: limpio(plan.catalogoPoc.despues) } : null,
     };
     let auditRef;
     try {
@@ -389,6 +456,7 @@ const ClientesDedupService = {
       }]);
     }
     if (relleno) ops.push([db.collection("clientes").doc(canonical.id), relleno.payload]);
+    if (plan.catalogoPoc) ops.push([db.collection("clientes").doc(canonical.id), plan.catalogoPoc.despues]);
 
     let hechas = 0;
     try {
@@ -405,7 +473,7 @@ const ClientesDedupService = {
     await auditRef.update({ estado: "completada", ops_aplicadas: hechas, ops_total: ops.length }).catch(() => {});
 
     const c = plan.cuenta;
-    return { contratosRepointed: c.contratos, ordenesRepointed: c.ordenes, pocRepointed: c.poc,
+    return { contratosRepointed: c.contratos, ordenesRepointed: c.ordenes, pocRepointed: c.poc, poolRepointed: c.pool || 0,
              eliminados: bajas.length, auditId: auditRef.id };
   },
 
