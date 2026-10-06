@@ -180,6 +180,17 @@ Object.assign(window.Centro, {
     return { ...r, desfase: e.estado || 'sin_estado', why: r.why ? `${r.why} ${aviso}` : aviso };
   },
   _elegBase(e) {
+    // Un radio que cuelga de un contrato de ALQUILER es nuestro, diga lo que
+    // diga `propiedad` (2026-10-06, CONCORD 25725A0547: la migración lo marcó
+    // "del cliente" cuando estaba con otro cliente y bodega lo volvió a
+    // alquilar). El contrato manda; la propiedad queda por confirmar.
+    const ctr = e.asignacion?.contrato_doc_id && (this.contratos || []).find(c => c.id === e.asignacion.contrato_doc_id);
+    const enAlquiler = /alquiler/i.test(String(ctr?.tipo || ctr?.tipo_contrato || ''))
+      || /^ALQ/i.test(String(e.asignacion?.contrato_id || ''));
+    if (e.propiedad === 'cliente' && !e.venta && enAlquiler) {
+      return { ok: true, code: 'alquiler', label: 'Alquiler (propiedad por confirmar)',
+        why: `Figuraba como del cliente, pero está en el contrato de alquiler ${e.asignacion.contrato_id || ''}.`.replace(' .', '.') };
+    }
     if (e.propiedad === 'cliente') {
       if (!e.venta) return { ok: false, label: 'No adquirido en CECOMUNICA', why: 'Equipo del cliente comprado fuera — no aplica reemplazo.' };
       // Una sola definición de garantía, compartida con la propuesta del
