@@ -165,10 +165,21 @@ Object.assign(window.Centro, {
   // Elegibilidad de un equipo del pool para reemplazo (decisiones §8):
   // alquiler siempre; propio adquirido en CECOMUNICA siempre (sin garantía →
   // excepción con aprobación admin); comprado fuera → bloqueado.
+  //
+  // El ESTADO del pool ya no bloquea (Alberto 2026-10-06, CONCORD): 13 de sus
+  // 15 radios seguían "en taller" porque la entrega de la programación nunca
+  // se registró, y el vendedor no podía marcar el dañado. El vendedor es quien
+  // habla con el cliente: si dice que lo tiene, se le cree. La fila avisa el
+  // desfase, el ítem lo lleva en `estado_en_sistema` y administración lo ve
+  // al aprobar. La devolución/ENTRADA del saliente termina de limpiar el dato.
   _eleg(e) {
-    if (!['en_cliente', 'asignado_contrato'].includes(e.estado)) {
-      return { ok: false, label: 'No disponible', why: `El equipo no está con el cliente (${e.estado}).` };
-    }
+    const r = this._elegBase(e);
+    if (!r.ok || ['en_cliente', 'asignado_contrato'].includes(e.estado) || e.sin_ficha) return r;
+    const L = (window.EquiposPoolService && EquiposPoolService.ESTADO_LABELS) || {};
+    const aviso = `El sistema lo tiene "${L[e.estado] || e.estado || 'sin estado'}" — al marcarlo confirmas que el cliente lo tiene.`;
+    return { ...r, desfase: e.estado || 'sin_estado', why: r.why ? `${r.why} ${aviso}` : aviso };
+  },
+  _elegBase(e) {
     if (e.propiedad === 'cliente') {
       if (!e.venta) return { ok: false, label: 'No adquirido en CECOMUNICA', why: 'Equipo del cliente comprado fuera — no aplica reemplazo.' };
       // Una sola definición de garantía, compartida con la propuesta del
@@ -234,7 +245,9 @@ Object.assign(window.Centro, {
     const unidades = [...this.equipos, ...this._wrExtras];
     const filas = unidades.map((e, ix) => {
       const extra = ix >= this.equipos.length;
-      const el = extra ? { ok: true, code: 'alquiler', label: 'Declarado por ti', why: 'El sistema no lo conocía: la ficha nace con esta solicitud, en campo y sin contrato.' } : this._eleg(e);
+      const el = !extra ? this._eleg(e)
+        : e.sin_ficha ? { ok: true, code: 'alquiler', label: 'Declarado por ti', why: 'El sistema no lo conocía: la ficha nace con esta solicitud, en campo y sin contrato.' }
+        : { ...this._eleg(e), label: 'Declarado por ti' };
       const contrato = extra ? '' : (e.asignacion?.contrato_id || '');
       return {
         grupo: extra ? '__declarados' : (e.asignacion?.contrato_doc_id || '__sin'),
@@ -309,11 +322,18 @@ Object.assign(window.Centro, {
     try { ficha = await EquiposPoolService.findBySerial(raw); } catch (_) { /* sin red: se declara igual */ }
     if (ficha) {
       // Existe pero no salió en la lista: está en bodega, en taller, con otro
-      // cliente… Eso no se arregla declarándolo — se dice qué pasa.
+      // cliente… Antes esto cortaba ("revísalo en Inventario"); ahora se deja
+      // seguir con el aviso a la vista (2026-10-06): el vendedor declara que
+      // el cliente lo tiene y administración lo ve al aprobar. El contrato de
+      // OTRO cliente no se arrastra a esta solicitud.
       const L = EquiposPoolService.ESTADO_LABELS || {};
-      const otro = ficha.asignacion?.cliente_id && ficha.asignacion.cliente_id !== this.cliente.id
-        ? ` y figura con ${ficha.asignacion.cliente_nombre || 'otro cliente'}` : '';
-      Toast.show(`${norm} sí está en el sistema (${L[ficha.estado] || ficha.estado}${otro}) — revísalo en Inventario antes de reemplazarlo`, 'warn');
+      const ajena = ficha.asignacion?.cliente_id && ficha.asignacion.cliente_id !== this.cliente.id;
+      const otro = ajena ? ` y figura con ${ficha.asignacion.cliente_nombre || 'otro cliente'}` : '';
+      this._wrExtras.push({ ...ficha, asignacion: ajena ? null : ficha.asignacion,
+        estado: ficha.estado || 'sin_estado', cliente_ajeno: ajena ? (ficha.asignacion.cliente_nombre || 'otro cliente') : null });
+      Toast.show(`${norm} está en el sistema como "${L[ficha.estado] || ficha.estado}"${otro} — queda marcado para que administración lo vea al aprobar`, 'warn');
+      if (inp) inp.value = '';
+      this._wrRepintar();
       return;
     }
     const m = this._modeloDeSelect(document.getElementById('wrModeloNuevo'));
@@ -357,6 +377,8 @@ Object.assign(window.Centro, {
         contrato_doc_id: e.asignacion?.contrato_doc_id || null,
         contrato_id: e.asignacion?.contrato_id || contrato?.contrato_id || null,
         elegibilidad: el.code || 'alquiler',
+        ...(el.desfase ? { estado_en_sistema: el.desfase } : {}),
+        ...(e.cliente_ajeno ? { figuraba_con: e.cliente_ajeno } : {}),
         motivo_codigo: motivo,
         motivo_detalle: document.querySelector(`input[data-wdet="${ix}"]`)?.value.trim() || '',
         modelo_solicitado: modeloSel.label,

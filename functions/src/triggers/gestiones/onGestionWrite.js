@@ -812,6 +812,24 @@ module.exports = onDocumentWritten(
       }
     }
 
+    // ── A01) Salientes cuyo estado en el pool no decía "con el cliente" ──
+    // (2026-10-06, CONCORD). El wizard ya no bloquea por estado: el vendedor
+    // confirma que el cliente tiene el radio. Queda en el historial para que
+    // administración lo vea al aprobar; la devolución/ENTRADA lo corrige.
+    if (creada && after.tipo === "reemplazo") {
+      const desf = (after.items || []).filter(it => it && (it.estado_en_sistema || it.figuraba_con));
+      if (desf.length) {
+        try {
+          await G.registrarEvento(gid, "desfase_inventario",
+            "El vendedor confirmó que el cliente tiene estos radios aunque el inventario decía otra cosa: "
+            + desf.map(it => `${it.serial_saliente} (${it.estado_en_sistema || "?"}${it.figuraba_con ? `, figuraba con ${it.figuraba_con}` : ""})`).join(", ")
+            + ".");
+        } catch (e) {
+          logger.warn("[onGestionWrite] evento de desfase falló", { gid, message: e.message });
+        }
+      }
+    }
+
     // ── A/B) correos de arranque, por flanco de estado ──────────────────
     try {
       if (creada && after.estado === "pendiente_aprobacion") {
