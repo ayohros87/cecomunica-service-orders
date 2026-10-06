@@ -135,7 +135,7 @@ async function cerrarUna(ficha, { motivo, ref, usuario }, db = dbReal) {
 
       tx.update(devRef, { ...baja, sim_number: "", sim_phone: "", operador: "" });
       if (ajeno || enOtra) return "cerrada-sim-ajeno";
-      const liberadoDe = { device_id: ficha.id, serial: ficha.serial || "", cliente_nombre: ficha.cliente_nombre || "", motivo };
+      const liberadoDe = { device_id: ficha.id, serial: ficha.serial || "", cliente_nombre: ficha.cliente_nombre || ficha.cliente || "", motivo };
       if (simSnap.exists) {
         tx.set(simRef, {
           estado: "disponible",
