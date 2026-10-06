@@ -114,8 +114,11 @@
     #devicesTable td:last-child .btn { margin-left: var(--sp-1); }
 
     /* SIM en la fila (P5): la celda SIM / Teléfono se edita en sitio. */
-    #devicesTable td.sim-cell-editable { cursor: pointer; }
-    #devicesTable td.sim-cell-editable:hover { background: var(--accent-soft, #e0f2fe); }
+    #devicesTable td.sim-cell-editable .sim-txt { user-select: text; }
+    #devicesTable td.sim-cell-editable .sim-editar { opacity: 0; vertical-align: middle; }
+    #devicesTable tr:hover td.sim-cell-editable .sim-editar,
+    #devicesTable td.sim-cell-editable .sim-editar:focus-visible { opacity: 1; }
+    @media (hover: none) { #devicesTable td.sim-cell-editable .sim-editar { opacity: 1; } }
     .sim-inline { display: flex; align-items: center; gap: 4px; min-width: 420px; }
     .sim-inline .table-input { font-size: 12px; padding: 3px 6px; }
     .sim-inline-iccid { width: 180px; font-family: var(--font-mono, monospace); }

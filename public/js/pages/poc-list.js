@@ -354,14 +354,20 @@ window.PocList = {
     const tdSim = document.createElement('td');
     const simNum = FMT.esc(this._campoVisible(d, 'sim_number'));
     const simTel = FMT.esc(this._campoVisible(d, 'sim_phone'));
-    tdSim.innerHTML = `<i data-lucide="smartphone"></i> ${simNum} / ${simTel}`;
+    tdSim.innerHTML = `<i data-lucide="smartphone"></i> <span class="sim-txt">${simNum} / ${simTel}</span>`;
     if (cerrada && (simNum || simTel)) tdSim.title = 'SIM que tenía al cerrarse la ficha (ya liberado del equipo)';
-    // SIM en la fila (P5): clic en la celda → editor en sitio (PocSimInline).
+    // SIM en la fila (P5): el editor en sitio (PocSimInline) se abre con el
+    // lápiz, no con un clic en el texto. Antes toda la celda era el botón y
+    // recepción, al seleccionar el ICCID para copiarlo, caía en edición y
+    // podía borrar un dígito sin querer (Brenda, 2026-10-06). El listener va en
+    // la celda (delegado) porque cancelar repone el innerHTML original.
     if (!cerrada && !PocState.esLectura() && window.PocSimInline) {
       tdSim.classList.add('sim-cell-editable');
-      tdSim.title = 'Clic para cambiar el SIM, el teléfono o el operador';
+      tdSim.insertAdjacentHTML('beforeend',
+        ' <button type="button" class="btn btn-ghost btn-icon btn-sm sim-editar" data-sim-editar'
+        + ' title="Cambiar el SIM, el teléfono o el operador" aria-label="Cambiar SIM"><i data-lucide="pencil"></i></button>');
       tdSim.addEventListener('click', (e) => {
-        if (e.target.closest('.sim-inline')) return;      // ya en edición
+        if (!e.target.closest('[data-sim-editar]')) return;
         if (window.PocBulk?._modo) return;                // la masiva tiene sus inputs
         PocSimInline.abrir(row, docId, d);
       });

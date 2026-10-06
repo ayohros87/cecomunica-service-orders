@@ -87,8 +87,11 @@ window.PocBulk = {
       celdaGrupos.setAttribute('data-original', celdaGrupos.innerHTML);
       celdaGrupos.innerHTML = `<input type="text" class="table-input" style="width:100%;" value="${gruposOrig}">`;
 
-      const simTelOrig = celdas[COL.sim_tel].textContent.trim();
-      celdas[COL.sim_tel].setAttribute('data-original', simTelOrig);
+      // El texto sale de .sim-txt (la celda trae además el lápiz del editor en
+      // sitio); se guarda el HTML para que cancelar reponga el lápiz.
+      const celdaSim = celdas[COL.sim_tel];
+      const simTelOrig = (celdaSim.querySelector('.sim-txt') || celdaSim).textContent.trim();
+      celdaSim.setAttribute('data-original', celdaSim.innerHTML);
       const partes = simTelOrig.replace('📱','').trim().split('/').map(s => s.trim());
       celdas[COL.sim_tel].innerHTML = `
         <input type="text" class="table-input sim-number" placeholder="SIM" value="${partes[0] || ''}" style="width:48%;margin-right:4%;">

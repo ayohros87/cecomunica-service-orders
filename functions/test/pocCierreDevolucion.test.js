@@ -61,7 +61,7 @@ function fakeDb(estado) {
 
 const ARRAIJAN = { clienteId: "CLI1", clienteNombre: "MUNICIPIO DE ARRAIJAN" };
 
-function escenario({ sim = null, simEnOtroRadio = false } = {}) {
+function escenario({ sim = null, simEnOtroRadio = false, enPool = true } = {}) {
   const estado = {
     poc_devices: {
       devArraijan: {
@@ -75,7 +75,7 @@ function escenario({ sim = null, simEnOtroRadio = false } = {}) {
       },
     },
     equipos_pool: { "21814A0123": { serial: "21814A0123", poc_device_id: "devBalboa" } },
-    sim_cards: sim ? {
+    sim_cards: sim && enPool ? {
       [sim]: {
         sim_number: sim, estado: "asignado",
         asignado_a: { device_id: simEnOtroRadio ? "devOtro" : "devArraijan" },
@@ -134,6 +134,42 @@ test("un SIM que el pool ya tiene en otro radio no se toca", async () => {
 
   assert.equal(estado.sim_cards[SIM].estado, "asignado", "la otra asignación manda");
   assert.deepEqual(estado.sim_cards[SIM].asignado_a, { device_id: "devOtro" });
+  assert.equal(estado.poc_devices.devArraijan.sim_number, "", "la ficha vieja sí lo suelta");
+  assert.deepEqual(r.simsAjenos, [SIM], "y el llamador se entera");
+});
+
+// SIM tecleado directo en la ficha, sin doc en el pool (al 2026-10-06, 3,178
+// fichas vivas así). El cierre lo dejaba fuera del pool y recepción tenía que
+// buscarlo a mano para reusarlo (Brenda: GANDER → GOLY, 2026-10-06).
+test("un SIM que el pool no conocía entra como disponible al cerrar", async () => {
+  const SIM = "8950702802032653626";
+  const { estado, db } = escenario({ sim: SIM, enPool: false });
+
+  const r = await cerrar(db);
+
+  const doc = estado.sim_cards[SIM];
+  assert.ok(doc, "se da de alta en el pool");
+  assert.equal(doc.estado, "disponible");
+  assert.equal(doc.origen, "liberado");
+  assert.equal(doc.sim_phone, "6000-0000", "el teléfono viaja con el SIM");
+  assert.equal(doc.operador, "+móvil");
+  assert.equal(doc.liberado_de.device_id, "devArraijan");
+  assert.equal(estado.poc_devices.devArraijan.cierre.sim_number, SIM,
+    "y la ficha cerrada lo sigue mostrando como referencia");
+  assert.deepEqual(r.simsAjenos, []);
+});
+
+test("un SIM sin pool que otra ficha viva ya tiene no se ofrece como libre", async () => {
+  const SIM = "8950702802032653626";
+  const { estado, db } = escenario({ sim: SIM, enPool: false });
+  estado.poc_devices.devGoly = {
+    serial: "23706A0606", cliente_id: "CLI7", cliente_nombre: "COMPAÑÍA GOLY, S.A",
+    activo: true, deleted: false, sim_number: SIM,
+  };
+
+  const r = await cerrar(db);
+
+  assert.equal(estado.sim_cards?.[SIM], undefined, "el SIM está en otro radio");
   assert.equal(estado.poc_devices.devArraijan.sim_number, "", "la ficha vieja sí lo suelta");
   assert.deepEqual(r.simsAjenos, [SIM], "y el llamador se entera");
 });

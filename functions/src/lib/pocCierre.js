@@ -20,7 +20,8 @@
 //     pool no se toca y se limpia únicamente la ficha (mismo criterio que
 //     SimCardsService.liberarDeEquipo en el navegador). Hoy la invariante
 //     "SIM asignado ⇒ ficha viva" se cumple al 100% (338/338) y este cierre la
-//     tiene que mantener.
+//     tiene que mantener. Si el pool no lo conoce (SIM tecleado directo en la
+//     ficha), se da de alta disponible — salvo que otra ficha viva lo tenga.
 //   · Cerrar NO es borrar: la ficha queda con `cierre` (motivo, orden, y la
 //     foto del SIM/operador que tenía). La lista de POC la sigue encontrando
 //     con "Incluir cerradas", que es como recepción pide la desconexión del
@@ -32,6 +33,19 @@ const { admin, db: dbReal } = require("./admin");
 const normSerial = (s) => (s ?? "").toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 const normNombre = (s) => (s ?? "").toString().trim().toUpperCase();
 const soloDigitos = (s) => (s ?? "").toString().replace(/\D/g, "");
+// Mismo rango que SimCardsService.esSimValido en el navegador.
+const SIM_VALIDO = /^\d{10,22}$/;
+
+// ¿Otra ficha viva tiene este SIM tecleado? Se busca por el texto tal como
+// está en la ficha y por solo dígitos (las fichas viejas traen espacios).
+async function simEnOtraFichaViva(tx, db, ficha) {
+  const formas = [...new Set([(ficha.sim_number || "").toString(), soloDigitos(ficha.sim_number)])].filter(Boolean);
+  for (const forma of formas) {
+    const snap = await tx.get(db.collection("poc_devices").where("sim_number", "==", forma));
+    if (snap.docs.some((d) => d.id !== ficha.id && d.data().deleted !== true)) return true;
+  }
+  return false;
+}
 
 // PURA: de las fichas vivas de ese serial, ¿cuáles cierra esta devolución?
 // Las del mismo cliente — por `cliente_id` cuando la ficha lo tiene (legacy no
@@ -105,21 +119,48 @@ async function cerrarUna(ficha, { motivo, ref, usuario }, db = dbReal) {
   } else {
     const simRef = db.collection("sim_cards").doc(sim);
     resultado = await db.runTransaction(async (tx) => {
+      // Todas las lecturas antes de la primera escritura (regla de Firestore).
       const simSnap = await tx.get(simRef);
-      tx.update(devRef, { ...baja, sim_number: "", sim_phone: "", operador: "" });
       const s = simSnap.exists ? simSnap.data() : null;
       const ajeno = s && s.estado === "asignado" && s.asignado_a
         && s.asignado_a.device_id !== ficha.id;
-      if (ajeno) return "cerrada-sim-ajeno";
+      // SIM que nunca se registró en el pool (tecleado directo en la ficha: al
+      // 2026-10-06, 3,178 fichas vivas). Antes el cierre lo dejaba fuera y
+      // recepción tenía que buscarlo a mano para reusarlo (Brenda, GANDER →
+      // GOLY). Ahora entra al pool como disponible, igual que
+      // SimCardsService.liberarDeEquipo en el navegador — salvo que otra ficha
+      // viva ya lo tenga tecleado: el SIM está en otro radio y ofrecerlo como
+      // libre sería mentir.
+      const enOtra = !simSnap.exists && await simEnOtraFichaViva(tx, db, ficha);
+
+      tx.update(devRef, { ...baja, sim_number: "", sim_phone: "", operador: "" });
+      if (ajeno || enOtra) return "cerrada-sim-ajeno";
+      const liberadoDe = { device_id: ficha.id, serial: ficha.serial || "", cliente_nombre: ficha.cliente_nombre || "", motivo };
       if (simSnap.exists) {
         tx.set(simRef, {
           estado: "disponible",
           asignado_a: null,
-          liberado_de: { device_id: ficha.id, serial: ficha.serial || "", cliente_nombre: ficha.cliente_nombre || "", motivo },
+          liberado_de: liberadoDe,
           updated_at: FV.serverTimestamp(),
           updated_by: null,
           updated_by_email: usuario,
         }, { merge: true });
+      } else if (SIM_VALIDO.test(sim)) {
+        tx.set(simRef, {
+          sim_number: sim,
+          sim_phone: (ficha.sim_phone || "").toString().trim(),
+          operador: (ficha.operador || "").toString().trim(),
+          estado: "disponible",
+          origen: "liberado",
+          asignado_a: null,
+          liberado_de: liberadoDe,
+          created_at: FV.serverTimestamp(),
+          creado_por_uid: null,
+          creado_por_email: usuario,
+          updated_at: FV.serverTimestamp(),
+          updated_by: null,
+          updated_by_email: usuario,
+        });
       }
       return "cerrada";
     });
