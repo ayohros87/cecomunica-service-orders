@@ -386,15 +386,29 @@ const onContratoActivado = onDocumentUpdated(
       const composicion = nAlqF && nProF ? ` · mixto: ${nAlqF} en alquiler / ${nProF} propio${nProF === 1 ? "" : "s"}`
         : nProF ? ` · ${nProF} equipo${nProF === 1 ? "" : "s"} propio${nProF === 1 ? "" : "s"} del cliente`
           : nAlqF ? ` · ${nAlqF} equipo${nAlqF === 1 ? "" : "s"} en alquiler` : "";
+      // Si espera la entrega, el correo NO pide facturar (Brenda 2026-10-06:
+      // "FACTURACIÓN: contrato ACTIVO" se leía como "factura ya", cuando la
+      // factura sale al entregar con el correo "equipos ENTREGADOS").
       await G.avisoFacturacion({
-        subject: `FACTURACIÓN: ${esRenov ? "renovación" : "contrato"} ACTIVO — ${after.cliente_nombre || "Cliente"} (${after.contrato_id || contratoId})`,
-        titulo: `${esRenov ? "Renovación activa" : "Contrato activo"} — alta de facturación y servicio`,
+        subject: esperando
+          ? `AVISO (no facturar aún): contrato ACTIVO, se factura al ENTREGAR — ${after.cliente_nombre || "Cliente"} (${after.contrato_id || contratoId})`
+          : `FACTURACIÓN: ${esRenov ? "renovación" : "contrato"} ACTIVO — ${after.cliente_nombre || "Cliente"} (${after.contrato_id || contratoId})`,
+        titulo: esperando
+          ? "Contrato activo — todavía no se factura"
+          : `${esRenov ? "Renovación activa" : "Contrato activo"} — alta de facturación y servicio`,
+        preheader: esperando ? "Solo informativo: se factura cuando se entreguen los equipos" : null,
+        pie: esperando
+          ? `<p style="margin:14px 0 0;font:13px/1.6 Arial,sans-serif;color:#40525f;border-top:1px solid #e5e7eb;padding-top:10px;">
+              <b>No hay nada que hacer todavía.</b> Cuando se entreguen los equipos te llega el correo
+              <b>«FACTURACIÓN: equipos ENTREGADOS»</b> y el aviso pasa solo a pendiente en la bandeja
+              <b>Facturación pendiente</b>. Ese es el que se factura.</p>`
+          : null,
         cuerpo: `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
             El contrato <b>${escapeHtml(after.contrato_id || contratoId)}</b>
             (${escapeHtml(after.tipo_contrato || "—")}${escapeHtml(composicion)} · ${escapeHtml(after.duracion || "—")}) de
             <b>${escapeHtml(after.cliente_nombre || "—")}</b> quedó <b>activo</b>${after.firmado_tipo === "digital" ? " con firma digital" : ""}.
             ${esperando
-              ? "Lleva equipo por entregar: <b>la facturación arranca en la fecha de entrega</b> (te avisaremos cuando se entregue)."
+              ? "Lleva equipo por entregar: <b>no se factura todavía</b>. La facturación arranca en la <b>fecha de entrega</b> y te avisaremos ese día."
               : "<b>La facturación arranca de una vez</b> — no hay entrega pendiente."}</p>
           ${G.detalleAumentoHtml({ lineas: after.equipos || [], cargos: after.cargos || [] })}
           <p style="margin:8px 0 0;font:14px Arial,sans-serif;">Total mensual: <b>$${m.mensual.toFixed(2)}</b>${m.exento ? " (exento de ITBMS)" : ` · $${m.con_itbms.toFixed(2)} con ITBMS`}${m.unico > 0 ? ` · Cargos únicos: <b>$${m.unico.toFixed(2)}</b>` : ""}</p>`,

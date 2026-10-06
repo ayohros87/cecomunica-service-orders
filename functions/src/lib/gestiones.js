@@ -628,8 +628,12 @@ const CHECKLIST_FACTURACION = `
 // aviso existe igual. Ver lib/facturacionAvisos.js. Si viene, el CTA del
 // correo apunta a la fila de la bandeja (el contrato/expediente se abren desde
 // ahí) y el aviso queda enlazado al doc de mail_queue.
+// `pie` (opcional): reemplaza el pie de acción. Un contrato activo que ESPERA
+// la entrega no tiene nada que marcar todavía (la bandeja ni lo permite), y
+// "Marca QuickBooks y POC" se leía como "factura ya" (Brenda, 2026-10-06).
 async function avisoFacturacion({ subject, titulo, cuerpo, cliente_id, cliente_nombre = "",
-  responsable_uid = null, responsable_email = null, ctaUrl, ctaLabel, meta, aviso = null }) {
+  responsable_uid = null, responsable_email = null, ctaUrl, ctaLabel, meta, aviso = null,
+  pie = null, preheader = null }) {
   let avisoId = null;
   try {
     const cc = await vendedorEmailDeCliente(cliente_id);
@@ -645,8 +649,8 @@ async function avisoFacturacion({ subject, titulo, cuerpo, cliente_id, cliente_n
     const to = await activacionesEmailTo();
     const mailId = await encolarCorreo({
       to, cc: cc || null, subject,
-      preheader: "Acción de facturación / servicio",
-      bodyContent: `<h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">${titulo}</h2>${cuerpo}${CHECKLIST_FACTURACION}`,
+      preheader: preheader || "Acción de facturación / servicio",
+      bodyContent: `<h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">${titulo}</h2>${cuerpo}${pie ?? CHECKLIST_FACTURACION}`,
       ctaUrl: avisoId ? `${APP_BASE_URL}/facturacion/bandeja.html?aviso=${encodeURIComponent(avisoId)}` : ctaUrl,
       ctaLabel: avisoId ? "Abrir en Facturación pendiente" : ctaLabel,
       meta: { ...(meta || {}), ...(avisoId ? { aviso_id: avisoId } : {}) },
