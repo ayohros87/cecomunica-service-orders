@@ -6,7 +6,7 @@ const { decidirMarcaCancelacion } = require("../../domain/cancelacionEntrada");
 const { decidirCierreTrasEntrada, buildCierre } = require("../../domain/cierreContrato");
 const G = require("../../lib/gestiones");
 const tandas = require("../../domain/entregaTandas");
-const { incidenciaSuperada } = require("../../lib/incidenciasEntrada");
+const { incidenciaSuperada, reubicadaTrasEntrada } = require("../../lib/incidenciasEntrada");
 const { separarSinSerial } = require("../../domain/accesorioSinSerial");
 const { admin, db } = require("../../lib/admin");
 
@@ -82,6 +82,24 @@ async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } =
   try { await catalogo(); } catch (err) { logger.warn("[onOrdenWritePool] catálogo no disponible", { message: err.message }); }
 
   for (const e of equipos) {
+    // Radio que alguien ya ubicó después de abrir esta ENTRADA (otro contrato,
+    // otro cliente, el taller de otra orden): el cierre no lo saca de ahí.
+    // Caso TROPICAL/GAMBOA, ver lib/incidenciasEntrada.js. No es incidencia:
+    // el radio está donde tiene que estar.
+    try {
+      const { ref, data } = await pool.resolver(e.serial, e.modelo_id, e.modelo);
+      if (data && data.estado !== pool.ESTADOS.DEVUELTO) {
+        const movs = await ref.collection("movimientos").get();
+        if (reubicadaTrasEntrada(movs.docs.map((d) => d.data()),
+          { ordenId, desdeMs: after.fecha_creacion?.toMillis?.() || 0 })) {
+          logger.info("[onOrdenWritePool] cierre de ENTRADA no mueve un radio ya reubicado",
+            { ordenId, serial: e.serial, estado: data.estado, contrato: data.asignacion?.contrato_id || null });
+          continue;
+        }
+      }
+    } catch (err) {
+      logger.warn("[onOrdenWritePool] no se pudo revisar el kardex antes del cierre", { ordenId, serial: e.serial, error: err.message });
+    }
     let r = null;
     try {
       r = await pool.transicionar(e.serial, e.modelo_id, e.modelo, {

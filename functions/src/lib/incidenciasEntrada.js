@@ -42,4 +42,29 @@ async function incidenciaSuperada(serial, { ordenId, desde }) {
   return movidaDespues(movs.docs.map((d) => d.data()), { ordenId, desdeMs });
 }
 
-module.exports = { movidaDespues, incidenciaSuperada };
+// ¿Alguien UBICÓ el radio después de que la ENTRADA abrió?
+//
+// Caso TROPICAL RESORTS / HOTEL GAMBOA (ALQ20260806-02, Brenda 2026-10-06).
+// Radios devueltos por M.A.M., R. SMITH, GOLY y MAS SEGURIDAD entraron en
+// junio-julio con su ENTRADA, y esas ENTRADAs se quedaron abiertas. Mientras
+// tanto bodega los asignó al hotel (07-ago), salieron de programación y se
+// entregaron (13-ago). El 14-ago alguien cerró las ENTRADAs viejas y el cierre
+// los mandó a bodega soltando la asignación: el radio seguía en el hotel. El
+// 09-09 la limpieza de POC vio "en bodega" y cerró 13 fichas vivas.
+//
+// La ENTRADA dice que el radio VOLVIÓ en su fecha, no dónde está hoy. Si
+// después de abrirla el kardex lo puso en un contrato, con un cliente o en el
+// taller de OTRA orden, el cierre no lo toca. Las correcciones de dato
+// (migración, modelo, condición) no cuentan: no mueven el radio.
+function reubicadaTrasEntrada(movimientos, { ordenId, desdeMs }) {
+  if (!desdeMs) return false;
+  const UBICA = [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE, pool.ESTADOS.EN_TALLER];
+  return (movimientos || []).some((m) => m
+    && ms(m.at) > desdeMs
+    && !(m.ref && m.ref.id === ordenId)
+    && !/^(correccion|migracion)/.test(m.tipo || "")
+    && m.tipo !== "cambio_condicion"
+    && UBICA.includes(m.a_estado));
+}
+
+module.exports = { movidaDespues, incidenciaSuperada, reubicadaTrasEntrada };
