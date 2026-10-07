@@ -40,6 +40,8 @@ window.CargaDiferida = (() => {
     // Entrega tardía (recepción, 2026-10-07): la orden quedó EN OFICINA y el
     // cliente ya se llevó los radios hace tiempo.
     entregaTardia: () => import("/js/pages/ordenes-entrega-tardia.js"),
+    // Reemplazo hecho por fuera de la gestión, registrado a posteriori (2026-10-07).
+    regularizarReemplazo: () => import("/js/pages/ordenes-regularizar-reemplazo.js"),
     bandejaKit: () => import("/js/ui/bandeja.js"),
     bandejaCss: () => import("/css/bandeja.css"),
     // Propuesta de reemplazo desde el taller: el módulo + lo que necesita
@@ -128,6 +130,9 @@ window.CargaDiferida = (() => {
     },
     entregaTardia() {
       return window.abrirEntregaTardia ? Promise.resolve() : traer("entregaTardia");
+    },
+    regularizarReemplazo() {
+      return window.abrirRegularizarReemplazo ? Promise.resolve() : traer("regularizarReemplazo");
     },
     casosViejos() {
       return window.abrirCasosViejos ? Promise.resolve()

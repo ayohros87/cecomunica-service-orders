@@ -470,6 +470,14 @@ window.AlmacenExistencias = (() => {
           onclick="event.stopPropagation(); AlmacenExistencias.loteAccion('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', 'corregir', this)">
           Corregir a bodega (${docs.length})</button>`;
       }
+      // Completar modelo (2026-10-07, D1): solo en la fila "(sin modelo)". El
+      // servidor propone (contrato, órdenes, prefijo del serial) y bodega
+      // acepta por grupo; cada ficha deja kardex correccion_modelo.
+      if (puede && (f.key === 'sinmodelo' || f.sinModelo) && docs.length) {
+        lote += ` <button type="button" class="btn btn-sm btn-accent" style="margin-left:6px;"
+          onclick="event.stopPropagation(); AlmacenExistencias.completarModelo('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', this)">
+          <i data-lucide="wand-2" style="width:13px;height:13px;"></i> Completar modelo (${docs.length})</button>`;
+      }
       const sinVerif = puede ? docs.filter(x => x.verificado === false).length : 0;
       const loteVerif = sinVerif ? `<button type="button" class="btn btn-sm" style="margin-left:6px;"
         onclick="event.stopPropagation(); AlmacenExistencias.loteAccion('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', 'verificar', this)">
@@ -627,6 +635,62 @@ window.AlmacenExistencias = (() => {
     },
   };
 
+  // D1: pide propuestas al servidor para las fichas sin modelo de un bloque y
+  // deja que bodega acepte por grupo (EntityPicker). Aplica con
+  // reclasificarModelo (frontend, con el nombre de quien aceptó).
+  async function completarModelo(key, estado, btn) {
+    if (_loteEnVuelo) return;
+    const f = ctx.filas.find(x => x.key === key);
+    if (!f || !Array.isArray(f.docs)) { if (window.Toast) Toast.show('Las unidades aún se están cargando — inténtalo de nuevo.', 'warn'); return; }
+    const docs = f.docs.filter(eq => eq.estado === estado && !eq.modelo_id && !String(eq.modelo_label || '').trim());
+    if (!docs.length) return;
+    if (!window.EntityPicker) { Toast.show('El selector no cargó. Recarga la página.', 'bad'); return; }
+    _loteEnVuelo = true;
+    if (btn) { btn.disabled = true; btn.textContent = 'Buscando evidencia…'; }
+    try {
+      const fn = firebase.functions().httpsCallable('proponerModeloSinFicha');
+      const propuestas = []; const sinPista = []; const ambiguas = [];
+      for (let i = 0; i < docs.length; i += 80) {
+        const r = await fn({ ids: docs.slice(i, i + 80).map(d => d.id) });
+        propuestas.push(...(r.data?.propuestas || [])); sinPista.push(...(r.data?.sinPista || [])); ambiguas.push(...(r.data?.ambiguas || []));
+      }
+      if (!propuestas.length) {
+        await Modal.alert({ title: 'Sin propuesta', icon: 'info', message: `Para estas ${docs.length} ficha(s) no hay contrato, orden ni prefijo de serial que diga el modelo${ambiguas.length ? ` (${ambiguas.length} con órdenes que se contradicen)` : ''}. Se completan con el conteo físico.` });
+        return;
+      }
+      const porModelo = new Map();
+      for (const p of propuestas) { if (!porModelo.has(p.modelo_id)) porModelo.set(p.modelo_id, { label: p.modelo_label, items: [] }); porModelo.get(p.modelo_id).items.push(p); }
+      const grupos = [...porModelo.entries()].map(([mid, g]) => ({ id: mid, titulo: `${g.label} · ${g.items.length}`,
+        items: g.items.map(p => ({ id: p.id, label: p.serial, sub: `${p.fuente === 'prefijo' ? 'prefijo (estadística)' : p.fuente} · ${p.detalle}`, data: p })) }));
+      const r = await EntityPicker.abrir({
+        titulo: `Completar modelo · ${propuestas.length} propuesta(s)`, icono: 'wand-2', size: 'lg',
+        descripcion: `Lo que dice el contrato o una orden es evidencia; lo que dice el prefijo del serial es estadística (≥ 90 % de las fichas con ese prefijo). Marca lo que aceptas: cada ficha queda con kardex y tu nombre.${sinPista.length ? ` <b>${sinPista.length}</b> sin pista` : ''}${ambiguas.length ? ` · <b>${ambiguas.length}</b> con órdenes que se contradicen` : ''}.`,
+        grupos, multiple: true, autoSeleccion: true, confirmar: 'Aplicar a las marcadas', iconoConfirmar: 'check',
+      });
+      if (!r || !r.seleccion?.length) return;
+      const user = firebase.auth().currentUser;
+      let ok = 0; const fallos = [];
+      for (const s of r.seleccion) {
+        const p = s.data;
+        try {
+          await EquiposPoolService.reclasificarModelo(p.id, { modelo_id: p.modelo_id, modelo_label: p.modelo_label, condicion: p.condicion, estadoActual: p.estado, antes: 'sin modelo' },
+            `Modelo completado desde Existencias (${p.fuente}: ${p.detalle}).`, user);
+          ok++;
+        } catch (e) { fallos.push(`${p.serial}: ${e.message || e}`); }
+      }
+      Toast.show(`${ok} ficha(s) con modelo${fallos.length ? ` · ${fallos.length} fallaron` : ''}.`, fallos.length ? 'warn' : 'ok');
+      if (fallos.length) console.warn('[existencias] completar modelo:', fallos);
+      await recargar();
+      if (window.AlmacenHoy) AlmacenHoy.recargar();
+    } catch (e) {
+      console.error('[existencias] completar modelo', e);
+      Toast.show(e?.message || 'No se pudo pedir la propuesta.', 'bad');
+    } finally {
+      _loteEnVuelo = false;
+      if (btn) { btn.disabled = false; btn.innerHTML = `<i data-lucide="wand-2" style="width:13px;height:13px;"></i> Completar modelo (${docs.length})`; if (window.lucide?.createIcons) lucide.createIcons({ nodes: [btn] }); }
+    }
+  }
+
   async function loteAccion(key, estado, accion, btn) {
     if (_loteEnVuelo) return;
     const f = ctx.filas.find(x => x.key === key);
@@ -666,5 +730,5 @@ window.AlmacenExistencias = (() => {
     }
   }
 
-  return { activar, recargar, refrescarSiCargado, render, toggleFila, onBuscar, onBuscarEnter, setFiltroEstado, toggleSoloDif, exportarExcel, copiarReporte, loteAccion, verHistorico, enfocarModelo, LOTES };
+  return { activar, recargar, refrescarSiCargado, render, toggleFila, onBuscar, onBuscarEnter, setFiltroEstado, toggleSoloDif, exportarExcel, copiarReporte, loteAccion, completarModelo, verHistorico, enfocarModelo, LOTES };
 })();

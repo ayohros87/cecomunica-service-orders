@@ -950,6 +950,24 @@ async function decorarEstadoPoolEnTabla(ordenId, equipos, filaDetalle) {
     });
     celda.appendChild(chip);
 
+    // R3 (2026-10-07): el dato de modelo de la ficha es flojo — sin modelo, o
+    // de migración sin verificar. Se dice en el mostrador para que se complete
+    // antes de que tranque un contrato o una renovación.
+    const sinModelo = !unidad.modelo_id && !String(unidad.modelo_label || '').trim();
+    const sinVerificar = !sinModelo && /^migracion/.test(String(unidad.origen || '')) && unidad.verificado !== true;
+    if (sinModelo || sinVerificar) {
+      const m = document.createElement('a');
+      m.className = 'eqpool-chip eqpool-chip-aviso';
+      m.href = EquiposPoolService.kardexUrl(unidad.serial || unidad.serial_norm);
+      m.style.textDecoration = 'none';
+      m.title = sinModelo
+        ? 'La ficha del pool no tiene modelo: bodega lo completa en Almacén · Existencias (fila "sin modelo") o desde la ficha'
+        : `La ficha dice ${unidad.modelo_label || unidad.modelo_id} por la migración y nadie lo ha verificado — un contrato o renovación puede corregirlo`;
+      m.textContent = sinModelo ? 'sin modelo' : 'modelo sin verificar';
+      m.addEventListener('click', (ev) => { if (window.EquipoFicha) { ev.preventDefault(); EquipoFicha.abrir(unidad.serial || unidad.serial_norm); } });
+      celda.appendChild(m);
+    }
+
     // Aviso suave: el pool dice que esta unidad esta con OTRO cliente.
     // Mismo texto y misma paleta que SerialField (.eqpool-chip-aviso) — es el
     // mismo hallazgo, solo que aqui sobre una fila ya guardada.
@@ -1446,6 +1464,19 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
         icon: '<i data-lucide="git-branch"></i>', label: "Resolver contrato anulado…",
         action: "resolver-contrato-anulado", dataAttributes: `data-orden-id="${ordenId}"`,
         class: 'highlighted',
+      });
+    }
+    // Registrar como reemplazo a posteriori (2026-10-07, E1): el taller cambió
+    // el radio del cliente en esta orden sin gestión de reemplazo (LIGO,
+    // CEMENTO BAYANO). Solo órdenes de cliente con ≥2 radios y sin gestión.
+    const puedeRegularizar = !o.gestion?.id && !!o.cliente_id && !esVisita && !esDevolucion
+      && !(typeof esOrdenEntrada === 'function' && esOrdenEntrada(o))
+      && (o.equipos || []).filter(e => e && !e.eliminado && (e.numero_de_serie || e.serial)).length >= 2
+      && estadoUpper !== "ANULADA";
+    if (puedeRegularizar) {
+      menuItems.push({
+        icon: '<i data-lucide="replace"></i>', label: "Registrar como reemplazo…",
+        action: "regularizar-reemplazo", dataAttributes: `data-orden-id="${ordenId}"`, class: "",
       });
     }
     // Entrega tardía (2026-10-07): el cliente ya se llevó los radios y la

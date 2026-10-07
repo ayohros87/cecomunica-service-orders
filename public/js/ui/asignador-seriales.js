@@ -730,7 +730,8 @@ window.AsignadorSeriales = (() => {
             const est = EquiposPoolService.ESTADO_LABELS[docs[0].estado] || docs[0].estado;
             errores.push({ serial: s.serial, tipo: 'ocupado', motivo: `Es ${otros} y está ${est}${docs[0].asignacion?.cliente_nombre ? ` con ${docs[0].asignacion.cliente_nombre}` : ''}.` });
           } else {
-            errores.push({ serial: s.serial, tipo: 'modelo', motivo: `Es ${otros}, no ${s.modelo || 'el modelo pedido'}.`, doc: enBodegaOtro });
+            errores.push({ serial: s.serial, tipo: 'modelo', motivo: `Es ${otros}, no ${s.modelo || 'el modelo pedido'}.`, doc: enBodegaOtro,
+              pedido: { modelo_id: s.modelo_id || null, modelo: s.modelo || '' } });
           }
           continue;
         }
@@ -831,13 +832,49 @@ window.AsignadorSeriales = (() => {
     // Resuelve null si hay que volver a editar; si no, { unidades, excepcion }.
     // `permitir(error)` deja a la página aceptar un bloqueo con criterio propio
     // (p.ej. una unidad que sigue con el MISMO cliente en una renovación).
+    // D2 (2026-10-07): la misma regla que la renovación (Centro._wcModeloCorregible
+    // / pool.modeloCorregiblePorLinea): una ficha sin modelo, o de migración
+    // sin verificar, no puede trancar la asignación — la línea del contrato es
+    // la declaración del vendedor. Se corrige la ficha (kardex
+    // correccion_modelo) y la unidad entra; un modelo VERIFICADO sigue bloqueando.
+    const modeloCorregible = (d) => !!d && (
+      (!d.modelo_id && !String(d.modelo_label || '').trim())
+      || (/^migracion/.test(String(d.origen || '')) && d.verificado !== true));
+    async function corregirModelosFlojos(errores, unidades) {
+      const cands = errores.filter(e => e.tipo === 'modelo' && e.doc && e.pedido?.modelo_id && modeloCorregible(e.doc)
+        && e.doc.estado === EquiposPoolService.ESTADOS.EN_BODEGA);
+      if (!cands.length) return errores;
+      const filas = cands.map(e => `<li><b style="font-family:var(--font-mono, monospace);">${esc(e.serial)}</b>: la ficha dice <i>${esc(e.doc.modelo_label || 'sin modelo')}</i> (migración sin verificar) → pasa a <b>${esc(e.pedido.modelo)}</b></li>`).join('');
+      const ok = await Modal.confirm({
+        title: 'Modelo de migración sin verificar',
+        message: `<span style="display:block;font-size:13px;line-height:1.5;">${cands.length} ficha(s) traen un modelo que puso la migración y nadie verificó. La línea del contrato manda: se corrige la ficha y el serial se asigna.<ul style="margin:8px 0 0 18px;padding:0;">${filas}</ul></span>`,
+        confirmLabel: 'Corregir y asignar', cancelLabel: 'Volver a editar',
+      });
+      if (!ok) return errores;
+      const user = firebase.auth().currentUser;
+      const hechos = new Set();
+      for (const e of cands) {
+        try {
+          const cond = e.doc.condicion || (/-?R$/i.test(String(e.pedido.modelo).replace(/\s+/g, '')) ? 'reuso' : 'nuevo');
+          await EquiposPoolService.reclasificarModelo(e.doc.id, { modelo_id: e.pedido.modelo_id, modelo_label: e.pedido.modelo, condicion: cond, estadoActual: e.doc.estado, antes: e.doc.modelo_label || 'sin modelo' },
+            'Modelo corregido por la línea del contrato al asignar (ficha de migración sin verificar).', user);
+          e.doc.modelo_id = e.pedido.modelo_id; e.doc.modelo_label = e.pedido.modelo;
+          unidades.set(norm(e.serial), e.doc);
+          hechos.add(e);
+        } catch (err) { console.warn('[asignador] corregir modelo', err); }
+      }
+      if (hechos.size) toast(`${hechos.size} ficha(s) con el modelo corregido por la línea.`, 'ok');
+      return errores.filter(e => !hechos.has(e));
+    }
+
     async function exigirEnBodega(seriales, ctxValidacion = {}) {
       const { errores: todos, unidades } = await validarDuro(seriales, ctxValidacion);
-      const errores = [];
+      let errores = [];
       todos.forEach(e => {
         if (typeof ctxValidacion.permitir === 'function' && e.doc && ctxValidacion.permitir(e)) unidades.set(norm(e.serial), e.doc);
         else errores.push(e);
       });
+      errores = await corregirModelosFlojos(errores, unidades);
       let excepcion = null;
       if (errores.length) {
         const r = await panelBloqueo(errores, ctxValidacion.modeloDistinto || 'forzar');

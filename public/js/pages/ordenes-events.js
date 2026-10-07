@@ -221,6 +221,15 @@
       CargaDiferida.casosViejos().then(() => abrirCasosViejos())
         .catch(() => Toast.show('Sin conexión — no se pudieron abrir los casos viejos.', 'bad'));
     },
+    // Reemplazo hecho por fuera de la gestión (ordenes-regularizar-reemplazo.js,
+    // diferido): liga saliente y entrante a posteriori.
+    'regularizar-reemplazo': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (!ordenId) return;
+      closeAllMenus();
+      CargaDiferida.regularizarReemplazo().then(() => abrirRegularizarReemplazo(ordenId))
+        .catch(() => Toast.show('Sin conexión — no se pudo abrir el registro del reemplazo.', 'bad'));
+    },
     // Entrega tardía (ordenes-entrega-tardia.js, diferido): la orden quedó EN
     // OFICINA y el cliente ya tiene los radios desde hace tiempo.
     'entrega-tardia': (el) => {

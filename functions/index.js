@@ -107,6 +107,9 @@ exports.declararSustitutoContrato     = require("./src/callable/declararSustitut
 // Trasladar un contrato a otra ficha de cliente / cambio de razón social (2026-10-07).
 exports.trasladarContratoCliente      = require("./src/callable/trasladarContratoCliente");
 exports.trasladarCuentaCliente        = require("./src/callable/trasladarCuentaCliente");
+// Completar modelo en lote (propuesta) y regularizar un reemplazo hecho por fuera (2026-10-07).
+exports.proponerModeloSinFicha        = require("./src/callable/proponerModeloSinFicha");
+exports.regularizarReemplazoOrden     = require("./src/callable/regularizarReemplazoOrden");
 exports.onOrdenEntregada              = require("./src/triggers/ordenes/onOrdenEntregada");
 exports.facturacionDiaria             = require("./src/triggers/scheduled/facturacionDiaria");
 exports.calcularFacturaContrato       = require("./src/callable/calcularFacturaContrato");
