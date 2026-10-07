@@ -217,6 +217,18 @@ async function resolver(serial, modeloId, modeloLabel, opts = {}) {
   return { ref: col.doc(sufijado), data: null, colisionConId: norm };
 }
 
+// ¿La propiedad declarada por la línea del contrato pisa la de la ficha?
+// Sí, salvo un radio que TRAJO el cliente (Almacén · Equipos del cliente,
+// 2026-10-07): `propietario` lo registró bodega con el radio en la mano, y una
+// línea "alquiler" no lo vuelve flota nuestra — sería un error de la línea, no
+// una declaración. Almacén ya bloquea ese caso; esto cubre las demás vías.
+function declaracionManda(actual, nueva, declarada) {
+  if (!declarada || !nueva) return false;
+  const a = actual || {};
+  if (a.propiedad === "cliente" && nueva !== "cliente" && a.propietario && a.propietario.cliente_id) return false;
+  return true;
+}
+
 // Upsert idempotente desde un flujo de contacto.
 // opts = {
 //   serial, modelo_id, modelo_label,
@@ -286,7 +298,7 @@ async function upsertContacto(opts) {
     // solo había pasado por una orden y no estaba en POC (819 fichas, 82
     // cuentas) — radios de la flota entre ellos, porque su contrato es legacy
     // y no tenía filas de seriales. Sin esto la marca falsa era para siempre.
-    const declarada = opts.propiedadDeclarada === true && !!update.propiedad;
+    const declarada = declaracionManda(actual, update.propiedad, opts.propiedadDeclarada === true);
     if (update.propiedad && actual.propiedad && actual.propiedad !== "desconocida" && !declarada) {
       delete update.propiedad;
     }
@@ -648,7 +660,7 @@ async function marcarRefurbished(serial, modeloId, modeloLabel, opts = {}) {
 }
 
 module.exports = { ESTADOS, normSerial, esSerialValido, modeloKey, mismoModelo, resolver,
-  upsertContacto, transicionar, transicionarPorId, custodiaPatch,
+  upsertContacto, declaracionManda, transicionar, transicionarPorId, custodiaPatch,
   marcarRefurbished, marcarRefurbishedPorRef,
   desasignarContrato, soltarDelCliente, estadoPrevioAOrden, destinoAlSalirDeOrden,
   facturaVentaPatch, estamparVentaContrato };

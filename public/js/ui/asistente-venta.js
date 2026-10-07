@@ -222,6 +222,10 @@ window.AsistenteVenta = {
         const unidad = enBodega.length === 1 ? enBodega[0]
           : enBodega.find(d => d.id === this._desdeUnidadId);
         if (!unidad) { problemas.push(`${esc(norm)}: serial en 2+ modelos en bodega — regístralo desde el botón de venta de su fila`); continue; }
+        // Radio que trajo un cliente (Almacén · Equipos del cliente): ya es
+        // suyo, no se le puede vender a nadie.
+        const dueno = EquiposPoolService.propietarioCliente ? EquiposPoolService.propietarioCliente(unidad) : null;
+        if (dueno) { problemas.push(`${esc(norm)}: es del cliente ${esc(dueno.cliente_nombre || dueno.cliente_id)} (lo trajo para su contrato) — no se vende`); continue; }
         vendibles.push(unidad);
       }
 

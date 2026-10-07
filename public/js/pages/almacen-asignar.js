@@ -189,6 +189,8 @@ window.AlmacenAsignar = (() => {
     : '';
 
   async function picklistHtml(grupos) {
+    const t = st.trabajo || {};
+    const clienteId = t.clienteId || t.g?.cliente_id || null;
     let res = null;
     try { res = await bodegaDe(refsDe(grupos)); } catch (e) { console.warn('[Asignar] stock:', e?.code || e); }
     // Sin consulta NO se pinta "0 disponibles · faltan N": sería afirmar que
@@ -206,12 +208,17 @@ window.AlmacenAsignar = (() => {
       // descartado en QC y las condiciones particulares las filtra el picker
       // (viven en otras colecciones; aquí no se consultan por cada modelo).
       const danadas = EquiposPoolService.esDanada ? delModelo.filter(u => EquiposPoolService.esDanada(u)).length : 0;
-      const disp = delModelo.length - danadas;
+      // Radios que trajo OTRO cliente: están en el estante pero no se ofrecen.
+      const ajenos = EquiposPoolService.propietarioCliente
+        ? delModelo.filter(u => { const d = EquiposPoolService.propietarioCliente(u); return d && d.cliente_id !== clienteId; }).length : 0;
+      const delCliente = EquiposPoolService.propietarioCliente
+        ? delModelo.filter(u => EquiposPoolService.propietarioCliente(u)?.cliente_id === clienteId && clienteId).length : 0;
+      const disp = delModelo.length - danadas - ajenos;
       const faltan = Math.max(0, Number(g.activos || 0) - (g.slots || []).filter(s => s.serial || s.omitido).length);
       const corto = disp < faltan;
       return `<div class="as-pl${corto ? ' short' : ''}">
         <b>${Number(g.activos || 0)} × ${esc(g.modelo)}</b>
-        <small>${disp} disponible${disp === 1 ? '' : 's'}${danadas ? ` · ${danadas} dañada${danadas === 1 ? '' : 's'}` : ''}${corto ? ` · faltan ${faltan - disp}` : ''}</small></div>`;
+        <small>${disp} disponible${disp === 1 ? '' : 's'}${delCliente ? ` (${delCliente} del cliente)` : ''}${danadas ? ` · ${danadas} dañada${danadas === 1 ? '' : 's'}` : ''}${corto ? ` · faltan ${faltan - disp}` : ''}</small></div>`;
     }).join('');
     return `<div class="as-picklist">${chips}</div>${notaSinFicha(res.sinFicha)}`;
   }
@@ -527,7 +534,33 @@ window.AlmacenAsignar = (() => {
     if (asg.politica === 'suave') return (await asg.confirmarAvisosPool(seriales)) ? { unidades: new Map(), excepcion: null } : null;
     // Contrato: el modelo y su precio los fija el contrato — otro modelo no se
     // fuerza aquí, se corrige la línea (2026-09-29).
-    return asg.exigirEnBodega(seriales, { excepciones: excepcionesContrato(c), permitir: permitirContrato(c), modeloDistinto: 'bloquear' });
+    const r = await asg.exigirEnBodega(seriales, { excepciones: excepcionesContrato(c), permitir: permitirContrato(c), modeloDistinto: 'bloquear' });
+    if (!r) return null;
+    return (await lineaDelClienteOk(c, r.unidades)) ? r : null;
+  }
+
+  // Radios que TRAJO el cliente (Almacén · Equipos del cliente) solo entran en
+  // una línea "Del cliente" del contrato. En una línea de alquiler el contrato
+  // los cobraría como flota y el Anexo A diría que son de Cecomunica — eso se
+  // corrige en la línea (vendedor), no aquí. ModeloFamilia.lineasCompatibles
+  // ya parea por modalidad: una unidad del cliente solo calza con líneas
+  // "propio" (o con líneas viejas sin modalidad, que aceptan cualquiera).
+  async function lineaDelClienteOk(c, unidades) {
+    if (!window.ModeloFamilia?.lineasCompatibles || !EquiposPoolService.propietarioCliente) return true;
+    const lineas = Array.isArray(c.contrato.equipos) ? c.contrato.equipos : [];
+    const malas = [];
+    (unidades || new Map()).forEach((u) => {
+      if (!EquiposPoolService.propietarioCliente(u)) return;
+      if (!ModeloFamilia.lineasCompatibles(u, lineas).length) malas.push(u);
+    });
+    if (!malas.length) return true;
+    await Modal.alert({ title: 'Equipos del cliente en una línea de alquiler', icon: 'shield-alert',
+      message: `${malas.length === 1 ? 'Este radio lo trajo' : `Estos ${malas.length} radios los trajo`} el cliente, pero el contrato no tiene una línea <b>"Del cliente"</b> de ese modelo:<br><br>`
+        + malas.slice(0, 10).map(u => `<b>${esc(u.serial || u.serial_norm)}</b> — ${esc(u.modelo_label || 'sin modelo')}`).join('<br>')
+        + (malas.length > 10 ? '<br>…' : '')
+        + '<br><br>Asignado así, el contrato lo cobraría como alquiler y el Anexo A diría que es de Cecomunica. '
+        + 'Pide al vendedor que marque la línea como <b>Del cliente</b> y asigna después.' });
+    return false;
   }
 
   async function guardarAvance() {

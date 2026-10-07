@@ -258,6 +258,10 @@
       menu: [
         { onclick: 'AlmacenPage.recargar()', label: '<i data-lucide="refresh-cw"></i> Recargar' },
         { divider: true },
+        // Radios que TRAE un cliente para su contrato (2026-10-07). Aquí y no
+        // en la barra para no cargar Almacén; almacen-hoy.js lo quita para
+        // quien no opera bodega.
+        { id: 'menuEquiposCliente', onclick: 'AlmacenPage.abrirEquiposCliente()', label: '<i data-lucide="user-plus"></i> Registrar equipos del cliente' },
         // La lista por serial (filtros finos, lotes, proveedor/notas, Excel
         // completo) es la pestaña Avanzado de esta página.
         { onclick: "AlmacenPage.setTab('serial')", label: '<i data-lucide="sliders-horizontal"></i> Avanzado (lista por serial)' },

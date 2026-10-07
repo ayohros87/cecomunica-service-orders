@@ -439,9 +439,13 @@ window.AsignadorSeriales = (() => {
         porModelo.set(k, cur);
       });
       for (const s of porModelo.values()) {
+        // Los radios que trajo ESTE cliente van primero: la selección
+        // automática los toma antes que la flota (son los que vino a meter).
+        const suyo = (d) => (st.clienteId && EquiposPoolService.propietarioCliente?.(d)?.cliente_id === st.clienteId) ? 0 : 1;
         const unidades = bodega.deRef({ modelo_id: s.modeloId || null, modelo: s.modelo })
           .filter(d => !pres.has(norm(d.serial || d.serial_norm)))
-          .sort((a, b) => (a.ingreso_bodega_at?.toMillis?.() || 0) - (b.ingreso_bodega_at?.toMillis?.() || 0)
+          .sort((a, b) => suyo(a) - suyo(b)
+            || (a.ingreso_bodega_at?.toMillis?.() || 0) - (b.ingreso_bodega_at?.toMillis?.() || 0)
             || String(a.serial || '').localeCompare(String(b.serial || '')));
         secciones.push({ ...s, unidades });
       }
@@ -495,7 +499,8 @@ window.AsignadorSeriales = (() => {
         placeholderBuscar: 'Filtrar por serial…', normalizar: (s) => norm(s),
         grupos: secciones.map((s, si) => ({
           id: si, titulo: s.modelo, cupos: s.cupos,
-          items: s.unidades.map(u => ({ id: u.serial || u.serial_norm, label: u.serial || u.serial_norm, sub: u.condicion === 'reuso' ? 'Refurbished' : 'Nuevo' })),
+          items: s.unidades.map(u => ({ id: u.serial || u.serial_norm, label: u.serial || u.serial_norm,
+            sub: (EquiposPoolService.propietarioCliente?.(u) ? 'Del cliente · ' : '') + (u.condicion === 'reuso' ? 'Refurbished' : 'Nuevo') })),
         })),
         vacioGrupo: 'Sin unidades en bodega de este modelo.',
         autoSeleccion: true, confirmar: 'Asignar seleccionados', iconoConfirmar: 'check',
@@ -617,7 +622,7 @@ window.AsignadorSeriales = (() => {
     // caché (sin el método) se cae al criterio anterior: solo descartados.
     function motivoNoDisponible(u, descartados, condiciones) {
       if (typeof EquiposPoolService !== 'undefined' && EquiposPoolService.motivoNoDisponible) {
-        return EquiposPoolService.motivoNoDisponible(u, { descartados, condiciones });
+        return EquiposPoolService.motivoNoDisponible(u, { descartados, condiciones, clienteId: st.clienteId || null });
       }
       const dsc = descartados.get(norm(u.serial || u.serial_norm));
       return dsc ? EquiposDescartadosService.motivoBloqueo(dsc) : null;
@@ -729,6 +734,13 @@ window.AsignadorSeriales = (() => {
           }
           continue;
         }
+        // Radio que trajo OTRO cliente (Almacén · Equipos del cliente): está en
+        // el estante pero no es de Cecomunica — solo va al contrato de su dueño.
+        const dueno = candidato && EquiposPoolService.propietarioCliente ? EquiposPoolService.propietarioCliente(candidato) : null;
+        if (dueno && candidato.estado === EquiposPoolService.ESTADOS.EN_BODEGA && dueno.cliente_id !== (st.clienteId || null)) {
+          errores.push({ serial: s.serial, tipo: 'ajeno', motivo: `Es del cliente ${dueno.cliente_nombre || dueno.cliente_id}: lo trajo para su propio contrato y no se asigna a otro.` });
+          continue;
+        }
         if (candidato && candidato.estado === EquiposPoolService.ESTADOS.EN_BODEGA) { unidades.set(k, candidato); continue; }
         if (candidato && st.contratoDocId && candidato.asignacion?.contrato_doc_id === st.contratoDocId) { unidades.set(k, candidato); continue; }
         const est = EquiposPoolService.ESTADO_LABELS[candidato?.estado] || candidato?.estado || 'fuera de bodega';
@@ -761,6 +773,8 @@ window.AsignadorSeriales = (() => {
             ? '<span class="eqpool-chip eqpool-chip-alerta">descartado en QC</span>'
           : t === 'inexistente'
             ? '<span class="eqpool-chip eqpool-chip-vacio">no existe</span>'
+          : t === 'ajeno'
+            ? '<span class="eqpool-chip eqpool-chip-alerta">equipo de otro cliente</span>'
           : t === 'sin_consulta'
             ? '<span class="eqpool-chip eqpool-chip-alerta">no se pudo verificar</span>'
             : '<span class="eqpool-chip eqpool-chip-aviso">no está en bodega</span>';

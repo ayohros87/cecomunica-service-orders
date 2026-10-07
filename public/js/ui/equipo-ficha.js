@@ -171,6 +171,9 @@ window.EquipoFicha = {
       ['Propiedad', window.EquiposPoolService?.chipPropiedadHtml
         ? EquiposPoolService.chipPropiedadHtml(eq)
         : (eq.propiedad === 'cliente' ? 'Del cliente' : 'Sin clasificar')],
+      // Radio que trajo el cliente (Almacén · Equipos del cliente): el dueño
+      // queda aunque todavía no esté en ningún contrato.
+      eq.propietario?.cliente_id ? ['Dueño', `<a href="/clientes/centro.html?id=${encodeURIComponent(eq.propietario.cliente_id)}">${esc(eq.propietario.cliente_nombre || eq.propietario.cliente_id)}</a> <span style="font-size:12px; color:var(--fg-3);">· lo trajo el cliente</span>`] : null,
       ['Plataforma POC', eq.poc_device_id ? 'Registrado' : '—'],
       // Cómo llegó aquí: el saliente al que sustituye y, sobre todo, la orden
       // con que se entregó — el contrato firmado conserva el serial original y
@@ -240,7 +243,8 @@ window.EquipoFicha = {
       a.push(btn('corregir', 'Corregir a bodega', 'btn-accent'));
       a.push(btn('baja', 'Dar de baja'));
     } else if (eq.estado === 'en_bodega') {
-      if (window.AsistenteVenta) a.push(btn('vender', 'Registrar venta'));
+      // Un radio que trajo el cliente ya es suyo: no se vende.
+      if (window.AsistenteVenta && !EquiposPoolService.propietarioCliente?.(eq)) a.push(btn('vender', 'Registrar venta'));
       a.push(btn('baja', 'Dar de baja'));
     } else if (eq.estado === 'vendido') {
       // Sin esta puerta, una venta mal registrada (factura equivocada, serial

@@ -100,6 +100,7 @@ window.AlmacenPage = {
   _topbarPorRol() {
     if (this.puedeOperar()) return;
     document.querySelectorAll('.topbar-actions .almacen-op').forEach(b => b.remove());
+    document.getElementById('menuEquiposCliente')?.remove();
   },
 
   // Asistentes (Fase B): componentes propios del espacio. Mientras alguno no
@@ -120,6 +121,13 @@ window.AlmacenPage = {
     if (!this.puedeOperar()) return this._sinPermiso('Importar la hoja de bodega');
     if (!window.AsistenteImportar) { AlmacenPage.abrirRecibir(); return; }
     AsistenteImportar.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
+  },
+  // Radios que trae un cliente para su contrato (2026-10-07). En el menú
+  // "Más" y no en la barra: es un caso ocasional.
+  abrirEquiposCliente() {
+    if (!this.puedeOperar()) return this._sinPermiso('Registrar equipos del cliente');
+    if (!window.AsistenteEquiposCliente) { if (window.Toast) Toast.show('El asistente no cargó. Recarga la página.', 'bad'); return; }
+    AsistenteEquiposCliente.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
   },
   abrirVenta() {
     if (!this.puedeOperar()) return this._sinPermiso('Registrar una venta');

@@ -520,7 +520,14 @@ const EquiposPoolService = {
   esDanada(eq) {
     return /^\s*DA[NÑ]ADA\b/i.test(String(eq?.notas || ''));
   },
-  motivoNoDisponible(eq, { descartados = null, condiciones = null } = {}) {
+  // `clienteId`: el cliente del trabajo. Un radio que trajo un cliente
+  // (propietarioCliente) solo está disponible para ESE cliente; sin clienteId
+  // (venta, flujos sin cliente) nunca se ofrece.
+  motivoNoDisponible(eq, { descartados = null, condiciones = null, clienteId = null } = {}) {
+    const dueno = this.propietarioCliente(eq);
+    if (dueno && dueno.cliente_id !== clienteId) {
+      return `es del cliente ${dueno.cliente_nombre || dueno.cliente_id} (lo trajo para su contrato)`;
+    }
     const k = this.normalizarSerial(eq?.serial || eq?.serial_norm || '');
     const dsc = descartados && k ? descartados.get(k) : null;
     if (dsc) {
@@ -785,6 +792,135 @@ const EquiposPoolService = {
       const d = existentesData.get(v.norm);
       return !!d && !d.modelo_id && !(d.modelo_label || '').toString().trim();
     });
+  },
+
+  // ── Equipos que TRAE el cliente (2026-10-07) ──────────────────────────
+  // Un cliente con radios propios que se meten a su contrato (línea "Del
+  // cliente"). Bodega los registra en Almacén · Más: quedan EN BODEGA porque
+  // físicamente están en el estante (se programan y se entregan como
+  // cualquiera), pero con `propiedad: 'cliente'` y `propietario` — el dueño.
+  // `propietario` es lo que los aparta del estante de Cecomunica: solo se
+  // ofrecen y se asignan en contratos/gestiones de ESE cliente
+  // (motivoNoDisponible) y solo en líneas "Del cliente" (Asignar).
+  //
+  // Clientes con ficha previa (un radio que pasó por taller, uno que nos
+  // compró): se traen a bodega con el dueño puesto, salvo que la ficha diga
+  // que es flota nuestra, que está en un contrato o en una orden, o que es de
+  // OTRO cliente — eso no lo decide bodega desde aquí.
+  //
+  // Pura: devuelve { nuevos, reclamables, yaEstaban, bloqueados:[{serial, motivo}] }.
+  // `porNorm` = Map(norm → docs[]) de findBySeriales.
+  DESDE_CLIENTE_RECLAMABLE: ['en_bodega', 'en_cliente', 'vendido', 'no_retirado', 'por_clasificar'],
+  clasificarDelCliente(items, porNorm, { modelo_id = null, modelo_label = '', cliente_id = '' } = {}) {
+    const out = { nuevos: [], reclamables: [], yaEstaban: [], bloqueados: [] };
+    const label = (e) => this.ESTADO_LABELS[e] || e || 'sin estado';
+    for (const v of items || []) {
+      const docs = porNorm.get(v.norm) || [];
+      if (!docs.length) { out.nuevos.push(v); continue; }
+      const d = docs.find(x => this._mismoModelo(x, modelo_id, modelo_label));
+      if (!d) {
+        out.bloqueados.push({ serial: v.raw, motivo: `ya existe como ${docs.map(x => x.modelo_label || 'sin modelo').join(', ')} — revisa el modelo` });
+        continue;
+      }
+      const dueno = d.propietario?.cliente_id || d.venta?.cliente_id || d.asignacion?.cliente_id || '';
+      const duenoNombre = d.propietario?.cliente_nombre || d.venta?.cliente_nombre || d.asignacion?.cliente_nombre || '';
+      if (d.estado === this.ESTADOS.EN_BODEGA && d.propiedad === 'cliente' && dueno === cliente_id) {
+        out.yaEstaban.push({ ...v, id: d.id }); continue;
+      }
+      if (d.propiedad === 'cecomunica') {
+        out.bloqueados.push({ serial: v.raw, motivo: `figura como flota de Cecomunica (${label(d.estado)}). Si de verdad es del cliente, lo corrige administración en la ficha del equipo` });
+        continue;
+      }
+      if (d.asignacion?.contrato_doc_id && [this.ESTADOS.ASIGNADO, this.ESTADOS.EN_CLIENTE].includes(d.estado)) {
+        out.bloqueados.push({ serial: v.raw, motivo: `está en el contrato ${d.asignacion.contrato_id || ''} de ${d.asignacion.cliente_nombre || 'otro cliente'}`.replace('  ', ' ') });
+        continue;
+      }
+      if (!this.DESDE_CLIENTE_RECLAMABLE.includes(d.estado)) {
+        out.bloqueados.push({ serial: v.raw, motivo: `está ${label(d.estado)}${d.orden_actual_id ? ` (orden ${d.orden_actual_id})` : ''}` });
+        continue;
+      }
+      if (dueno && cliente_id && dueno !== cliente_id) {
+        out.bloqueados.push({ serial: v.raw, motivo: `figura de otro cliente: ${duenoNombre || dueno}` });
+        continue;
+      }
+      out.reclamables.push({ ...v, id: d.id, estado: d.estado });
+    }
+    return out;
+  },
+
+  // Registra en bodega los radios que trae el cliente (ver clasificarDelCliente).
+  // Retorna { nuevos, reclamados, existentes, bloqueados, invalidos_lista, repetidos_lista }.
+  async registrarDelCliente(seriales, { modelo_id = null, modelo_label = '', condicion = 'nuevo',
+                                        cliente_id, cliente_nombre = '', notas = '' }, user) {
+    if (!cliente_id) { const e = new Error('Falta el cliente dueño de los equipos'); e.code = 'sin-cliente'; throw e; }
+    const db = firebase.firestore();
+    const res = { nuevos: 0, reclamados: 0, existentes: 0, bloqueados: [],
+                  invalidos_lista: [], repetidos_lista: [] };
+    const vistos = new Set();
+    const validos = [];
+    for (const raw of seriales || []) {
+      const norm = this.normalizarSerial(raw);
+      if (!this.esSerialValido(norm)) { res.invalidos_lista.push((raw ?? '').toString().trim()); continue; }
+      if (vistos.has(norm)) { if (!res.repetidos_lista.includes(norm)) res.repetidos_lista.push(norm); continue; }
+      vistos.add(norm);
+      validos.push({ raw: (raw || '').toString().trim(), norm });
+    }
+    if (!validos.length) return res;
+
+    const porNorm = await this.findBySeriales(validos.map(v => v.norm));
+    const cls = this.clasificarDelCliente(validos, porNorm, { modelo_id, modelo_label, cliente_id });
+    res.bloqueados = cls.bloqueados;
+    res.existentes = cls.yaEstaban.length;
+
+    const propietario = {
+      cliente_id, cliente_nombre: (cliente_nombre || '').toString().trim(),
+      registrado_at: firebase.firestore.FieldValue.serverTimestamp(),
+      registrado_por: user?.uid || null, registrado_por_email: user?.email || null,
+    };
+    const nota = `Equipo del cliente ${propietario.cliente_nombre || cliente_id}: lo trae para su contrato.`
+      + (notas ? ` ${notas}` : '');
+
+    for (let i = 0; i < cls.nuevos.length; i += 200) {
+      const batch = db.batch();
+      for (const v of cls.nuevos.slice(i, i + 200)) {
+        const ref = db.collection('equipos_pool').doc(v.norm);
+        batch.set(ref, { ...this._docNuevo({
+          serial: v.raw, serial_norm: v.norm, modelo_id, modelo_label, condicion,
+          estado: this.ESTADOS.EN_BODEGA, propiedad: 'cliente', notas,
+        }, 'cliente', user), propietario });
+        batch.set(ref.collection('movimientos').doc(), this._movimiento({
+          tipo: 'ingreso_cliente', a_estado: this.ESTADOS.EN_BODEGA, notas: nota,
+        }, user));
+      }
+      await batch.commit();
+      res.nuevos += Math.min(200, cls.nuevos.length - i);
+    }
+
+    // Fichas que ya existían: transacción por unidad, re-verificando el estado
+    // (otra sesión pudo moverla entre la consulta y aquí).
+    for (const v of cls.reclamables) {
+      try {
+        await this.cambiarEstado(v.id, this.ESTADOS.EN_BODEGA, {
+          esperado: v.estado, tipo: 'ingreso_cliente', notas: nota,
+          extra: {
+            propiedad: 'cliente', propietario, asignacion: null, orden_actual_id: null,
+            verificado: true, ingreso_bodega_at: firebase.firestore.FieldValue.serverTimestamp(),
+            pendiente_devolucion: firebase.firestore.FieldValue.delete(),
+          },
+        }, user);
+        res.reclamados++;
+      } catch (e) {
+        res.bloqueados.push({ serial: v.raw, motivo: e.message || String(e) });
+      }
+    }
+    return res;
+  },
+
+  // ¿Es un radio del cliente apartado en bodega (registrado por "Equipos del
+  // cliente")? Devuelve { cliente_id, cliente_nombre } o null.
+  propietarioCliente(eq) {
+    if (!eq || eq.propiedad !== 'cliente' || !eq.propietario?.cliente_id) return null;
+    return { cliente_id: eq.propietario.cliente_id, cliente_nombre: eq.propietario.cliente_nombre || '' };
   },
 
   // Recepción masiva de un modelo (pegado multilínea / lector de código de
@@ -1159,6 +1295,12 @@ const EquiposPoolService = {
     const fact  = (factura || '').toString().trim();
     const cli   = (cliente_nombre || '').toString().trim();
     const cliId = (cliente_id || '').toString().trim();
+    const actual = await this.getDoc(id).catch(() => null);
+    const dueno = this.propietarioCliente(actual);
+    if (dueno) {
+      const e = new Error(`Es del cliente ${dueno.cliente_nombre || dueno.cliente_id}: lo trajo para su contrato y no se vende.`);
+      e.code = 'equipo-del-cliente'; throw e;
+    }
     return this.cambiarEstado(id, this.ESTADOS.VENDIDO, {
       esperado: this.ESTADOS.EN_BODEGA,
       tipo: 'venta',
