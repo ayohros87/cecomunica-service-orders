@@ -171,6 +171,49 @@ Object.assign(window.Centro, {
   _wcCandidatos() {
     return this.contratos.filter(c => this._esVigente(c) && !c.deleted);
   },
+  // ¿Hay un contrato VIVO de esta cuenta con exactamente los mismos equipos
+  // (familia de modelo + modalidad + cantidad)? Es la huella de "rehecho sin
+  // anular el viejo" (MAGEN DAVID 2026-10-05: dos contratos vivos por los
+  // mismos 22 PNC460-R y la alerta de seriales escalando para siempre).
+  _wcHuellaLineas(lineas) {
+    const norm = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/R$/, '');
+    const fam = (l) => {
+      const f = window.ModeloFamilia?.familiaDe ? ModeloFamilia.familiaDe(l.modelo_id || l.modelo) : '';
+      return (f && !String(f).startsWith('~')) ? String(f) : norm(l.modelo);
+    };
+    const m = new Map();
+    for (const l of (lineas || [])) {
+      if (!l || !(Number(l.cantidad) > 0)) continue;
+      const k = `${fam(l)}|${l.modalidad === 'propio' ? 'propio' : 'alquiler'}`;
+      m.set(k, (m.get(k) || 0) + Number(l.cantidad));
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, n]) => `${k}=${n}`).join(';');
+  },
+  _wcContratoVivoIgual(lineas) {
+    const huella = this._wcHuellaLineas(lineas);
+    if (!huella) return null;
+    return this._wcCandidatos()
+      .filter(c => !this._renovadoPor(c) && this._wcHuellaLineas(c.equipos) === huella)
+      .sort((a, b) => (b.fecha_creacion?.seconds || 0) - (a.fecha_creacion?.seconds || 0))[0] || null;
+  },
+  async _wcPreguntarDuplicado(dup) {
+    const unid = (dup.equipos || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
+    const r = await Modal.sheet({
+      title: 'Esta cuenta ya tiene un contrato vivo con estos mismos equipos', icon: 'copy', size: 'md',
+      html: `<p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;">
+          <b class="cg-mono">${this.esc(dup.contrato_id || dup.id)}</b> (${this.esc(this._estadoLabel(dup))}) tiene exactamente las mismas líneas: ${unid} equipo(s)${dup.total_mensual ? ` por $${Number(dup.total_mensual).toFixed(2)}/mes` : ''}.
+        </p>
+        <p style="margin:0 0 6px;font-size:13px;color:var(--fg-3);line-height:1.5;">
+          Si este contrato <b>rehace</b> aquel (precio, representante, modelo…), dilo aquí: al aprobarlo, el viejo se anula por sustitución y sus seriales pasan solos a este. Dejar los dos vivos amarra el inventario al contrato muerto y las alertas de seriales no paran.
+        </p>`,
+      buttons: [
+        { action: 'cancelar', label: 'Cancelar' },
+        { action: 'distinto', label: 'Son cuentas distintas, seguir' },
+        { action: 'sustituye', label: `Este sustituye a ${dup.contrato_id || 'aquel'}`, primary: true, icon: 'replace' },
+      ],
+    });
+    return r;
+  },
   _wcEnVentana(c) {
     if (!this._aplicaVenc(c) || this._renovadoPor(c)) return false;
     const dias = this._diasA(c.fecha_vencimiento);
@@ -210,6 +253,9 @@ Object.assign(window.Centro, {
     opts = opts || {};
     // crearContrato() lee aquí si este contrato nace con cuenta vigente (D6).
     this._wcOpts = opts;
+    // B1 (2026-10-07): si al guardar hay un contrato vivo con los mismos
+    // equipos, se pregunta una vez; aquí se olvida la respuesta anterior.
+    this._wcSustituyeA = null; this._wcDuplicadoVisto = false;
     // Con una renovación en curso no se abre otra: se lleva al trámite.
     if (opts.renovarCuenta || opts.renovarDe) {
       const tram = this._renovacionEnTramite();

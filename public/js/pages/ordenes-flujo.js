@@ -362,9 +362,9 @@ function abrirModalContratoMuerto(orden, contrato, { esAdmin, clienteId }) {
       </p>
       <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">
         Casi siempre anular es <b>rehacer el papel</b>: si el cliente ya tiene un contrato
-        nuevo, esta orden debe <b>pasar a ese contrato</b> —búscalo en la ficha del cliente y
-        pídele a administración que la repunte— y la entrega sale sola. Si no hay contrato
-        nuevo, esta orden no va a ninguna parte y hay que <b>anularla</b>.
+        nuevo, esta orden debe <b>pasar a ese contrato</b> —con «Resolver esta orden…» la
+        pasas tú mismo (recepción o administración)— y la entrega sale sola. Si no hay
+        contrato nuevo, esta orden no va a ninguna parte y hay que <b>anularla</b>.
       </p>`,
     buttons: [
       ...(esAdmin ? [{ action: 'override', label: 'Entregar igual (admin)' }] : []),

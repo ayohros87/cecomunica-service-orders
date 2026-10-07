@@ -550,6 +550,73 @@ Object.assign(window.Centro, {
   // Contratos, al que el Centro ya no enlaza). Misma escritura que
   // ContratosLista.anular: js/domain/contratoAnulacion.js. La pregunta que
   // importa es QUÉ PASA CON LOS EQUIPOS, no el motivo.
+  // Declarar DESPUÉS de anular cuál contrato sustituye al anulado (2026-10-07,
+  // B3). El servidor (callable declararSustitutoContrato) hace el traspaso que
+  // onAnnulment habría hecho con el sustituto indicado a tiempo: seriales,
+  // señal de asignados, Base PoC, órdenes señaladas y la marca pendiente.
+  declararSustituto(id) {
+    const c = this.contratos.find(x => x.id === id);
+    if (!c) return;
+    if (![ROLES.ADMIN, ROLES.GERENTE, ROLES.VENDEDOR, ROLES.RECEPCION].includes(this.rol)) { Toast.show('Tu rol no declara sustitutos de contrato.', 'bad'); return; }
+    if (c.estado !== 'anulado') { Toast.show('Solo un contrato anulado tiene sustituto.', 'warn'); return; }
+    const cands = ContratoAnulacion.candidatos(this.contratos, id);
+    const colgando = this.equipos.filter(e => e.asignacion?.contrato_doc_id === id).length;
+    const pend = Array.isArray(c.sustitucion_pendientes) ? c.sustitucion_pendientes : [];
+    this._cerrarModal();
+    this._abrirModalA({
+      titulo: `Sustituto de <span class="cg-mono">${this.esc(c.contrato_id || id)}</span>`,
+      cuerpo: `
+        <p style="font-size:13px; color:var(--fg-3); margin:0 0 12px;">
+          Este contrato está <b>anulado</b>${c.anulado_motivo ? ` (${this.esc(String(c.anulado_motivo).slice(0, 100))})` : ''}${c.sustituido_por_contrato_id ? ` y dice que lo sustituye <span class="cg-mono">${this.esc(c.sustituido_por_contrato_id)}</span>` : ' y no dice qué contrato lo reemplazó'}.
+          ${colgando ? `<b>${colgando}</b> radio(s) siguen amarrados a él en el inventario.` : 'Ningún radio sigue amarrado a él en el inventario.'}
+          Al declarar el sustituto, los seriales, la Base PoC y las órdenes que quedaron sin contrato pasan al nuevo; el radio no se mueve de sitio.</p>
+        ${pend.length ? `<p style="font-size:12.5px; color:var(--warn-deep,#92400E); margin:0 0 12px;">Quedó pendiente: ${this.esc(c.sustitucion_vinculo_motivo || '')} — ${pend.slice(0, 6).map(p => `${this.esc(p.serial)} (${this.esc(p.motivo || '')})`).join('; ')}${pend.length > 6 ? '…' : ''}</p>` : ''}
+        <label style="display:block; font-weight:600; font-size:13px; margin-bottom:4px;">Contrato que lo sustituye</label>
+        <select class="form-input" id="dsSustituto" style="width:100%;">
+          <option value="">Elige el contrato vivo de esta cuenta…</option>
+          ${cands.map(x => `<option value="${this.esc(x.id)}" ${x.id === c.sustituido_por_id ? 'selected' : ''}>${this.esc(x.contrato_id || x.id)} · ${this.esc(this._estadoLabel(x))}${x.total_mensual ? ` — $${Number(x.total_mensual).toFixed(2)}/mes` : ''}${x.seriales_estado === 'asignados' ? ' · seriales ya asignados' : ''}</option>`).join('')}
+        </select>
+        ${cands.length ? '' : '<small style="color:var(--warn-deep,#92400E);">La cuenta no tiene ningún contrato aprobado o activo. Crea primero el contrato correcto.</small>'}
+        <label style="display:block; font-weight:600; font-size:13px; margin:12px 0 4px;">¿Por qué no se indicó al anular? <small style="font-weight:400; color:var(--fg-3);">(opcional)</small></label>
+        <textarea class="form-input" id="dsMotivo" rows="2" style="width:100%; resize:vertical;" placeholder="Ej.: el contrato nuevo se creó después de anular el viejo"></textarea>`,
+      footer: `
+        <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(id)}')">Volver</button>
+        <span class="sep"></span>
+        <button class="btn btn-primary cg-act" onclick="Centro._declararSustitutoConfirmar('${this.esc(id)}')" ${cands.length ? '' : 'disabled'}>Declarar sustituto</button>`,
+    });
+  },
+  async _declararSustitutoConfirmar(id) {
+    const c = this.contratos.find(x => x.id === id);
+    if (!c) return;
+    const sustId = document.getElementById('dsSustituto')?.value || '';
+    if (!sustId) { Toast.show('Elige el contrato sustituto.', 'warn'); return; }
+    const s = this.contratos.find(x => x.id === sustId);
+    const motivo = (document.getElementById('dsMotivo')?.value || '').trim();
+    const ok = await Modal.confirm({
+      title: 'Declarar el sustituto',
+      message: `<span class="cg-mono">${this.esc(c.contrato_id || id)}</span> (anulado) → <span class="cg-mono">${this.esc(s?.contrato_id || sustId)}</span>. Los seriales que sigan amarrados al anulado pasan al sustituto${s?.seriales_estado === 'asignados' ? ' (ya tiene los suyos asignados: solo se confirma el vínculo y se reapunta la Base PoC)' : ' y, si queda completo, sale el PDF a activaciones'}. ¿Seguir?`,
+      confirmLabel: 'Declarar sustituto',
+    });
+    if (!ok) return;
+    const btn = document.querySelector('#cgModal .btn-primary'); if (btn) { btn.disabled = true; btn.textContent = 'Declarando…'; }
+    try {
+      const r = await firebase.functions().httpsCallable('declararSustitutoContrato')({ origenId: id, sustitutoId: sustId, motivo });
+      const d = r.data || {};
+      this._cerrarModal();
+      const partes = [`${d.copiados || 0} serial(es) pasaron a ${d.sustituto || ''}`];
+      if (d.ya_en_sustituto) partes.push(`${d.ya_en_sustituto} ya estaban`);
+      if (d.poc_reapuntados) partes.push(`${d.poc_reapuntados} ficha(s) PoC reapuntadas`);
+      if ((d.ordenes_repuntadas || []).length) partes.push(`${d.ordenes_repuntadas.length} orden(es) pasaron al sustituto`);
+      if ((d.pendientes || []).length) partes.push(`${d.pendientes.length} sin resolver: ${d.pendientes.slice(0, 3).map(p => `${p.serial} (${p.motivo})`).join('; ')}`);
+      Toast.show(partes.join(' · '), (d.pendientes || []).length ? 'warn' : 'ok', 9000);
+      setTimeout(() => { if (this.cliente) this.abrir(this.cliente.id, { push: false }); }, 1200);
+    } catch (e) {
+      console.error(e);
+      if (btn) { btn.disabled = false; btn.textContent = 'Declarar sustituto'; }
+      Toast.show(e?.message || 'No se pudo declarar el sustituto.', 'bad', 8000);
+    }
+  },
+
   anularContrato(id) {
     const c = this.contratos.find(x => x.id === id);
     if (!c) return;
@@ -844,6 +911,7 @@ Object.assign(window.Centro, {
       ${fila('Equipos', lineas.length ? lineas.join('<br>') : '<span style="color:var(--warn-deep, #92400E);">sin líneas de equipo</span>')}
       ${fila('Mensual', `<b class="num">$${Number(c.total_mensual ?? c.total_con_itbms ?? 0).toFixed(2)}</b>${c.itbms_aplica === false ? ' · sin ITBMS' : ' con ITBMS'}${Number(c.subtotal_cargos_unicos || 0) > 0 ? ` · cargos únicos $${Number(c.subtotal_cargos_unicos).toFixed(2)}` : ''}`)}
       ${fila('Seriales', `${esc(seriales)}${plan ? `<br><span style="color:var(--fg-3);">${esc(plan)}</span>` : ''}`)}
+      ${c.sustituye_a_pendiente_id ? fila('Sustituye a', `<b class="cg-mono">${esc(c.sustituye_a_pendiente_contrato_id || c.sustituye_a_pendiente_id)}</b> — al aprobar se anula por sustitución y sus equipos pasan a este contrato`) : ''}
       <span style="display:block; margin:10px 0 0; font-size:12.5px; color:var(--fg-3);">Al aprobar: ${seriales.startsWith('bodega') ? 'bodega recibe el aviso para asignar; ' : ''}${despues}.</span>
     </span>`;
   },
@@ -863,8 +931,26 @@ Object.assign(window.Centro, {
         aprobado_por_uid: this.uid,
         fecha_modificacion: new Date(),
       });
+      // El vendedor dijo al crearlo que ESTE contrato sustituye a otro vivo
+      // (B1, 2026-10-07): se anula aquel por sustitución con este como
+      // sustituto, y onAnnulment traspasa sus seriales. Lo hace quien aprueba
+      // (administración), que es quien puede anular.
+      let sustituido = '';
+      const viejoId = c.sustituye_a_pendiente_id;
+      const viejo = viejoId ? this.contratos.find(x => x.id === viejoId) : null;
+      if (viejo && ['activo', 'aprobado'].includes(viejo.estado)) {
+        try {
+          const upd = ContratoAnulacion.buildUpdate(viejo, {
+            motivo: `Sustituido por ${c.contrato_id || id} (declarado al crear el contrato nuevo)`,
+            tipo: 'sustitucion', sustituto: { id, contrato_id: c.contrato_id || '' }, uid: this.uid,
+          }, viejoId);
+          await ContratosService.updateContrato(viejoId, upd);
+          await ContratosService.updateContrato(id, { sustituye_a_pendiente_id: firebase.firestore.FieldValue.delete(), sustituye_a_pendiente_contrato_id: firebase.firestore.FieldValue.delete(), sustituye_a_id: viejoId, sustituye_a_contrato_id: viejo.contrato_id || '' });
+          sustituido = ` · ${viejo.contrato_id || viejoId} queda anulado y sus equipos pasan a este`;
+        } catch (e) { console.error('[centro] anular el sustituido', e); Toast.show(`Aprobado, pero no se pudo anular ${viejo.contrato_id || viejoId}: anúlalo a mano como sustitución.`, 'warn', 8000); }
+      }
       this._cerrarModal();
-      Toast.show(`Contrato ${c.contrato_id || id} aprobado — ${ContratoFirma.lleva(c) ? 'bodega asigna los seriales y luego sigue la firma del cliente' : 'sigue la entrega de los equipos'}`, 'ok');
+      Toast.show(`Contrato ${c.contrato_id || id} aprobado — ${ContratoFirma.lleva(c) ? 'bodega asigna los seriales y luego sigue la firma del cliente' : 'sigue la entrega de los equipos'}${sustituido}`, 'ok');
       await this.abrir(this.cliente.id, { push: false });
     } catch (e) { console.error(e); Toast.show('No se pudo aprobar el contrato', 'bad'); }
   },

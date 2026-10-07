@@ -612,6 +612,18 @@ Object.assign(window.Centro, {
     const vOrigen = OrigenContrato.validar(origenSel);
     if (!vOrigen.ok) { Toast.show(`⚠️ ${vOrigen.mensaje}`, 'warn'); return; }
 
+    // B1 (2026-10-07): un contrato NUEVO (sin origen declarado) con los mismos
+    // equipos que uno vivo de la cuenta. Aviso con decisión, no bloqueo.
+    if (accion === 'Nuevo' && !origenIds.length && !this._wcDuplicadoVisto && this._wcContratoVivoIgual) {
+      const dup = this._wcContratoVivoIgual(lineas);
+      if (dup) {
+        const r = await this._wcPreguntarDuplicado(dup);
+        if (!r || r === 'cancelar') return;
+        this._wcDuplicadoVisto = true;
+        this._wcSustituyeA = r === 'sustituye' ? dup : null;
+      }
+    }
+
     let plan = null;
     let modalidad = null;
     if (TransicionPlan.aplica(origenSel)) {
@@ -691,6 +703,13 @@ Object.assign(window.Centro, {
       Object.assign(contrato, Centro._estampaReg());
       if (nuevoConVigente) {
         Object.assign(contrato, { motivo_contrato_nuevo: motivoNuevo, motivo_contrato_nuevo_por_uid: this.uid || null });
+      }
+      if (this._wcSustituyeA) {
+        Object.assign(contrato, {
+          sustituye_a_pendiente_id: this._wcSustituyeA.id,
+          sustituye_a_pendiente_contrato_id: this._wcSustituyeA.contrato_id || '',
+          sustituye_a_pendiente_por_uid: this.uid || null,
+        });
       }
       const docRef = await ContratosService.addContrato(contrato);
 

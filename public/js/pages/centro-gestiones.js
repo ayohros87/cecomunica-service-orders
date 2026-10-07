@@ -439,6 +439,19 @@ Object.assign(window.Centro, {
         }
       }
     }
+    // Órdenes ABIERTAS bajo un contrato anulado o vencido que no llevan la
+    // marca del trigger (anuladas antes del 2026-09-15, vencidas, o creadas
+    // después): hasta hoy solo se descubrían al darle a Entregar (R2).
+    const muertos = new Map((this.contratos || []).filter(c => ['anulado', 'vencido'].includes(c.estado) && !c.deleted).map(c => [c.id, c]));
+    const vistas = new Set(out.map(o => o.id));
+    for (const o of (this.ordenesAbiertas || [])) {
+      const cid = o.contrato?.contrato_doc_id;
+      const c = cid && muertos.get(cid);
+      if (!c || vistas.has(o.id) || o.contrato_anulado_revisar) continue;
+      const n = (o.equipos || []).filter(e => e && !e.eliminado && (e.numero_de_serie || e.serial)).length;
+      out.push({ id: o.id, equipos_n: n, contrato: c.contrato_id || c.id, motivo: c.anulado_motivo || c.vencido_motivo || '',
+        sin_marca: true, estado_contrato: c.estado });
+    }
     this.ordenesPorDecidir = out;
     if (out.length) { this.pintarAcciones(); if (window.lucide?.createIcons) lucide.createIcons(); }
   },

@@ -479,9 +479,25 @@ Object.assign(window.Centro, {
     // Órdenes que se quedaron sin contrato cuando se anuló el suyo. Van aquí
     // y no en el expediente del contrato anulado porque nadie abre un contrato
     // muerto a ver qué dejó pendiente (2026-09-15).
+    // Anulados que dijeron "se rehace" sin decir con cuál, o cuyo traspaso
+    // quedó a medias (2026-10-07, B3). Es el vendedor quien sabe cuál es.
+    const puedeDeclarar = [ROLES.ADMIN, ROLES.GERENTE, ROLES.VENDEDOR, ROLES.RECEPCION].includes(this.rol);
+    for (const c of (this.contratos || [])) {
+      if (c.estado !== 'anulado' || c.deleted) continue;
+      const sinSust = c.anulacion_tipo === 'sustitucion' && !c.sustituido_por_id;
+      if (!sinSust && !c.sustitucion_vinculo_pendiente) continue;
+      const colg = (this.equipos || []).filter(e => e.asignacion?.contrato_doc_id === c.id).length;
+      if (!colg && !c.sustitucion_vinculo_pendiente) continue;   // nada amarrado: no es pendiente
+      it('warn', `El contrato anulado <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span> ${c.sustituido_por_id ? 'no terminó de pasar sus equipos al sustituto' : 'no dice qué contrato lo sustituye'}`,
+        (colg ? `${colg} radio(s) siguen amarrados a él en el inventario` : '') + (c.sustitucion_vinculo_motivo ? `${colg ? ' · ' : ''}${this.esc(c.sustitucion_vinculo_motivo)}` : '')
+        + '. Mientras no se declare, las alertas de seriales siguen y la Base PoC apunta al contrato muerto.',
+        puedeDeclarar ? B(c.sustituido_por_id ? 'Reintentar el traspaso…' : 'Declarar sustituto…', `Centro.declararSustituto('${this.esc(c.id)}')`, true)
+          : B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`), 'cuenta');
+    }
     for (const o of (this.ordenesPorDecidir || [])) {
+      const murio = o.estado_contrato === 'vencido' ? 'venció' : 'se anuló';
       it('warn', `La orden <span class="cg-mono">${this.esc(o.id)}</span> se quedó sin contrato`,
-        `${o.equipos_n} equipo(s) preparados bajo <span class="cg-mono">${this.esc(o.contrato)}</span>, que se anuló`
+        `${o.equipos_n} equipo(s) preparados bajo <span class="cg-mono">${this.esc(o.contrato)}</span>, que ${murio}`
         + `${o.motivo ? ` (${this.esc(String(o.motivo).slice(0, 80))})` : ''}. `
         + `Si el cliente ya tiene contrato nuevo, la orden pasa a ese contrato y se entrega; si no, se anula.`,
         // ?ids= y no ?orden=: la bandeja carga las 40 mas recientes y estas

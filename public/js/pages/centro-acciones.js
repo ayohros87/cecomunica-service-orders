@@ -218,6 +218,22 @@ Object.assign(window.Centro, {
     const conEnlace = c.estado === 'aprobado' && !c.firmado && c.firma_solicitud_estado === 'pendiente';
     const reg = this._regPendiente(c);
 
+    // ANULADO sin sustituto declarado (plan de autoservicio 2026-10-07, B3):
+    // onAnnulment corre una vez; si el sustituto no existía o no se indicó,
+    // el pool se queda amarrado al contrato muerto y las alertas de seriales
+    // siguen (MAGEN DAVID, INNOVACIÓN, SHEVET). Antes la salida era un script.
+    if (c.estado === 'anulado' && (!c.sustituido_por_id || c.sustitucion_vinculo_pendiente)) {
+      const puedeDeclarar = [ROLES.ADMIN, ROLES.GERENTE, ROLES.VENDEDOR, ROLES.RECEPCION].includes(this.rol);
+      const reintento = !!c.sustituido_por_id;
+      A.push(this._acc({ id: 'declarar_sustituto',
+        label: reintento ? 'Reintentar el traspaso al sustituto…' : 'Declarar el contrato sustituto…',
+        primaria: !!c.sustitucion_vinculo_pendiente || c.anulacion_tipo === 'sustitucion',
+        hint: c.sustitucion_vinculo_pendiente
+          ? `quedó pendiente: ${c.sustitucion_vinculo_motivo || 'el traspaso no se completó'}`
+          : 'los seriales, la Base PoC y las órdenes de este contrato pasan al que lo reemplazó',
+        onclick: `Centro.declararSustituto('${id}')`, ok: puedeDeclarar, motivo: 'tu rol no mueve contratos' }));
+    }
+
     // Cerrar el contrato (2026-09-14): el acuerdo terminó y el equipo ya está
     // en casa. Va PRIMERO y como primaria cuando el sistema lo está pidiendo
     // (`cancelacion_pendiente`) — hasta hoy ese aviso solo salía en el home,

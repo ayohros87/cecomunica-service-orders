@@ -41,6 +41,9 @@ async function cerrarOrdenesDeContratoAnulado(contratoDocId, contrato = {}, opts
         },
         contrato_repuntado_desde: numero,
         contrato_repuntado_at: admin.firestore.FieldValue.serverTimestamp(),
+        // Si la orden venía SEÑALADA de una anulación anterior sin sustituto
+        // (declararSustitutoContrato la repunta después), la marca se apaga.
+        contrato_anulado_revisar: admin.firestore.FieldValue.delete(),
         os_logs: admin.firestore.FieldValue.arrayUnion({
           action: "REPUNTAR_CONTRATO", by: "system:anulacion",
           nota: `El contrato ${numero} se anuló por SUSTITUCIÓN: esta orden pasa a ${o.sustitutoNumero || o.sustitutoId}.`,

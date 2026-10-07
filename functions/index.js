@@ -102,6 +102,8 @@ exports.listQBOPiezas                 = require("./src/callable/listQBOPiezas");
 exports.listQBOEquipos                = require("./src/callable/listQBOEquipos");
 exports.gestionarFacturacion          = require("./src/callable/gestionarFacturacion");
 exports.confirmarEntregaContrato      = require("./src/callable/confirmarEntregaContrato");
+// Declarar después de anular cuál contrato sustituye al anulado (2026-10-07).
+exports.declararSustitutoContrato     = require("./src/callable/declararSustitutoContrato");
 exports.onOrdenEntregada              = require("./src/triggers/ordenes/onOrdenEntregada");
 exports.facturacionDiaria             = require("./src/triggers/scheduled/facturacionDiaria");
 exports.calcularFacturaContrato       = require("./src/callable/calcularFacturaContrato");
