@@ -276,7 +276,7 @@ window.AlmacenHoy = (() => {
     try {
       // Cada carga cae por su lado: un permiso o índice roto no tumba la bandeja
       // — se muestra lo que sí se pudo leer y se avisa del hueco (null = falló).
-      const [colas, gestiones, devueltos, clasificar, conflictos, sinVerificarN, difs, dormidos] = await Promise.all([
+      const [colas, gestiones, devueltos, clasificar, conflictos, sinVerificarN, difs, dormidos, ventas] = await Promise.all([
         ColaInventarioService.todo(),
         cargarGestionesBodega().catch(e => { console.warn('[Hoy] gestiones:', e?.code || e); return null; }),
         EquiposPoolService.listar({ estado: 'devuelto_revision' }).catch(e => { console.warn('[Hoy] devueltos:', e?.code || e); return null; }),
@@ -291,8 +291,10 @@ window.AlmacenHoy = (() => {
         contarSinVerificar().catch(e => { console.warn('[Hoy] sin verificar:', e?.code || e); return null; }),
         cargarDiferencias().catch(e => { console.warn('[Hoy] diferencias:', e?.code || e); return null; }),
         cargarAnexosDormidos().catch(e => { console.warn('[Hoy] anexos dormidos:', e?.code || e); return null; }),
+        // Ventas facturadas por recepción esperando seriales (2026-10-07).
+        Promise.resolve().then(() => PedidosVentaService.listarPendientes()).catch(e => { console.warn('[Hoy] ventas facturadas:', e?.code || e); return null; }),
       ]);
-      ctx.datos = { colas, gestiones, devueltos, clasificar, conflictos, sinVerificarN, difs, dormidos };
+      ctx.datos = { colas, gestiones, devueltos, clasificar, conflictos, sinVerificarN, difs, dormidos, ventas };
       render();
     } catch (e) {
       console.error('[Hoy] no se pudo cargar:', e);
@@ -381,6 +383,26 @@ window.AlmacenHoy = (() => {
     ));
     // Badge de la pestaña Asignar = lo que bodega tiene que poner.
     if (window.WorkspaceTabs) WorkspaceTabs.setBadge('asignar', colas.seriales.length + colas.cambios.length + gestiones.length);
+
+    // ── Ventas facturadas (recepción pide, bodega asigna) ──
+    // Se asignan con el asistente de venta, no en la pestaña Asignar: la
+    // unidad sale de bodega como `vendido`, no a un contrato.
+    if (d.ventas === null) fallidas.push('ventas facturadas');
+    const ventas = d.ventas || [];
+    total += ventas.length;
+    partes.push(grupo('Ventas facturadas (bodega asigna)', ventas.length,
+      ventas.map(p => fila({
+        chip: 'Venta', chipCls: 'seriales',
+        txt: `<b>${esc(p.cliente_nombre || '—')}</b> · factura ${esc(p.factura || '—')} — `
+          + (p.lineas || []).map(l => `${Number(l.cantidad || 0)} × ${esc(l.modelo || '?')}`).join(', ')
+          + (p.notas ? ` <span style="color:var(--fg-3);">${esc(p.notas)}</span>` : ''),
+        at: p.creado_at?.toMillis?.() || null,
+        ctaHtml: AlmacenPage.puedeOperar()
+          ? `<button type="button" class="btn btn-sm btn-accent bj-cta" data-venta="${esc(p.id)}">
+              <i data-lucide="scan-barcode" style="width:14px;height:14px;"></i> Asignar seriales</button>`
+          : '',
+      })).join(''),
+    ));
 
     // ── De anexos dormidos ──
     // Solo los que bodega tiene que DECIDIR suman al día; los demás son la
@@ -666,6 +688,24 @@ window.AlmacenHoy = (() => {
     verificarAccesoYAplicarVisibilidad(init);
   });
 
+  // Pedido de venta facturada → asistente de venta con cliente y factura
+  // fijos. Se relee el pedido: el de la bandeja (o el del correo) pudo
+  // asignarse o anularse en otra máquina.
+  async function abrirPedidoVenta(id) {
+    if (!AlmacenPage.puedeOperar()) return AlmacenPage._sinPermiso('Asignar los seriales de una venta');
+    let p = null;
+    try { p = await PedidosVentaService.get(id); }
+    catch (e) { console.warn('[Hoy] pedido de venta:', e?.code || e); }
+    if (!p) { Toast.show('No se encontró ese pedido de venta.', 'bad'); return; }
+    if (p.estado !== 'pendiente_bodega') {
+      Toast.show(p.estado === 'anulada' ? 'Recepción anuló ese pedido.' : 'Ese pedido ya tiene sus seriales asignados.', 'warn');
+      return;
+    }
+    if (!window.AsistenteVenta) { Toast.show('El asistente de venta no cargó. Recarga la página.', 'bad'); return; }
+    AsistenteVenta.abrir({ user: firebase.auth().currentUser, pedido: p, rol: ctx.rol,
+      onDone: () => AlmacenPage.recargarTodo() });
+  }
+
   function init(rol) {
     ctx.rol = rol;
     // EquipoFicha decide su footer ("Abrir en Inventario") con window.userRole.
@@ -715,6 +755,8 @@ window.AlmacenHoy = (() => {
       if (c) { e.preventDefault(); abrirConflicto(c.dataset.conflicto); return; }
       const sa = e.target.closest('[data-soltar-anexo]');
       if (sa) { e.preventDefault(); soltarAnexo(sa.dataset.soltarAnexo, sa); return; }
+      const vt = e.target.closest('[data-venta]');
+      if (vt) { e.preventDefault(); abrirPedidoVenta(vt.dataset.venta); return; }
       // Ficha y Existencias en la misma página (auditoría UX 2026-09-28).
       const fi = e.target.closest('a[data-ficha]');
       if (fi && window.EquipoFicha && !(e.ctrlKey || e.metaKey || e.button !== 0)) {
@@ -755,6 +797,8 @@ window.AlmacenHoy = (() => {
     if (accion === 'conteo') AlmacenPage.abrirConteo();
     else if (accion === 'recibir') AlmacenPage.abrirRecibir();
     else if (accion === 'vender') AlmacenPage.abrirVenta();
+    // ?venta=<pedido> — el correo "Venta facturada: asignar serial(es)".
+    if (qs.get('venta')) abrirPedidoVenta(qs.get('venta'));
     // La bandeja de Hoy (7 fuentes, ~10 consultas) se pide de una vez solo si
     // es la pestaña visible. Si la página abrió en otra (deep-link ?tab=),
     // sus datos van primero y Hoy se carga cuando terminen: antes se lanzaba

@@ -120,6 +120,9 @@ exports.agregadoPoolDiario            = require("./src/triggers/scheduled/agrega
 // Gestiones por cliente (Ola 2 — reemplazo/demo): máquina de estados del
 // expediente (correos bodega/recepción/admin, OS de programación, cierre 4/4)
 exports.onGestionWrite                = require("./src/triggers/gestiones/onGestionWrite");
+// Venta facturada por recepción → bodega asigna seriales → OS de programación
+// y aviso a recepción con los seriales (Brenda, 2026-10-07)
+exports.onPedidoVentaWrite            = require("./src/triggers/ventas/onPedidoVentaWrite");
 // Avance seamless desde las órdenes: PROG entregada → devolución + linaje;
 // devolución sin pendientes → entrada completada
 exports.onOrdenWriteGestion           = require("./src/triggers/gestiones/onOrdenWriteGestion");

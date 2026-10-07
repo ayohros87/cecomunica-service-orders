@@ -867,7 +867,7 @@ module.exports = {
   TIPO_LABEL, escapeHtml, isEmail, urlGestion, urlBodegaGestion, tablaHtml,
   destinatariosRecepcionVendedor, vendedorEmailDeCliente, adminEmails, aprobadoresEmails, aprobacionesTo, encolarCorreo,
   configEmailTo,
-  registrarEvento, crearOrdenesProgramacion,
+  registrarEvento, crearOrdenesProgramacion, siguienteOrdenId: _siguienteOrdenId,
   modeloEntrante, completarModeloEntrante,
   cambiosDeModelo, estadoCambiosModelo, cambioModeloEnEspera, tarifasContrato,
   bodegaEmailTo,

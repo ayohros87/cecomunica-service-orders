@@ -24,6 +24,8 @@ import '/js/ui/filtered-select.js';
 import '/js/ui/asistente-recibir.js';
 import '/js/ui/entity-combo.js';
 import '/js/ui/asistente-venta.js';
+// Ventas facturadas por recepción esperando seriales (2026-10-07).
+import '/js/services/pedidosVentaService.js';
 // Equipos que trae el cliente (Almacén · Más, 2026-10-07): usa la caché de
 // clientes del asistente de venta y la condición por modelo de Recibir.
 import '/js/ui/asistente-equipos-cliente.js';

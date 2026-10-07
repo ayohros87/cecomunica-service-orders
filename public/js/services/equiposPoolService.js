@@ -1291,7 +1291,9 @@ const EquiposPoolService = {
   // vacío solo en ventas por excepción (comprador QBO sin ficha en la app),
   // que quedan marcadas con cliente_excepcion. `venta` conserva el vínculo a
   // la factura.
-  async vender(id, { factura = '', cliente_id = '', cliente_nombre = '', cliente_excepcion = false, notas = '' } = {}, user) {
+  // `pedido_id`: la venta viene de un pedido de recepción (pedidos_venta,
+  // 2026-10-07) — queda el vínculo en venta.pedido_id.
+  async vender(id, { factura = '', cliente_id = '', cliente_nombre = '', cliente_excepcion = false, notas = '', pedido_id = null } = {}, user) {
     const fact  = (factura || '').toString().trim();
     const cli   = (cliente_nombre || '').toString().trim();
     const cliId = (cliente_id || '').toString().trim();
@@ -1314,6 +1316,7 @@ const EquiposPoolService = {
           cliente_id: cliId,
           cliente_nombre: cli,
           cliente_excepcion: !!cliente_excepcion,
+          ...(pedido_id ? { pedido_id } : {}),
           // null explícito (no ausente): el feed "Órdenes por crear" del home
           // consulta == null para hallar ventas sin orden de programación —
           // Firestore no puede consultar "campo ausente". Lo llena

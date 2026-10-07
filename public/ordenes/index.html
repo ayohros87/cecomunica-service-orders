@@ -94,6 +94,9 @@
         <div class="overflow-menu-dropdown" id="topbar-menu">
           <!-- Acción esporádica (auditoría órdenes P2): antes ocupaba un botón
                permanente del topbar; vive aquí para despejar la barra. -->
+          <!-- Venta facturada (Brenda, 2026-10-07): el pedido le llega a bodega y
+               los seriales vuelven por correo con la orden de programación. -->
+          <button class="overflow-menu-item" id="topbarBtnVentaFacturada" data-action="venta-facturada" style="display:none;" title="Pedirle a bodega los seriales de una venta ya facturada"><i data-lucide="receipt"></i> Venta facturada: pedir seriales</button>
           <button class="overflow-menu-item" data-action="nueva-devolucion" title="Registrar la devolución de equipos cuyo contrato no está en el sistema (contrato de papel)"><i data-lucide="package-open"></i> Devolución sin contrato en el sistema</button>
           <div class="overflow-menu-divider"></div>
           <button class="overflow-menu-item" data-action="go-reporte-pendientes"><i data-lucide="clock"></i> Pendientes</button>

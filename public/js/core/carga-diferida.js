@@ -46,6 +46,13 @@ window.CargaDiferida = (() => {
     // El taller avisa que un radio no sirve para la gestion (Zuleika 2026-09-16).
     cambioSerialTaller: () => import("/js/pages/ordenes-cambio-serial.js"),
     gestiones:  () => import("/js/services/gestionesService.js"),
+    // Venta facturada: recepción le pide los seriales a bodega (Brenda,
+    // 2026-10-07). El combo de cliente no viene en /ordenes/.
+    ventaFacturada: () => Promise.all([
+      import("/js/ui/entity-combo.js"),
+      import("/js/services/pedidosVentaService.js"),
+      import("/js/ui/venta-facturada.js"),
+    ]),
     garantia:   () => import("/js/domain/garantiaEquipo.js"),
   };
 
@@ -96,6 +103,9 @@ window.CargaDiferida = (() => {
     },
     visita() {
       return window.abrirInformeVisita ? Promise.resolve() : traer("visita");
+    },
+    ventaFacturada() {
+      return window.VentaFacturada && window.EntityCombo ? Promise.resolve() : traer("ventaFacturada");
     },
     fotos() {
       return window.abrirFotosOrden ? Promise.resolve() : traer("fotos");

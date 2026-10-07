@@ -23,6 +23,9 @@ async function main() {
     },
   });
 
+  // Desde cero: contra un emulador que ya estaba corriendo, los docs de la
+  // corrida anterior convierten los create en update y la suite falla por eso.
+  await testEnv.clearFirestore();
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     for (const r of ROLES) await db.doc(`usuarios/${r}`).set({ rol: r });
@@ -852,14 +855,14 @@ async function main() {
   ok("cotizaciones: envío fuera de política bloqueado para vendedor");
   await assertSucceeds(as("vendedor").doc("cotizaciones/cAprobada").set({ estado: "enviada" }, { merge: true }));
   ok("cotizaciones: con aprobación previa el dueño sí puede marcar enviada");
-  await assertSucceeds(as("gerente").doc("cotizaciones/cFuera").set({ estado: "enviada" }, { merge: true }));
-  ok("cotizaciones: gerente (aprobador comercial) envía fuera de política");
+  await assertFails(as("gerente").doc("cotizaciones/cFuera").set({ estado: "enviada" }, { merge: true }));
+  ok("cotizaciones: gerente ya NO aprueba comerciales (D11, 2026-10-01): no envía fuera de política");
   await assertFails(as("vendedor").doc("cotizaciones/cLinea").set({ estado: "enviada" }, { merge: true }));
   ok("cotizaciones: requiere_aprobacion=true bloquea el envío directo (descuento por línea)");
   await assertSucceeds(as("vendedor").doc("cotizaciones/cFlagOk").set({ estado: "enviada" }, { merge: true }));
   ok("cotizaciones: flag en false no estorba el envío dentro de política");
-  await assertSucceeds(as("gerente").doc("cotizaciones/cLinea").set({ estado: "enviada" }, { merge: true }));
-  ok("cotizaciones: el aprobador del tipo envía aunque el flag pida aprobación");
+  await assertFails(as("gerente").doc("cotizaciones/cLinea").set({ estado: "enviada" }, { merge: true }));
+  ok("cotizaciones: gerente tampoco envía con el flag de aprobación (D11)");
 
   // ── Respuesta del cliente desde el enlace público (2026-09-28) ────────────
   // La escribe solo responderCotizacionPublica (admin SDK). El espejo se lee
@@ -1425,6 +1428,42 @@ async function main() {
   // Admin queda exento (correcciones manuales), como en el resto del bloque.
   await assertSucceeds(as("administrador").doc("ordenes_de_servicio/oTandaBorrar").update({ "entrega.tandas": [] }));
   ok("tandas: admin puede corregir a mano");
+
+  // ── pedidos_venta: recepción pide, bodega asigna, el servidor avisa ───────
+  // (Brenda, 2026-10-07).
+  const pedido = (uid, extra = {}) => ({
+    cliente_id: "c1", cliente_nombre: "CLIENTE", factura: "11044",
+    lineas: [{ modelo: "HYTERA HP786", cantidad: 2 }], requiere_programacion: true,
+    estado: "pendiente_bodega", creado_por_uid: uid, ...extra,
+  });
+  await assertSucceeds(as("recepcion").doc("pedidos_venta/pv1").set(pedido("recepcion")));
+  await assertSucceeds(as("administrador").doc("pedidos_venta/pv2").set(pedido("administrador")));
+  for (const r of ["inventario", "vendedor", "tecnico", "contabilidad", "vista"]) {
+    await assertFails(as(r).doc("pedidos_venta/bad_" + r).set(pedido(r)));
+  }
+  await assertFails(as("recepcion").doc("pedidos_venta/bad_otro").set(pedido("administrador")));
+  await assertFails(as("recepcion").doc("pedidos_venta/bad_fac").set(pedido("recepcion", { factura: "" })));
+  await assertFails(as("recepcion").doc("pedidos_venta/bad_lin").set(pedido("recepcion", { lineas: [] })));
+  await assertFails(as("recepcion").doc("pedidos_venta/bad_est").set(pedido("recepcion", { estado: "asignada" })));
+  await assertFails(as("recepcion").doc("pedidos_venta/bad_os").set(pedido("recepcion", { orden_programacion_id: "x" })));
+  ok("pedidos_venta: solo recepción/admin crean, a su nombre, con factura y líneas, en pendiente_bodega");
+
+  const asignar = { estado: "asignada", seriales: [{ serial: "A1" }], asignado_por_uid: "inventario" };
+  await assertFails(as("recepcion").doc("pedidos_venta/pv1").update(asignar));
+  await assertFails(as("inventario").doc("pedidos_venta/pv1").update({ ...asignar, seriales: [] }));
+  await assertFails(as("inventario").doc("pedidos_venta/pv1").update({ ...asignar, factura: "999" }));
+  await assertFails(as("inventario").doc("pedidos_venta/pv1").update({ estado: "anulada" }));
+  await assertSucceeds(as("inventario").doc("pedidos_venta/pv1").update(asignar));
+  await assertFails(as("inventario").doc("pedidos_venta/pv1").update({ ...asignar, seriales: [{ serial: "B2" }] }));
+  await assertFails(as("recepcion").doc("pedidos_venta/pv1").update({ estado: "anulada" }));
+  ok("pedidos_venta: bodega asigna una sola vez, sin tocar factura ni anular; ya asignado nadie lo mueve");
+
+  await assertFails(as("inventario").doc("pedidos_venta/pv2").update({ estado: "anulada", anulado_motivo: "x" }));
+  await assertFails(as("recepcion").doc("pedidos_venta/pv2").update({ estado: "anulada", factura: "1" }));
+  await assertSucceeds(as("recepcion").doc("pedidos_venta/pv2").update({ estado: "anulada", anulado_motivo: "x" }));
+  await assertFails(as("administrador").doc("pedidos_venta/pv2").delete());
+  await assertSucceeds(as("vista").doc("pedidos_venta/pv2").get());
+  ok("pedidos_venta: recepción/admin anulan mientras está pendiente; nadie borra; todos leen");
 
   await testEnv.cleanup();
   console.log(`\nTODOS LOS TESTS DE REGLAS PASARON (${n} grupos)`);

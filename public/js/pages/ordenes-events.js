@@ -133,6 +133,10 @@
     },
     // Devolución de equipos con contrato de papel (fuera del sistema):
     // crea la orden en modo sin_contrato y abre el check-in de captura libre.
+    'venta-facturada': () => {
+      CargaDiferida.ventaFacturada().then(() => VentaFacturada.abrir({ user: firebase.auth().currentUser }))
+        .catch(() => Toast.show('Sin conexión — no se pudo abrir la venta facturada.', 'bad'));
+    },
     'nueva-devolucion': () => {
       CargaDiferida.devolucion().then(() => OrdenesDevolucion.nueva())
         .catch(() => Toast.show('Sin conexión — no se pudo abrir la devolución.', 'bad'));

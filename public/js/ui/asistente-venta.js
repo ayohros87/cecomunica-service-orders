@@ -73,6 +73,23 @@ window.AsistenteVenta = {
     const pref = opts.serialesPrefill;
     this._el.querySelector('#asvSeriales').value =
       Array.isArray(pref) ? pref.join('\n') : (pref || '');
+    // Pedido de recepción (pedidos_venta, 2026-10-07): cliente y factura ya
+    // vienen decididos — bodega solo escanea los seriales.
+    const p = opts.pedido;
+    if (p) {
+      this._clienteSel = { id: p.cliente_id || '', nombre: p.cliente_nombre || '' };
+      const cli = this._el.querySelector('#asvCliente');
+      const fac = this._el.querySelector('#asvFactura');
+      cli.value = p.cliente_nombre || ''; cli.readOnly = true;
+      fac.value = p.factura || ''; fac.readOnly = true;
+      this._el.querySelector('#asvClienteHint')?.remove();
+      const lineas = (p.lineas || []).map(l => `${Number(l.cantidad || 0)} × ${this._esc(l.modelo || '?')}`).join(', ');
+      const aviso = this._el.querySelector('#asvPedido');
+      aviso.style.display = '';
+      aviso.innerHTML = `Pedido de ${this._esc(p.creado_por_email || 'recepción')}: <b>${lineas}</b>`
+        + (p.notas ? `<br>Notas: ${this._esc(p.notas)}` : '')
+        + `<br>Al registrar, ${p.requiere_programacion !== false ? 'el sistema crea la orden de programación y ' : ''}le avisa a recepción con los seriales.`;
+    }
     this._cargarClientesCache().catch(e => console.error('Error al precargar clientes:', e));
   },
 
@@ -235,8 +252,13 @@ window.AsistenteVenta = {
       }
       const detalle = vendibles.map(u =>
         `<span style="font-family:var(--font-mono);">${esc(u.serial || u.serial_norm)}</span> (${esc(u.modelo_label || 'sin modelo')})`).join('<br>');
-      const avisos = problemas.length
+      let avisos = problemas.length
         ? `<br><br><strong>${problemas.length} serial(es) NO se venderán:</strong><br>${problemas.join('<br>')}` : '';
+      const pedido = this._opts.pedido || null;
+      const esperados = pedido ? (pedido.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0) : 0;
+      if (pedido && esperados && vendibles.length !== esperados) {
+        avisos += `<br><br><strong>Ojo:</strong> recepción pidió <b>${esperados}</b> equipo(s) y aquí van <b>${vendibles.length}</b>. El pedido se cierra con estos.`;
+      }
       if (!await Modal.confirm({
         title: 'Registrar venta',
         message: `Venta a <strong>${esc(clienteSel.nombre)}</strong>${clienteExcepcion ? ' <em>(por excepción — no registrado en la app)</em>' : ''}${factura ? ` — factura QBO <strong>${esc(factura)}</strong>` : ''}.<br>
@@ -251,6 +273,7 @@ window.AsistenteVenta = {
             factura, notas,
             cliente_id: clienteSel.id, cliente_nombre: clienteSel.nombre,
             cliente_excepcion: clienteExcepcion,
+            pedido_id: pedido?.id || null,
           }, user);
           ok++;
           vendidas.push(u);
@@ -269,6 +292,21 @@ window.AsistenteVenta = {
       this._cerrarForzado();
       let msg = `${ok} equipo(s) registrados como vendidos.`;
       if (errores.length) msg += ` ${errores.length} fallaron: ${errores.join(' · ')}`;
+      // Pedido de recepción: se cierra con lo que sí se vendió y el servidor
+      // crea la orden y le escribe a recepción. Sin CTA de orden aquí.
+      if (pedido && ok > 0) {
+        try {
+          await PedidosVentaService.marcarAsignado(pedido.id, vendidas, user);
+          msg += ' Recepción recibe los seriales por correo.';
+        } catch (e) {
+          console.error('No se pudo cerrar el pedido de venta:', e);
+          msg += ' OJO: los equipos quedaron vendidos pero el pedido no se cerró — avísale a recepción.';
+          errores.push('pedido');
+        }
+        this._toast(msg, errores.length ? 'warn' : 'ok');
+        this._onDone({ ok, errores, vendidas });
+        return;
+      }
       this._toast(msg, errores.length ? 'warn' : 'ok');
       this._onDone({ ok, errores, vendidas });
 
@@ -333,6 +371,7 @@ window.AsistenteVenta = {
             QuickBooks; aquí solo se descuentan de bodega. Solo se venden unidades
             <span class="eqpool-chip eqpool-chip-en_bodega">En bodega</span> — lo demás se avisa antes de confirmar.
           </p>
+          <p id="asvPedido" style="display:none; font-size:13px; background:var(--accent-50, #EFF6FF); border-radius:6px; padding:8px 10px; margin:0 0 var(--sp-3);"></p>
           <div class="form-field">
             <label class="form-label" for="asvSeriales">Seriales <span class="optional">(uno por línea — acepta lector de código de barras)</span></label>
             <textarea class="form-input" id="asvSeriales" rows="5" placeholder="B12345678&#10;B12345679&#10;…" style="font-family:var(--font-mono);"></textarea>
@@ -345,7 +384,7 @@ window.AsistenteVenta = {
                 <input class="form-input" id="asvCliente" type="text" placeholder="Escribe para buscar el cliente…"
                        autocomplete="off">
               </div>
-              <span class="form-hint">Elígelo de la lista. Si no existe en la app, la venta se registra por excepción.</span>
+              <span class="form-hint" id="asvClienteHint">Elígelo de la lista. Si no existe en la app, la venta se registra por excepción.</span>
             </div>
             <div class="form-field" style="flex:1.2;">
               <label class="form-label" for="asvFactura">Factura QBO <span class="optional">(recomendado)</span></label>

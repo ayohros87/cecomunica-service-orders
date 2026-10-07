@@ -316,6 +316,12 @@ function aplicarRestriccionesPorRol(rol) {
   if (topbarBtnAdminEquiposCliente) {
     topbarBtnAdminEquiposCliente.style.display = isAdmin ? "flex" : "none";
   }
+  // Venta facturada: la registra quien factura (recepción) o administración;
+  // las reglas de pedidos_venta cierran lo mismo.
+  const topbarBtnVentaFacturada = document.getElementById("topbarBtnVentaFacturada");
+  if (topbarBtnVentaFacturada) {
+    topbarBtnVentaFacturada.style.display = (isAdmin || normalizedRole === ROLES.RECEPCION) ? "flex" : "none";
+  }
 }
 window.aplicarRestriccionesPorRol = aplicarRestriccionesPorRol;
 

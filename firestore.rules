@@ -867,6 +867,34 @@ service cloud.firestore {
       }
     }
 
+    // Venta facturada (Brenda, 2026-10-07): recepción registra el pedido con
+    // la factura y lo que se vendió; bodega asigna los seriales (vendiéndolos
+    // en equipos_pool) y lo marca 'asignada'; onPedidoVentaWrite crea la OS
+    // de programación y avisa. Los avisos (`aviso_*_at`) y la orden los
+    // escribe Cloud Functions con Admin SDK — ningún cliente los toca.
+    match /pedidos_venta/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && userRole() in ["administrador", "recepcion"]
+        && request.resource.data.estado == "pendiente_bodega"
+        && request.resource.data.creado_por_uid == request.auth.uid
+        && request.resource.data.factura is string && request.resource.data.factura.size() > 0
+        && request.resource.data.lineas is list && request.resource.data.lineas.size() > 0
+        && !request.resource.data.keys().hasAny(["seriales", "aviso_bodega_at", "aviso_asignada_at", "orden_programacion_id"]);
+      // Bodega asigna (una sola vez): solo de pendiente a asignada.
+      // Recepción/admin anulan mientras bodega no haya asignado.
+      allow update: if isSignedIn() && resource.data.estado == "pendiente_bodega"
+        && ((userRole() in ["administrador", "inventario"]
+              && request.resource.data.estado == "asignada"
+              && request.resource.data.seriales is list && request.resource.data.seriales.size() > 0
+              && request.resource.data.diff(resource.data).affectedKeys()
+                   .hasOnly(["estado", "seriales", "asignado_por_uid", "asignado_por_email", "asignado_at"]))
+          || (userRole() in ["administrador", "recepcion"]
+              && request.resource.data.estado == "anulada"
+              && request.resource.data.diff(resource.data).affectedKeys()
+                   .hasOnly(["estado", "anulado_por_uid", "anulado_por_email", "anulado_at", "anulado_motivo"])));
+      allow delete: if false;
+    }
+
     // Equipos descartados en control de calidad o en la revisión de una
     // ENTRADA. Doc ID = serial normalizado, así que la alerta al teclear un
     // serial (SerialField, en Bodega y Taller) es un solo get por doc-ID,
