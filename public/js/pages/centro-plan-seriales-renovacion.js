@@ -204,9 +204,21 @@ Object.assign(window.Centro, {
       serial: ficha ? (ficha.serial || raw) : raw, serial_norm: norm, pool: !!ficha, pool_id: ficha ? ficha.id : null,
       modelo_id: ficha?.modelo_id || null, modelo: ficha?.modelo_label || '',
       propiedad: ficha?.propiedad || null, aviso,
+      corregible: !!(ficha && this._wcModeloCorregible(ficha)),
     });
     this._wcSyncPlan();
     document.getElementById('wcSerialNuevo')?.focus();
+  },
+
+  // ¿La línea del contrato puede corregir el modelo de esta ficha? Sí cuando
+  // no tiene modelo, o cuando el que tiene lo puso una migración y nadie lo
+  // verificó (2026-10-07, caso ACODECO). Un modelo verificado o capturado por
+  // bodega/órdenes NO se toca desde la venta: ese serial sigue saliendo sin
+  // línea, como siempre.
+  _wcModeloCorregible(e) {
+    if (!e) return false;
+    if (!e.modelo_id && !String(e.modelo_label || '').trim()) return true;
+    return /^migracion/.test(String(e.origen || '')) && e.verificado !== true;
   },
 
   // Lee el plan tal como está en pantalla (o null si no aplica / vacío).
@@ -223,6 +235,7 @@ Object.assign(window.Centro, {
       return { pool_id: e.id, serial: e.serial || e.id, serial_norm: e.id,
         modelo_id: e.modelo_id || null, modelo: e.modelo_label || '', destino: s.value, fuente,
         modalidad: e.propiedad === 'cliente' ? 'propio' : 'alquiler',
+        ...(this._wcModeloCorregible(e) ? { modelo_corregible: true } : {}),
         ...(rm ? { reemplazo_modelo_id: rm.id, reemplazo_modelo: rm.label } : {}),
         ...(refurbished ? { refurbished: true } : {}) };
     }).filter(Boolean);
@@ -239,6 +252,7 @@ Object.assign(window.Centro, {
       const refurbished = !!document.querySelector(`input[data-wcpaf="${i}"]`)?.checked;
       conDestino.push({ pool_id: a.pool_id, serial: a.serial, serial_norm: a.serial_norm, modelo_id, modelo,
         destino: 'continua', fuente: 'agregado', modalidad: a.propiedad === 'cliente' ? 'propio' : 'alquiler',
+        ...(a.pool && a.corregible ? { modelo_corregible: true } : {}),
         ...(refurbished ? { refurbished: true } : {}) });
     });
     if (!conDestino.length) return null;
@@ -253,7 +267,7 @@ Object.assign(window.Centro, {
   _wcConciliar() {
     const box = document.getElementById('wcPlanConc');
     if (!box) return { ok: true, sinDestino: 0 };
-    const plan = this._wcLeerPlan(this._wcOrigenIds());
+    let plan = this._wcLeerPlan(this._wcOrigenIds());
     const sinDestino = this._wcSinDestino || 0;
     const modBox = document.getElementById('wcModalidad');
     if (!plan) {
@@ -263,6 +277,9 @@ Object.assign(window.Centro, {
     }
     const lineas = this._lineasModelo('wcm');
     const r = TransicionPlan.conciliarLineas(plan, lineas);
+    // Los seriales sin modelo (o con el de una migración sin verificar)
+    // toman el de la línea: el plan que se guarda ya lo lleva.
+    plan = TransicionPlan.aplicarModeloDeLinea(plan, r);
     const partes = [];
     let desajuste = false;
     r.porLinea.forEach(({ idx, continuan, reemplazan }) => {
@@ -281,6 +298,7 @@ Object.assign(window.Centro, {
     // conciliarLineas): se dice, no se bloquea. La ficha del pool suele venir
     // de una migración sin verificar y la línea es lo que el vendedor declara.
     const otraMod = this._wcOtraModalidadHtml(r.otraModalidad);
+    const corrige = this._wcModeloCorregidoHtml(r.modeloCorregido);
     const modalidad = TransicionPlan.derivarModalidad(plan, lineas);
     if (modBox) {
       modBox.innerHTML = `<b>${modalidad.sin_equipo ? 'Renovación sin equipo' : 'Renovación con equipo'}</b> — ${modalidad.continuan} continúa${modalidad.continuan === 1 ? '' : 'n'}${modalidad.reemplazos ? ` · ${modalidad.reemplazos} reemplazo${modalidad.reemplazos === 1 ? '' : 's'}` : ''}${modalidad.nuevos ? ` · ${modalidad.nuevos} radio${modalidad.nuevos === 1 ? '' : 's'} nuevo${modalidad.nuevos === 1 ? '' : 's'}` : ''} · refurbished: ${modalidad.refurbished ? `<b>sí</b> (${modalidad.refurbished_n})` : 'no'}`;
@@ -290,9 +308,28 @@ Object.assign(window.Centro, {
       <div style="font-size:12.5px; color:var(--fg-3);">${this.esc(TransicionPlan.resumen(plan))}</div>
       ${partes.length ? `<div style="display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; margin-top:4px;">${partes.join('')}
         ${desajuste && !this._wcSoloPlan ? `<button type="button" class="btn btn-ghost cg-act" onclick="Centro._wcCuadrar()">Cuadrar cantidades con los seriales</button>` : ''}</div>` : ''}
-      ${sinLinea}${otraMod}
+      ${corrige}${sinLinea}${otraMod}
       ${faltaModelo ? '<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;">Elige el modelo de cada serial agregado sin ficha.</div>' : ''}`;
-    return { ok: !sinDestino && !desajuste && !r.sinLinea.length && !faltaModelo, plan, desajuste, sinLinea: r.sinLinea, faltaModelo, sinDestino, modalidad, otraModalidad: r.otraModalidad || [] };
+    return { ok: !sinDestino && !desajuste && !r.sinLinea.length && !faltaModelo, plan, desajuste, sinLinea: r.sinLinea, faltaModelo, sinDestino, modalidad, otraModalidad: r.otraModalidad || [], modeloCorregido: r.modeloCorregido || [] };
+  },
+
+  // Aviso (no bloquea) al vendedor: le está CAMBIANDO el modelo a estos
+  // equipos. Agrupado por "lo que decía la ficha → lo que dice la línea".
+  _wcModeloCorregidoHtml(lista) {
+    if (!Array.isArray(lista) || !lista.length) return '';
+    const grupos = new Map();
+    for (const x of lista) {
+      const k = `${x.de}→${x.a}`;
+      const g = grupos.get(k) || { de: x.de, a: x.a, seriales: [] };
+      g.seriales.push(x.unidad.serial || x.unidad.serial_norm || '');
+      grupos.set(k, g);
+    }
+    return [...grupos.values()].map(g => `<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;">
+      <b>Vas a cambiar el modelo de ${g.seriales.length} equipo(s)</b>:
+      ${g.de ? `el sistema los tiene como <b>${this.esc(g.de)}</b> (de una migración que nadie verificó)` : 'el sistema no tiene su modelo'}
+      y quedarán como <b>${this.esc(g.a)}</b>, el modelo de la línea del contrato.
+      <span style="color:var(--fg-3);">${this.esc(g.seriales.join(', '))}</span>
+      — si no es ese modelo, cámbiales el destino o corrige la línea.</div>`).join('');
   },
 
   // Aviso (nunca bloqueo) de los seriales que cayeron en una línea de otra

@@ -653,6 +653,44 @@ async function marcarRefurbishedPorRef(ref, { refMov = null, notas = "" } = {}) 
     return filaR ? "repuntada" : "sin-fila-r";
   });
 }
+// La LÍNEA del contrato le pone el modelo a una ficha (2026-10-07, caso
+// ACODECO: 22 radios de la migración POC sin modelo trancaban la renovación).
+// Solo si la ficha no tiene modelo o si el que tiene vino de una migración y
+// nadie lo verificó — un modelo capturado por bodega u órdenes no se pisa
+// desde la venta. La condición la impone la fila del catálogo (R → reuso).
+// Siempre con movimiento en el kardex. Por id de ficha (`ref`): el serial
+// puede estar partido entre modelos y aquí se corrige UNA unidad concreta.
+// Retorna 'corregida' | 'sin-cambio' | 'protegida' | 'no-existe'.
+function modeloCorregiblePorLinea(ficha) {
+  const f = ficha || {};
+  if (!f.modelo_id && !String(f.modelo_label || "").trim()) return true;
+  return /^migracion/.test(String(f.origen || "")) && f.verificado !== true;
+}
+async function corregirModeloPorLinea(ref, { modelo_id, modelo_label, refMov = null, notas = "" } = {}) {
+  if (!modelo_id && !String(modelo_label || "").trim()) return "sin-cambio";
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return "no-existe";
+    const actual = snap.data();
+    if (modelo_id && actual.modelo_id === modelo_id) return "sin-cambio";
+    if (!modeloCorregiblePorLinea(actual)) return "protegida";
+    const label = String(modelo_label || "").trim();
+    const condicion = ModeloFamilia.condicionDerivada({ modelo_id: modelo_id || null, modelo_label: label, modelo: label });
+    tx.set(ref, {
+      modelo_id: modelo_id || null, modelo_label: label, condicion,
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    const antes = actual.modelo_label || actual.modelo_id
+      ? `${actual.modelo_label || actual.modelo_id} (de ${actual.origen || "origen desconocido"}, sin verificar)`
+      : "sin modelo";
+    tx.set(ref.collection("movimientos").doc(), _movimiento({
+      tipo: "correccion_modelo", de_estado: actual.estado || null, a_estado: actual.estado || null, ref: refMov,
+      notas: [`Modelo corregido por la línea del contrato: ${antes} → ${label} (${condicion})`, notas].filter(Boolean).join(" — "),
+    }));
+    return "corregida";
+  });
+}
+
 async function marcarRefurbished(serial, modeloId, modeloLabel, opts = {}) {
   const { ref, data } = await resolver(serial, modeloId, modeloLabel, { adoptarSiExiste: true });
   if (!data) return "no-existe";
@@ -661,6 +699,6 @@ async function marcarRefurbished(serial, modeloId, modeloLabel, opts = {}) {
 
 module.exports = { ESTADOS, normSerial, esSerialValido, modeloKey, mismoModelo, resolver,
   upsertContacto, declaracionManda, transicionar, transicionarPorId, custodiaPatch,
-  marcarRefurbished, marcarRefurbishedPorRef,
+  marcarRefurbished, marcarRefurbishedPorRef, modeloCorregiblePorLinea, corregirModeloPorLinea,
   desasignarContrato, soltarDelCliente, estadoPrevioAOrden, destinoAlSalirDeOrden,
   facturaVentaPatch, estamparVentaContrato };

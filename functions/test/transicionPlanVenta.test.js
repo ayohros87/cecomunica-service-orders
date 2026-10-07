@@ -214,3 +214,57 @@ test("derivarModalidad: sin equipo solo cuando no hay reemplazos ni unidades de 
   assert.equal(m.sin_equipo, false); assert.equal(m.reemplazos, 1); assert.equal(m.refurbished, false);
   assert.equal(P.derivarModalidad(null, []).sin_equipo, true);
 });
+
+// ── 2026-10-07 (ACODECO): 22 radios de la migración POC sin modelo trancaban
+// la renovación. La línea les pone el modelo y se avisa al vendedor. ──
+test("paso 5: un serial sin modelo entra en la línea con cupo y sale en modeloCorregido", () => {
+  const P = cargar();
+  const plan = P.construirSerial([
+    { serial: "S1", modelo: "", destino: "continua", modalidad: "alquiler" },
+    { serial: "S2", modelo: "", destino: "continua", modalidad: "alquiler" },
+    { serial: "S3", modelo: "", destino: "no_tiene" },
+  ], []);
+  const lineas = [{ modelo_id: "x7", modelo: "HYTERA PNC360S-R", cantidad: 2, modalidad: "propio" }];
+  const r = P.conciliarLineas(plan, lineas);
+  assert.equal(r.sinLinea.length, 0, "ya no traba: la línea pone el modelo");
+  assert.deepEqual(JSON.parse(JSON.stringify(r.porLinea)), [{ idx: 0, continuan: 2, reemplazan: 0 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.modeloCorregido.map(x => `${x.unidad.serial}:${x.de}→${x.a}`))), ["S1:→HYTERA PNC360S-R", "S2:→HYTERA PNC360S-R"]);
+  assert.equal(r.otraModalidad.length, 2, "la modalidad distinta se sigue diciendo");
+  const corregido = P.aplicarModeloDeLinea(plan, r);
+  assert.equal(corregido.unidades[0].modelo_id, "x7");
+  assert.equal(corregido.unidades[0].modelo, "HYTERA PNC360S-R");
+  assert.deepEqual(JSON.parse(JSON.stringify(corregido.unidades[0].modelo_corregido)), { de_id: null, de: "" });
+  assert.equal("modelo_corregido" in corregido.unidades[2], false);
+  assert.equal(plan.unidades[0].modelo, "", "no muta el plan recibido");
+});
+
+test("paso 5: modelo de migración sin verificar se corrige; un modelo firme sigue sin línea", () => {
+  const P = cargar();
+  const plan = P.construirSerial([
+    { serial: "M1", modelo_id: "k1", modelo: "KENWOOD TK-3000", destino: "continua", modelo_corregible: true },
+    { serial: "F1", modelo_id: "k1", modelo: "KENWOOD TK-3000", destino: "continua" },
+  ], []);
+  const lineas = [{ modelo_id: "x7", modelo: "HYTERA PNC360S-R", cantidad: 5, modalidad: "alquiler" }];
+  const r = P.conciliarLineas(plan, lineas);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.sinLinea.map(u => u.serial))), ["F1"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.modeloCorregido.map(x => `${x.unidad.serial}:${x.de}→${x.a}`))), ["M1:KENWOOD TK-3000→HYTERA PNC360S-R"]);
+  const c = P.aplicarModeloDeLinea(plan, r);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.unidades[0].modelo_corregido)), { de_id: "k1", de: "KENWOOD TK-3000" });
+});
+
+test("paso 5: sin cupo solo con UNA línea; con varias líneas llenas queda sin línea", () => {
+  const P = cargar();
+  const plan = P.construirSerial([
+    { serial: "A1", modelo: "HYTERA PNC360S-R", destino: "continua" },
+    { serial: "S1", modelo: "", destino: "continua" },
+  ], []);
+  const una = P.conciliarLineas(plan, [{ modelo_id: "x7", modelo: "HYTERA PNC360S-R", cantidad: 1 }]);
+  assert.equal(una.sinLinea.length, 0);
+  assert.equal(una.porLinea[0].continuan, 2, "sale el desajuste para 'Cuadrar cantidades'");
+  const dos = P.conciliarLineas(plan, [
+    { modelo_id: "x7", modelo: "HYTERA PNC360S-R", cantidad: 1 },
+    { modelo_id: "k1", modelo: "KENWOOD TK-3000", cantidad: 0 },
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(dos.sinLinea.map(u => u.serial))), ["S1"]);
+  assert.equal(dos.modeloCorregido.length, 0);
+});

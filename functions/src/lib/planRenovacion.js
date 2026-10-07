@@ -106,8 +106,27 @@ async function aplicarPlanRenovacion(contratoRef, contrato, cid, { motivo = "apr
   // Catálogo para resolver la fila -R de cada familia (refurbished por serial).
   try { await catalogo(); } catch (e) { logger.warn("[planRenovacion] catálogo no disponible", { message: e.message }); }
 
-  for (const u of dec.crear) {
+  let modelosCorregidos = 0;
+  for (const u0 of dec.crear) {
+    let u = u0;
     try {
+      // La LÍNEA le puso el modelo a este serial en el wizard (2026-10-07,
+      // caso ACODECO): la ficha no tenía modelo o lo tenía de una migración
+      // sin verificar. Se corrige la ficha ANTES de crear la fila — si no,
+      // onSerialWrite vería un modelo distinto y partiría el serial en dos
+      // fichas. Si entretanto alguien verificó el modelo ('protegida'), la
+      // fila sale con el modelo de la ficha y el contrato queda por revisar.
+      if (u.modelo_corregido && u.pool_id) {
+        const r = await pool.corregirModeloPorLinea(
+          admin.firestore().collection("equipos_pool").doc(u.pool_id),
+          { modelo_id: u.modelo_id || null, modelo_label: u.modelo || "", refMov,
+            notas: `Renovación ${contrato.contrato_id || cid}` });
+        if (r === "corregida") modelosCorregidos++;
+        if (r === "protegida") {
+          logger.warn("[planRenovacion] la ficha ya tiene un modelo verificado; se respeta", { cid, serial: u.serial, linea: u.modelo });
+          u = { ...u, modelo_id: u.modelo_corregido.de_id || null, modelo: u.modelo_corregido.de || "" };
+        }
+      }
       // "Una familia, dos filas" (2026-09-07): un serial declarado refurbished
       // se registra sobre la fila -R de su familia y la ficha del pool se
       // repunta igual — así el Anexo A, la tarifa y el stock ven lo mismo.
@@ -180,14 +199,14 @@ async function aplicarPlanRenovacion(contratoRef, contrato, cid, { motivo = "apr
       hash,
       at: admin.firestore.FieldValue.serverTimestamp(),
       motivo,
-      creadas, quitadas, soltadas,
+      creadas, quitadas, soltadas, modelos_corregidos: modelosCorregidos,
       no_tiene_total: dec.soltar.length,
       soltar_detalle: soltarDetalle.slice(0, 60),
       por: `trigger:${SOURCE}`,
     },
   }, { merge: true });
 
-  logger.info("[planRenovacion] plan aplicado", { cid, contrato: contrato.contrato_id, motivo, creadas, quitadas, soltadas });
+  logger.info("[planRenovacion] plan aplicado", { cid, contrato: contrato.contrato_id, motivo, creadas, quitadas, soltadas, modelosCorregidos });
   return { creadas, quitadas, soltadas };
 }
 

@@ -94,6 +94,9 @@ window.TransicionPlan = {
       // Modalidad de la línea a la que pertenece (SERV mixto): 'propio' si
       // el equipo es del cliente, 'alquiler' si es de CECOMUNICA.
       ...(u.modalidad === 'propio' || u.modalidad === 'alquiler' ? { modalidad: u.modalidad } : {}),
+      // La ficha no tiene modelo, o el que tiene lo puso una migración sin
+      // verificar: la línea del contrato puede corregirlo (ver conciliarLineas).
+      ...(u.destino === 'continua' && u.modelo_corregible === true ? { modelo_corregible: true } : {}),
     })).filter(u => u.serial_norm);
     return {
       nivel: 'serial',
@@ -168,7 +171,8 @@ window.TransicionPlan = {
   // Cuenta cuántas unidades 'continua' del plan caen en cada línea del
   // contrato (mismo modelo — id exacto o texto tolerante al sufijo -R — y
   // misma modalidad; una línea sin modalidad es legacy y acepta ambas).
-  // Devuelve { porLinea: [{ idx, continuan, reemplazan }], sinLinea: [unidad] }.
+  // Devuelve { porLinea: [{ idx, continuan, reemplazan }], sinLinea: [unidad],
+  // otraModalidad, modeloCorregido }.
   // Los 'reemplaza' cuentan en la línea del modelo ENTRANTE (el declarado en
   // reemplazo_modelo o, si es por uno nuevo igual, el propio): la línea debe
   // cubrir continúan + reemplazos, porque ambos son radios facturados.
@@ -262,12 +266,57 @@ window.TransicionPlan = {
       if (idx < 0) { resto.push(it); continue; }
       anota(it, idx);
     }
+    resto2 = [];
     for (const it of resto) {                     // 4 · solo el modelo, sin cupo
       const idx = buscar(it.q, true, false);
-      if (idx < 0) { sinLinea.push(it.u); continue; }
+      if (idx < 0) { resto2.push(it); continue; }
       anota(it, idx);
     }
-    return { porLinea, sinLinea, otraModalidad };
+    // 5 · LA LÍNEA PONE EL MODELO (2026-10-07, caso ACODECO: 22 radios de la
+    // migración POC sin modelo trancaban la renovación con "agrega su
+    // modelo" — y el modelo ya estaba en la línea). Un serial que continúa y
+    // cuya ficha no tiene modelo, o lo tiene de una migración sin verificar
+    // (`modelo_corregible`), entra en la línea con cupo — primero la de su
+    // modalidad — y sale en `modeloCorregido` para AVISARLE al vendedor que
+    // le está cambiando el modelo. Sin cupo solo si el contrato tiene UNA
+    // línea (si no, no hay cómo saber cuál es). Lo demás sigue sin línea.
+    const modeloCorregido = [];
+    const corregible = (it) => it.q === it.u && it.u.destino === 'continua'
+      && (it.u.modelo_corregible === true || (!it.u.modelo_id && !String(it.u.modelo || '').trim()));
+    const libre = (modalidad) => ls.findIndex((l, idx) => cupo[idx] > 0
+      && (!modalidad || (l.modalidad || 'alquiler') === modalidad));
+    for (const it of resto2) {
+      if (!corregible(it)) { sinLinea.push(it.u); continue; }
+      let idx = libre(it.u.modalidad || 'alquiler');
+      if (idx < 0) idx = libre(null);
+      if (idx < 0 && ls.length === 1) idx = 0;
+      if (idx < 0) { sinLinea.push(it.u); continue; }
+      const l = ls[idx];
+      if ((l.modalidad || 'alquiler') !== (it.u.modalidad || 'alquiler')) anota(it, idx); else contar(idx, it.u);
+      modeloCorregido.push({ unidad: it.u, idx,
+        de_id: it.u.modelo_id || null, de: it.u.modelo || '',
+        a_id: l.modelo_id || null, a: l.modelo || '' });
+    }
+    return { porLinea, sinLinea, otraModalidad, modeloCorregido };
+  },
+
+  // Plan con el modelo de la LÍNEA en cada serial que conciliarLineas
+  // corrigió (paso 5). Deja `modelo_corregido` con lo que decía la ficha:
+  // el servidor (lib/planRenovacion) repunta la ficha del pool con eso y lo
+  // anota en el kardex. No muta el plan recibido.
+  aplicarModeloDeLinea(plan, conc) {
+    const lista = (conc && conc.modeloCorregido) || [];
+    if (!plan || !lista.length) return plan;
+    const porUnidad = new Map(lista.map(c => [c.unidad, c]));
+    return {
+      ...plan,
+      unidades: (plan.unidades || []).map(u => {
+        const c = porUnidad.get(u);
+        if (!c) return u;
+        return { ...u, modelo_id: c.a_id, modelo: c.a,
+          modelo_corregido: { de_id: c.de_id, de: c.de } };
+      }),
+    };
   },
 
   // ¿El plan declara reemplazos? Una renovación "sin equipo" con reemplazos
