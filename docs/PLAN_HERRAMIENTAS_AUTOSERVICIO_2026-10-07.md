@@ -93,7 +93,20 @@ La marca `contrato_anulado_revisar` ya existe y la Puerta 1 también; falta el c
 
 **R3. Chip "modelo sin verificar / sin modelo"** en la fila del equipo de la orden, con enlace a la ficha del pool, para que el dato se complete en el mostrador y no tranque después.
 
-## 4. Orden propuesto
+## 4. Estado (2026-10-07, mismo día)
+
+Los cuatro paquetes están hechos, probados y desplegados.
+
+| Paquete | Commit | Qué quedó | Cómo se probó |
+|---|---|---|---|
+| P1 | `544fb78` | Ficha del equipo y Avanzado: "Corregir ubicación…". Órdenes ⋯: "Registrar entrega tardía…". Almacén · Hoy: grupo "Por cuadrar" (58 órdenes viejas en producción el primer día) con "El cliente ya los tiene". `onGestionWrite` estampa `desfase_inventario` en la gestión. | `test/corregirUbicacion.test.js` · `tools/emulador-almacen/emu-test-por-cuadrar.mjs` |
+| P2 | `e528c8d` | Callable `declararSustitutoContrato`. Centro: "Declarar el contrato sustituto…" en el anulado y en Ahora; órdenes abiertas bajo contrato anulado/vencido sin marca también en Ahora. Contrato nuevo con equipos iguales a uno vivo → pregunta; "sustituye a X" se ejecuta al aprobar. | `test-emulator/declarar-sustituto.js` · `test/declararSustitutoCentro.test.js` · `emu-test-declarar-sustituto.mjs` |
+| P3 | `d753519` | `lib/trasladoCliente` + callables `trasladarContratoCliente` y `trasladarCuentaCliente` (administración/gerencia). Centro: "Trasladar a otra ficha de cliente…" y "Cambio de razón social / traslado de cuenta…". Lo que no se puede afirmar vuelve "por confirmar". | `test-emulator/traslado-cliente.js` · `emu-test-traslado.mjs` |
+| P4 | `368437b` | Existencias (sin modelo): "Completar modelo" con `proponerModeloSinFicha`. Asignar: la línea corrige el modelo de migración sin verificar. Órdenes ⋯: "Registrar como reemplazo…" con `regularizarReemplazoOrden`. Chip "sin modelo / modelo sin verificar" en la fila del equipo. | `test-emulator/p4-modelo-reemplazo.js` · `emu-test-p4.mjs` |
+
+Pendiente que quedó fuera a propósito: el aviso B1 solo mira contratos con acción "Nuevo" y sin origen declarado (una renovación ya declara su origen). La aprobación de administración para los traslados se resolvió haciendo que solo administración/gerencia los ejecute (el vendedor ve la acción deshabilitada con el motivo).
+
+## 4b. Orden propuesto (original)
 
 | Prioridad | Qué | Casos que habría evitado | Tamaño |
 |---|---|---|---|
