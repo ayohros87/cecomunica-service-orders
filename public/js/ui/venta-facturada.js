@@ -8,7 +8,9 @@
 // (Órdenes → Más). Necesita Modal, Toast, ClientesService, ModelosService y
 // EntityCombo (este último también lo trae CargaDiferida).
 //
-// Solo para ventas de verdad (radios que pasan a ser del cliente). Un radio
+// Solo para el camino DIRECTO (radio vendido sin contrato de servicio). La
+// venta con contrato de servicio va por el contrato (Propio/Servicio):
+// bodega asigna ahí y los seriales salen en "Contrato APROBADO". Un radio
 // hurtado/dañado de un contrato de ALQUILER que el cliente paga no es venta:
 // es una gestión de reemplazo con reposición por daño, desde el Centro.
 window.VentaFacturada = {
@@ -184,9 +186,13 @@ window.VentaFacturada = {
       closable: () => !this._busy,
       html: `
           <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 var(--sp-3);">
-            Para radios <b>vendidos</b> con la factura ya fiscalizada. Bodega recibe el pedido y asigna los
-            seriales; al hacerlo, el sistema crea la orden de programación y <b>te llega un correo con los seriales</b>.
-            Un radio hurtado o dañado de un contrato de <b>alquiler</b> no va aquí: es un reemplazo desde el Centro del cliente.</p>
+            Para radios <b>vendidos en modo directo, sin contrato de servicio</b>, con la factura ya fiscalizada.
+            Bodega recibe el pedido y asigna los seriales; al hacerlo, el sistema crea la orden de programación y
+            <b>te llega un correo con los seriales</b>.</p>
+          <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 var(--sp-3);">
+            <b>No va aquí:</b> un radio que se asocia a un <b>contrato de servicio</b> (Propio o Servicio): bodega
+            asigna sus seriales en el contrato y llegan en el correo "Contrato APROBADO". Tampoco un radio hurtado o
+            dañado de un contrato de <b>alquiler</b>: es un reemplazo desde el Centro del cliente.</p>
           <div style="display:flex; gap:var(--sp-3); flex-wrap:wrap;">
             <div class="form-field" style="flex:2; min-width:200px;">
               <label class="form-label" for="vfCliente">Cliente (de la factura)</label>
