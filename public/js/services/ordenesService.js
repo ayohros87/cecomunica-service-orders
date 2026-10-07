@@ -706,6 +706,118 @@ const OrdenesService = {
     return { equipos: pendientes.length };
   },
 
+  /**
+   * Registrar una ENTREGA TARDÍA (recepción, 2026-10-07). La orden quedó en
+   * COMPLETADO (EN OFICINA) pero el cliente se llevó los radios hace días o
+   * meses (CEMENTO BAYANO 2026070104, CONCORD 2026080705). Marcarla ENTREGADO
+   * por el camino normal no sirve: manda el correo de entrega de hoy y, peor,
+   * onOrdenWritePool solo saca a `en_cliente` lo que sigue `en_taller` y
+   * amarrado a esta orden — un radio que bodega ya "corrigió" a bodega no se
+   * mueve. Aquí el pool se mueve PRIMERO desde el navegador (kardex
+   * `salida_taller` con la fecha real) y después la orden pasa a ENTREGADO con
+   * `correccion_terminal` (sin correo, fuera de las estadísticas del día).
+   *
+   * Qué radios se mueven y cuáles no (y se devuelven en `omitidos`):
+   *   · en_taller / asignado_contrato → en_cliente (si cuelgan de OTRA orden
+   *     abierta, no se tocan);
+   *   · en_bodega / devuelto_revision / por_clasificar / no_retirado → en_cliente
+   *     solo si no están con otro cliente;
+   *   · en_cliente → ya está; con OTRO cliente se deja y se avisa;
+   *   · vendido / baja → no se tocan.
+   * La custodia es la del cliente de la orden; si la ficha ya colgaba de un
+   * contrato de ese cliente, lo conserva.
+   *
+   * @param {string} ordenId
+   * @param {{fecha:Date, receptor?:string, notas?:string}} payload
+   */
+  async registrarEntregaTardia(ordenId, { fecha, receptor = '', notas = '' }) {
+    if (!(fecha instanceof Date) || Number.isNaN(fecha.getTime())) throw new Error('Indica la fecha real de la entrega.');
+    if (fecha.getTime() > Date.now() + 60_000) throw new Error('La fecha de entrega no puede ser futura.');
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    const S = window.EquiposPoolService;
+    const snapO = await db.collection('ordenes_de_servicio').doc(ordenId).get();
+    if (!snapO.exists) throw new Error('Orden no encontrada.');
+    const orden = snapO.data() || {};
+    const estadoDe = orden.estado_reparacion || '';
+    if (estadoDe !== 'COMPLETADO (EN OFICINA)') throw new Error(`La orden está "${estadoDe}", no en COMPLETADO (EN OFICINA).`);
+    const fechaTxt = fecha.toLocaleDateString('es-PA', { timeZone: 'America/Panama' });
+    const clienteId = orden.cliente_id || '';
+    const clienteNombre = orden.cliente_nombre || orden.cliente || '';
+
+    // 1) Pool primero. Lo que ya salió en una tanda no entra.
+    const equipos = (typeof EntregaTandas !== 'undefined')
+      ? EntregaTandas.equiposPendientes(orden)
+      : (orden.equipos || []).filter(e => e && !e.eliminado);
+    const movidos = [], omitidos = [];
+    if (S) {
+      const E = S.ESTADOS;
+      for (const e of equipos) {
+        const serial = e.numero_de_serie || e.serial || '';
+        if (!serial) continue;
+        let docs = [];
+        try { docs = await S.findBySerial(serial); } catch (_) { docs = []; }
+        const ficha = docs.length > 1
+          ? (docs.find(d => S._mismoModelo(d, e.modelo_id || null, e.modelo || '')) || null)
+          : (docs[0] || null);
+        if (!ficha) { omitidos.push({ serial, motivo: 'sin ficha en el pool' }); continue; }
+        const est = ficha.estado;
+        const otroCliente = ficha.asignacion?.cliente_id && clienteId && ficha.asignacion.cliente_id !== clienteId;
+        if (est === E.EN_CLIENTE) {
+          if (otroCliente) omitidos.push({ serial, motivo: `figura con ${ficha.asignacion.cliente_nombre || 'otro cliente'}` });
+          continue;                                     // ya está con el cliente
+        }
+        if ([E.VENDIDO, E.BAJA].includes(est)) { omitidos.push({ serial, motivo: S.ESTADO_LABELS[est] || est }); continue; }
+        if ([E.EN_TALLER, E.ASIGNADO].includes(est) && ficha.orden_actual_id && ficha.orden_actual_id !== ordenId) {
+          omitidos.push({ serial, motivo: `en taller con la orden ${ficha.orden_actual_id}` }); continue;
+        }
+        if (otroCliente) { omitidos.push({ serial, motivo: `asignado a ${ficha.asignacion.cliente_nombre || 'otro cliente'}` }); continue; }
+        const asignacion = (ficha.asignacion?.contrato_doc_id && !otroCliente)
+          ? { ...ficha.asignacion }
+          : { contrato_doc_id: null, contrato_id: '', cliente_id: clienteId, cliente_nombre: clienteNombre };
+        try {
+          await S.cambiarEstado(ficha.id, E.EN_CLIENTE, {
+            esperado: est, tipo: 'salida_taller',
+            ref: { tipo: 'orden', id: ordenId, label: ordenId },
+            notas: `Entrega tardía registrada por recepción: el cliente lo tiene desde el ${fechaTxt}.`,
+            extra: { asignacion, orden_actual_id: null, verificado: false,
+                     custodia_faltante: firebase.firestore.FieldValue.delete(),
+                     pendiente_devolucion: firebase.firestore.FieldValue.delete() },
+          }, user);
+          movidos.push({ serial, de: est });
+        } catch (err) {
+          omitidos.push({ serial, motivo: err.message || String(err) });
+        }
+      }
+    }
+
+    // 2) La orden. `fecha_entrega` lleva la fecha REAL (las métricas la leen).
+    const hoy = firebase.firestore.Timestamp.now();
+    await db.collection('ordenes_de_servicio').doc(ordenId).set({
+      estado_reparacion: 'ENTREGADO AL CLIENTE',
+      fecha_entrega: firebase.firestore.Timestamp.fromDate(fecha),
+      no_recibido: true,                       // sin firma digital: entrega registrada a posteriori
+      receptor_nombre: String(receptor || '').trim() || null,
+      notas_entrega: String(notas || '').trim() || null,
+      entrega_por_uid: user?.uid || '',
+      entrega_por_email: user?.email || null,
+      correccion_terminal: true,
+      correccion_terminal_at: hoy,
+      correccion_terminal_de: estadoDe,
+      entrega_tardia: {
+        registrada_at: hoy, fecha_real: firebase.firestore.Timestamp.fromDate(fecha),
+        receptor: String(receptor || '').trim() || null,
+        por_uid: user?.uid || '', por_email: user?.email || null,
+        movidos: movidos.map(m => m.serial), omitidos,
+      },
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'ENTREGA_TARDIA', by: user?.uid || '', at: hoy,
+        nota: `Entregado el ${fechaTxt}${receptor ? ` a ${String(receptor).trim()}` : ''}. ${movidos.length} radio(s) pasaron al cliente` + (omitidos.length ? `; ${omitidos.length} sin mover` : '') + '.',
+      }),
+    }, { merge: true });
+    return { movidos, omitidos };
+  },
+
   // ── El contrato de la orden se anuló: las dos salidas (2026-09-15) ────────
   // Anular un contrato dejaba su orden viva y sin destino: no se puede
   // entregar (el candado de firma deniega bajo un contrato anulado), el editor

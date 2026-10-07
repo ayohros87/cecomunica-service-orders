@@ -221,6 +221,15 @@
       CargaDiferida.casosViejos().then(() => abrirCasosViejos())
         .catch(() => Toast.show('Sin conexión — no se pudieron abrir los casos viejos.', 'bad'));
     },
+    // Entrega tardía (ordenes-entrega-tardia.js, diferido): la orden quedó EN
+    // OFICINA y el cliente ya tiene los radios desde hace tiempo.
+    'entrega-tardia': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (!ordenId) return;
+      closeAllMenus();
+      CargaDiferida.entregaTardia().then(() => abrirEntregaTardia(ordenId))
+        .catch(() => Toast.show('Sin conexión — no se pudo abrir la entrega tardía.', 'bad'));
+    },
     // El taller propone reemplazar ESTE radio (ordenes-reemplazo.js, diferido):
     // nace una gestión GR por serial, en pendiente_aprobacion, y ventas la
     // decide. La acción sale de la fila del equipo, no del ⋯ de la orden.

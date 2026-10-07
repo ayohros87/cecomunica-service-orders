@@ -294,7 +294,10 @@ window.AlmacenHoy = (() => {
         // Ventas facturadas por recepción esperando seriales (2026-10-07).
         Promise.resolve().then(() => PedidosVentaService.listarPendientes()).catch(e => { console.warn('[Hoy] ventas facturadas:', e?.code || e); return null; }),
       ]);
-      ctx.datos = { colas, gestiones, devueltos, clasificar, conflictos, sinVerificarN, difs, dormidos, ventas };
+      // "Por cuadrar" (2026-10-07) va aparte y después: son tres consultas
+      // chicas que no deben retrasar lo demás; si fallan, falla solo su grupo.
+      const cuadrar = await cargarPorCuadrar().catch(e => { console.warn('[Hoy] por cuadrar:', e?.code || e); return null; });
+      ctx.datos = { colas, gestiones, devueltos, clasificar, conflictos, sinVerificarN, difs, dormidos, ventas, cuadrar };
       render();
     } catch (e) {
       console.error('[Hoy] no se pudo cargar:', e);
@@ -302,6 +305,76 @@ window.AlmacenHoy = (() => {
     } finally {
       if (loader) loader.style.display = 'none';
     }
+  }
+
+  // ── Por cuadrar (2026-10-07) ──────────────────────────────────────────
+  // El radio está donde el sistema no dice. Hasta hoy esto se descubría
+  // trancado (Elvia en el wizard de reemplazo, CONCORD) o contando a ojo
+  // (Brenda, 23 vs 21). Tres fuentes, todas con tope:
+  //   1. órdenes COMPLETADO (EN OFICINA) con más de 7 días cuyos radios siguen
+  //      en taller / asignados a esa orden en el pool (CEMENTO BAYANO, CONCORD);
+  //   2. reemplazos en los que el vendedor declaró que el cliente tiene un
+  //      radio que el pool decía en otro lado (`desfase_inventario.pendiente`);
+  //   3. ENTRADAs cerradas con incidencias (serial sin ficha / que no se movió).
+  const CUADRAR_DIAS = 7;
+  const CUADRAR_TOPE_ORDENES = 200;
+  async function cargarPorCuadrar() {
+    const db = firebase.firestore();
+    const ms = (t) => t?.toMillis?.() ?? (t?.seconds ? t.seconds * 1000 : (t ? new Date(t).getTime() : 0));
+    const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const corte = Date.now() - CUADRAR_DIAS * 86400000;
+
+    // 1) Órdenes en oficina con radios que el pool sigue amarrando a ellas.
+    const snapO = await db.collection('ordenes_de_servicio')
+      .where('estado_reparacion', '==', 'COMPLETADO (EN OFICINA)')
+      .orderBy('fecha_creacion', 'desc').limit(CUADRAR_TOPE_ORDENES).get();
+    const viejas = snapO.docs.map(d => ({ ordenId: d.id, ...d.data() })).filter(o => {
+      if (o.eliminado === true) return false;
+      const t = norm(o.tipo_de_servicio);
+      if (/entrada|visita|devolucion/.test(t)) return false;
+      const f = ms(o.fecha_completado || o.fecha_creacion);
+      return f && f < corte;
+    });
+    const porOrden = new Map();
+    const ids = viejas.map(o => o.ordenId);
+    for (let i = 0; i < ids.length; i += 30) {
+      const chunk = ids.slice(i, i + 30);
+      const snapP = await db.collection('equipos_pool').where('orden_actual_id', 'in', chunk).get();
+      snapP.docs.forEach(d => {
+        const eq = { id: d.id, ...d.data() };
+        if (!['en_taller', 'asignado_contrato'].includes(eq.estado)) return;
+        if (!porOrden.has(eq.orden_actual_id)) porOrden.set(eq.orden_actual_id, []);
+        porOrden.get(eq.orden_actual_id).push(eq);
+      });
+    }
+    const ordenes = viejas.filter(o => porOrden.has(o.ordenId)).map(o => ({
+      ordenId: o.ordenId, cliente_id: o.cliente_id || '', cliente_nombre: o.cliente_nombre || o.cliente || '',
+      tipo: o.tipo_de_servicio || '', at: ms(o.fecha_completado || o.fecha_creacion), equipos: porOrden.get(o.ordenId),
+    }));
+
+    // 2) Desfases declarados en reemplazos, mientras algún serial siga sin
+    //    estar en_cliente con esa cuenta.
+    const snapG = await db.collection('gestiones').where('desfase_inventario.pendiente', '==', true).limit(30).get();
+    const desfases = [];
+    for (const d of snapG.docs) {
+      const g = { id: d.id, ...d.data() };
+      const pendientes = [];
+      for (const s of (g.desfase_inventario?.seriales || [])) {
+        if (!s?.serial) continue;
+        const fichas = await EquiposPoolService.findBySerial(s.serial).catch(() => []);
+        const ok = fichas.some(f => f.estado === 'en_cliente' && (!g.cliente_id || f.asignacion?.cliente_id === g.cliente_id));
+        if (!ok) pendientes.push({ ...s, estado_actual: fichas[0]?.estado || 'sin ficha' });
+      }
+      if (pendientes.length) desfases.push({ id: g.id, numero: g.numero || g.id, cliente_id: g.cliente_id || '', cliente_nombre: g.cliente_nombre || '', at: ms(g.desfase_inventario?.at), pendientes });
+    }
+
+    // 3) ENTRADAs cerradas con incidencias (el cron limpia las superadas).
+    const snapI = await db.collection('ordenes_de_servicio').where('cierre_entrada_con_incidencias', '==', true).limit(50).get();
+    const incidencias = snapI.docs.map(d => ({ ordenId: d.id, ...d.data() })).filter(o => o.eliminado !== true).map(o => ({
+      ordenId: o.ordenId, cliente_nombre: o.cliente_nombre || o.cliente || '', at: ms(o.cierre_entrada_incidencias_at || o.fecha_cierre_entrada),
+      items: (o.cierre_entrada_incidencias || []).slice(0, 12),
+    }));
+    return { ordenes, desfases, incidencias };
   }
 
   // ── Render ────────────────────────────────────────────────────────────
@@ -403,6 +476,55 @@ window.AlmacenHoy = (() => {
           : '',
       })).join(''),
     ));
+
+    // ── Por cuadrar (2026-10-07) ──
+    if (d.cuadrar === null) fallidas.push('por cuadrar');
+    const cu = d.cuadrar || { ordenes: [], desfases: [], incidencias: [] };
+    const nCuadrar = cu.ordenes.length + cu.desfases.length + cu.incidencias.length;
+    total += nCuadrar;
+    if (nCuadrar) {
+      const puede = AlmacenPage.puedeOperar();
+      const chipSerial = (s) => `<a href="${avz({ serial: s })}" data-ficha="${esc(s)}" style="font-family:var(--font-mono,monospace);">${esc(s)}</a>`;
+      const filasO = cu.ordenes.map(o => fila({
+        chip: 'En oficina', chipCls: 'transicion',
+        txt: `<b><a href="/ordenes/index.html?ids=${encodeURIComponent(o.ordenId)}">Orden ${esc(o.ordenId)}</a></b> · ${esc(o.cliente_nombre || '—')} — `
+          + `${o.equipos.length} radio(s) siguen "${o.equipos.some(e => e.estado === 'en_taller') ? 'en taller' : 'asignados'}" en el inventario `
+          + `y la orden lleva más de ${CUADRAR_DIAS} días terminada sin entrega: `
+          + o.equipos.slice(0, 6).map(e => chipSerial(e.serial || e.serial_norm)).join(', ') + (o.equipos.length > 6 ? ` y ${o.equipos.length - 6} más` : ''),
+        at: o.at,
+        ctaHtml: puede
+          ? `<button type="button" class="btn btn-sm btn-accent bj-cta" data-cuadrar-orden="${esc(o.ordenId)}">
+              <i data-lucide="user-check" style="width:14px;height:14px;"></i> El cliente ya los tiene</button>`
+          : '',
+      }));
+      const filasD = cu.desfases.map(g => fila({
+        chip: 'Desfase', chipCls: 'conflicto',
+        txt: `<b>${esc(g.numero)}</b> · ${esc(g.cliente_nombre || '—')} — el vendedor confirmó que el cliente tiene `
+          + g.pendientes.map(p => `${chipSerial(p.serial)} <span style="color:var(--fg-3);">(sistema: ${esc(EquiposPoolService.ESTADO_LABELS[p.estado_actual] || p.estado_actual)}${p.figuraba_con ? `, figuraba con ${esc(p.figuraba_con)}` : ''})</span>`).join(', ')
+          + '. Abre el serial y corrige su ubicación.',
+        at: g.at, ctaHtml: '',
+      }));
+      const filasI = cu.incidencias.map(o => fila({
+        chip: 'ENTRADA', chipCls: 'inspeccion',
+        txt: `<b><a href="/ordenes/index.html?ids=${encodeURIComponent(o.ordenId)}">ENTRADA ${esc(o.ordenId)}</a></b> · ${esc(o.cliente_nombre || '—')} — al cerrarla no se pudo mover: `
+          + o.items.map(i => `${esc(i.serial || '?')} <span style="color:var(--fg-3);">(${i.motivo === 'sin_ficha' ? 'sin ficha en el pool: serial mal escrito en la fila o en el radio' : esc(i.motivo || '')})</span>`).join(', ')
+          + '. Si el serial de la fila está mal, recepción lo corrige en la orden; si la ficha es la que está mal, "Corregir serial" aquí.',
+        at: o.at, ctaHtml: '',
+      }));
+      // En producción (2026-10-07) son 58 órdenes viejas de golpe: se ven las
+      // 10 más recientes y el resto se despliega aquí mismo (no hay otra
+      // página donde verlas).
+      const VISIBLES = 10;
+      const filasOHtml = filasO.length > VISIBLES
+        ? filasO.slice(0, VISIBLES).join('')
+          + `<div data-cuadrar-resto style="display:none;">${filasO.slice(VISIBLES).join('')}</div>`
+          + `<p class="bj-mas"><a href="#" data-cuadrar-mas>Mostrar ${filasO.length - VISIBLES} más →</a></p>`
+        : filasO.join('');
+      partes.push(grupo('Por cuadrar — el radio no está donde el sistema dice', nCuadrar,
+        filasOHtml + filasD.join('') + filasI.join(''),
+        nota('Lo que marques aquí manda sobre la orden o el contrato y queda en el kardex. Si el cliente ya tiene los radios, recepción además registra la entrega tardía de la orden (Órdenes → ⋯ → Registrar entrega tardía).'),
+      ));
+    }
 
     // ── De anexos dormidos ──
     // Solo los que bodega tiene que DECIDIR suman al día; los demás son la
@@ -706,6 +828,44 @@ window.AlmacenHoy = (() => {
       onDone: () => AlmacenPage.recargarTodo() });
   }
 
+  // "El cliente ya los tiene" (Por cuadrar): los radios que el pool amarra a
+  // una orden vieja en oficina pasan a en_cliente con la custodia del cliente
+  // de la orden (mismo servicio que la ficha: corregirUbicacion).
+  async function cuadrarOrden(ordenId) {
+    if (!AlmacenPage.puedeOperar()) return AlmacenPage._sinPermiso('Corregir la ubicación de los radios');
+    const o = (ctx.datos?.cuadrar?.ordenes || []).find(x => x.ordenId === ordenId);
+    if (!o) return;
+    if (!o.cliente_id) { Toast.show('La orden no tiene cliente registrado; corrige cada radio desde su ficha.', 'warn'); return; }
+    // Un radio que el pool tiene con OTRA cuenta no se mueve en silencio: se
+    // dice antes de pedir el motivo (la orden puede estar mal, no el pool).
+    const ajenos = o.equipos.filter(e => e.asignacion?.cliente_id && e.asignacion.cliente_id !== o.cliente_id);
+    const avisoAjenos = ajenos.length
+      ? ` OJO: ${ajenos.map(e => `${e.serial || e.id} figura con ${e.asignacion.cliente_nombre || 'otro cliente'}${e.asignacion.contrato_id ? ` (${e.asignacion.contrato_id})` : ''}`).join('; ')} — pasarían a custodia de ${o.cliente_nombre || o.cliente_id} sin contrato. Si la que está mal es la orden, no sigas: corrige el radio desde su ficha.`
+      : '';
+    const motivo = await Modal.prompt({
+      title: `El cliente ya tiene los radios de la orden ${ordenId}`,
+      message: `${o.equipos.length} radio(s) pasan a "En cliente" a nombre de ${o.cliente_nombre || o.cliente_id} (los que ya colgaban de un contrato de esa cuenta lo conservan).${avisoAjenos} ¿Cómo se sabe?`,
+      placeholder: 'Ej.: el técnico los entregó en agosto y la orden no registró la entrega',
+      confirmLabel: 'Pasar al cliente', multiline: true,
+    });
+    if (motivo === null) return;
+    if (motivo.trim().length < 8) { Toast.show('Escribe el motivo.', 'warn'); return; }
+    const user = firebase.auth().currentUser;
+    let ok = 0; const fallos = [];
+    for (const eq of o.equipos) {
+      try {
+        await EquiposPoolService.corregirUbicacion(eq.id, { destino: 'en_cliente', motivo: `${motivo.trim()} (orden ${ordenId})`,
+          cliente: { id: o.cliente_id, nombre: o.cliente_nombre } }, user);
+        ok++;
+      } catch (e) { fallos.push(`${eq.serial || eq.id}: ${e.message || e}`); }
+    }
+    Toast.show(`${ok} radio(s) → en cliente.${fallos.length ? ` ${fallos.length} no se movieron.` : ''}`, fallos.length ? 'warn' : 'ok');
+    if (fallos.length) console.warn('[Hoy] cuadrar orden:', fallos);
+    await Modal.alert({ title: 'Falta cerrar la orden', icon: 'calendar-check',
+      message: `El inventario ya dice que ${o.cliente_nombre || 'el cliente'} tiene los radios. La orden ${ordenId} sigue "en oficina": pídele a recepción que registre la <b>entrega tardía</b> (Órdenes → ⋯ → Registrar entrega tardía) con la fecha real.` });
+    AlmacenPage.recargarTodo();
+  }
+
   function init(rol) {
     ctx.rol = rol;
     // EquipoFicha decide su footer ("Abrir en Inventario") con window.userRole.
@@ -757,6 +917,10 @@ window.AlmacenHoy = (() => {
       if (sa) { e.preventDefault(); soltarAnexo(sa.dataset.soltarAnexo, sa); return; }
       const vt = e.target.closest('[data-venta]');
       if (vt) { e.preventDefault(); abrirPedidoVenta(vt.dataset.venta); return; }
+      const cq = e.target.closest('[data-cuadrar-orden]');
+      if (cq) { e.preventDefault(); cuadrarOrden(cq.dataset.cuadrarOrden); return; }
+      const cm = e.target.closest('[data-cuadrar-mas]');
+      if (cm) { e.preventDefault(); const r = cm.closest('.bj-grupo, section, div')?.parentElement?.querySelector('[data-cuadrar-resto]') || document.querySelector('[data-cuadrar-resto]'); if (r) { r.style.display = ''; cm.parentElement.remove(); } return; }
       // Ficha y Existencias en la misma página (auditoría UX 2026-09-28).
       const fi = e.target.closest('a[data-ficha]');
       if (fi && window.EquipoFicha && !(e.ctrlKey || e.metaKey || e.button !== 0)) {

@@ -1448,6 +1448,17 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
         class: 'highlighted',
       });
     }
+    // Entrega tardía (2026-10-07): el cliente ya se llevó los radios y la
+    // orden se quedó "en oficina" (CEMENTO BAYANO, CONCORD). Cierra con la
+    // fecha real y sin correo; el pool pasa al cliente. No aplica a ENTRADA,
+    // VISITA ni DEVOLUCIÓN, que no se entregan.
+    if (estadoUpper === "COMPLETADO (EN OFICINA)" && !esVisita && !esDevolucion
+        && !(typeof esOrdenEntrada === 'function' && esOrdenEntrada(o))) {
+      menuItems.push({
+        icon: '<i data-lucide="calendar-check"></i>', label: "Registrar entrega tardía…",
+        action: "entrega-tardia", dataAttributes: `data-orden-id="${ordenId}"`, class: "",
+      });
+    }
     // "Eliminar" se guarda para el FINAL del menú, separado (auditoría UX
     // 2026-09-28, 4.2 #10): en medio de 9-11 acciones se tocaba por error.
     if (!esTerminal) {

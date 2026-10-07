@@ -676,6 +676,10 @@ async function puedeEntregar(orden, ordenId) {
   return true;
 }
 
+// Los candados de la entrega, para quien entrega por otra puerta (entrega
+// tardía, ordenes-entrega-tardia.js): una entrega tardía sigue siendo entrega.
+window.puedeEntregarOrden = puedeEntregar;
+
 window.entregarOrden = async function (ordenId, opts = {}) {
   const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
   if (!(await puedeEntregar(orden, ordenId))) return;

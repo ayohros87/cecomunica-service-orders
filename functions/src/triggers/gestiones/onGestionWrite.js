@@ -724,8 +724,10 @@ module.exports = onDocumentWritten(
     // recordatorioOperativo (secciones K y J): marcan que se avisó, no deciden.
     // La marca de anexo DORMIDO (2-oct-2026, cron dormirContratosSinFirma) y su
     // reactivación tampoco: el estado sigue 'pendiente_firma'.
+    // `desfase_inventario` (A01, 2026-10-07) lo escribe este mismo trigger
+    // para la cola "Por cuadrar" de bodega: su eco tampoco decide nada.
     if (soloCambiaron(before, after, ["seriales_norm", "correccion_en_curso", "cobro",
-      "bodega_aviso", "firma_recordatorio_at",
+      "bodega_aviso", "firma_recordatorio_at", "desfase_inventario",
       ...require("../../domain/contratoDormido").CAMPOS_GESTION])) return null;
 
     // ── A0) ANULADA → revertir los efectos regados (caso P223344) ────────
@@ -824,6 +826,16 @@ module.exports = onDocumentWritten(
             "El vendedor confirmó que el cliente tiene estos radios aunque el inventario decía otra cosa: "
             + desf.map(it => `${it.serial_saliente} (${it.estado_en_sistema || "?"}${it.figuraba_con ? `, figuraba con ${it.figuraba_con}` : ""})`).join(", ")
             + ".");
+          // Y en el propio doc, para que bodega lo vea en Almacén · Hoy
+          // ("Por cuadrar", 2026-10-07): la cola consulta
+          // `desfase_inventario.pendiente == true` y deja de mostrarlo cuando
+          // cada serial ya está en_cliente con esta cuenta.
+          await ref.update({
+            desfase_inventario: {
+              pendiente: true, at: admin.firestore.FieldValue.serverTimestamp(),
+              seriales: desf.map(it => ({ serial: it.serial_saliente || "", estado_en_sistema: it.estado_en_sistema || null, figuraba_con: it.figuraba_con || null })),
+            },
+          });
         } catch (e) {
           logger.warn("[onGestionWrite] evento de desfase falló", { gid, message: e.message });
         }

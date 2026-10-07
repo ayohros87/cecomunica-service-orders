@@ -37,6 +37,9 @@ window.CargaDiferida = (() => {
     // Necesita el kit de bandeja (fila + semáforo) y su hoja, que /ordenes/
     // no carga. El import() de un .css lo inyecta Vite como <link>.
     casosViejos: () => import("/js/pages/ordenes-casos-viejos.js"),
+    // Entrega tardía (recepción, 2026-10-07): la orden quedó EN OFICINA y el
+    // cliente ya se llevó los radios hace tiempo.
+    entregaTardia: () => import("/js/pages/ordenes-entrega-tardia.js"),
     bandejaKit: () => import("/js/ui/bandeja.js"),
     bandejaCss: () => import("/css/bandeja.css"),
     // Propuesta de reemplazo desde el taller: el módulo + lo que necesita
@@ -122,6 +125,9 @@ window.CargaDiferida = (() => {
         : traer("firmaPad")
             .then(() => this.firmaTablet())
             .then(() => traer("entregaParcial"));
+    },
+    entregaTardia() {
+      return window.abrirEntregaTardia ? Promise.resolve() : traer("entregaTardia");
     },
     casosViejos() {
       return window.abrirCasosViejos ? Promise.resolve()

@@ -1134,6 +1134,10 @@ window.EquiposPool = {
       items.push(I('check-circle-2', 'Inspección OK → a bodega', `EquiposPool.inspeccionOk('${id}')`));
     if (puedeCorregir && kind !== 'corregir')
       items.push(I('pencil-ruler', 'Corregir estado → En bodega', `EquiposPool.abrirCorregir('${id}')`));
+    // Corregir ubicación (2026-10-07): el radio está donde el sistema no dice
+    // (en la calle, en revisión, en taller). "A bodega" era el único destino.
+    if (puede && !['baja', 'vendido'].includes(eq.estado) && window.EquipoFicha?._corregirUbicacion)
+      items.push(I('map-pin', 'Corregir ubicación…', `EquiposPool.corregirUbicacion('${id}')`));
     if (puede && eq.estado === 'en_bodega')
       items.push(I('banknote', 'Registrar venta de esta unidad', `EquiposPool.abrirVenta('${id}')`));
     // Revivir NO es CTA: una baja correcta es terminal, revertirla es la
@@ -1279,6 +1283,21 @@ window.EquiposPool = {
   // Corrección de serial con kardex — ver nota en _accionesHtml. El servicio
   // valida colisión (un serial ya existente en otra ficha es un duplicado a
   // fusionar, no un typo) y escribe serial + serial_norm en la misma tanda.
+  // Misma hoja que la ficha (EquipoFicha._corregirUbicacion): un solo
+  // formulario y un solo servicio para las dos pantallas.
+  async corregirUbicacion(id) {
+    const eq = this._equipos.find(x => x.id === id);
+    if (!eq) return;
+    try {
+      const r = await EquipoFicha._corregirUbicacion(eq, firebase.auth().currentUser);
+      if (!r) return;
+      Toast.show(r.mensaje, 'ok');
+      this.refrescar([id]);
+    } catch (e) {
+      Toast.show(e.message || String(e), 'bad');
+    }
+  },
+
   async corregirSerial(id) {
     const eq = this._equipos.find(x => x.id === id);
     if (!eq) return;

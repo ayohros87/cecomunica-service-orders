@@ -1242,6 +1242,95 @@ const EquiposPoolService = {
     return ent ? (ent.data().serial || ent.id) : null;
   },
 
+  // ── Corregir ubicación (bodega, 2026-10-07) ─────────────────────────────
+  // Hasta hoy la única corrección de bodega era "Corregir a bodega": cuando el
+  // radio estaba en la calle (LIGO, INNOVACIÓN, CEMENTO BAYANO, CONCORD), la
+  // corrección lo dejaba DISPONIBLE y el siguiente contrato se lo llevaba en
+  // papel. Aquí bodega declara dónde está el radio de verdad — lo tiene o no
+  // lo tiene en el estante; no se deduce —, con motivo y kardex `reubicacion`
+  // (NO `correccion_*`: para `reubicadaTrasEntrada` esto SÍ mueve el radio, y
+  // así una ENTRADA vieja que se cierre después no lo devuelve a bodega).
+  //
+  //   destino: 'en_bodega' | 'en_cliente' | 'devuelto_revision' | 'en_taller'
+  //   cliente: { id, nombre }  (en_cliente)   orden: { id, numero } (en_taller)
+  //
+  // Lo que NO hace: amarrar el radio a un contrato. Si ya colgaba de uno y el
+  // cliente es el mismo, el vínculo se conserva; si no, queda en custodia del
+  // cliente y el contrato se liga por Almacén · Asignar (el camino pool←contrato
+  // tiene UN dueño: la fila de seriales del contrato y onSerialWrite).
+  DESTINOS_UBICACION: {
+    en_bodega:         'En bodega (en el estante)',
+    en_cliente:        'Con el cliente',
+    devuelto_revision: 'Devuelto, por revisar (lo decide el taller)',
+    en_taller:         'En taller, con una orden abierta',
+  },
+  async corregirUbicacion(id, { destino, motivo = '', cliente = null, orden = null } = {}, user) {
+    const E = this.ESTADOS;
+    const db = firebase.firestore();
+    const snap = await db.collection('equipos_pool').doc(id).get();
+    if (!snap.exists) { const e = new Error('El equipo no existe en el pool'); e.code = 'no-existe'; throw e; }
+    const eq = { id: snap.id, ...snap.data() };
+    if (!this.DESTINOS_UBICACION[destino]) throw new Error(`Destino desconocido: ${destino}`);
+    if ([E.VENDIDO, E.BAJA].includes(eq.estado)) {
+      const e = new Error(`Un radio ${this.ESTADO_LABELS[eq.estado] || eq.estado} no se reubica desde aquí: usa "Anular venta" o "Reactivar".`);
+      e.code = 'estado-no-reubicable'; throw e;
+    }
+    // Un radio que cuelga de una gestión viva (aumento/demo/reemplazo asignado
+    // pero no entregado) se corrige desde la gestión: ahí viajan la OS y los
+    // seriales declarados; moverlo suelto dejaría la gestión diciendo otra cosa.
+    const gid = eq.asignacion?.gestion_doc_id;
+    if (gid && destino !== 'en_cliente') {
+      const g = await db.collection('gestiones').doc(gid).get().catch(() => null);
+      const estadoG = g?.exists ? g.data().estado : null;
+      if (estadoG && !['cerrada', 'anulada'].includes(estadoG)) {
+        const e = new Error(`Este radio está asignado en la gestión ${g.data().numero || gid} (${estadoG}). Corrígelo desde el expediente con "Corregir seriales…".`);
+        e.code = 'gestion-viva'; e.gestion_id = gid; e.gestion_numero = g.data().numero || ''; throw e;
+      }
+    }
+    const motivoTxt = (motivo || '').trim() || 'Ubicación corregida por bodega';
+    const esperado = eq.estado || null;
+    const FV = firebase.firestore.FieldValue;
+
+    if (destino === 'en_bodega') {
+      return this.corregirABodega(id, motivoTxt, user, { esperado });
+    }
+    if (destino === 'devuelto_revision') {
+      const r = await this.cambiarEstado(id, E.DEVUELTO, {
+        esperado, tipo: 'reubicacion',
+        notas: `${motivoTxt} — a revisión: lo decide el taller`,
+        extra: { asignacion: null, poc_device_id: null, orden_actual_id: null, verificado: false,
+                 pendiente_devolucion: FV.delete() },
+      }, user);
+      return { ...r, destino };
+    }
+    if (destino === 'en_cliente') {
+      if (!cliente?.id) throw new Error('Falta el cliente que tiene el radio.');
+      const mismaCuenta = eq.asignacion?.cliente_id === cliente.id;
+      const asignacion = (mismaCuenta && eq.asignacion?.contrato_doc_id)
+        ? { ...eq.asignacion }                                       // conserva el contrato
+        : { contrato_doc_id: null, contrato_id: '', cliente_id: cliente.id, cliente_nombre: cliente.nombre || '' };
+      const r = await this.cambiarEstado(id, E.EN_CLIENTE, {
+        esperado, tipo: 'reubicacion',
+        ref: asignacion.contrato_doc_id
+          ? { tipo: 'contrato', id: asignacion.contrato_doc_id, label: asignacion.contrato_id || '' }
+          : { tipo: 'cliente', id: cliente.id, label: cliente.nombre || '' },
+        notas: `${motivoTxt} — con el cliente ${cliente.nombre || cliente.id}${asignacion.contrato_id ? ` (${asignacion.contrato_id})` : ' (custodia sin contrato)'}`,
+        extra: { asignacion, orden_actual_id: null, verificado: false,
+                 custodia_faltante: FV.delete(), pendiente_devolucion: FV.delete() },
+      }, user);
+      return { ...r, destino, con_contrato: !!asignacion.contrato_doc_id };
+    }
+    // en_taller
+    if (!orden?.id) throw new Error('Falta la orden abierta que tiene el radio.');
+    const r = await this.cambiarEstado(id, E.EN_TALLER, {
+      esperado, tipo: 'reubicacion',
+      ref: { tipo: 'orden', id: orden.id, label: orden.numero || orden.id },
+      notas: `${motivoTxt} — en taller con la orden ${orden.numero || orden.id}`,
+      extra: { orden_actual_id: orden.id, verificado: false },
+    }, user);
+    return { ...r, destino };
+  },
+
   // ── Salidas de `no_retirado` ────────────────────────────────────────────
   // Un radio del cliente que quedó listo y nadie vino a buscarlo. La orden ya
   // se archivó (CERRADA (SIN RETIRAR)); lo que falta es decidir qué se hace

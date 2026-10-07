@@ -50,6 +50,9 @@ window.EquipoFicha = {
     correccion_serial:    'Corrección de serial',
     correccion_modelo:    'Corrección de modelo',
     correccion_propiedad: 'Corrección de propiedad',
+    // Bodega declaró dónde está el radio (Corregir ubicación, 2026-10-07).
+    // No es `correccion_*` a propósito: SÍ mueve el radio.
+    reubicacion:          'Ubicación corregida por bodega',
     // Pick & confirm de Almacén · Asignar (auditoría UX 2026-09-28): bodega
     // no encontró la unidad al verificar la lista y la sustituyó.
     picklist_no_encontrado: 'No estaba en el estante al verificar la lista',
@@ -254,6 +257,12 @@ window.EquipoFicha = {
     } else if (eq.estado === 'baja') {
       a.push(btn('reactivar', 'Reactivar → bodega', 'btn-accent'));
     }
+    // Corregir ubicación (2026-10-07): hasta hoy la única corrección era "a
+    // bodega", y con el radio en la calle eso lo dejaba DISPONIBLE (LIGO,
+    // INNOVACIÓN, CEMENTO BAYANO, CONCORD). Bodega declara dónde está.
+    if (!['vendido', 'baja'].includes(eq.estado) && EquiposPoolService.corregirUbicacion) {
+      a.push(btn('ubicacion', 'Corregir ubicación…'));
+    }
     if (eq.verificado === false) a.push(btn('verificar', 'Marcar verificado'));
     // Un conflicto de modelo ya cerrado ("son radios distintos") se reabre
     // desde aquí: la cola de Almacén · Hoy solo muestra pendientes, y este era
@@ -329,6 +338,10 @@ window.EquipoFicha = {
         await EquiposPoolService.corregirSerial(eq.id, limpio, 'Corregido desde la ficha (Almacén).', user);
         if (window.SerialField) { SerialField.invalidar(serial); SerialField.invalidar(limpio); }
         aviso(`Serial corregido: ${limpio}`);
+      } else if (accion === 'ubicacion') {
+        const r = await this._corregirUbicacion(eq, user);
+        if (!r) return;
+        aviso(r.mensaje);
       } else if (accion === 'verificar') {
         await EquiposPoolService.verificar(eq.id, user);
         aviso(`${serial} marcado como verificado.`);
@@ -361,6 +374,157 @@ window.EquipoFicha = {
       if (typeof this.onCambio === 'function') this.onCambio();
     } catch (e) {
       aviso(e.message || String(e), 'bad');
+    }
+  },
+
+  // ── Corregir ubicación (bodega, 2026-10-07) ────────────────────────────
+  // Una hoja: dónde está el radio de verdad (bodega / con el cliente / por
+  // revisar / en taller con una orden), quién, y por qué. El servicio hace la
+  // transición con kardex `reubicacion`. Devuelve { mensaje } o null si se
+  // canceló. Si el radio cuelga de una gestión viva, manda al expediente.
+  async _corregirUbicacion(eq, user) {
+    const esc = this._esc.bind(this);
+    const S = EquiposPoolService;
+    const serial = eq.serial || eq.serial_norm || eq.id;
+    const estadoActual = eq.estado || '';
+    const D = S.DESTINOS_UBICACION;
+    const opciones = Object.keys(D).filter(k => k !== estadoActual
+      || k === 'en_cliente');   // en_cliente se repite para cambiar la custodia
+    const clientePrevio = eq.asignacion?.cliente_nombre || eq.propietario?.cliente_nombre || '';
+    const clientePrevioId = eq.asignacion?.cliente_id || eq.propietario?.cliente_id || '';
+    const html = `
+      <p style="margin:0 0 10px;font-size:13.5px;line-height:1.45;">
+        <b style="font-family:var(--mono,monospace);">${esc(serial)}</b> · ${esc(eq.modelo_label || 'modelo ?')}
+        · ahora: <b>${esc(S.ESTADO_LABELS[estadoActual] || estadoActual || '—')}</b>${eq.asignacion?.contrato_id ? ` (${esc(eq.asignacion.contrato_id)})` : ''}
+      </p>
+      <p style="margin:0 0 10px;font-size:12.5px;color:var(--fg-3);line-height:1.45;">
+        Dónde está el radio <b>de verdad</b>. No es una deducción del sistema: lo que marques aquí manda sobre lo que decían la orden o el contrato, y queda en el kardex con tu nombre.
+      </p>
+      <div id="efuDestinos" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+        ${opciones.map(k => `
+          <label style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;cursor:pointer;font-size:13.5px;">
+            <input type="radio" name="efuDestino" value="${esc(k)}" style="margin-top:3px;">
+            <span>${esc(D[k])}</span>
+          </label>`).join('')}
+      </div>
+      <div id="efuCliente" style="display:none;margin-bottom:10px;">
+        <label style="font-size:12.5px;color:var(--fg-3);display:block;margin-bottom:4px;">¿Qué cliente lo tiene?</label>
+        <input type="text" class="form-input" id="efuClienteInput" placeholder="Nombre del cliente (tiene que existir en Clientes)" value="${esc(clientePrevio)}" style="width:100%;height:36px;" autocomplete="off">
+        <div id="efuClienteNota" style="font-size:12px;color:var(--fg-3);margin-top:4px;">
+          ${eq.asignacion?.contrato_id ? `Si es el mismo cliente, el radio sigue en el contrato ${esc(eq.asignacion.contrato_id)}. ` : ''}Sin contrato queda en <b>custodia</b> del cliente; el contrato se amarra después desde Almacén · Asignar.
+        </div>
+      </div>
+      <div id="efuOrden" style="display:none;margin-bottom:10px;">
+        <label style="font-size:12.5px;color:var(--fg-3);display:block;margin-bottom:4px;">Número de la orden abierta que lo tiene</label>
+        <input type="text" class="form-input" id="efuOrdenInput" placeholder="Ej.: 2026100701" value="${esc(eq.orden_actual_id || '')}" style="width:100%;height:36px;font-family:var(--mono,monospace);" autocomplete="off">
+      </div>
+      <label style="font-size:12.5px;color:var(--fg-3);display:block;margin-bottom:4px;">Motivo (obligatorio)</label>
+      <textarea class="form-input" id="efuMotivo" rows="2" placeholder="Ej.: el cliente lo tiene desde la programación de agosto; la orden nunca registró la entrega" style="width:100%;resize:vertical;"></textarea>
+      <div id="efuAviso" role="alert" style="display:none;margin-top:10px;padding:8px 12px;border:1px solid #FCD34D;background:#FFFBEB;color:#92400E;border-radius:6px;font-size:13px;"></div>`;
+
+    let clienteSel = clientePrevioId ? { id: clientePrevioId, nombre: clientePrevio } : null;
+    let clientes = null;
+    const cargarClientes = async (fresh = false) => {
+      if (clientes && !fresh) return clientes;
+      if (window.AsistenteVenta?._cargarClientesCache) clientes = await AsistenteVenta._cargarClientesCache(fresh);
+      else if (window.ClientesService?.getAllClientes) {
+        const cs = await ClientesService.getAllClientes({ fresh });
+        clientes = cs.map(c => ({ id: c.id, nombre: String(c.nombre || '') }));
+      } else clientes = [];
+      return clientes;
+    };
+
+    const res = await Modal.sheet({
+      title: 'Corregir ubicación', icon: 'map-pin', size: 'md',
+      html,
+      buttons: [{ action: 'cancelar', label: 'Cancelar' }, { action: 'aplicar', label: 'Corregir ubicación', primary: true, icon: 'check' }],
+      onMount: (root) => {
+        const radios = root.querySelectorAll('input[name="efuDestino"]');
+        const bloqueCli = root.querySelector('#efuCliente');
+        const bloqueOrd = root.querySelector('#efuOrden');
+        const refrescar = () => {
+          const v = root.querySelector('input[name="efuDestino"]:checked')?.value;
+          bloqueCli.style.display = v === 'en_cliente' ? '' : 'none';
+          bloqueOrd.style.display = v === 'en_taller' ? '' : 'none';
+          if (v === 'en_cliente') root.querySelector('#efuClienteInput')?.focus();
+          if (v === 'en_taller') root.querySelector('#efuOrdenInput')?.focus();
+        };
+        radios.forEach(r => r.addEventListener('change', refrescar));
+        // Combo de clientes cuando la página lo trae (Almacén); si no, el
+        // nombre se resuelve exacto contra la lista al aplicar.
+        const input = root.querySelector('#efuClienteInput');
+        input.addEventListener('input', () => { if (clienteSel && input.value.trim() !== clienteSel.nombre) clienteSel = null; });
+        if (window.EntityCombo && input) {
+          cargarClientes().then(lista => {
+            let refrescado = false;
+            const combo = EntityCombo.montar(null, {
+              input, items: lista || [], limite: 30,
+              id: (c) => c.id, label: (c) => c.nombre, campos: (c) => [c.nombre],
+              vacio: (q) => {
+                if (!refrescado && q && q.trim().length >= 2) {
+                  refrescado = true;
+                  cargarClientes(true).then(l => combo.setItems(l || [])).catch(() => {});
+                  return '<div class="combo-empty">Buscando en el servidor…</div>';
+                }
+                return '<div class="combo-empty">No hay un cliente con ese nombre.</div>';
+              },
+              onSelect: (id, c) => { clienteSel = c ? { id: c.id, nombre: c.nombre } : null; },
+            });
+          }).catch(e => console.warn('[EquipoFicha] clientes:', e));
+        }
+      },
+      onAction: async (action, root) => {
+        if (action !== 'aplicar') return null;
+        const avisoEl = root.querySelector('#efuAviso');
+        const avisar = (m) => { avisoEl.textContent = m; avisoEl.style.display = ''; return false; };
+        const destino = root.querySelector('input[name="efuDestino"]:checked')?.value;
+        if (!destino) return avisar('Marca dónde está el radio.');
+        const motivo = root.querySelector('#efuMotivo').value.trim();
+        if (motivo.length < 8) return avisar('Escribe el motivo (al menos unas palabras: quién lo tiene, desde cuándo, por qué el sistema decía otra cosa).');
+        const payload = { destino, motivo };
+        if (destino === 'en_cliente') {
+          const nombre = root.querySelector('#efuClienteInput').value.trim();
+          if (!nombre) return avisar('Escribe el cliente que tiene el radio.');
+          if (!clienteSel || clienteSel.nombre !== nombre) {
+            const lista = await cargarClientes().catch(() => []);
+            const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+            const hit = (lista || []).find(c => norm(c.nombre) === norm(nombre));
+            if (!hit) return avisar('Ese cliente no existe tal cual en Clientes. Elígelo de la lista.');
+            clienteSel = { id: hit.id, nombre: hit.nombre };
+          }
+          payload.cliente = clienteSel;
+        }
+        if (destino === 'en_taller') {
+          const num = root.querySelector('#efuOrdenInput').value.trim();
+          if (!num) return avisar('Escribe el número de la orden.');
+          const snap = await firebase.firestore().collection('ordenes_de_servicio').doc(num).get().catch(() => null);
+          if (!snap || !snap.exists || snap.data().eliminado === true) return avisar(`No existe la orden ${num}.`);
+          const est = snap.data().estado_reparacion || '';
+          if (/^(ENTREGADO|CERRADA|ANULADA)/.test(est)) return avisar(`La orden ${num} ya está ${est}; el radio no puede estar "en taller" con ella.`);
+          payload.orden = { id: snap.id, numero: snap.id };
+        }
+        return payload;
+      },
+    });
+    if (!res || res === 'cancelar') return null;
+
+    try {
+      const r = await S.corregirUbicacion(eq.id, res, user);
+      const label = D[res.destino] || res.destino;
+      const extra = res.destino === 'en_cliente'
+        ? (r.con_contrato ? ' Sigue en su contrato.' : ' Queda en custodia del cliente, sin contrato.')
+        : (r.a_revision ? ` A revisión y no a bodega: lo sustituyó ${r.entrante}.` : '');
+      return { mensaje: `${serial} → ${label}.${extra}` };
+    } catch (e) {
+      if (e?.code === 'gestion-viva') {
+        const ir = await Modal.confirm({
+          title: 'Este radio está en una gestión abierta',
+          message: `${e.message} ¿Abrir el expediente?`, confirmLabel: 'Abrir expediente', cancelLabel: 'Ahora no',
+        });
+        if (ir) window.location.href = `/almacen/index.html?tab=asignar&g=${encodeURIComponent(e.gestion_id)}&corregir=1`;
+        return null;
+      }
+      throw e;
     }
   },
 
