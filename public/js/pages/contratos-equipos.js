@@ -118,6 +118,26 @@ window.ContratosEquipos = {
   _esVentaPropio(c) {
     return !!c && (c.tipo_contrato === 'Propio' || c.codigo_tipo === 'PROP');
   },
+  // SERV con línea "propio" (desde 2026-09-03 las ventas con servicio van
+  // así): puede llevar factura de venta. Es OBLIGATORIA —candado de entrega—
+  // solo cuando onSerialWrite vio salir un radio de bodega hacia esa línea
+  // (factura_venta_requerida). Los radios que el cliente ya tenía no se
+  // facturan: por eso la factura se estampa solo en factura_venta_seriales.
+  _admiteFacturaVenta(c) {
+    return this._esVentaPropio(c) || c?.factura_venta_requerida === true
+      || (c?.equipos || []).some(e => e.modalidad === 'propio');
+  },
+  _exigeFacturaVenta(c) {
+    return this._esVentaPropio(c) || c?.factura_venta_requerida === true;
+  },
+  // Unidades a las que se les estampa la factura: todas en PROP; en SERV solo
+  // las que salieron de bodega (la venta).
+  _unidadesDeLaVenta(c, unidades) {
+    if (this._esVentaPropio(c)) return unidades;
+    const norm = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const vendidos = new Set((c?.factura_venta_seriales || []).map(norm));
+    return unidades.filter(u => vendidos.has(norm(u.serial || u.serial_norm)));
+  },
 
   // "Ruta del equipo" (P5 auditoría 2026-07-24): responde "¿en qué paso va
   // esto?" sin ir al inventario — seriales → programación → entrega →
@@ -165,7 +185,7 @@ window.ContratosEquipos = {
     // (lo ideal es facturar antes de entregar — Zuleika 2026-09-03) pero no
     // bloquea nada: se puede registrar en cualquier momento.
     const fv = contrato.factura_venta;
-    const p0 = this._esVentaPropio(contrato)
+    const p0 = (this._exigeFacturaVenta(contrato) || fv?.numero)
       ? paso(fv?.numero ? 'done' : 'now',
           fv?.numero ? `Factura ${fv.numero}` : 'Factura QBO',
           fv?.numero ? `Factura QBO registrada por ${fv.por_email || '—'}`
@@ -183,11 +203,21 @@ window.ContratosEquipos = {
   // vive en rules (tocaFacturaVenta en contratos + puedeGestionarSeriales en el
   // pool).
   _seccionFacturaHtml(contrato) {
-    if (!this._esVentaPropio(contrato)) return '';
+    if (!this._admiteFacturaVenta(contrato)) return '';
     const esc = CS.esc.bind(CS);
     const fv = contrato.factura_venta || null;
     const puede = typeof canRole === 'function' && canRole(window.userRole, 'registrar-factura-venta');
     const fecha = fv?.at?.toDate ? ' · ' + fv.at.toDate().toLocaleDateString('es-PA') : '';
+    // SERV con línea propio sin radios de bodega (el cliente ya los tenía, o
+    // contrato anterior al candado): la factura es opcional — sin alarma.
+    if (!fv?.numero && !this._exigeFacturaVenta(contrato)) {
+      return `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+          margin-bottom:16px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg-2, #fafafa);">
+        <div style="font-size:13px; color:var(--fg-3);">Línea propio: si en este contrato se vendieron radios, registra aquí su factura QBO.</div>
+        ${puede ? `<button class="btn" onclick="ContratosEquipos.registrarFactura('${esc(contrato.id)}')">
+           <i data-lucide="receipt"></i> Registrar factura de venta</button>` : ''}
+      </div>`;
+    }
     const estadoTxt = fv?.numero
       ? `Factura QBO <b style="font-family:var(--font-mono,monospace);">${esc(fv.numero)}</b>
          <span style="color:var(--fg-3);">· registrada por ${esc(fv.por_email || '—')}${fecha}</span>`
@@ -228,15 +258,19 @@ window.ContratosEquipos = {
       if (!num) { Toast.show('Escribe el número de la factura.', 'bad'); return; }
       if (num === actual) { Toast.show('Ese número ya está registrado.', 'ok'); return; }
 
-      const unidades = await this._fetchUnidades(id);
+      const unidades = this._unidadesDeLaVenta(contrato, await this._fetchUnidades(id));
       const detalle = unidades.slice(0, 12)
         .map(u => `<span style="font-family:var(--font-mono,monospace);">${esc(u.serial || u.serial_norm)}</span>`)
         .join(', ') + (unidades.length > 12 ? ` … (+${unidades.length - 12})` : '');
       const msg = unidades.length
         ? `La factura <b>${esc(num)}</b> quedará asociada al contrato y a sus
            <b>${unidades.length}</b> unidad(es) del pool:<br><br>${detalle}`
-        : `El contrato aún no tiene seriales en el pool: la factura <b>${esc(num)}</b>
-           queda registrada en el contrato y se asociará sola a cada serial que bodega asigne.`;
+        : this._esVentaPropio(contrato)
+          ? `El contrato aún no tiene seriales en el pool: la factura <b>${esc(num)}</b>
+             queda registrada en el contrato y se asociará sola a cada serial que bodega asigne.`
+          : `La factura <b>${esc(num)}</b> queda registrada en el contrato. Se asociará sola
+             a cada radio que bodega saque de su inventario para la línea propio; los radios
+             que el cliente ya tenía no se marcan como vendidos.`;
       if (!await Modal.confirm({
         title: 'Confirmar factura de venta', message: msg,
         confirmLabel: actual ? 'Corregir' : 'Registrar',

@@ -4,6 +4,7 @@ const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
 const { catalogo } = require("../../domain/modeloCatalogo");
 const { propiedadDeUnidad } = require("../../domain/propiedadUnidad");
+const { requiereFacturaVenta, esContratoPropio } = require("../../domain/facturaVentaRequerida");
 
 // Mantiene `seriales_count` en el contrato cuando cambia su subcolección de
 // seriales. Con admin SDK (esquiva el guard touchesCFOwnedFields). El índice usa
@@ -129,6 +130,27 @@ module.exports = onDocumentWritten(
           logger.warn("[onSerialWrite] Propiedad ambigua: el modelo aparece en dos modalidades",
             { cid, serial: serialDespues, modelo: after.modelo || "" });
         }
+        // ¿Venta? Radio de NUESTRA bodega que entra a una línea propio de un SERV
+        // nuevo: el contrato queda exigiendo factura antes de entregar (candado
+        // en rules de ordenes_de_servicio). Se mira la ficha ANTES del upsert,
+        // que es el que la saca de bodega. Best-effort: si falla, no se marca.
+        if (propiedad === "cliente") {
+          try {
+            const { data: previa } = await pool.resolver(serialDespues, after.modelo_id || null, after.modelo || "");
+            if (requiereFacturaVenta({ contrato: c, propiedadLinea: propiedad, unidad: previa })) {
+              await db.collection("contratos").doc(cid).update({
+                factura_venta_requerida: true,
+                factura_venta_seriales: admin.firestore.FieldValue.arrayUnion(serialDespues),
+              });
+              c.factura_venta_requerida = true;
+              c.factura_venta_seriales = [...(c.factura_venta_seriales || []), serialDespues];
+              logger.info("[onSerialWrite] Venta desde bodega en línea propio: el contrato exige factura",
+                { cid, serial: serialDespues });
+            }
+          } catch (e) {
+            logger.warn("[onSerialWrite] No se pudo evaluar si la asignación es venta", { cid, message: e.message });
+          }
+        }
         const r = await pool.upsertContacto({
           serial: serialDespues,
           modelo_id: after.modelo_id || null,
@@ -170,8 +192,12 @@ module.exports = onDocumentWritten(
         // factura-primero: la factura se registra con el contrato sin seriales
         // y cada serial que bodega asigne la recibe aquí. Idempotente
         // (facturaVentaPatch devuelve null si ya la tiene) y sin tocar estado.
+        // En un SERV solo heredan los radios que salieron de bodega (la venta);
+        // los de la línea propio que el cliente ya tenía no son de esta factura.
         const facturaVenta = (c.factura_venta?.numero || "").toString().trim();
-        if (propiedad === "cliente" && facturaVenta) {
+        const esDeLaVenta = esContratoPropio(c)
+          || (c.factura_venta_seriales || []).some(s => pool.normSerial(s) === pool.normSerial(serialDespues));
+        if (propiedad === "cliente" && facturaVenta && esDeLaVenta) {
           const rf = await pool.estamparVentaContrato(serialDespues, after.modelo_id, after.modelo, {
             factura: facturaVenta,
             cliente_id:      after.cliente_id || c.cliente_id || "",

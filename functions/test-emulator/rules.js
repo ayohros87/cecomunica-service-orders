@@ -442,6 +442,32 @@ async function main() {
   await assertSucceeds(as("administrador").doc("ordenes_de_servicio/oPropSinFactAdm").set(ENTREGADO, { merge: true }));
   ok("factura: admin exento (override de casos excepcionales)");
 
+  // SERV (2026-10-07): el candado lo enciende onSerialWrite con
+  // factura_venta_requerida (venta desde bodega en línea propio). Un SERV sin
+  // la marca —los anteriores al candado, o una línea propio con radios que el
+  // cliente ya tenía— entrega sin factura.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const base = { estado_reparacion: "COMPLETADO (EN OFICINA)", tipo_de_servicio: "PROGRAMACIÓN",
+      qc_requerido: true, qc: { resultado: "aprobado" } };
+    await db.doc("contratos/cServVenta").set({ estado: "activo", tipo_contrato: "Servicio", codigo_tipo: "SERV", contrato_id: "SERV-1",
+      factura_venta_requerida: true, factura_venta_seriales: ["A1"] });
+    await db.doc("contratos/cServVentaFact").set({ estado: "activo", codigo_tipo: "SERV", contrato_id: "SERV-2",
+      factura_venta_requerida: true, factura_venta: { numero: "11100" } });
+    await db.doc("contratos/cServViejo").set({ estado: "activo", codigo_tipo: "SERV", contrato_id: "SERV-3",
+      equipos: [{ modelo: "X", cantidad: 1, modalidad: "propio" }] });
+    await db.doc("ordenes_de_servicio/oServVenta").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cServVenta" } });
+    await db.doc("ordenes_de_servicio/oServVentaFact").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cServVentaFact" } });
+    await db.doc("ordenes_de_servicio/oServViejo").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cServViejo" } });
+  });
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oServVenta").set(ENTREGADO, { merge: true }));
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oServVentaFact").set(ENTREGADO, { merge: true }));
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oServViejo").set(ENTREGADO, { merge: true }));
+  ok("factura SERV: venta desde bodega sin factura NO se entrega; con factura sí; SERV sin la marca (anterior) sí");
+  await assertFails(as("administrador").doc("contratos/cServVenta").set({ factura_venta_requerida: false }, { merge: true }));
+  await assertFails(as("recepcion").doc("contratos/cServVenta").set({ factura_venta_seriales: [] }, { merge: true }));
+  ok("factura SERV: la marca es del servidor — ni admin la quita desde la UI");
+
   // ── Candado de firma del ANEXO en la ENTREGA (2026-09-03, segunda vuelta) ──
   // La OS de un aumento sale con el anexo todavía en firma (preparación en
   // paralelo); el contrato marco ya está activo, así que el candado lee la

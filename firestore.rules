@@ -84,6 +84,10 @@ service cloud.firestore {
         "seriales_estado", "seriales_count", "seriales_omitidos_count",
         "seriales_asignados_at", "seriales_asignados_por", "seriales_cambio_pendiente",
         "seriales_pdf_enviado_at", "seriales_actualizado_at",
+        // Venta desde bodega en línea propio de un SERV (onSerialWrite,
+        // 2026-10-07): la marca que activa el candado de factura. Si la UI
+        // pudiera borrarla, el candado se saltaría.
+        "factura_venta_requerida", "factura_venta_seriales",
         "os_count", "equipos_total", "tiene_os", "os_linked",
         "os_serials_preview", "os_has_equipos", "os_last_orden_id",
         "os_equipos_count_last", "os_dirty",
@@ -593,7 +597,10 @@ service cloud.firestore {
           || !(cid is string) || cid == ""
           || !exists(/databases/$(database)/documents/contratos/$(cid))
           || !(get(/databases/$(database)/documents/contratos/$(cid)).data.get("tipo_contrato", "") == "Propio"
-               || get(/databases/$(database)/documents/contratos/$(cid)).data.get("codigo_tipo", "") == "PROP")
+               || get(/databases/$(database)/documents/contratos/$(cid)).data.get("codigo_tipo", "") == "PROP"
+               // SERV desde 2026-10-07: venta desde bodega en línea propio
+               // (onSerialWrite estampa la marca; los anteriores no la tienen).
+               || get(/databases/$(database)/documents/contratos/$(cid)).data.get("factura_venta_requerida", false) == true)
           || get(/databases/$(database)/documents/contratos/$(cid)).data.get("factura_venta", {}).get("numero", "") != "";
       }
       // El QC aprobado cubre los equipos que tenía la orden CUANDO se firmó:

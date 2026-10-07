@@ -581,7 +581,10 @@ async function contratoSinFacturaParaEntrega(orden) {
     // El candado aplica SOLO a ventas (tipo "Propio") — mismo criterio que
     // onSerialWrite/contratos-equipos. Alquiler/demo/temporal no facturan
     // equipos y pasan de largo.
-    const exento = (d) => !!d && !(d.tipo_contrato === 'Propio' || d.codigo_tipo === 'PROP');
+    // SERV (2026-10-07): solo si onSerialWrite marcó una venta desde bodega en
+    // línea propio (factura_venta_requerida) — mismo criterio que las rules.
+    const exento = (d) => !!d && !(d.tipo_contrato === 'Propio' || d.codigo_tipo === 'PROP'
+      || d.factura_venta_requerida === true);
     const facturada = (d) => !!(d && d.factura_venta && (d.factura_venta.numero || '').trim());
     let snap = await ref.get();
     let d = snap.exists ? snap.data() : null;
