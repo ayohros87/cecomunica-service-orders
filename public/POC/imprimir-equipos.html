@@ -84,6 +84,12 @@
       display: flex; gap: 12px; justify-content: flex-end;
     }
 
+    /* El ICCID no se parte a la mitad: se lee y se copia completo. */
+    table.print-equipos td.sim-num { white-space: nowrap; }
+
+    /* 13 columnas: en horizontal caben sin apretar el ICCID. */
+    @page { size: landscape; }
+
     @media print {
       body { padding: 0; background: white; }
       .print-page { box-shadow: none; border-radius: 0; padding: 20px; }
@@ -125,6 +131,8 @@
           <th>Cliente</th>
           <th>Serial</th>
           <th>Operador</th>
+          <th>SIM Card</th>
+          <th>Celular</th>
           <th>IP</th>
           <th>GPS</th>
           <th>Activo</th>
@@ -191,6 +199,15 @@
         || "";
     }
 
+    // SIM y celular como los muestra la lista del POC: en una ficha cerrada el
+    // SIM ya volvió al pool y queda la foto de lo que tenía en `cierre`.
+    function simDe(d, campo) {
+      const v = d[campo];
+      if (v != null && String(v).trim() !== "") return v;
+      if (d.deleted === true && d.cierre && d.cierre[campo] != null) return d.cierre[campo];
+      return "";
+    }
+
     const params = new URLSearchParams(window.location.search);
     const ids = JSON.parse(params.get("ids") || "[]");
     const cuerpoTabla = document.getElementById("cuerpoTabla");
@@ -222,6 +239,8 @@
           <td>${esc(nombreClienteDe(d))}</td>
           <td>${esc(d.serial || "")}</td>
           <td>${esc(d.operador || "")}</td>
+          <td class="sim-num">${esc(simDe(d, 'sim_number'))}</td>
+          <td class="sim-num">${esc(simDe(d, 'sim_phone'))}</td>
           <td>${esc(d.ip || "")}</td>
           <td>${d.gps ? "Sí" : "No"}</td>
           <td>${d.activo ? "Activo" : "Inactivo"}</td>
