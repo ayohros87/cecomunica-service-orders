@@ -267,6 +267,23 @@ window.FacturacionBandeja = (() => {
       izq += `<h5>Lo cotizado</h5><table><tr><th>Cant.</th><th>Concepto</th><th class="r">Importe</th></tr>` +
         rgs.map(x => `<tr><td>${Number(x.cant || 0)}</td><td>${esc(x.nombre || '—')}${x.parte ? ` <span class="seriales">${esc(x.parte)}</span>` : ''}${x.serial ? `<br><span class="seriales" style="color:var(--fg-3)">${esc(x.serial)}</span>` : ''}</td><td class="r">${money(x.importe)}</td></tr>`).join('') +
         `<tr><td colspan="2"><b>Total</b></td><td class="r"><b>${money(r.total)}</b>${r.exento ? ' · exento' : ` · incl. ITBMS ${money(r.itbms)}`}</td></tr></table>`;
+      // La misma pieza sumada a través de los radios (pedido de Solangel): una
+      // fila = una línea de factura, por eso la clave lleva el precio. Con un
+      // solo radio repetiría la tabla de arriba. Misma regla que
+      // CotizacionTotales.resumenPiezas, que esta página no carga.
+      if (new Set(rgs.map(x => x.serial).filter(Boolean)).size > 1) {
+        const porPieza = new Map();
+        rgs.forEach(x => {
+          const k = `${String(x.parte || x.nombre || '').trim().toUpperCase()}|${Number(x.precio || 0)}`;
+          const f = porPieza.get(k) || { parte: x.parte, nombre: x.nombre, cant: 0, precio: x.precio, importe: 0 };
+          f.cant += Number(x.cant || 0);
+          f.importe = Math.round((f.importe + Number(x.importe || 0)) * 100) / 100;
+          porPieza.set(k, f);
+        });
+        izq += `<h5 style="margin-top:12px">Resumen por pieza</h5><table><tr><th>Cant.</th><th>Pieza</th><th class="r">P. unit.</th><th class="r">Importe</th></tr>` +
+          [...porPieza.values()].map(f => `<tr><td><b>${f.cant}</b></td><td>${esc(f.nombre || '—')}${f.parte ? ` <span class="seriales">${esc(f.parte)}</span>` : ''}</td><td class="r">${money(f.precio)}</td><td class="r">${money(f.importe)}</td></tr>`).join('') +
+          `</table>`;
+      }
     }
     if ((d.cargos || []).length) {
       izq += `<h5 style="margin-top:12px">Cargos</h5><table><tr><th>Cant.</th><th>Concepto</th><th>Tipo</th><th class="r">Monto</th></tr>` +

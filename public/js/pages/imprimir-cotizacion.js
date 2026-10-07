@@ -137,6 +137,10 @@
         </table>
       </div>
 
+      <!-- La misma pieza sumada a través de los equipos (pedido de Solangel):
+           quien factura lee el total por pieza sin contar renglón por renglón. -->
+      ${T.resumenPiezasHtml(cot.items)}
+
       <div class="cq-lower">
         <div class="cq-conditions">
           ${(cot.condiciones || []).length ? `

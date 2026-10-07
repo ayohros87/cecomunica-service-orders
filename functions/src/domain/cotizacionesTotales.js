@@ -348,6 +348,83 @@ const CotizacionTotales = {
     }).join('');
   },
 
+  /**
+   * Resumen por pieza: suma la misma pieza a través de todos los equipos.
+   *
+   * Pedido de Solangel (2026-10-07): cuando a tres radios se les cambia la
+   * misma pieza, quien factura tenía que contarla renglón por renglón. Las
+   * cotizaciones manuales cerraban con este cuadro.
+   *
+   * Una fila del resumen es una línea de factura: la clave es el número de
+   * pieza (o el nombre, si no trae) MÁS el precio y la modalidad. La misma
+   * pieza cotizada a dos precios sale en dos filas — sumarlas escondería que
+   * no se cobra igual.
+   *
+   * Devuelve [] cuando la cotización tiene menos de dos equipos: con uno
+   * solo, el resumen repetiría la tabla de arriba.
+   * @param {Array} items
+   * @returns {Array<{parte:string, nombre:string, cant:number, precio:number,
+   *   total:number, alquiler:boolean, equipos:number}>}
+   */
+  resumenPiezas(items) {
+    const lista = Array.isArray(items) ? items : [];
+    const nEquipos = this.agruparPorEquipo(lista)
+      .filter((g) => this.tituloEquipo(g)).length;
+    if (nEquipos < 2) return [];
+    const norm = (v) => String(v || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    const filas = new Map();
+    lista.forEach((it) => {
+      const cant = Number(it?.cant || 0);
+      if (!(cant > 0)) return;
+      const parte = String(it.modelo || '').trim();
+      const nombre = String(it.nombre || '').trim();
+      const alquiler = this.esAlquiler(it);
+      const precio = FMT.round2(Number(it.precio || 0));
+      const key = `${norm(parte) || norm(nombre)}|${precio}|${alquiler ? 'a' : 'v'}`;
+      if (!filas.has(key)) {
+        filas.set(key, { parte, nombre, cant: 0, precio, total: 0, alquiler, _eq: new Set() });
+      }
+      const f = filas.get(key);
+      f.cant += cant;
+      f.total = FMT.round2(f.total + this.lineTotal(it));
+      const eq = it.equipo;
+      f._eq.add(eq ? (eq.id || `${eq.serial || ''}|${eq.modelo || ''}`) : String(it.spec || ''));
+    });
+    return [...filas.values()].map(({ _eq, ...f }) => ({ ...f, equipos: _eq.size }));
+  },
+
+  /**
+   * Bloque "Resumen de piezas" del documento que ve el cliente (impresión y
+   * vista pública). '' cuando no aplica — ver resumenPiezas.
+   */
+  resumenPiezasHtml(items) {
+    const esc = (v) => FMT.esc(v);
+    const filas = this.resumenPiezas(items);
+    if (!filas.length) return '';
+    const per = (f) => (f.alquiler ? '<span class="cq-per">/mes</span>' : '');
+    return `
+      <div class="cq-items cq-resumen">
+        <div class="cq-lbl">Resumen de piezas</div>
+        <table class="cq-table">
+          <thead><tr><th>Nº pieza</th><th>Descripción</th><th class="c">Cant. total</th>
+            <th class="r">Precio unit.</th><th class="r">Total</th></tr></thead>
+          <tbody>
+            ${filas.map((f) => `
+            <tr>
+              <td><span class="cq-model">${esc(f.parte || '—')}</span></td>
+              <td>
+                <div class="cq-desc">${esc(f.nombre || '—')}</div>
+                ${f.equipos > 1 ? `<div class="cq-spec">en ${f.equipos} equipos</div>` : ''}
+              </td>
+              <td class="qty">${esc(f.cant)}</td>
+              <td class="num r">${FMT.money(f.precio)}${per(f)}</td>
+              <td class="num r">${FMT.money(f.total)}${per(f)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  },
+
   // Atajo: calcula totales y evalúa la política en un paso.
   // Existe para que ningún llamador vuelva a armar el input a mano — olvidar
   // `items` fue justo el bug que hacía que el listado y el detalle ofrecieran

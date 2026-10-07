@@ -225,6 +225,46 @@
   // Importe para encabezados y avisos de una línea. Una cotización mixta no
   // tiene UN importe: se enseñan los dos en vez de un total proyectado que el
   // cliente nunca va a ver en la propuesta.
+  // La misma pieza sumada a través de los equipos (pedido de Solangel): es la
+  // tabla que lee quien factura. '' con menos de dos equipos — ver
+  // CotizacionTotales.resumenPiezas.
+  function resumenPiezasPanel(items) {
+    const filas = T.resumenPiezas(items);
+    if (!filas.length) return '';
+    const mono = 'font-family:var(--font-mono);';
+    const per = (f) => (f.alquiler ? '<span class="cc-per">/mes</span>' : '');
+    return `
+          <div class="cc-panel">
+            <div class="cc-panel-head">
+              <h3><i data-lucide="layers"></i> Resumen de piezas</h3>
+              <span style="font-size:12px; color:var(--fg-3);">total por pieza, todos los equipos</span>
+            </div>
+            <div style="padding:0 4px 4px;">
+              <table class="app-table">
+                <thead>
+                  <tr><th style="width:130px;">Nº pieza</th><th>Descripción</th>
+                    <th style="width:90px; text-align:center;">Cant. total</th>
+                    <th style="width:100px; text-align:right;">P. unit.</th>
+                    <th style="width:110px; text-align:right;">Total</th></tr>
+                </thead>
+                <tbody>
+                  ${filas.map((f) => `
+                  <tr>
+                    <td style="${mono}">${esc(f.parte || '—')}</td>
+                    <td>
+                      <div style="font-weight:600; color:var(--fg-1);">${esc(f.nombre || '—')}</div>
+                      ${f.equipos > 1 ? `<div style="font-size:11.5px; color:var(--fg-3);">en ${f.equipos} equipos</div>` : ''}
+                    </td>
+                    <td style="text-align:center; ${mono} font-weight:600;">${esc(f.cant)}</td>
+                    <td style="text-align:right; ${mono}">${FMT.money(f.precio)}${per(f)}</td>
+                    <td style="text-align:right; ${mono} font-weight:600; color:var(--fg-1);">${FMT.money(f.total)}${per(f)}</td>
+                  </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>`;
+  }
+
   function resumenImporte(t) {
     if (!t.hayAlquiler) return FMT.money(t.venta.total);
     if (!t.hayVenta) return FMT.money(t.alquiler.total) + '/mes';
@@ -332,6 +372,8 @@
               </table>
             </div>
           </div>
+
+          ${resumenPiezasPanel(cot.items)}
 
           ${cot.condiciones.length ? `
           <!-- Condiciones (una de taller sin condiciones no pinta el bloque) -->

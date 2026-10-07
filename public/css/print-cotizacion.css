@@ -98,6 +98,13 @@
 .cq-table .cq-grp-w b { color: var(--fg4); font-weight: 600; }
 .cq-table td.c { text-align: center; }
 .cq-table td.r { text-align: right; }
+
+/* Resumen de piezas: la misma pieza sumada a través de los equipos. Va
+   entero en una página — partido pierde su razón de ser, que es leerlo de
+   un vistazo al facturar. */
+.cq-resumen { padding-top: 16px; break-inside: avoid; page-break-inside: avoid; }
+.cq-resumen .cq-lbl { margin-bottom: 6px; }
+.cq-resumen thead th { white-space: nowrap; }
 .cq-table td.num { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink); white-space: nowrap; }
 .cq-table td.qty { font-family: var(--font-mono); font-size: 12.5px; color: var(--fg2); text-align: center; width: 60px; }
 

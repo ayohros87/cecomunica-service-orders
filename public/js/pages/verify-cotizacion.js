@@ -146,6 +146,8 @@
         </table>
       </div>
 
+      ${T.resumenPiezasHtml(snap.items || [])}
+
       <div class="cq-lower">
         <div class="cq-conditions">
           ${(snap.condiciones || []).length ? `
