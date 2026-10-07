@@ -617,6 +617,157 @@ Object.assign(window.Centro, {
     }
   },
 
+  // ── Traslados a otra ficha (2026-10-07, P3) ──────────────────────────
+  // Buscador de clientes propio (el Centro no trae entity-combo): lista de
+  // Clientes en caché, filtro sin acentos, clic para elegir. Excluye la
+  // ficha actual, las borradas, las fusionadas y las inactivas.
+  async _montarBuscadorCliente(root, { onSelect }) {
+    const input = root.querySelector('#trCliente');
+    const lista = root.querySelector('#trClienteLista');
+    if (!input || !lista) return;
+    const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    let clientes = [];
+    try {
+      const cs = await ClientesService.getAllClientes({ fresh: false });
+      clientes = cs.filter(c => c && c.id !== this.cliente?.id && !c.deleted && !c.merged_into && c.activo !== false && !c.trasladado_a)
+        .map(c => ({ id: c.id, nombre: String(c.nombre || ''), ruc: c.ruc || '', norm: norm(`${c.nombre} ${c.ruc || ''}`) }));
+    } catch (e) { console.warn('[centro] clientes para traslado:', e); }
+    const pintar = () => {
+      const q = norm(input.value);
+      const toks = q.split(/\s+/).filter(Boolean);
+      const hits = toks.length ? clientes.filter(c => toks.every(t => c.norm.includes(t))).slice(0, 12) : [];
+      lista.innerHTML = hits.length
+        ? hits.map(c => `<button type="button" class="tr-hit" data-id="${this.esc(c.id)}" style="display:block;width:100%;text-align:left;padding:7px 10px;border:0;border-bottom:1px solid var(--border-subtle,#eee);background:transparent;cursor:pointer;font-size:13px;">${this.esc(c.nombre)}${c.ruc ? ` <span style="color:var(--fg-3);font-size:12px;">· RUC ${this.esc(c.ruc)}</span>` : ''}</button>`).join('')
+        : (toks.length ? '<div style="padding:8px 10px;font-size:12.5px;color:var(--fg-3);">No hay una ficha activa con ese nombre. Tiene que existir en Clientes.</div>' : '');
+      lista.style.display = lista.innerHTML ? '' : 'none';
+    };
+    input.addEventListener('input', () => { onSelect(null); pintar(); });
+    lista.addEventListener('click', (e) => {
+      const b = e.target.closest('.tr-hit'); if (!b) return;
+      const c = clientes.find(x => x.id === b.dataset.id); if (!c) return;
+      input.value = c.nombre; lista.style.display = 'none'; onSelect(c);
+    });
+  },
+  _trasladoHtml({ intro, extraHtml = '' }) {
+    return `
+      ${intro}
+      <label style="display:block; font-weight:600; font-size:13px; margin:12px 0 4px;">Ficha de cliente destino</label>
+      <input type="text" class="form-input" id="trCliente" placeholder="Nombre o RUC (tiene que existir en Clientes)" autocomplete="off" style="width:100%;">
+      <div id="trClienteLista" style="display:none; max-height:220px; overflow:auto; border:1px solid var(--border-subtle,#e5e7eb); border-radius:8px; margin-top:4px;"></div>
+      ${extraHtml}
+      <label style="display:block; font-weight:600; font-size:13px; margin:12px 0 4px;">Motivo</label>
+      <textarea class="form-input" id="trMotivo" rows="2" style="width:100%; resize:vertical;" placeholder="Ej.: el contrato se hizo a la ficha de la sigla; el cliente es la razón social completa"></textarea>`;
+  },
+
+  // B2 · Un contrato a otra ficha (ACODECO → APC). Mismo número, mismos
+  // equipos; cambia el cliente y todo lo que cuelga del contrato.
+  trasladarContrato(id) {
+    const c = this.contratos.find(x => x.id === id);
+    if (!c) return;
+    if (![ROLES.ADMIN, 'admin', ROLES.GERENTE].includes(this.rol)) { Toast.show('Trasladar un contrato lo hace administración o gerencia.', 'bad'); return; }
+    const enCampo = this.equipos.filter(e => e.asignacion?.contrato_doc_id === id).length;
+    this._trDestino = null;
+    this._cerrarModal();
+    this._abrirModalA({
+      titulo: `Trasladar <span class="cg-mono">${this.esc(c.contrato_id || id)}</span> a otra ficha`,
+      cuerpo: this._trasladoHtml({ intro: `
+        <p style="font-size:13px; color:var(--fg-3); margin:0;">
+          El contrato conserva su número, sus líneas y su estado (<b>${this.esc(this._estadoLabel(c))}</b>); cambia el cliente al que pertenece y al que se factura.
+          Se van con él: sus seriales${enCampo ? ` (<b>${enCampo}</b> radio(s) en el inventario)` : ''}, la Base PoC, las órdenes y gestiones abiertas y los avisos de facturación. El representante que firmó no cambia.
+          Activaciones recibe un correo con el cambio.</p>
+        <p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0;">
+          Si la ficha destino ya tiene un contrato con estos mismos radios, después de trasladar anula el sobrante como <b>sustitución</b> (ya estarán en la misma cuenta).</p>` }),
+      footer: `
+        <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(id)}')">Volver</button>
+        <span class="sep"></span>
+        <button class="btn btn-primary cg-act" id="trBtn" onclick="Centro._trasladarContratoConfirmar('${this.esc(id)}')">Trasladar contrato</button>`,
+    });
+    this._montarBuscadorCliente(document.getElementById('cgModal'), { onSelect: (c2) => { this._trDestino = c2; } });
+  },
+  async _trasladarContratoConfirmar(id) {
+    const c = this.contratos.find(x => x.id === id);
+    const dest = this._trDestino;
+    if (!c) return;
+    if (!dest) { Toast.show('Elige la ficha destino de la lista.', 'warn'); document.getElementById('trCliente')?.focus(); return; }
+    const motivo = (document.getElementById('trMotivo')?.value || '').trim();
+    if (motivo.length < 8) { Toast.show('Escribe el motivo.', 'warn'); document.getElementById('trMotivo')?.focus(); return; }
+    const ok = await Modal.confirm({
+      title: 'Trasladar el contrato',
+      message: `<span class="cg-mono">${this.esc(c.contrato_id || id)}</span> pasa de <b>${this.esc(this.cliente?.nombre || '')}</b> a <b>${this.esc(dest.nombre)}</b>. A partir de ahora se factura a ${this.esc(dest.nombre)}. ¿Seguir?`,
+      confirmLabel: 'Trasladar',
+    });
+    if (!ok) return;
+    const btn = document.getElementById('trBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Trasladando…'; }
+    try {
+      const r = await firebase.functions().httpsCallable('trasladarContratoCliente')({ contratoId: id, destinoClienteId: dest.id, motivo });
+      const d = r.data || {};
+      this._cerrarModal();
+      Toast.show(`${d.contrato || c.contrato_id} → ${d.destino || dest.nombre}: ${d.seriales || 0} serial(es), ${d.pool || 0} radio(s), ${d.poc || 0} PoC, ${d.ordenes || 0} orden(es)`, 'ok', 9000);
+      setTimeout(() => this.abrir(dest.id, { push: true }), 900);
+    } catch (e) {
+      console.error(e);
+      if (btn) { btn.disabled = false; btn.textContent = 'Trasladar contrato'; }
+      Toast.show(e?.message || 'No se pudo trasladar el contrato.', 'bad', 8000);
+    }
+  },
+
+  // C1 · Cambio de razón social / traslado de cuenta (MORENO → ASESORÍA).
+  trasladarCuenta() {
+    if (!this.cliente) return;
+    if (![ROLES.ADMIN, 'admin', ROLES.GERENTE].includes(this.rol)) { Toast.show('Trasladar una cuenta lo hace administración o gerencia.', 'bad'); return; }
+    const vivos = (this.contratos || []).filter(c => ['pendiente_aprobacion', 'aprobado', 'activo'].includes(c.estado) && !c.deleted);
+    const custodia = (this.equipos || []).filter(e => e.asignacion?.cliente_id === this.cliente.id);
+    this._trDestino = null;
+    this._cerrarModal();
+    this._abrirModalA({
+      titulo: `Trasladar la cuenta de <span class="cg-mono">${this.esc(this.cliente.nombre || '')}</span>`,
+      cuerpo: this._trasladoHtml({ intro: `
+        <p style="font-size:13px; color:var(--fg-3); margin:0;">
+          Para un <b>cambio de razón social</b> o una cuenta abierta en la ficha equivocada. Todo lo <b>vivo</b> pasa a la ficha destino
+          (que ya tiene que existir en Clientes, con su RUC): <b>${vivos.length}</b> contrato(s) vigente(s) con sus seriales, las fichas PoC <b>activas</b>,
+          la custodia del inventario que esas fichas respaldan${custodia.length ? ` (hoy <b>${custodia.length}</b> radio(s) a nombre de esta cuenta)` : ''}, las gestiones y avisos abiertos y el catálogo de grupos PoC.
+          Esta ficha queda <b>inactiva</b> apuntando a la nueva.</p>
+        <p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0;">
+          No se mueve: la historia (órdenes cerradas, facturas, contratos anulados o vencidos) ni lo que no se puede afirmar —fichas PoC inactivas y radios en custodia sin ficha activa ni contrato—; eso vuelve como lista <b>por confirmar</b> con bodega.
+          No es una fusión de duplicados: para dos fichas del mismo RUC usa Admin · Clientes duplicados.</p>` }),
+      footer: `
+        <button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal()">Cancelar</button>
+        <span class="sep"></span>
+        <button class="btn btn-primary cg-act" id="trBtn" onclick="Centro._trasladarCuentaConfirmar()">Trasladar la cuenta</button>`,
+    });
+    this._montarBuscadorCliente(document.getElementById('cgModal'), { onSelect: (c2) => { this._trDestino = c2; } });
+  },
+  async _trasladarCuentaConfirmar() {
+    const dest = this._trDestino;
+    if (!this.cliente) return;
+    if (!dest) { Toast.show('Elige la ficha destino de la lista.', 'warn'); document.getElementById('trCliente')?.focus(); return; }
+    const motivo = (document.getElementById('trMotivo')?.value || '').trim();
+    if (motivo.length < 8) { Toast.show('Escribe el motivo.', 'warn'); document.getElementById('trMotivo')?.focus(); return; }
+    const ok = await Modal.confirm({
+      title: 'Trasladar la cuenta', danger: true,
+      message: `<b>${this.esc(this.cliente.nombre || '')}</b> → <b>${this.esc(dest.nombre)}</b>. Esta ficha queda inactiva y todo lo vivo pasa a la otra. No se puede deshacer con un clic. ¿Seguir?`,
+      confirmLabel: 'Sí, trasladar',
+    });
+    if (!ok) return;
+    const btn = document.getElementById('trBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Trasladando…'; }
+    try {
+      const r = await firebase.functions().httpsCallable('trasladarCuentaCliente')({ origenClienteId: this.cliente.id, destinoClienteId: dest.id, motivo });
+      const d = r.data || {};
+      this._cerrarModal();
+      const pc = Array.isArray(d.por_confirmar) ? d.por_confirmar : [];
+      Toast.show(`Cuenta trasladada a ${d.destino || dest.nombre}: ${(d.contratos || []).length} contrato(s), ${d.poc || 0} ficha(s) PoC, ${d.pool || 0} radio(s) en custodia${pc.length ? ` · ${pc.length} por confirmar con bodega` : ''}`, pc.length ? 'warn' : 'ok', 10000);
+      if (pc.length) {
+        await Modal.alert({ title: 'Por confirmar con bodega', icon: 'alert-triangle',
+          message: 'No se movieron (no hay con qué afirmar que la cuenta nueva los tiene):<br>' + pc.slice(0, 20).map(p => `<b style="font-family:var(--mono,monospace);">${this.esc(p.serial)}</b> · ${this.esc(p.motivo)}`).join('<br>') + (pc.length > 20 ? `<br>… y ${pc.length - 20} más` : '') + '<br><br>Bodega los corrige desde la ficha del radio ("Corregir ubicación") cuando sepa dónde están.' });
+      }
+      setTimeout(() => this.abrir(dest.id, { push: true }), 600);
+    } catch (e) {
+      console.error(e);
+      if (btn) { btn.disabled = false; btn.textContent = 'Trasladar la cuenta'; }
+      Toast.show(e?.message || 'No se pudo trasladar la cuenta.', 'bad', 8000);
+    }
+  },
+
   anularContrato(id) {
     const c = this.contratos.find(x => x.id === id);
     if (!c) return;

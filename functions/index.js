@@ -104,6 +104,9 @@ exports.gestionarFacturacion          = require("./src/callable/gestionarFactura
 exports.confirmarEntregaContrato      = require("./src/callable/confirmarEntregaContrato");
 // Declarar después de anular cuál contrato sustituye al anulado (2026-10-07).
 exports.declararSustitutoContrato     = require("./src/callable/declararSustitutoContrato");
+// Trasladar un contrato a otra ficha de cliente / cambio de razón social (2026-10-07).
+exports.trasladarContratoCliente      = require("./src/callable/trasladarContratoCliente");
+exports.trasladarCuentaCliente        = require("./src/callable/trasladarCuentaCliente");
 exports.onOrdenEntregada              = require("./src/triggers/ordenes/onOrdenEntregada");
 exports.facturacionDiaria             = require("./src/triggers/scheduled/facturacionDiaria");
 exports.calcularFacturaContrato       = require("./src/callable/calcularFacturaContrato");

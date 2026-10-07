@@ -123,8 +123,12 @@ Object.assign(window.Centro, {
       <a href="./ficha.html?id=${id}&from=centro">${this._puedeEditarCliente() ? 'Editar datos del cliente' : 'Ver datos del cliente'}<span class="cg-menu-hint">${this._puedeEditarCliente() ? 'RUC, representante, contacto, vendedor' : 'solo lectura — los cambios los hace cobros'}</span></a>
       ${this._puedeVerDocs() ? `<button type="button" onclick="Centro.verDocumentos()">Documentos del cliente<span class="cg-menu-hint">registro público, cédula, poderes</span></button>` : ''}
       <button type="button" onclick="Centro.constanciaEquipos()">Constancia de equipos<span class="cg-menu-hint">lo que tiene hoy, con qué contrato y con qué entrega</span></button>
-      <button type="button" onclick="Centro.abrirBloque('blkActividad')">Historial de la ficha<span class="cg-menu-hint">quién cambió qué y cuándo</span></button>`;
+      <button type="button" onclick="Centro.abrirBloque('blkActividad')">Historial de la ficha<span class="cg-menu-hint">quién cambió qué y cuándo</span></button>
+      ${this._puedeTrasladar() ? `<button type="button" onclick="Centro.trasladarCuenta()">Cambio de razón social / traslado de cuenta…<span class="cg-menu-hint">todo lo vivo pasa a otra ficha; esta queda inactiva</span></button>` : ''}`;
   },
+  // Trasladar la cuenta o un contrato a otra ficha cambia a quién se factura:
+  // administración o gerencia (2026-10-07, P3).
+  _puedeTrasladar() { return [ROLES.ADMIN, 'admin', ROLES.GERENTE].includes(this.rol); },
 
   // Documentos legales del cliente (PII). Hasta 2026-09-10 solo se veían desde
   // el form de cliente del módulo de contratos; el Centro es la ficha 360, así

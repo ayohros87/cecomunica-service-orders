@@ -339,6 +339,13 @@ Object.assign(window.Centro, {
         hint: 'el enlace del cliente deja de servir y el contrato vuelve a poder editarse',
         onclick: `Centro.retirarEnlaceFirma('${id}')`, ok: puedeG, motivo: 'tu rol no mueve contratos' }));
     }
+    // Trasladar a otra ficha (2026-10-07, B2): el contrato se hizo al cliente
+    // equivocado (ACODECO → APC). Lo hace administración: cambia a quién se factura.
+    if (['pendiente_aprobacion', 'aprobado', 'activo'].includes(c.estado)) {
+      A.push(this._acc({ id: 'trasladar', grupo: 'Corregir', label: 'Trasladar a otra ficha de cliente…',
+        hint: 'mismo número y equipos; cambia el cliente al que pertenece (y se factura)',
+        onclick: `Centro.trasladarContrato('${id}')`, ok: mando, motivo: 'lo traslada administración o gerencia' }));
+    }
     const anulable = ContratoAnulacion.esAnulable(c);
     A.push(this._acc({ id: 'anular', grupo: 'Corregir', label: 'Anular contrato…', danger: true,
       hint: 'pide el motivo y queda en el historial',

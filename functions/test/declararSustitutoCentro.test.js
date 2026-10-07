@@ -114,3 +114,28 @@ test("el resumen de aprobación avisa cuando el contrato sustituye a otro", () =
   assert.match(html, /ALQ20260720-02/);
   assert.match(html, /se anula por sustitución/);
 });
+
+// ── P3 (2026-10-07): trasladar a otra ficha ───────────────────────────────
+test("trasladar a otra ficha: en vivos para administración; deshabilitado con motivo para el vendedor; no en anulados", () => {
+  const A = montar("administrador");
+  const vivo = { id: "c1", contrato_id: "ALQ-1", estado: "activo", equipos: [L("PNC460-R", 2)] };
+  const anulado = { id: "c2", contrato_id: "ALQ-2", estado: "anulado", equipos: [] };
+  A.contratos = [vivo, anulado];
+  const a = porId(A._accionesContrato(vivo));
+  assert.ok(a.trasladar, "falta la acción");
+  assert.equal(a.trasladar.ok, true);
+  assert.equal(a.trasladar.grupo, "Corregir");
+  assert.equal(porId(A._accionesContrato(anulado)).trasladar, undefined, "un anulado no se traslada");
+  const V = montar("vendedor");
+  V.contratos = [vivo];
+  const av = porId(V._accionesContrato(vivo));
+  assert.equal(av.trasladar.ok, false);
+  assert.match(av.trasladar.motivo, /administración/);
+});
+
+test("el ⋯ de la cabecera ofrece el traslado de cuenta solo a administración/gerencia", () => {
+  assert.equal(montar("administrador")._puedeTrasladar(), true);
+  assert.equal(montar("gerente")._puedeTrasladar(), true);
+  assert.equal(montar("vendedor")._puedeTrasladar(), false);
+  assert.equal(montar("recepcion")._puedeTrasladar(), false);
+});
