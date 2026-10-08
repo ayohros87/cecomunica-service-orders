@@ -12,7 +12,7 @@ window.PedidosVentaService = {
 
   _col() { return firebase.firestore().collection('pedidos_venta'); },
 
-  async crear({ cliente_id, cliente_nombre, factura, lineas, requiere_programacion = true, notas = '' }, user) {
+  async crear({ cliente_id, cliente_nombre, factura, lineas, requiere_programacion = true, notas = '', reposicion = null }, user) {
     const limpias = (lineas || [])
       .map(l => ({ modelo_id: l.modelo_id || null, modelo: String(l.modelo || '').trim(), cantidad: Number(l.cantidad || 0) }))
       .filter(l => l.modelo && l.cantidad > 0);
@@ -23,6 +23,9 @@ window.PedidosVentaService = {
       lineas: limpias,
       requiere_programacion: !!requiere_programacion,
       notas: String(notas || '').trim(),
+      // Reposición de un radio alquilado robado/perdido (2026-10-08): ver
+      // functions/src/lib/reposicionAlquiler.js.
+      ...(reposicion && (reposicion.items || []).length ? { reposicion } : {}),
       estado: 'pendiente_bodega',
       creado_por_uid: user?.uid || null,
       creado_por_email: user?.email || null,

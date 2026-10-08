@@ -465,9 +465,10 @@ window.AlmacenHoy = (() => {
     total += ventas.length;
     partes.push(grupo('Ventas facturadas (bodega asigna)', ventas.length,
       ventas.map(p => fila({
-        chip: 'Venta', chipCls: 'seriales',
+        chip: p.reposicion ? 'Reposición' : 'Venta', chipCls: 'seriales',
         txt: `<b>${esc(p.cliente_nombre || '—')}</b> · factura ${esc(p.factura || '—')} — `
           + (p.lineas || []).map(l => `${Number(l.cantidad || 0)} × ${esc(l.modelo || '?')}`).join(', ')
+          + (p.reposicion ? ` · repone ${esc((p.reposicion.items || []).map(i => i.serial_saliente).join(', '))} (alquiler: queda en su contrato, no vendido)` : '')
           + (p.notas ? ` <span style="color:var(--fg-3);">${esc(p.notas)}</span>` : ''),
         at: p.creado_at?.toMillis?.() || null,
         ctaHtml: AlmacenPage.puedeOperar()

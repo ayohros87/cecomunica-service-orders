@@ -87,6 +87,7 @@ window.AsistenteVenta = {
       const aviso = this._el.querySelector('#asvPedido');
       aviso.style.display = '';
       aviso.innerHTML = `Pedido de ${this._esc(p.creado_por_email || 'recepción')}: <b>${lineas}</b>`
+        + (p.reposicion ? `<br><b>Reposición de un radio alquilado</b> (${this._esc((p.reposicion.items || []).map(i => i.serial_saliente).join(', '))}): asigna uno del mismo modelo; al registrar, el sistema lo deja de CECOMUNICA en el contrato y da de baja el perdido.` : '')
         + (p.notas ? `<br>Notas: ${this._esc(p.notas)}` : '')
         + `<br>Al registrar, ${p.requiere_programacion !== false ? 'el sistema crea la orden de programación y ' : ''}le avisa a recepción con los seriales.`;
     }

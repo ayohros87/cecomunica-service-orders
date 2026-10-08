@@ -29,6 +29,7 @@ const crypto = require("crypto");
 const { admin, db } = require("../../lib/admin");
 const { APP_BASE_URL } = require("../../lib/inventario");
 const G = require("../../lib/gestiones");
+const R = require("../../lib/reposicionAlquiler");
 
 const esc = G.escapeHtml;
 
@@ -45,6 +46,11 @@ const facturaTxt = (p) => String(p.factura || "").trim() || "—";
 const lineasTxt = (p) => (p.lineas || [])
   .map(l => `${Number(l.cantidad || 0)} × ${l.modelo || "?"}`).join(", ");
 
+// Reposición de un radio alquilado (robo/pérdida): no es venta, ver
+// lib/reposicionAlquiler.js. Texto corto para asunto y correos.
+const perdidosTxt = (p) => (p.reposicion?.items || []).map(i => i.serial_saliente).filter(Boolean).join(", ");
+const esReposicion = (p) => (p.reposicion?.items || []).length > 0;
+
 // Quien registró el pedido va en copia de los dos correos: el primero le queda
 // como "lo pedí", el segundo como "ya está".
 const creador = (p) => String(p.creado_por_email || "").trim().toLowerCase();
@@ -55,7 +61,9 @@ async function correoBodega(pid, p) {
   const cc = creador(p) && !to.toLowerCase().includes(creador(p)) ? creador(p) : null;
   await G.encolarCorreo({
     to, cc,
-    subject: `Venta facturada ${facturaTxt(p)}: asignar serial(es) — ${p.cliente_nombre || "Cliente"}`,
+    subject: esReposicion(p)
+      ? `Reposición (factura ${facturaTxt(p)}): asignar serial(es) — ${p.cliente_nombre || "Cliente"}`
+      : `Venta facturada ${facturaTxt(p)}: asignar serial(es) — ${p.cliente_nombre || "Cliente"}`,
     preheader: `Asignar ${lineasTxt(p)}`,
     bodyContent: `
       <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Venta facturada — asignar equipos</h2>
@@ -66,6 +74,9 @@ async function correoBodega(pid, p) {
           ? "Al asignarlos, el sistema crea solo la orden de programación y le avisa a Recepción."
           : "Esta venta <b>no lleva programación</b>: al asignarlos, el sistema solo le avisa a Recepción."}
       </p>
+      ${esReposicion(p) ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;background:#EFF6FF;border-radius:6px;padding:10px 12px;">
+        <b>No es una venta:</b> es la reposición de ${esc(perdidosTxt(p))} (${esc(R.motivoTxt(p.reposicion.motivo))}), radio(s) alquilado(s) del cliente.
+        Asígnalo como siempre; el sistema lo deja de CECOMUNICA en el contrato del radio perdido y da de baja el perdido.</p>` : ""}
       ${G.tablaHtml(["Cantidad", "Modelo"], (p.lineas || []).map(l => [
         `${Number(l.cantidad || 0)}`, esc(l.modelo || "—"),
       ]))}
@@ -76,7 +87,7 @@ async function correoBodega(pid, p) {
   });
 }
 
-async function crearOrden(pid, p) {
+async function crearOrden(pid, p, repo = null) {
   let vendedorUid = "";
   if (p.cliente_id) {
     try {
@@ -85,19 +96,25 @@ async function crearOrden(pid, p) {
     } catch (e) { logger.warn("[pedidoVenta] vendedor de la ficha ilegible", { pid, error: e.message }); }
   }
   const fact = facturaTxt(p);
+  // Reposición: el entrante pareado va con su contrato y su gestión, no como venta.
+  const parDe = new Map((repo?.pares || []).map(x => [String(x.entrante).toUpperCase(), x]));
   const equipos = (p.seriales || []).map(s => {
     const serial = String(s.serial || "").trim();
+    const par = parDe.get(serial.toUpperCase());
     return {
       id: crypto.randomUUID(),
       modelo_id: s.modelo_id || null,
       modelo: String(s.modelo || "").trim(),
       serial,
       numero_de_serie: serial,
-      observaciones: `Venta directa — factura ${fact}.`,
+      observaciones: par
+        ? `Reposición del ${par.saliente} (${R.motivoTxt(repo.motivo)}, contrato ${par.contrato_id}) — factura ${fact}.`
+        : `Venta directa — factura ${fact}.`,
       eliminado: false,
     };
   }).filter(e => e.serial);
   if (!equipos.length) return null;
+  const vendidos = equipos.map(e => e.serial).filter(sr => !parDe.has(sr.toUpperCase()));
 
   const data = {
     cliente_id: p.cliente_id || "",
@@ -106,12 +123,20 @@ async function crearOrden(pid, p) {
     tipo_de_servicio: "PROGRAMACIÓN",
     estado_reparacion: "POR ASIGNAR",
     fecha_creacion: admin.firestore.FieldValue.serverTimestamp(),
-    observaciones: `Orden creada automáticamente por la venta facturada ${fact}: programar ${equipos.length} equipo(s).`
+    observaciones: (repo?.gid
+      ? `Orden creada automáticamente por la reposición ${repo.gid} (factura ${fact}): programar ${equipos.length} equipo(s).`
+      : `Orden creada automáticamente por la venta facturada ${fact}: programar ${equipos.length} equipo(s).`)
       + (p.notas ? ` Notas de recepción: ${p.notas}` : ""),
     equipos,
     // Mismo amarre que la orden que nace de nueva-orden?origen=venta.
-    contrato: { aplica: false, contrato_doc_id: null, contrato_id: null, motivo_no_aplica: `Venta directa — factura QBO ${fact}` },
-    origen_venta: { factura_qbo: p.factura || null, seriales: equipos.map(e => e.serial), pedido_id: pid },
+    contrato: repo?.contrato
+      ? { aplica: true, contrato_doc_id: repo.contrato.doc_id, contrato_id: repo.contrato.id, motivo_no_aplica: null }
+      : { aplica: false, contrato_doc_id: null, contrato_id: null, motivo_no_aplica: repo?.gid ? `Reposición ${repo.gid} — factura QBO ${fact}` : `Venta directa — factura QBO ${fact}` },
+    ...(vendidos.length ? { origen_venta: { factura_qbo: p.factura || null, seriales: vendidos, pedido_id: pid } } : {}),
+    ...(repo?.gid ? {
+      gestion: { id: repo.gid, tipo: "reemplazo", regularizada: true },
+      origen_reposicion: { factura_qbo: p.factura || null, pedido_id: pid, gestion_id: repo.gid, seriales: repo.pares.map(x => x.entrante) },
+    } : {}),
     creado_por_uid: "system",
     creado_por_email: null,
     eliminado: false,
@@ -133,7 +158,7 @@ async function crearOrden(pid, p) {
   return null;
 }
 
-async function correoRecepcion(pid, p, ordenId) {
+async function correoRecepcion(pid, p, ordenId, repo = null) {
   const dests = await G.destinatariosRecepcionVendedor(p.cliente_id);
   if (creador(p) && !dests.includes(creador(p))) dests.push(creador(p));
   if (!dests.length) { logger.warn("[pedidoVenta] aviso de seriales sin destinatarios", { pid }); return; }
@@ -167,6 +192,12 @@ async function correoRecepcion(pid, p, ordenId) {
             ? "Esta venta se registró <b>sin programación</b>: no se creó orden."
             : "<b>No se pudo crear la orden de programación</b>: créala desde el botón (sale precargada)."}
       </p>
+      ${repo?.gid ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;background:#ECFDF5;border-radius:6px;padding:10px 12px;">
+        <b>Reposición registrada (${esc(repo.gid)}):</b> ${repo.pares.map(x => `${esc(x.entrante)} reemplaza a ${esc(x.saliente)} en el contrato ${esc(x.contrato_id)}`).join("; ")}.
+        Los radios nuevos quedan de CECOMUNICA en el contrato y los perdidos quedaron dados de baja.</p>` : ""}
+      ${(repo?.rechazados || []).length || (repo?.perdidosSinPar || []).length ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;background:#FEF3C7;border-radius:6px;padding:10px 12px;">
+        ⚠️ No se registró como reposición: ${[...(repo.rechazados || []).map(x => `${esc(x.serial)} (${esc(x.motivo)})`), ...(repo.perdidosSinPar || []).map(x => `${esc(x.serial)} (bodega no asignó un radio del mismo modelo)`)].join("; ")}.
+        Lo que quedó sin parear figura como venta: avísale a administración.</p>` : ""}
       ${incompleto ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;background:#FEF3C7;border-radius:6px;padding:10px 12px;">
         ⚠️ Se pidieron <b>${pedidos}</b> equipo(s) y bodega asignó <b>${n}</b>.</p>` : ""}
       ${G.tablaHtml(["Serial", "Modelo"], (p.seriales || []).map(s => [
@@ -198,14 +229,27 @@ module.exports = onDocumentWritten(
     // 2) Bodega asignó → OS + recepción.
     if (after.estado === "asignada" && before?.estado !== "asignada" && !after.aviso_asignada_at) {
       if (!(await reservar(ref, "aviso_asignada_at"))) return null;
+      // Reposición de alquiler: el pool se corrige ANTES de crear la OS, para
+      // que la orden nazca con el contrato y la gestión.
+      let repo = null;
+      if (esReposicion(after)) {
+        try {
+          repo = await R.aplicar(pid, after);
+          await ref.update({ reposicion_resultado: {
+            gestion_id: repo?.gid || null, pares: repo?.pares || [],
+            rechazados: repo?.rechazados || [], sin_par: (repo?.perdidosSinPar || []).map(x => x.serial),
+          } });
+        } catch (e) { logger.error("[pedidoVenta] reposición falló: queda como venta", { pid, message: e.message }); }
+      }
       let ordenId = null;
       if (after.requiere_programacion !== false) {
         try {
-          ordenId = await crearOrden(pid, after);
+          ordenId = await crearOrden(pid, after, repo);
           if (ordenId) await ref.update({ orden_programacion_id: ordenId });
+          if (ordenId && repo?.gid) await R.ligarOrden(repo, ordenId);
         } catch (e) { logger.error("[pedidoVenta] OS de programación falló", { pid, message: e.message }); }
       }
-      try { await correoRecepcion(pid, after, ordenId); }
+      try { await correoRecepcion(pid, after, ordenId, repo); }
       catch (e) { logger.error("[pedidoVenta] correo a recepción falló", { pid, message: e.message }); }
     }
     return null;

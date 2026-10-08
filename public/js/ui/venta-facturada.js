@@ -10,13 +10,20 @@
 //
 // Solo para el camino DIRECTO (radio vendido sin contrato de servicio). La
 // venta con contrato de servicio va por el contrato (Propio/Servicio):
-// bodega asigna ahí y los seriales salen en "Contrato APROBADO". Un radio
-// hurtado/dañado de un contrato de ALQUILER que el cliente paga no es venta:
-// es una gestión de reemplazo con reposición por daño, desde el Centro.
+// bodega asigna ahí y los seriales salen en "Contrato APROBADO".
+//
+// REPOSICIÓN (Alberto, 2026-10-08, caso Goly factura 11076): un radio
+// ALQUILADO robado o perdido que el cliente paga no es venta. Con la casilla
+// marcada, recepción declara el serial perdido; el formulario verifica que es
+// un radio alquilado de ese cliente y arma solo las líneas (mismo modelo).
+// Bodega asigna como siempre y onPedidoVentaWrite (lib/reposicionAlquiler.js)
+// deja el nuevo de CECOMUNICA en el contrato, da de baja el perdido y abre la
+// gestión de reemplazo. Un radio dañado que vuelve sigue yendo por el Centro.
 window.VentaFacturada = {
 
   _el: null, _api: null, _busy: false,
   _clientes: null, _clienteSel: null, _modelos: [],
+  _perdidos: [],   // [{ serial, ok, motivo?, data? }] del bloque de reposición
 
   _esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, s =>
@@ -27,6 +34,7 @@ window.VentaFacturada = {
   async abrir({ user } = {}) {
     this._user = user || firebase.auth().currentUser;
     this._clienteSel = null;
+    this._perdidos = [];
     this._render();
     await Promise.all([this._cargarModelos(), this._montarCombo(), this._pintarPendientes()]);
   },
@@ -76,7 +84,10 @@ window.VentaFacturada = {
         }
         return '<div class="combo-empty">No hay un cliente con ese nombre. Créalo primero en Clientes.</div>';
       },
-      onSelect: (id, c) => { this._clienteSel = c ? { id: c.id, nombre: c.nombre } : null; },
+      onSelect: (id, c) => {
+        this._clienteSel = c ? { id: c.id, nombre: c.nombre } : null;
+        if (this._esReposicion()) this._verificarPerdidos();
+      },
     });
   },
 
@@ -112,7 +123,7 @@ window.VentaFacturada = {
         <div style="font-size:12.5px; font-weight:600; color:var(--fg-2); margin-bottom:6px;">Esperando seriales de bodega (${lista.length})</div>
         ${lista.map(p => `
           <div style="display:flex; gap:var(--sp-2); align-items:center; font-size:13px; padding:4px 0;">
-            <span style="flex:1; min-width:0;"><b>${esc(p.cliente_nombre || '—')}</b> · factura ${esc(p.factura || '—')} —
+            <span style="flex:1; min-width:0;"><b>${esc(p.cliente_nombre || '—')}</b> · factura ${esc(p.factura || '—')}${p.reposicion ? ` · <b>reposición</b> de ${esc((p.reposicion.items || []).map(i => i.serial_saliente).join(', '))}` : ''} —
               ${esc((p.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`).join(', '))}
               <span style="color:var(--fg-3);">${p.creado_at?.toDate ? '· ' + esc(p.creado_at.toDate().toLocaleDateString('es-PA')) : ''}</span></span>
             <button type="button" class="btn btn-ghost btn-sm" data-action="anular" data-id="${esc(p.id)}">Anular</button>
@@ -140,20 +151,91 @@ window.VentaFacturada = {
     }
   },
 
-  async guardar() {
-    const nombre = this._el.querySelector('#vfCliente').value.trim();
-    const cli = (this._clienteSel && this._clienteSel.nombre === nombre) ? this._clienteSel
+  _esReposicion() { return !!this._el?.querySelector('#vfReposicion')?.checked; },
+
+  _clienteActual() {
+    const nombre = this._el?.querySelector('#vfCliente')?.value.trim() || '';
+    return (this._clienteSel && this._clienteSel.nombre === nombre) ? this._clienteSel
       : (this._clientes || []).find(c => EntityCombo.normBusq(c.nombre) === EntityCombo.normBusq(nombre)) || null;
+  },
+
+  _toggleReposicion() {
+    const on = this._esReposicion();
+    // style.display y no `hidden`: .form-field trae su propio display y le gana al atributo.
+    this._el.querySelector('#vfBloqueRepo').style.display = on ? '' : 'none';
+    this._el.querySelector('#vfBloqueLineas').style.display = on ? 'none' : '';
+    if (on) this._verificarPerdidos();
+  },
+
+  // Cada serial perdido se busca en el pool (doc ID = serial normalizado) y se
+  // valida con la misma regla que el servidor (reposicionAlquiler.validarPerdido):
+  // alquilado, de este cliente, en un contrato. El servidor lo re-valida al asignar.
+  async _verificarPerdidos() {
+    const cont = this._el?.querySelector('#vfPerdidosRes');
+    if (!cont) return;
+    const seriales = [...new Set((this._el.querySelector('#vfPerdidos').value || '')
+      .split(/[\s,;]+/).map(x => x.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean))];
+    const cli = this._clienteActual();
+    if (!seriales.length) { this._perdidos = []; cont.innerHTML = ''; return; }
+    if (!cli) { this._perdidos = []; cont.innerHTML = '<div style="font-size:12.5px;color:var(--fg-3);">Elige primero el cliente.</div>'; return; }
+    const esc = this._esc.bind(this);
+    this._perdidos = await Promise.all(seriales.map(async (serial) => {
+      try {
+        const d = await firebase.firestore().collection('equipos_pool').doc(serial).get();
+        const x = d.exists ? d.data() : null;
+        const a = x?.asignacion || {};
+        let motivo = null;
+        if (!x) motivo = 'no está en el inventario';
+        else if (x.propiedad === 'cliente') motivo = 'es del cliente (equipo propio): eso es una venta, desmarca la casilla';
+        else if (!['en_cliente', 'asignado_contrato', 'en_taller'].includes(x.estado)) motivo = `está ${x.estado || 'sin estado'}, no con el cliente`;
+        else if (a.cliente_id !== cli.id) motivo = a.cliente_nombre ? `está con ${a.cliente_nombre}` : 'no está asignado a este cliente';
+        else if (!a.contrato_doc_id) motivo = 'no está en ningún contrato';
+        return { serial: x?.serial || serial, ok: !motivo, motivo, data: x };
+      } catch (e) {
+        return { serial, ok: false, motivo: 'no se pudo leer el inventario' };
+      }
+    }));
+    cont.innerHTML = this._perdidos.map(p => p.ok
+      ? `<div style="font-size:12.5px;color:var(--status-ok,#047857);">✓ <b>${esc(p.serial)}</b> · ${esc(p.data.modelo_label || 'modelo sin registrar')} · contrato ${esc(p.data.asignacion.contrato_id || '—')}</div>`
+      : `<div style="font-size:12.5px;color:var(--status-critical,#b42318);">✕ <b>${esc(p.serial)}</b>: ${esc(p.motivo)}</div>`).join('');
+  },
+
+  async guardar() {
+    const cli = this._clienteActual();
     const factura = this._el.querySelector('#vfFactura').value.trim();
     const notas = this._el.querySelector('#vfNotas').value.trim();
     const programacion = this._el.querySelector('#vfProgramacion').checked;
-    const lineas = [...this._el.querySelectorAll('.vf-linea')].map(r => {
+    const repo = this._esReposicion();
+    let lineas = [...this._el.querySelectorAll('.vf-linea')].map(r => {
       const id = r.querySelector('[data-f="modelo"]').value;
       return { modelo_id: id || null, modelo: this._modelos.find(m => m.id === id)?.label || '',
                cantidad: parseInt(r.querySelector('[data-f="cantidad"]').value, 10) || 0 };
     });
     if (!cli) { this._toast('Elige el cliente de la lista (tiene que existir en la app).', 'bad'); return; }
     if (!factura) { this._toast('Escribe el número de la factura.', 'bad'); return; }
+    let reposicion = null;
+    if (repo) {
+      await this._verificarPerdidos();
+      if (!this._perdidos.length) { this._toast('Escribe el serial del radio robado o perdido.', 'bad'); return; }
+      const malos = this._perdidos.filter(p => !p.ok);
+      if (malos.length) { this._toast(`Revisa ${malos.map(p => p.serial).join(', ')}: ${malos[0].motivo}.`, 'bad'); return; }
+      if (this._perdidos.some(p => !p.data.modelo_id)) { this._toast('Un radio perdido no tiene modelo en el inventario: pídele a bodega que lo complete.', 'bad'); return; }
+      // Las líneas salen de los perdidos: un radio del mismo modelo por cada uno.
+      const porModelo = new Map();
+      for (const p of this._perdidos) {
+        const k = p.data.modelo_id;
+        const l = porModelo.get(k) || { modelo_id: k, modelo: p.data.modelo_label || '', cantidad: 0 };
+        l.cantidad++; porModelo.set(k, l);
+      }
+      lineas = [...porModelo.values()];
+      reposicion = {
+        motivo: this._el.querySelector('#vfMotivo').value === 'perdida' ? 'perdida' : 'robo',
+        items: this._perdidos.map(p => ({
+          serial_saliente: p.serial, modelo_id: p.data.modelo_id, modelo: p.data.modelo_label || '',
+          contrato_doc_id: p.data.asignacion.contrato_doc_id, contrato_id: p.data.asignacion.contrato_id || '',
+        })),
+      };
+    }
     if (lineas.some(l => !l.modelo_id)) { this._toast('Elige el modelo en cada línea (o quita la línea vacía).', 'bad'); return; }
     if (!lineas.length || lineas.some(l => l.cantidad < 1)) { this._toast('Indica al menos un modelo con su cantidad.', 'bad'); return; }
 
@@ -162,9 +244,11 @@ window.VentaFacturada = {
     try {
       await PedidosVentaService.crear({
         cliente_id: cli.id, cliente_nombre: cli.nombre, factura, lineas,
-        requiere_programacion: programacion, notas,
+        requiere_programacion: programacion, notas, reposicion,
       }, this._user);
-      this._toast('Listo: bodega recibió el pedido. Te llegará un correo con los seriales cuando los asigne.', 'ok');
+      this._toast(reposicion
+        ? 'Listo: bodega recibió la reposición. Al asignar, el radio nuevo queda en el contrato y el perdido se da de baja.'
+        : 'Listo: bodega recibió el pedido. Te llegará un correo con los seriales cuando los asigne.', 'ok');
       this._busy = false;
       this._cerrar();
     } catch (e) {
@@ -191,8 +275,8 @@ window.VentaFacturada = {
             <b>te llega un correo con los seriales</b>.</p>
           <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 var(--sp-3);">
             <b>No va aquí:</b> un radio que se asocia a un <b>contrato de servicio</b> (Propio o Servicio): bodega
-            asigna sus seriales en el contrato y llegan en el correo "Contrato APROBADO". Tampoco un radio hurtado o
-            dañado de un contrato de <b>alquiler</b>: es un reemplazo desde el Centro del cliente.</p>
+            asigna sus seriales en el contrato y llegan en el correo "Contrato APROBADO". Tampoco un radio
+            <b>dañado</b> de un contrato de alquiler que vuelve al taller: es un reemplazo desde el Centro del cliente.</p>
           <div style="display:flex; gap:var(--sp-3); flex-wrap:wrap;">
             <div class="form-field" style="flex:2; min-width:200px;">
               <label class="form-label" for="vfCliente">Cliente (de la factura)</label>
@@ -203,7 +287,26 @@ window.VentaFacturada = {
               <input class="form-input" id="vfFactura" type="text" placeholder="11044">
             </div>
           </div>
-          <div class="form-field">
+          <label style="display:flex; gap:8px; align-items:flex-start; font-size:13px; margin-bottom:var(--sp-3);">
+            <input type="checkbox" id="vfReposicion" style="margin-top:3px;">
+            <span>Es la <b>reposición de un radio alquilado robado o perdido</b> que el cliente pagó.
+              <span style="color:var(--fg-3);">No es venta: el radio nuevo queda de CECOMUNICA en el mismo contrato y el perdido se da de baja.</span></span>
+          </label>
+          <div id="vfBloqueRepo" style="display:none; border:1px solid var(--border,#e5e7eb); border-radius:8px; padding:var(--sp-3); margin-bottom:var(--sp-3);">
+            <div style="display:flex; gap:var(--sp-3); flex-wrap:wrap;">
+              <div class="form-field" style="flex:2; min-width:200px; margin-bottom:0;">
+                <label class="form-label" for="vfPerdidos">Serial del radio robado o perdido</label>
+                <input class="form-input" id="vfPerdidos" type="text" placeholder="23905A0436 (si son varios, sepáralos con coma)" autocomplete="off">
+              </div>
+              <div class="form-field" style="flex:1; min-width:130px; margin-bottom:0;">
+                <label class="form-label" for="vfMotivo">Motivo</label>
+                <select class="form-select" id="vfMotivo"><option value="robo">Robo</option><option value="perdida">Pérdida</option></select>
+              </div>
+            </div>
+            <div id="vfPerdidosRes" style="margin-top:6px;"></div>
+            <div style="font-size:12px; color:var(--fg-3); margin-top:6px;">Bodega asigna un radio del mismo modelo por cada perdido.</div>
+          </div>
+          <div class="form-field" id="vfBloqueLineas">
             <label class="form-label">Equipos vendidos</label>
             <div id="vfLineas"></div>
             <button type="button" class="btn btn-ghost btn-sm" data-action="agregar-linea"><i data-lucide="plus"></i> Otro modelo</button>
@@ -233,6 +336,8 @@ window.VentaFacturada = {
           } else if (a === 'anular') this._anular(b.getAttribute('data-id'));
         });
         root.querySelector('#vfBtnGuardar').addEventListener('click', () => this.guardar());
+        root.querySelector('#vfReposicion').addEventListener('change', () => this._toggleReposicion());
+        root.querySelector('#vfPerdidos').addEventListener('change', () => this._verificarPerdidos());
         root.querySelector('#vfLineas').appendChild(this._filaLinea());
         if (typeof lucide !== 'undefined') lucide.createIcons();
         root.querySelector('#vfCliente').focus();

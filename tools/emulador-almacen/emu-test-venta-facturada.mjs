@@ -5,6 +5,7 @@
 import { abrir, USUARIOS } from './emu-lib.mjs';
 
 let fallos = 0;
+const FACT = `TEST-VF-${Date.now()}`;
 const ok = (c, m) => { console.log((c ? '  ok   ' : '  FALLA ') + m); if (!c) fallos++; };
 const espera = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -38,7 +39,7 @@ await rec.page.waitForSelector('.combo-item', { timeout: 10000 });
 await rec.page.evaluate((id) => document.querySelector(`.combo-item[data-id="${id}"]`)?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })), base.cli.id);
 await espera(300);
 await rec.page.evaluate((id) => { const it = document.querySelector(`.combo-item[data-id="${id}"]`); if (it) it.click(); }, base.cli.id);
-await rec.page.type('#vfFactura', 'TEST-99001');
+await rec.page.type('#vfFactura', FACT);
 await rec.page.select('.vf-linea select[data-f="modelo"]', base.modeloId);
 await rec.page.evaluate(() => { const q = document.querySelector('.vf-linea [data-f="cantidad"]'); q.value = '2'; });
 await rec.captura('01-recepcion-formulario');
@@ -46,10 +47,10 @@ await rec.page.click('#vfBtnGuardar');
 await espera(2500);
 const toastsRec = await rec.toasts();
 console.log('    toasts:', JSON.stringify(toastsRec).slice(0, 300));
-const ped = await rec.page.evaluate(async () => {
-  const s = await firebase.firestore().collection('pedidos_venta').where('factura', '==', 'TEST-99001').get();
+const ped = await rec.page.evaluate(async (FACT) => {
+  const s = await firebase.firestore().collection('pedidos_venta').where('factura', '==', FACT).get();
   return s.docs.map(d => ({ id: d.id, ...d.data(), creado_at: null }));
-});
+}, FACT);
 ok(ped.length === 1 && ped[0].estado === 'pendiente_bodega' && ped[0].lineas[0].cantidad === 2,
   `pedido creado en pendiente_bodega: ${JSON.stringify(ped.map(p => [p.cliente_nombre, p.lineas]))}`);
 ok(!rec.errores.length, 'recepción sin errores de página: ' + rec.errores.join(' | '));
@@ -63,7 +64,7 @@ await bod.page.evaluate((id) => document.querySelector(`[data-venta="${id}"]`).c
 await bod.page.waitForSelector('#asvSeriales', { timeout: 15000 });
 await espera(800);
 const fijo = await bod.page.evaluate(() => ({ cli: document.querySelector('#asvCliente').readOnly, fac: document.querySelector('#asvFactura').value, aviso: document.querySelector('#asvPedido').innerText }));
-ok(fijo.cli && fijo.fac === 'TEST-99001' && /2 ×/.test(fijo.aviso), `cliente y factura fijos, pedido a la vista: ${JSON.stringify(fijo)}`);
+ok(fijo.cli && fijo.fac === FACT && /2 ×/.test(fijo.aviso), `cliente y factura fijos, pedido a la vista: ${JSON.stringify(fijo)}`);
 await bod.page.type('#asvSeriales', base.seriales.join('\n'));
 await bod.captura('03-bodega-asistente');
 await bod.page.click('#asvBtnGuardar');
