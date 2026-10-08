@@ -56,6 +56,9 @@ window.EquipoFicha = {
     // Pick & confirm de Almacén · Asignar (auditoría UX 2026-09-28): bodega
     // no encontró la unidad al verificar la lista y la sustituyó.
     picklist_no_encontrado: 'No estaba en el estante al verificar la lista',
+    // Descartados (2026-10-08): no salen al cliente ni a bodega; a cuarentena.
+    descarte_qc:          'Descartado en control de calidad',
+    descarte_revision:    'Descartado en la revisión de entrada',
   },
 
   _esc(s) {

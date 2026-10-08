@@ -196,7 +196,8 @@ function buildBodyNotaEntrega({ orden, ordenId, opts }) {
       <td style="padding:6px 8px;border-bottom:1px solid #eee;">${f(e.modelo)}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;">${f(e.numero_de_serie || e.SERIAL || e.serial)}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${escapeHtml(accesoriosDe(e))}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${f(e.trabajo_tecnico)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${e.sin_reparar
+        ? `<strong style="color:#991b1b;">Se devuelve sin reparar.</strong> ` : ""}${f(e.trabajo_tecnico)}</td>
     </tr>${consumosSubtabla(e)}`).join("");
 
   const equiposTable = equipos.length ? `

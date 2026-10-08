@@ -5,6 +5,7 @@
 import '/js/firebase-init.js';
 import '/js/services/clientesService.js';
 import '/js/services/ordenesService.js';
+import '/js/domain/descarteEntrega.js';
 import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';
 import '/js/pages/imprimir-orden.js';

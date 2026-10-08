@@ -64,7 +64,8 @@ const EquiposDescartadosService = {
    * @returns {Promise<string|null>} serial normalizado, o null si no era serial
    */
   async registrar({ serial, modelo = '', modelo_id = '', orden_id = '',
-                    equipo_id = '', cliente = '', motivo = '', checklist = null } = {}) {
+                    equipo_id = '', cliente = '', motivo = '', checklist = null,
+                    destino = '', causa = '' } = {}) {
     const norm = this.normalizar(serial);
     // Sin serial válido no hay a qué colgar el descarte. No es un error: el
     // campo serial se usa de cajón de sastre (consolas, cargadores) igual que
@@ -72,10 +73,17 @@ const EquiposDescartadosService = {
     if (!norm || !this.esSerialValido(norm)) return null;
 
     const ref = this._col().doc(norm);
+    // Destino ('cecomunica' | 'cliente') y causa ('garantia' | 'dano_cliente')
+    // del descarte en QC (2026-10-08). El registro manual y el de la
+    // revisión de ENTRADA no los traen: el radio ya está aquí.
+    const extra = {};
+    if (destino === 'cecomunica' || destino === 'cliente') extra.destino = destino;
+    if (causa === 'garantia' || causa === 'dano_cliente') extra.causa = causa;
     const entrada = {
       fecha_iso: new Date().toISOString(),   // serverTimestamp no vale en arrayUnion
       orden_id, equipo_id, motivo,
       checklist: checklist || {},
+      ...extra,
       ...this._autoria()
     };
 
@@ -85,6 +93,7 @@ const EquiposDescartadosService = {
       modelo, modelo_id, cliente,
       orden_id, equipo_id, motivo,
       checklist: checklist || {},
+      ...extra,
       revocado: false,
       // Se limpian los campos de una revocación anterior: si el serial se
       // vuelve a descartar, el registro tiene que quedar vigente otra vez.

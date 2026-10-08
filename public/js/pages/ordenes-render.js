@@ -549,6 +549,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
                   ${obtenerIconoLapiz(`${ordenId}_${e.id}`, 'numero_de_serie', e.numero_de_serie || '')}
                   ${fotosBadgeDesktop}
                 </div>
+                ${_badgeDescartadoDesktop(ordenData, e)}
               </td>
 
               <td class="col-modelo">
@@ -661,6 +662,17 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
    El módulo que abre la hoja es diferido, así que la condición se evalúa aquí
    en corto; ordenes-reemplazo.js la vuelve a validar antes de escribir.      */
 const ROLES_PROPONEN_REEMPLAZO = [ROLES.TECNICO, ROLES.TECNICO_OPERATIVO, ROLES.JEFE_TALLER, ROLES.ADMIN];
+
+// Marca de descartado en la tabla de escritorio (2026-10-08): antes solo la
+// tarjeta móvil lo decía. Cubre el descarte de la revisión de ENTRADA y el
+// del QC, con su destino ("se queda" no sale en la entrega).
+function _badgeDescartadoDesktop(ordenData, e) {
+  const dq = window.DescarteEntrega ? DescarteEntrega.descarteDe(ordenData, e) : null;
+  if (!dq && !e.descartado_revision) return '';
+  const label = dq ? (dq.destino === 'cliente' ? 'Descartado · sin reparar' : 'Descartado · se queda') : 'Descartado';
+  const title = dq ? [DescarteEntrega.DESTINOS[dq.destino], dq.nota].filter(Boolean).join(' — ') : (e.descarte_motivo || '');
+  return `<span title="${escapeHtml(String(title))}" style="display:inline-flex;align-items:center;gap:4px;margin-top:3px;font-size:11px;font-weight:600;padding:1px 6px;border-radius:6px;background:#FEF2F2;color:#991B1B;border:1px solid #FECACA;"><i data-lucide="ban" style="width:12px;height:12px;"></i> ${label}</span>`;
+}
 
 // La propuesta que ya existe para un serial (o null). El mapa va por serial
 // normalizado; `reemplazo_propuesto` es el formato de las primeras horas del

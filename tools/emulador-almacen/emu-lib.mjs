@@ -13,6 +13,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const BASE = process.env.BASE || 'http://127.0.0.1:5000';
+// Puertos del emulador: EMU_FS / EMU_AUTH para correr al lado de otra sesión
+// que ya ocupa los de siempre (8080 / 9099).
+export const FS_HOST = process.env.EMU_FS || '127.0.0.1:8080';
+export const AUTH_HOST = process.env.EMU_AUTH || '127.0.0.1:9099';
 export const PASS = 'emulador123';
 export const CAPTURAS = 'C:/Projects/cecomunica-service-orders/docs/auditoria-modulos/capturas';
 export const VIEWPORTS = {
@@ -34,9 +38,9 @@ async function chunkParchado(url, email) {
   if (cacheChunks.has(k)) return cacheChunks.get(k);
   let src = await (await fetch(url)).text();
   const antes = src.length;
-  src = src.replace(/settings\(\{merge:!0,/, 'settings({merge:!0,host:"127.0.0.1:8080",ssl:!1,');
+  src = src.replace(/settings\(\{merge:!0,/, 'settings({merge:!0,host:"' + FS_HOST + '",ssl:!1,');
   src = src.replace(/(\w+)\.auth\(\)\.setPersistence\(/, (m, y) =>
-    `${y}.auth().useEmulator("http://127.0.0.1:9099",{disableWarnings:!0});` +
+    `${y}.auth().useEmulator("http://${AUTH_HOST}",{disableWarnings:!0});` +
     `(function(){var a=${y}.auth();var o=a.onAuthStateChanged.bind(a);a.onAuthStateChanged=function(cb){return o(function(u){` +
     `if(u){if(!window.__tAuth){window.__tAuth=performance.now();}cb(u);}else if(!window.__login){window.__login=1;` +
     `a.signInWithEmailAndPassword(${JSON.stringify(email)},${JSON.stringify(PASS)}).catch(function(e){console.error("login",e.code||e)});}});};})();` +
@@ -60,7 +64,7 @@ export async function abrir({ email, viewport = 'escritorio', carpeta = 'varios'
     const u = req.url();
     if (/\/assets\/firebase-init-[^/]+\.js$/.test(u)) { try { req.respond({ status: 200, contentType: 'application/javascript', body: await chunkParchado(u, email) }); } catch (e) { console.error(e.message); req.continue(); } return; }
     if (/googleapis\.com|gstatic\.com\/firebasejs|identitytoolkit/.test(u) && !u.includes('fonts') && !u.includes('127.0.0.1')) { s.errores.push('¡PRODUCCIÓN! ' + u.slice(0, 100)); }
-    if (u.includes('127.0.0.1:8080')) s.fsReqs.push(Date.now() - s._t0);
+    if (u.includes(FS_HOST)) s.fsReqs.push(Date.now() - s._t0);
     req.continue();
   });
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') s.errores.push(m.text().slice(0, 200)); });

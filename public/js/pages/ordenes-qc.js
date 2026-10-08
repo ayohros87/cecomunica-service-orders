@@ -188,6 +188,37 @@
       title: 'El equipo no tiene arreglo. Queda registrado por serial y se alertará si alguien lo vuelve a ingresar' },
   ];
 
+  // Destino y causa de un descartado (petición Solangel 2026-10-08). El
+  // destino decide si el radio sale en lo que firma el cliente y adónde va en
+  // el inventario al entregar (ver domain/descarteEntrega.js); la causa es la
+  // misma distinción garantía/daño del reemplazo. Las dos son obligatorias.
+  const DESTINOS_DESCARTE = [
+    { key: 'cecomunica', label: 'Se queda en Cecomunica',
+      title: 'No sale en la entrega: el cliente no firma por él y al entregar la orden queda en cuarentena para su baja' },
+    { key: 'cliente', label: 'Se devuelve sin reparar',
+      title: 'Radio propio que el cliente no quiere reparar: sale en la entrega marcado "se devuelve sin reparar"' },
+  ];
+  const CAUSAS_DESCARTE = [
+    { key: 'garantia', label: 'Falla (garantía)', title: 'Falla del equipo por uso normal o defecto' },
+    { key: 'dano_cliente', label: 'Daño del cliente', title: 'Golpe, líquido, carcasa o pantalla rota, sellos violados' },
+  ];
+
+  function _descarteOpcionesHtml() {
+    const grupo = (campo, titulo, opciones) => `
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;">
+        <span style="font-size:12px;font-weight:600;min-width:90px;">${titulo}</span>
+        ${opciones.map(o => `
+          <button type="button" class="btn btn-secondary qc-eq-opcion" data-campo="${campo}" data-valor="${o.key}"
+                  title="${esc(o.title)}" style="padding:4px 10px;font-size:12px;">${o.label}</button>`).join('')}
+      </div>`;
+    return `
+        <div class="qc-eq-descarte-wrap" style="display:none;margin-top:4px;">
+          ${grupo('destino', '¿Dónde queda?', DESTINOS_DESCARTE)}
+          ${grupo('causa', 'Causa:', CAUSAS_DESCARTE)}
+          <div class="qc-eq-descarte-info muted" style="font-size:12px;margin-top:6px;"></div>
+        </div>`;
+  }
+
   // Tarjeta de un equipo: contexto (serial, modelo, intervención del técnico),
   // su checklist propio y su desenlace. Antes esto era UNA sola lista para toda
   // la orden: con 10 radios, la firma decía "aprobado" sin poder decir qué se
@@ -257,6 +288,7 @@
           <input type="text" class="form-input qc-eq-nota" style="font-size:13px;"
                  placeholder="Motivo (obligatorio) — qué falló o por qué se descarta">
         </div>
+        ${_descarteOpcionesHtml()}
         ${condBlock}
       </div>`;
   }
@@ -295,6 +327,8 @@
           cliente: orden.cliente_nombre || orden.cliente || orden.nombre_cliente || '',
           motivo: d.nota,
           checklist: d.checklist,
+          destino: d.destino,
+          causa: d.causa,
         });
         // El chip del campo de serial cachea 60 s: sin esto, quien teclee el
         // serial en el minuto siguiente no vería la alerta recién creada.
@@ -340,6 +374,14 @@
     return fallos;
   }
 
+  // "Se queda en Cecomunica · Daño del cliente". Un descarte anterior al
+  // 2026-10-08 no trae destino: se lee como "se queda" (el caso normal).
+  function _descarteEtiqueta(d) {
+    const dest = DESTINOS_DESCARTE.find(x => x.key === (d.destino || 'cecomunica'));
+    const causa = CAUSAS_DESCARTE.find(x => x.key === d.causa);
+    return [dest ? dest.label : '', causa ? causa.label : ''].filter(Boolean).join(' · ');
+  }
+
   // Resumen por equipo de una pasada ya firmada (modo consulta).
   function _porEquipoResumenHtml(qc) {
     const pe = qc?.por_equipo;
@@ -361,6 +403,7 @@
               &nbsp;<b>${ICONO[d.resultado] || ''} ${esc(d.resultado || '')}</b></span>
           </div>
           ${d.nota ? `<div class="muted" style="color:#991B1B;">${esc(d.nota)}</div>` : ''}
+          ${d.resultado === 'descartado' ? `<div class="muted" style="color:#991B1B;">${esc(_descarteEtiqueta(d))}</div>` : ''}
           ${d.condicion ? `<div class="muted" style="color:#92400E;">⚠ Con condición: ${esc(d.condicion)}</div>` : ''}
           ${d.levantar_condicion ? '<div class="muted" style="color:#065F46;">✓ Condición levantada en esta orden</div>' : ''}
         </div>`;
@@ -481,13 +524,18 @@
     // Condiciones YA registradas por serial (equipos_condiciones): quien
     // firma la salida de taller tiene que verlas resaltadas en la tarjeta de
     // cada radio (petición Solangel 2026-09-04). Best-effort.
-    let condiciones = new Map();
-    if (typeof EquiposCondicionesService !== 'undefined' && eqs.length) {
-      try {
-        condiciones = await EquiposCondicionesService.buscarVarios(
-          eqs.map(({ eq }) => String(eq.numero_de_serie || eq.serial || '')));
-      } catch (e) { condiciones = new Map(); }
-    }
+    // En paralelo, los descartes YA registrados (equipos_descartados): si el
+    // radio se vuelve a descartar, el motivo, el destino y la causa de la
+    // vez anterior salen precargados (petición Solangel 2026-10-08).
+    const serialesEqs = eqs.map(({ eq }) => String(eq.numero_de_serie || eq.serial || ''));
+    const [condiciones, descartesReg] = await Promise.all([
+      (typeof EquiposCondicionesService !== 'undefined' && eqs.length)
+        ? EquiposCondicionesService.buscarVarios(serialesEqs).catch(() => new Map()) : new Map(),
+      (porEquipoUI && !soloLectura && typeof EquiposDescartadosService !== 'undefined')
+        ? EquiposDescartadosService.descartadosDe(serialesEqs).catch(() => new Map()) : new Map(),
+    ]);
+    const descRegDe = (eq) => typeof EquiposDescartadosService === 'undefined' ? null
+      : (descartesReg.get(EquiposDescartadosService.normalizar(String(eq.numero_de_serie || eq.serial || ''))) || null);
     const condRegDe = (eq) => typeof EquiposCondicionesService === 'undefined' ? null
       : (condiciones.get(EquiposCondicionesService.normalizar(String(eq.numero_de_serie || eq.serial || ''))) || null);
 
@@ -620,6 +668,7 @@
       const marcada = !!(eq.condicion_especial && String(eq.condicion_texto || '').trim());
       porEquipo[key] = {
         checklist: {}, resultado: '', nota: '',
+        destino: '', causa: '',   // solo si resultado === 'descartado'
         conCondicion: marcada,
         condicion: marcada ? String(eq.condicion_texto || '').trim() : '',
         levantar: false,   // "se resolvió en esta orden" sobre una condición ya registrada
@@ -640,7 +689,37 @@
         // "Con condición" sin decir cuál no sirve de nada a bodega.
         return checklistOk && (!st.conCondicion || !!st.condicion.trim());
       }
+      // Descartar pide además adónde va el radio y por qué: sin destino no se
+      // sabe si el cliente firma por él al retirar la orden.
+      if (st.resultado === 'descartado') return !!st.nota.trim() && !!st.destino && !!st.causa;
       return !!st.nota.trim();
+    }
+
+    // Al marcar "Descartado" se precarga lo que ya se sabe del radio:
+    //   · del registro de descartados (si ya se había descartado antes):
+    //     motivo, destino y causa;
+    //   · del reemplazo propuesto desde la fila del equipo: la causa
+    //     (falla → garantía, daño → daño del cliente).
+    // Solo llena lo que está vacío — nunca pisa lo que el revisor escribió.
+    function _precargarDescarte(eqKey) {
+      const st = porEquipo[eqKey];
+      const item = eqs.find(x => x.key === eqKey);
+      if (!st || !item) return '';
+      const reg = descRegDe(item.eq);
+      const serial = String(item.eq.numero_de_serie || item.eq.serial || '');
+      const prop = typeof window.propuestaReemplazoDe === 'function' ? window.propuestaReemplazoDe(orden, serial) : null;
+      const avisos = [];
+      if (reg) {
+        if (!st.nota.trim() && reg.motivo) st.nota = String(reg.motivo);
+        if (!st.destino && (reg.destino === 'cecomunica' || reg.destino === 'cliente')) st.destino = reg.destino;
+        if (!st.causa && (reg.causa === 'garantia' || reg.causa === 'dano_cliente')) st.causa = reg.causa;
+        avisos.push(`Ya estaba descartado${reg.orden_id && reg.orden_id !== ordenId ? ` (orden ${esc(reg.orden_id)})` : ''}: se recuperó el motivo; puedes editarlo.`);
+      }
+      if (prop && prop.gestion_id) {
+        if (!st.causa) st.causa = prop.causa === 'dano_cliente' ? 'dano_cliente' : 'garantia';
+        avisos.push(`Reemplazo propuesto: ${esc(prop.gestion_id)}.`);
+      }
+      return avisos.join(' ');
     }
 
     const _refrescarEstado = () => {
@@ -723,6 +802,24 @@
         wrap.appendChild(aviso);
       } else if (sel !== 'descartado' && aviso) {
         aviso.remove();
+      }
+      // Destino y causa del descarte.
+      const st = porEquipo[eqKey];
+      const descWrap = card.querySelector('.qc-eq-descarte-wrap');
+      if (descWrap) {
+        descWrap.style.display = sel === 'descartado' ? '' : 'none';
+        descWrap.querySelectorAll('.qc-eq-opcion').forEach(b => {
+          const activo = st[b.dataset.campo] === b.dataset.valor;
+          b.classList.toggle('btn-primary', activo);
+          b.classList.toggle('btn-secondary', !activo);
+        });
+      }
+      if (aviso && sel === 'descartado') {
+        aviso.textContent = st.destino === 'cliente'
+          ? 'Al firmar, este serial queda en el registro de equipos descartados. En la entrega sale marcado "se devuelve sin reparar".'
+          : (st.destino === 'cecomunica'
+            ? 'Al firmar, este serial queda en el registro de equipos descartados. No sale en lo que firma el cliente y, al entregar la orden, queda en cuarentena para que bodega le dé de baja.'
+            : 'Al firmar, este serial queda en el registro de equipos descartados: si alguien lo teclea en bodega o taller, saltará una alerta.');
       }
       // El verde señala RESUELTO, no "elegí aprobado": marcar el desenlace sin
       // completar el checklist dejaba la tarjeta en verde mientras el resumen
@@ -836,6 +933,23 @@
         // no debería obligar a elegir otro para poder volver atrás.
         porEquipo[eqK].resultado = porEquipo[eqK].resultado === res.dataset.resultado
           ? '' : res.dataset.resultado;
+        if (porEquipo[eqK].resultado === 'descartado') {
+          const info = _precargarDescarte(eqK);
+          const inp = card.querySelector('.qc-eq-nota');
+          if (inp && !inp.value.trim()) inp.value = porEquipo[eqK].nota;
+          const infoEl = card.querySelector('.qc-eq-descarte-info');
+          if (infoEl) infoEl.innerHTML = info;
+        }
+        _pintarResultado(eqK);
+        _refrescarEstado();
+        return;
+      }
+
+      // Destino / causa de un descartado: un valor por campo.
+      const opcion = e.target.closest('.qc-eq-opcion');
+      if (opcion) {
+        const eqK = opcion.closest('.qc-equipo-card').dataset.eq;
+        porEquipo[eqK][opcion.dataset.campo] = opcion.dataset.valor;
         _pintarResultado(eqK);
         _refrescarEstado();
         return;
@@ -879,6 +993,9 @@
           checklist: { ...st.checklist },
           resultado: st.resultado,
           nota: st.nota.trim(),
+          // Destino y causa solo existen en un descartado. Los lee
+          // domain/descarteEntrega.js (navegador y servidor) al entregar.
+          ...(st.resultado === 'descartado' ? { destino: st.destino, causa: st.causa } : {}),
           condicion,
           levantar_condicion: st.resultado === 'aprobado' && !condicion && !!st.levantar,
         };
@@ -903,9 +1020,14 @@
       if (pe && pe.descartados.length) {
         // Modal.confirm inserta `message` como HTML (no lo escapa): el salto va
         // con <br> y los seriales pasan por esc().
+        const desc = Object.values(pe.por_equipo).filter(d => d.resultado === 'descartado' && d.serial);
+        const quedan = desc.filter(d => d.destino !== 'cliente').map(d => d.serial);
+        const vuelven = desc.filter(d => d.destino === 'cliente').map(d => d.serial);
         const ok = await Modal.confirm({
           message: `Se descartarán ${pe.descartados.length} equipo(s): <b>${esc(pe.descartados.join(', '))}</b>.<br><br>`
-            + 'Quedarán registrados por serial y saltará una alerta si alguien los vuelve a ingresar en bodega o taller. ¿Continuar?',
+            + (quedan.length ? `Se quedan en Cecomunica (no salen en la entrega): <b>${esc(quedan.join(', '))}</b>.<br>` : '')
+            + (vuelven.length ? `Se devuelven al cliente sin reparar: <b>${esc(vuelven.join(', '))}</b>.<br>` : '')
+            + '<br>Quedarán registrados por serial y saltará una alerta si alguien los vuelve a ingresar en bodega o taller. ¿Continuar?',
           danger: true
         });
         if (!ok) return;

@@ -166,7 +166,7 @@
             <td>${e.cargador ? '✅' : '❌'}</td><td>${e.fuente ? '✅' : '❌'}</td>
             <td>${e.antena ? '✅' : '❌'}</td>
             <td>${e.cubrepolvo ? '✅' : '❌'}</td>
-            <td style="text-align:left;">${e.observaciones || '—'}</td>
+            <td style="text-align:left;">${e.sin_reparar ? '<strong style="color:#991B1B;">Se devuelve sin reparar.</strong> ' : ''}${e.observaciones || '—'}</td>
           </tr>`;
         });
         tabla += `</tbody></table>`;
@@ -207,7 +207,11 @@
           infoContainer.innerHTML = `<div class="alert-box">❌ Orden no encontrada</div>`;
           return;
         }
-        const equipos = Array.isArray(o.equipos) ? o.equipos.filter(e => !e.eliminado) : [];
+        // Sin los descartados que se quedan en Cecomunica: tras el QC, este
+        // papel es el que firma el cliente al retirar (domain/descarteEntrega.js).
+        const DE = window.DescarteEntrega || null;
+        const equipos = Array.isArray(o.equipos)
+          ? o.equipos.filter(e => !e.eliminado && !(DE && DE.seQueda(o, e))) : [];
         const nombreCliente = await resolverNombreCliente(o);
         renderOrden({
           tipo_de_servicio: o.tipo_de_servicio,
@@ -220,6 +224,7 @@
           fechaCreacion: fechaCorta(o.fecha_creacion),
           fechaEntrega: fechaCorta(o.fecha_entrega)
         }, equipos.map(e => ({
+          sin_reparar: !!(DE && DE.sinReparar(o, e)),
           numero_de_serie: e.numero_de_serie,
           modelo: e.modelo,
           bateria: e.bateria,

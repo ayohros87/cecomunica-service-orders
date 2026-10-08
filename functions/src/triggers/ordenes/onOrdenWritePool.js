@@ -8,6 +8,7 @@ const G = require("../../lib/gestiones");
 const tandas = require("../../domain/entregaTandas");
 const { incidenciaSuperada, reubicadaTrasEntrada } = require("../../lib/incidenciasEntrada");
 const { separarSinSerial } = require("../../domain/accesorioSinSerial");
+const descarte = require("../../domain/descarteEntrega");
 const { admin, db } = require("../../lib/admin");
 
 // Pool de equipos ↔ órdenes de servicio ("migración por contacto", plan
@@ -81,7 +82,29 @@ async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } =
   // Catálogo para repuntar a la fila -R lo que regresa de un cliente.
   try { await catalogo(); } catch (err) { logger.warn("[onOrdenWritePool] catálogo no disponible", { message: err.message }); }
 
+  // Descartados en la revisión de la ENTRADA (2026-10-08): NO aterrizan en
+  // bodega ni se repuntan a refurbished — no sirven. Se quedan en cuarentena
+  // (devuelto_revision), cuya salida es manual: bodega los da de baja. Antes
+  // caían en bodega "disponibles" y solo la alerta del serial los frenaba.
+  const descartados = descarte.serialesDescartadosEnRevision(after);
+
   for (const e of equipos) {
+    if (descartados.has(pool.normSerial(e.serial))) {
+      try {
+        await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+          aEstado: pool.ESTADOS.DEVUELTO,
+          soloDesde: [pool.ESTADOS.EN_TALLER, pool.ESTADOS.EN_CLIENTE, pool.ESTADOS.ASIGNADO],
+          tipo: "descarte_revision",
+          refMov: refMovE,
+          notas: "Descartado en la revisión de entrada: queda en cuarentena hasta su baja",
+          extra: { orden_actual_id: null },
+        });
+      } catch (err) {
+        logger.warn("[onOrdenWritePool] no se pudo dejar en cuarentena un descartado de la ENTRADA",
+          { ordenId, serial: e.serial, error: err.message });
+      }
+      continue;
+    }
     // Radio que alguien ya ubicó después de abrir esta ENTRADA (otro contrato,
     // otro cliente, el taller de otra orden): el cierre no lo saca de ahí.
     // Caso TROPICAL/GAMBOA, ver lib/incidenciasEntrada.js. No es incidencia:
@@ -130,7 +153,7 @@ async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } =
       // "Una familia, dos filas" (2026-09-07, decisión de Alberto): un radio
       // que vuelve de un cliente y pasa la inspección de la ENTRADA es
       // refurbished — se repunta a la fila -R de su familia. Los descartados
-      // no llegan aquí (no aterrizan en bodega).
+      // no llegan aquí: se apartan arriba, a cuarentena.
       try {
         await pool.marcarRefurbished(e.serial, e.modelo_id, e.modelo, {
           refMov: refMovE, notas: "Regresó de un cliente y pasó la revisión de entrada",
@@ -523,7 +546,28 @@ module.exports = onDocumentWritten(
         && norm(after.estado_reparacion) === CERRADA_SIN_RETIRAR
         && norm(before?.estado_reparacion) !== CERRADA_SIN_RETIRAR;
       if (cerroSinRetirar) {
+        // El descartado que se queda en Cecomunica no es "del cliente en
+        // nuestra repisa": va a cuarentena, igual que al entregar.
+        const quedan = descarte.serialesQueSeQuedan(after);
         for (const e of despues) {
+          if (quedan.has(pool.normSerial(e.serial))) {
+            try {
+              await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+                aEstado: pool.ESTADOS.DEVUELTO,
+                soloDesde: [pool.ESTADOS.EN_TALLER],
+                condicion: (d) => d.orden_actual_id === ordenId,
+                tipo: "descarte_qc",
+                refMov,
+                notas: "Descartado en control de calidad — se queda en Cecomunica",
+                extra: { orden_actual_id: null },
+              });
+            } catch (err) {
+              logger.warn("[onOrdenWritePool] No se pudo dejar en cuarentena un descartado", {
+                ordenId, serial: e.serial, message: err.message,
+              });
+            }
+            continue;
+          }
           try {
             const r = await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
               aEstado: pool.ESTADOS.NO_RETIRADO,
@@ -664,7 +708,27 @@ module.exports = onDocumentWritten(
       // Salida de taller: entrega de la orden, soft-delete, o borrado del doc.
       if (entregadaAhora || (eliminada && before?.eliminado !== true)) {
         const equiposFuente = despues.length ? despues : antes;
+        // Descartados en el QC que se quedan en Cecomunica (2026-10-08): el
+        // cliente no se los lleva, así que no pueden pasar a en_cliente. Van a
+        // cuarentena (devuelto_revision), de donde bodega los da de baja.
+        const descartes = entregadaAhora ? descarte.descartesPorSerial(after) : new Map();
         for (const e of equiposFuente) {
+          const desc = descartes.get(pool.normSerial(e.serial));
+          if (desc && desc.destino === "cecomunica") {
+            await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+              aEstado: pool.ESTADOS.DEVUELTO,
+              soloDesde: [pool.ESTADOS.EN_TALLER],
+              condicion: (d) => d.orden_actual_id === ordenId,
+              tipo: "descarte_qc",
+              refMov,
+              notas: ("Descartado en control de calidad — se queda en Cecomunica"
+                + (desc.causa ? ` (${descarte.CAUSAS[desc.causa]})` : "")
+                + (desc.nota ? `: ${desc.nota}` : "")).slice(0, 300),
+              extra: { orden_actual_id: null },
+            });
+            await soltarVendido(e);
+            continue;
+          }
           // Entrega: el radio SÍ llegó al cliente. Orden eliminada: no.
           if (entregadaAhora) {
             await pool.transicionar(e.serial, e.modelo_id, e.modelo, {

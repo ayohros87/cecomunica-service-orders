@@ -31,9 +31,13 @@ window.EntregaTandas = (() => {
     return tipo.includes("reparacion");
   }
 
+  // Lo que se le entrega al cliente. Un descartado en el QC que se queda en
+  // Cecomunica (domain/descarteEntrega.js) no cuenta: nunca va a salir, y
+  // contarlo dejaría la orden con "1 pendiente" para siempre.
   function equiposActivos(orden) {
-    return (Array.isArray(orden && orden.equipos) ? orden.equipos : [])
+    const vivos = (Array.isArray(orden && orden.equipos) ? orden.equipos : [])
       .filter((e) => e && !e.eliminado);
+    return window.DescarteEntrega ? window.DescarteEntrega.equiposQueSalen(orden, vivos) : vivos;
   }
 
   function tandas(orden) {

@@ -419,7 +419,14 @@ window.abrirEquiposMobile = function(ordenId) {
       const obs = (e.observaciones || e.descripcion || e.nombre || "").toString();
       const noDisponible = !!e.intervencion_no_disponible;
       const motivoNoDisponible = (e.motivo_no_disponible || "").toString();
-      const descartado = !!e.descartado_revision;
+      // Descartado en la revisión de ENTRADA, o en el QC (con su destino).
+      const descQc = window.DescarteEntrega ? DescarteEntrega.descarteDe(o, e) : null;
+      const descartado = !!e.descartado_revision || !!descQc;
+      const descLabel = descQc
+        ? (descQc.destino === 'cliente' ? 'Descartado · sin reparar' : 'Descartado · se queda')
+        : 'Descartado';
+      const descTitle = (descQc ? [DescarteEntrega.DESTINOS[descQc.destino], descQc.nota].filter(Boolean).join(' — ')
+        : (e.descarte_motivo || '')).toString();
       const cardClass = `equipo-card ${noDisponible ? 'equipo-card--no-disponible' : (e.trabajo_tecnico ? 'equipo-card--ok' : '')}`;
 
       // 2-line clamp usando CSS inline simple
@@ -457,7 +464,7 @@ window.abrirEquiposMobile = function(ordenId) {
               <div class="equipo-card-model">Modelo: <span class="equipo-card-model-value">${escapeHtml(modelo)}</span></div>
             </div>
             ${descartado
-              ? `<div class="equipo-status-badge equipo-status-badge--warn" style="background:#FEF2F2;color:#991B1B;border-color:#FECACA;" title="${escapeHtml((e.descarte_motivo || '').toString())}"><i data-lucide="ban"></i> Descartado</div>`
+              ? `<div class="equipo-status-badge equipo-status-badge--warn" style="background:#FEF2F2;color:#991B1B;border-color:#FECACA;" title="${escapeHtml(descTitle)}"><i data-lucide="ban"></i> ${descLabel}</div>`
               : (noDisponible
                 ? '<div class="equipo-status-badge equipo-status-badge--warn"><i data-lucide="ban"></i> No disponible</div>'
                 : (e.condicion_especial
@@ -876,6 +883,25 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
   }
   if (motivoDescarte) motivoDescarte.value = isDescartado ? (e.descarte_motivo || "").toString() : "";
   _syncDescarteUI();
+  if (avisoDescarte) avisoDescarte.textContent = "Al cerrar la entrada, este serial queda en el registro de equipos descartados: si alguien lo teclea en bodega o taller, saltará una alerta.";
+  // Radio que vuelve ya descartado (petición Solangel 2026-10-08): el
+  // descarte del QC de otra orden se recupera solo — casilla marcada y motivo
+  // precargado, editable. El técnico puede desmarcarlo si el radio sí sirve.
+  if (esEntrada && !isDescartado && chkDescarte && !chkDescarte.disabled
+      && typeof EquiposDescartadosService !== "undefined") {
+    const idxDesc = _trabajoEquipoIdx;
+    EquiposDescartadosService.buscar(String(e.numero_de_serie || e.serial || "")).then((reg) => {
+      if (!reg || _trabajoEquipoIdx !== idxDesc || chkDescarte.checked || chkNoDisp?.checked) return;
+      chkDescarte.checked = true;
+      if (motivoDescarte && !motivoDescarte.value.trim()) motivoDescarte.value = String(reg.motivo || "");
+      _syncDescarteUI();
+      if (chkCondicion) { chkCondicion.checked = false; if (txtCondicion) txtCondicion.value = ""; }
+      _syncCondicionUI();
+      if (avisoDescarte) {
+        avisoDescarte.textContent = `Este serial ya estaba descartado${reg.orden_id ? ` (orden ${reg.orden_id})` : ""}: se recuperó el motivo — edítalo si hace falta, o desmarca la casilla si el radio sí sirve.`;
+      }
+    }).catch(() => { /* best-effort */ });
+  }
 
   // Condición particular (petición Solangel 2026-09-04) — en CUALQUIER tipo
   // de orden: el radio funciona, pero con una limitación que el taller no

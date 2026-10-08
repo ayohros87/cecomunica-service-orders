@@ -139,6 +139,12 @@
         <td>${esc(r.modelo || '—')}</td>
         <td class="dsc-motivo">
           ${esc(r.motivo || '—')}
+          ${r.destino || r.causa
+            ? `<div class="dsc-meta">${esc([
+                r.destino === 'cliente' ? 'Se devolvió al cliente sin reparar' : (r.destino === 'cecomunica' ? 'Se queda en Cecomunica' : ''),
+                r.causa === 'dano_cliente' ? 'Daño del cliente' : (r.causa === 'garantia' ? 'Falla (garantía)' : ''),
+              ].filter(Boolean).join(' · '))}</div>`
+            : ''}
           ${revocado && r.revocado_motivo
             ? `<div class="dsc-meta">Revocado: ${esc(r.revocado_motivo)} · ${esc(r.revocado_por_email || '')}</div>`
             : ''}

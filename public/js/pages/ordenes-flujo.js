@@ -979,6 +979,9 @@ function prepararEquiposParaNota(orden, incluirIntervencion = false) {
 
   equipos.forEach((e) => {
     if (!e || e.eliminado === true) return;
+    // La nota la firma el cliente: el descartado que se queda en Cecomunica
+    // no va (petición Solangel 2026-10-08).
+    if (window.DescarteEntrega && DescarteEntrega.seQueda(orden, e)) return;
 
     const serial = String(e.numero_de_serie || "").trim();
     const modelo = String(e.modelo || "").trim();
@@ -1002,6 +1005,7 @@ function prepararEquiposParaNota(orden, incluirIntervencion = false) {
     if (incluirIntervencion) {
       item.intervencion = String(e.trabajo_tecnico || "").trim();
     }
+    if (window.DescarteEntrega && DescarteEntrega.sinReparar(orden, e)) item.sin_reparar = true;
     unicos.push(item);
   });
 
@@ -1193,8 +1197,14 @@ window.copiarSeriales = function (ordenId) {
     const tot = document.getElementById('entregaResumenTotales');
     if (!ul || !tot) return;
 
-    const equipos = (Array.isArray(orden?.equipos) ? orden.equipos : [])
+    const vivos = (Array.isArray(orden?.equipos) ? orden.equipos : [])
       .filter(e => e && !e.eliminado);
+    // Lo que el cliente se lleva. Los descartados que se quedan en Cecomunica
+    // no entran en lo que firma (petición Solangel 2026-10-08); se avisan
+    // aparte para que recepción sepa que no faltan.
+    const { salen: equipos, seQuedan } = window.DescarteEntrega
+      ? DescarteEntrega.separar(orden, vivos) : { salen: vivos, seQuedan: [] };
+    const sinReparar = (e) => !!window.DescarteEntrega && DescarteEntrega.sinReparar(orden, e);
 
     const accs = [
       { key: 'bateria',  short: 'Bat',  plural: 'baterías'   },
@@ -1215,13 +1225,18 @@ window.copiarSeriales = function (ordenId) {
           const accStr = presentes.length
             ? `<span class="re-acc">${presentes.join(' · ')}</span>`
             : `<span class="re-acc re-acc--none">sin acc.</span>`;
-          return `<li><span class="re-num">${i + 1}.</span> <span class="re-serial">${serial}</span>${modelo} ${accStr}</li>`;
+          const marca = sinReparar(e)
+            ? ' <span class="re-acc" style="color:#991B1B;font-weight:600;">· se devuelve sin reparar</span>' : '';
+          return `<li><span class="re-num">${i + 1}.</span> <span class="re-serial">${serial}</span>${modelo} ${accStr}${marca}</li>`;
         }).join('')
       : `<li class="re-empty">Sin equipos</li>`;
 
     const partes = [`<b>${equipos.length}</b> radio${equipos.length !== 1 ? 's' : ''}`];
     accs.forEach(a => { if (totales[a.key] > 0) partes.push(`<b>${totales[a.key]}</b> ${a.plural}`); });
-    tot.innerHTML = partes.join(' · ');
+    tot.innerHTML = partes.join(' · ') + (seQuedan.length
+      ? `<div style="margin-top:6px;font-size:12.5px;color:#991B1B;">No se entrega${seQuedan.length !== 1 ? 'n' : ''} — descartado${seQuedan.length !== 1 ? 's' : ''} en control de calidad, se queda${seQuedan.length !== 1 ? 'n' : ''} en Cecomunica:
+           <b>${seQuedan.map(e => _escapeHtml(e.numero_de_serie || e.serial || '—')).join(', ')}</b></div>`
+      : '');
   }
 
   // Minimal RFC-style check — backend re-validates on send. Enough to
@@ -1453,7 +1468,10 @@ window.copiarSeriales = function (ordenId) {
     }
     const orden = APP.state.orders.find(o => o.ordenId === _ordenId) || {};
     const esRecepcion = _modo === 'recepcion';
-    const unidades = FirmaTablet.unidadesDeEquipos(orden.equipos);
+    // En la entrega, la tablet muestra solo lo que el cliente se lleva: el
+    // descartado que se queda en Cecomunica no se firma.
+    const unidades = FirmaTablet.unidadesDeEquipos(!esRecepcion && window.DescarteEntrega
+      ? DescarteEntrega.equiposQueSalen(orden) : orden.equipos);
     // La leyenda que firma el cliente: solo aplica al dejar equipos de una
     // ENTRADA (mismo criterio que _toggleLegendaEntrada).
     const leyenda = String(orden.tipo_de_servicio || '').toUpperCase().includes('ENTRADA')
@@ -1627,12 +1645,16 @@ window.copiarSeriales = function (ordenId) {
       precio_unit:  Number(c.precio_unit || 0),
       tipo:         c.tipo || 'cobro',
     }));
+    // El correo es la copia de lo que firmó el cliente: sin el descartado que
+    // se queda en Cecomunica, y con la marca del que vuelve sin reparar.
+    const DE = window.DescarteEntrega || null;
     const equipos = (Array.isArray(orden.equipos) ? orden.equipos : [])
-      .filter(e => e && !e.eliminado)
+      .filter(e => e && !e.eliminado && !(DE && DE.seQueda(orden, e)))
       .map(e => ({
         modelo:          e.modelo || null,
         numero_de_serie: e.numero_de_serie || e.SERIAL || e.serial || null,
         trabajo_tecnico: e.trabajo_tecnico || null,
+        sin_reparar:     !!(DE && DE.sinReparar(orden, e)),
         // Accesorios (flags booleanos) — se listan en la nota como columna
         // "Accesorios", con la misma fuente de datos que "Imprimir orden".
         bateria:  !!e.bateria,

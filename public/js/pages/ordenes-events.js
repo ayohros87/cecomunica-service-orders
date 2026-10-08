@@ -621,7 +621,11 @@ function abrirImpresionOrden(ordenId) {
           tipo: el.tipo || '', detalle: el.detalle || '', serial: el.serial || ''
         }))
       } : null,
-      equipos: (orden.equipos || []).filter(e => !e.eliminado).map(e => ({
+      // Sin los descartados que se quedan en Cecomunica: tras el QC, este
+      // papel es el que firma el cliente al retirar (domain/descarteEntrega.js).
+      equipos: (orden.equipos || []).filter(e => !e.eliminado
+          && !(window.DescarteEntrega && DescarteEntrega.seQueda(orden, e))).map(e => ({
+        sin_reparar: !!(window.DescarteEntrega && DescarteEntrega.sinReparar(orden, e)),
         numero_de_serie: e.numero_de_serie || '',
         modelo: e.modelo || '',
         bateria: !!e.bateria,

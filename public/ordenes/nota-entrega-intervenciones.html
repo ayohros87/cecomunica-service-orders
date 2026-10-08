@@ -384,7 +384,7 @@
         <td><strong>${index + 1}</strong></td>
         <td>${esc(e.modelo) || "—"}</td>
         <td>${esc(e.serial) || "—"}</td>
-        <td class="${intervencionClass}">${esc(intervencionTexto)}${piezasHtml}</td>
+        <td class="${intervencionClass}">${e.sin_reparar ? '<strong style="color:#991B1B;">Se devuelve sin reparar.</strong> ' : ''}${esc(intervencionTexto)}${piezasHtml}</td>
       `;
       tbody.appendChild(row);
     });
