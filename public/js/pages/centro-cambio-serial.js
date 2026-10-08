@@ -19,9 +19,10 @@ Object.assign(window.Centro, {
      Va DIRECTO a bodega, sin aprobación (Alberto 2026-09-15): corregir un typo
      no saca equipo del estante ni cambia la facturación — hacerlo esperar una
      firma de administración es trancar el trámite corto con el largo. */
-  async wizCambioSerial() {
+  // opts.pre: ids del pool marcados en la pestaña Equipos de la ficha (2026-10-08).
+  async wizCambioSerial(opts = {}) {
     this._cerrarModal();
-    document.getElementById('cgMenu')?.classList.add('hidden');
+    this.cerrarMenu?.();
     const flota = this._flotaCorregible();
     const enDemo = this._enDemo();
     this._ssReset('cs');
@@ -53,6 +54,12 @@ Object.assign(window.Centro, {
         <button class="btn btn-primary" onclick="Centro.crearCambioSerial(this)">Enviar a bodega</button>
       </div>`);
     this._ssMontar('cs');
+    if (Array.isArray(opts.pre) && opts.pre.length) {
+      this._ssPreMarcar('cs', opts.pre.map(pid => {
+        const ix = flota.findIndex(e => e.id === pid);
+        return { inp: ix >= 0 ? document.querySelector(`#cgModal input[data-cssel="${ix}"]`) : null, on: () => this._csFila(ix, true) };
+      }));
+    }
   },
 
   // Lo que se puede corregir: lo que el sistema dice que el cliente tiene.

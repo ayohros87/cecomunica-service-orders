@@ -164,14 +164,8 @@ window.Centro = {
     });
     document.getElementById('btnMas')?.addEventListener('click', () => this.cargarLista(false));
     document.getElementById('fEqFiltro')?.addEventListener('input', () => this.pintarEquipos());
-    // El bloque Actividad carga el historial la primera vez que se abre.
-    document.getElementById('blkActividad')?.addEventListener('toggle', (e) => { if (e.target.open) this.cargarActividad(); });
-    document.addEventListener('click', (e) => {
-      if (e.target.closest('.cg-acts')) return;
-      for (const id of ['cgMenu', 'cgMasMenu']) {
-        const menu = document.getElementById(id);
-        if (menu && !menu.classList.contains('hidden')) menu.classList.add('hidden');
-      }
-    });
+    // Las pestañas (ficha v3, 2026-10-08) cargan lo suyo al abrirse
+    // (mostrarTab → cargarActividad / pintarDocumentos); el panel "Más
+    // acciones" se cierra con el velo, la X o Escape (cerrarMenu).
   },
 };

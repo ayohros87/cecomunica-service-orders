@@ -214,9 +214,11 @@ Object.assign(window.Centro, {
   _wrExtras: [],
   _wrUnidad(ix) { return this.equipos[ix] || this._wrExtras[ix - this.equipos.length] || null; },
 
-  async wizReemplazo() {
+  // opts.pre: ids del pool marcados en la pestaña Equipos de la ficha
+  // (2026-10-08): llegan ya marcados, con su fila de motivo/modelo abierta.
+  async wizReemplazo(opts = {}) {
     this._cerrarModal();
-    document.getElementById('cgMenu')?.classList.add('hidden');
+    this.cerrarMenu?.();
     await this._cargarModelos();
     this._wrExtras = [];
     this._ssReset('wr');
@@ -244,6 +246,12 @@ Object.assign(window.Centro, {
         <button class="btn btn-primary" onclick="Centro.crearReemplazo(this)">Enviar solicitud</button>
       </div>`);
     this._ssMontar('wr');
+    if (Array.isArray(opts.pre) && opts.pre.length) {
+      this._ssPreMarcar('wr', opts.pre.map(pid => {
+        const ix = this.equipos.findIndex(e => e.id === pid);
+        return { inp: ix >= 0 ? document.querySelector(`#cgModal input[data-wsel="${ix}"]`) : null, on: () => this._wizFila(ix, true) };
+      }));
+    }
   },
 
   // Cuerpo de la tabla del wizard: la flota del pool + los seriales que el

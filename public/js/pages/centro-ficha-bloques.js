@@ -4,12 +4,12 @@
 // centro-core.js define window.Centro; aquí se le suman estos métodos. El
 // orden de carga lo fija js/entry/clientes-centro.js.
 Object.assign(window.Centro, {
-  /* ═════════ Ficha reordenada (2026-09-08, "cada pieza en su lugar") ═════════
-   * Verificado con emulador: la ficha medía 3,558 px (5,056 en móvil), los
-   * equipos eran el 67 % y las gestiones quedaban al final. Ahora: cabecera
-   * con estado y UN botón primario, una sola cola "Ahora", una franja de
-   * números y bloques plegables con su resumen. Los pintores viejos quedan
-   * como alias porque los llaman la recarga y el listener. */
+  /* ═════════ Ficha v3 (2026-10-08): cabecera sin badges, barra de verbos
+   * fija, pestañas en vez de acordeones, "Qué está esperando" en la columna
+   * derecha y panel "Más acciones" por intención. Lo que decide QUÉ se
+   * muestra (_itemsAhora, _accionPrimaria, _cuentaEstado, armarMenu) no
+   * cambió: cambió el envase. Los pintores viejos quedan como alias porque
+   * los llaman la recarga y el listener. */
   pintarAcciones() { this.pintarAhora(); },
   pintarSenales() { /* fundido en pintarAhora */ },
   pintarKpis() { this.pintarResumen(); },
@@ -17,17 +17,17 @@ Object.assign(window.Centro, {
   // "Le toca a" ya no se adivina con regex sobre el texto: cada fila trae su
   // {rol} desde la fuente (_itemsAccion, _itemsSenal) y TOCA le pone nombre.
   _ahoraTodo: false,
-  // Las filas de "Ahora", ya fundidas y ordenadas (bad → warn → info). La
-  // primera es lo que la cuenta pide primero: de ahí sale también el botón
-  // primario de la cabecera (_accionPrimaria).
+  // Las filas de "Qué está esperando", ya fundidas y ordenadas (bad → warn →
+  // info). La primera es lo que la cuenta pide primero: de ahí sale también
+  // la acción sugerida (_accionPrimaria).
   _itemsAhora() {
     const acc = this._itemsAccion().map(x => ({ tono: x.tono === 'info' ? 'info' : 'warn', t: x.t, s: x.s, btns: x.btns, rol: x.rol }));
     const sen = this._itemsSenal().map(x => ({ tono: x.tipo, t: this.esc(x.txt), s: '', btns: x.extra || '', rol: x.rol }));
     const peso = { bad: 0, warn: 1, info: 2 };
     return [...acc, ...sen].sort((a, b) => (peso[a.tono] ?? 3) - (peso[b.tono] ?? 3));
   },
-  // El botón primario de una fila de "Ahora" ({label, onclick}), o null si
-  // la fila no tiene uno (solo "Ver contrato", o es de bodega/cliente).
+  // El botón primario de una fila ({label, onclick}), o null si la fila no
+  // tiene uno (solo "Ver contrato", o es de bodega/cliente).
   _primariaDe(btns) {
     const m = String(btns || '').match(/<(button|a)\b([^>]*\bbtn-primary\b[^>]*)>([^<]*)<\/\1>/);
     if (!m) return null;
@@ -38,120 +38,167 @@ Object.assign(window.Centro, {
     if (href && href[1]) return { label, onclick: `location.href='${href[1].replace(/'/g, '')}'` };
     return null;
   },
+  // "Qué está esperando": tarjeta de la columna derecha. Una fila por cosa
+  // pendiente, con quién le toca y sus botones; hasta MAX a la vista.
   pintarAhora() {
     const cont = document.getElementById('fAhora');
     if (!cont) return;
     const items = this._itemsAhora();
+    const hayBad = items.some(x => x.tono === 'bad');
+    const hd = `<div class="hd"><h2 class="cg-h2">Qué está esperando</h2>
+      ${items.length ? `<span class="cg-chip ${hayBad ? 'cg-chip--bad' : 'cg-chip--warn'}">${items.length}</span>` : ''}
+      ${items.length > 5 ? `<button type="button" class="mas" onclick="Centro._ahoraTodo=!Centro._ahoraTodo; Centro.pintarAhora(); if(window.lucide) lucide.createIcons()">${this._ahoraTodo ? 'Ver menos' : `Ver ${items.length - 5} más`}</button>` : ''}
+    </div>`;
     if (!items.length) {
-      cont.innerHTML = `<div class="ok"><i data-lucide="check-circle-2" style="width:15px;height:15px;"></i> Nada pendiente en esta cuenta.</div>`;
+      cont.innerHTML = `${hd}<div class="ok"><i data-lucide="check-circle-2" style="width:15px;height:15px;"></i> Nada pendiente en esta cuenta.</div>`;
       return;
     }
-    const MAX = 3;
+    const MAX = 5;
     const vis = this._ahoraTodo ? items : items.slice(0, MAX);
     const fila = (x) => {
       const toca = this._tocaLabel(x.rol);
-      return `<div class="row ${x.tono}"><span class="dot"></span>
-        <span class="t"><b>${x.t}</b><span class="s">${x.s}${x.s && toca ? ' · ' : ''}${toca ? `le toca a <span class="toca">${this.esc(toca)}</span>` : ''}</span></span>
-        <span class="btns">${x.btns}</span></div>`;
+      return `<div class="row ${x.tono}">
+        <div class="top"><span class="dot"></span>
+          <span class="t"><b>${x.t}</b><span class="s">${x.s}${x.s && toca ? ' · ' : ''}${toca ? `le toca a <span class="toca">${this.esc(toca)}</span>` : ''}</span></span></div>
+        <div class="btns">${x.btns || ''}</div></div>`;
     };
-    cont.innerHTML = `<div class="hd">Ahora · ${items.length}
-        ${items.length > MAX ? `<button type="button" class="mas" onclick="Centro._ahoraTodo=!Centro._ahoraTodo; Centro.pintarAhora(); if(window.lucide) lucide.createIcons()">${this._ahoraTodo ? 'Ver menos' : `Ver ${items.length - MAX} más`}</button>` : ''}</div>
-      ${vis.map(fila).join('')}`;
+    cont.innerHTML = hd + vis.map(fila).join('');
+  },
+  irAEsperando() {
+    const el = document.getElementById('fAhora');
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.style.outline = '2px solid var(--accent)';
+    el.style.outlineOffset = '2px';
+    setTimeout(() => { el.style.outline = ''; el.style.outlineOffset = ''; }, 1600);
   },
 
-  // Franja de números con enlace al bloque (reemplaza los cuatro tiles).
-  pintarResumen() {
-    const cont = document.getElementById('fResumen');
-    if (!cont) return;
+  // Los números de la cuenta que usan la cabecera, las pestañas y la tarjeta
+  // "La cuenta": calculados UNA vez por pintado.
+  _numerosCuenta() {
     const enTram = this._idsEnTramite();
     const vig = this.contratos.filter(c => this._esOperativo(c, enTram));
     const mensual = vig.reduce((s, c) => s + Number(c.total_mensual ?? c.total_con_itbms ?? 0), 0);
-    const enContrato = this.equipos.filter(e => ['en_cliente', 'asignado_contrato'].includes(e.estado) && e.asignacion?.contrato_doc_id).length;
-    const sinContrato = this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id).length;
+    const enCampoL = this.equipos.filter(e => ['en_cliente', 'asignado_contrato'].includes(e.estado));
+    const enContrato = enCampoL.filter(e => e.asignacion?.contrato_doc_id).length;
+    const sinContrato = enCampoL.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id).length;
     const porClasificar = this.equipos.filter(e => e.estado === 'por_clasificar').length;
     const taller = this.equipos.filter(e => ['en_taller', 'devuelto_revision'].includes(e.estado)).length;
     const abiertas = (this.gestiones || []).filter(g => GestionesService.enTramite(g)).length + this._tramitesContrato().length;
-    const L = (blk, html) => `<button type="button" onclick="Centro.abrirBloque('${blk}')">${html}</button>`;
-    cont.innerHTML = [
-      L('blkContratos', `Vigentes <b>${vig.length}</b>`),
-      `<span>Mensual <b class="num">$${mensual.toFixed(2)}</b></span>`,
-      L('blkEquipos', `En contrato <b>${enContrato}</b>`),
-      sinContrato ? L('blkEquipos', `Sin contrato <b>${sinContrato}</b>`) : '',
-      // "Por clasificar" es cola de BODEGA, no deuda de la cuenta (decisión 8,
-      // 1-oct-2026): se dice como tal y no dispara nada.
-      porClasificar ? `<button type="button" onclick="Centro.abrirBloque('blkEquipos')" title="${porClasificar} radio(s) por clasificar: los revisa bodega, no cuentan como deuda de la cuenta">Bodega <b>${porClasificar}</b></button>` : '',
-      L('blkGestiones', `En trámite <b>${abiertas}</b>`),
-      taller ? L('blkEquipos', `En taller <b>${taller}</b>`) : '',
-      // Órdenes abiertas del cliente, enlazadas a la bandeja con ?ids= (08 P8):
-      // antes la ficha no llevaba a ninguna orden.
-      (this.ordenesAbiertas || []).length
-        ? `<a href="../ordenes/index.html?ids=${this.ordenesAbiertas.slice(0, 60).map(o => encodeURIComponent(o.id)).join(',')}" title="${this.ordenesAbiertas.slice(0, 6).map(o => `${o.id} · ${o.estado_reparacion || ''}`).join('\n')}">Órdenes abiertas <b>${this.ordenesAbiertas.length}</b></a>` : '',
-    ].filter(Boolean).join('');
-    // La cabecera resume la cuenta en una línea y los chips dicen el estado.
-    const meta = document.getElementById('fMeta');
-    const c = this.cliente || {};
-    if (meta) meta.textContent = [
-      `${vig.length} contrato${vig.length === 1 ? '' : 's'} vigente${vig.length === 1 ? '' : 's'}`,
-      `${this.equipos.length} radio${this.equipos.length === 1 ? '' : 's'}`,
-      c.vendedor_email ? `Vendedor: ${c.vendedor_email.split('@')[0]}` : null,
-      this._rucLegible(c),
-      c.telefono || null,
-    ].filter(Boolean).join(' · ');
-    this._pintarChipReg(c);
-    this._pintarSumarios({ vig, enContrato, sinContrato, porClasificar, taller, abiertas });
-    this._pintarPrimario();
-  },
-
-  // Resúmenes de una línea en la cabecera de cada bloque.
-  _pintarSumarios({ vig, enContrato, sinContrato, porClasificar, taller, abiertas }) {
-    const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
-    const cerradas = (this.gestiones || []).filter(g => ['cerrada', 'anulada'].includes(g.estado)).length;
-    set('sumGestiones', abiertas ? `${abiertas} en trámite · ${cerradas} en historial` : (cerradas ? `nada en trámite · ${cerradas} en historial` : 'nada en trámite'));
-    let vencidos = 0, proxima = null;
+    let vencidos = 0, proxima = null, proximaC = null;
     const hoy = new Date();
     for (const c of vig) {
       if (!this._aplicaVenc(c) || !c.fecha_vencimiento) continue;
       const d = c.fecha_vencimiento.toDate ? c.fecha_vencimiento.toDate() : new Date(c.fecha_vencimiento);
       if (isNaN(d)) continue;
-      if (d < hoy) vencidos++; else if (!proxima || d < proxima) proxima = d;
+      if (d < hoy) vencidos++; else if (!proxima || d < proxima) { proxima = d; proximaC = c; }
     }
-    set('sumContratos', vig.length
-      ? `${vig.length} vigente${vig.length === 1 ? '' : 's'}${proxima ? ` · próximo vence ${this._fmtFecha(proxima)}` : ''}${vencidos ? ` · ${vencidos} vencido${vencidos === 1 ? '' : 's'}` : ''}`
-      : 'sin contratos vigentes');
-    set('sumEquipos', this.equipos.length
-      ? [`${this.equipos.length}`, `${enContrato} en contrato`, sinContrato ? `${sinContrato} sin contrato` : '', porClasificar ? `${porClasificar} por clasificar` : '', taller ? `${taller} en taller` : ''].filter(Boolean).join(' · ')
-      : 'sin equipos en el inventario');
+    const diasProx = proxima ? Math.ceil((proxima - hoy) / 86400000) : null;
+    return { vig, mensual, enCampo: enCampoL.length, enContrato, sinContrato, porClasificar, taller, abiertas, vencidos, proxima, proximaC, diasProx };
   },
 
-  // Chips de estado junto al nombre: vencidos, en trámite, regularización.
+  // Tarjeta "La cuenta" (columna derecha) + línea meta de la cabecera +
+  // estado en palabras + conteos de las pestañas + barra de verbos.
+  pintarResumen() {
+    const N = this._numerosCuenta();
+    const cont = document.getElementById('fResumen');
+    const c = this.cliente || {};
+    if (cont) {
+      const T = (l, v, { tab = '', tono = '', sm = false, icono = '' } = {}) => {
+        const cuerpo = `<div class="l">${l}${icono ? `<i data-lucide="${icono}" style="width:11px;height:11px;"></i>` : ''}</div><div class="v${sm ? ' sm' : ''}${tono ? ` ${tono}` : ''}">${v}</div>`;
+        return `<div class="cg-tile">${tab ? `<button type="button" onclick="Centro.mostrarTab('${tab}')" title="Abrir la pestaña">${cuerpo}</button>` : cuerpo}</div>`;
+      };
+      const venc = N.vencidos
+        ? T('Vencimiento', `${N.vencidos} vencido${N.vencidos === 1 ? '' : 's'}`, { tab: 'blkContratos', tono: 'bad', sm: true })
+        : N.proxima
+          ? T('Próximo vencimiento', this._fmtFecha(N.proxima), { tab: 'blkContratos', tono: N.diasProx != null && N.diasProx <= this.AVISO_DIAS ? 'warn' : '', sm: true })
+          : T('Próximo vencimiento', '—', { sm: true });
+      // El monto mensual lo ven quienes trabajan la cuenta; bodega no lo
+      // necesita (entra solo a asignar seriales).
+      const verMensual = this.rol !== ROLES.INVENTARIO;
+      const extras = [
+        N.abiertas ? `<button type="button" onclick="Centro.mostrarTab('blkGestiones')">En trámite <b>${N.abiertas}</b></button>` : '',
+        N.sinContrato ? `<button type="button" onclick="Centro.mostrarTab('blkEquipos')">Sin contrato <b>${N.sinContrato}</b></button>` : '',
+        // "Por clasificar" es cola de BODEGA, no deuda de la cuenta (decisión 8, 1-oct-2026).
+        N.porClasificar ? `<button type="button" onclick="Centro.mostrarTab('blkEquipos')" title="${N.porClasificar} radio(s) por clasificar: los revisa bodega, no cuentan como deuda de la cuenta">Bodega <b>${N.porClasificar}</b></button>` : '',
+        N.taller ? `<button type="button" onclick="Centro.mostrarTab('blkEquipos')">En taller <b>${N.taller}</b></button>` : '',
+        (this.ordenesAbiertas || []).length
+          ? `<a href="../ordenes/index.html?ids=${this.ordenesAbiertas.slice(0, 60).map(o => encodeURIComponent(o.id)).join(',')}" title="${this.ordenesAbiertas.slice(0, 6).map(o => `${o.id} · ${o.estado_reparacion || ''}`).join('\n')}">Órdenes abiertas <b>${this.ordenesAbiertas.length}</b></a>` : '',
+      ].filter(Boolean);
+      cont.innerHTML = `<div class="cg-cardhd"><h2 class="cg-h2">La cuenta</h2></div>
+        <div class="cg-tiles">
+          ${T('Contratos vigentes', N.vig.length, { tab: 'blkContratos' })}
+          ${T('Radios con el cliente', N.enCampo, { tab: 'blkEquipos' })}
+          ${venc}
+          ${verMensual ? T('Mensual', `<span class="num">$${N.mensual.toFixed(2)}</span>`, { sm: true }) : T('En trámite', N.abiertas, { tab: 'blkGestiones' })}
+        </div>
+        ${extras.length ? `<div style="display:flex; flex-wrap:wrap; gap:6px 16px; padding:0 16px 14px; font-size:12.5px; color:var(--fg-3);">${extras.map(x => x.replace('<button type="button"', '<button type="button" style="background:none; border:0; padding:0; font:inherit; color:inherit; cursor:pointer; border-bottom:1px dotted var(--accent-line, #66BCE7);"').replace('<a href', '<a style="color:inherit; text-decoration:none; border-bottom:1px dotted var(--accent-line, #66BCE7);" href')).join('')}</div>` : ''}`;
+    }
+    // La línea bajo el nombre es IDENTIDAD (RUC, teléfono, correo, vendedor:
+    // la pinta _pintarEncabezado); los números viven en "La cuenta".
+    this._pintarChipReg(c);
+    this._pintarSumarios(N);
+    this._pintarPrimario();
+    this.pintarContacto();
+    this.pintarResumenTab();
+  },
+
+  // Conteos en las pestañas (antes: resúmenes de una línea en los acordeones).
+  _pintarSumarios(N) {
+    const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+    set('nContratos', N.vig.length ? String(N.vig.length) : '');
+    set('nEquipos', this.equipos.length ? String(this.equipos.length) : '');
+    set('nGestiones', N.abiertas ? String(N.abiertas) : '');
+    set('fEqResumen', this.equipos.length
+      ? [`${this.equipos.length} radio${this.equipos.length === 1 ? '' : 's'}`, `${N.enContrato} en contrato`, N.sinContrato ? `${N.sinContrato} sin contrato` : '', N.porClasificar ? `${N.porClasificar} por clasificar` : '', N.taller ? `${N.taller} en taller` : ''].filter(Boolean).join(' · ')
+      : '');
+  },
+
+  // Estado de la cuenta EN PALABRAS bajo el nombre (antes: chips clicables
+  // junto al nombre, que parecían etiquetas y escondían funciones). Nada aquí
+  // se aprieta salvo el enlace a "Qué está esperando". Conserva el nombre
+  // porque lo llaman _pintarEncabezado y el listener del cliente.
   _pintarChipReg(c) {
-    const el = document.getElementById('fRegChip');
+    const el = document.getElementById('fEstado');
     if (!el) return;
-    const chips = [];
+    const items = this._itemsAhora();
     const enTram = this._idsEnTramite();
     const vig = (this.contratos || []).filter(x => this._esOperativo(x, enTram));
     const vencidos = vig.filter(x => this._vencInfo(x)?.estado === 'vencido').length;
-    if (vencidos) chips.push(`<button type="button" class="cg-chip cg-chip--bad" style="border:0; cursor:pointer; font:inherit; font-size:12px;" onclick="Centro.abrirBloque('blkContratos')">${vencidos} contrato${vencidos === 1 ? '' : 's'} vencido${vencidos === 1 ? '' : 's'}</button>`);
-    const chip = (typeof Regularizacion !== 'undefined') ? Regularizacion.chip(c?.regularizacion) : null;
-    if (chip) {
-      const cls = chip.tono === 'bad' ? 'cg-chip--bad' : chip.tono === 'warn' ? 'cg-chip--warn' : 'cg-chip--muted';
-      chips.push(`<button type="button" class="cg-chip ${cls}" onclick="Centro.verRegularizacion()"
-        style="border:0; cursor:pointer; font:inherit; font-size:12px;" title="Qué le falta a esta cuenta para estar bien registrada">${this.esc(chip.texto)}</button>`);
-    }
     const tram = (this.gestiones || []).filter(g => GestionesService.enTramite(g)).length + this._tramitesContrato().length;
-    if (tram) chips.push(`<button type="button" class="cg-chip cg-chip--info" style="border:0; cursor:pointer; font:inherit; font-size:12px;" onclick="Centro.abrirBloque('blkGestiones')">${tram} en trámite</button>`);
-    if (!chips.length && this.contratos.length) chips.push(`<span class="cg-chip cg-chip--ok" style="font-size:12px;">Al día</span>`);
-    el.innerHTML = chips.join(' ');
+    const chip = (typeof Regularizacion !== 'undefined') ? Regularizacion.chip(c?.regularizacion) : null;
+    // Deuda SIN D7 (por clasificar es cola de bodega, decisión 8, 1-oct-2026).
+    const puntos = (typeof Regularizacion !== 'undefined') ? Regularizacion.puntosCuenta(c?.regularizacion) : 0;
+    const partes = [];
+    if (vencidos) partes.push(`${vencidos} contrato${vencidos === 1 ? '' : 's'} vencido${vencidos === 1 ? '' : 's'}`);
+    if (tram) partes.push(`${tram} trámite${tram === 1 ? '' : 's'} en curso`);
+    if (puntos > 0) partes.push(`${c?.regularizacion?.nivel === 'critica' ? 'cuenta sin regularizar' : 'por regularizar'} (${puntos} punto${puntos === 1 ? '' : 's'})`);
+    const hayBad = vencidos > 0 || items.some(x => x.tono === 'bad') || chip?.tono === 'bad';
+    const link = `<a href="#esperando" onclick="event.preventDefault(); Centro.irAEsperando()">Ver qué está esperando</a>`;
+    let tono, icono, html;
+    if (!items.length && !partes.length) {
+      if (this.contratos.length) { tono = 'ok'; icono = 'check-circle-2'; html = '<b>Cuenta al día.</b> Nada espera una acción.'; }
+      else { tono = 'info'; icono = 'info'; html = '<b>Cuenta nueva.</b> Sin contratos todavía: el primer paso es un contrato nuevo o un demo.'; }
+    } else if (!partes.length) {
+      tono = hayBad ? 'bad' : 'warn'; icono = 'alert-circle';
+      html = `<b>${items.length === 1 ? 'Una cosa espera' : `${items.length} cosas esperan`} una acción.</b> ${link}`;
+    } else {
+      tono = hayBad ? 'bad' : 'warn'; icono = 'alert-circle';
+      html = `<b>La cuenta pide atención:</b> ${this.esc(partes.join(' · '))}. ${link}`;
+    }
+    el.className = `cg-estado ${tono}`;
+    el.innerHTML = `<i data-lucide="${icono}"></i><span>${html}</span>`;
   },
 
-  // La acción que la cuenta pide primero — el botón primario de la cabecera,
-  // el destacado del menú y el dock móvil salen de aquí (una sola regla).
+  // La acción que la cuenta pide primero — marca "Sugerido" en la barra de
+  // verbos, encabeza el panel "Más acciones" y va en el dock móvil (una regla).
   _accionPrimaria() {
     if (!this.puedeCrearGestion()) return null;
-    // Lo primero de "Ahora" manda (auditoría de módulos 2026-09-30, R3): si la
-    // cuenta tiene algo esperando a alguien, ESE botón es el primario — no
-    // una renovación de 16 contratos por 2 radios sin contrato. Si la fila no
-    // trae botón primario (le toca a bodega o al cliente), se sigue abajo.
+    // Lo primero de "Qué está esperando" manda (auditoría de módulos
+    // 2026-09-30, R3): si la cuenta tiene algo esperando a alguien, ESA es la
+    // sugerida — no una renovación de 16 contratos por 2 radios sin contrato.
+    // Si la fila no trae botón primario (le toca a bodega o al cliente), se
+    // sigue abajo.
     const primera = this._itemsAhora()[0];
     const deAhora = primera ? this._primariaDe(primera.btns) : null;
     if (deAhora) return { ...deAhora, hint: String(primera.t || '').replace(/<[^>]+>/g, '') };
@@ -172,53 +219,347 @@ Object.assign(window.Centro, {
     if (est.tipo === 'consolidada' && this._wcEnVentana(est.maestro)) return { onclick: `Centro.wizContrato('${this.esc(est.maestro.id)}')`, label: 'Renovar cuenta', hint: 'entra en ventana de renovación' };
     return null;
   },
-  _pintarPrimario() {
+
+  // El verbo de la CUENTA (quinto de la barra): su posición es fija y su
+  // nombre depende solo del estado de la cuenta (tres casos). Devuelve el
+  // mismo descriptor que los demás verbos.
+  _verboCuenta(est, tram, puedeG) {
+    if (!puedeG) return null;
+    if (tram) return { id: 'cuenta', icono: 'refresh-cw', label: 'Ver renovación en trámite', onclick: `Centro.abrirGestion('ct-${this.esc(tram.id)}')`, hint: `${tram.contrato_id || ''} — abre el expediente` };
+    if (est.tipo === 'nueva') return { id: 'cuenta', icono: 'file-plus', label: 'Nuevo contrato', onclick: 'Centro.wizContrato()', hint: 'el primer contrato de la cuenta' };
+    if (est.tipo === 'sin_contrato') return { id: 'cuenta', icono: 'file-plus', label: 'Nuevo contrato', onclick: 'Centro.wizContrato({renovarCuenta:true})', hint: `cubre los ${est.custodia} radio${est.custodia === 1 ? '' : 's'} que el cliente aún tiene` };
+    if (est.tipo === 'fragmentada') return { id: 'cuenta', icono: 'refresh-cw', label: 'Renovar cuenta', onclick: 'Centro.wizContrato({renovarCuenta:true})', hint: `consolida ${est.renovables.length} contratos en uno` };
+    // Consolidada: un solo contrato. Se renueva cuando entra en ventana o
+    // cuando hay radios sueltos que cubrir; si no, se dice desde cuándo.
+    const m = est.maestro;
+    const enVentana = this._wcEnVentana(m);
+    const custodia = this._wcCustodia().length;
+    if (enVentana || custodia) return { id: 'cuenta', icono: 'refresh-cw', label: 'Renovar cuenta', onclick: `Centro.wizContrato('${this.esc(m.id)}')`, hint: enVentana ? 'entra en ventana de renovación' : `cubre ${custodia} radio(s) sin contrato` };
+    const v = this._vencInfo(m);
+    return { id: 'cuenta', icono: 'refresh-cw', label: 'Renovar cuenta', onclick: `Centro.wizContrato('${this.esc(m.id)}')`, ok: false,
+      motivo: `${m.contrato_id || 'El contrato'} todavía no entra en ventana de renovación${v && v.dias != null ? ` (vence en ${v.dias} días)` : ''}. Para agregar radios usa Agregar equipos.` };
+  },
+
+  // Barra de verbos: Cotizar · Agregar equipos · Reemplazar · Demo · [cuenta]
+  // · Más acciones. SIEMPRE los mismos, en el mismo orden; lo que no aplica
+  // sale en gris con el motivo (title y toast), nunca escondido. La sugerida
+  // se marca, no se mueve. Quien no inicia gestiones (bodega, contabilidad)
+  // ve solo Cotizar (si puede) y Más acciones.
+  pintarVerbos() {
+    const cont = document.getElementById('cgVerbos');
+    const c = this.cliente;
+    if (!cont || !c) return;
+    const puedeG = this.puedeCrearGestion();
+    const est = this._cuentaEstado();
+    const tram = this._renovacionEnTramite();
+    const hayRadios = this.equipos.some(e => ['en_cliente', 'asignado_contrato'].includes(e.estado));
+    const hayContrato = est.renovables.length > 0;
     const P = this._accionPrimaria();
-    const btn = document.getElementById('btnPrimario');
-    if (btn) {
-      btn.classList.toggle('hidden', !P);
-      if (P) { btn.textContent = P.label; btn.setAttribute('onclick', P.onclick); btn.title = P.hint || ''; }
-    }
-    // El "Nueva gestión" de la cabecera sigue la misma regla que el del dock:
-    // quien no crea gestiones (bodega, contabilidad) no ve el botón (D17).
-    document.getElementById('btnGestion')?.classList.toggle('hidden', !this.puedeCrearGestion());
+    const id = encodeURIComponent(c.id);
+    const V = (d) => {
+      if (!d) return '';
+      const sug = P && d.onclick && P.onclick === d.onclick;
+      if (d.ok === false) {
+        return `<button type="button" class="cg-verbo off${d.cls ? ` ${d.cls}` : ''}" data-verbo="${d.id}" aria-disabled="true" title="${this.esc(d.motivo)}"
+          onclick="Toast.show(${this.esc(JSON.stringify(d.motivo))}, 'warn')"><i data-lucide="${d.icono}"></i>${this.esc(d.label)}</button>`;
+      }
+      return `<button type="button" class="cg-verbo${sug ? ' is-sug' : ''}${d.cls ? ` ${d.cls}` : ''}" data-verbo="${d.id}" title="${this.esc(d.hint || '')}"
+        onclick="${d.onclick}"><i data-lucide="${d.icono}"></i>${this.esc(d.label)}${sug ? `<span class="sug">Sugerido</span>` : ''}</button>`;
+    };
+    const verbos = [
+      this._puedeCotizar()
+        ? { id: 'cotizar', icono: 'receipt', label: 'Cotizar', onclick: `location.href='../cotizaciones/nueva-cotizacion.html?cliente_id=${id}&from=centro'`, hint: 'abre el editor con este cliente ya elegido' }
+        : null,
+      puedeG ? { id: 'agregar', icono: 'plus', label: 'Agregar equipos', onclick: 'Centro.wizAgregarEquipos()', hint: 'radios nuevos por anexo al contrato de la cuenta',
+        ok: hayContrato && !tram,
+        motivo: tram ? 'Hay una renovación en trámite: los equipos nuevos entran por ahí.' : 'La cuenta no tiene contrato vigente donde colgar el anexo: empieza por Nuevo contrato.' } : null,
+      puedeG ? { id: 'reemplazar', icono: 'repeat', label: 'Reemplazar', onclick: 'Centro.wizReemplazo()', hint: 'un radio dañado por otro; el taller propone y administración aprueba',
+        ok: hayRadios, motivo: 'El cliente no tiene radios en campo que reemplazar.' } : null,
+      puedeG ? { id: 'demo', icono: 'radio', label: 'Demo', onclick: 'Centro.wizDemo()', hint: 'prueba sin cargo, termina con la devolución' } : null,
+      this._verboCuenta(est, tram, puedeG),
+      { id: 'mas', icono: 'more-horizontal', label: 'Más acciones', onclick: 'Centro.abrirMenu()', hint: 'todas las acciones de la cuenta', cls: 'cg-verbo--mas' },
+    ];
+    cont.innerHTML = `<span class="lbl">Acciones</span>${verbos.map(V).join('')}`;
+    // Editar / ver datos: arriba a la derecha, siempre en el mismo sitio.
+    const ed = document.getElementById('fEditar');
+    if (ed) ed.innerHTML = `<a class="btn btn-ghost" href="./ficha.html?id=${id}&from=centro" title="${this._puedeEditarCliente() ? 'RUC, representante, contacto, vendedor' : 'Solo lectura: los cambios los hace cobros'}">
+      <i data-lucide="${this._puedeEditarCliente() ? 'pencil' : 'eye'}"></i> ${this._puedeEditarCliente() ? 'Editar datos' : 'Ver datos'}</a>`;
+    // Dock móvil: Acciones + la sugerida.
     const dock = document.getElementById('cgDock');
-    if (dock) dock.innerHTML = !this.puedeCrearGestion() ? '' : `<span aria-hidden="true"></span>
-      <button class="btn" onclick="Centro.abrirMenuDesdeDock()">Nueva gestión ▾</button>
-      ${P ? `<button class="btn btn-primary" onclick="${P.onclick}">${P.label}</button>` : ''}`;
+    if (dock) dock.innerHTML = !puedeG && !this._puedeCotizar() ? '' : `<span aria-hidden="true"></span>
+      <button class="btn" onclick="Centro.abrirMenu()">Acciones <i data-lucide="chevron-down"></i></button>
+      ${P ? `<button class="btn btn-primary" onclick="${P.onclick}">${this.esc(P.label)}</button>` : `<span></span>`}`;
   },
-  abrirMenuDesdeDock() {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    setTimeout(() => document.getElementById('cgMenu')?.classList.remove('hidden'), 250);
+  _pintarPrimario() { this.pintarVerbos(); },
+
+  // Tarjeta "Contacto": representante, contacto, dirección, documentos.
+  pintarContacto() {
+    const el = document.getElementById('fContacto');
+    const c = this.cliente;
+    if (!el || !c) return;
+    const id = encodeURIComponent(c.id);
+    const fila = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : '';
+    const rep = c.representante
+      ? `${this.esc(c.representante)}${c.representante_cedula ? ` · ${c.representante_doc_tipo === 'pasaporte' ? 'pasaporte' : 'cédula'} <span class="cg-mono">${this.esc(c.representante_cedula)}</span>` : ''}${c.representante_email ? `<br><span style="color:var(--fg-3);">${this.esc(c.representante_email)}</span>` : ''}`
+      : '';
+    const tel = [c.telefono, c.email].filter(Boolean).map(x => this.esc(x)).join(' · ');
+    const docs = this._puedeVerDocs()
+      ? `<a href="#documentos" onclick="event.preventDefault(); Centro.mostrarTab('blkDocumentos')">${this._docsN == null ? 'Ver el expediente' : `${this._docsN} archivo${this._docsN === 1 ? '' : 's'}`}</a> · registro público, cédula, poderes`
+      : '';
+    const filas = fila('Representante', rep) + fila('Contacto', tel) + fila('Acuses', c.email_acuses ? this.esc(c.email_acuses) : '')
+      + fila('Dirección', c.direccion ? this.esc(c.direccion) : '') + fila('Documentos', docs);
+    el.innerHTML = `<div class="cg-cardhd"><h2 class="cg-h2">Contacto</h2>
+        <a class="mas" href="./ficha.html?id=${id}&from=centro">${this._puedeEditarCliente() ? 'Editar ›' : 'Ver ficha ›'}</a></div>
+      ${filas ? `<dl class="cg-dl">${filas}</dl>` : `<p style="margin:0; padding:0 16px 14px; font-size:13px; color:var(--fg-3);">Sin datos de contacto registrados.</p>`}`;
   },
-  toggleMas(e) {
-    e.stopPropagation();
-    document.getElementById('cgMenu')?.classList.add('hidden');
-    const m = document.getElementById('cgMasMenu');
-    if (!m) return;
-    m.classList.toggle('hidden');
-    if (!m.classList.contains('hidden')) {
-      document.addEventListener('click', () => m.classList.add('hidden'), { once: true });
-    }
+
+  // ── Pestañas ──────────────────────────────────────────────────────────
+  _tabActiva: 'blkResumen',
+  mostrarTab(id) {
+    document.querySelectorAll('#cgTabs .cg-tab').forEach(b => {
+      const on = b.dataset.tab === id;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.querySelectorAll('#vistaFicha .cg-panel').forEach(p => { p.hidden = p.id !== id; });
+    this._tabActiva = id;
+    if (id === 'blkActividad') this.cargarActividad();
+    if (id === 'blkDocumentos') this.pintarDocumentos();
+    if (window.lucide?.createIcons) lucide.createIcons();
   },
+  // Compatibilidad: muchos botones dicen abrirBloque('blkContratos'); ahora
+  // es la pestaña, y se lleva la vista hasta ella.
   abrirBloque(id) {
-    const d = document.getElementById(id);
-    if (!d) return;
-    d.open = true;
-    d.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    this.mostrarTab(id);
+    document.getElementById('cgTabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   },
-  // Qué bloque abre solo al entrar: el que tenga trabajo vivo; si no, Contratos.
+  // Qué pestaña se abre al entrar: Gestiones si se llega por deep-link a un
+  // expediente (?g=); si no, Resumen. Una vez por cliente (el listener en
+  // vivo repinta sin mover la pestaña).
   _bloquesDe: null,
   _abrirBloques(clienteId) {
     if (this._bloquesDe === clienteId) return;
     this._bloquesDe = clienteId;
-    const vivas = (this.gestiones || []).some(g => GestionesService.enTramite(g)) || this._tramitesContrato().length > 0;
-    const ids = ['blkGestiones', 'blkContratos', 'blkEquipos', 'blkActividad'];
-    const abrir = this.gSel ? 'blkGestiones' : vivas ? 'blkGestiones' : 'blkContratos';
-    ids.forEach(id => { const d = document.getElementById(id); if (d) d.open = id === abrir; });
-    const act = document.getElementById('fActividad');
-    if (act) act.innerHTML = '<div class="cg-vacio">Ábrelo para cargar el historial.</div>';
+    this._eqSel = new Set();
+    this._docsN = null; this._docsDe = null;
     this._actividadDe = null;
+    const act = document.getElementById('fActividad');
+    if (act) act.innerHTML = '<div class="cg-vacio">Cargando el historial…</div>';
+    const tabDocs = document.getElementById('tabDocumentos');
+    if (tabDocs) tabDocs.classList.toggle('hidden', !this._puedeVerDocs());
+    this.mostrarTab(this.gSel ? 'blkGestiones' : 'blkResumen');
+    if (this._puedeVerDocs()) this.pintarDocumentos().catch(() => {});
+  },
+
+  // ── Pestaña Resumen: equipos por contrato + últimos movimientos ───────
+  pintarResumenTab() {
+    const cont = document.getElementById('fResumenTab');
+    if (!cont) return;
+    const esc = (v) => this.esc(v);
+    const enTram = this._idsEnTramite();
+    const operativos = this.contratos.filter(c => this._esOperativo(c, enTram));
+    if (!this.equipos.length && !this.contratos.length) {
+      cont.innerHTML = `<div class="cg-empty">Cuenta nueva: sin contratos ni equipos todavía.
+        ${this.puedeCrearGestion() ? `<div class="cta"><button class="btn btn-primary cg-act" onclick="Centro.wizContrato()">Nuevo contrato</button>
+        <button class="btn btn-ghost cg-act" onclick="Centro.wizDemo()">Demo</button></div>` : ''}</div>`;
+      return;
+    }
+    // Grupos: un contrato por fila, luego sin contrato, taller y bodega.
+    const grupos = new Map();
+    const add = (k, e) => { if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(e); };
+    for (const e of this.equipos) {
+      if (['en_taller', 'devuelto_revision'].includes(e.estado)) add('__taller', e);
+      else if (e.estado === 'por_clasificar') add('__bodega', e);
+      else if (['en_cliente', 'asignado_contrato'].includes(e.estado)) add(e.asignacion?.contrato_doc_id ? `c:${e.asignacion.contrato_doc_id}` : '__sin', e);
+    }
+    const PAL = ['#0B2A47', '#0074AC', '#66BCE7', '#0F3A5F', '#005781', '#99D3EF', '#1D4ED8', '#334155'];
+    const modelos = (items) => { const m = {}; items.forEach(e => { const k = e.modelo_label || 'sin modelo'; m[k] = (m[k] || 0) + 1; });
+      const xs = Object.entries(m).sort((a, b) => b[1] - a[1]); return esc(xs.slice(0, 2).map(([k, n]) => `${k} ×${n}`).join(', ')) + (xs.length > 2 ? ` <span style="color:var(--fg-3);">+${xs.length - 2}</span>` : ''); };
+    const venceDe = (c) => { const d = c?.fecha_vencimiento?.toDate ? c.fecha_vencimiento.toDate() : (c?.fecha_vencimiento ? new Date(c.fecha_vencimiento) : null); return d && !isNaN(d) ? d.getTime() : Infinity; };
+    const contratosConRadios = [...grupos.keys()].filter(k => k.startsWith('c:')).map(k => ({ k, c: this.contratos.find(x => x.id === k.slice(2)) }))
+      .sort((a, b) => venceDe(a.c) - venceDe(b.c));
+    const filas = []; const segs = [];
+    let col = 0;
+    const chipVenc = (c) => {
+      if (!c) return '';
+      if (!this._aplicaVenc(c)) return `<span class="cg-chip cg-chip--muted">${esc(this._estadoLabel(c))}</span>`;
+      const v = this._vencInfo(c);
+      if (!v) return `<span class="cg-chip cg-chip--ok">Vigente</span>`;
+      if (v.estado === 'vencido') return `<span class="cg-chip cg-chip--bad">Venció hace ${-v.dias} día${-v.dias === 1 ? '' : 's'}</span>`;
+      if (v.estado === 'por_vencer') return `<span class="cg-chip cg-chip--warn">Vence en ${v.dias} día${v.dias === 1 ? '' : 's'}</span>`;
+      return `<span class="cg-chip cg-chip--ok">Vigente</span>`;
+    };
+    for (const { k, c } of contratosConRadios) {
+      const items = grupos.get(k); const color = PAL[col++ % PAL.length];
+      segs.push({ n: items.length, color });
+      filas.push(`<tr>
+        <td style="white-space:nowrap;"><span class="cg-sw" style="background:${color};"></span>${c ? `<a class="cg-mono" href="#" onclick="Centro.verContrato('${esc(c.id)}'); return false;">${esc(c.contrato_id || c.id)}</a>` : `<span class="cg-mono">${esc(items[0].asignacion?.contrato_id || '—')}</span>`}</td>
+        <td>${modelos(items)}${items.some(e => e.propiedad === 'cliente') ? ` <span style="color:var(--fg-3);">· ${items.filter(e => e.propiedad === 'cliente').length} del cliente</span>` : ''}</td>
+        <td style="text-align:right;"><b>${items.length}</b></td>
+        <td style="white-space:nowrap;">${c?.fecha_vencimiento && this._aplicaVenc(c) ? this._fmtFecha(c.fecha_vencimiento) : '—'}</td>
+        <td>${chipVenc(c)}</td></tr>`);
+    }
+    const puedeG = this.puedeCrearGestion();
+    const sin = grupos.get('__sin');
+    if (sin) {
+      segs.push({ n: sin.length, color: '#E0A93A' });
+      const tram = this._renovacionEnTramite();
+      const salida = !puedeG ? '' : tram
+        ? `<a href="#" onclick="Centro.abrirGestion('ct-${esc(tram.id)}'); return false;" style="font-weight:600;">Los cubre la renovación en trámite ›</a>`
+        : operativos.some(c => this._aplicaVenc(c))
+          ? `<a href="#" onclick="Centro.wizRegularizarCuenta(); return false;" style="font-weight:600;">Actualizar seriales ›</a>`
+          : `<a href="#" onclick="Centro.wizContrato({renovarCuenta:true}); return false;" style="font-weight:600;">Nuevo contrato que los cubra ›</a>`;
+      filas.push(`<tr><td><span class="cg-sw" style="background:#E0A93A;"></span><b>Sin contrato</b></td><td>${modelos(sin)}</td><td style="text-align:right;"><b>${sin.length}</b></td><td>—</td><td>${salida || '<span class="cg-chip cg-chip--warn">Por regularizar</span>'}</td></tr>`);
+    }
+    const tal = grupos.get('__taller');
+    if (tal) {
+      segs.push({ n: tal.length, color: '#9AA7B4' });
+      const ids = [...new Set(tal.map(e => e.orden_actual_id).filter(Boolean))].slice(0, 60);
+      filas.push(`<tr><td><span class="cg-sw" style="background:#9AA7B4;"></span><b>En taller</b></td><td>${modelos(tal)}</td><td style="text-align:right;"><b>${tal.length}</b></td><td>—</td>
+        <td>${ids.length ? `<a class="cg-mono" href="../ordenes/index.html?ids=${ids.map(encodeURIComponent).join(',')}" style="font-size:12.5px;">${ids.length === 1 ? ids[0] : `${ids.length} órdenes`}</a>` : '<span style="color:var(--fg-3);">vuelven al entregarse la orden</span>'}</td></tr>`);
+    }
+    const bod = grupos.get('__bodega');
+    if (bod) {
+      segs.push({ n: bod.length, color: '#C9D6E3' });
+      filas.push(`<tr><td><span class="cg-sw" style="background:#C9D6E3;"></span><b>Por clasificar</b></td><td>${modelos(bod)}</td><td style="text-align:right;"><b>${bod.length}</b></td><td>—</td><td><span style="color:var(--fg-3);">cola de bodega, no es deuda de la cuenta</span></td></tr>`);
+    }
+    const total = segs.reduce((s, x) => s + x.n, 0);
+    const sinRadios = operativos.filter(c => !grupos.has(`c:${c.id}`)).length;
+    const N = this._numerosCuenta();
+    const sub = [`${this.equipos.length} radio${this.equipos.length === 1 ? '' : 's'}`, `${N.enContrato} en contrato`, N.sinContrato ? `${N.sinContrato} sin contrato` : '', N.taller ? `${N.taller} en taller` : '', N.porClasificar ? `${N.porClasificar} por clasificar` : ''].filter(Boolean).join(' · ');
+    const equiposHtml = `
+      <div class="cg-sechd"><h2 class="cg-h2">Equipos por contrato</h2><span class="sub">${sub}</span>
+        <a class="mas" href="#" onclick="Centro.mostrarTab('blkContratos'); return false;">Ver contratos ›</a></div>
+      ${total ? `<div class="cg-barra" aria-hidden="true">${segs.map(s => `<span style="flex:${s.n}; background:${s.color};"></span>`).join('')}</div>` : ''}
+      ${filas.length ? `<div class="cg-twrap"><table class="cg-tabla"><thead><tr><th>Contrato</th><th>Modelos</th><th style="text-align:right;">Radios</th><th>Vence</th><th>Estado</th></tr></thead><tbody>${filas.join('')}</tbody></table></div>`
+        : `<div class="cg-empty">Sin equipos en el inventario de esta cuenta.</div>`}
+      ${sinRadios ? `<p style="margin:10px 0 0; font-size:12.5px; color:var(--fg-3);">${sinRadios === 1 ? 'Otro contrato vigente no tiene' : `Otros ${sinRadios} contratos vigentes no tienen`} radios en campo (consola, servicios o pendiente de entrega). ${sinRadios === 1 ? 'Está' : 'Están'} en la pestaña Contratos.</p>` : ''}`;
+    // Últimos movimientos: contratos, gestiones y órdenes abiertas en una
+    // sola línea de tiempo (lo que ya está cargado; nada se consulta de más).
+    const ev = this._eventosRecientes().slice(0, 8);
+    const movHtml = `
+      <div class="cg-sechd" style="margin-top:22px;"><h2 class="cg-h2">Últimos movimientos</h2><span class="sub">contratos, gestiones y órdenes</span>
+        <a class="mas" href="#" onclick="Centro.mostrarTab('blkActividad'); return false;">Historial de la ficha ›</a></div>
+      ${ev.length ? `<ol class="cg-tl">${ev.map(x => `<li><span class="cu">${esc(this._cuandoCorto(x.at))}</span><span class="ic ${x.tono || ''}"><i data-lucide="${x.icono}"></i></span><span class="tx">${x.html}</span></li>`).join('')}</ol>`
+        : `<p style="margin:0; font-size:13px; color:var(--fg-3);">Sin movimientos registrados en esta cuenta.</p>`}`;
+    cont.innerHTML = equiposHtml + movHtml;
+  },
+  _cuandoCorto(d) {
+    if (!d || isNaN(d)) return '—';
+    const hoy = new Date();
+    const mismo = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    if (mismo(d, hoy)) return 'Hoy';
+    const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
+    if (mismo(d, ayer)) return 'Ayer';
+    return d.getFullYear() === hoy.getFullYear() ? (this._fmtFechaCorta(d) || '—') : this._fmtFecha(d);
+  },
+  _eventosRecientes() {
+    const out = [];
+    const fecha = (v) => { const d = v?.toDate ? v.toDate() : (v ? new Date(v) : null); return d && !isNaN(d) ? d : null; };
+    const esc = (v) => this.esc(v);
+    const mono = (t) => `<span class="cg-mono">${esc(t)}</span>`;
+    const push = (at, icono, tono, html) => { const d = fecha(at); if (d) out.push({ at: d, icono, tono, html }); };
+    for (const c of this.contratos || []) {
+      if (c.deleted) continue;
+      const id = c.contrato_id || c.id;
+      const link = `<a href="#" onclick="Centro.verContrato('${esc(c.id)}'); return false;">${mono(id)}</a>`;
+      const nombre = c.accion === 'Renovación' ? 'La renovación' : this._codigoTipo(c) === 'DEMO' ? 'El demo' : this._codigoTipo(c) === 'TEMP' ? 'El contrato temporal' : this._codigoTipo(c) === 'REEMP' ? 'El reemplazo' : 'El contrato';
+      push(c.fecha_creacion, 'file-text', '', `${nombre} ${link} se creó${c.creado_por_email ? ` <span class="quien">· ${esc(String(c.creado_por_email).split('@')[0])}</span>` : ''}.`);
+      push(c.fecha_aprobacion, 'check-circle-2', 'info', `Administración aprobó ${nombre.toLowerCase()} ${link}.`);
+      push(c.firmado_fecha, 'pen-line', 'ok', `${nombre} ${link} quedó firmado${c.firmado_tipo === 'digital' ? ' por enlace' : ''}.`);
+      push(c.fecha_activacion, 'check-circle-2', 'ok', `${nombre} ${link} se activó.`);
+      push(c.fecha_entrega_ultima, 'truck', 'ok', `Entrega de equipos de ${link}.`);
+      push(c.vencido_at, 'x-circle', 'warn', `${nombre} ${link} se cerró${c.vencido_motivo ? ` — ${esc(c.vencido_motivo)}` : ''}.`);
+      push(c.anulado_at || c.fecha_anulacion, 'x-circle', 'warn', `${nombre} ${link} se anuló${c.anulacion_motivo ? ` — ${esc(c.anulacion_motivo)}` : ''}.`);
+    }
+    for (const g of this.gestiones || []) {
+      const tipo = (typeof GestionesService !== 'undefined' && GestionesService.tipoLabel) ? GestionesService.tipoLabel(g.tipo) : (g.tipo || 'Gestión');
+      const link = `<a href="#" onclick="Centro.abrirGestion('${esc(g.id)}'); return false;">${mono(g.id)}</a>`;
+      push(g.fecha_solicitud, 'refresh-cw', '', `Gestión ${link} (${esc(tipo.toLowerCase())}) creada${g.responsable_email ? ` <span class="quien">· ${esc(String(g.responsable_email).split('@')[0])}</span>` : ''}.`);
+      push(g.anulada_at, 'x-circle', 'warn', `Gestión ${link} (${esc(tipo.toLowerCase())}) anulada${g.anulada_motivo ? ` — ${esc(g.anulada_motivo)}` : ''}.`);
+      push(g.cerrada_at || g.cierre?.at, 'check-circle-2', 'ok', `Gestión ${link} (${esc(tipo.toLowerCase())}) cerrada.`);
+    }
+    for (const o of this.ordenesAbiertas || []) {
+      push(o.fecha_creacion || o.creado_en, 'wrench', '', `Orden <a class="cg-mono" href="../ordenes/index.html?ids=${encodeURIComponent(o.id)}">${esc(o.id)}</a> (${esc(o.tipo_de_servicio || 'servicio')}) · ${esc(o.estado_reparacion || '')}${(o.equipos || []).length ? ` · ${o.equipos.length} equipo${o.equipos.length === 1 ? '' : 's'}` : ''}.`);
+    }
+    return out.sort((a, b) => b.at - a.at);
+  },
+
+  // ── Pestaña Documentos (expediente legal, PII): la misma lista que antes
+  // abría un modal desde el "⋯". Solo quien puede verlos tiene la pestaña. ──
+  _docsDe: null,
+  _docsN: null,
+  async pintarDocumentos() {
+    const cont = document.getElementById('fDocumentos');
+    const c = this.cliente;
+    if (!cont || !c || !this._puedeVerDocs()) return;
+    if (this._docsDe === c.id) return;
+    this._docsDe = c.id;
+    const urlSubir = `./ficha.html?id=${encodeURIComponent(c.id)}&from=centro&seccion=documentos`;
+    cont.innerHTML = `<p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">Expediente legal de <b>${this.esc(c.nombre || '')}</b>. Cada archivo se abre con un enlace que vence a los 5 minutos y queda registrado en la auditoría de PII.</p>
+      <div id="cgDocsList"><div class="cg-vacio">Cargando documentos…</div></div>
+      <p style="margin:12px 0 0; font-size:12.5px;"><a href="${urlSubir}">Cargar un documento ›</a></p>`;
+    try {
+      const docs = await ClienteDocumentosService.list(c.id);
+      if (this.cliente?.id !== c.id) return;
+      this._docsN = docs.length;
+      const n = document.getElementById('nDocumentos'); if (n) n.textContent = docs.length ? String(docs.length) : '';
+      const lista = document.getElementById('cgDocsList');
+      if (lista) lista.innerHTML = docs.length ? docs.map(d => this._docFilaHtml(d)).join('') : `<div class="cg-vacio">No hay documentos cargados para este cliente.</div>`;
+      this.pintarContacto();
+      if (window.lucide?.createIcons) lucide.createIcons();
+    } catch (err) {
+      const lista = document.getElementById('cgDocsList');
+      if (lista) lista.innerHTML = `<p style="color:#b91c1c; font-size:13px;">No se pudieron cargar los documentos: ${this.esc(err?.message || err)}</p>`;
+    }
+  },
+
+  // ── Selección en Equipos: la gestión sale de lo marcado ──────────────
+  _eqSel: null,
+  _eqSelIds() { return [...(this._eqSel || [])]; },
+  _eqSeleccionable(e) { return ['en_cliente', 'asignado_contrato'].includes(e.estado); },
+  _eqMarcar(id, on) {
+    const s = this._eqSel || (this._eqSel = new Set());
+    if (on) s.add(id); else s.delete(id);
+    document.querySelector(`#fEquipos tr[data-eq="${CSS.escape(id)}"]`)?.classList.toggle('is-sel', !!on);
+    this._pintarSelBar();
+  },
+  _eqMarcarGrupo(k, on) {
+    const s = this._eqSel || (this._eqSel = new Set());
+    for (const e of this.equipos) {
+      if (!this._eqSeleccionable(e)) continue;
+      const ke = e.asignacion?.contrato_doc_id ? `c:${e.asignacion.contrato_doc_id}` : 'sin_contrato';
+      if (ke !== k) continue;
+      if (on) s.add(e.id); else s.delete(e.id);
+    }
+    this.pintarEquipos();
+    if (window.lucide?.createIcons) lucide.createIcons();
+  },
+  _eqLimpiarSel() {
+    this._eqSel = new Set();
+    this.pintarEquipos();
+    if (window.lucide?.createIcons) lucide.createIcons();
+  },
+  _pintarSelBar() {
+    const bar = document.getElementById('cgSelBar');
+    if (!bar) return;
+    const sel = this._eqSelIds().map(id => this.equipos.find(e => e.id === id)).filter(Boolean);
+    if (!sel.length) { bar.innerHTML = ''; return; }
+    const n = sel.length;
+    const contratos = new Set(sel.map(e => e.asignacion?.contrato_id || 'sin contrato'));
+    const puedeG = this.puedeCrearGestion();
+    const bajables = sel.filter(e => e.asignacion?.contrato_doc_id).length;
+    const corregibles = sel.filter(e => !e.pendiente_devolucion && !(e.asignacion?.gestion_doc_id && !e.asignacion?.contrato_doc_id)).length;
+    const off = (ok, motivo) => ok ? '' : ` disabled aria-disabled="true" title="${this.esc(motivo)}"`;
+    bar.innerHTML = `<span class="n">${n} seleccionado${n === 1 ? '' : 's'}</span>
+      <span class="s">${contratos.size === 1 ? `de <span class="cg-mono">${this.esc([...contratos][0])}</span>` : `de ${contratos.size} contratos`}</span>
+      <div class="btns">
+        ${puedeG ? `<button type="button" class="btn btn-primary" onclick="Centro.wizReemplazo({pre: Centro._eqSelIds()})"><i data-lucide="repeat"></i> Reemplazar ${n === 1 ? 'este' : `estos ${n}`}</button>` : ''}
+        ${puedeG ? `<button type="button" class="btn" onclick="Centro.wizBaja({pre: Centro._eqSelIds()})"${off(bajables > 0, 'La baja es de radios con contrato; los sueltos se corrigen con Actualizar seriales')}><i data-lucide="undo-2"></i> Dar de baja</button>` : ''}
+        ${puedeG ? `<button type="button" class="btn" onclick="Centro.wizCambioSerial({pre: Centro._eqSelIds()})"${off(corregibles > 0, 'Los radios de un demo o pendientes de devolución no se corrigen por aquí')}><i data-lucide="arrow-left-right"></i> Corregir serial</button>` : ''}
+        <button type="button" class="btn btn-dark" aria-label="Quitar la selección" onclick="Centro._eqLimpiarSel()"><i data-lucide="x"></i></button>
+      </div>`;
+    if (window.lucide?.createIcons) lucide.createIcons();
   },
   _actividadDe: null,
   async cargarActividad() {

@@ -68,9 +68,10 @@ Object.assign(window.Centro, {
     else this.wizTerminacionCuenta();
   },
 
+  // opts.pre: ids del pool marcados en la pestaña Equipos de la ficha (2026-10-08).
   wizBaja(opts = {}) {
     this._cerrarModal();
-    document.getElementById('cgMenu')?.classList.add('hidden');
+    this.cerrarMenu?.();
     const termCuenta = !!opts.terminacionCuenta;
     const termDe = opts.terminacionDe || null;
     const contratoTerm = termDe ? this.contratos.find(c => c.id === termDe) : null;
@@ -164,6 +165,13 @@ Object.assign(window.Centro, {
     });
     this._ssMontar('wb');
     if (esTerm) this._bajaPreview();
+    else if (Array.isArray(opts.pre) && opts.pre.length) {
+      this._ssPreMarcar('wb', opts.pre.map(pid => {
+        const ix = this.equipos.findIndex(e => e.id === pid);
+        return { inp: ix >= 0 ? document.querySelector(`#cgModal input[data-bsel="${ix}"]`) : null, on: null };
+      }));
+      this._bajaPreview();
+    }
   },
 
   _bajaItemsSeleccion() {

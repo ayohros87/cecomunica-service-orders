@@ -132,6 +132,23 @@ Object.assign(window.Centro, {
     this._ssAplicar(id);
   },
 
+  // Pre-marcar filas que vienen de la selección hecha en la pestaña Equipos
+  // de la ficha (2026-10-08): `pares` = [{ inp, on }] con el checkbox de cada
+  // fila y el handler que el wizard corre al marcarla a mano. Abre el grupo
+  // de cada una para que se VEA lo que llegó marcado.
+  _ssPreMarcar(id, pares) {
+    const st = this._ss[id];
+    if (!st || !pares.length) return;
+    for (const { inp, on } of pares) {
+      if (!inp || inp.disabled) continue;
+      inp.checked = true;
+      try { on?.(); } catch (e) { console.warn('[centro] premarcar:', e?.message || e); }
+      const k = inp.closest('tr[data-ssg]')?.dataset.ssg;
+      if (k) st.abiertos[k] = true;
+    }
+    this._ssAplicar(id);
+  },
+
   // Marca (checkbox) todas las filas disponibles de un grupo: dispara change
   // para que el wizard abra sus filas de configuración como si fuera a mano.
   _ssMarcarGrupo(id, k) {

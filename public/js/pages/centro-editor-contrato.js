@@ -35,7 +35,7 @@ Object.assign(window.Centro, {
     if (!ed.ok) { Toast.show(ed.texto, 'warn'); return; }
 
     this._cerrarModal();
-    document.getElementById('cgMenu')?.classList.add('hidden');
+    this.cerrarMenu?.();
     await Promise.all([this._cargarModelos(), this._cargarCargos()]);
     this._weC = c;
 

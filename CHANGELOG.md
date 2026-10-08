@@ -1,5 +1,34 @@
 # Changelog
 
+## [Centro: la ficha del cliente, versión 3] — 2026-10-08
+
+> Alberto: "la ficha es confusa, los badges de arriba esconden funciones y
+> ventas los ignora". Cambia el envase de la ficha individual, no las reglas.
+>
+> - **Cabecera sin badges.** Debajo del nombre, una frase en palabras ("La
+>   cuenta pide atención: 2 trámites en curso · por regularizar (3 puntos)")
+>   con un enlace a "Qué está esperando". Nada ahí se aprieta por error.
+> - **Barra de verbos fija.** Cotizar · Agregar equipos · Reemplazar · Demo ·
+>   Renovar cuenta (o Nuevo contrato, o Ver renovación en trámite) · Más
+>   acciones. Siempre en el mismo orden; lo que la cuenta pide primero se marca
+>   como "Sugerido" pero no se mueve; lo que no aplica sale en gris con el
+>   motivo, nunca escondido.
+> - **Pestañas en lugar de acordeones.** Resumen, Contratos, Equipos,
+>   Gestiones, Documentos y Actividad, cada una con su conteo. Resumen trae
+>   "Equipos por contrato" y "Últimos movimientos" (contratos, gestiones y
+>   órdenes en una sola línea de tiempo).
+> - **"Qué está esperando" a la derecha, siempre visible:** la cola de antes,
+>   con quién le toca y un botón por fila; debajo "La cuenta" en números y el
+>   Contacto del cliente.
+> - **Equipos con selección.** Se marcan radios (uno a uno o todo un contrato) y
+>   la barra inferior abre Reemplazar, Dar de baja o Corregir serial con esas
+>   filas ya marcadas en el wizard.
+> - **"Más acciones" es un panel completo** por intención (Dar equipos,
+>   Cambiar, Actualizar, Retirar, Contratos, Cliente y documentos), con
+>   buscador. Absorbe el "⋯" de la cabecera.
+> - En el teléfono los verbos van en una fila que se desliza, "Qué está
+>   esperando" sube arriba de las pestañas y el dock trae Acciones + la sugerida.
+
 ## [Home: una cotización borrada ya no pide visto bueno] — 2026-09-29
 
 > Alberto vio en el home "1 cotización por aprobar" y la cotización llevaba

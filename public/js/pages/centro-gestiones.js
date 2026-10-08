@@ -514,7 +514,7 @@ Object.assign(window.Centro, {
     if (!(this.gestiones || []).length && !tramites.length && !dormidos.length) {
       cont.innerHTML = `<div class="cg-empty">Sin gestiones registradas todavía.
         ${this.puedeCrearGestion() ? `<div class="cta"><button class="btn btn-primary cg-act"
-          onclick="event.stopPropagation(); document.getElementById('btnGestion')?.scrollIntoView({block:'center'}); document.getElementById('btnGestion')?.click()">Nueva gestión</button></div>` : ''}</div>`;
+          onclick="event.stopPropagation(); Centro.abrirMenu()">Nueva gestión</button></div>` : ''}</div>`;
       return;
     }
     const filaG = (g, atenuada) => {

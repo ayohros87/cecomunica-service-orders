@@ -132,7 +132,7 @@ Object.assign(window.Centro, {
 
   async wizAumento(preselId, opts = {}) {
     this._cerrarModal();
-    document.getElementById('cgMenu')?.classList.add('hidden');
+    this.cerrarMenu?.();
     await Promise.all([this._cargarModelos(), this._cargarCargos()]);
     const activos = this.contratos.filter(c => this._esVigente(c));
     // Adenda a contrato EN PAPEL (opts.papel): no hay contrato interno que

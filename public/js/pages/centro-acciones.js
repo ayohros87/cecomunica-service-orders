@@ -436,7 +436,5 @@ Object.assign(window.Centro, {
       m.classList.add('hidden');
       m.style.position = ''; m.style.left = ''; m.style.top = ''; m.style.right = ''; m.style.bottom = ''; m.style.maxHeight = '';
     });
-    document.getElementById('cgMenu')?.classList.add('hidden');
-    document.getElementById('cgMasMenu')?.classList.add('hidden');
   },
 });

@@ -84,14 +84,92 @@
     .cg-row--cli .cg-vend { font-size:12px; color:var(--fg-3); white-space:nowrap; }
     .cg-row--cli .arr { margin-left:0; text-align:center; }
     .cg-av.cg-av--off { background:var(--fg-4, #8A97A6); }
+    /* ── Ficha v3 (2026-10-08): cabecera sin badges, barra de verbos fija,
+       pestañas, columna "Qué está esperando", panel de acciones ── */
     /* Meta de la ficha: en escritorio una línea con " · "; en el teléfono, líneas cortas. */
-    #fNombre { margin:0; font-size:20px; }
+    #fNombre { margin:0; font-size:24px; line-height:1.15; }
     .cg-meta .m + .m::before { content:' · '; }
-    .cg-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:var(--sp-4) 0; }
-    @media (max-width:760px){ .cg-kpis { grid-template-columns:1fr 1fr; } }
-    .cg-kpi { background:var(--surface-card); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:12px 15px; }
-    .cg-kpi .v { font-size:22px; font-weight:700; color:var(--navy); font-variant-numeric:tabular-nums; line-height:1.1; }
-    .cg-kpi .l { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--fg-3); font-weight:600; margin-top:4px; }
+    .cg-ficha { background:var(--surface-card); border:1px solid var(--border-default); border-radius:12px; overflow:hidden; }
+    .cg-ident { display:flex; gap:16px; align-items:flex-start; padding:20px 22px 16px; flex-wrap:wrap; }
+    .cg-ident .cg-txt { flex:1 1 380px; min-width:0; display:flex; flex-direction:column; gap:5px; }
+    .cg-ident .cg-edit { display:flex; gap:8px; align-items:center; flex:none; }
+    /* Estado de la cuenta: UNA frase en palabras; nada aquí se aprieta. Las
+       salidas viven en "Qué está esperando". */
+    .cg-estado { margin:4px 0 0; display:flex; gap:8px; align-items:flex-start; font-size:14px; line-height:1.4; }
+    .cg-estado i, .cg-estado svg { width:16px; height:16px; flex:none; margin-top:2px; }
+    .cg-estado.ok { color:var(--cg-ok-deep, #17714B); }
+    .cg-estado.warn { color:var(--cg-warn-deep, #8A6415); }
+    .cg-estado.bad { color:var(--cg-bad-deep, #A03030); }
+    .cg-estado.info { color:var(--cg-info-deep, #0B5E8A); }
+    .cg-estado a { font-weight:600; }
+    /* Barra de verbos: SIEMPRE los mismos seis, en el mismo orden. Lo que no
+       aplica sale en gris CON el motivo (title), nunca escondido. */
+    .cg-verbos { display:flex; gap:8px; align-items:center; padding:10px 22px; border-top:1px solid var(--border-subtle); background:#FBFCFD; flex-wrap:wrap; }
+    .cg-verbos .lbl { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--fg-3); font-weight:600; margin-right:4px; }
+    .cg-verbo { display:inline-flex; align-items:center; gap:8px; height:42px; padding:0 14px; border-radius:8px; border:1px solid var(--border-default);
+                background:var(--surface-card); color:var(--fg-1); font:600 13.5px var(--font-body); cursor:pointer; white-space:nowrap; text-decoration:none; }
+    .cg-verbo i, .cg-verbo svg { width:16px; height:16px; }
+    .cg-verbo:hover { border-color:var(--accent); background:#F6FBFE; }
+    .cg-verbo.is-sug { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft, #E6F4FB); }
+    .cg-verbo .sug { display:inline-flex; align-items:center; height:20px; padding:0 8px; border-radius:999px; background:var(--accent-soft, #E6F4FB); color:var(--accent-hover, #0074AC); font-size:11px; font-weight:600; }
+    .cg-verbo.off { color:var(--fg-4); background:var(--surface-sunken, #F6F9FB); border-style:dashed; cursor:not-allowed; }
+    .cg-verbo.off:hover { border-color:var(--border-default); background:var(--surface-sunken, #F6F9FB); }
+    /* Cuerpo: pestañas a la izquierda, "Qué está esperando" y datos a la derecha. */
+    .cg-body { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; margin-top:var(--sp-4); }
+    .cg-main { flex:999 1 560px; min-width:0; background:var(--surface-card); border:1px solid var(--border-default); border-radius:12px; }
+    .cg-aside { flex:1 1 300px; max-width:360px; min-width:280px; display:flex; flex-direction:column; gap:14px; }
+    .cg-tabs { display:flex; align-items:center; padding:0 18px; border-bottom:1px solid var(--border-default); overflow-x:auto; scrollbar-width:none; }
+    .cg-tabs::-webkit-scrollbar { display:none; }
+    .cg-tab { display:inline-flex; align-items:center; gap:8px; height:46px; padding:0 4px; margin-right:22px; border:0; border-bottom:2px solid transparent; background:none;
+              color:var(--fg-2); font:600 14px var(--font-body); cursor:pointer; white-space:nowrap; }
+    .cg-tab:hover { color:var(--fg-1); }
+    .cg-tab .n { display:inline-flex; align-items:center; height:20px; padding:0 7px; border-radius:999px; background:var(--surface-sunken, #EEF2F6); color:var(--fg-2); font-size:12px; font-weight:600; }
+    .cg-tab .n:empty { display:none; }
+    .cg-tab.is-on { color:var(--navy); border-bottom-color:var(--accent); }
+    .cg-tab.is-on .n { background:var(--accent-soft, #E6F4FB); color:var(--accent-hover, #0074AC); }
+    .cg-panel { padding:16px 18px 18px; }
+    .cg-panel[hidden] { display:none; }
+    .cg-h2 { margin:0; font-family:var(--font-display); font-weight:700; font-size:16px; color:var(--navy); }
+    .cg-sechd { display:flex; align-items:baseline; gap:12px; margin-bottom:10px; flex-wrap:wrap; }
+    .cg-sechd .sub { font-size:13px; color:var(--fg-3); }
+    .cg-sechd .mas { margin-left:auto; font-size:13px; font-weight:600; }
+    .cg-barra { display:flex; height:10px; border-radius:999px; overflow:hidden; gap:2px; margin-bottom:12px; }
+    .cg-barra span { display:block; }
+    .cg-sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:8px; vertical-align:middle; }
+    .cg-tl { list-style:none; margin:0; padding:0; }
+    .cg-tl li { display:grid; grid-template-columns:88px 22px minmax(0,1fr); gap:0 12px; align-items:start; padding:9px 0; border-top:1px solid var(--border-subtle); font-size:13.5px; }
+    .cg-tl li:first-child { border-top:0; }
+    .cg-tl .cu { font-size:12.5px; color:var(--fg-3); padding-top:2px; white-space:nowrap; }
+    .cg-tl .ic { display:grid; place-items:center; width:22px; height:22px; border-radius:50%; background:var(--surface-sunken, #EEF2F6); color:var(--fg-2); }
+    .cg-tl .ic i, .cg-tl .ic svg { width:13px; height:13px; }
+    .cg-tl .ic.ok { background:#E4F5EC; color:#17714B; } .cg-tl .ic.info { background:var(--accent-soft, #E6F4FB); color:var(--accent-hover, #0074AC); }
+    .cg-tl .ic.warn { background:#FBF3E0; color:#8A6415; }
+    .cg-tl .quien { color:var(--fg-3); }
+    /* Tarjetas de la columna derecha. */
+    .cg-card { background:var(--surface-card); border:1px solid var(--border-default); border-radius:12px; overflow:hidden; }
+    .cg-card .cg-cardhd { display:flex; align-items:center; gap:10px; padding:13px 16px 9px; }
+    .cg-card .cg-cardhd .mas { margin-left:auto; font-size:13px; font-weight:600; }
+    .cg-tiles { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; padding:0 16px 14px; }
+    .cg-tile { padding:10px 12px; border:1px solid var(--border-subtle); border-radius:8px; }
+    .cg-tile .l { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--fg-3); font-weight:600; display:flex; align-items:center; gap:5px; }
+    .cg-tile .v { font-family:var(--font-display); font-weight:700; font-size:22px; color:var(--navy); margin-top:2px; font-variant-numeric:tabular-nums; line-height:1.1; }
+    .cg-tile .v.sm { font-size:15px; margin-top:5px; }
+    .cg-tile .v.warn { color:var(--cg-warn-deep, #8A6415); } .cg-tile .v.bad { color:var(--cg-bad-deep, #A03030); }
+    .cg-tile button { background:none; border:0; padding:0; font:inherit; color:inherit; cursor:pointer; text-align:left; }
+    .cg-tile button:hover .v { text-decoration:underline; }
+    .cg-dl { margin:0; padding:0 16px 14px; display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 12px; font-size:13px; }
+    .cg-dl dt { color:var(--fg-3); } .cg-dl dd { margin:0; min-width:0; overflow-wrap:anywhere; }
+    /* Selección en Equipos: la gestión sale de lo marcado. */
+    .cg-chk { width:18px; height:18px; margin:0; accent-color:var(--accent); cursor:pointer; vertical-align:middle; }
+    .cg-selbar { position:sticky; bottom:0; display:flex; align-items:center; gap:10px; padding:10px 16px; margin:10px -18px -18px; background:var(--navy); color:#fff;
+                 border-radius:0 0 12px 12px; flex-wrap:wrap; z-index:5; }
+    .cg-selbar .n { font-family:var(--font-display); font-weight:700; font-size:14px; }
+    .cg-selbar .s { font-size:12.5px; color:#C9D6E3; }
+    .cg-selbar .btns { display:flex; gap:8px; margin-left:auto; flex-wrap:wrap; }
+    .cg-selbar .btn { height:34px; padding:0 12px; font-size:12.5px; }
+    .cg-selbar .btn.btn-dark { background:var(--navy-hover, #0F3A5F); border-color:var(--navy-hover, #0F3A5F); color:#fff; }
+    .cg-selbar:empty { display:none; }
+    .cg-tabla tr.is-sel td { background:#F2F9FD; }
     .cg-senal { display:flex; gap:8px; align-items:flex-start; border-radius:8px; padding:9px 13px; font-size:13px; margin-bottom:8px; }
     .cg-senal.warn { background:var(--soft-warn, #FBF3E0); color:#8A6415; }
     .cg-senal.bad  { background:var(--soft-bad, #FBE9E9); color:#A03030; }
@@ -112,8 +190,38 @@
     .cg-tabla tr:last-child td { border-bottom:none; }
     .cg-twrap { overflow-x:auto; }
     .cg-mono { font-family:var(--font-mono, ui-monospace); font-size:.93em; }
-    .cg-head { display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; }
-    .cg-acts { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; position:relative; }
+    /* Panel "Más acciones" (2026-10-08): hoja lateral con TODAS las acciones
+       por intención, buscador arriba, lo que no aplica en gris con el motivo.
+       Conserva el id #cgMenu: los wizards lo cierran con classList.add('hidden'). */
+    .cg-velo { position:fixed; inset:0; background:rgba(11,42,71,.28); z-index:1200; }
+    .cg-panelacc { position:fixed; top:0; right:0; bottom:0; width:540px; max-width:100vw; background:var(--surface-card); z-index:1210;
+                   box-shadow:-18px 0 40px -20px rgba(11,42,71,.45); display:flex; flex-direction:column; overflow:auto; }
+    .cg-panelacc .ph { display:flex; align-items:flex-start; gap:12px; padding:18px 20px 12px; border-bottom:1px solid var(--border-subtle); position:sticky; top:0; background:var(--surface-card); z-index:2; }
+    .cg-panelacc .ph h2 { margin:0; font-family:var(--font-display); font-weight:800; font-size:20px; color:var(--navy); }
+    .cg-panelacc .ph .sub { font-size:13px; color:var(--fg-3); margin-top:2px; }
+    .cg-panelacc .ph .form-input { margin-top:12px; width:100%; }
+    .cg-panelacc .grp { display:flex; align-items:center; gap:10px; padding:16px 20px 6px; }
+    .cg-panelacc .grp h3 { margin:0; font:700 12px var(--font-body); letter-spacing:.08em; text-transform:uppercase; color:var(--fg-3); }
+    .cg-acc { display:grid; grid-template-columns:40px minmax(0,1fr) 18px; gap:14px; align-items:center; min-height:58px; padding:8px 20px; width:100%;
+              border:0; border-top:1px solid var(--border-subtle); background:var(--surface-card); color:var(--fg-1); text-decoration:none; text-align:left; font:inherit; cursor:pointer; }
+    .cg-acc:hover { background:#F6FBFE; }
+    .cg-acc .box { width:40px; height:40px; border-radius:10px; background:var(--surface-sunken, #EEF2F6); color:var(--fg-2); display:grid; place-items:center; }
+    .cg-acc .box i, .cg-acc .box svg { width:16px; height:16px; }
+    .cg-acc .t { display:block; font-size:14px; font-weight:600; line-height:1.3; }
+    .cg-acc .h { display:block; font-size:12.5px; color:var(--fg-3); line-height:1.35; margin-top:2px; }
+    .cg-acc .chev { color:var(--fg-4); font-size:18px; font-weight:600; text-align:center; }
+    .cg-acc.top { background:#F2F9FD; border-top-color:#CCE9F7; border-bottom:1px solid #CCE9F7; }
+    .cg-acc.top .box { background:var(--accent); color:#fff; }
+    .cg-acc.off { color:var(--fg-3); cursor:not-allowed; }
+    .cg-acc.off:hover { background:var(--surface-card); }
+    .cg-acc.off .box { background:var(--surface-sunken, #F6F9FB); color:var(--fg-4); }
+    .cg-acc.off .h { color:var(--cg-warn-deep, #8A6415); }
+    .cg-acc.danger .t { color:var(--cg-bad-deep, #A03030); }
+    .cg-acc.danger .box { background:#FBE9E9; color:#A03030; }
+    .cg-acc.is-oculto { display:none; }
+    .cg-panelacc .pie { padding:16px 20px 28px; font-size:12.5px; color:var(--fg-3); border-top:1px solid var(--border-subtle); }
+    .cg-panelacc .pie a { display:inline; }
+    /* Menú "⋯" de las filas (gestión / contrato): sigue siendo un desplegable. */
     .cg-menu { position:absolute; right:0; top:calc(100% + 6px); background:var(--surface-card); border:1px solid var(--border-default);
                border-radius:10px; box-shadow:0 10px 30px -12px rgba(11,42,71,.25); min-width:250px; z-index:50;
                max-height:70vh; overflow:auto; }
@@ -153,35 +261,22 @@
     .cg-accmenu .mal { color:var(--bad-deep, #991B1B); }
     .cg-accmenu.cg-up { top:auto; bottom:calc(100% + 6px); }
     .cg-vacio { color:var(--fg-3); font-size:13px; padding:14px; text-align:center; }
-    /* ── Ficha reordenada (2026-09-08): cola "Ahora", franja de números,
-       bloques plegables, equipos por grupo, dock móvil ── */
-    .cg-ahora { background:var(--surface-card); border:1px solid var(--border-default); border-radius:10px; margin:var(--sp-4) 0 10px; overflow:hidden; }
-    .cg-ahora .hd { font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--fg-3); font-weight:700; padding:9px 14px 4px; display:flex; gap:10px; align-items:center; }
-    .cg-ahora .hd .mas { margin-left:auto; background:none; border:0; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; text-transform:none; letter-spacing:0; }
-    .cg-ahora .row { display:grid; grid-template-columns:10px minmax(0,1fr) auto; gap:12px; align-items:center; padding:9px 14px; border-top:1px solid var(--border-subtle); }
-    .cg-ahora .row .dot { width:10px; height:10px; border-radius:50%; background:var(--accent); }
+    /* "Qué está esperando" (antes la cola "Ahora", 2026-09-08): ahora vive en
+       la columna derecha, siempre visible, una tarjeta por fila con quién le
+       toca y UN botón. Las filas las pinta pintarAhora. */
+    .cg-ahora .hd { display:flex; align-items:center; gap:10px; padding:13px 16px 9px; }
+    .cg-ahora .hd .mas { margin-left:auto; background:none; border:0; color:var(--accent); font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; }
+    .cg-ahora .row { display:flex; flex-direction:column; gap:8px; padding:11px 16px; border-top:1px solid var(--border-subtle); }
+    .cg-ahora .row .top { display:grid; grid-template-columns:10px minmax(0,1fr); gap:10px; align-items:start; }
+    .cg-ahora .row .dot { width:10px; height:10px; border-radius:50%; background:var(--accent-line, #66BCE7); margin-top:5px; }
     .cg-ahora .row.bad .dot { background:#D24545; } .cg-ahora .row.warn .dot { background:#E0A93A; }
-    .cg-ahora .row .t { min-width:0; font-size:13.5px; } .cg-ahora .row .t b { font-weight:600; }
-    .cg-ahora .row .t .s { display:block; color:var(--fg-3); font-size:12.5px; }
+    .cg-ahora .row .t { min-width:0; font-size:13.5px; line-height:1.35; } .cg-ahora .row .t b { font-weight:600; }
+    .cg-ahora .row .t .s { display:block; color:var(--fg-3); font-size:12.5px; margin-top:2px; }
     .cg-ahora .row .t .toca { color:var(--fg-2); font-weight:600; }
-    .cg-ahora .row .btns { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
-    .cg-ahora .ok { padding:10px 14px; font-size:13px; color:var(--cg-ok-deep, #17714B); display:flex; gap:8px; align-items:center; }
-    .cg-resumen { display:flex; flex-wrap:wrap; gap:6px 18px; font-size:12.5px; color:var(--fg-3); padding:0 4px; margin-bottom:12px; }
-    .cg-resumen b { color:var(--fg-1); font-weight:600; font-variant-numeric:tabular-nums; }
-    .cg-resumen button { background:none; border:0; padding:0; font:inherit; color:var(--fg-3); cursor:pointer; border-bottom:1px dotted var(--accent-line, #66BCE7); }
-    .cg-resumen button:hover { color:var(--fg-1); }
-    .cg-resumen a { color:var(--fg-3); text-decoration:none; border-bottom:1px dotted var(--accent-line, #66BCE7); }
-    .cg-resumen a:hover { color:var(--fg-1); }
-    .cg-block { background:var(--surface-card); border:1px solid var(--border-default); border-radius:10px; margin-bottom:10px; }
-    .cg-block > summary { list-style:none; cursor:pointer; display:grid; grid-template-columns:24px auto minmax(0,1fr) 18px; gap:10px; align-items:center; padding:11px 14px; user-select:none; }
-    .cg-block > summary::-webkit-details-marker { display:none; }
-    .cg-block > summary .ic { width:24px; height:24px; border-radius:6px; background:var(--surface-sunken, #EEF2F6); display:grid; place-items:center; color:var(--fg-2); }
-    .cg-block > summary .ic svg, .cg-block > summary .ic i { width:14px; height:14px; }
-    .cg-block > summary .ttl { font-family:var(--font-display); font-weight:700; font-size:15.5px; }
-    .cg-block > summary .sum { color:var(--fg-3); font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .cg-block > summary .chev { color:var(--fg-4); font-size:18px; font-weight:600; transition:transform .15s; text-align:center; }
-    .cg-block[open] > summary .chev { transform:rotate(90deg); }
-    .cg-block > .in { border-top:1px solid var(--border-subtle); padding:10px 14px 14px; }
+    .cg-ahora .row .btns { display:flex; gap:6px; flex-wrap:wrap; padding-left:20px; }
+    .cg-ahora .row .btns:empty { display:none; }
+    .cg-ahora .row .btns .btn { height:34px; padding:0 12px; font-size:12.5px; }
+    .cg-ahora .ok { padding:4px 16px 14px; font-size:13px; color:var(--cg-ok-deep, #17714B); display:flex; gap:8px; align-items:center; }
     .cg-eqgrp { border:1px solid var(--border-subtle); border-radius:8px; margin-bottom:6px; }
     .cg-eqgrp > summary { list-style:none; cursor:pointer; display:grid; grid-template-columns:minmax(0,1fr) auto auto auto 18px; gap:12px; align-items:center; padding:8px 12px; font-size:13px; user-select:none; }
     .cg-eqgrp > summary::-webkit-details-marker { display:none; }
@@ -192,12 +287,30 @@
     .cg-eqgrp.warn > summary { background:var(--cg-warn-soft, #FBF3E0); }
     .cg-dock { display:none; }
     @media (max-width:760px) {
-      .cg-block > summary { grid-template-columns:24px minmax(0,1fr) 18px; }
-      .cg-block > summary .sum { grid-column:2; white-space:normal; }
       .cg-eqgrp > summary { grid-template-columns:minmax(0,1fr) auto 18px; }
       .cg-eqgrp > summary .k:nth-of-type(2) { display:none; }
-      .cg-ahora .row { grid-template-columns:10px minmax(0,1fr); }
-      .cg-ahora .row .btns { grid-column:2; justify-content:flex-start; }
+      /* La barra de verbos se desliza en UNA fila; "Más acciones" baja al dock. */
+      .cg-verbos { flex-wrap:nowrap; overflow-x:auto; padding:10px 14px; scrollbar-width:none; }
+      .cg-verbos::-webkit-scrollbar { display:none; }
+      .cg-verbos .lbl { display:none; }
+      .cg-verbo { flex:none; height:40px; padding:0 12px; font-size:12.5px; }
+      .cg-verbo .sug { display:none; }
+      .cg-verbo.cg-verbo--mas { display:none; }
+      .cg-ident { padding:14px; gap:12px; }
+      .cg-body { margin-top:12px; gap:12px; }
+      /* En el teléfono "Qué está esperando" va ARRIBA de las pestañas. */
+      .cg-aside { order:-1; max-width:none; min-width:0; flex:1 1 100%; }
+      .cg-main { flex:1 1 100%; }
+      .cg-tabs { padding:0 14px; } .cg-tab { margin-right:18px; height:44px; font-size:13.5px; }
+      .cg-panel { padding:12px 14px 14px; }
+      .cg-selbar { margin:10px -14px -14px; position:fixed; left:0; right:0; bottom:0; margin:0; border-radius:0; z-index:1060; padding-bottom:calc(10px + env(safe-area-inset-bottom)); }
+      .cg-panelacc { width:100vw; }
+      /* Línea de tiempo en el teléfono: icono a la izquierda (dos filas), fecha
+         arriba y texto debajo — sin la columna de fecha de 88 px. */
+      .cg-tl li { grid-template-columns:22px minmax(0,1fr); row-gap:2px; }
+      .cg-tl .cu { grid-column:2; grid-row:1; }
+      .cg-tl .ic { grid-column:1; grid-row:1 / span 2; }
+      .cg-tl .tx { grid-column:2; grid-row:2; }
       /* Dock inferior con las dos acciones; el FAB del rail sube para no taparlo. */
       /* El FAB del rail vive DENTRO del dock (primera celda vacía): nada tapa el contenido. */
       .cg-dock { display:grid; grid-template-columns:54px 1fr 1fr; gap:8px; position:fixed; left:0; right:0; bottom:0; z-index:1050;
@@ -206,7 +319,6 @@
       .cg-dock:empty { display:none; }
       #vistaFicha { padding-bottom:84px; }
       .rail-fab { bottom:12px !important; left:12px !important; z-index:1100 !important; }
-      #btnPrimario, #btnGestion { display:none; }
       /* Barra superior: en el teléfono el título montaba sobre "Menú principal"
          y "Cerrar sesión" (recorrido con emulador 2026-09-08). Aquí solo el
          título y el menú; el resto vive en el rail.
@@ -219,8 +331,6 @@
       .topbar .topbar-title { display:block; min-width:0; font-size:15px; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
       .topbar .topbar-actions { flex:none; margin-left:auto; }
       .topbar .topbar-actions > a.btn, .topbar .topbar-actions > button.btn:not(.btn-topbar-menu) { display:none; }
-      .cg-head { flex-wrap:nowrap; }
-      .cg-acts { margin-left:0; }
       /* Cabecera de la ficha: nombre a 2 líneas máximo y el meta en líneas cortas. */
       #fNombre { font-size:18px; line-height:1.2; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
       .cg-meta .m { display:block; }
@@ -298,67 +408,70 @@
     <button class="btn btn-ghost" onclick="Centro.volver()" style="margin-bottom:var(--sp-3);">
       <i data-lucide="arrow-left"></i> Clientes</button>
 
-    <div class="ds-card" style="padding:var(--sp-5);">
-      <div class="cg-head">
-        <div class="cg-av" id="fAvatar" style="width:48px;height:48px;font-size:17px;"></div>
-        <div style="min-width:0;">
-          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-            <h2 id="fNombre"></h2>
-            <!-- Deuda de regularización de la cuenta (plan 2026-09-08): lee
-                 clientes.regularizacion (lo escribe el job); clic → "Qué falta". -->
-            <span id="fRegChip"></span>
-          </div>
-          <p id="fMeta" class="cg-meta" style="margin:4px 0 0; color:var(--fg-3); font-size:13px;"></p>
+    <!-- ═══ Cabecera (ficha v3, 2026-10-08): identidad + UNA frase de estado +
+         barra de verbos fija. Sin chips clicables ni botón primario que cambia
+         de nombre: lo sugerido se MARCA en la barra, no se mueve. ═══ -->
+    <section class="cg-ficha" aria-label="Cliente">
+      <div class="cg-ident">
+        <div class="cg-av" id="fAvatar" style="width:52px;height:52px;font-size:18px;border-radius:13px;"></div>
+        <div class="cg-txt">
+          <h2 id="fNombre"></h2>
+          <p id="fMeta" class="cg-meta" style="margin:0; color:var(--fg-2); font-size:13.5px;"></p>
+          <!-- Estado de la cuenta en palabras (lo pinta _pintarChipReg → _pintarEstado). -->
+          <p id="fEstado" class="cg-estado"></p>
         </div>
-        <div class="cg-acts">
-          <!-- Rediseño de la ficha (2026-09-08, "cada pieza en su lugar"):
-               UN botón primario contextual (Regularizar / Renovar / Ver
-               trámite / Nuevo contrato), "Nueva gestión" para todo lo demás y
-               un "⋯" con Cotizar · Datos · Historial. Lo pinta _pintarPrimario. -->
-          <button class="btn btn-primary hidden" id="btnPrimario"></button>
-          <button class="btn" id="btnGestion" onclick="Centro.toggleMenu(event)">
-            Nueva gestión <i data-lucide="chevron-down"></i></button>
-          <div class="cg-menu hidden" id="cgMenu"></div>
-          <button class="btn btn-ghost" id="btnMasFicha" onclick="Centro.toggleMas(event)" aria-label="Más opciones"
-                  title="Cotizar · Datos del cliente · Historial"><i data-lucide="more-horizontal"></i></button>
-          <div class="cg-menu hidden" id="cgMasMenu" style="min-width:220px;"></div>
-        </div>
+        <div class="cg-edit" id="fEditar"></div>
       </div>
+      <!-- Cotizar · Agregar equipos · Reemplazar · Demo · [cuenta] · Más acciones (pintarVerbos). -->
+      <div class="cg-verbos" id="cgVerbos"></div>
+    </section>
+
+    <div class="cg-body">
+      <section class="cg-main" aria-label="Secciones de la ficha">
+        <nav class="cg-tabs" id="cgTabs" role="tablist">
+          <button type="button" class="cg-tab is-on" role="tab" data-tab="blkResumen" onclick="Centro.mostrarTab('blkResumen')">Resumen</button>
+          <button type="button" class="cg-tab" role="tab" data-tab="blkContratos" onclick="Centro.mostrarTab('blkContratos')">Contratos <span class="n" id="nContratos"></span></button>
+          <button type="button" class="cg-tab" role="tab" data-tab="blkEquipos" onclick="Centro.mostrarTab('blkEquipos')">Equipos <span class="n" id="nEquipos"></span></button>
+          <button type="button" class="cg-tab" role="tab" data-tab="blkGestiones" onclick="Centro.mostrarTab('blkGestiones')">Gestiones <span class="n" id="nGestiones"></span></button>
+          <button type="button" class="cg-tab hidden" role="tab" data-tab="blkDocumentos" id="tabDocumentos" onclick="Centro.mostrarTab('blkDocumentos')">Documentos <span class="n" id="nDocumentos"></span></button>
+          <button type="button" class="cg-tab" role="tab" data-tab="blkActividad" onclick="Centro.mostrarTab('blkActividad')">Actividad</button>
+        </nav>
+
+        <div class="cg-panel" id="blkResumen" role="tabpanel"><div id="fResumenTab"></div></div>
+        <div class="cg-panel" id="blkContratos" role="tabpanel" hidden><div class="cg-twrap" id="fContratos"></div></div>
+        <div class="cg-panel" id="blkEquipos" role="tabpanel" hidden>
+          <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+            <input class="form-input" id="fEqFiltro" type="search" placeholder="Serial, modelo o contrato…"
+                   style="flex:1 1 240px; max-width:380px;" autocomplete="off" aria-label="Buscar equipo">
+            <span id="fEqResumen" style="font-size:12.5px; color:var(--fg-3);"></span>
+            <button type="button" class="btn btn-ghost" style="margin-left:auto; font-size:12.5px;" onclick="Centro.constanciaEquipos()">
+              <i data-lucide="file-text"></i> Constancia de equipos</button>
+          </div>
+          <div id="fEquipos"></div>
+          <div class="cg-selbar" id="cgSelBar"></div>
+        </div>
+        <div class="cg-panel" id="blkGestiones" role="tabpanel" hidden><div id="fGestiones"></div></div>
+        <div class="cg-panel" id="blkDocumentos" role="tabpanel" hidden><div id="fDocumentos"></div></div>
+        <div class="cg-panel" id="blkActividad" role="tabpanel" hidden>
+          <p id="sumActividad" style="margin:0 0 8px; font-size:12.5px; color:var(--fg-3);">Quién cambió qué en la ficha.</p>
+          <div id="fActividad"><div class="cg-vacio">Cargando el historial…</div></div>
+        </div>
+      </section>
+
+      <aside class="cg-aside">
+        <!-- Qué está esperando: la cola "Ahora" de antes, siempre visible, con
+             quién le toca y un botón por fila (pintarAhora). -->
+        <section class="cg-card cg-ahora" id="fAhora" aria-label="Qué está esperando"></section>
+        <!-- La cuenta en números (pintarResumen). -->
+        <section class="cg-card" id="fResumen" aria-label="La cuenta"></section>
+        <!-- Contacto y representante (pintarContacto). -->
+        <section class="cg-card" id="fContacto" aria-label="Contacto"></section>
+      </aside>
     </div>
 
-    <!-- Una sola cola "Ahora": lo que antes eran "Requiere tu acción" + las
-         señales + la regularización, ordenadas por urgencia, con quién debe
-         actuar y un botón por fila. Debajo, la franja de números (sin tiles). -->
-    <div id="fAhora" class="cg-ahora"></div>
-    <div id="fResumen" class="cg-resumen"></div>
-
-    <!-- Bloques plegables con resumen en la cabecera: Gestiones primero
-         (abierto si hay trabajo vivo), Contratos, Equipos agrupados, Actividad. -->
-    <details class="cg-block" id="blkGestiones">
-      <summary><span class="ic"><i data-lucide="refresh-cw"></i></span><span class="ttl">Gestiones</span><span class="sum" id="sumGestiones"></span><span class="chev">›</span></summary>
-      <div class="in"><div id="fGestiones"></div></div>
-    </details>
-
-    <details class="cg-block" id="blkContratos">
-      <summary><span class="ic"><i data-lucide="file-text"></i></span><span class="ttl">Contratos</span><span class="sum" id="sumContratos"></span><span class="chev">›</span></summary>
-      <div class="in"><div class="cg-twrap" id="fContratos"></div></div>
-    </details>
-
-    <details class="cg-block" id="blkEquipos">
-      <summary><span class="ic"><i data-lucide="radio"></i></span><span class="ttl">Equipos</span><span class="sum" id="sumEquipos"></span><span class="chev">›</span></summary>
-      <div class="in">
-        <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
-          <input class="form-input" id="fEqFiltro" type="search" placeholder="Buscar serial, modelo o contrato…"
-                 style="max-width:300px;" autocomplete="off" aria-label="Buscar equipo">
-        </div>
-        <div id="fEquipos"></div>
-      </div>
-    </details>
-
-    <details class="cg-block" id="blkActividad">
-      <summary><span class="ic"><i data-lucide="history"></i></span><span class="ttl">Actividad</span><span class="sum" id="sumActividad">quién cambió qué en la ficha</span><span class="chev">›</span></summary>
-      <div class="in"><div id="fActividad"><div class="cg-vacio">Ábrelo para cargar el historial.</div></div></div>
-    </details>
+    <!-- Panel "Más acciones": lo arma armarMenu; abrirMenu/cerrarMenu lo muestran. -->
+    <div class="cg-velo hidden" id="cgMenuVelo" onclick="Centro.cerrarMenu()"></div>
+    <aside class="cg-panelacc hidden" id="cgMenu" aria-label="Todas las acciones"></aside>
 
     <!-- Móvil: las dos acciones siempre al alcance del pulgar. -->
     <div class="cg-dock" id="cgDock"></div>

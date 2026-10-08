@@ -828,7 +828,15 @@ Object.assign(window.Centro, {
     // hoy no cuadra con el papel y nadie sabe por qué (SilverKing 2026-09-17).
     const origen = (e) => (window.EquiposPoolService?.origenReemplazoHtml)
       ? EquiposPoolService.origenReemplazoHtml(e) : '';
-    const fila = (e) => `<tr>
+    // Selección (ficha v3, 2026-10-08): marcar radios en campo y abrir la
+    // gestión desde la barra inferior (reemplazo, baja, corregir serial).
+    const sel = this._eqSel || (this._eqSel = new Set());
+    const chk = (e) => this._eqSeleccionable(e)
+      ? `<input type="checkbox" class="cg-chk" ${sel.has(e.id) ? 'checked' : ''} aria-label="Seleccionar ${this.esc(e.serial || e.id)}"
+           onclick="event.stopPropagation()" onchange="Centro._eqMarcar('${this.esc(e.id)}', this.checked)">`
+      : '';
+    const fila = (e) => `<tr data-eq="${this.esc(e.id)}" class="${sel.has(e.id) ? 'is-sel' : ''}">
+      <td style="width:34px;">${chk(e)}</td>
       <td class="cg-mono">${this.esc(e.serial || e.id)}${origen(e)}</td>
       <td>${this.esc(e.modelo_label || '—')}</td>
       <td>${chipProp(e)}</td>
@@ -839,15 +847,16 @@ Object.assign(window.Centro, {
       <td style="text-align:right;"><button class="btn btn-ghost cg-act"
         title="Historia completa de esta unidad" onclick="Centro.verKardex('${this.esc(e.id)}')">Kardex ›</button></td></tr>`;
     const tabla = (rows) => `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
-      <th>Serial</th><th>Modelo</th><th>De quién es</th><th>Situación</th><th>Contrato</th><th style="text-align:right;">Tarifa</th><th>Vence</th><th></th>
+      <th style="width:34px;"></th><th>Serial</th><th>Modelo</th><th>De quién es</th><th>Situación</th><th>Contrato</th><th style="text-align:right;">Tarifa</th><th>Vence</th><th></th>
       </tr></thead><tbody>${rows}</tbody></table></div>`;
     const resProp = (items) => (window.EquiposPoolService?.resumenPropiedadTexto)
       ? EquiposPoolService.resumenPropiedadTexto(items) : '';
-    if (!this.equipos.length) { cont.innerHTML = '<div class="cg-empty">Sin equipos asignados en el inventario.</div>'; return; }
+    if (!this.equipos.length) { cont.innerHTML = '<div class="cg-empty">Sin equipos asignados en el inventario.</div>'; this._pintarSelBar(); return; }
     // Buscar un serial lo abre directo: con filtro, lista plana.
     if (q) {
       const lista = this.equipos.filter(e => `${e.serial || ''} ${e.modelo_label || ''} ${e.asignacion?.contrato_id || ''}`.toUpperCase().includes(q));
       cont.innerHTML = lista.length ? tabla(lista.map(fila).join('')) : '<div class="cg-empty">Ningún equipo coincide con la búsqueda.</div>';
+      this._pintarSelBar();
       return;
     }
     // Sin filtro: GRUPOS (2026-09-08). Antes eran 52 filas abiertas con los
@@ -889,6 +898,7 @@ Object.assign(window.Centro, {
         || String(a.serial || a.id).localeCompare(String(b.serial || b.id)));
       const resumen = resProp(todos);
       cont.innerHTML = `${aviso}${resumen ? `<div style="font-size:12.5px; color:var(--fg-3); margin-bottom:6px;">${this.esc(resumen)}</div>` : ''}${tabla(todos.map(fila).join(''))}`;
+      this._pintarSelBar();
       return;
     }
     const venceDe = (c) => { const d = c?.fecha_vencimiento?.toDate ? c.fecha_vencimiento.toDate() : (c?.fecha_vencimiento ? new Date(c.fecha_vencimiento) : null); return d && !isNaN(d) ? d.getTime() : Infinity; };
@@ -922,12 +932,21 @@ Object.assign(window.Centro, {
       // El desglose de propiedad va en el MISMO span del conteo: la rejilla
       // del summary tiene 5 celdas fijas y en móvil se oculta la segunda .k.
       const rp = resProp(g.items);
+      // Checkbox del grupo: marca todos los radios en campo del contrato. Va
+      // dentro del summary, así que corta el clic para no plegar el grupo.
+      const selec = g.items.filter(e => this._eqSeleccionable(e));
+      const todosSel = selec.length > 0 && selec.every(e => sel.has(e.id));
+      const chkGrupo = selec.length
+        ? `<input type="checkbox" class="cg-chk" style="margin-right:10px;" ${todosSel ? 'checked' : ''} aria-label="Seleccionar los ${selec.length} equipos de este grupo"
+             onclick="event.preventDefault(); event.stopPropagation(); Centro._eqMarcarGrupo('${this.esc(g.k)}', ${todosSel ? 'false' : 'true'})">`
+        : '';
       return `<details class="cg-eqgrp ${tono}" data-grp="${this.esc(g.k)}" ${open ? 'open' : ''} ontoggle="Centro._eqToggle(this)">
-        <summary><span>${titulo}</span><span class="k">${n} equipo${n === 1 ? '' : 's'}${rp ? ` · ${rp}` : ''}</span><span class="k">${k2}</span><span>${accion}</span><span class="chev">›</span></summary>
+        <summary><span>${chkGrupo}${titulo}</span><span class="k">${n} equipo${n === 1 ? '' : 's'}${rp ? ` · ${rp}` : ''}</span><span class="k">${k2}</span><span>${accion}</span><span class="chev">›</span></summary>
         <div style="padding:6px 8px 8px;">${tabla(g.items.map(fila).join(''))}</div>
       </details>`;
     }).join('');
     cont.innerHTML = html;
+    this._pintarSelBar();
   },
   _eqGruposAbiertos: null,
   _eqToggle(d) {

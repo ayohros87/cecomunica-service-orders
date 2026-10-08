@@ -18,7 +18,7 @@ Object.assign(window.Centro, {
   async wizAjuste(preselId, opts = {}) {
     if (!this.puedeCrearGestion()) { Toast.show('Tu rol no crea gestiones desde aquí', 'warn'); return; }
     this._cerrarModal();
-    document.getElementById('cgMenu')?.classList.add('hidden');
+    this.cerrarMenu?.();
     await this._cargarCargos();
     const activos = this.contratos.filter(c => this._esVigente(c));
     if (!activos.length) { Toast.show('El cliente no tiene contratos vigentes', 'warn'); return; }

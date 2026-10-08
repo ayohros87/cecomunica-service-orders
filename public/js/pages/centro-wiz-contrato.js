@@ -266,7 +266,7 @@ Object.assign(window.Centro, {
       }
     }
     this._cerrarModal();
-    document.getElementById('cgMenu')?.classList.add('hidden');
+    this.cerrarMenu?.();
     await Promise.all([this._cargarModelos(), this._cargarCargos()]);
 
     const candidatos = this._wcCandidatos();

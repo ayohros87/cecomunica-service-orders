@@ -6,126 +6,184 @@
 Object.assign(window.Centro, {
   /* ═════════ Menú "Nueva gestión" ═════════ */
 
+  // Panel lateral "Más acciones" (ficha v3, 2026-10-08). Antes era un
+  // desplegable de 12 renglones bajo "Nueva gestión" más un "⋯" aparte con
+  // Cotizar · Datos · Documentos · Historial. Ahora es UNA hoja lateral con
+  // todo, por intención, con buscador, y lo que no aplica sale en gris CON el
+  // motivo (antes se escondía: "no estoy viendo el menú…", 2026-09-09).
+  // Conserva el id #cgMenu: los wizards lo cierran con classList.add('hidden').
   toggleMenu(e) {
-    e.stopPropagation();
-    // El "⋯" se cierra al abrir este (2026-09-09, Alberto: "aprieto los 3
-    // puntitos y luego nueva gestión y no se cierra el menú"). toggleMas ya
-    // hacía lo simétrico, y el stopPropagation de aquí impedía que el
-    // listener {once:true} que deja toggleMas llegara a cerrarlo.
-    document.getElementById('cgMasMenu')?.classList.add('hidden');
-    document.getElementById('cgMenu').classList.toggle('hidden');
+    e?.stopPropagation?.();
+    const el = document.getElementById('cgMenu');
+    if (!el) return;
+    if (el.classList.contains('hidden')) this.abrirMenu(); else this.cerrarMenu();
+  },
+  abrirMenu() {
+    const el = document.getElementById('cgMenu');
+    if (!el) return;
+    if (!el.innerHTML) this.armarMenu();
+    el.classList.remove('hidden');
+    document.getElementById('cgMenuVelo')?.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    if (window.lucide?.createIcons) lucide.createIcons();
+    const q = el.querySelector('[data-accq]');
+    if (q) { q.value = ''; this._menuFiltrar(''); setTimeout(() => q.focus(), 60); }
+    if (!this._menuEsc) {
+      this._menuEsc = (ev) => { if (ev.key === 'Escape') this.cerrarMenu(); };
+      document.addEventListener('keydown', this._menuEsc);
+    }
+  },
+  cerrarMenu() {
+    document.getElementById('cgMenu')?.classList.add('hidden');
+    document.getElementById('cgMenuVelo')?.classList.add('hidden');
+    document.body.style.overflow = '';
+    if (this._menuEsc) { document.removeEventListener('keydown', this._menuEsc); this._menuEsc = null; }
+  },
+  abrirMenuDesdeDock() { this.abrirMenu(); },
+  _menuNorm(s) {
+    return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  },
+  _menuFiltrar(term) {
+    const el = document.getElementById('cgMenu');
+    if (!el) return;
+    const palabras = this._menuNorm(term).split(' ').filter(Boolean);
+    const grupos = el.querySelectorAll('[data-accgrp]');
+    let visibles = 0;
+    grupos.forEach(g => {
+      let n = 0;
+      g.querySelectorAll('.cg-acc').forEach(a => {
+        const ok = !palabras.length || palabras.every(p => (a.dataset.busca || '').includes(p));
+        a.classList.toggle('is-oculto', !ok);
+        if (ok) n++;
+      });
+      g.classList.toggle('hidden', n === 0);
+      visibles += n;
+    });
+    const vacio = el.querySelector('[data-accvacio]');
+    if (vacio) vacio.classList.toggle('hidden', visibles > 0);
   },
 
   armarMenu() {
-    const btn = document.getElementById('btnGestion');
-    this._pintarHeadLinks();
-    if (!this.puedeCrearGestion()) { btn?.classList.add('hidden'); return; }
-    btn?.classList.remove('hidden');
-    // Terminación total como GESTIÓN (2026-08-27) — la página vieja de
-    // enmiendas queda para el histórico y se descontinuará en la Ola 6.
-    // Menú SEGÚN EL ESTADO DE LA CUENTA (decisión 2026-08-28: la unidad es la
-    // cuenta, no el contrato — cada acción tiene UN significado claro):
-    //   nueva        → Nuevo contrato.
-    //   fragmentada  → todo pasa por Renovar cuenta (consolida); agregar
-    //                  equipos entra por ahí; terminación = toda la cuenta.
-    //   consolidada  → Aumento (anexo directo al maestro), Renovar cuando
-    //                  entra en ventana, Terminación de la cuenta.
-    // ── Menú POR INTENCIÓN (plan 2026-09-08 §4.2, rediseño del menú de
-    // 2026-08-28). Depende de dos hechos y una excepción: ¿hay radios en
-    // campo?, ¿hay contrato vigente?, ¿hay renovación en trámite? Mismo nombre
-    // para la misma intención en todos los estados; lo que no aplica se
-    // ESCONDE, no se deshabilita. Cotizar / Datos / Historial viven en la
-    // cabecera (_pintarHeadLinks): este menú es solo para gestiones.
+    const el = document.getElementById('cgMenu');
+    if (!el || !this.cliente) return;
+    const esc = (v) => this.esc(v);
+    const puedeG = this.puedeCrearGestion();
     const est = this._cuentaEstado();
     const tram = this._renovacionEnTramite();
     const hayRadios = this.equipos.some(e => ['en_cliente', 'asignado_contrato'].includes(e.estado));
     const hayContrato = est.renovables.length > 0;
-    const item = (onclick, label, hint, cls = '') =>
-      `<button type="button" class="${cls}" onclick="${onclick}">${label}${hint ? `<span class="cg-menu-hint">${hint}</span>` : ''}</button>`;
-    const grupo = (hd, items) => { const xs = items.filter(Boolean); return xs.length ? `<div class="hd">${hd}</div>${xs.join('')}` : ''; };
-
-    // Arriba, destacado: lo que la cuenta pide primero (misma regla que el
-    // botón primario de la cabecera y el dock móvil: _accionPrimaria).
-    const P = this._accionPrimaria();
-    const top = P ? item(P.onclick, P.label, P.hint, 'top') : '';
-    // Renovar cuenta ya es el destacado cuando aplica: no se repite en "Cambiar".
     const n = est.renovables.length;
+    const cid = encodeURIComponent(this.cliente.id);
+    const SIN_ROL = 'Tu rol no inicia gestiones: las abre ventas, recepción o administración.';
+    const SIN_CONTRATO = 'La cuenta no tiene contrato vigente en el sistema: empieza por Nuevo contrato.';
+    const EN_TRAMITE = `Hay una renovación en trámite (${tram?.contrato_id || ''}): lo que cambie entra por ahí.`;
+    const SIN_RADIOS = 'El cliente no tiene radios en campo.';
 
-    // "Poner la cuenta al día" (Alberto 2026-09-09): estaba escondido dentro
-    // de "Qué falta" y entraba por un contrato elegido a dedo. Es una gestión
-    // de CUENTA —abarca todo lo que el cliente tiene, venga del contrato que
-    // venga— y por eso vive en el menú, como las demás.
+    // Un ítem: {icono, label, hint, onclick|href, ok, motivo, cls}. Lo que no
+    // aplica sale en gris con el motivo en el renglón de abajo.
+    const item = (d) => {
+      const busca = this._menuNorm(`${d.label} ${d.hint || ''} ${d.busca || ''}`);
+      const box = `<span class="box"><i data-lucide="${d.icono}"></i></span>`;
+      if (d.ok === false) {
+        return `<div class="cg-acc off${d.cls ? ` ${d.cls}` : ''}" aria-disabled="true" data-busca="${esc(busca)}">${box}
+          <span><span class="t">${esc(d.label)}</span><span class="h">${esc(d.motivo || 'No aplica a esta cuenta.')}</span></span><span class="chev"></span></div>`;
+      }
+      const cuerpo = `${box}<span><span class="t">${esc(d.label)}</span>${d.hint ? `<span class="h">${esc(d.hint)}</span>` : ''}</span><span class="chev">›</span>`;
+      if (d.href) return `<a class="cg-acc${d.cls ? ` ${d.cls}` : ''}" href="${d.href}" data-busca="${esc(busca)}">${cuerpo}</a>`;
+      return `<button type="button" class="cg-acc${d.cls ? ` ${d.cls}` : ''}" data-busca="${esc(busca)}" onclick="Centro.cerrarMenu(); ${d.onclick}">${cuerpo}</button>`;
+    };
+    const grupo = (hd, items) => { const xs = items.filter(Boolean); return xs.length ? `<div data-accgrp><div class="grp"><h3>${hd}</h3></div>${xs.join('')}</div>` : ''; };
+    const okG = (cond, motivo) => puedeG ? ({ ok: !!cond, motivo }) : ({ ok: false, motivo: SIN_ROL });
+
+    // Arriba, destacado: lo que la cuenta pide primero (misma regla que la
+    // marca "Sugerido" de la barra y el dock móvil: _accionPrimaria).
+    const P = this._accionPrimaria();
+    const top = P ? grupo('Lo que la cuenta pide primero', [item({ icono: 'flag', label: P.label, hint: P.hint, onclick: P.onclick, cls: 'top' })]) : '';
+
     const d1Menu = this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id && !e.pendiente_devolucion);
-    // Se ofrece SIEMPRE que haya contrato vigente, tenga o no radios sueltos
-    // (Alberto 2026-09-09: "no estoy viendo el menú actualizar seriales del
-    // cliente"). Con la cuenta al día el camino sigue sirviendo para declarar
-    // seriales que el sistema no conoce y para sacar los que el cliente ya no
-    // tiene; el hint dice cuál de los dos casos es.
-    const alDia = grupo('Actualizar', [
-      hayContrato && !tram
-        ? item('Centro.wizRegularizarCuenta()', 'Actualizar seriales del cliente',
-          d1Menu.length
-            ? `amarra al contrato los ${d1Menu.length} radio(s) que ya tiene — sin firma, sin bodega y sin entrega`
-            : 'declara los que el sistema no conoce o saca los que el cliente ya no tiene — sin firma') : '',
-    ]);
+    const ajusteOn = est.tipo === 'consolidada' ? `Centro.wizAjuste('${esc(est.maestro.id)}')` : 'Centro.wizAjuste()';
+
     const dar = grupo('Dar equipos', [
-      hayContrato && !tram ? item('Centro.wizAgregarEquipos()', 'Agregar equipos', 'radios — anexo al contrato de la cuenta') : '',
-      // La consola es un CARGO, no un radio (2026-10-02, COMPAÑÍA GOLY: la
-      // vendedora la buscó aquí, la mandó como "Agregar equipos" y nada se
-      // guardaba). Mismo wizard que "Ajustar tarifa", nombrado por lo que da.
-      hayContrato ? item(est.tipo === 'consolidada' ? `Centro.wizAjuste('${this.esc(est.maestro.id)}')` : 'Centro.wizAjuste()',
-        'Agregar consola o servicio', 'consola, GPS y otros cargos — anexo con firma, sin bodega') : '',
-      // TEMP (evento) y DEMO son independientes de la cuenta: no cuentan para
-      // _cuentaEstado ni renuevan nada (caso Arraiján / Elvia, 2026-09-07).
-      item('Centro.wizContrato({temporal:true})', 'Contrato temporal', 'por evento, días o meses'),
-      item('Centro.wizDemo()', 'Demo', 'prueba sin cargo, termina con la devolución'),
+      item({ icono: 'plus', label: 'Agregar equipos', hint: 'radios nuevos por anexo al contrato de la cuenta · administración aprueba, bodega asigna, el cliente firma',
+        onclick: 'Centro.wizAgregarEquipos()', ...okG(hayContrato && !tram, tram ? EN_TRAMITE : SIN_CONTRATO) }),
+      // La consola es un CARGO, no un radio (2026-10-02, COMPAÑÍA GOLY).
+      item({ icono: 'monitor', label: 'Agregar consola o servicio', hint: 'consola, GPS y otros cargos · anexo con firma, sin bodega',
+        onclick: ajusteOn, ...okG(hayContrato, SIN_CONTRATO) }),
+      // TEMP (evento) y DEMO son independientes de la cuenta (caso Arraiján / Elvia, 2026-09-07).
+      item({ icono: 'calendar', label: 'Contrato temporal', hint: 'por evento, días o meses · no toca la cuenta ni la renueva',
+        onclick: 'Centro.wizContrato({temporal:true})', ...okG(true) }),
+      item({ icono: 'radio', label: 'Demo', hint: 'prueba sin cargo · termina con la devolución', onclick: 'Centro.wizDemo()', ...okG(true) }),
     ]);
     const cambiar = grupo('Cambiar', [
-      hayRadios ? item('Centro.wizReemplazo()', 'Reemplazar un equipo') : '',
-      // Corregir ≠ reemplazar: aquí no se mueve equipo. Va junto al reemplazo
-      // porque es donde lo busca quien acaba de descubrir el error, y el hint
-      // es lo que evita que abran el trámite equivocado.
-      hayRadios ? item('Centro.wizCambioSerial()', 'Corregir un serial mal registrado',
-        'el cliente tiene otro radio del que dice el sistema — no mueve equipo') : '',
-      hayContrato ? item(est.tipo === 'consolidada' ? `Centro.wizAjuste('${this.esc(est.maestro.id)}')` : 'Centro.wizAjuste()',
-        'Ajustar tarifa', 'cambia el precio de las líneas o agrega cargos') : '',
+      item({ icono: 'repeat', label: 'Reemplazar un equipo', hint: 'marca el radio en la pestaña Equipos o búscalo aquí · el taller propone, administración aprueba',
+        onclick: 'Centro.wizReemplazo()', ...okG(hayRadios, SIN_RADIOS) }),
+      // Corregir ≠ reemplazar: aquí no se mueve equipo.
+      item({ icono: 'arrow-left-right', label: 'Corregir un serial mal registrado', hint: 'el cliente tiene otro radio del que dice el sistema · no mueve equipo',
+        onclick: 'Centro.wizCambioSerial()', ...okG(hayRadios, SIN_RADIOS) }),
+      item({ icono: 'sliders-horizontal', label: 'Ajustar tarifa', hint: 'cambia el precio de las líneas o agrega cargos · anexo con firma',
+        onclick: ajusteOn, ...okG(hayContrato, SIN_CONTRATO) }),
+    ]);
+    // "Poner la cuenta al día" (Alberto 2026-09-09): gestión de CUENTA, se
+    // ofrece siempre que haya contrato vigente; el hint dice cuál caso es.
+    const actualizar = grupo('Actualizar', [
+      item({ icono: 'clipboard-check', label: 'Actualizar seriales del cliente',
+        hint: d1Menu.length
+          ? `amarra al contrato los ${d1Menu.length} radio(s) que ya tiene · sin firma, sin bodega y sin entrega`
+          : 'declara los que el sistema no conoce o saca los que el cliente ya no tiene · sin firma',
+        onclick: 'Centro.wizRegularizarCuenta()', ...okG(hayContrato && !tram, tram ? EN_TRAMITE : SIN_CONTRATO) }),
     ]);
     const retirar = grupo('Retirar', [
-      hayRadios ? item('Centro.wizBaja()', 'Baja parcial por serial') : '',
-      hayContrato ? item('Centro.wizTerminacionCuenta()', 'Terminar la cuenta', n > 1 ? `cancela los ${n} contratos con una sola carta` : '') : '',
+      item({ icono: 'undo-2', label: 'Baja parcial por serial', hint: 'marca los radios en Equipos o búscalos aquí · carta del cliente · termina con la orden de devolución',
+        onclick: 'Centro.wizBaja()', ...okG(hayRadios, SIN_RADIOS) }),
+      item({ icono: 'x-circle', label: 'Terminar la cuenta', hint: n > 1 ? `cancela los ${n} contratos con una sola carta · administración aprueba` : 'cancela el contrato con la carta del cliente · administración aprueba',
+        onclick: 'Centro.wizTerminacionCuenta()', cls: 'danger', ...okG(hayContrato, SIN_CONTRATO) }),
     ]);
-    // Pie discreto: salidas raras. Adenda a contrato EN PAPEL (2026-09-07,
-    // caso Falcon): el marco no está en el sistema y hoy no se puede
-    // regularizar, pero hace falta un equipo más; no crea contrato interno.
-    // Solo donde tiene sentido: cuenta sin contrato en el sistema.
-    const pie = [
-      (est.tipo === 'nueva' || est.tipo === 'sin_contrato')
-        ? item('Centro.wizAumento(null,{papel:true})', '¿Contrato en papel? Anexo de aumento', '', 'pie') : '',
-      // Contrato nuevo con cuenta vigente (decisión 6 de Alberto, 1-oct-2026):
-      // SÍ, como respaldo y no como camino principal — otra sede, otro
-      // servicio aparte. Al final del menú, y el wizard pide y guarda la razón
-      // por la que no es un anexo ni una renovación.
-      hayContrato && !tram
-        ? item('Centro.wizContrato({nuevoConVigente:true})', '¿Otro contrato aparte? Nuevo contrato', 'respaldo — pide la razón de no usar anexo o renovación', 'pie') : '',
-      this._puedeMasiva() ? `<a class="pie" href="./index.html">Edición masiva de clientes</a>` : '',
-    ].filter(Boolean).join('');
+    // Contratos: el nuevo cuando no hay ninguno; con cuenta vigente, "aparte"
+    // como respaldo (decisión 6 de Alberto, 1-oct-2026: pide la razón).
+    const sinNinguno = est.tipo === 'nueva' || est.tipo === 'sin_contrato';
+    const contratos = grupo('Contratos', [
+      sinNinguno
+        ? item({ icono: 'file-plus', label: 'Nuevo contrato', hint: est.tipo === 'sin_contrato' ? `cubre los ${est.custodia} radio(s) que el cliente ya tiene` : 'el primer contrato de la cuenta',
+          onclick: est.tipo === 'sin_contrato' ? 'Centro.wizContrato({renovarCuenta:true})' : 'Centro.wizContrato()', ...okG(true) })
+        : item({ icono: 'file-plus', label: 'Otro contrato aparte', hint: 'respaldo: otra sede u otro servicio · pide la razón de no usar anexo o renovación',
+          onclick: 'Centro.wizContrato({nuevoConVigente:true})', ...okG(!tram, EN_TRAMITE) }),
+      // Adenda a contrato EN PAPEL (2026-09-07, caso Falcon): solo cuando el marco no está en el sistema.
+      item({ icono: 'file-text', label: 'Anexo de aumento a un contrato en papel', hint: 'el contrato marco no está en el sistema y hace falta un equipo más',
+        onclick: 'Centro.wizAumento(null,{papel:true})', ...okG(sinNinguno, 'La cuenta ya tiene contrato en el sistema: usa Agregar equipos.') }),
+    ]);
+    const hayCampo = this.equipos.some(e => ['en_cliente', 'asignado_contrato'].includes(e.estado));
+    const cliente = grupo('Cliente y documentos', [
+      item({ icono: 'receipt', label: 'Nueva cotización', hint: 'abre el editor con este cliente ya elegido',
+        href: `../cotizaciones/nueva-cotizacion.html?cliente_id=${cid}&from=centro`, ok: this._puedeCotizar(), motivo: 'Las cotizaciones las abre ventas o administración.' }),
+      item({ icono: this._puedeEditarCliente() ? 'pencil' : 'eye', label: this._puedeEditarCliente() ? 'Editar datos del cliente' : 'Ver datos del cliente',
+        hint: this._puedeEditarCliente() ? 'RUC, representante, contacto, vendedor' : 'solo lectura: los cambios los hace cobros', href: `./ficha.html?id=${cid}&from=centro` }),
+      item({ icono: 'folder-open', label: 'Documentos del cliente', hint: 'registro público, cédula, poderes · cada apertura queda en la auditoría',
+        onclick: "Centro.mostrarTab('blkDocumentos')", ok: this._puedeVerDocs(), motivo: 'El expediente legal lo ven administración, recepción y gerencia.' }),
+      item({ icono: 'file-check', label: 'Constancia de equipos', hint: 'lo que el cliente tiene hoy, con qué contrato y con qué orden se entregó · para imprimir',
+        onclick: 'Centro.constanciaEquipos()', ok: hayCampo, motivo: 'La cuenta no tiene equipos en campo.' }),
+      item({ icono: 'history', label: 'Historial de la ficha', hint: 'quién cambió qué y cuándo', onclick: "Centro.mostrarTab('blkActividad')" }),
+      // Trasladar cambia a quién se factura: administración o gerencia (2026-10-07, P3).
+      item({ icono: 'users', label: 'Cambio de razón social / traslado de cuenta', hint: 'todo lo vivo pasa a otra ficha; esta queda inactiva',
+        onclick: 'Centro.trasladarCuenta()', ok: this._puedeTrasladar(), motivo: 'Cambia a quién se factura: lo hace administración o gerencia.' }),
+      this._puedeMasiva() ? item({ icono: 'list-checks', label: 'Edición masiva de clientes', hint: 'el grid de limpieza por tandas (admin y recepción)', href: './index.html' }) : '',
+    ]);
 
-    document.getElementById('cgMenu').innerHTML = `${top}${alDia}${dar}${cambiar}${retirar}${pie}`;
-  },
-
-  // Menú "⋯" de la cabecera: Cotizar, Datos del cliente, Historial (2026-09-08).
-  _pintarHeadLinks() {
-    const el = document.getElementById('cgMasMenu');
-    if (!el || !this.cliente) return;
-    const id = this.esc(this.cliente.id);
     el.innerHTML = `
-      ${this._puedeCotizar() ? `<a href="../cotizaciones/nueva-cotizacion.html?cliente_id=${id}&from=centro">Nueva cotización<span class="cg-menu-hint">abre el editor con este cliente ya elegido</span></a>` : ''}
-      <a href="./ficha.html?id=${id}&from=centro">${this._puedeEditarCliente() ? 'Editar datos del cliente' : 'Ver datos del cliente'}<span class="cg-menu-hint">${this._puedeEditarCliente() ? 'RUC, representante, contacto, vendedor' : 'solo lectura — los cambios los hace cobros'}</span></a>
-      ${this._puedeVerDocs() ? `<button type="button" onclick="Centro.verDocumentos()">Documentos del cliente<span class="cg-menu-hint">registro público, cédula, poderes</span></button>` : ''}
-      <button type="button" onclick="Centro.constanciaEquipos()">Constancia de equipos<span class="cg-menu-hint">lo que tiene hoy, con qué contrato y con qué entrega</span></button>
-      <button type="button" onclick="Centro.abrirBloque('blkActividad')">Historial de la ficha<span class="cg-menu-hint">quién cambió qué y cuándo</span></button>
-      ${this._puedeTrasladar() ? `<button type="button" onclick="Centro.trasladarCuenta()">Cambio de razón social / traslado de cuenta…<span class="cg-menu-hint">todo lo vivo pasa a otra ficha; esta queda inactiva</span></button>` : ''}`;
+      <div class="ph">
+        <div style="flex:1; min-width:0;">
+          <h2>Todas las acciones</h2>
+          <div class="sub">para ${esc(this.cliente.nombre || '')} · lo que no aplica sale en gris con el motivo</div>
+          <input class="form-input" type="search" data-accq autocomplete="off" aria-label="Buscar una acción"
+            placeholder="Escribe lo que quieres hacer: reemplazar, baja, consola…" oninput="Centro._menuFiltrar(this.value)">
+        </div>
+        <button type="button" class="btn" style="width:44px; padding:0; justify-content:center; flex:none;" aria-label="Cerrar el panel" onclick="Centro.cerrarMenu()"><i data-lucide="x"></i></button>
+      </div>
+      ${top}${dar}${cambiar}${actualizar}${retirar}${contratos}${cliente}
+      <div class="cg-vacio hidden" data-accvacio>Ninguna acción coincide con lo que escribiste.</div>
+      <div class="pie">Las gestiones abiertas y las que ya cerraron están en la pestaña <a href="#" onclick="event.preventDefault(); Centro.cerrarMenu(); Centro.mostrarTab('blkGestiones')">Gestiones</a>.</div>`;
+    if (!el.classList.contains('hidden') && window.lucide?.createIcons) lucide.createIcons();
   },
+
   // Trasladar la cuenta o un contrato a otra ficha cambia a quién se factura:
   // administración o gerencia (2026-10-07, P3).
   _puedeTrasladar() { return [ROLES.ADMIN, 'admin', ROLES.GERENTE].includes(this.rol); },

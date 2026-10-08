@@ -70,7 +70,13 @@ Object.assign(window.Centro, {
       const skel = (n, h) => Array.from({ length: n }, () =>
         `<div class="cg-skel" style="height:${h}px; margin-bottom:8px;"></div>`).join('');
       document.getElementById('fAhora').innerHTML = skel(1, 64);
-      document.getElementById('fResumen').innerHTML = '';
+      document.getElementById('fResumen').innerHTML = skel(1, 120);
+      const sk = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+      sk('fResumenTab', skel(3, 38));
+      sk('fContacto', skel(1, 90));
+      sk('cgVerbos', skel(1, 42));
+      sk('fEstado', '');
+      sk('cgMenu', '');
       document.getElementById('fContratos').innerHTML = skel(3, 38);
       document.getElementById('fEquipos').innerHTML = skel(3, 38);
       document.getElementById('fGestiones').innerHTML = skel(2, 46);
