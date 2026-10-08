@@ -115,9 +115,16 @@
     .cg-verbo.off { color:var(--fg-4); background:var(--surface-sunken, #F6F9FB); border-style:dashed; cursor:not-allowed; }
     .cg-verbo.off:hover { border-color:var(--border-default); background:var(--surface-sunken, #F6F9FB); }
     /* Cuerpo: pestañas a la izquierda, "Qué está esperando" y datos a la derecha. */
+    /* La ficha aprovecha el ancho de la pantalla (Alberto 2026-10-08: "sobra
+       mucho espacio a los lados"): el kit topa .app-wrap en 1100 px; con la
+       ficha abierta sube a 1600 (abrir/volver ponen y quitan .is-ficha). El
+       directorio sigue en 1100: una lista de nombres no gana con más ancho. */
+    .app-wrap.is-ficha { max-width:1600px; }
     .cg-body { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; margin-top:var(--sp-4); }
-    .cg-main { flex:999 1 560px; min-width:0; background:var(--surface-card); border:1px solid var(--border-default); border-radius:12px; }
-    .cg-aside { flex:1 1 300px; max-width:360px; min-width:280px; display:flex; flex-direction:column; gap:14px; }
+    /* El sobrante se reparte 4:1 (principal : columna derecha) y la derecha
+       topa en 440 px: a 1920 la principal mide ~1110 y la derecha ~440. */
+    .cg-main { flex:4 1 560px; min-width:0; background:var(--surface-card); border:1px solid var(--border-default); border-radius:12px; }
+    .cg-aside { flex:1 1 320px; max-width:440px; min-width:280px; display:flex; flex-direction:column; gap:14px; }
     .cg-tabs { display:flex; align-items:center; padding:0 18px; border-bottom:1px solid var(--border-default); overflow-x:auto; scrollbar-width:none; }
     .cg-tabs::-webkit-scrollbar { display:none; }
     .cg-tab { display:inline-flex; align-items:center; gap:8px; height:46px; padding:0 4px; margin-right:22px; border:0; border-bottom:2px solid transparent; background:none;

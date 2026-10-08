@@ -11,6 +11,7 @@ Object.assign(window.Centro, {
     this.cliente = null;
     document.getElementById('vistaFicha').classList.add('hidden');
     document.getElementById('vistaLista').classList.remove('hidden');
+    document.querySelector('.app-wrap')?.classList.remove('is-ficha');
     const cola = window.CentroAprobaciones?.tipo;
     // El filtro de regularización sobrevive al ir y volver de una ficha.
     const qs = this.filtroReg ? '?filtro=regularizacion' : (cola ? `?aprobaciones=${cola}` : '');
@@ -61,6 +62,8 @@ Object.assign(window.Centro, {
       if (push) history.pushState({}, '', `?id=${encodeURIComponent(clienteId)}`);
       document.getElementById('vistaLista').classList.add('hidden');
       document.getElementById('vistaFicha').classList.remove('hidden');
+      // Ancho de ficha (1600 px) solo mientras se mira una cuenta.
+      document.querySelector('.app-wrap')?.classList.add('is-ficha');
       window.scrollTo(0, 0);
 
       this._pintarEncabezado(c);
