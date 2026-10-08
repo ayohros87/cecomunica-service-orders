@@ -291,6 +291,15 @@ window.PocList = {
       sub.style.cssText = 'display:inline-block;font-size:11px;color:var(--fg-3);font-family:var(--font-mono,monospace);margin-top:2px;';
       tdCliente.appendChild(document.createElement('br'));
       tdCliente.appendChild(sub);
+    } else if (d.venta_factura) {
+      // Venta directa (Brenda, 2026-10-08): sin contrato, la factura dice de
+      // dónde salió el radio. Antes solo quedaba en las notas.
+      const sub = document.createElement('span');
+      sub.title = 'Vendido por factura, sin contrato';
+      sub.textContent = /^\d/.test(String(d.venta_factura)) ? `Factura ${d.venta_factura}` : String(d.venta_factura);
+      sub.style.cssText = 'display:inline-block;font-size:11px;color:var(--fg-3);font-family:var(--font-mono,monospace);margin-top:2px;';
+      tdCliente.appendChild(document.createElement('br'));
+      tdCliente.appendChild(sub);
     }
     // Ficha cerrada: se dice de UNA vez de qué devolución salió. Sin esto la
     // fila parece viva y con datos a medias.
@@ -593,7 +602,7 @@ window.PocList = {
 
     docs.forEach(d => {
       if (soloInactivos && d.activo) return;
-      if (soloSinContrato && (d.contrato_id || d.contrato_doc_id)) return;
+      if (soloSinContrato && (d.contrato_id || d.contrato_doc_id || d.venta_factura)) return;
       if (soloIncompletos && !this._incompleta(d)) return;
       tbody.appendChild(this._buildRow(d.id, d));
     });
@@ -723,7 +732,7 @@ window.PocList = {
           const nombreCliente = PocState.nombreClienteDe(d);
           const algunoVacio   = this._incompleta(d);
 
-          if (soloSinContrato && (d.contrato_id || d.contrato_doc_id)) return;
+          if (soloSinContrato && (d.contrato_id || d.contrato_doc_id || d.venta_factura)) return;
           if (soloIncompletos) {
             if (!algunoVacio) return;
             incompletos++;
@@ -946,7 +955,7 @@ window.PocList = {
     }).then(docs => {
       docs.forEach(d => {
         if (soloInactivos && d.activo) return;
-        if (soloSinContrato && (d.contrato_id || d.contrato_doc_id)) return;
+        if (soloSinContrato && (d.contrato_id || d.contrato_doc_id || d.venta_factura)) return;
         if (soloIncompletos && !this._incompleta(d)) return;
         const row = this._buildRow(d.id, d);
         if (!PocState.esLectura()) {

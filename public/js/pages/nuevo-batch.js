@@ -103,10 +103,44 @@
       return serialesDeGestion(g).filter(s => s.saliente);
     }
 
+    // ── Factura de venta directa como fuente (Brenda, 2026-10-08) ──
+    // Un radio vendido por factura (sin contrato) no está en ningún contrato ni
+    // gestión: recepción tecleaba serial y modelo y anotaba la factura en las
+    // notas (Goly, factura 11076). Bodega ya dejó en el pool cada unidad vendida
+    // con venta.factura y su modelo, así que el select ofrece las facturas del
+    // cliente y "Jalar" trae serial + modelo. Valor con prefijo "v:".
+    let ventasPorFactura = new Map();   // factura → { factura, pedido_id, seriales[] }
+    const esValorVenta = (v) => typeof v === 'string' && v.startsWith('v:');
+    const ventaDe = (v) => esValorVenta(v) ? ventasPorFactura.get(v.slice(2)) : null;
+    // "11076" → "Factura 11076"; "FACTURA 10848" / "NO FISCAL 10959" quedan como vienen.
+    const facturaLabel = (f) => /^\d/.test(String(f)) ? `Factura ${f}` : String(f);
+
+    async function cargarVentasDelCliente(clienteId) {
+      const snap = await firebase.firestore().collection('equipos_pool')
+        .where('venta.cliente_id', '==', clienteId).limit(300).get();
+      const map = new Map();
+      snap.docs.map(d => d.data())
+        .filter(p => p.estado === 'vendido' && String(p.venta?.factura || '').trim())
+        .forEach(p => {
+          const f = String(p.venta.factura).trim();
+          if (!map.has(f)) map.set(f, { factura: f, pedido_id: p.venta.pedido_id || null, at: 0, seriales: [] });
+          const v = map.get(f);
+          const at = p.venta.at?.toMillis ? p.venta.at.toMillis() : 0;
+          if (at > v.at) v.at = at;
+          v.seriales.push({ serial: String(p.serial || '').trim(), modelo: p.modelo_label || '', modelo_id: p.modelo_id || '', en_poc: !!p.poc_device_id });
+        });
+      return map;
+    }
+
     // Mapa serialNorm → { serial, modelo, modelo_id } de la fuente elegida:
     // contrato (subcolección seriales) o gestión (seriales asignados por bodega).
     async function mapaSerialesDe(valor) {
       if (!valor) return new Map();
+      if (esValorVenta(valor)) {
+        const map = new Map();
+        for (const s of (ventaDe(valor)?.seriales || [])) if (s.serial) map.set(ContratosService._serialKey(s.serial), s);
+        return map;
+      }
       if (esValorGestion(valor)) {
         const map = new Map();
         for (const s of serialesDeGestion(gestionDe(valor))) map.set(ContratosService._serialKey(s.serial), s);
@@ -938,11 +972,25 @@ async function cargarContratosDelCliente() {
       const label = `${g.id} · ${que} · ${serialesDeGestion(g).length} serial(es) · OS ${(g.ordenes.programacion_ids || []).join(', ')}`;
       return `<option value="g:${esc(g.id)}" data-ref="${esc(a.contrato_id || '')}">${esc(label)}</option>`;
     }).join('');
-    sel.innerHTML = (contratos.length || gestiones.length)
+    // Facturas de venta directa del cliente (pool vendido). Las que ya están
+    // completas en PoC van al final: casi siempre se busca la más reciente.
+    try { ventasPorFactura = await cargarVentasDelCliente(clienteId); }
+    catch (e) { ventasPorFactura = new Map(); console.warn('[nuevo-batch] ventas del cliente ilegibles', e); }
+    const opcionesVentas = [...ventasPorFactura.values()]
+      .sort((a, b) => (a.seriales.every(s => s.en_poc) - b.seriales.every(s => s.en_poc)) || (b.at - a.at))
+      .map(v => {
+        const modelos = [...new Set(v.seriales.map(s => s.modelo).filter(Boolean))].join(', ');
+        const enPoc = v.seriales.filter(s => s.en_poc).length;
+        const label = `${facturaLabel(v.factura)} · ${v.seriales.length} equipo(s)${modelos ? ` · ${modelos}` : ''}`
+          + (enPoc ? ` · ${enPoc === v.seriales.length ? 'ya en PoC' : `${enPoc} ya en PoC`}` : '');
+        return `<option value="v:${esc(v.factura)}" data-ref="">${esc(label)}</option>`;
+      }).join('');
+    sel.innerHTML = (contratos.length || gestiones.length || ventasPorFactura.size)
       ? '<option value="">Sin vincular a contrato</option>'
         + (opcionesContratos ? `<optgroup label="Contratos vigentes">${opcionesContratos}</optgroup>` : '')
         + (opcionesGestiones ? `<optgroup label="Gestiones con OS de programación (aumento, reemplazo, demo)">${opcionesGestiones}</optgroup>` : '')
-      : '<option value="">El cliente no tiene contratos vigentes ni gestiones con OS</option>';
+        + (opcionesVentas ? `<optgroup label="Facturas de venta directa (sin contrato)">${opcionesVentas}</optgroup>` : '')
+      : '<option value="">El cliente no tiene contratos vigentes, gestiones con OS ni facturas de venta</option>';
     sel.dataset.clienteId = clienteId;
     const restaurado = mismoCliente && contratoPrevio
       && [...sel.options].some(o => o.value === contratoPrevio);
@@ -1424,7 +1472,9 @@ document.getElementById("addCliente").onclick = async () => {
         // es el de su anexo si existe en el sistema, o el número de papel de
         // la adenda (solo referencia, sin contrato_doc_id).
         const gestionSel    = gestionDe(fuente);
-        const contratoDocId = gestionSel ? (gestionSel.aumento?.contrato_doc_id || null) : fuente;
+        // Factura de venta directa: sin contrato, el ancla es la factura.
+        const ventaSel      = ventaDe(fuente);
+        const contratoDocId = ventaSel ? null : gestionSel ? (gestionSel.aumento?.contrato_doc_id || null) : fuente;
         const contratoRef   = gestionSel
           ? (gestionSel.aumento?.contrato_id || null)
           : (contratoDocId ? (contratoSel.selectedOptions[0]?.getAttribute("data-ref") || null) : null);
@@ -1440,6 +1490,8 @@ document.getElementById("addCliente").onclick = async () => {
         // 2026-07-24: lote re-creado suelto y hubo que vincularlo a mano).
         if (!fuente) {
           Toast.show('Ojo: el lote se está creando SIN contrato vinculado. Los equipos no quedarán anclados a ningún contrato.', 'warn');
+        } else if (ventaSel) {
+          Toast.show(`Lote anclado a la ${facturaLabel(ventaSel.factura).toLowerCase()} (venta directa, sin contrato).`, 'ok');
         } else if (gestionSel && !contratoDocId) {
           Toast.show(`Lote anclado a la gestión ${gestionSel.id}${contratoRef ? ` (contrato en papel ${contratoRef})` : ' (sin contrato, por diseño)'}.`, 'ok');
         }
@@ -1512,6 +1564,7 @@ document.getElementById("addCliente").onclick = async () => {
         contrato_doc_id: contratoDocId,
         contrato_id: contratoRef,
         ...(gestionSel ? { gestion_id: gestionSel.id, gestion_tipo: gestionSel.tipo || null } : {}),
+        ...(ventaSel ? { venta_factura: ventaSel.factura, venta_pedido_id: ventaSel.pedido_id || null } : {}),
         ip: document.getElementById("ip").value,
         serial: serialesFinal[i],
         unit_id: String(unitIdInicial + i), // Unit ID consecutivo

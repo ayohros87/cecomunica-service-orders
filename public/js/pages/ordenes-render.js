@@ -142,6 +142,11 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
         iconoContrato = `<span title="Contrato: ${contratoNumero}" style="cursor:help;margin-left:4px;vertical-align:middle;"><i data-lucide="link" style="color:#059669;width:15px;height:15px;"></i></span>`;
       } else if (ordenData.contrato.aplica === false && gestionLink) {
         iconoContrato = '';
+      } else if (ordenData.contrato.aplica === false && facturaVentaDe(ordenData)) {
+        // Venta directa (Brenda, 2026-10-08): la factura es su amarre, como el
+        // contrato en las demás. Se ve el número, no la prohibición roja.
+        const fact = escapeHtml(facturaVentaDe(ordenData));
+        iconoContrato = `<span title="Venta directa — factura ${fact}" style="cursor:help;margin-left:4px;vertical-align:middle;display:inline-flex;align-items:center;gap:2px;font-size:11px;color:#059669;"><i data-lucide="receipt" style="width:15px;height:15px;"></i>${fact}</span>`;
       } else if (ordenData.contrato.aplica === false) {
         const motivoShort = ordenData.contrato.motivo_no_aplica || 'Sin motivo';
         iconoContrato = `<span title="No aplica contrato: ${motivoShort}" style="cursor:help;margin-left:4px;vertical-align:middle;"><i data-lucide="ban" style="color:#dc2626;width:15px;height:15px;"></i></span>`;
@@ -1824,8 +1829,20 @@ function _enlacesContexto(ordenData) {
     contrato = alCentro && c.contrato_doc_id
       ? `<a class="orden-ctx-link orden-ctx-link--mono" href="${base}&contrato=${encodeURIComponent(c.contrato_doc_id)}" data-stop-propagation="true" title="Abrir el contrato ${escapeHtml(numero)} en el Centro de gestión">${escapeHtml(numero)}</a>`
       : `<span class="orden-ctx-link--mono" title="Contrato">${escapeHtml(numero)}</span>`;
+  } else if (facturaVentaDe(ordenData)) {
+    contrato = `<span class="orden-ctx-link--mono" title="Venta directa, sin contrato">Factura ${escapeHtml(facturaVentaDe(ordenData))}</span>`;
   }
   return { cliente, contrato };
+}
+
+// Número de factura de una orden de venta directa: origen_venta lo trae desde
+// 2026-10-07 (pedidos_venta y nueva-orden?origen=venta). Las de antes solo lo
+// dejaron en el motivo de "no aplica contrato" ("Venta directa — factura QBO X").
+function facturaVentaDe(ordenData) {
+  const f = String(ordenData.origen_venta?.factura_qbo || '').trim();
+  if (f) return f;
+  const m = /factura(?:\s+QBO)?\s+(.+)$/i.exec(String(ordenData.contrato?.motivo_no_aplica || ''));
+  return m && /venta/i.test(ordenData.contrato.motivo_no_aplica) ? m[1].trim() : '';
 }
 
 function _crearFilaDetalle(ordenId, ordenData, equiposNormalizados) {

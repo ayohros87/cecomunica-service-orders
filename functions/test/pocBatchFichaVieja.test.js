@@ -77,7 +77,7 @@ const FICHAS_VIEJAS = [
     sim_number: "8950702902411531904", grupos: ["MUNICIPIO ARRAIJAN"], created_at: ts("2025-09-08T15:00:00Z") },
 ];
 
-function montar({ existentes = FICHAS_VIEJAS, confirmar = () => true } = {}) {
+function montar({ existentes = FICHAS_VIEJAS, confirmar = () => true, pool = [] } = {}) {
   const els = new Map();
   const selects = new Set(["cliente", "ip", "contratoJalar"]);
   const get = (id) => {
@@ -153,7 +153,9 @@ function montar({ existentes = FICHAS_VIEJAS, confirmar = () => true } = {}) {
           where: () => ({
             get: async () => ({ forEach: (fn) => (nombre === "poc_devices" ? existentes : [])
               .forEach(d => fn({ id: d.id, data: () => d })) }),
-            limit: () => ({ get: async () => ({ docs: [] }) }),
+            // Unidades vendidas del pool (facturas de venta del cliente).
+            limit: () => ({ get: async () => ({ docs: (nombre === "equipos_pool" ? pool : [])
+              .map(p => ({ id: p.serial, data: () => p })) }) }),
           }),
           // proponerProximoUnitId
           orderBy: () => ({ limit: () => ({ get: async () => ({ forEach: () => {} }) }) }),
@@ -303,4 +305,26 @@ test("cancelar en el aviso de otro cliente no crea el lote", async () => {
 
   assert.equal(h.registro.creados.length, 0);
   assert.equal(h.registro.cerrados.length, 0);
+});
+
+// ── Factura de venta directa como ancla (Brenda, 2026-10-08) ───────────────
+test("elegir la factura de venta deja la factura en la ficha, sin contrato", async () => {
+  const pool = [{ serial: "25220A0521", estado: "vendido", modelo_id: "mPNC460", modelo_label: "HYTERA PNC460-R",
+    venta: { factura: "11076", cliente_id: "CLI1", pedido_id: "PED1" } }];
+  const h = montar({ existentes: [], pool });
+  await conFormularioLleno(h, { seriales: ["25220A0521"], unitIdInicial: 275671 });
+  await h.sandbox.cargarContratosDelCliente();
+  h.el("contratoJalar").value = "v:11076";
+  assert.equal(h.el("contratoJalar").value, "v:11076", "precondición: la factura está en el select");
+
+  await guardar(h);
+
+  assert.equal(h.registro.creados.length, 1);
+  const d = h.registro.creados[0];
+  assert.equal(d.venta_factura, "11076");
+  assert.equal(d.venta_pedido_id, "PED1");
+  assert.equal(d.contrato_doc_id, null, "una factura no es un contrato");
+  assert.equal(d.contrato_id, null);
+  assert.equal(d.modelo_id, "mPNC460", "el modelo sale de lo que bodega asignó, no del teclado");
+  assert.ok(!h.registro.toasts.some(t => /SIN contrato/.test(t.msg)), "no avisa de lote suelto");
 });

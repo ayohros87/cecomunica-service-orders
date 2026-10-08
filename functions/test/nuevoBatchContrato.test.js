@@ -96,7 +96,7 @@ const ARCHIVO_22_PNC = Array.from({ length: 22 }, (_, i) => ({
   gps: false, grupos: ["MONTAJE-GAMBOA"],
 }));
 
-function montar({ contratos = CONTRATOS, modelos = MODELOS } = {}) {
+function montar({ contratos = CONTRATOS, modelos = MODELOS, pool = [] } = {}) {
   const els = new Map();
   const get = (id) => {
     if (!els.has(id)) els.set(id, id === "contratoJalar" || id === "cliente" || id === "ip" ? new FakeSelect(id) : new FakeEl(id));
@@ -156,8 +156,16 @@ function montar({ contratos = CONTRATOS, modelos = MODELOS } = {}) {
     firebase: {
       auth: () => ({ onAuthStateChanged: () => {}, currentUser: { uid: "u", email: "e" } }),
       // Solo lo que usa proponerProximoUnitId (poc_devices recientes).
+      // + where() de un solo campo: gestiones del cliente (vacío) y las
+      // unidades vendidas del pool (venta.cliente_id).
       firestore: () => ({
-        collection: () => ({ orderBy: () => ({ limit: () => ({ get: async () => ({ forEach: () => {} }) }) }) }),
+        collection: (nombre) => ({
+          orderBy: () => ({ limit: () => ({ get: async () => ({ forEach: () => {} }) }) }),
+          where: (_campo, _op, valor) => ({ limit: () => ({ get: async () => ({
+            docs: (nombre === "equipos_pool" ? pool.filter(p => p.venta?.cliente_id === valor) : [])
+              .map(p => ({ id: p.serial, data: () => p })),
+          }) }) }),
+        }),
       }),
     },
   };
@@ -476,4 +484,31 @@ test("cambiar de cliente sí trae el IP del cliente nuevo", async () => {
 
   assert.equal(h.el("ip").value, "main.cecomunica.net",
     "el IP de un cliente jamás debe quedarse pegado al siguiente");
+});
+
+// ── Factura de venta directa como fuente (Brenda, 2026-10-08) ──────────────
+// Goly: un PNC460-R vendido por la factura 11076, sin contrato. Recepción
+// tecleaba serial y modelo; ahora la factura sale en el select y "Jalar" los trae.
+const POOL_GOLY = [
+  { serial: "25220A0521", estado: "vendido", modelo_id: "mid", modelo_label: "HYTERA PNC460-R",
+    venta: { factura: "11076", cliente_id: "CLI1", pedido_id: "PED1" } },
+  { serial: "OTRO-CLI", estado: "vendido", modelo_id: "mid", modelo_label: "HYTERA PNC460-R",
+    venta: { factura: "9999", cliente_id: "CLI2" } },
+];
+
+test("la factura de venta del cliente aparece en el select y jala serial + modelo", async () => {
+  const h = montar({ pool: POOL_GOLY });
+  h.el("cliente").value = "CLI1";
+  await h.sandbox.cargarContratosDelCliente();
+  const opt = h.el("contratoJalar").options.find(o => o.value === "v:11076");
+  assert.ok(opt, "la factura 11076 está en el select");
+  assert.match(opt.textContent, /Factura 11076 · 1 equipo\(s\) · HYTERA PNC460-R/);
+  assert.ok(!h.el("contratoJalar").options.some(o => o.value === "v:9999"), "no trae facturas de otro cliente");
+
+  h.el("contratoJalar").value = "v:11076";
+  await h.sandbox.jalarSerialesDesdeContrato();
+  assert.deepEqual(lineas(h), ["25220A0521"]);
+  assert.match(h.el("previewContrato").innerHTML, /25220A0521/);
+  h.sandbox.actualizarAvisoSinContrato();
+  assert.equal(h.el("avisoSinContrato").hidden, true, "con factura elegida no es un lote suelto");
 });
