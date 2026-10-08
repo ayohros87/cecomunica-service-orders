@@ -64,6 +64,12 @@
        it. Mirror ordenes-index and make the wrap non-clipping. */
     .app-table-wrap { overflow: visible; }
 
+    /* Los grupos de filtros por pestaña son display:contents (para fluir en
+       la misma barra), y un display en línea le gana al atributo `hidden`:
+       la pestaña Gestiones mostraba los chips de estado y composición de
+       contratos, que ahí no filtran nada (visto 2026-10-08). */
+    #filtrosContratos[hidden], #filtrosGestiones[hidden] { display: none !important; }
+
     /* Zebra stripe + readability bump — mirrors ordenes/index. The kit
        default (13px on a 1-row band) felt tight here; bumping td font to
        15px and using a slightly darker tint (#f1f5f9 vs #f8fafc) gives
@@ -227,6 +233,7 @@
           </div>
           <div style="flex:1;"></div>
           <label class="toggle-pill"><input type="checkbox" id="chkGestionesAbiertas"> <i data-lucide="clock" style="width:14px;height:14px;"></i> Solo abiertas</label>
+          <label class="toggle-pill" title="Aumentos sin el anexo firmado y bajas sin la carta del cliente. Reemplazos, demos y cambios de serial no llevan documento."><input type="checkbox" id="chkGestionesSinDocumento"> <i data-lucide="file-x" style="width:14px;height:14px;"></i> Falta documento</label>
         </div>
 
         <!-- Rango de fechas: el filtro que convierte una lista en un archivo
@@ -332,6 +339,7 @@
               <th style="width:150px;">Tipo</th>
               <th style="width:64px; text-align:center;">Ser.</th>
               <th style="width:180px;">Estado</th>
+              <th style="width:190px;">Documento</th>
               <th style="width:160px;">Contrato</th>
               <th>Responsable</th>
               <th style="width:110px;">Solicitud</th>
