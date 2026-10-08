@@ -287,8 +287,15 @@
     .cg-eqgrp.warn > summary { background:var(--cg-warn-soft, #FBF3E0); }
     .cg-dock { display:none; }
     @media (max-width:760px) {
-      .cg-eqgrp > summary { grid-template-columns:minmax(0,1fr) auto 18px; }
+      /* Cabecera del grupo en el teléfono: título, conteo y acción apilados en
+         UNA columna que puede partir. Con `auto` + nowrap, "121 equipos · 121 en
+         alquiler" empujaba la página a 413 px (emulador con SEPROSA, 2026-10-08). */
+      .cg-eqgrp > summary { grid-template-columns:minmax(0,1fr) 18px; row-gap:2px; }
+      .cg-eqgrp > summary > span { grid-column:1; min-width:0; }
+      .cg-eqgrp > summary .k { white-space:normal; }
       .cg-eqgrp > summary .k:nth-of-type(2) { display:none; }
+      .cg-eqgrp > summary > span:empty { display:none; }
+      .cg-eqgrp > summary .chev { grid-column:2; grid-row:1; }
       /* La barra de verbos se desliza en UNA fila; "Más acciones" baja al dock. */
       .cg-verbos { flex-wrap:nowrap; overflow-x:auto; padding:10px 14px; scrollbar-width:none; }
       .cg-verbos::-webkit-scrollbar { display:none; }
@@ -303,7 +310,9 @@
       .cg-main { flex:1 1 100%; }
       .cg-tabs { padding:0 14px; } .cg-tab { margin-right:18px; height:44px; font-size:13.5px; }
       .cg-panel { padding:12px 14px 14px; }
-      .cg-selbar { margin:10px -14px -14px; position:fixed; left:0; right:0; bottom:0; margin:0; border-radius:0; z-index:1060; padding-bottom:calc(10px + env(safe-area-inset-bottom)); }
+      /* Fija abajo; el hueco de la izquierda es para el FAB del rail (igual que el dock). */
+      .cg-selbar { position:fixed; left:0; right:0; bottom:0; margin:0; border-radius:0; z-index:1060; padding:10px 12px calc(10px + env(safe-area-inset-bottom)) 72px; }
+      .cg-selbar .btns { margin-left:0; }
       .cg-panelacc { width:100vw; }
       /* Línea de tiempo en el teléfono: icono a la izquierda (dos filas), fecha
          arriba y texto debajo — sin la columna de fecha de 88 px. */

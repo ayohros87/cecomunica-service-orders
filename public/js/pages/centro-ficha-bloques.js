@@ -225,7 +225,9 @@ Object.assign(window.Centro, {
   // mismo descriptor que los demás verbos.
   _verboCuenta(est, tram, puedeG) {
     if (!puedeG) return null;
-    if (tram) return { id: 'cuenta', icono: 'refresh-cw', label: 'Ver renovación en trámite', onclick: `Centro.abrirGestion('ct-${this.esc(tram.id)}')`, hint: `${tram.contrato_id || ''} — abre el expediente` };
+    // Corto a propósito: con "Ver renovación en trámite" + "Sugerido" la barra
+    // partía en dos líneas a 1280 px (COPASECUVA, emulador 2026-10-08).
+    if (tram) return { id: 'cuenta', icono: 'refresh-cw', label: 'Renovación en trámite', onclick: `Centro.abrirGestion('ct-${this.esc(tram.id)}')`, hint: `${tram.contrato_id || ''} — abre el expediente para ver en qué paso va` };
     if (est.tipo === 'nueva') return { id: 'cuenta', icono: 'file-plus', label: 'Nuevo contrato', onclick: 'Centro.wizContrato()', hint: 'el primer contrato de la cuenta' };
     if (est.tipo === 'sin_contrato') return { id: 'cuenta', icono: 'file-plus', label: 'Nuevo contrato', onclick: 'Centro.wizContrato({renovarCuenta:true})', hint: `cubre los ${est.custodia} radio${est.custodia === 1 ? '' : 's'} que el cliente aún tiene` };
     if (est.tipo === 'fragmentada') return { id: 'cuenta', icono: 'refresh-cw', label: 'Renovar cuenta', onclick: 'Centro.wizContrato({renovarCuenta:true})', hint: `consolida ${est.renovables.length} contratos en uno` };
