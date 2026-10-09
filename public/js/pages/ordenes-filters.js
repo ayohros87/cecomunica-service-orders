@@ -584,6 +584,8 @@ function renderOrdersList(list) {
     const alcanzable = document.documentElement.scrollHeight - window.innerHeight;
     if (alcanzable >= scrollPrevio) window.scrollTo(0, scrollPrevio);
   }
+  // La ficha lateral, si está abierta, se repinta con el state fresco (2026-10-09).
+  if (window.OrdenesFicha) OrdenesFicha.refrescar();
 }
 
 // La cola de QC NO cabe en la primera página. La lista viva son las 40 órdenes
@@ -800,7 +802,7 @@ function _applyURLToFilters() {
   // enlaces viejos de correos, nuevo-batch y editar-orden): antes solo
   // filtraba por texto las 40 recientes y una orden vieja "no existía"
   // (auditoría de módulos 2026-09-30, 01 R2).
-  const idsRaw = params.get('ids') || params.get('orden');
+  const idsRaw = params.get('ids') || params.get('orden') || params.get('ficha');
   if (idsRaw) {
     const ids = idsRaw.split(',').map(s => s.trim()).filter(Boolean).slice(0, 60);
     if (ids.length) { _idsCorreo = new Set(ids); touched = true; }

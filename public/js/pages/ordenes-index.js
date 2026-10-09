@@ -148,6 +148,8 @@ document.addEventListener("DOMContentLoaded", function () {
       // Entrega/Recepción (firma + receptor). Es el destino de los links
       // generados en onComplete.js.
       _abrirEntregaDeepLink();
+      // ?ficha=<id> abre la ficha lateral de la orden (señales del home, correos).
+      if (window.OrdenesFicha) OrdenesFicha._deepLink();
       // ?orden=<id>&recibir=1 — "Guardar y recibir" de nuevo-batch.
       _abrirRecepcionDeepLink();
     } catch (e) {

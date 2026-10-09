@@ -159,7 +159,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   filaOrden.innerHTML = `
     <td>
       <i data-lucide="chevron-right" class="flecha"></i>
-      <span class="orden-id">${ordenId}</span>
+      <button type="button" class="orden-id orden-id--btn" data-action="ver-ficha" data-orden-id="${ordenId}" data-stop-propagation="true" title="Abrir la ficha de la orden">${ordenId}</button>
       ${fotosBadge}
     </td>
     <td class="client-name-cell">
@@ -266,7 +266,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
         <span class="chip-estado ${getEstadoClass(estadoDisplay, ordenData)}" title="${estadoTooltip(estadoDisplay, ordenData)}">${estadoCompacto(estadoDisplay, ordenData)}</span>
       </div>
       <div class="card-contrato__tier2">
-        <span class="card-contrato__ord">#${ordenId}</span>
+        <button type="button" class="card-contrato__ord orden-id--btn" data-action="ver-ficha" data-orden-id="${ordenId}" data-stop-propagation="true" title="Abrir la ficha de la orden">#${ordenId}</button>
         <span class="card-contrato__sep" aria-hidden="true">·</span>
         <span class="card-contrato__tipo">${tipoDisplay}</span>
         <span class="card-contrato__sep" aria-hidden="true">·</span>
@@ -295,6 +295,8 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   }
 }
 window.renderizarOrdenYEquipos = renderizarOrdenYEquipos;
+// La ficha lateral (ordenes-ficha.js) reusa el historial.
+window._buildTimelineHTML = (o) => _buildTimelineHTML(o);
 
 // Build the audit-log timeline HTML for an order.
 // Derives entries from the dedicated `fecha_*` timestamp fields the

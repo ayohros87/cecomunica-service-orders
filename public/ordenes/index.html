@@ -29,7 +29,7 @@
        aviso "otro cliente" sale sin fondo con el CSS viejo en caché. -->
   <link rel="stylesheet" href="../css/ceco-ui.css?v=74b79c3f">
   <link rel="stylesheet" href="../css/bandeja.css?v=0d25ff09">
-  <link rel="stylesheet" href="../css/ordenes-index.css?v=c8e114be">
+  <link rel="stylesheet" href="../css/ordenes-index.css?v=c2398230">
   <!-- Rediseño Command Center F2: rail lateral + KPIs de señal (híbrido,
        conserva ceco-ui). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=c83fa1b2">
@@ -137,29 +137,29 @@
        so the existing handlers in ordenes-filters.js handle both. -->
   <div class="bj-filtros" id="estadoChipsBarMobile" role="tablist" aria-label="Filtrar por estado">
     <button type="button" class="bj-filtro bj-filtro--all active"
-            data-action="filtrar-bj-filtro" data-estado=""
+            data-action="filtrar-estado-chip" data-estado=""
             role="tab" aria-selected="true">
       Todas
     </button>
     <button type="button" class="bj-filtro bj-filtro--por-asignar"
-            data-action="filtrar-bj-filtro" data-estado="por_recibir"
+            data-action="filtrar-estado-chip" data-estado="por_recibir"
             role="tab" aria-selected="false"
             title="Reparaciones que el cliente todavía no entrega en mostrador">
       <span class="dot" aria-hidden="true"></span>Por recibir <span class="cnt" data-count="por_recibir">—</span>
     </button>
     <button type="button" class="bj-filtro bj-filtro--recibido"
-            data-action="filtrar-bj-filtro" data-estado="por_asignar"
+            data-action="filtrar-estado-chip" data-estado="por_asignar"
             role="tab" aria-selected="false"
             title="Esperando técnico: recibidas en mostrador, programaciones, entradas y visitas">
       <span class="dot" aria-hidden="true"></span>Por asignar <span class="cnt" data-count="por_asignar">—</span>
     </button>
     <button type="button" class="bj-filtro bj-filtro--asignado"
-            data-action="filtrar-bj-filtro" data-estado="ASIGNADO"
+            data-action="filtrar-estado-chip" data-estado="ASIGNADO"
             role="tab" aria-selected="false">
       <span class="dot" aria-hidden="true"></span>Asignado <span class="cnt" data-count="ASIGNADO">—</span>
     </button>
     <button type="button" class="bj-filtro bj-filtro--completado"
-            data-action="filtrar-bj-filtro" data-estado="COMPLETADO (EN OFICINA)"
+            data-action="filtrar-estado-chip" data-estado="COMPLETADO (EN OFICINA)"
             role="tab" aria-selected="false"
             title="Completadas en oficina: listas para entregar o esperando el QC (chip QC)">
       <span class="dot" aria-hidden="true"></span>Listos <span class="cnt" data-count="COMPLETADO (EN OFICINA)">—</span>
@@ -184,30 +184,30 @@
       </button>
       <div class="bj-filtro-menu" role="menu" hidden>
         <button type="button" class="bj-filtro-menu__item bj-filtro--entregado" role="menuitem"
-                data-action="filtrar-bj-filtro" data-estado="ENTREGADO AL CLIENTE">
+                data-action="filtrar-estado-chip" data-estado="ENTREGADO AL CLIENTE">
           <span class="dot" aria-hidden="true"></span>Entregado <span class="cnt" data-count="ENTREGADO AL CLIENTE">—</span>
         </button>
         <button type="button" class="bj-filtro-menu__item bj-filtro--visita-cerrada" role="menuitem"
-                data-action="filtrar-bj-filtro" data-estado="CERRADA (VISITA)">
+                data-action="filtrar-estado-chip" data-estado="CERRADA (VISITA)">
           <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="cnt" data-count="CERRADA (VISITA)">—</span>
         </button>
         <!-- Separador (2026-09-30): arriba las dos que se usan (Entregado 12,
              Visita cerrada 16 consultas en septiembre); abajo las de archivo (0). -->
         <div class="bj-filtro-menu__sep" role="separator"></div>
         <button type="button" class="bj-filtro-menu__item bj-filtro--cerrada" role="menuitem"
-                data-action="filtrar-bj-filtro" data-estado="CERRADA (DEVOLUCION)">
+                data-action="filtrar-estado-chip" data-estado="CERRADA (DEVOLUCION)">
           <span class="dot" aria-hidden="true"></span>Devolución cerrada <span class="cnt" data-count="CERRADA (DEVOLUCION)">—</span>
         </button>
         <button type="button" class="bj-filtro-menu__item bj-filtro--cerrada" role="menuitem"
-                data-action="filtrar-bj-filtro" data-estado="CERRADA (ENTRADA)">
+                data-action="filtrar-estado-chip" data-estado="CERRADA (ENTRADA)">
           <span class="dot" aria-hidden="true"></span>Entrada cerrada <span class="cnt" data-count="CERRADA (ENTRADA)">—</span>
         </button>
         <button type="button" class="bj-filtro-menu__item bj-filtro--sin-retirar" role="menuitem"
-                data-action="filtrar-bj-filtro" data-estado="CERRADA (SIN RETIRAR)">
+                data-action="filtrar-estado-chip" data-estado="CERRADA (SIN RETIRAR)">
           <span class="dot" aria-hidden="true"></span>Sin retirar <span class="cnt" data-count="CERRADA (SIN RETIRAR)">—</span>
         </button>
         <button type="button" class="bj-filtro-menu__item bj-filtro--anulada" role="menuitem"
-                data-action="filtrar-bj-filtro" data-estado="ANULADA">
+                data-action="filtrar-estado-chip" data-estado="ANULADA">
           <span class="dot" aria-hidden="true"></span>Anulada <span class="cnt" data-count="ANULADA">—</span>
         </button>
       </div>
@@ -294,29 +294,29 @@
   </div>
   <div class="bj-filtros" id="estadoChipsBar" role="tablist" aria-label="Filtrar por estado">
     <button type="button" class="bj-filtro bj-filtro--all active"
-            data-action="filtrar-bj-filtro" data-estado=""
+            data-action="filtrar-estado-chip" data-estado=""
             role="tab" aria-selected="true">
       Todas
     </button>
     <button type="button" class="bj-filtro bj-filtro--por-asignar"
-            data-action="filtrar-bj-filtro" data-estado="por_recibir"
+            data-action="filtrar-estado-chip" data-estado="por_recibir"
             role="tab" aria-selected="false"
             title="Reparaciones que el cliente todavía no entrega en mostrador">
       <span class="dot" aria-hidden="true"></span>Por recibir <span class="cnt" data-count="por_recibir">—</span>
     </button>
     <button type="button" class="bj-filtro bj-filtro--recibido"
-            data-action="filtrar-bj-filtro" data-estado="por_asignar"
+            data-action="filtrar-estado-chip" data-estado="por_asignar"
             role="tab" aria-selected="false"
             title="Esperando técnico: recibidas en mostrador, programaciones, entradas y visitas">
       <span class="dot" aria-hidden="true"></span>Por asignar <span class="cnt" data-count="por_asignar">—</span>
     </button>
     <button type="button" class="bj-filtro bj-filtro--asignado"
-            data-action="filtrar-bj-filtro" data-estado="ASIGNADO"
+            data-action="filtrar-estado-chip" data-estado="ASIGNADO"
             role="tab" aria-selected="false">
       <span class="dot" aria-hidden="true"></span>Asignado <span class="cnt" data-count="ASIGNADO">—</span>
     </button>
     <button type="button" class="bj-filtro bj-filtro--completado"
-            data-action="filtrar-bj-filtro" data-estado="COMPLETADO (EN OFICINA)"
+            data-action="filtrar-estado-chip" data-estado="COMPLETADO (EN OFICINA)"
             role="tab" aria-selected="false"
             title="Completadas en oficina: listas para entregar o esperando el QC (chip QC)">
       <span class="dot" aria-hidden="true"></span>Listos <span class="cnt" data-count="COMPLETADO (EN OFICINA)">—</span>
@@ -341,30 +341,30 @@
       </button>
       <div class="bj-filtro-menu" role="menu" hidden>
         <button type="button" class="bj-filtro-menu__item bj-filtro--entregado" role="menuitem"
-                data-action="filtrar-bj-filtro" data-estado="ENTREGADO AL CLIENTE">
+                data-action="filtrar-estado-chip" data-estado="ENTREGADO AL CLIENTE">
           <span class="dot" aria-hidden="true"></span>Entregado <span class="cnt" data-count="ENTREGADO AL CLIENTE">—</span>
         </button>
         <button type="button" class="bj-filtro-menu__item bj-filtro--visita-cerrada" role="menuitem"
-                data-action="filtrar-bj-filtro" data-estado="CERRADA (VISITA)">
+                data-action="filtrar-estado-chip" data-estado="CERRADA (VISITA)">
           <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="cnt" data-count="CERRADA (VISITA)">—</span>
         </button>
         <!-- Separador (2026-09-30): arriba las dos que se usan (Entregado 12,
              Visita cerrada 16 consultas en septiembre); abajo las de archivo (0). -->
         <div class="bj-filtro-menu__sep" role="separator"></div>
         <button type="button" class="bj-filtro-menu__item bj-filtro--cerrada" role="menuitem"
-                data-action="filtrar-bj-filtro" data-estado="CERRADA (DEVOLUCION)">
+                data-action="filtrar-estado-chip" data-estado="CERRADA (DEVOLUCION)">
           <span class="dot" aria-hidden="true"></span>Devolución cerrada <span class="cnt" data-count="CERRADA (DEVOLUCION)">—</span>
         </button>
         <button type="button" class="bj-filtro-menu__item bj-filtro--cerrada" role="menuitem"
-                data-action="filtrar-bj-filtro" data-estado="CERRADA (ENTRADA)">
+                data-action="filtrar-estado-chip" data-estado="CERRADA (ENTRADA)">
           <span class="dot" aria-hidden="true"></span>Entrada cerrada <span class="cnt" data-count="CERRADA (ENTRADA)">—</span>
         </button>
         <button type="button" class="bj-filtro-menu__item bj-filtro--sin-retirar" role="menuitem"
-                data-action="filtrar-bj-filtro" data-estado="CERRADA (SIN RETIRAR)">
+                data-action="filtrar-estado-chip" data-estado="CERRADA (SIN RETIRAR)">
           <span class="dot" aria-hidden="true"></span>Sin retirar <span class="cnt" data-count="CERRADA (SIN RETIRAR)">—</span>
         </button>
         <button type="button" class="bj-filtro-menu__item bj-filtro--anulada" role="menuitem"
-                data-action="filtrar-bj-filtro" data-estado="ANULADA">
+                data-action="filtrar-estado-chip" data-estado="ANULADA">
           <span class="dot" aria-hidden="true"></span>Anulada <span class="cnt" data-count="ANULADA">—</span>
         </button>
       </div>

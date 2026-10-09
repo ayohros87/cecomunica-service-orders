@@ -36,6 +36,7 @@ import '/js/pages/ordenes-flujo.js';
 import '/js/pages/ordenes-qc.js';
 import '/js/pages/ordenes-equipos.js';
 import '/js/pages/ordenes-ui.js';
+import '/js/pages/ordenes-ficha.js';
 import '/js/pages/ordenes-presets.js';
 import '/js/pages/ordenes-events.js';
 import '/js/vendor/lucide.min.js';
