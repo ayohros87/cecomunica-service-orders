@@ -70,7 +70,27 @@
       <div>
         Páginas vistas con sesión, contadas desde el <strong>30 de septiembre de 2026</strong>. Cada vez que
         alguien abre una pantalla suma 1. En Almacén se cuenta la pestaña con la que se abrió.
-        Lo que la persona hace dentro de la pantalla no se cuenta aquí.
+        Desde el <strong>9 de octubre</strong> se cuentan también las acciones (verbos del Centro, su menú
+        y la fila de la bandeja de órdenes), el dispositivo y de qué pantalla se llegó. Login ya no cuenta.
+      </div>
+    </div>
+
+    <div class="uso-grid" style="margin-bottom:var(--sp-4);">
+      <div class="uso-card">
+        <h3>Acciones más usadas</h3>
+        <p class="ts" style="margin:0 0 8px;">Lo que se pulsa dentro de la pantalla. Con <code>:off</code> es un verbo apagado que alguien intentó igual.</p>
+        <div id="usoAcciones"><div class="uso-vacio">Cargando…</div></div>
+      </div>
+      <div>
+        <div class="uso-card" style="margin-bottom:var(--sp-4);">
+          <h3>Dispositivo</h3>
+          <div id="usoDispositivos"><div class="uso-vacio">Cargando…</div></div>
+        </div>
+        <div class="uso-card">
+          <h3>De dónde se llega</h3>
+          <p class="ts" style="margin:0 0 8px;">Pantalla anterior → pantalla abierta. Un ida y vuelta constante entre dos dice que una de ellas es un peaje.</p>
+          <div id="usoOrigenes"><div class="uso-vacio">Cargando…</div></div>
+        </div>
       </div>
     </div>
 

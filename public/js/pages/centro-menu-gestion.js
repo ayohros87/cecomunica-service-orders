@@ -22,6 +22,15 @@ Object.assign(window.Centro, {
     const el = document.getElementById('cgMenu');
     if (!el) return;
     if (!el.innerHTML) this.armarMenu();
+    // Uso del app: qué ítem del menú se pulsa (los apagados también: dicen
+    // qué quiso hacer la gente y no pudo). Un solo listener por panel.
+    if (!el.dataset.usoHook) {
+      el.dataset.usoHook = '1';
+      el.addEventListener('click', (e) => {
+        const a = e.target.closest('[data-uso]');
+        if (a && window.Uso) Uso.accion(`menu.${a.dataset.uso}${a.classList.contains('off') ? ':off' : ''}`);
+      });
+    }
     el.classList.remove('hidden');
     document.getElementById('cgMenuVelo')?.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
@@ -82,13 +91,15 @@ Object.assign(window.Centro, {
     const item = (d) => {
       const busca = this._menuNorm(`${d.label} ${d.hint || ''} ${d.busca || ''}`);
       const box = `<span class="box"><i data-lucide="${d.icono}"></i></span>`;
+      // data-uso: slug del ítem para uso_diario (menu.<label>), ver abrirMenu.
+      const uso = ` data-uso="${esc(this._norm(d.label).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40))}"`;
       if (d.ok === false) {
-        return `<div class="cg-acc off${d.cls ? ` ${d.cls}` : ''}" aria-disabled="true" data-busca="${esc(busca)}">${box}
+        return `<div class="cg-acc off${d.cls ? ` ${d.cls}` : ''}" aria-disabled="true" data-busca="${esc(busca)}"${uso}>${box}
           <span><span class="t">${esc(d.label)}</span><span class="h">${esc(d.motivo || 'No aplica a esta cuenta.')}</span></span><span class="chev"></span></div>`;
       }
       const cuerpo = `${box}<span><span class="t">${esc(d.label)}</span>${d.hint ? `<span class="h">${esc(d.hint)}</span>` : ''}</span><span class="chev">›</span>`;
-      if (d.href) return `<a class="cg-acc${d.cls ? ` ${d.cls}` : ''}" href="${d.href}" data-busca="${esc(busca)}">${cuerpo}</a>`;
-      return `<button type="button" class="cg-acc${d.cls ? ` ${d.cls}` : ''}" data-busca="${esc(busca)}" onclick="Centro.cerrarMenu(); ${d.onclick}">${cuerpo}</button>`;
+      if (d.href) return `<a class="cg-acc${d.cls ? ` ${d.cls}` : ''}" href="${d.href}" data-busca="${esc(busca)}"${uso}>${cuerpo}</a>`;
+      return `<button type="button" class="cg-acc${d.cls ? ` ${d.cls}` : ''}" data-busca="${esc(busca)}"${uso} onclick="Centro.cerrarMenu(); ${d.onclick}">${cuerpo}</button>`;
     };
     const grupo = (hd, items) => { const xs = items.filter(Boolean); return xs.length ? `<div data-accgrp><div class="grp"><h3>${hd}</h3></div>${xs.join('')}</div>` : ''; };
     const okG = (cond, motivo) => puedeG ? ({ ok: !!cond, motivo }) : ({ ok: false, motivo: SIN_ROL });

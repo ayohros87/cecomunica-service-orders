@@ -115,23 +115,63 @@ try {
 // uso_diario/{fecha de Panamá} — total por página y por usuario — con
 // increment en set merge (una escritura, no bloquea nada: sin await). Lo lee
 // admin/uso.html. Slug = ruta sin ".html"; Almacén suma la pestaña (?tab=).
+//
+// 2026-10-09, tras la primera lectura de 8 días: la vista suma además
+// - dispositivos.{movil|escritorio}: quién entra desde el teléfono;
+// - origenes.{desde>hasta}: de qué pantalla propia se llegó (referrer), para
+//   distinguir el rebote inicio↔Centro de un uso real del inicio;
+// - y NO cuenta login: esa página registraba la vista aunque ya hubiera sesión
+//   y fuera a redirigir, así que inflaba el conteo sin decir nada.
+// Y window.Uso.accion(slug) suma acciones.{slug} y usuarios_acciones.{uid}.{slug}
+// para los verbos de adentro de una pantalla (barra del Centro, menú de
+// acciones, fila de la bandeja de órdenes): el contador de páginas no los ve.
+const slugDePagina = (pathname) => {
+  let slug = String(pathname || "").replace(/^\/+/, "").replace(/\.html$/, "") || "index";
+  if (slug.endsWith("/")) slug += "index";
+  return slug;
+};
+const diaPanama = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Panama" });
+window.Uso = {
+  accion(slug) {
+    try {
+      const u = firebase.auth().currentUser;
+      if (!u || !slug || !/^[a-z0-9._:#/-]{1,60}$/i.test(slug)) return;
+      const inc = firebase.firestore.FieldValue.increment(1);
+      db.collection("uso_diario").doc(diaPanama()).set({
+        fecha: diaPanama(),
+        acciones: { [slug]: inc },
+        usuarios_acciones: { [u.uid]: { [slug]: inc } },
+      }, { merge: true }).catch(() => { /* telemetría: nunca estorba */ });
+    } catch { /* sin datos de uso esta vez */ }
+  },
+};
 (function registrarPaginaVista() {
   let hecho = false;
   firebase.auth().onAuthStateChanged((u) => {
     if (!u || hecho) return;
     hecho = true;
     try {
-      let slug = location.pathname.replace(/^\/+/, "").replace(/\.html$/, "") || "index";
-      if (slug.endsWith("/")) slug += "index";
+      let slug = slugDePagina(location.pathname);
+      if (slug === "login") return;
       const tab = new URLSearchParams(location.search).get("tab");
       if (tab && /^[a-z-]{1,20}$/.test(tab)) slug += "#" + tab;
-      const dia = new Date().toLocaleDateString("en-CA", { timeZone: "America/Panama" });
+      const dia = diaPanama();
       const inc = firebase.firestore.FieldValue.increment(1);
-      db.collection("uso_diario").doc(dia).set({
+      const doc = {
         fecha: dia,
         paginas: { [slug]: inc },
         usuarios: { [u.uid]: { [slug]: inc } },
-      }, { merge: true }).catch(() => { /* telemetría: nunca estorba */ });
+        dispositivos: { [window.innerWidth <= 768 ? "movil" : "escritorio"]: inc },
+      };
+      // Origen: solo pantallas propias (mismo origin) y distintas de la actual.
+      // document.referrer no se altera dentro del app (referrer-policy por defecto).
+      let ref = null;
+      try { ref = document.referrer ? new URL(document.referrer) : null; } catch { ref = null; }
+      if (ref && ref.origin === location.origin) {
+        const desde = slugDePagina(ref.pathname);
+        if (desde !== slug && desde !== "login") doc.origenes = { [`${desde}>${slug}`]: inc };
+      }
+      db.collection("uso_diario").doc(dia).set(doc, { merge: true }).catch(() => { /* telemetría: nunca estorba */ });
     } catch { /* sin datos de uso esta vez */ }
   });
 })();

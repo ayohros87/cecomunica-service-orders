@@ -282,6 +282,15 @@ Object.assign(window.Centro, {
       { id: 'mas', icono: 'more-horizontal', label: 'Más acciones', onclick: 'Centro.abrirMenu()', hint: 'todas las acciones de la cuenta', cls: 'cg-verbo--mas' },
     ];
     cont.innerHTML = `<span class="lbl">Acciones</span>${verbos.map(V).join('')}`;
+    // Uso del app: qué verbo se pulsa (los apagados también cuentan: dicen
+    // qué quiso hacer la gente y no pudo). Un solo listener por contenedor.
+    if (!cont.dataset.usoHook) {
+      cont.dataset.usoHook = '1';
+      cont.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-verbo]');
+        if (b && window.Uso) Uso.accion(`centro.${b.dataset.verbo}${b.classList.contains('off') ? ':off' : ''}`);
+      });
+    }
     // Editar / ver datos: arriba a la derecha, siempre en el mismo sitio.
     const ed = document.getElementById('fEditar');
     if (ed) ed.innerHTML = `<a class="btn btn-ghost" href="./ficha.html?id=${id}&from=centro" title="${this._puedeEditarCliente() ? 'RUC, representante, contacto, vendedor' : 'Solo lectura: los cambios los hace cobros'}">

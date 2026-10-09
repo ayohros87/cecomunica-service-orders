@@ -18,6 +18,21 @@
 (function initEventDelegation() {
   
   // Action handlers map
+  // Acciones de negocio que cuentan en uso_diario (admin/uso.html). Lista
+  // cerrada a propósito: lo demás (filtros, ordenar, cerrar modales, móvil)
+  // es ruido que taparía lo que importa.
+  const USO_ACCIONES = new Set([
+    'go-nueva-orden', 'nuevo-batch', 'nueva-devolucion', 'checkin-devolucion', 'recibir-mostrador',
+    'asignar-tecnico', 'reasignar-tecnico', 'completar-orden', 'entregar-orden', 'entregar-parcial',
+    'cerrar-entrada', 'qc-orden', 'cerrar-visita', 'informe-visita', 'eliminar-orden', 'dividir-orden',
+    'casos-viejos', 'regularizar-reemplazo', 'entrega-tardia', 'proponer-reemplazo', 'marcar-cambio-serial',
+    'editar-orden', 'resolver-contrato-anulado', 'go-fotos-taller', 'agregar-equipo', 'venta-facturada',
+    'imprimir-orden', 'imprimir-orden-doc', 'nota-entrega-doc', 'ver-documentos', 'ver-cotizacion',
+    'cotizar-orden', 'gestionar-notas', 'ver-entrega', 'subir-nota-firmada', 'scan-serial', 'copiar-seriales',
+    'abrir-trabajo-equipo', 'abrir-intervencion-desktop', 'ver-trabajo-equipo', 'ver-intervencion-equipo',
+    'agregar-foto-equipo', 'abrir-material-equipo',
+    'filtrar-mias', 'filtrar-estado-chip', 'abrir-chip-cerradas', 'set-view-cards', 'set-view-table',
+  ]);
   const ACTION_HANDLERS = {
     // La nota impresa que el cliente firmó, subida DESPUÉS de la entrega
     // (auditoría 2026-09-17): en el mostrador con cola no siempre se alcanza a
@@ -546,8 +561,11 @@
     
     const action = target.dataset.action;
     const handler = ACTION_HANDLERS[action];
-    
+
     if (handler) {
+      // Uso del app: qué acción de la bandeja se pulsa. Solo las de negocio
+      // (lista cerrada): filtros, ordenar, cerrar modales y lo móvil son ruido.
+      if (window.Uso && USO_ACCIONES.has(action)) Uso.accion(`ordenes.${action}`);
       // Stop propagation if requested
       if (target.dataset.stopPropagation === 'true') {
         e.stopPropagation();

@@ -35,8 +35,21 @@ window.AdminUso = (() => {
     const porDia = new Map();
     const porPagina = new Map();    // slug → {vistas, usuarios:Set}
     const porUsuario = new Map();   // uid → {vistas, paginas:Map}
+    const porAccion = new Map();    // slug → {veces, usuarios:Set}
+    const dispositivos = new Map(); // movil|escritorio → vistas
+    const origenes = new Map();     // "desde>hasta" → vistas
+    const suma = (mapa, k, n) => mapa.set(k, (mapa.get(k) || 0) + Number(n || 0));
     snap.docs.forEach((doc) => {
       const d = doc.data() || {};
+      Object.entries(d.acciones || {}).forEach(([slug, n]) => {
+        const a = porAccion.get(slug) || { veces: 0, usuarios: new Set() };
+        a.veces += Number(n || 0);
+        porAccion.set(slug, a);
+      });
+      Object.entries(d.usuarios_acciones || {}).forEach(([uid, accs]) =>
+        Object.keys(accs || {}).forEach((slug) => porAccion.get(slug)?.usuarios.add(uid)));
+      Object.entries(d.dispositivos || {}).forEach(([k, n]) => suma(dispositivos, k, n));
+      Object.entries(d.origenes || {}).forEach(([k, n]) => suma(origenes, k, n));
       let totalDia = 0;
       Object.entries(d.paginas || {}).forEach(([slug, n]) => {
         totalDia += Number(n || 0);
@@ -75,6 +88,35 @@ window.AdminUso = (() => {
           <td><div class="uso-barra" style="width:${Math.round((p.vistas / maxPag) * 100)}%"></div></td></tr>`).join('')}
         </tbody></table>`
       : '<div class="uso-vacio">Todavía no hay datos en este rango. Se empezó a contar el 30 de septiembre de 2026.</div>';
+
+    // Acciones (desde 2026-10-09).
+    const acciones = [...porAccion].sort((a, b) => b[1].veces - a[1].veces);
+    const maxAcc = Math.max(1, ...acciones.map(([, a]) => a.veces));
+    $('usoAcciones').innerHTML = acciones.length
+      ? `<table><thead><tr><th>Acción</th><th class="num">Veces</th><th class="num">Usuarios</th><th style="width:30%"></th></tr></thead><tbody>
+        ${acciones.map(([slug, a]) => `<tr><td>${esc(slug)}</td><td class="num">${fmt(a.veces)}</td><td class="num">${fmt(a.usuarios.size)}</td>
+          <td><div class="uso-barra" style="width:${Math.round((a.veces / maxAcc) * 100)}%"></div></td></tr>`).join('')}
+        </tbody></table>`
+      : '<div class="uso-vacio">Todavía no hay acciones en este rango. Se empezaron a contar el 9 de octubre de 2026.</div>';
+
+    // Dispositivo: móvil vs escritorio, en vistas y en porcentaje.
+    const totDisp = [...dispositivos.values()].reduce((s, n) => s + n, 0);
+    $('usoDispositivos').innerHTML = totDisp
+      ? `<table><tbody>${[['escritorio', 'Escritorio'], ['movil', 'Teléfono']].map(([k, label]) => {
+          const n = dispositivos.get(k) || 0;
+          return `<tr><td>${label}</td><td class="num">${fmt(n)}</td><td class="num">${Math.round((n / totDisp) * 100)}%</td>
+            <td style="width:40%"><div class="uso-barra" style="width:${Math.round((n / totDisp) * 100)}%"></div></td></tr>`;
+        }).join('')}</tbody></table>`
+      : '<div class="uso-vacio">Sin datos de dispositivo en este rango.</div>';
+
+    // Orígenes: los 15 saltos más frecuentes entre pantallas propias.
+    const saltos = [...origenes].sort((a, b) => b[1] - a[1]).slice(0, 15);
+    $('usoOrigenes').innerHTML = saltos.length
+      ? `<table><tbody>${saltos.map(([k, n]) => {
+          const [de, a] = k.split('>');
+          return `<tr><td style="font-size:12.5px;">${esc(de)} <span class="ts">→</span> ${esc(a)}</td><td class="num">${fmt(n)}</td></tr>`;
+        }).join('')}</tbody></table>`
+      : '<div class="uso-vacio">Sin datos de origen en este rango.</div>';
 
     pintarIntentos(desde, mapaNombres).catch((e) => {
       console.error('[admin/uso] intentos', e);
