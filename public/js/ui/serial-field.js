@@ -31,6 +31,9 @@
 //                      formulario, o bloquear el guardado si viene descartado).
 //                      `descartado` = doc de equipos_descartados vigente o null.
 //                      `condicion`  = doc de equipos_condiciones vigente o null.
+//     opts.onUsarModelo : (unidad) => bool — si viene, el chip "modelo distinto"
+//                      ofrece "usar este" y llama aquí para poner el modelo del
+//                      pool en el formulario (false = no se pudo).
 //     opts.slot      : Element             — dónde inyectar el chip (default:
 //                      un <span> insertado justo después del input)
 // Dependencias: EquiposPoolService; EquiposDescartadosService,
@@ -57,6 +60,48 @@ window.SerialField = {
 
   invalidar(serial) {
     this._cache.delete(EquiposPoolService.normalizarSerial(serial));
+  },
+
+  // ── "¿Quisiste decir…?" (2026-10-09, OS 2026100101 de APMT) ─────────────
+  // Un dígito de más o de menos al recibir (B11000165 por B1100165) no daba
+  // más que el chip gris "sin registro": la orden se guardaba, el trigger daba
+  // de alta una ficha "del cliente, sin factura" y el radio de alquiler
+  // quedaba bloqueado para reemplazo. Si el serial no existe, se busca en la
+  // flota del cliente uno a UNA edición de distancia (cambiar, sobrar o faltar
+  // un carácter, o dos vecinos al revés) y se ofrece con un clic.
+  _flota: new Map(), // clienteId → {docs, at}
+
+  async _flotaDe(clienteId) {
+    const hit = this._flota.get(clienteId);
+    if (hit && Date.now() - hit.at < 5 * this._TTL_MS) return hit.docs;
+    const docs = await EquiposPoolService.listarPorCliente(clienteId);
+    this._flota.set(clienteId, { docs, at: Date.now() });
+    return docs;
+  },
+
+  _aUnaEdicion(a, b) {
+    if (a === b || Math.abs(a.length - b.length) > 1) return false;
+    if (a.length === b.length) {
+      const dif = [];
+      for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) dif.push(i);
+      if (dif.length === 1) return true;
+      return dif.length === 2 && dif[1] === dif[0] + 1
+        && a[dif[0]] === b[dif[1]] && a[dif[1]] === b[dif[0]];
+    }
+    const [largo, corto] = a.length > b.length ? [a, b] : [b, a];
+    for (let i = 0; i < largo.length; i++) {
+      if (largo.slice(0, i) + largo.slice(i + 1) === corto) return true;
+    }
+    return false;
+  },
+
+  async parecidos(norm, clienteId) {
+    if (!clienteId || !norm) return [];
+    const flota = await this._flotaDe(clienteId);
+    return flota
+      .filter(u => u.estado !== 'baja'
+        && this._aUnaEdicion(norm, u.serial_norm || EquiposPoolService.normalizarSerial(u.serial)))
+      .slice(0, 3);
   },
 
   adjuntar(input, opts = {}) {
@@ -175,6 +220,22 @@ window.SerialField = {
         chip('sin registro en el pool', 'eqpool-chip-vacio',
           'Este serial no existe en el inventario — se dará de alta automáticamente al guardar. Verifica que esté bien escrito.');
         if (opts.onInfo) opts.onInfo({ docs, unidad: null, descartado, condicion });
+        const clienteId = typeof opts.clienteId === 'function' ? (opts.clienteId() || '') : '';
+        let cerca = [];
+        try { cerca = await this.parecidos(norm, clienteId); } catch (_) { /* sin sugerencia */ }
+        if (EquiposPoolService.normalizarSerial(input.value) !== norm) return;
+        for (const u of cerca) {
+          const donde = u.asignacion?.contrato_id ? `en ${u.asignacion.contrato_id}` : 'del cliente';
+          const a = chip(`¿Quisiste decir <b>${esc(u.serial)}</b>? · ${esc(u.modelo_label || '')} ${esc(donde)}`,
+            'eqpool-chip-aviso',
+            `${u.serial} está en la flota de este cliente y difiere en un solo carácter de lo escrito. Clic para usarlo.`);
+          a.addEventListener('click', (ev) => {
+            ev.preventDefault(); ev.stopImmediatePropagation();
+            input.value = u.serial;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          }, { capture: true });
+        }
         return;
       }
 
@@ -210,8 +271,21 @@ window.SerialField = {
       const m = typeof opts.modelo === 'function' ? opts.modelo() : null;
       if (m && (m.modelo_id || (m.modelo_label || '').trim())
           && !EquiposPoolService._mismoModelo(u, m.modelo_id || null, m.modelo_label || '')) {
-        chip(`modelo distinto: ${esc(u.modelo_label || u.modelo_id || '?')}`, 'eqpool-chip-alerta',
-          'El inventario registra esta unidad con OTRO modelo — puede ser un error de dedo o una ficha por fusionar.');
+        // Con onUsarModelo el chip corrige la fila de un clic: un radio de la
+        // flota recibido con el modelo de la fila de al lado (B6C10768, NX-420-R
+        // recibido como NX-410-R) partía una ficha aparte "del cliente".
+        const usar = typeof opts.onUsarModelo === 'function';
+        const a = chip(`modelo distinto: ${esc(u.modelo_label || u.modelo_id || '?')}${usar ? ' · <b>usar este</b>' : ''}`,
+          'eqpool-chip-alerta',
+          usar
+            ? `El inventario registra esta unidad como ${u.modelo_label || u.modelo_id}. Clic para poner ese modelo en la fila. Si guardas con otro modelo, se crea una ficha aparte.`
+            : 'El inventario registra esta unidad con OTRO modelo — puede ser un error de dedo o una ficha por fusionar.');
+        if (usar) {
+          a.addEventListener('click', (ev) => {
+            ev.preventDefault(); ev.stopImmediatePropagation();
+            if (opts.onUsarModelo(u) !== false) { slot._sfNorm = null; refrescar(); }
+          }, { capture: true });
+        }
       }
 
       if (opts.onInfo) opts.onInfo({ docs, unidad: u, descartado, condicion });

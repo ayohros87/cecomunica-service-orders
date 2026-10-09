@@ -289,6 +289,14 @@ function addRow({ serial = "", modeloId = "", accesorios = {}, observaciones = "
         refrescarContrato();
         Toast.show(`Serial reconocido en el pool: ${m.nombre}.`, "ok");
       },
+      onUsarModelo: (unidad) => {
+        const sel = tr.querySelector(".modelo");
+        const m = modeloDelPool({ unidad });
+        if (!sel || !m) { Toast.show("Ese modelo no está en la lista: corrígelo a mano.", "warn"); return false; }
+        sel.value = m.id;
+        refrescarContrato();
+        return true;
+      },
     });
   }
   // Enter en el serial = fila nueva con el foco en su serial (o la siguiente
