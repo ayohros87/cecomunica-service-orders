@@ -222,6 +222,94 @@ async function correoRechazoTaller(gid, g) {
   });
 }
 
+// Gestión ANULADA (2026-10-09, caso FORTALEZA): anular un contrato avisaba
+// por correo y anular una gestión no — recepción y bodega se enteraban
+// cuando chocaban con el radio. El correo dice qué revirtió el sistema (la
+// bitácora de limpiarAnulacion) y SEÑALA lo que no podía tocar: radios
+// vendidos al cliente que siguen sin entregar en una orden viva. Esos salen
+// por la venta directa, no por la gestión, y el sistema no sabe si son los de
+// esta compra — los anula una persona (ficha del equipo → Anular venta, y la
+// orden) o se quedan si son de otra compra.
+async function correoAnulacionGestion(gid, g, acciones) {
+  const { recepcionEmails } = require("../../lib/mailRecipients");
+  const AV = require("../../domain/anulacionGestionAviso");
+
+  let ventas = [];
+  try {
+    const snap = await db.collection("equipos_pool").where("venta.cliente_id", "==", g.cliente_id).get();
+    const unidades = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const ids = [...new Set(unidades.filter(u => u.estado === "vendido" && u.orden_actual_id).map(u => u.orden_actual_id))];
+    const ordenes = {};
+    for (const oid of ids) {
+      const o = await db.collection("ordenes_de_servicio").doc(oid).get();
+      if (o.exists) ordenes[oid] = o.data();
+    }
+    ventas = AV.ventasSinEntregar(unidades, ordenes, g.cliente_id);
+  } catch (e) {
+    logger.warn("[onGestionWrite] ventas sin entregar ilegibles", { gid, message: e.message });
+  }
+
+  let anulador = null;
+  try {
+    if (g.anulada_por_uid) {
+      const u = await db.collection("usuarios").doc(g.anulada_por_uid).get();
+      anulador = u.exists ? { email: u.data().email || null, nombre: u.data().nombre || u.data().email || null } : null;
+    }
+  } catch { /* sin anulador */ }
+
+  const to = [];
+  try { (await recepcionEmails()).forEach(e => to.push(e)); } catch { /* sin recepción */ }
+  const cc = [anulador?.email, g.responsable_email, await G.vendedorEmailDeCliente(g.cliente_id), await G.bodegaEmailTo()];
+  const norm = (list) => [...new Set(list.flatMap(v => String(v || "").split(",")).map(v => v.trim().toLowerCase()).filter(G.isEmail))];
+  const para = norm(to);
+  const copia = norm(cc).filter(e => !para.includes(e));
+  if (!para.length && !copia.length) return false;
+
+  const tipo = (G.TIPO_LABEL?.[g.tipo] || g.tipo || "gestión").toLowerCase();
+  const contrato = g.aumento?.contrato_id || g.demo?.contrato_id || "";
+  const revertido = (acciones || []).filter(Boolean);
+  const ordenesVentas = [...new Set(ventas.map(v => v.orden))];
+
+  await G.encolarCorreo({
+    to: (para.length ? para : copia).join(","),
+    cc: (para.length ? copia : copia.slice(1)).join(",") || null,
+    subject: `Gestión ANULADA: ${gid} (${tipo}) — ${g.cliente_nombre || "Cliente"}`,
+    preheader: `Gestión ${gid} anulada. Motivo: ${g.anulada_motivo || "—"}`,
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#991b1b;">Gestión anulada</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        La gestión <b>${G.escapeHtml(gid)}</b> (${G.escapeHtml(tipo)}) de
+        <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>${contrato ? ` sobre el contrato <b>${G.escapeHtml(contrato)}</b>` : ""}
+        fue anulada${anulador?.nombre ? ` por <b>${G.escapeHtml(anulador.nombre)}</b>` : ""}.
+      </p>
+      <div style="margin:0 0 14px;padding:12px 14px;border:2px solid #b91c1c;border-radius:10px;background:#fef2f2;font:700 15px Arial,sans-serif;color:#991b1b;">
+        Motivo: ${G.escapeHtml(g.anulada_motivo || "—")}
+      </div>
+      <p style="margin:0 0 6px;font:14px/1.5 Arial,sans-serif;"><b>Lo que el sistema revirtió</b></p>
+      ${revertido.length
+        ? `<ul style="margin:0 0 14px;padding-left:20px;font:14px/1.6 Arial,sans-serif;">${revertido.map(a => `<li>${G.escapeHtml(a)}</li>`).join("")}</ul>`
+        : `<p style="margin:0 0 14px;font:14px/1.5 Arial,sans-serif;color:#475569;">Nada: la gestión no tenía seriales, órdenes ni líneas aplicadas al contrato.</p>`}
+      ${ventas.length ? `
+      <div style="margin:0 0 14px;padding:12px 14px;border:2px solid #d97706;border-radius:10px;background:#fffbeb;font:14px/1.5 Arial,sans-serif;color:#78350f;">
+        <b>Revisar: el cliente tiene ${ventas.length} radio${ventas.length === 1 ? "" : "s"} vendido${ventas.length === 1 ? "" : "s"} sin entregar.</b>
+        Salieron por venta directa, no por esta gestión, así que la anulación <b>no los tocó</b>.
+        Si eran parte de esta compra: en la ficha de cada equipo, <i>Anular venta</i> (vuelve a bodega),
+        anular la orden ${G.escapeHtml(ordenesVentas.join(", "))} y cerrar sus fichas del POC.
+        Si son de otra compra, no hay nada que hacer.
+      </div>
+      ${G.tablaHtml(["Serial", "Modelo", "Factura", "Orden"], ventas.map(v => [
+        `<code>${G.escapeHtml(v.serial)}</code>`, G.escapeHtml(v.modelo || "—"),
+        G.escapeHtml(v.factura || "—"), G.escapeHtml(v.orden),
+      ]))}` : ""}`,
+    ctaUrl: ventas.length
+      ? `${APP_BASE_URL}/ordenes/index.html?ids=${encodeURIComponent(ordenesVentas.join(","))}`
+      : G.urlGestion(g, gid),
+    ctaLabel: ventas.length ? "Ver las órdenes" : "Ver la gestión",
+    meta: { gestion_id: gid, paso: "anulacion", ventas_sin_entregar: ventas.length },
+  });
+  return true;
+}
+
 // Reemplazo pedido por el vendedor desde el Centro. Desde 2026-09-10 TODO
 // reemplazo pasa por aquí, no solo la excepción: antes, un reemplazo de
 // alquiler salía derecho a Bodega y administración se enteraba con el radio
@@ -735,8 +823,9 @@ module.exports = onDocumentWritten(
     // derivados de baja se recalculan; el aumento sin entregar se retira del
     // contrato. Lo físico (entregas/check-ins) NUNCA se deshace solo.
     if (before && before.estado !== "anulada" && after.estado === "anulada") {
+      let acciones = [];
       try {
-        await G.limpiarAnulacion(gid, after);
+        acciones = await G.limpiarAnulacion(gid, after) || [];
       } catch (e) {
         logger.error("[onGestionWrite] limpieza de anulación falló", { gid, message: e.message });
       }
@@ -758,6 +847,15 @@ module.exports = onDocumentWritten(
           await G.registrarEvento(gid, "rechazo_taller", "Rechazo avisado al técnico que propuso el reemplazo (vendedor en copia).");
         } catch (e) {
           logger.error("[onGestionWrite] aviso de rechazo al taller falló", { gid, message: e.message });
+        }
+      }
+      if (require("../../domain/anulacionGestionAviso").debeAvisar(after)) {
+        try {
+          if (await correoAnulacionGestion(gid, after, acciones)) {
+            await G.registrarEvento(gid, "aviso_anulacion", "Anulación avisada por correo a recepción y bodega (vendedor y responsable en copia).");
+          }
+        } catch (e) {
+          logger.error("[onGestionWrite] aviso de anulación falló", { gid, message: e.message });
         }
       }
       return null;
