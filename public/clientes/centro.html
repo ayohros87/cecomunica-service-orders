@@ -191,7 +191,9 @@
        mucho espacio a los lados"): el kit topa .app-wrap en 1100 px; con la
        ficha abierta sube a 1600 (abrir/volver ponen y quitan .is-ficha). El
        directorio sigue en 1100: una lista de nombres no gana con más ancho. */
-    .app-wrap.is-ficha { max-width:1600px; }
+    /* 2026-10-09 (Alberto): el inicio también a lo ancho, como la ficha. La
+       página entera del Centro va a 1600; .is-ficha queda por compatibilidad. */
+    .app-wrap, .app-wrap.is-ficha { max-width:1600px; }
     .cg-body { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; margin-top:var(--sp-4); }
     /* El sobrante se reparte 4:1 (principal : columna derecha) y la derecha
        topa en 440 px: a 1920 la principal mide ~1110 y la derecha ~440. */
