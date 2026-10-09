@@ -159,6 +159,8 @@ function montar({ search = "?orden_id=2026081801", seriales = SERIALES_CONTRATO,
   };
   vm.createContext(sandbox);
   sandbox.window = sandbox;
+  // normName delega en FMT.normalizeNombre (core/formatting.js, 2026-10-09).
+  vm.runInContext(require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "..", "public", "js", "core", "formatting.js"), "utf8"), sandbox, { filename: "formatting.js" });
   vm.runInContext(SRC, sandbox, { filename: "ordenes-nuevo-batch.js" });
   return { sandbox, el: get, filas, toasts, filasBatch };
 }

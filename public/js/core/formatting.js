@@ -86,6 +86,13 @@ window.FMT = {
     return FMT.normalize(String(s == null ? "" : s)).replace(/[^a-z0-9]+/g, " ").trim();
   },
 
+  // Para COMPARAR nombres (cliente, modelo, consola): sin acentos, minúsculas,
+  // espacios internos colapsados. Antes vivía copiada en seis archivos
+  // (dedup de clientes, refs huérfanas, lotes PoC, consola, ficha del equipo).
+  normalizeNombre(s) {
+    return FMT.normalize(String(s == null ? "" : s)).replace(/\s+/g, " ");
+  },
+
   // PoC group names: trim + collapse internal whitespace. Case stays as typed
   // so admin/grupos.html can suggest casing fixes after the fact.
   normalizeGrupo(s) {

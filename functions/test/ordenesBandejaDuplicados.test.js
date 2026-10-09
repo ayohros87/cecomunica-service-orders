@@ -106,6 +106,7 @@ function cargarBandeja() {
   };
   vm.createContext(ctx);
   vm.runInContext(leer("public", "js", "core", "roles.js"), ctx);
+  vm.runInContext(leer("public", "js", "core", "formatting.js"), ctx);   // normTxt → FMT.normalize
   vm.runInContext(leer("public", "js", "pages", "ordenes-state.js"), ctx);
 
   const tabla = getEl("ordersTable");

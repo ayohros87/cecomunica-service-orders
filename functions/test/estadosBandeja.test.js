@@ -40,6 +40,9 @@ function extraerFuncion(src, nombre) {
 
 const ctx = { window: {}, OrdenesQC: { qcPendiente: () => false } };
 vm.createContext(ctx);
+// normTxt delega en FMT.normalize (core/formatting.js, 2026-10-09): el helper real.
+vm.runInContext(leer("js/core/formatting.js"), ctx, { filename: "formatting.js" });
+ctx.FMT = ctx.window.FMT;
 vm.runInContext(SRC_EB, ctx, { filename: "estadosBandeja.js" });
 vm.runInContext(["normTxt", "esTipoVisita", "esOrdenVisita", "esOrdenProgramacion", "esOrdenEntrada",
   "_completadoFaltaQc", "estadoCompacto"].map(n => extraerFuncion(SRC_STATE, n)).join("\n"),

@@ -32,13 +32,7 @@
     btnVolver: document.getElementById('btnVolverOrdenes')
   };
 
-  function norm(value) {
-    return String(value || '')
-      .toLowerCase()
-      .trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-  }
+  function norm(value) { return FMT.normalize(String(value || '')); }   // core/formatting.js
 
   function escapeHtml(value) {
     return String(value || '')

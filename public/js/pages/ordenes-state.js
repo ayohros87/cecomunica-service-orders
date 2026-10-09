@@ -283,14 +283,7 @@ function formatFechaHora(ts) {
   return `${p.day} ${MESES_CORTOS[Number(p.month) - 1]} ${p.year}, ${p.hour}:${p.minute} ${ampm}`;
 }
 
-function normTxt(s) {
-  return (s || "")
-    .toString()
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
-}
+function normTxt(s) { return FMT.normalize((s || "").toString()); } // helper canónico (core/formatting.js)
 
 function escapeHtml(str) { return FMT.esc(str); } // helper canónico (core/formatting.js)
 

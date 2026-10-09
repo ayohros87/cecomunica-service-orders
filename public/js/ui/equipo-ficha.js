@@ -490,7 +490,7 @@ window.EquipoFicha = {
           if (!nombre) return avisar('Escribe el cliente que tiene el radio.');
           if (!clienteSel || clienteSel.nombre !== nombre) {
             const lista = await cargarClientes().catch(() => []);
-            const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+            const norm = (s) => FMT.normalizeNombre(s);
             const hit = (lista || []).find(c => norm(c.nombre) === norm(nombre));
             if (!hit) return avisar('Ese cliente no existe tal cual en Clientes. Elígelo de la lista.');
             clienteSel = { id: hit.id, nombre: hit.nombre };

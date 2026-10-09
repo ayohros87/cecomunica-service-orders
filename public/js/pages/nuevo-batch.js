@@ -914,11 +914,7 @@ async function onClienteChange() {
 }
 
 // Normaliza nombres para comparar (sin acentos, minúsculas, espacios colapsados).
-function normNombreCliente(s) {
-  return String(s ?? "").trim().toLowerCase()
-    .normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "")
-    .replace(/\s+/g, " ");
-}
+function normNombreCliente(s) { return FMT.normalizeNombre(s); }   // core/formatting.js
 
 // ── Vínculo POC ↔ contrato (PLAN_CICLO_VIDA_EQUIPOS.md, conexión POC) ──────
 // Carga los contratos vigentes del cliente en el select "contratoJalar". Elegir

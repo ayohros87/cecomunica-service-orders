@@ -61,7 +61,7 @@ let filaSeq = 0;
 // Escapes mínimos para inyectar valores de usuario en el markup de la fila.
 const escAttr = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 const escHtml = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const normName = (s) => String(s ?? "").trim().toLowerCase().normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "").replace(/\s+/g, " ");
+const normName = (s) => FMT.normalizeNombre(s);   // core/formatting.js
 
 const $ = (id) => document.getElementById(id);
 

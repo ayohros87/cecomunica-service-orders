@@ -28,8 +28,7 @@ let _catalogoGrupos = [];         // catálogo de grupos del cliente
 let _grupos = [];                 // grupos elegidos para ESTA consola
 let _guardando = false;
 
-const _normTxt = (s) => String(s ?? "").toLowerCase()
-  .normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+const _normTxt = (s) => FMT.normalizeNombre(s);   // core/formatting.js
 
 const el = (id) => document.getElementById(id);
 

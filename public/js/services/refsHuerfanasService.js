@@ -15,11 +15,7 @@
 (function (global) {
   'use strict';
 
-  function _norm(s){
-    return String(s == null ? "" : s)
-      .normalize("NFD").replace(/[̀-ͯ]/g, "")
-      .toLowerCase().replace(/\s+/g, " ").trim();
-  }
+  function _norm(s){ return FMT.normalizeNombre(s); }   // core/formatting.js
   const COLS = [
     { name: "ordenes_de_servicio", del: "eliminado", kind: "orden" },
     { name: "poc_devices",         del: "deleted",   kind: "poc" },

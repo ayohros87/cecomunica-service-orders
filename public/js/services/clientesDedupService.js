@@ -20,11 +20,7 @@
  *   - poc_devices:          `cliente_id`; por NOMBRE solo en grupos exactos
  */
 
-function _dnorm(s){
-  return String(s == null ? "" : s)
-    .normalize("NFD").replace(/[̀-ͯ]/g, "")
-    .toLowerCase().replace(/\s+/g, " ").trim();
-}
+function _dnorm(s){ return FMT.normalizeNombre(s); }   // core/formatting.js
 function _val(c, ...keys){
   for (const k of keys){ const v = (c[k] || "").toString().trim(); if (v) return v; }
   return "";

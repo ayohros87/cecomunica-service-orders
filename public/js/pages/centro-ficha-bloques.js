@@ -968,7 +968,7 @@ Object.assign(window.Centro, {
     const input = root.querySelector('#trCliente');
     const lista = root.querySelector('#trClienteLista');
     if (!input || !lista) return;
-    const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const norm = (s) => FMT.normalize(String(s || ''));
     let clientes = [];
     try {
       const cs = await ClientesService.getAllClientes({ fresh: false });

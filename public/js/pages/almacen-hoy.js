@@ -321,7 +321,7 @@ window.AlmacenHoy = (() => {
   async function cargarPorCuadrar() {
     const db = firebase.firestore();
     const ms = (t) => t?.toMillis?.() ?? (t?.seconds ? t.seconds * 1000 : (t ? new Date(t).getTime() : 0));
-    const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const norm = (v) => FMT.normalize(String(v || ''));
     const corte = Date.now() - CUADRAR_DIAS * 86400000;
 
     // 1) Órdenes en oficina con radios que el pool sigue amarrando a ellas.

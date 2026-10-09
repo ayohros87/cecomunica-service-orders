@@ -32,6 +32,7 @@ function cargar() {
   };
   vm.createContext(sandbox);
   sandbox.window = sandbox;
+  vm.runInContext(leer("public", "js", "core", "formatting.js"), sandbox, { filename: "formatting.js" });   // _normTxt → FMT.normalizeNombre
   vm.runInContext(leer("public", "js", "services", "pocService.js"), sandbox, { filename: "pocService.js" });
   vm.runInContext(leer("public", "js", "domain", "consolasContrato.js"), sandbox, { filename: "consolasContrato.js" });
   vm.runInContext(leer("public", "js", "pages", "poc-nueva-consola.js"), sandbox, { filename: "poc-nueva-consola.js" });
