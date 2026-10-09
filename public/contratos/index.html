@@ -24,14 +24,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0B2A47">
 
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=dc82d8af">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=74b79c3f">
   <!-- Rediseño Command Center F4: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=c83fa1b2">
+  <link rel="stylesheet" href="../css/bandeja.css?v=0d25ff09">
 
   <style>
     /* Page-local — kit primitives handle the rest */
 
-    /* Hidden estado select drives filter-chips (preserves JS contract) */
+    /* Hidden estado select drives bj-filtros (preserves JS contract) */
     #filtroEstado { display: none; }
 
     /* Resumen / counts inside the table footer */
@@ -164,10 +165,10 @@
       <!-- Pestañas del archivo: Contratos | Gestiones. La caja de búsqueda es
            la misma para las dos (uno busca por lo que tiene a mano, no por
            saber en qué colección vive la respuesta). -->
-      <div class="filter-chips" id="archivoTabs" role="tablist" aria-label="Qué buscar"
+      <div class="bj-filtros" id="archivoTabs" role="tablist" aria-label="Qué buscar"
            style="padding:var(--sp-3) var(--sp-3) 0; gap:var(--sp-1);">
-        <button type="button" class="filter-chip active" data-tab="contratos" role="tab"><i data-lucide="file-text" style="width:14px;height:14px;"></i> Contratos</button>
-        <button type="button" class="filter-chip" data-tab="gestiones" role="tab"><i data-lucide="folder-open" style="width:14px;height:14px;"></i> Gestiones</button>
+        <button type="button" class="bj-filtro active" data-tab="contratos" role="tab"><i data-lucide="file-text" style="width:14px;height:14px;"></i> Contratos</button>
+        <button type="button" class="bj-filtro" data-tab="gestiones" role="tab"><i data-lucide="folder-open" style="width:14px;height:14px;"></i> Gestiones</button>
       </div>
 
       <!-- Filter bar -->
@@ -189,25 +190,25 @@
         </select>
 
         <div id="filtrosContratos" style="display:contents;">
-          <div class="filter-chips" id="filtroEstadoChips" role="tablist" aria-label="Filtrar por estado">
-            <button type="button" class="filter-chip active" data-estado="">Todos</button>
-            <button type="button" class="filter-chip" data-estado="pendiente_aprobacion">Pendiente</button>
-            <button type="button" class="filter-chip" data-estado="aprobado">Aprobado</button>
-            <button type="button" class="filter-chip" data-estado="activo">Activo</button>
-            <button type="button" class="filter-chip" data-estado="vencido">Vencido</button>
-            <button type="button" class="filter-chip" data-estado="anulado">Anulado</button>
+          <div class="bj-filtros" id="filtroEstadoChips" role="tablist" aria-label="Filtrar por estado">
+            <button type="button" class="bj-filtro active" data-estado="">Todos</button>
+            <button type="button" class="bj-filtro" data-estado="pendiente_aprobacion">Pendiente</button>
+            <button type="button" class="bj-filtro" data-estado="aprobado">Aprobado</button>
+            <button type="button" class="bj-filtro" data-estado="activo">Activo</button>
+            <button type="button" class="bj-filtro" data-estado="vencido">Vencido</button>
+            <button type="button" class="bj-filtro" data-estado="anulado">Anulado</button>
           </div>
 
           <!-- Composición (2026-09-28): Alquiler / Propio / Mixto leído de las
                líneas del contrato. Corre sobre lo YA CARGADO (como Devolución
                pendiente): la composición no es un campo consultable. Teclear
                "alq" / "prop" en el buscador enciende estos chips. -->
-          <div class="filter-chips" id="filtroComposicionChips" role="tablist" aria-label="Filtrar por composición"
+          <div class="bj-filtros" id="filtroComposicionChips" role="tablist" aria-label="Filtrar por composición"
                title="Alquiler, propio o mixto, según las líneas del contrato. Se aplica a los contratos ya cargados.">
-            <button type="button" class="filter-chip active" data-comp="">Todas</button>
-            <button type="button" class="filter-chip" data-comp="alquiler">Alquiler</button>
-            <button type="button" class="filter-chip" data-comp="propio">Propio</button>
-            <button type="button" class="filter-chip" data-comp="mixto">Mixto</button>
+            <button type="button" class="bj-filtro active" data-comp="">Todas</button>
+            <button type="button" class="bj-filtro" data-comp="alquiler">Alquiler</button>
+            <button type="button" class="bj-filtro" data-comp="propio">Propio</button>
+            <button type="button" class="bj-filtro" data-comp="mixto">Mixto</button>
           </div>
 
           <div style="flex:1;"></div>
@@ -222,14 +223,14 @@
         </div>
 
         <div id="filtrosGestiones" hidden style="display:contents;">
-          <div class="filter-chips" id="filtroTipoGestionChips" role="tablist" aria-label="Filtrar por tipo de gestión">
-            <button type="button" class="filter-chip active" data-tipo="">Todas</button>
-            <button type="button" class="filter-chip" data-tipo="reemplazo">Reemplazo</button>
-            <button type="button" class="filter-chip" data-tipo="baja">Baja</button>
-            <button type="button" class="filter-chip" data-tipo="aumento">Aumento</button>
+          <div class="bj-filtros" id="filtroTipoGestionChips" role="tablist" aria-label="Filtrar por tipo de gestión">
+            <button type="button" class="bj-filtro active" data-tipo="">Todas</button>
+            <button type="button" class="bj-filtro" data-tipo="reemplazo">Reemplazo</button>
+            <button type="button" class="bj-filtro" data-tipo="baja">Baja</button>
+            <button type="button" class="bj-filtro" data-tipo="aumento">Aumento</button>
             <!-- Sin chip "Devolución": ninguna pantalla crea gestiones GV (auditoría UX 2026-09-28). -->
-            <button type="button" class="filter-chip" data-tipo="demo">Demo</button>
-            <button type="button" class="filter-chip" data-tipo="cambio_serial">Cambio de serial</button>
+            <button type="button" class="bj-filtro" data-tipo="demo">Demo</button>
+            <button type="button" class="bj-filtro" data-tipo="cambio_serial">Cambio de serial</button>
           </div>
           <div style="flex:1;"></div>
           <label class="toggle-pill"><input type="checkbox" id="chkGestionesAbiertas"> <i data-lucide="clock" style="width:14px;height:14px;"></i> Solo abiertas</label>
@@ -368,7 +369,7 @@
        agnostic of the chip UI. -->
   <script>
     (function wireEstadoChips() {
-      const chips = document.querySelectorAll('#filtroEstadoChips .filter-chip');
+      const chips = document.querySelectorAll('#filtroEstadoChips .bj-filtro');
       const sel   = document.getElementById('filtroEstado');
       const chkPnd = document.getElementById('chkSoloPendientes');
       const chkIna = document.getElementById('chkMostrarInactivos');

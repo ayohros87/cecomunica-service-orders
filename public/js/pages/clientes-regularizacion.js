@@ -42,9 +42,9 @@ window.ClientesRegularizacion = (() => {
 
   function wire() {
     document.getElementById('rgChips').addEventListener('click', (e) => {
-      const b = e.target.closest('.rg-chip'); if (!b) return;
+      const b = e.target.closest('.bj-filtro'); if (!b) return;
       filtro = b.dataset.f;
-      document.querySelectorAll('.rg-chip').forEach(x => x.classList.toggle('active', x === b));
+      document.querySelectorAll('.bj-filtro').forEach(x => x.classList.toggle('active', x === b));
       render();
     });
     document.getElementById('rgVendedor').addEventListener('change', (e) => { vendedorSel = e.target.value; render(); });

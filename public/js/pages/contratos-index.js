@@ -31,7 +31,7 @@ function aplicarRestriccionesPorRol(rol) {
 // el archivo se consulta por lo que uno tiene a mano (un número, un serial, un
 // cliente), no por saber de antemano en qué colección vive la respuesta.
 function wirePestanas() {
-  const tabs = document.querySelectorAll('#archivoTabs .filter-chip[data-tab]');
+  const tabs = document.querySelectorAll('#archivoTabs .bj-filtro[data-tab]');
   tabs.forEach((t) => t.addEventListener('click', () => Archivo.irA(t.dataset.tab)));
 }
 
@@ -41,7 +41,7 @@ window.Archivo = {
   irA(tab) {
     if (tab !== 'contratos' && tab !== 'gestiones') tab = 'contratos';
     this.tab = tab;
-    document.querySelectorAll('#archivoTabs .filter-chip[data-tab]').forEach((t) =>
+    document.querySelectorAll('#archivoTabs .bj-filtro[data-tab]').forEach((t) =>
       t.classList.toggle('active', t.dataset.tab === tab));
     const esContratos = tab === 'contratos';
     document.getElementById('panelContratos').hidden = !esContratos;
@@ -159,7 +159,7 @@ auth.onAuthStateChanged(async (user) => {
     const sel = document.getElementById('filtroEstado');
     if (sel && [...sel.options].some((o) => o.value === estadoParam)) {
       sel.value = estadoParam;
-      document.querySelectorAll('#filtroEstadoChips .filter-chip').forEach((ch) =>
+      document.querySelectorAll('#filtroEstadoChips .bj-filtro').forEach((ch) =>
         ch.classList.toggle('active', (ch.dataset.estado || '') === estadoParam));
       const chkPnd = document.getElementById('chkSoloPendientes');
       if (chkPnd) chkPnd.checked = (estadoParam === 'pendiente_aprobacion');

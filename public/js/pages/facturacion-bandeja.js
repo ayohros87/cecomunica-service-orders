@@ -428,7 +428,7 @@ window.FacturacionBandeja = (() => {
       el.hidden = !n;
       el.title = n ? `${n} con el correo sin salir` : '';
     });
-    document.querySelectorAll('#fbChips .fb-chip').forEach(el => {
+    document.querySelectorAll('#fbChips .bj-filtro').forEach(el => {
       const on = el.getAttribute('data-f') === filtro;
       el.classList.toggle('active', on); el.setAttribute('aria-selected', on ? 'true' : 'false');
     });
@@ -629,7 +629,7 @@ window.FacturacionBandeja = (() => {
     const mount = document.getElementById('fbRows');
     if (!mount._fbBound) { mount.addEventListener('click', onClick); mount._fbBound = true; }
     document.getElementById('fbChips').addEventListener('click', (ev) => {
-      const c = ev.target.closest('.fb-chip'); if (!c) return;
+      const c = ev.target.closest('.bj-filtro'); if (!c) return;
       filtro = c.getAttribute('data-f'); render();
     });
     document.getElementById('fbBuscar').addEventListener('input', (ev) => { busqueda = ev.target.value.trim(); render(); });

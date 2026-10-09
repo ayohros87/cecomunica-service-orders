@@ -176,6 +176,39 @@ window.Bandeja = (() => {
   }
   function listaVacia(texto) { return `<p class="bj-lista-vacia">${esc(texto)}</p>`; }
 
+  // ── Barra de bandeja (2026-10-09) ───────────────────────────────────────
+  // UNA barra para todas: buscador · filtros con conteo · Mías · secundarios.
+  // Chip de filtro: {id, label, n, tono, active, all, title, data='f', extra}.
+  // `data` es el nombre del data-attr que lee la página (data-f, data-estado…);
+  // el conteo lleva data-cnt="<id>" para que la página lo actualice sin
+  // repintar. El punto de tono solo va en los chips con tono (no en "Todas").
+  function filtro({ id, label, n = null, tono = null, active = false, all = false, title = '', data = 'f', extra = '', attrs = '' } = {}) {
+    const cls = ['bj-filtro', all ? 'bj-filtro--all' : '', tono ? `bj-filtro--${tono}` : '', active ? 'active' : ''].filter(Boolean).join(' ');
+    return `<button type="button" class="${cls}" data-${data}="${esc(id)}" role="tab" aria-selected="${active ? 'true' : 'false'}"${title ? ` title="${esc(title)}"` : ''}${attrs ? ` ${attrs}` : ''}>`
+      + `${tono && !all ? '<span class="dot" aria-hidden="true"></span>' : ''}${esc(label)}`
+      + `${n != null ? ` <span class="cnt" data-cnt="${esc(id)}">${esc(String(n))}</span>` : ''}${extra}</button>`;
+  }
+  function filtros(items, { id = '', label = 'Filtrar', seg = false } = {}) {
+    return `<div class="${seg ? 'bj-seg' : 'bj-filtros'}"${id ? ` id="${esc(id)}"` : ''} role="tablist" aria-label="${esc(label)}">${(items || []).filter(Boolean).map(filtro).join('')}</div>`;
+  }
+  // Interruptor "Mías": mismo rótulo, misma forma y misma posición en toda
+  // bandeja con dueño. `attrs` va al <input> (data-action, etc.).
+  function mias({ id = 'toggleMias', label = 'Mías', checked = false, n = null, title = 'Solo lo que está a tu nombre', attrs = '', hidden = false } = {}) {
+    return `<label class="bj-filtro bj-mias${checked ? ' active' : ''}" for="${esc(id)}" title="${esc(title)}"${hidden ? ' hidden' : ''}>`
+      + `<input type="checkbox" id="${esc(id)}"${checked ? ' checked' : ''}${attrs ? ` ${attrs}` : ''}>${esc(label)}`
+      + `${n != null ? ` <span class="cnt" data-cnt="mias">${esc(String(n))}</span>` : ''}</label>`;
+  }
+  // Buscador con lupa. `attrs` va al <input>.
+  function buscar({ id = 'buscar', placeholder = 'Buscar…', value = '', attrs = '' } = {}) {
+    return `<span class="bj-buscar"><i data-lucide="search"></i><input type="search" id="${esc(id)}" class="form-input" placeholder="${esc(placeholder)}" value="${esc(value)}" autocomplete="off" aria-label="${esc(placeholder)}"${attrs ? ` ${attrs}` : ''}></span>`;
+  }
+  // La barra completa: `partes` en el orden canónico (buscador, filtros, mías,
+  // push, secundarios). Cada parte es HTML ya armado o '' para omitirla.
+  function barra(partes, { id = '' } = {}) {
+    return `<div class="bj-barra"${id ? ` id="${esc(id)}"` : ''}>${(partes || []).filter(Boolean).join('')}</div>`;
+  }
+
   return { esc, TONOS, UMBRALES, dias, edadTexto, hace, edad, edadDeDias, chip, tag, btnTexto, cta, fila, grupo, conMas,
-    nota, aviso, vacio, pastilla, panelHead, pie, esqueleto, listaTitulo, item, listaVacia };
+    nota, aviso, vacio, pastilla, panelHead, pie, esqueleto, listaTitulo, item, listaVacia,
+    filtro, filtros, mias, buscar, barra };
 })();

@@ -31,7 +31,7 @@
     'cotizar-orden', 'gestionar-notas', 'ver-entrega', 'subir-nota-firmada', 'scan-serial', 'copiar-seriales',
     'abrir-trabajo-equipo', 'abrir-intervencion-desktop', 'ver-trabajo-equipo', 'ver-intervencion-equipo',
     'agregar-foto-equipo', 'abrir-material-equipo',
-    'filtrar-mias', 'filtrar-estado-chip', 'abrir-chip-cerradas', 'set-view-cards', 'set-view-table',
+    'filtrar-mias', 'filtrar-bj-filtro', 'abrir-chip-cerradas', 'set-view-cards', 'set-view-table',
   ]);
   const ACTION_HANDLERS = {
     // La nota impresa que el cliente firmó, subida DESPUÉS de la entrega
@@ -104,7 +104,7 @@
     'filtrar-mias': () => aplicarFiltrosCombinados(),
     // Desde/Hasta (auditoría UX 2026-09-28, T6): re-consulta al servidor.
     'filtrar-fechas': () => filtrarPorFechas(),
-    'filtrar-estado-chip': (el) => filtrarPorChipEstado(el),
+    'filtrar-bj-filtro': (el) => filtrarPorChipEstado(el),
     // Chip "Cerradas": un solo chip con menú para los 6 estados terminales.
     'abrir-chip-cerradas': (el) => abrirChipCerradas(el),
     'set-view-cards': () => setOrdersView('cards'),

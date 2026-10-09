@@ -16,8 +16,9 @@
   <meta charset="UTF-8">
   <title>Facturación pendiente - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=dc82d8af">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=74b79c3f">
   <link rel="stylesheet" href="../css/ceco-rail.css?v=c83fa1b2">
+  <link rel="stylesheet" href="../css/bandeja.css?v=0d25ff09">
   <link rel="stylesheet" href="../css/ws-tabs.css?v=36ec8d37">
 
   <style>
@@ -27,39 +28,13 @@
        botones quietos. Tokens de ceco-ui.css. */
     .fb-intro { color: var(--fg-3); font-size: 13px; margin: 0 0 var(--sp-3); }
 
-    .fb-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-      padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border-subtle); }
-    .fb-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px;
-      border-radius: var(--radius-pill, 999px); border: 1px solid var(--border-default);
-      background: var(--surface-card, #fff); color: var(--fg-2); font: 500 13px/1 var(--font-body);
-      cursor: pointer; user-select: none; white-space: nowrap; }
-    .fb-chip:hover { background: var(--accent-soft); border-color: var(--accent); }
-    .fb-chip:focus-visible { outline: none; box-shadow: var(--ring-focus, 0 0 0 3px rgba(0,145,215,.30)); }
-    .fb-chip .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-    .fb-chip .cnt { margin-left: 2px; padding: 0 6px; height: 18px; min-width: 22px; display: inline-flex;
-      align-items: center; justify-content: center; font-size: 11px; font-weight: 600;
-      border-radius: 999px; background: rgba(0,0,0,.06); font-variant-numeric: tabular-nums; }
-    .fb-chip.active { font-weight: 600; border-width: 1.5px; color: var(--fg-1); }
-    .fb-chip--all.active { background: var(--fg-1); color: #fff; border-color: var(--fg-1); }
     /* Correo en error dentro del chip (R3): punto rojo, conteo en el title. */
-    .fb-chip .errdot { width: 8px; height: 8px; border-radius: 50%; background: #DC2626; display: inline-block; margin-left: 2px; }
-    .fb-chip .errdot[hidden] { display: none; }
+    .bj-filtro .errdot { width: 8px; height: 8px; border-radius: 50%; background: #DC2626; display: inline-block; margin-left: 2px; }
+    .bj-filtro .errdot[hidden] { display: none; }
     .fb-t2 .fb-reenviar { height: 20px; padding: 0 8px; margin-left: 2px; border-radius: 999px; border: 1px solid #FECACA;
       background: #FEF2F2; color: #991B1B; font: 600 11px/1 var(--font-body); cursor: pointer; vertical-align: 1px; }
     .fb-t2 .fb-reenviar:hover { background: #FEE2E2; border-color: #991B1B; }
-    .fb-chip--arranca .dot { background: #166534; }
-    .fb-chip--cambia  .dot { background: #0369A1; }
-    .fb-chip--termina .dot { background: #9A3412; }
-    .fb-chip--espera  .dot { background: transparent; border: 2px solid var(--gray-400, #9AA7B4); width: 6px; height: 6px; }
     /* QBO marcado por una persona SIN número de factura (P5): mismo ámbar que el "?" de la pastilla. */
-    .fb-chip--sinnum  .dot { background: #E9C46A; }
-    .fb-chip--sinnum.active  { background: var(--soft-warn, #FBF3E0); border-color: #8A6415; color: #8A6415; }
-    .fb-chip--arranca.active { background: #F0FDF4; border-color: #166534; color: #166534; }
-    .fb-chip--cambia.active  { background: #F0F9FF; border-color: #0369A1; color: #0369A1; }
-    .fb-chip--termina.active { background: #FFF7ED; border-color: #9A3412; color: #9A3412; }
-    .fb-chip--espera.active  { background: var(--surface-sunken); border-color: var(--gray-400, #9AA7B4); color: var(--fg-2); }
-    .fb-chips .push { flex: 1; }
-    .fb-chips .form-input { height: 30px; font-size: 13px; }
     .fb-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg-3); cursor: pointer; }
 
     .fb-rows { display: flex; flex-direction: column; gap: 6px; }
@@ -212,15 +187,17 @@
 
   <div id="fbAviso" class="fb-aviso" hidden></div>
 
-  <div class="fb-chips" id="fbChips" role="tablist" aria-label="Filtrar por efecto">
-    <button type="button" class="fb-chip fb-chip--all active" data-f="all" role="tab">Pendientes <span class="cnt" data-cnt="all">0</span><span class="errdot" data-err="all" hidden></span></button>
-    <button type="button" class="fb-chip fb-chip--arranca" data-f="arranca" role="tab"><span class="dot"></span>Arranca cobro <span class="cnt" data-cnt="arranca">0</span><span class="errdot" data-err="arranca" hidden></span></button>
-    <button type="button" class="fb-chip fb-chip--cambia" data-f="cambia" role="tab"><span class="dot"></span>Cambia cobro <span class="cnt" data-cnt="cambia">0</span><span class="errdot" data-err="cambia" hidden></span></button>
-    <button type="button" class="fb-chip fb-chip--termina" data-f="termina" role="tab"><span class="dot"></span>Termina cobro <span class="cnt" data-cnt="termina">0</span><span class="errdot" data-err="termina" hidden></span></button>
-    <button type="button" class="fb-chip fb-chip--espera" data-f="espera" role="tab" title="Esperando la entrega de los equipos: todavía no hay nada que facturar"><span class="dot"></span>En espera <span class="cnt" data-cnt="espera">0</span><span class="errdot" data-err="espera" hidden></span></button>
-    <button type="button" class="fb-chip fb-chip--sinnum" data-f="sinnum" role="tab" title="QBO marcado sin número de factura: sin él no se puede verificar el pago contra QuickBooks. Clic en la pastilla con ? para anotarlo"><span class="dot"></span>Sin número <span class="cnt" data-cnt="sinnum">0</span></button>
+  <div class="bj-barra" id="fbChips">
+    <span class="bj-buscar"><i data-lucide="search"></i><input type="search" id="fbBuscar" class="form-input" placeholder="Buscar cliente o contrato…" autocomplete="off" aria-label="Buscar cliente o contrato…"></span>
+    <div class="bj-filtros" role="tablist" aria-label="Filtrar">
+    <button type="button" class="bj-filtro bj-filtro--all active" data-f="all" role="tab">Pendientes <span class="cnt" data-cnt="all">0</span><span class="errdot" data-err="all" hidden></span></button>
+    <button type="button" class="bj-filtro bj-filtro--listo" data-f="arranca" role="tab"><span class="dot"></span>Arranca cobro <span class="cnt" data-cnt="arranca">0</span><span class="errdot" data-err="arranca" hidden></span></button>
+    <button type="button" class="bj-filtro bj-filtro--info" data-f="cambia" role="tab"><span class="dot"></span>Cambia cobro <span class="cnt" data-cnt="cambia">0</span><span class="errdot" data-err="cambia" hidden></span></button>
+    <button type="button" class="bj-filtro bj-filtro--aviso" data-f="termina" role="tab"><span class="dot"></span>Termina cobro <span class="cnt" data-cnt="termina">0</span><span class="errdot" data-err="termina" hidden></span></button>
+    <button type="button" class="bj-filtro bj-filtro--neutro" data-f="espera" role="tab" title="Esperando la entrega de los equipos: todavía no hay nada que facturar"><span class="dot"></span>En espera <span class="cnt" data-cnt="espera">0</span><span class="errdot" data-err="espera" hidden></span></button>
+    <button type="button" class="bj-filtro bj-filtro--aviso" data-f="sinnum" role="tab" title="QBO marcado sin número de factura: sin él no se puede verificar el pago contra QuickBooks. Clic en la pastilla con ? para anotarlo"><span class="dot"></span>Sin número <span class="cnt" data-cnt="sinnum">0</span></button>
+    </div>
     <span class="push"></span>
-    <input type="search" id="fbBuscar" class="form-input" placeholder="Buscar cliente o contrato…" style="max-width:220px;" autocomplete="off">
     <label class="fb-toggle"><input type="checkbox" id="fbVerHechos"> Ver hechos y no aplica</label>
   </div>
 

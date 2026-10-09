@@ -329,11 +329,12 @@ Object.assign(window.Centro, {
       if (f === 'firma') return S.firma ? new Set(S.firma.map(x => x.cliente_id)).size : null;
       return null;
     };
-    const chip = (f, label) => { const k = n(f); return `<button type="button" class="cg-filtro${this.filtro === f ? ' is-on' : ''}" aria-pressed="${this.filtro === f}" onclick="Centro.setFiltro('${f}')">${esc(label)}${k != null ? ` <span class="n">${k}</span>` : ''}</button>`; };
-    const seg = this.esVendedor() ? '' : `<div class="cg-seg" role="group" aria-label="Cartera">
-        <button type="button" class="cg-filtro${this.cartera === 'mios' ? ' is-on' : ''}" onclick="Centro.setCartera('mios')">Mi cartera</button>
-        <button type="button" class="cg-filtro${this.cartera === 'todos' ? ' is-on' : ''}" onclick="Centro.setCartera('todos')">Todos</button></div>`;
-    const vend = (!this.esVendedor() && this.cartera === 'todos') ? `<select class="cg-filtro cg-filtro--sel${this.vendedorFiltro ? ' is-on' : ''}" aria-label="Filtrar por vendedor" onchange="Centro.setVendedorFiltro(this.value)">
+    // Chips y "Mías" del kit de bandeja (2026-10-09): el mismo chip y el mismo
+    // interruptor que Órdenes, Cotizaciones, Facturación y Contratos.
+    const chip = (f, label) => { const k = n(f); return `<button type="button" class="bj-filtro${this.filtro === f ? ' active' : ''}" aria-pressed="${this.filtro === f}" onclick="Centro.setFiltro('${f}')">${esc(label)}${k != null ? ` <span class="cnt">${k}</span>` : ''}</button>`; };
+    const seg = this.esVendedor() ? '' : `<label class="bj-filtro bj-mias${this.cartera === 'mios' ? ' active' : ''}" for="cgMias" title="Solo mi cartera">
+        <input type="checkbox" id="cgMias"${this.cartera === 'mios' ? ' checked' : ''} onchange="Centro.setCartera(this.checked ? 'mios' : 'todos')">Mías</label>`;
+    const vend = (!this.esVendedor() && this.cartera === 'todos') ? `<select class="bj-filtro bj-filtro--sel${this.vendedorFiltro ? ' active' : ''}" aria-label="Filtrar por vendedor" onchange="Centro.setVendedorFiltro(this.value)">
         <option value="">Vendedor: todos</option>
         ${(this._vendedores || []).map(u => `<option value="${esc(u.id)}"${this.vendedorFiltro === u.id ? ' selected' : ''}>${esc(u.nombre || u.displayName || String(u.email || '').split('@')[0])}</option>`).join('')}</select>` : '';
     if (!this.esVendedor() && !this._vendedores && window.UsuariosService?.getVendedores) {
@@ -348,8 +349,9 @@ Object.assign(window.Centro, {
         : `${docs.length} cuenta${docs.length === 1 ? '' : 's'}${this._dir?.provisional ? ' · actualizando…' : ''}`;
     const extra = this.filtro === 'regularizar' && [ROLES.ADMIN, 'admin', ROLES.GERENTE, ROLES.RECEPCION].includes(this.rol)
       ? ` · <a href="./regularizacion.html">bandeja completa ›</a>` : '';
-    cont.innerHTML = `<h2 class="cg-h2" style="margin-right:6px;">${titulo}</h2>${seg}${vend}
-      ${chip('regularizar', 'Por regularizar')}${this.esVendedor() ? '' : chip('sin_vendedor', 'Sin vendedor')}${chip('vencen', 'Vencen pronto')}${chip('firma', 'Firma pendiente')}
+    // Orden canónico de la barra (2026-10-09): chips · Mías · secundarios.
+    cont.innerHTML = `<h2 class="cg-h2" style="margin-right:6px;">${titulo}</h2>
+      ${chip('regularizar', 'Por regularizar')}${this.esVendedor() ? '' : chip('sin_vendedor', 'Sin vendedor')}${chip('vencen', 'Vencen pronto')}${chip('firma', 'Firma pendiente')}${seg}${vend}
       <label class="cg-switch" style="margin-left:auto;" title="Ocultar clientes marcados como inactivos"><input type="checkbox" ${this.soloActivos ? 'checked' : ''} onchange="Centro.setSoloActivos(this.checked)"><span class="trk" aria-hidden="true"></span> Solo activas</label>
       <span class="cg-resumen" id="cgResumen">${resumen}${extra}</span>`;
   },

@@ -2571,18 +2571,7 @@ table.app-table.editable tbody tr:hover { background: transparent; }
 .disclosure-sub.visible { display: block; }
 
 /* ── Filter chips (standalone) ──────────────────────────────── */
-.filter-chips { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
-.filter-chip {
-  height: 28px; padding: 0 10px;
-  border-radius: var(--radius-sm);
-  font-size: 12px; font-weight: 500;
-  border: 1px solid var(--border-default);
-  background: var(--surface-card); color: var(--fg-2);
-  cursor: pointer;
-  transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
-}
-.filter-chip:hover  { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
-.filter-chip.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+/* .filter-chip → .bj-filtro del kit de bandeja (2026-10-09) */
 
 /* ── Breadcrumbs (kit-promoted) ─────────────────────────────── */
 .app-breadcrumbs {

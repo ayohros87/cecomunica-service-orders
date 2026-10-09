@@ -384,7 +384,7 @@ window.FacturacionComisiones = (() => {
       const el = document.querySelector(`[data-cnt="${k}"]`);
       if (el) el.textContent = v;
     });
-    document.querySelectorAll('.cm-chip').forEach(b => b.classList.toggle('active', b.dataset.f === filtro));
+    document.querySelectorAll('.bj-filtro').forEach(b => b.classList.toggle('active', b.dataset.f === filtro));
 
     // Sin vendedor primero: es lo que hay que resolver antes de poder pagar.
     const filas = visibles();
@@ -621,7 +621,7 @@ window.FacturacionComisiones = (() => {
 
   function wire() {
     document.getElementById('cmChips')?.addEventListener('click', (ev) => {
-      const b = ev.target.closest('.cm-chip'); if (!b) return;
+      const b = ev.target.closest('.bj-filtro'); if (!b) return;
       filtro = b.dataset.f; abierto = null; render();
     });
     let t = null;
@@ -671,7 +671,7 @@ window.FacturacionComisiones = (() => {
         if (mount && !mount.children.length && window.FinanzasNav) FinanzasNav.render('comisiones');
         // ?f=pago (señal "Comisiones listas" del home, P8): abre en ese chip.
         const f0 = new URLSearchParams(location.search).get('f');
-        if (f0 && document.querySelector(`#cmChips [data-f="${CSS.escape(f0)}"], .cm-chip[data-f="${CSS.escape(f0)}"]`)) filtro = f0;
+        if (f0 && document.querySelector(`#cmChips [data-f="${CSS.escape(f0)}"], .bj-filtro[data-f="${CSS.escape(f0)}"]`)) filtro = f0;
         wire();
         await cargar();
         const id = new URLSearchParams(location.search).get('aviso');

@@ -22,10 +22,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cotizaciones - Cecomunica</title>
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=dc82d8af">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=74b79c3f">
   <!-- Rediseño Command Center F4: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=c83fa1b2">
-  <link rel="stylesheet" href="../css/cotizaciones-kit.css?v=de4f878d">
+  <link rel="stylesheet" href="../css/bandeja.css?v=0d25ff09">
+  <link rel="stylesheet" href="../css/cotizaciones-kit.css?v=9183f98c">
 
           <script src="../js/core/modulos.js?v=9700916f"></script>
   <script src="../js/core/layout.js?v=72ea4cc4"></script>
@@ -66,7 +67,7 @@
     <!-- Taller | Ventas (2026-09-25): son dos documentos distintos con dos
          desenlaces distintos. La jefa de taller aterriza en Taller; ventas en
          Ventas; administración ve las dos. -->
-    <div class="cc-segments" id="tipoSeg" role="tablist" aria-label="Tipo de cotización" style="margin-bottom:var(--sp-3);"></div>
+    <div class="bj-filtros" id="tipoSeg" role="tablist" aria-label="Tipo de cotización" style="margin-bottom:var(--sp-3);"></div>
 
     <div class="cc-stats" id="statsRegion">
       <div class="cc-stat"><div class="cc-stat-icon"><i data-lucide="file-text"></i></div>
@@ -93,11 +94,11 @@
     <!-- Tabla / lista -->
     <div class="app-table-wrap">
       <div class="filter-bar">
-        <div class="cc-segments" id="segments"></div>
-        <div class="filter-search" style="margin-left:auto;">
+        <div class="filter-search">
           <span class="search-icon"><i data-lucide="search"></i></span>
           <input id="filtroTexto" type="search" placeholder="Buscar N°, cliente…" aria-label="Buscar cotizaciones">
         </div>
+        <div class="bj-filtros" id="segments"></div>
         <!-- Rango de fecha de creación (auditoría UX 2026-09-28, §4.5 #12).
              Recorta en memoria el alcance cargado: tarjetas, segmentos y tabla
              cuentan lo mismo (auditoría de módulos 2026-09-30, C1). Vacío =
@@ -110,10 +111,8 @@
           <span class="toggle-label">Hasta</span>
           <input type="date" id="filtroHasta" aria-label="Creada hasta" style="border:none;background:none;font:inherit;color:inherit;">
         </label>
-        <label class="filter-toggle" id="wrapToggleMias" for="toggleMias" style="display:none;">
-          <input type="checkbox" id="toggleMias" class="toggle-input">
-          <span class="toggle-slider"></span>
-          <span class="toggle-label">Solo mis cotizaciones</span>
+        <label class="bj-filtro bj-mias" id="wrapToggleMias" for="toggleMias" style="display:none;" title="Solo mis cotizaciones">
+          <input type="checkbox" id="toggleMias">Mías
         </label>
         <label class="filter-toggle" for="toggleEliminadas">
           <input type="checkbox" id="toggleEliminadas" class="toggle-input">

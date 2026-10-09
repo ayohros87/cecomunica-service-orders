@@ -163,8 +163,8 @@
     const n = { todas: base.length, taller: base.filter(esTallerC).length };
     n.ventas = n.todas - n.taller;
     wrap.innerHTML = [['taller', 'Taller'], ['ventas', 'Ventas'], ['todas', 'Todas']].map(([k, l]) => `
-      <button type="button" class="cc-seg${filtroTipo === k ? ' active' : ''}" data-tipo="${k}" role="tab" aria-selected="${filtroTipo === k}">
-        ${l} <span class="cc-seg-count">${n[k]}</span>
+      <button type="button" class="bj-filtro${filtroTipo === k ? ' active' : ''}" data-tipo="${k}" role="tab" aria-selected="${filtroTipo === k}">
+        ${l} <span class="cnt">${n[k]}</span>
       </button>`).join('');
   }
 
@@ -201,8 +201,8 @@
       segs.push({ key: 'facturadas',   label: 'Facturadas',   count: facturadas });
     }
     wrap.innerHTML = segs.map(s => `
-      <button type="button" class="cc-seg${filtroEstado === s.key ? ' active' : ''}" data-estado="${s.key}">
-        ${s.label} <span class="cc-seg-count">${s.count}</span>
+      <button type="button" class="bj-filtro${filtroEstado === s.key ? ' active' : ''}" data-estado="${s.key}">
+        ${s.label} <span class="cnt">${s.count}</span>
       </button>
     `).join('');
   }
@@ -759,7 +759,7 @@
     });
 
     $('segments').addEventListener('click', (e) => {
-      const btn = e.target.closest('.cc-seg');
+      const btn = e.target.closest('.bj-filtro');
       if (!btn) return;
       filtroEstado = btn.dataset.estado;
       render();

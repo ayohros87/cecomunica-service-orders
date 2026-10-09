@@ -1626,7 +1626,7 @@ let _conteosSrvEnVuelo = false;
 
 function _pintarConteosChips() {
   const pinta = (key, n) => {
-    document.querySelectorAll(`.estado-chips-bar [data-count="${key}"]`)
+    document.querySelectorAll(`.bj-filtros [data-count="${key}"]`)
       .forEach(s => { s.textContent = n == null ? '—' : String(n); });
   };
   [...CHIPS_ABIERTOS, ...CHIPS_CERRADOS, 'qc'].forEach(k => pinta(k, _conteosSrv[k]));
@@ -1681,7 +1681,7 @@ function actualizarResumen(lista) {
   // su "activo" se sincroniza aquí, que corre tras cada aplicación de filtros
   // (incluye el deep-link ?qc=1 y el chip del dropdown Resumen).
   const qcOn = !!document.getElementById('filtroQcPendiente')?.checked;
-  document.querySelectorAll('.estado-chips-bar [data-action="filtrar-qc"]').forEach(b => {
+  document.querySelectorAll('.bj-filtros [data-action="filtrar-qc"]').forEach(b => {
     b.classList.toggle('active', qcOn);
     b.setAttribute('aria-selected', String(qcOn));
   });

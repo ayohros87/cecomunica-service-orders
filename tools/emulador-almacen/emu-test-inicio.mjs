@@ -25,7 +25,7 @@ async function leerInicio(s) {
       saludo: t('#cgSaludo'), fecha: t('#cgFecha'), botones: ts('#cgHeroBtns .btn'),
       senales: [...document.querySelectorAll('#cgSenales .cg-senal')].map(e => `${e.querySelector('.t')?.textContent.trim()} = ${e.querySelector('.v')?.textContent.trim()} (${e.querySelector('.s')?.textContent.trim()})${e.classList.contains('is-on') ? ' [ON]' : ''}`),
       recientes: ts('#cgRecientes .cg-rec .n'),
-      filtros: ts('#cgFiltros .cg-filtro'), resumen: t('#cgResumen'),
+      filtros: ts('#cgFiltros .bj-filtro'), resumen: t('#cgResumen'),
       letras: ts('#cgLista .cg-letra b'), filas: document.querySelectorAll('#cgLista .cg-fila').length,
       tarjetas: document.querySelectorAll('#cgLista .cg-tarjeta:not(.cg-tarjeta--nueva)').length,
       az: ts('#cgAZ a'), azMute: document.querySelectorAll('#cgAZ span.mute').length,
@@ -88,7 +88,7 @@ async function leerInicio(s) {
   const venc = await s.page.evaluate(() => ({ dir: document.querySelectorAll('#cgLista .cg-fila').length, chips: [...document.querySelectorAll('#cgLista .cg-chip')].map(e => e.textContent.trim()).slice(0, 5) }));
   console.log('    vencen:', J(venc));
   ok(venc.dir >= 1 && venc.chips.some(c => /Vence en \d+ d|Firma pendiente|Sin regularizar/.test(c)), 'la señal "por vencer" filtra y las filas dicen cuándo');
-  await s.page.evaluate(() => [...document.querySelectorAll('#cgFiltros .cg-filtro')].find(e => /Sin vendedor/.test(e.textContent)).click()); await espera(400);
+  await s.page.evaluate(() => [...document.querySelectorAll('#cgFiltros .bj-filtro')].find(e => /Sin vendedor/.test(e.textContent)).click()); await espera(400);
   const sv = await s.page.evaluate(() => ({ dir: document.querySelectorAll('#cgLista .cg-fila').length, todosSin: [...document.querySelectorAll('#cgLista .cg-fila .v')].every(e => /Sin vendedor/.test(e.textContent)) }));
   ok(sv.dir >= 1 && sv.todosSin, 'el chip "Sin vendedor" deja solo las cuentas sin vendedor: ' + sv.dir);
   await s.page.evaluate(() => Centro.setFiltro(null)); await espera(300);

@@ -39,10 +39,10 @@ window.ContratosLista = {
     return `<span class="${CC.chipClass(data)}" title="${CS.esc(CC.resumen(data))}">${CS.esc(CC.etiqueta(data))}</span>`;
   },
   composicionSel() {
-    return document.querySelector('#filtroComposicionChips .filter-chip.active')?.dataset.comp || '';
+    return document.querySelector('#filtroComposicionChips .bj-filtro.active')?.dataset.comp || '';
   },
   setComposicion(grupo) {
-    document.querySelectorAll('#filtroComposicionChips .filter-chip').forEach(ch =>
+    document.querySelectorAll('#filtroComposicionChips .bj-filtro').forEach(ch =>
       ch.classList.toggle('active', (ch.dataset.comp || '') === (grupo || '')));
   },
 
@@ -481,7 +481,7 @@ window.ContratosLista = {
     const sel = document.getElementById('filtroEstado');
     if (sel && typeof f.estado === 'string' && [...sel.options].some(o => o.value === f.estado)) {
       sel.value = f.estado;
-      document.querySelectorAll('#filtroEstadoChips .filter-chip').forEach(ch =>
+      document.querySelectorAll('#filtroEstadoChips .bj-filtro').forEach(ch =>
         ch.classList.toggle('active', (ch.dataset.estado || '') === f.estado));
       const chkPnd = document.getElementById('chkSoloPendientes');
       if (chkPnd) chkPnd.checked = (f.estado === 'pendiente_aprobacion');
@@ -920,7 +920,7 @@ window.ContratosLista = {
     }
 
     // Filtro "Composición" (Todas / Alquiler / Propio / Mixto), sobre lo cargado.
-    document.querySelectorAll('#filtroComposicionChips .filter-chip').forEach((chip) => {
+    document.querySelectorAll('#filtroComposicionChips .bj-filtro').forEach((chip) => {
       chip.addEventListener('click', () => {
         self.setComposicion(chip.dataset.comp || '');
         self.cargar(true);

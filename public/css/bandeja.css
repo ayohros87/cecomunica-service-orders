@@ -155,3 +155,87 @@
 .bj-item-n.ok { color: #065F46; }
 .bj-item-s { grid-column: 1 / -1; font-size: 12px; color: var(--bj-fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bj-lista-vacia { margin: 0; padding: 18px 14px; font-size: 13px; color: var(--bj-fg-3); }
+
+/* =============================================================
+   Barra de bandeja (2026-10-09) — UNA barra para todas las bandejas:
+   buscador · filtros con conteo · Mías · secundarios (select) a la derecha.
+   El chip es el de Órdenes ("el estado es la única voz de color"): el punto
+   lleva el tono, el activo engrosa el borde y toma el tono suave; "Todas"
+   activo se pinta oscuro. Reemplaza .estado-chip, .fb-chip, .cm-chip,
+   .rg-chip, .cg-filtro, .filter-chip y .cc-seg (siete copias).
+   ============================================================= */
+.bj-barra {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--bj-line-soft);
+}
+.bj-barra .push { flex: 1; }
+.bj-barra .form-input, .bj-barra .form-select, .bj-barra input[type="search"], .bj-barra select { height: 30px; font-size: 13px; }
+.bj-barra input[type="search"] { max-width: 240px; }
+.bj-buscar { position: relative; display: inline-flex; align-items: center; }
+.bj-buscar svg { position: absolute; left: 9px; width: 14px; height: 14px; color: var(--bj-fg-4); pointer-events: none; }
+.bj-buscar input { padding-left: 29px; }
+
+.bj-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.bj-filtro {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px;
+  border-radius: var(--bj-pill); border: 1px solid var(--bj-line);
+  background: var(--bj-surface); color: var(--bj-fg-2);
+  font: 500 13px/1 var(--font-body, "Inter", system-ui, sans-serif);
+  cursor: pointer; white-space: nowrap; user-select: none;
+  transition: background var(--dur-fast, 120ms) ease, border-color var(--dur-fast, 120ms) ease, color var(--dur-fast, 120ms) ease;
+}
+.bj-filtro:hover { background: var(--bj-accent-soft); border-color: var(--bj-accent); }
+.bj-filtro:focus-visible { outline: none; box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 145, 215, .30)); }
+.bj-filtro .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; background: var(--bj-fg-4); }
+.bj-filtro .cnt {
+  margin-left: 2px; padding: 0 6px; height: 18px; min-width: 22px; display: inline-flex;
+  align-items: center; justify-content: center; font-size: 11px; font-weight: 600;
+  border-radius: 999px; background: rgba(0, 0, 0, .06); font-variant-numeric: tabular-nums;
+}
+.bj-filtro.active { font-weight: 600; border-width: 1.5px; color: var(--bj-fg-1); }
+.bj-filtro--all.active { background: var(--bj-fg-1); color: #fff; border-color: var(--bj-fg-1); }
+.bj-filtro--all.active .cnt { background: rgba(255, 255, 255, .20); color: #fff; }
+/* Tonos del kit (los mismos cinco de .bj-chip) */
+.bj-filtro--alerta .dot { background: #DC2626; }
+.bj-filtro--aviso  .dot { background: #D97706; }
+.bj-filtro--info   .dot { background: #2563EB; }
+.bj-filtro--listo  .dot { background: #16A34A; }
+.bj-filtro--neutro .dot { background: var(--bj-fg-4); }
+.bj-filtro--alerta.active { background: #FEF2F2; border-color: #DC2626; color: #991B1B; }
+.bj-filtro--aviso.active  { background: #FFFBEB; border-color: #D97706; color: #92400E; }
+.bj-filtro--info.active   { background: #EFF6FF; border-color: #2563EB; color: #1E3A8A; }
+.bj-filtro--listo.active  { background: #ECFDF5; border-color: #16A34A; color: #065F46; }
+.bj-filtro--neutro.active { background: var(--bj-sunken); border-color: var(--bj-fg-4); color: var(--bj-fg-2); }
+/* Un <select> con forma de chip (vendedor, período…) */
+.bj-filtro--sel {
+  appearance: none; -webkit-appearance: none; padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7884' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 9px center;
+}
+/* Segmento: dos o tres chips pegados (Contratos | Gestiones) */
+.bj-seg { display: inline-flex; border: 1px solid var(--bj-line); border-radius: var(--bj-pill); overflow: hidden; background: var(--bj-surface); }
+.bj-seg .bj-filtro { border: 0; border-radius: 0; }
+.bj-seg .bj-filtro.active { background: var(--bj-fg-1); color: #fff; }
+
+/* "Mías": el mismo interruptor en todas las bandejas con dueño (Órdenes,
+   Cotizaciones, Centro). Es un chip con casilla; .active o :has(:checked). */
+.bj-mias { position: relative; }
+.bj-mias input { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }
+.bj-mias::before {
+  content: ""; width: 13px; height: 13px; flex: none; border-radius: 4px;
+  border: 1.5px solid currentColor; background: transparent; box-sizing: border-box;
+}
+.bj-mias.active, .bj-mias:has(input:checked) { background: var(--bj-accent-soft); border-color: var(--bj-accent); color: #005781; font-weight: 600; }
+.bj-mias.active::before, .bj-mias:has(input:checked)::before {
+  background: var(--bj-accent) currentColor;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+  background-size: 11px; background-position: center; background-repeat: no-repeat; border-color: var(--bj-accent);
+}
+.bj-mias:has(input:focus-visible) { box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 145, 215, .30)); }
+
+@media (max-width: 640px) {
+  .bj-barra { flex-wrap: nowrap; overflow-x: auto; margin: 0 -10px 10px; padding: 0 10px 10px; scrollbar-width: none; }
+  .bj-barra::-webkit-scrollbar { display: none; }
+  .bj-barra .push { display: none; }
+  .bj-filtros { flex-wrap: nowrap; }
+}

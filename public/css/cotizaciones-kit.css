@@ -44,20 +44,7 @@
 .cc-row-actions .btn-icon { color: var(--fg-3); }
 
 /* ── Segmentos / tabs por estado ───────────────────────────── */
-.cc-segments { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
-.cc-seg {
-  height: 30px; padding: 0 12px; border-radius: var(--radius-md);
-  font-size: 12.5px; font-weight: 600; border: 1px solid transparent;
-  background: transparent; color: var(--fg-3); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
-  transition: background var(--dur-fast), color var(--dur-fast);
-}
-.cc-seg:hover { background: var(--surface-sunken); color: var(--fg-1); }
-.cc-seg.active { background: var(--brand); color: #fff; }
-.cc-seg .cc-seg-count {
-  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
-  background: rgba(0,0,0,.07); padding: 0 6px; border-radius: var(--radius-pill); line-height: 16px;
-}
-.cc-seg.active .cc-seg-count { background: rgba(255,255,255,.22); }
+/* .cc-seg (chips de la bandeja) → .bj-filtro del kit de bandeja (2026-10-09) */
 
 /* ── Editor grid + panels ──────────────────────────────────── */
 .cc-editor-grid { display: grid; grid-template-columns: 1fr 360px; gap: var(--sp-6); align-items: start; }

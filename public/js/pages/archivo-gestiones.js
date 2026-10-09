@@ -17,7 +17,7 @@ window.ArchivoGestiones = {
   esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); },
 
   tipoActivo() {
-    return document.querySelector('#filtroTipoGestionChips .filter-chip.active')?.dataset.tipo || '';
+    return document.querySelector('#filtroTipoGestionChips .bj-filtro.active')?.dataset.tipo || '';
   },
 
   // Chip de estado. Cerrada = verde, anulada = roja, todo lo abierto = ámbar:
@@ -219,9 +219,9 @@ window.ArchivoGestiones = {
   },
 
   init() {
-    document.querySelectorAll('#filtroTipoGestionChips .filter-chip').forEach((chip) => {
+    document.querySelectorAll('#filtroTipoGestionChips .bj-filtro').forEach((chip) => {
       chip.addEventListener('click', () => {
-        document.querySelectorAll('#filtroTipoGestionChips .filter-chip')
+        document.querySelectorAll('#filtroTipoGestionChips .bj-filtro')
           .forEach((c) => c.classList.toggle('active', c === chip));
         this.cargar();
       });

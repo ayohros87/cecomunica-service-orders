@@ -11,12 +11,12 @@
   <meta charset="UTF-8" />
   <title>Centro de gestión de clientes - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=dc82d8af">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=74b79c3f">
   <link rel="stylesheet" href="../css/ceco-rail.css?v=c83fa1b2">
   <!-- UI kit del módulo (2026-08-28): chips unificados, anatomía de modal,
        pasos de wizard, expediente responsivo, jerarquía de botones. -->
   <link rel="stylesheet" href="../css/ceco-gestion.css?v=5b285396">
-  <link rel="stylesheet" href="../css/bandeja.css?v=0a2d7aa4"> <!-- kit de bandeja: panel Pendientes por aprobar -->
+  <link rel="stylesheet" href="../css/bandeja.css?v=0d25ff09"> <!-- kit de bandeja: panel Pendientes por aprobar -->
 
       <script src="../js/core/modulos.js?v=9700916f"></script>
   <script src="../js/core/layout.js?v=72ea4cc4"></script>
@@ -90,14 +90,6 @@
     .cg-rec .n { display:block; font-size:13.5px; font-weight:600; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .cg-rec .s { display:block; font-size:12px; color:var(--fg-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     /* Filtros del directorio */
-    .cg-filtros { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-    .cg-filtro { display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 13px; border-radius:999px; border:1px solid var(--border-default); background:var(--surface-card); color:var(--fg-2);
-                 font:600 13px var(--font-body); cursor:pointer; white-space:nowrap; }
-    .cg-filtro .n { color:var(--fg-3); font-weight:500; }
-    .cg-filtro.is-on { background:var(--navy); border-color:var(--navy); color:#fff; } .cg-filtro.is-on .n { color:#C9D6E3; }
-    .cg-filtro--sel { appearance:none; -webkit-appearance:none; padding-right:30px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7884' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; }
-    .cg-seg { display:inline-flex; border:1px solid var(--border-default); border-radius:999px; overflow:hidden; background:var(--surface-card); }
-    .cg-seg .cg-filtro { border:0; border-radius:0; }
     .cg-resumen { font-size:13px; color:var(--fg-3); }
     .cg-resumen a { color:var(--accent-hover, #0074AC); }
     /* Directorio por letra */
@@ -437,9 +429,6 @@
       .cg-recgrid { display:flex; gap:10px; overflow-x:auto; margin:0 -10px; padding:0 10px 2px; scrollbar-width:none; }
       .cg-recgrid::-webkit-scrollbar { display:none; }
       .cg-rec { flex:none; width:200px; }
-      .cg-filtros { flex-wrap:nowrap; overflow-x:auto; margin:0 -10px 10px; padding:0 10px 2px; scrollbar-width:none; }
-      .cg-filtros::-webkit-scrollbar { display:none; }
-      .cg-filtros .cg-h2 { display:none; } .cg-filtros .cg-switch { margin-left:0; flex:none; } .cg-resumen { flex:none; }
       .cg-dirbody { gap:8px; }
       .cg-fila { grid-template-columns:minmax(0,1fr) 18px; min-height:56px; padding:8px 12px; }
       .cg-fila > .r:nth-child(2), .cg-fila .v { display:none; }
