@@ -1,0 +1,126 @@
+/* =============================================================
+   facturacion-bandeja.css — estilos propios de facturacion/bandeja.html
+   Vivían inline en el <head> (hasta 2026-10-09, revisión holística de
+   bandejas, fase "un solo sistema de estilos"). Mismo orden en cascada:
+   el <link> va donde estaba el <style>.
+   ============================================================= */
+/* Page-local — bandeja "Facturación pendiente" (propuesta 2026-09-04).
+   Convenciones de la revisión de densidad de Órdenes: sin tarjetas KPI,
+   chips con conteo, UNA voz de color por fila (el efecto sobre el cobro),
+   botones quietos. Tokens de ceco-ui.css. */
+.fb-intro { color: var(--fg-3); font-size: 13px; margin: 0 0 var(--sp-3); }
+
+/* Correo en error dentro del chip (R3): punto rojo, conteo en el title. */
+.bj-filtro .errdot { width: 8px; height: 8px; border-radius: 50%; background: #DC2626; display: inline-block; margin-left: 2px; }
+.bj-filtro .errdot[hidden] { display: none; }
+.fb-t2 .fb-reenviar { height: 20px; padding: 0 8px; margin-left: 2px; border-radius: 999px; border: 1px solid #FECACA;
+  background: #FEF2F2; color: #991B1B; font: 600 11px/1 var(--font-body); cursor: pointer; vertical-align: 1px; }
+.fb-t2 .fb-reenviar:hover { background: #FEE2E2; border-color: #991B1B; }
+/* QBO marcado por una persona SIN número de factura (P5): mismo ámbar que el "?" de la pastilla. */
+.fb-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg-3); cursor: pointer; }
+
+.fb-rows { display: flex; flex-direction: column; gap: 6px; }
+.fb-row { background: var(--surface-card, #fff); border: 1px solid var(--border-default); border-radius: var(--radius-md); }
+.fb-main { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto auto auto; align-items: center;
+  gap: 12px; padding: 9px 12px; cursor: pointer; }
+.fb-main:hover { background: #FAFCFE; }
+.fb-row.is-open { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,145,215,.12); }
+.fb-row.is-open .fb-main { background: #FAFCFE; }
+.fb-row.is-cerrado .fb-main { opacity: .62; }
+.fb-efecto { display: inline-flex; align-items: center; justify-content: center; height: 22px; padding: 0 9px;
+  border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  border: 1px solid transparent; white-space: nowrap; }
+.fb-efecto--arranca { background: #F0FDF4; color: #166534; border-color: #BBF7D0; }
+.fb-efecto--cambia  { background: #F0F9FF; color: #0369A1; border-color: #BAE6FD; }
+.fb-efecto--termina { background: #FFF7ED; color: #9A3412; border-color: #FED7AA; }
+.fb-efecto--espera  { background: transparent; color: var(--fg-3); border-color: var(--border-default); border-style: dashed; }
+.fb-efecto--hecho   { background: var(--surface-sunken); color: var(--fg-3); border-color: transparent; }
+.fb-txt { min-width: 0; }
+.fb-t1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13.5px; }
+.fb-t1 b { font-weight: 600; color: var(--fg-1); }
+.fb-t1 .id { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--fg-3); }
+.fb-t1 .que { color: var(--fg-2); }
+.fb-t2 { font-size: 12.5px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.fb-t2 .alerta { color: #991B1B; font-weight: 600; }
+.fb-monto { font-family: var(--font-mono, monospace); font-size: 13px; color: var(--fg-2); text-align: right;
+  white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fb-monto small { display: block; font-family: var(--font-body); font-size: 11px; color: var(--fg-4, #9AA7B4); }
+.fb-age { font-size: 12px; color: var(--fg-3); white-space: nowrap; min-width: 44px; text-align: right; }
+.fb-age.warn { color: #92400E; font-weight: 600; }
+.fb-age.bad  { color: #991B1B; font-weight: 600; }
+.fb-pasos { display: inline-flex; gap: 6px; align-items: center; }
+.fb-paso { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border-radius: 999px;
+  border: 1px solid var(--border-default); background: var(--surface-card, #fff); font: 600 12px/1 var(--font-body);
+  color: var(--fg-2); cursor: pointer; white-space: nowrap; }
+.fb-paso .o { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--gray-400, #9AA7B4); display: inline-block; position: relative; }
+.fb-paso:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.fb-paso.done { background: #F0FDF4; border-color: #BBF7D0; color: #166534; }
+.fb-paso.done .o { border: 0; background: #166534; }
+.fb-paso.done .o::after { content: ""; position: absolute; left: 4px; top: 1.5px; width: 3px; height: 6px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.fb-paso.na { opacity: .45; cursor: default; border-style: dashed; }
+/* QBO hecho pero SIN número de factura: el paso está a medias — sin ese
+   número no se puede confirmar el pago contra QuickBooks. Sigue verde
+   (facturar SÍ se facturó) con un "?" ámbar que invita a completarlo. */
+.fb-paso.sin-num { border-color: #E9C46A; }
+.fb-paso.sin-num .q { margin-left: 1px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--soft-warn, #FBF3E0); color: #8A6415; font: 700 10px/14px var(--font-body);
+  text-align: center; display: inline-block; }
+.fb-paso.na:hover { border-color: var(--border-default); color: var(--fg-2); background: var(--surface-card, #fff); }
+.fb-more { width: 26px; height: 26px; border-radius: 6px; border: 1px solid transparent; color: var(--fg-4, #9AA7B4);
+  display: inline-flex; align-items: center; justify-content: center; font-weight: 700; letter-spacing: .05em; }
+.fb-main:hover .fb-more { border-color: var(--border-default); color: var(--fg-2); }
+
+/* Popover del paso (pegado a la pastilla, sin modal) */
+.fb-popwrap { position: relative; display: inline-block; }
+.fb-pop { display: none; position: absolute; right: 0; top: 34px; z-index: 30; width: 300px;
+  background: var(--surface-card, #fff); border: 1px solid var(--border-default); border-radius: 8px;
+  box-shadow: 0 18px 40px rgba(6,24,41,.13), 0 6px 14px rgba(6,24,41,.07); padding: 12px 14px; text-align: left; cursor: default; }
+.fb-pop.show { display: block; }
+.fb-pop h6 { margin: 0 0 8px; font: 600 13.5px/1.3 var(--font-body); color: var(--fg-1); }
+.fb-pop label { display: block; font-size: 11.5px; color: var(--fg-3); margin: 8px 0 3px; font-weight: 500; }
+.fb-pop .form-input { height: 30px; font-size: 13px; width: 100%; }
+.fb-pop .hint { font-size: 11.5px; color: var(--fg-3); margin-top: 4px; line-height: 1.4; }
+.fb-pop .act { display: flex; gap: 6px; justify-content: flex-end; margin-top: 12px; }
+.fb-pop .err { font-size: 12px; color: #991B1B; margin-top: 6px; min-height: 0; }
+
+/* Detalle expandido */
+.fb-det { display: none; border-top: 1px solid var(--border-subtle); padding: 14px 16px 16px 120px; background: #FBFCFD; }
+.fb-row.is-open .fb-det { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 10px 28px; }
+.fb-det h5 { margin: 0 0 6px; font: 600 11.5px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); }
+.fb-det table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.fb-det td, .fb-det th { padding: 5px 8px; border-bottom: 1px solid var(--border-subtle); text-align: left; }
+.fb-det th { font-weight: 600; color: var(--fg-3); font-size: 11.5px; }
+.fb-det td.r, .fb-det th.r { text-align: right; font-variant-numeric: tabular-nums; }
+.fb-det .seriales { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--fg-2); line-height: 1.7; word-break: break-word; }
+.fb-det .kv { font-size: 12.5px; line-height: 1.7; color: var(--fg-2); }
+.fb-det .links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.fb-mail { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 8px 10px; border-radius: 6px;
+  background: var(--surface-sunken); color: var(--fg-2); }
+.fb-mail.err { background: #FEF2F2; color: #991B1B; }
+.fb-hist { font-size: 12px; color: var(--fg-3); line-height: 1.7; }
+.fb-hist b { color: var(--fg-2); font-weight: 600; }
+.fb-detfoot { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; padding-top: 8px; border-top: 1px solid var(--border-subtle); }
+.fb-detfoot .push { flex: 1; }
+.fb-desc { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  padding: 10px 12px; border-radius: 6px; background: #FFFBEB; border: 1px solid #FDE68A; }
+.fb-desc .t { width: 100%; font-size: 13px; font-weight: 600; color: #92400E; }
+.fb-desc .form-input { height: 30px; font-size: 13px; }
+.fb-desc .err { width: 100%; font-size: 12px; color: #991B1B; }
+.fb-descartado { font-size: 12.5px; color: var(--fg-3); }
+
+.fb-vacio { text-align: center; color: var(--fg-3); padding: var(--sp-6); }
+.fb-vacio svg { width: 34px; height: 34px; color: #16A34A; }
+.fb-aviso { display: flex; align-items: flex-start; gap: 8px; margin-bottom: var(--sp-3); padding: 9px 12px;
+  border-radius: var(--radius-md); font-size: 13px; background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
+/* display:flex le ganaba al atributo hidden: salía una franja roja vacía. */
+.fb-aviso[hidden] { display: none; }
+.fb-sep { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-3); margin: 14px 0 6px; }
+@media (max-width: 860px) {
+  .fb-main { grid-template-columns: 84px minmax(0,1fr); }
+  .fb-monto, .fb-age { display: none; }
+  .fb-pasos { grid-column: 2; justify-content: flex-end; }
+  .fb-det { padding-left: 16px; }
+  .fb-row.is-open .fb-det { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

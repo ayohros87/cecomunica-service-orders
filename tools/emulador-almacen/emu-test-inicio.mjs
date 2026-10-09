@@ -184,7 +184,8 @@ async function leerInicio(s) {
   console.log(`\n── C · vendedora · cartera (${info.msTotal} ms)`);
   console.log('    saludo:', f.saludo, '|', f.fecha); console.log('    señales:', J(f.senales)); console.log('    tarjetas:', f.tarjetas, J(tj.est)); console.log('    acciones:', J(tj.acts)); console.log('    semana:', J(tj.semana), 'cards', tj.cots);
   ok(/Karla/.test(f.saludo) && /tu cartera/.test(f.fecha), 'saludo y resumen de la vendedora');
-  ok(f.senales.length === 3 && !f.senales.some(x => /aprobar/.test(x)), 'la vendedora ve tres señales (sin "por aprobar")');
+  // Home por rol (2026-10-09): su inicio es el Centro, así que suma "Mis cotizaciones".
+  ok(f.senales.length === 4 && !f.senales.some(x => /aprobar/.test(x)) && f.senales.some(x => /otizaciones activas/.test(x)), 'la vendedora ve cuatro señales (sin "por aprobar", con "Mis cotizaciones")');
   ok(f.tarjetas >= 1 && f.filas === 0, 'la cartera chica sale en tarjetas: ' + f.tarjetas);
   ok(tj.est.length === f.tarjetas && tj.est.every(x => /Pide atención|Al día|Cuenta nueva/.test(x)), 'cada tarjeta dice su estado en una frase');
   ok(tj.acts.every(a => a.some(b => /Cotizar/.test(b)) && a.some(b => /Nueva gestión/.test(b)) && a.some(b => /Abrir ficha/.test(b))), 'cada tarjeta trae Cotizar · Nueva gestión · Abrir ficha');
@@ -218,7 +219,8 @@ async function leerInicio(s) {
   const g = await s.geometria();
   console.log('\n── D · teléfono', J(m), J(g));
   ok(m.iw === 390 && m.sw === 390 && !g.scrollHorizontal, 'cabe en los 390 px');
-  ok(m.senalesScroll && m.filtrosScroll, 'señales y filtros se deslizan en una fila');
+  // Los chips del kit (30 px) caben en 390 px sin deslizar: solo las señales deslizan.
+  ok(m.senalesScroll, 'las señales se deslizan en una fila');
   ok(m.dockVisible && m.dock.some(x => /Nuevo cliente/.test(x)), 'dock con Nuevo cliente');
   ok(m.az && m.filas > 100 && m.filaAlto >= 44, 'lista densa con índice A–Z y filas tocables');
   await s.captura('D01-telefono', { full: false });
