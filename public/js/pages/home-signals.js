@@ -361,7 +361,9 @@ window.HomeSignals = (() => {
     // se lee. El vendedor ve SU cartera; gerencia/admin ven todas (REGG).
     REGV: {
       modulo: 'centro', icon: 'clipboard-list', alert: true, moreIsBad: true,
-      deuda: true,
+      // `mia`: deuda de SU cartera — en el teléfono sube a la fila de
+      // pastillas en vez de esconderse con la deuda de toda la empresa.
+      deuda: true, mia: true,
       label: 'Mis cuentas por regularizar', sub: 'operan, pero les faltan seriales o contratos',
       href: 'clientes/centro.html?filtro=regularizacion',
       count: (ctx) => SenalesService.countCuentasPorRegularizar({ uid: ctx.uid }),
@@ -488,6 +490,25 @@ window.HomeSignals = (() => {
     administrador: ['S7', 'FIRV', 'REGV'],
   };
 
+  /* ── Teléfono (2026-10-09): las tarjetas se vuelven UNA fila de pastillas
+     ("20 Por asignar") que se desliza de lado, con el buscador arriba. El
+     rótulo largo no cabe en una pastilla: este es el corto. Lo que no esté
+     aquí usa el largo. En el teléfono se esconden la deuda de la empresa
+     (Seguimiento sin `mia`), "Al día" y la línea de "Actualizado". */
+  const MOVIL = '(max-width:640px)';
+  const CORTO = {
+    OPC: 'Por crear', S1: 'Por asignar', S2: 'En mostrador', S3: 'En taller',
+    S4: 'Completadas', S4Q: 'Control de calidad', ENT: 'Por entregar',
+    EST: 'Sin movimiento', S5: 'Mis órdenes', S4P: 'Mis completadas',
+    S6: 'Cotizaciones enviadas', S7: 'Mis cotizaciones', FIR: 'Por firmar',
+    FIRV: 'Por firmar', APR: 'Por aprobar', SAP: 'Cotizaciones por aprobar',
+    S9: 'Sin stock', LPC: 'Lotes PoC', S11: 'En bodega', S12: 'Por verificar',
+    S13: 'Por inspeccionar', S14: 'Por clasificar', S15: 'Seriales por asignar',
+    ADB: 'Apartados', REGV: 'Por regularizar', REGG: 'Por regularizar',
+    FAV: 'Sin facturar', COM: 'Comisiones',
+  };
+  const _esMovil = () => !!window.matchMedia?.(MOVIL).matches;
+
   function _cacheKey(uid, rol) { return `${CACHE_PREFIX}:${uid}:${rol}`; }
 
   function _readCache(uid, rol) {
@@ -606,7 +627,7 @@ window.HomeSignals = (() => {
     const titulo = `${sig.label} — ${sig.sub}${nueva ? ` · Nuevo: ${sig.nuevo.nota}` : ''}`;
     return `
 <a class="kpi${sig.alert ? ' kpi--alert' : ''}${abre ? ' kpi--abre' : ''}${nueva ? ' kpi--nuevo' : ''} is-loading" href="${sig.href}" data-signal="${id}" title="${titulo.replace(/"/g, '&quot;')}"${abre ? ' aria-expanded="false" role="button"' : ''}>
-  <div class="kpi__label"><i data-lucide="${sig.icon}"></i> <span class="kpi__t">${sig.label}</span>${nueva ? '<span class="kpi__nuevo">Nuevo</span>' : ''}${abre ? '<span class="kpi__chev" aria-hidden="true">▾</span>' : ''}</div>
+  <div class="kpi__label"><i data-lucide="${sig.icon}"></i> <span class="kpi__t">${sig.label}</span><span class="kpi__corto">${CORTO[id] || sig.label}</span>${nueva ? '<span class="kpi__nuevo">Nuevo</span>' : ''}${abre ? '<span class="kpi__chev" aria-hidden="true">▾</span>' : ''}</div>
   <div class="kpi__row">
     <div class="kpi__val num" data-signal-val="${id}">—</div>
     <div class="kpi__delta">${sig.sub}</div>
@@ -669,15 +690,19 @@ window.HomeSignals = (() => {
     const deudaItems = mount.querySelector('.kpis-deuda__items');
     if (!grid || !cero || !items) return;
     const orden = mount._signalOrder || [];
+    const movil = _esMovil();
     for (const id of orden) {
       const tile = mount.querySelector(`[data-signal="${id}"]`);
       if (!tile) continue;
+      const sig = SIGNALS[id];
       const destino = tile.classList.contains('is-cero') ? items
-        : (SIGNALS[id]?.deuda && deudaItems) ? deudaItems : grid;
+        : (sig?.deuda && deudaItems && !(movil && sig.mia)) ? deudaItems : grid;
       if (tile.parentElement === destino) continue;
       const foco = tile.contains(document.activeElement) ? document.activeElement : null;
-      const siguiente = Array.from(destino.children).find(el => orden.indexOf(el.dataset.signal) > orden.indexOf(id));
-      destino.insertBefore(tile, siguiente || null);
+      const siguiente = Array.from(destino.children).find(el => el.dataset.signal && orden.indexOf(el.dataset.signal) > orden.indexOf(id));
+      // El botón de recontar del teléfono es el último de la fila: las
+      // tarjetas entran antes que él.
+      destino.insertBefore(tile, siguiente || destino.querySelector(':scope > .kpis-refresh') || null);
       if (foco) foco.focus({ preventScroll: true });
     }
     const n = grid.querySelectorAll('.kpi').length;
@@ -916,7 +941,7 @@ window.HomeSignals = (() => {
     // un 128 permanente al lado de "por asignar" enseñaban a no mirar la fila.
     const dia = ids.filter(id => !SIGNALS[id].deuda);
     const deuda = ids.filter(id => SIGNALS[id].deuda);
-    mount.innerHTML = `<div class="kpis" data-n="${dia.length}">${dia.map(id => _tileHtml(id, SIGNALS[id])).join('')}</div>
+    mount.innerHTML = `<div class="kpis" data-n="${dia.length}">${dia.map(id => _tileHtml(id, SIGNALS[id])).join('')}<button type="button" class="kpis-refresh" data-signals-refresh title="Volver a contar ahora" aria-label="Volver a contar"><i data-lucide="refresh-cw"></i></button></div>
       <div class="kpis-deuda"${deuda.length ? '' : ' hidden'}><span class="kpis-deuda__label">Seguimiento</span>
         <div class="kpis-deuda__items" role="group" aria-label="Atrasos en seguimiento">${deuda.map(id => _tileHtml(id, SIGNALS[id])).join('')}</div></div>
       <div class="kpis-foot">
@@ -924,6 +949,13 @@ window.HomeSignals = (() => {
           <div class="kpis-zero__items" role="group" aria-label="Sin pendientes"></div></div>
       </div>`;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+    mount.querySelector('.kpis-refresh')?.addEventListener('click', () => _recontar(mount, true));
+    // Girar el teléfono o cambiar el ancho de la ventana cruza el corte del
+    // teléfono: "Mis cuentas por regularizar" cambia de zona.
+    if (!mount._movilWired && window.matchMedia) {
+      mount._movilWired = true;
+      window.matchMedia(MOVIL).addEventListener?.('change', () => _sincronizarN(mount));
+    }
     // La expansión se cablea ANTES de resolver los conteos: el camino de la
     // caché hace `return` temprano y sin esto las señales cacheadas no abrían.
     _wireExpansion(mount, ids);
@@ -1064,8 +1096,8 @@ window.HomeSignals = (() => {
       return;
     }
     mount._recontando = true;
-    const btn = mount.querySelector('[data-signals-refresh]');
-    if (btn) btn.disabled = true;
+    const btns = mount.querySelectorAll('[data-signals-refresh]');
+    btns.forEach(b => { b.disabled = true; });
     try {
       // Las listas memo (5 min) solo se tiran cuando la persona pide
       // "Actualizar"; en el recuento automático el TTL ya las mantiene frescas.
@@ -1091,7 +1123,7 @@ window.HomeSignals = (() => {
       _pintaActualizado(mount, Date.now());
     } finally {
       mount._recontando = false;
-      if (btn) btn.disabled = false;
+      btns.forEach(b => { b.disabled = false; });
     }
   }
 

@@ -295,7 +295,9 @@ a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
    nunca queda solo al inicio de un renglón con la palabra en el siguiente. */
 .kpis-zero__items{display:inline;min-width:0}
 .kpis-zero .kpi{display:inline;padding:0;border:0;border-radius:0;background:none;box-shadow:none;min-height:0;overflow:visible;color:var(--fg-3);font-size:12px}
-.kpis-zero .kpi + .kpi::before{content:"·";margin:0 6px;color:var(--fg-4)}
+/* El separador va DETRÁS de cada uno (no delante del siguiente): al partirse
+   la línea, el "·" se queda al final de la de arriba y no abre la de abajo. */
+.kpis-zero .kpi:not(:last-child)::after{content:"·";margin:0 6px;color:var(--fg-4)}
 .kpis-zero .kpi__label{display:inline;font-size:12px;color:inherit}
 .kpis-zero .kpi__label > i,.kpis-zero .kpi__label > svg,.kpis-zero .kpi__chev,.kpis-zero .kpi__nuevo,.kpis-zero .kpi__row{display:none}
 .kpis-zero .kpi__t{display:inline;overflow:visible}
@@ -557,6 +559,50 @@ a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
 @media (max-width:640px){
   .mgrid{grid-template-columns:1fr}
   .launch__hi .who{display:none}
+}
+
+/* ---- Home en el teléfono (2026-10-09) ----
+   Medido a 390 px: los contadores del administrador ocupaban 525 px y el
+   buscador arrancaba en y=661 — la primera pantalla era solo números. Ahora:
+   el buscador sube bajo la franja navy, las señales son UNA fila de
+   pastillas ("20 Por asignar") que se desliza de lado, y se esconden la
+   deuda de la empresa (Seguimiento sin `mia`), "Al día" y "Actualizado"
+   (el recuento al volver a la pestaña sigue; el botón queda como ícono al
+   final de la fila). Las de la persona ("Mis…") nunca se quitan. */
+.kpi__corto{display:none}
+.kpis-refresh{display:none}
+@media (max-width:640px){
+  .cc-app--home .cc-work{display:flex;flex-direction:column}
+  .cc-app--home .cc-work > *{order:10;width:100%;box-sizing:border-box}
+  .cc-app--home #impersonateBanner{order:0}
+  .cc-app--home .launch__hero{order:1;padding-bottom:18px}
+  .cc-app--home .launch__search{order:2;margin:14px auto 10px}
+  .cc-app--home .launch__search-hint{order:3;margin:-4px auto 10px}
+  .cc-app--home .launch__signals{order:4;margin:0 auto 4px}
+  .cc-app--home #feedDevoluciones{order:5}
+  .cc-app--home .launch{padding-top:14px;padding-bottom:88px}  /* aire para el botón flotante del menú (46 px a 14 px del borde) */
+
+  .launch__signals .kpis:not([hidden]){display:flex;gap:8px;overflow-x:auto;margin:0 -16px;padding:2px 16px 6px;scroll-padding-inline:16px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .launch__signals .kpis::-webkit-scrollbar{display:none}
+  .launch__signals .kpis > .kpi{flex:none;flex-direction:row;align-items:center;justify-content:flex-start;gap:6px;min-height:40px;padding:0 12px;border-radius:999px;box-shadow:none}
+  .launch__signals .kpis > .kpi--alert{border-left-width:1px;border-left-color:var(--line)}
+  .launch__signals .kpis > .kpi--alert:not(.is-cero){order:-1}
+  .launch__signals .kpis > .kpi .kpi__row{order:-1;flex:none}
+  .launch__signals .kpis > .kpi .kpi__val{font:700 15px/1 var(--font-display);letter-spacing:0}
+  .launch__signals .kpis > .kpi.is-loading .kpi__val{min-width:22px}
+  .launch__signals .kpis > .kpi .kpi__label{flex:none;gap:4px;font-size:13px;color:var(--fg-2)}
+  .launch__signals .kpis > .kpi .kpi__label > i,
+  .launch__signals .kpis > .kpi .kpi__label > svg,
+  .launch__signals .kpis > .kpi .kpi__t,
+  .launch__signals .kpis > .kpi .kpi__nuevo{display:none}
+  .launch__signals .kpis > .kpi .kpi__corto{display:inline;white-space:nowrap}
+  .launch__signals .kpis > .kpi[aria-expanded="true"]{outline:0;border-color:var(--accent);background:var(--accent-soft)}
+  .launch__signals .kpis-refresh{display:inline-flex;order:99;flex:none;align-items:center;justify-content:center;width:40px;height:40px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg-3);cursor:pointer;padding:0}
+  .launch__signals .kpis-refresh:disabled{opacity:.5}
+  .launch__signals .kpis-refresh svg{width:16px;height:16px}
+  .launch__signals .kpis-deuda,
+  .launch__signals .kpis-foot{display:none}
+  .launch__signals .kpis-skel{height:40px;border-radius:999px;margin-bottom:6px}
 }
 /* Teléfono: una sola columna. En dos columnas, rótulos como "Esperando
    control de calidad" no caben junto a su número y se recortaban. */
