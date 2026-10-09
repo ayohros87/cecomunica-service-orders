@@ -179,10 +179,15 @@ Object.assign(window.Centro, {
     // cuentas con algo registrado; el resto queda sin chip (menos ruido).
     let chip = null;
     if (inactivo) chip = { cls: 'cg-chip--muted', txt: 'Inactiva' };
-    // Ámbar también para las críticas: son 67 de 128 (umbral sin calibrar,
-    // auditoría 2026-09-30 §5) y en rojo la lista entera gritaba. El texto
-    // sí distingue: "Sin regularizar" (crítica) vs "Por regularizar".
-    else if (critica) chip = { cls: 'cg-chip--warn', txt: `Sin regularizar · ${puntos}`, title: 'Cuenta crítica: equipos en campo sin contrato que los ampare' };
+    // Rojo SOLO para "excede el margen": la escalera de gestiones puntuales
+    // (3) o de días (90) ya se agotó y la cuenta sigue sin regularizar. Es
+    // lo raro de verdad (0 cuentas el 2026-10-09). Las demás críticas van en
+    // ámbar con su CAUSA: 54 de 67 lo son por no tener ningún contrato
+    // vigente (casi todas con 1–8 radios), no por el umbral de 20 — subirlo
+    // no cambiaba nada (medido con el export del emulador).
+    else if (r?.excede_margen) chip = { cls: 'cg-chip--bad', txt: `Excede el margen · ${puntos}`, title: 'Agotó las gestiones puntuales o los días de margen sin regularizar: le toca a gerencia' };
+    else if (critica && r?.sin_contrato_vigente) chip = { cls: 'cg-chip--warn', txt: `Sin contrato · ${r.d1 || puntos} radio${(r.d1 || puntos) === 1 ? '' : 's'}`, title: 'Radios en campo y ningún contrato vigente que los ampare: hace falta un contrato nuevo' };
+    else if (critica) chip = { cls: 'cg-chip--warn', txt: `Sin regularizar · ${puntos}`, title: 'Cuenta crítica: 20 o más radios en campo sin contrato' };
     else if (firma.length) chip = { cls: 'cg-chip--warn', txt: firma.length === 1 ? 'Firma pendiente' : `${firma.length} firmas pendientes`, title: firma.map(f => `${f.contrato} · ${f.dias} d`).join(' · ') };
     else if (diasVence != null) chip = { cls: 'cg-chip--warn', txt: `Vence en ${diasVence} d`, title: vencen.map(x => x.contrato_id || x.id).join(' · ') };
     else if (puntos > 0) chip = { cls: 'cg-chip--warn', txt: `Por regularizar · ${puntos}`, title: `${(window.Regularizacion?.NIVEL_LABEL || {})[r?.nivel] || ''} ${puntos} punto(s)`.trim() };
@@ -294,9 +299,14 @@ Object.assign(window.Centro, {
     tiles.push(T({ id: 'vencen', lbl: 'Próximos 60 días', n: vencen ? vencen.length : null, t: 'Contratos por vencer', tono: vencen?.length ? 'warn' : 'ok',
       s: primero ? `el primero el ${this._fmtFecha(primero.fecha_vencimiento)}${nCli > 1 ? ` · ${nCli} cuentas` : ''}` : 'nada vence pronto' }));
     const reg = S?.reg ? S.reg.filter(x => !x.pospuesto) : null;
-    const crit = (reg || []).filter(x => x.nivel === 'critica').length, sinV = (reg || []).filter(x => !x.vendedor).length;
-    tiles.push(T({ id: 'regularizar', lbl: this.esVendedor() ? 'Tu cartera' : 'Cartera', n: reg ? reg.length : null, t: 'Cuentas por regularizar', tono: reg?.length ? 'info' : 'ok',
-      s: reg?.length ? [crit ? `${crit} crítica${crit === 1 ? '' : 's'}` : '', sinV ? `${sinV} sin vendedor` : ''].filter(Boolean).join(' · ') || 'equipos en campo sin contrato' : 'ninguna con deuda' }));
+    // El pie dice la CAUSA, no "n críticas": sin contrato vigente (la
+    // mayoría), las que exceden el margen (gerencia) y las sin vendedor.
+    const regIds = new Set((reg || []).map(x => x.id));
+    const docsReg = (this._dir?.docs || []).filter(c => regIds.has(c.id));
+    const sinContrato = docsReg.filter(c => c.regularizacion?.sin_contrato_vigente).length;
+    const excede = (reg || []).filter(x => x.excede).length, sinV = (reg || []).filter(x => !x.vendedor).length;
+    tiles.push(T({ id: 'regularizar', lbl: this.esVendedor() ? 'Tu cartera' : 'Cartera', n: reg ? reg.length : null, t: 'Cuentas por regularizar', tono: excede ? 'bad' : reg?.length ? 'info' : 'ok',
+      s: reg?.length ? [sinContrato ? `${sinContrato} sin contrato vigente` : '', excede ? `${excede} excede${excede === 1 ? '' : 'n'} el margen` : '', sinV ? `${sinV} sin vendedor` : ''].filter(Boolean).join(' · ') || 'equipos en campo sin contrato' : 'ninguna con deuda' }));
     cont.innerHTML = tiles.join('');
     cont.style.gridTemplateColumns = `repeat(${tiles.length}, minmax(0,1fr))`;
   },
