@@ -99,31 +99,18 @@ window.Centro = {
         // bloqueada para clientes ajenos. (El piso en firestore.rules llega con
         // el scoping de la Ola 2; hoy clientes es legible por toda la app.)
         this.cartera = this.esVendedor() ? 'mios' : 'todos';
-        if (this.esVendedor()) {
-          document.querySelector('.seg')?.classList.add('hidden');
-        }
+        this.nombreUsuario = u?.nombre || u?.displayName || null;
         // Toggle "solo activos": encendido por defecto, preferencia persistida.
         this.soloActivos = localStorage.getItem('cg_solo_activos') !== '0';
-        const chk = document.getElementById('cgSoloActivos');
-        if (chk) chk.checked = this.soloActivos;
-        // Bandeja "Cuentas por regularizar" (plan 2026-09-08 §4.6): admin y
-        // gerencia. El vendedor ve las suyas en el inicio y en cada ficha.
-        const extras = [];
-        if ([ROLES.ADMIN, ROLES.GERENTE, ROLES.RECEPCION].includes(this.rol)) {
-          extras.push(`<a class="btn btn-ghost" href="./regularizacion.html" style="font-size:13px;"><i data-lucide="clipboard-list"></i> Cuentas por regularizar</a>`);
-        }
-        // Alta de cliente desde el Centro (2026-09-11): el vendedor no tiene
-        // el módulo Clientes en el rail, así que su única puerta al alta era
-        // el combo de una cotización. El formulario es la misma ficha.
-        if (this._puedeCrearCliente()) {
-          extras.push(`<a class="btn btn-primary" href="./ficha.html?nuevo=1&from=centro" style="font-size:13px;"><i data-lucide="user-plus"></i> Nuevo cliente</a>`);
-        }
-        const ex = document.getElementById('cgToolsExtra');
-        if (ex && extras.length) ex.innerHTML = extras.join(' ');
+        // Inicio v2 (2026-10-09): saludo, buscador, señales, Recientes y la
+        // lista por letra los pinta centro-directorio.js (pintarInicio);
+        // "Nuevo cliente" y "Cuentas por regularizar" viven ahí.
         this._wire();
+        this._wireInicio();
         window.CentroAprobaciones?.init(this.rol);
         const params = new URLSearchParams(location.search);
         const id = params.get('id');
+        if (params.get('aprobaciones')) this.filtro = 'aprobar';
         this.gSel = params.get('g') || null;   // deep-link al expediente (correos)
         // Deep-link al contrato (?contrato=): el editor del módulo viejo vuelve
         // aquí y reabre el mismo contrato que se estaba viendo (2026-09-07).
@@ -141,7 +128,9 @@ window.Centro = {
         };
         const aviso = AVISOS[params.get('aviso') || ''];
         if (aviso) setTimeout(() => Toast.show(aviso, 'warn'), 300);
-        if (id) await this.abrir(id, { push: false });
+        // ?serial= (resultado del buscador) aterriza en Equipos con la fila
+        // marcada; ?accion=menu|contrato|renovar abre esa acción al entrar.
+        if (id) await this.abrir(id, { push: false, serial: params.get('serial') || null, accion: params.get('accion') || null });
         else await this.cargarLista(true);
         // ?docs=1: el documento del contrato (contratos/documento.html) manda
         // aquí a ver el expediente legal — esa página es "papel" y no carga el
@@ -158,11 +147,7 @@ window.Centro = {
   },
 
   _wire() {
-    document.getElementById('cgBuscar')?.addEventListener('input', (e) => {
-      clearTimeout(this._debounce);
-      this._debounce = setTimeout(() => { this.term = e.target.value.trim(); this.cargarLista(true); }, 250);
-    });
-    document.getElementById('btnMas')?.addEventListener('click', () => this.cargarLista(false));
+    // El buscador del inicio lo engancha _wireInicio (centro-directorio.js).
     document.getElementById('fEqFiltro')?.addEventListener('input', () => this.pintarEquipos());
     // Las pestañas (ficha v3, 2026-10-08) cargan lo suyo al abrirse
     // (mostrarTab → cargarActividad / pintarDocumentos); el panel "Más

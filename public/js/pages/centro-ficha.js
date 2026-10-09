@@ -11,16 +11,20 @@ Object.assign(window.Centro, {
     this.cliente = null;
     document.getElementById('vistaFicha').classList.add('hidden');
     document.getElementById('vistaLista').classList.remove('hidden');
-    document.querySelector('.app-wrap')?.classList.remove('is-ficha');
+    if (document.querySelector) document.querySelector('.app-wrap')?.classList.remove('is-ficha');
     const cola = window.CentroAprobaciones?.tipo;
     // El filtro de regularización sobrevive al ir y volver de una ficha.
     const qs = this.filtroReg ? '?filtro=regularizacion' : (cola ? `?aprobaciones=${cola}` : '');
     if (push) history.pushState({}, '', location.pathname + qs);
     window.CentroAprobaciones?.refrescar();
-    if (!document.querySelector('#cgLista .cg-row')) this.cargarLista(true);
+    // Lo abierto hace un momento sale en Recientes; el directorio se repinta
+    // de lo que ya está en memoria (y se recarga si quedó viejo).
+    this.cargarLista(false);
   },
 
-  async abrir(clienteId, { push = true } = {}) {
+  // opts.serial: aterrizar en Equipos con ese serial filtrado (buscador del
+  // inicio); opts.accion: 'menu' | 'contrato' | 'renovar' abre esa acción.
+  async abrir(clienteId, { push = true, serial = null, accion = null } = {}) {
     try {
       window.AprobacionesService?.invalidarHome();
       // Contratos, flota, catálogo y gestiones solo necesitan el id: se piden
@@ -59,11 +63,12 @@ Object.assign(window.Centro, {
         return;
       }
       this.cliente = c;
+      this._recordarReciente?.(c);
       if (push) history.pushState({}, '', `?id=${encodeURIComponent(clienteId)}`);
       document.getElementById('vistaLista').classList.add('hidden');
       document.getElementById('vistaFicha').classList.remove('hidden');
       // Ancho de ficha (1600 px) solo mientras se mira una cuenta.
-      document.querySelector('.app-wrap')?.classList.add('is-ficha');
+      if (document.querySelector) document.querySelector('.app-wrap')?.classList.add('is-ficha');
       window.scrollTo(0, 0);
 
       this._pintarEncabezado(c);
@@ -113,6 +118,21 @@ Object.assign(window.Centro, {
         history.replaceState({}, '', `?id=${encodeURIComponent(clienteId)}`);
         if (this.contratos.some(x => x.id === cid)) this.verContrato(cid);
       }
+      if (serial) {
+        // Desde el buscador del inicio: la pestaña Equipos con ese serial filtrado.
+        const f = document.getElementById('fEqFiltro');
+        if (f) { f.value = serial; this.pintarEquipos(); }
+        this.mostrarTab('blkEquipos');
+        history.replaceState({}, '', `?id=${encodeURIComponent(clienteId)}`);
+      }
+      if (accion === 'menu') setTimeout(() => this.abrirMenu(), 150);
+      else if (accion === 'contrato') setTimeout(() => this.wizContrato(), 150);
+      else if (accion === 'renovar') setTimeout(() => {
+        const est = this._cuentaEstado();
+        if (est.tipo === 'consolidada') this.wizContrato(est.maestro.id);
+        else if (est.renovables.length) this.wizContrato({ renovarCuenta: true });
+        else this.abrirMenu();
+      }, 150);
       // Escucha en vivo: los triggers escriben el avance ~1-2s después de
       // cada acción y la página lo adivinaba con setTimeout — ahora el
       // expediente se repinta cuando el dato REAL llega.

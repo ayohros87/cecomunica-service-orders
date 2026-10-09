@@ -5,6 +5,9 @@
 import '/js/firebase-init.js';
 import '/js/firebase-aggregates.js';
 import '/js/services/aprobacionesService.js';
+// Señales del inicio del Centro (sin firmar, por regularizar): mismas listas que el home.
+import '/js/domain/pendientes.js';
+import '/js/services/senalesService.js';
 import '/js/ui/bandeja.js';
 import '/js/pages/centro-aprobaciones.js';
 import '/js/services/usuariosService.js';

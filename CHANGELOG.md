@@ -1,5 +1,33 @@
 # Changelog
 
+## [Centro: el inicio, versión 2] — 2026-10-09
+
+> Alberto: "que sea más navegable y más amigable, mejor a la vista, que sea un
+> disfrute estar en esa página". Lo que había: seis controles en una línea, la
+> bandeja gris de aprobaciones, la lista de 30 en 30 con "Cargar más" (ocho
+> clics hasta la Z) y "Por regularizar" en 165 de 249 cuentas.
+>
+> - **El buscador es el protagonista.** Saludo y fecha arriba, atajo `/`, y al
+>   teclear salen Clientes · Seriales · Contratos agrupados sin salir de la
+>   página, con flechas y Enter. Un serial abre la ficha en Equipos con la fila
+>   filtrada. El RUC se encuentra con guiones o sin ellos.
+> - **Cuatro señales con número** (pendientes por aprobar, sin firmar, por
+>   vencer en 60 días, por regularizar): tocarlas filtra la lista. La bandeja
+>   de aprobaciones se pliega detrás de su señal.
+> - **Recientes:** las últimas seis cuentas que abriste, a un clic.
+> - **Directorio por letra** con índice A–Z y filas de 52 px: nombre y RUC,
+>   alias o representante, vendedor con iniciales y UN chip de estado. El
+>   directorio entero llega de una vez (caché local primero), así que buscar y
+>   filtrar no cuesta lecturas. Filtros: Mi cartera/Todos, Vendedor, Por
+>   regularizar, Sin vendedor, Vencen pronto, Firma pendiente, Solo activas.
+> - **Cartera chica en tarjetas.** Con doce cuentas o menos, la vendedora ve
+>   tarjetas con el estado en una frase, los números y los verbos de uso
+>   diario; al lado, "Tu semana" y sus cotizaciones abiertas.
+> - Teléfono: buscador arriba, señales y filtros deslizables, lista por letra
+>   con índice al borde, Nuevo cliente en el dock.
+> - Verificado en el emulador con datos reales (admin, gerencia, vendedora,
+>   teléfono): `tools/emulador-almacen/emu-test-inicio.mjs`.
+
 ## [Centro: la ficha del cliente, versión 3] — 2026-10-08
 
 > Alberto: "la ficha es confusa, los badges de arriba esconden funciones y

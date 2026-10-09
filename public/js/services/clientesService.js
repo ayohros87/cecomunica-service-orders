@@ -325,6 +325,18 @@ const ClientesService = {
   },
 
   // Parameterized page fetch — handles search-by-token and ordered list with cursor pagination.
+  // El directorio ENTERO, ordenado por nombre (inicio del Centro v2,
+  // 2026-10-09): 249 activos de golpe pesan menos que paginar de 30 en 30 y
+  // consultar aparte la regularización; con todo en memoria la búsqueda y
+  // los filtros no cuestan lecturas. `source: 'cache'` = solo la caché local.
+  async listClientesTodos({ onlyActive = false, limit = 1200, source = null } = {}) {
+    const db = firebase.firestore();
+    let q = db.collection('clientes').orderBy('nombre').where('deleted', '==', false).limit(limit);
+    if (onlyActive) q = q.where('activo', '==', true);
+    const snap = source ? await q.get({ source }) : await q.get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
   // Returns { docs: [{id,...data}], lastDoc: FirestoreDoc|null, count: number }
   // `source: 'cache'` lee SOLO la caché local (IndexedDB): el directorio del
   // Centro pinta la primera página al instante con lo que ya tenía y luego la

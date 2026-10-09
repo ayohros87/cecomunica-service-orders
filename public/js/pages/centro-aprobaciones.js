@@ -19,7 +19,8 @@ window.CentroAprobaciones = {
     this.rol = rol;
     this.mount = document.getElementById('cgAprobaciones');
     if (!this.mount || !['administrador', 'gerente'].includes(rol)) return;
-    this.mount.classList.remove('hidden');
+    // Visible solo con la señal "Pendientes por aprobar" encendida (inicio
+    // v2, 2026-10-09): Centro.pintarInicio decide; aquí solo se pinta.
     this.mount.addEventListener('click', e => {
       if (e.target.closest('[data-aprobaciones-refresh]')) { e.preventDefault(); this.refrescar(); return; }
       if (e.target.closest('[data-aprobaciones-mas]')) { this._verTodo = true; this.pintar(); return; }
@@ -92,6 +93,7 @@ window.CentroAprobaciones = {
     const ms = fecha?.toDate ? fecha.toDate().getTime() : (fecha ? new Date(fecha).getTime() : null);
     return {
       tipo, id: r.id,
+      cliente_id: r.cliente_id || null,
       referencia: esGestion ? r.id : (r.contrato_id || r.id),
       cliente: r.cliente_nombre || 'Cliente sin nombre',
       clase,
@@ -157,6 +159,8 @@ window.CentroAprobaciones = {
         ${pie.length ? `<div class="bj-pie">${pie.join(' · ')}</div>` : ''}
       </div>`;
     if (window.lucide?.createIcons) { try { lucide.createIcons({ root: this.mount }); } catch (_) {} }
+    // La señal del inicio lee _items: que se repinte con el conteo nuevo.
+    if (!this._cargando) window.Centro?._senalAprobar?.();
   },
 
   // Compat: algunas pruebas y páginas viejas llamaban fila(tipo, r) directo.
