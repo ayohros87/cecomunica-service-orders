@@ -232,7 +232,13 @@ const Layout = (() => {
   function renderRail(opts = {}) {
     const { active = '', rol = '', userName = '' } = opts;
 
-    const visibles = (window.MODULOS && MODULOS.deRol(rol)) || [];
+    // Vendedor (home por rol, 2026-10-09): su trabajo vive en el Centro, así
+    // que "Inicio" lleva al Centro y la entrada "Centro de gestión" sobra.
+    // index.html hace la misma redirección si entra por la URL del home.
+    const inicioEsCentro = rol === 'vendedor';
+    const inicioHref = inicioEsCentro ? '/clientes/centro.html' : '/index.html';
+    const inicioActivo = active === 'inicio' || (inicioEsCentro && active === 'centro');
+    const visibles = ((window.MODULOS && MODULOS.deRol(rol)) || []).filter(id => !(inicioEsCentro && id === 'centro'));
     const grupos = _catalogo().map(g => {
       const items = g.items.filter(it => visibles.includes(it.id));
       if (!items.length) return '';
@@ -257,7 +263,7 @@ const Layout = (() => {
     <div class="wm"><b>CECOMUNICA</b><span>Plataforma</span></div>
   </div>
   <nav class="rail__nav">
-    <a class="rail__link${active === 'inicio' ? ' is-active' : ''}" href="/index.html" title="Inicio"><i data-lucide="layout-grid"></i> <span class="rail__txt">Inicio</span></a>
+    <a class="rail__link${inicioActivo ? ' is-active' : ''}" href="${inicioHref}" title="Inicio"><i data-lucide="layout-grid"></i> <span class="rail__txt">Inicio</span></a>
     <button type="button" class="rail__link rail__search" data-cc-buscar title="Buscar (${_ATAJO})"><i data-lucide="search"></i> <span class="rail__txt">Buscar</span> <kbd class="rail__kbd">${_ATAJO}</kbd></button>
     ${grupos}
     ${adminLink}

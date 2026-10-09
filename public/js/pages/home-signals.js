@@ -164,7 +164,19 @@ window.HomeSignals = (() => {
       modulo: 'ordenes', icon: 'wrench',
       label: 'Mis órdenes asignadas', sub: 'en tu cola',
       href: 'ordenes/index.html?mias=1&estado=ASIGNADO',
-      count: (ctx) => SenalesService.countMisOrdenes(ctx.uid, EST.ASIGNADO),
+      // Home por rol (2026-10-09): el técnico ve sus órdenes como LISTA, abierta
+      // sola al entrar (AUTO_ABRIR), con la ficha de cada una a un clic. El
+      // número sale de las mismas filas (sin las de más de 30 días, que van
+      // en "por depurar"), para que tarjeta y panel digan lo mismo.
+      count: async (ctx) => (await SenalesService.listMisOrdenes(ctx.uid, EST.ASIGNADO)).filter(r => !r.viejo).length,
+      items: (ctx) => SenalesService.listMisOrdenes(ctx.uid, EST.ASIGNADO),
+      row: (r, esc) => ({
+        txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.id)}</span> · ${esc(r.tipo)}`,
+        dias: r.dias,
+        cta: { label: 'Abrir orden', href: `ordenes/index.html?ficha=${encodeURIComponent(r.id)}` },
+      }),
+      hrefLabel: 'Ver en la bandeja →',
+      vacio: 'No tienes órdenes asignadas.',
     },
     S7: {
       modulo: 'cotizaciones', icon: 'file-clock',
@@ -465,6 +477,18 @@ window.HomeSignals = (() => {
   const SOLO_SI_HAY = {
     administrador: ['S7', 'FIRV', 'REGV'],
   };
+  // Home por rol (2026-10-09). AUTO_ABRIR: la única señal del rol se abre sola
+  // como lista (el técnico entra y ve sus órdenes, no un número). GRUPOS: el
+  // administrador tenía once tarjetas iguales; ahora van en tres bloques con
+  // rótulo. Lo que no está en ningún grupo cae en el último ("Mis cosas").
+  const AUTO_ABRIR = { tecnico: 'S5', tecnico_operativo: 'S5' };
+  const GRUPOS = {
+    administrador: [
+      { t: 'Aprobar', ids: ['APR', 'SAP'] },
+      { t: 'Operación trancada', ids: ['OPC', 'S1', 'EST', 'S4Q', 'LPC'] },
+      { t: 'Mis cosas', ids: ['S7', 'FIRV', 'REGV'] },
+    ],
+  };
 
   /* ── Teléfono (2026-10-09): las tarjetas se vuelven UNA fila de pastillas
      ("20 Por asignar") que se desliza de lado, con el buscador arriba. El
@@ -671,8 +695,9 @@ window.HomeSignals = (() => {
       const tile = mount.querySelector(`[data-signal="${id}"]`);
       if (!tile) continue;
       const sig = SIGNALS[id];
+      const grupoDe = grid.querySelector(`.kpis-grupo__items[data-ids~="${id}"]`);
       const destino = tile.classList.contains('is-cero') ? items
-        : (sig?.deuda && deudaItems && !(movil && sig.mia)) ? deudaItems : grid;
+        : (sig?.deuda && deudaItems && !(movil && sig.mia)) ? deudaItems : (grupoDe || grid);
       if (tile.parentElement === destino) continue;
       const foco = tile.contains(document.activeElement) ? document.activeElement : null;
       const siguiente = Array.from(destino.children).find(el => el.dataset.signal && orden.indexOf(el.dataset.signal) > orden.indexOf(id));
@@ -683,6 +708,7 @@ window.HomeSignals = (() => {
     }
     const n = grid.querySelectorAll('.kpi').length;
     grid.setAttribute('data-n', String(n));
+    grid.querySelectorAll('.kpis-grupo').forEach(g => { g.hidden = !g.querySelector('.kpi'); });
     grid.hidden = n === 0;
     cero.hidden = items.children.length === 0;
     if (deuda) deuda.hidden = deudaItems.children.length === 0;
@@ -730,7 +756,7 @@ window.HomeSignals = (() => {
     }
     panel.innerHTML = Bandeja.listaVacia('Cargando…');
     let rows;
-    try { rows = await sig.items(); }
+    try { rows = await sig.items(panel.closest('[data-pend-mount]')?._renderOpts || {}); }
     catch (e) {
       console.warn('[HomeSignals] filas de', id, 'no disponibles:', e?.code || e);
       if (!panel.isConnected || panel.dataset.signalPanel !== id) return;
@@ -917,7 +943,16 @@ window.HomeSignals = (() => {
     // un 128 permanente al lado de "por asignar" enseñaban a no mirar la fila.
     const dia = ids.filter(id => !SIGNALS[id].deuda);
     const deuda = ids.filter(id => SIGNALS[id].deuda);
-    mount.innerHTML = `<div class="kpis" data-n="${dia.length}">${dia.map(id => _tileHtml(id, SIGNALS[id])).join('')}<button type="button" class="kpis-refresh" data-signals-refresh title="Volver a contar ahora" aria-label="Volver a contar"><i data-lucide="refresh-cw"></i></button></div>
+    // Grupos con rótulo (admin) solo en escritorio: en el teléfono las
+    // tarjetas son UNA fila de pastillas y el rótulo no cabe.
+    const grupos = (!_esMovil() && GRUPOS[rolEfectivo]) ? GRUPOS[rolEfectivo] : null;
+    const tilesDia = grupos
+      ? grupos.map((g, k) => {
+          const propios = dia.filter(id => g.ids.includes(id) || (k === grupos.length - 1 && !grupos.some(x => x.ids.includes(id))));
+          return `<div class="kpis-grupo" style="flex-grow:${Math.max(1, propios.length)}"${propios.length ? '' : ' hidden'}><span class="kpis-grupo__label">${g.t}</span><div class="kpis-grupo__items" data-ids="${propios.join(' ')}">${propios.map(id => _tileHtml(id, SIGNALS[id])).join('')}</div></div>`;
+        }).join('')
+      : dia.map(id => _tileHtml(id, SIGNALS[id])).join('');
+    mount.innerHTML = `<div class="kpis${grupos ? ' kpis--grupos' : ''}" data-n="${dia.length}">${tilesDia}<button type="button" class="kpis-refresh" data-signals-refresh title="Volver a contar ahora" aria-label="Volver a contar"><i data-lucide="refresh-cw"></i></button></div>
       <div class="kpis-deuda"${deuda.length ? '' : ' hidden'}><span class="kpis-deuda__label">Seguimiento</span>
         <div class="kpis-deuda__items" role="group" aria-label="Atrasos en seguimiento">${deuda.map(id => _tileHtml(id, SIGNALS[id])).join('')}</div></div>
       <div class="kpis-foot">
@@ -936,6 +971,11 @@ window.HomeSignals = (() => {
     // caché hace `return` temprano y sin esto las señales cacheadas no abrían.
     _wireExpansion(mount, ids);
     _wireAprobaciones(mount, { rolEfectivo, uid, user });
+    mount._renderOpts = { rolEfectivo, uid, user };
+    if (AUTO_ABRIR[rolEfectivo] && ids.includes(AUTO_ABRIR[rolEfectivo])) {
+      const tile = mount.querySelector(`[data-signal="${AUTO_ABRIR[rolEfectivo]}"]`);
+      if (tile) setTimeout(() => { if (_panelAbierto !== AUTO_ABRIR[rolEfectivo]) tile.click(); }, 0);
+    }
 
     const setVal = (id, n, opts) => _pintaVal(mount, id, n, opts);
     const dropTile = (id, { sync = true } = {}) => {

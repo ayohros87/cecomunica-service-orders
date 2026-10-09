@@ -291,6 +291,18 @@ Object.assign(window.Centro, {
     const excede = (reg || []).filter(x => x.excede).length, sinV = (reg || []).filter(x => !x.vendedor).length;
     tiles.push(T({ id: 'regularizar', lbl: this.esVendedor() ? 'Tu cartera' : 'Cartera', n: reg ? reg.length : null, t: 'Cuentas por regularizar', tono: excede ? 'bad' : reg?.length ? 'info' : 'ok',
       s: reg?.length ? [sinContrato ? `${sinContrato} sin contrato vigente` : '', excede ? `${excede} excede${excede === 1 ? '' : 'n'} el margen` : '', sinV ? `${sinV} sin vendedor` : ''].filter(Boolean).join(' · ') || 'equipos en campo sin contrato' : 'ninguna con deuda' }));
+    // Vendedor (home por rol, 2026-10-09): su inicio es el Centro, así que la
+    // señal "Mis cotizaciones activas" del home viene aquí. Es un enlace, no
+    // un filtro de la cartera.
+    if (this.esVendedor() && window.SenalesService?.countMisCotizacionesActivas) {
+      const uid = firebase.auth().currentUser?.uid;
+      if (this._nCotiz === undefined && uid) {
+        this._nCotiz = null;
+        SenalesService.countMisCotizacionesActivas(uid).then(n => { this._nCotiz = n; this._pintarSenales(); }).catch(() => { this._nCotiz = 0; });
+      }
+      const n = this._nCotiz;
+      tiles.push(`<a class="cg-senal ${n ? 'info' : 'ok'}" href="../cotizaciones/index.html?estado=activas" title="Abrir mis cotizaciones"><span class="lbl">Mis cotizaciones</span><span class="v">${n == null ? '…' : n}</span><span class="t">Cotizaciones activas</span><span class="s">${n ? 'borradores y enviadas' : 'ninguna abierta'}</span></a>`);
+    }
     cont.innerHTML = tiles.join('');
     cont.style.gridTemplateColumns = `repeat(${tiles.length}, minmax(0,1fr))`;
   },

@@ -227,6 +227,34 @@ const SenalesService = {
     return n;
   },
 
+  // Mis órdenes asignadas como filas (home por rol, 2026-10-09): el técnico
+  // ve la LISTA en su inicio, no un número que pide un clic más.
+  listMisOrdenes(uid, estado = 'ASIGNADO') {
+    return this._memoList(`mias:${uid}:${estado}`, async () => {
+      const { staleMax } = await this._config();
+      const db = firebase.firestore();
+      const snap = await db.collection('ordenes_de_servicio')
+        .where('tecnico_uid', '==', uid)
+        .where('estado_reparacion', '==', estado)
+        .limit(200).get({ source: 'server' });
+      const now = new Date();
+      const rows = [];
+      for (const d of snap.docs) {
+        const o = d.data() || {};
+        if (!this._viva(o)) continue;
+        const r = {
+          id: d.id, col: 'ordenes_de_servicio',
+          cliente: o.cliente_nombre || o.cliente || '—',
+          tipo: o.tipo_de_servicio || '—',
+          dias: Math.max(0, Math.floor(PendientesDomain.edadDias(o.fecha_asignacion || o.fecha_entrada || o.fecha_creacion, now) || 0)),
+        };
+        r.viejo = this._vieja(r.dias, staleMax);
+        rows.push(r);
+      }
+      return rows.sort((a, b) => b.dias - a.dias || a.id.localeCompare(b.id));
+    });
+  },
+
   countMisOrdenes(uid, estado) {
     const db = firebase.firestore();
     return this._count(
