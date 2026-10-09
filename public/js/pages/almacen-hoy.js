@@ -876,18 +876,12 @@ window.AlmacenHoy = (() => {
     // Mismo criterio que las páginas del área: operan admin/inventario, lee
     // gerencia; y quien puede gestionar seriales (recepción/vendedor) puede
     // ver su cola aquí igual que podía en la bandeja vieja.
-    const ok = rol === ROLES.ADMIN || rol === ROLES.INVENTARIO || rol === ROLES.GERENTE
-      || (typeof canRole === 'function' && canRole(rol, 'gestionar-seriales'));
-    if (!ok) {
-      const body = $('bodyAlmacen');
-      if (body) {
-        body.innerHTML = `<div class="ds-card ds-card-padded" style="text-align:center; color:var(--fg-3);">
-          Esta área es de administración e inventario. <a href="../index.html">Volver al inicio</a></div>`;
-      }
-      const loader = $('loader');
-      if (loader) loader.style.display = 'none';
-      return;
-    }
+    // Guarda única (2026-10-09): módulo 'almacen' del mapa de roles, más quien
+    // puede gestionar seriales (recepción/vendedor llegan desde el Centro a
+    // Asignar con ?g= y no tienen entrada en el rail: es un deep-link, no un
+    // módulo suyo).
+    const ok = MODULOS.exigir(rol, 'almacen', { ademas: typeof canRole === 'function' && canRole(rol, 'gestionar-seriales') });
+    if (!ok) { const loader = $('loader'); if (loader) loader.style.display = 'none'; return; }
 
     // La barra de pestañas y el deep-link ?tab= se resuelven en el parse
     // (scripts inline de la página) para que nada brinque; aquí solo se

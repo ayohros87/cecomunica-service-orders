@@ -82,6 +82,9 @@ document.addEventListener("DOMContentLoaded", function () {
       APP.state.user = userData || null;
       APP.state.userId = user.uid || null;
       APP.state.userRole = rol;
+      // Guarda única (2026-10-09): la bandeja no tenía guarda de rol (el rol
+      // solo decidía botones). Módulo 'ordenes' del mapa de roles.
+      if (!MODULOS.exigir(rol, 'ordenes')) return;
 
       const shouldDefaultMine = [ROLES.TECNICO, ROLES.TECNICO_OPERATIVO].includes(rol);
       if (shouldDefaultMine) {

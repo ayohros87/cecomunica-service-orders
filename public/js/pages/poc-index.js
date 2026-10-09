@@ -16,12 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // GERENTE entra en solo lectura: modulos.js le muestra la tarjeta PoC y
     // antes lo rebotaba con "No autorizado" (auditoría UX 2026-09-28, P0 #24).
-    const permitidos = [ROLES.ADMIN, ROLES.RECEPCION, ROLES.TECNICO, ROLES.VISTA, ROLES.JEFE_TALLER, ROLES.GERENTE];
-    if (!permitidos.includes(PocState.rolActual)) {
-      Toast.show('No autorizado. Tu rol no tiene acceso a este módulo.', 'bad');
-      window.location.href = '/index.html';
-      return;
-    }
+    // Guarda única (2026-10-09): módulo 'poc' del mapa de roles.
+    if (!MODULOS.exigir(PocState.rolActual, 'poc')) return;
 
     PocState.aplicarPermisosRol();
     // Los tres mapas son independientes y ya NO retienen la lista: el primer

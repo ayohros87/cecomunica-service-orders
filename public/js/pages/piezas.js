@@ -73,7 +73,7 @@ if (btnBatch) {
 
     // Solo administradores o personal de inventario
     if (rol !== ROLES.ADMIN && rol !== ROLES.INVENTARIO) {
-      document.body.innerHTML = '<div style="text-align:center; margin-top:100px; color:red;">Acceso restringido.</div>';
+      MODULOS.rechazar(); // guarda única (2026-10-09)
       return;
     }
 

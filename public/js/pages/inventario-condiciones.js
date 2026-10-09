@@ -167,6 +167,8 @@
         .then(r => { _rol = r || ''; })
         .catch(e => { console.warn('[Condiciones] no se pudo leer el rol:', e); })
         .then(() => {
+          // Guarda única (2026-10-09): taller y bodega; antes no había guarda.
+          if (!MODULOS.exigir(_rol, ['ordenes', 'almacen'])) return;
           window.userRole = _rol;   // la ficha del equipo lee este
           // Si la lista ya se pintó antes de saber el rol, se repinta para
           // que salgan los botones que dependen de él.

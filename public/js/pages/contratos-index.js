@@ -16,9 +16,9 @@ function cerrarSesion() {
 function aplicarRestriccionesPorRol(rol) {
   // roles.js es la fuente ('ver-contratos' incluye ahora a contabilidad: el
   // archivo es de consulta y ellos lo necesitan para conciliar).
-  if (!canRole(rol, 'ver-contratos')) {
-    Toast.show('No autorizado para ver el archivo de contratos.', 'bad');
-    window.location.href = '/index.html';
+  // Guarda única (2026-10-09): módulo 'contratos' del mapa de roles (mismos
+  // roles que 'ver-contratos'); el rechazo es el de todas las bandejas.
+  if (!MODULOS.exigir(rol, 'contratos')) {
     return;
   }
   // La columna de montos es need-to-know: se OMITE para quien no la tiene.

@@ -238,6 +238,8 @@
         .then(r => { _rol = r || ''; })
         .catch(e => { console.warn('[Descartados] no se pudo leer el rol:', e); })
         .then(() => {
+          // Guarda única (2026-10-09): taller y bodega; antes no había guarda.
+          if (!MODULOS.exigir(_rol, ['ordenes', 'almacen'])) return;
           window.userRole = _rol;   // la ficha del equipo lee este
           document.getElementById('dscRegistrar').style.display = _puedeRegistrar() ? '' : 'none';
           // Si la lista ya se pintó (caché o servidor) antes de saber el rol,

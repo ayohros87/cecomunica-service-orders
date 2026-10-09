@@ -666,10 +666,7 @@ window.FacturacionComisiones = (() => {
         rol = u ? u.rol : null;
         // Esta pantalla es de admin/contabilidad y punto: recepción marca pasos
         // de facturación, no libera comisiones.
-        if (!S().puedeComisionar(rol)) {
-          document.body.innerHTML = "<h3 style='color:red;text-align:center;margin-top:100px;'>Acceso restringido</h3>";
-          return;
-        }
+        if (!S().puedeComisionar(rol)) { MODULOS.rechazar(); return; } // guarda única (2026-10-09)
         const mount = document.getElementById('wsTabs-mount');
         if (mount && !mount.children.length && window.FinanzasNav) FinanzasNav.render('comisiones');
         // ?f=pago (señal "Comisiones listas" del home, P8): abre en ese chip.

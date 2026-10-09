@@ -22,7 +22,7 @@ firebase.auth().onAuthStateChanged(async (user)=>{
     const u = await Sesion.miPerfil(user);
     const rol = u ? u.rol : null;
     if(!u || (rol!==ROLES.ADMIN && rol!==ROLES.CONTABILIDAD)){
-      document.body.innerHTML="<h3 style='color:red;text-align:center;margin-top:100px;'>Acceso restringido</h3>"; return;
+      MODULOS.rechazar(); // guarda única (2026-10-09) return;
     }
     const lista = document.getElementById('lista');
     if(lista && !lista._qboWired){

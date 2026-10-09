@@ -96,11 +96,10 @@ window.Centro = {
         // correo de bodega con deep-link ?id=&g=); no crea gestiones.
         // contabilidad (D17, Alberto 2026-10-01) entra de CONSULTA: ve la ficha,
         // los contratos y las gestiones; ningún puede* la incluye.
-        const permitido = [ROLES.ADMIN, ROLES.GERENTE, ROLES.VENDEDOR, ROLES.RECEPCION, ROLES.INVENTARIO, ROLES.CONTABILIDAD];
-        if (!u || !permitido.includes(this.rol)) {
-          document.body.innerHTML = "<h3 style='color:red;text-align:center;margin-top:100px;'>Acceso restringido</h3>";
-          return;
-        }
+        // Guarda única (2026-10-09): el módulo 'centro' del mapa de roles, el
+        // mismo que decide la entrada en el rail. Inventario salió: bodega
+        // asigna desde Almacén · Asignar desde 2026-09-03 y no tenía entrada.
+        if (!u || !MODULOS.exigir(this.rol, 'centro')) return;
         // REGLA (Alberto 2026-08-26): el vendedor SOLO ve su propia cartera.
         // No es un default — es un candado: sin toggle, lista filtrada y ficha
         // bloqueada para clientes ajenos. (El piso en firestore.rules llega con

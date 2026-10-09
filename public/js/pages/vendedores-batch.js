@@ -1112,11 +1112,8 @@ firebase.auth().onAuthStateChanged(async user => {
     const rol     = userDoc ? userDoc.rol : null;
     VB._rol = rol;
     VB._userNombre = (userDoc && userDoc.nombre) || user.email || "";
-    if (![ROLES.ADMIN, ROLES.VENDEDOR, ROLES.RECEPCION].includes(rol)) {
-      Toast.show('Acceso restringido.', 'bad');
-      window.location.href = '../index.html';
-      return;
-    }
+    // Guarda única (2026-10-09): módulo 'vendedores' del mapa de roles.
+    if (!MODULOS.exigir(rol, 'vendedores')) return;
     // Mensaje "crear grupo" según el rol: el vendedor NO entra a Administrar
     // grupos (es solo admin/recepción), así que se le indica pedírselo a recepción.
     const hint = document.getElementById('grupoHintVB');

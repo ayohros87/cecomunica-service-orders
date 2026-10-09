@@ -166,18 +166,6 @@ window.HomeSignals = (() => {
       href: 'ordenes/index.html?mias=1&estado=ASIGNADO',
       count: (ctx) => SenalesService.countMisOrdenes(ctx.uid, EST.ASIGNADO),
     },
-    S4P: {
-      modulo: 'ordenes', icon: 'package-check',
-      label: 'Mis completadas (en oficina)', sub: 'trabajadas por ti',
-      href: 'ordenes/index.html?mias=1&estado=COMPLETADO%20(EN%20OFICINA)',
-      count: (ctx) => SenalesService.countMisOrdenes(ctx.uid, EST.COMPLETADO),
-    },
-    S6: {
-      modulo: 'cotizaciones', icon: 'file-clock',
-      label: 'Cotizaciones enviadas', sub: 'esperan al cliente',
-      href: 'cotizaciones/index.html?estado=enviada',
-      count: () => SenalesService.countCotizacionesPorEstado('enviada'),
-    },
     S7: {
       modulo: 'cotizaciones', icon: 'file-clock',
       label: 'Mis cotizaciones activas', sub: 'borradores y enviadas',
@@ -293,18 +281,6 @@ window.HomeSignals = (() => {
     },
     // Pool de equipos serializados (PLAN_CICLO_VIDA_EQUIPOS.md, Fase A). Los
     // href aterrizan en la pestaña/filtro EXACTOS de la señal (deep-links).
-    S11: {
-      modulo: 'equipos', icon: 'warehouse',
-      label: 'Equipos en bodega', sub: 'disponibles',
-      href: 'almacen/index.html?tab=serial&estado=en_bodega',
-      count: () => SenalesService.countEquiposPoolPorEstado('en_bodega'),
-    },
-    S12: {
-      modulo: 'equipos', icon: 'search-check', moreIsBad: true,
-      label: 'Equipos por verificar', sub: 'de la migración',
-      href: 'almacen/index.html?tab=serial&estado=todos&verificar=1',
-      count: () => SenalesService.countEquiposPoolSinVerificar(),
-    },
     S13: {
       modulo: 'equipos', icon: 'package-search', moreIsBad: true,
       deuda: true,
@@ -499,10 +475,10 @@ window.HomeSignals = (() => {
   const CORTO = {
     OPC: 'Por crear', S1: 'Por asignar', S2: 'En mostrador', S3: 'En taller',
     S4: 'Completadas', S4Q: 'Control de calidad', ENT: 'Por entregar',
-    EST: 'Sin movimiento', S5: 'Mis órdenes', S4P: 'Mis completadas',
-    S6: 'Cotizaciones enviadas', S7: 'Mis cotizaciones', FIR: 'Por firmar',
+    EST: 'Sin movimiento', S5: 'Mis órdenes',
+    S7: 'Mis cotizaciones', FIR: 'Por firmar',
     FIRV: 'Por firmar', APR: 'Por aprobar', SAP: 'Cotizaciones por aprobar',
-    S9: 'Sin stock', LPC: 'Lotes PoC', S11: 'En bodega', S12: 'Por verificar',
+    S9: 'Sin stock', LPC: 'Lotes PoC',
     S13: 'Por inspeccionar', S14: 'Por clasificar', S15: 'Seriales por asignar',
     ADB: 'Apartados', REGV: 'Por regularizar', REGG: 'Por regularizar',
     FAV: 'Sin facturar', COM: 'Comisiones',

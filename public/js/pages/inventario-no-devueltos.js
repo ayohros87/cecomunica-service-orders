@@ -382,7 +382,12 @@
       // Sesion (caché de sesión, compartida con el rail) y en paralelo con
       // la bandeja, no antes.
       const rolP = Sesion.rol(user.uid)
-        .then(r => { window.userRole = r || ''; })
+        .then(r => {
+          window.userRole = r || '';
+          // Guarda única (2026-10-09): taller, bodega y finanzas (cobro del
+          // equipo no devuelto); antes no había guarda.
+          MODULOS.exigir(window.userRole, ['ordenes', 'almacen', 'facturacion']);
+        })
         .catch(e => { console.warn('[NoDevueltos] no se pudo leer el rol:', e); })
         // Si la bandeja ya se pintó antes de saber el rol, se repinta para
         // que salgan los botones que dependen de él.

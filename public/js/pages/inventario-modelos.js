@@ -35,7 +35,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
     // catálogo que decide el tipo (Nuevo/Refurbished) de lo que recibe.
     const esBodega = rol === ROLES.INVENTARIO;
     if (!userDoc || (rol !== ROLES.ADMIN && rol !== ROLES.CONTABILIDAD && !esBodega)) {
-      document.body.innerHTML = "<h3 style='color:red; text-align:center; margin-top:100px;'>Acceso restringido</h3>";
+      MODULOS.rechazar(); // guarda única (2026-10-09)
       return;
     }
     const q = document.getElementById('q');

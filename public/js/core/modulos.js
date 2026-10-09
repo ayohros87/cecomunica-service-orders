@@ -132,5 +132,28 @@ window.MODULOS = (() => {
     return ok ? asParam : rolReal;
   }
 
-  return { visiblesPorRol, CATALOGO, ROL_LABELS, rolLabel, deRol, puedeVer, rolEfectivo };
+  // Guarda ÚNICA de pantalla (2026-10-09). Antes cada bandeja hacía lo suyo:
+  // unas redirigían al home, otras reemplazaban el <body> por un "Acceso
+  // restringido" rojo, otras pintaban un mensaje y cuatro no tenían guarda.
+  // Ahora hay una regla (el mapa visiblesPorRol de arriba, el mismo que arma
+  // el rail) y un comportamiento (aviso + al inicio).
+  //   MODULOS.exigir(rol, 'centro')               → true si puede; si no, rechaza
+  //   MODULOS.exigir(rol, ['ordenes', 'almacen']) → basta con ver uno
+  //   { ademas: cond }  permiso extra que también deja pasar (p. ej. los
+  //                     supervisores de cotizaciones por correo, o quien puede
+  //                     gestionar seriales en Almacén · Asignar)
+  //   MODULOS.rechazar(motivo?)  el mismo rechazo para páginas con criterio propio
+  function rechazar(motivo) {
+    try { if (window.Toast) window.Toast.show(motivo || 'Esta pantalla no es de tu rol.', 'warn'); } catch { /* sin toast */ }
+    setTimeout(() => { location.replace('/index.html'); }, 900);
+    return false;
+  }
+  function exigir(rol, modulos, opts) {
+    const ids = Array.isArray(modulos) ? modulos : [modulos];
+    const o = opts || {};
+    if (o.ademas === true || ids.some((m) => puedeVer(rol, m))) return true;
+    return rechazar(o.motivo);
+  }
+
+  return { visiblesPorRol, CATALOGO, ROL_LABELS, rolLabel, deRol, puedeVer, rolEfectivo, exigir, rechazar };
 })();

@@ -319,6 +319,8 @@ async function cargarYRenderQc(dias){
       currentUser = user;
       const uDoc = await Sesion.miPerfil(user);
       currentRole = uDoc ? (uDoc.rol || '') : '';
+      // Guarda única (2026-10-09): módulo 'ordenes'; antes no había guarda.
+      if (!MODULOS.exigir(currentRole, 'ordenes')) return;
 
       // Todos pueden ver (técnico ve sus propios números + ranking general sin datos sensibles)
       try {

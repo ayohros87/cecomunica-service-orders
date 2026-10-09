@@ -700,9 +700,9 @@ window.FacturacionBandeja = (() => {
       try {
         const u = await Sesion.miPerfil(user);
         rol = u ? u.rol : null;
-        if (!S().puedeGestionar(rol)) {
-          document.body.innerHTML = "<h3 style='color:red;text-align:center;margin-top:100px;'>Acceso restringido</h3>"; return;
-        }
+        // Guarda única (2026-10-09): el criterio sigue siendo el del servicio
+        // (recepción, admin, contabilidad); el rechazo es el de todas.
+        if (!S().puedeGestionar(rol)) { MODULOS.rechazar(); return; }
         // Barra de Finanzas solo admin/contabilidad (need-to-know). La página
         // la pintó en DOMContentLoaded con la sesión cacheada; aquí se confirma
         // con el rol real: se agrega si faltaba, se quita si no corresponde.

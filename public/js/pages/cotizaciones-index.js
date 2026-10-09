@@ -802,8 +802,9 @@
       const cfg = window.EMPRESA_CONFIG || await EmpresaService.getConfig();
       esSupervisor = (cfg.cotizaciones_supervisores || [])
         .some(e => String(e).toLowerCase() === (user.email || '').toLowerCase());
-      const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER, ROLES.GERENTE];
-      if (!permitidos.includes(rol) && !esSupervisor) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
+      // Guarda única (2026-10-09): módulo 'cotizaciones' del mapa de roles;
+      // el supervisor por correo entra aunque su rol no lo vea.
+      if (!MODULOS.exigir(rol, 'cotizaciones', { ademas: esSupervisor })) return;
 
       // Vendedor: forzar "solo mías" y ocultar el toggle (salvo supervisor). Admin: mostrarlo.
       if (rol === ROLES.VENDEDOR && !esSupervisor) {
