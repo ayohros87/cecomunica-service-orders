@@ -248,6 +248,14 @@ const ContratosService = {
   },
 
   // Active/approved contracts for a specific client (used in nueva/editar-orden dropdowns).
+  // TODOS los contratos de un cliente (cualquier estado, sin los borrados):
+  // las tarjetas de la cartera en el inicio del Centro (2026-10-09).
+  async listContratosPorCliente(clienteId, { limit = 60 } = {}) {
+    const db = firebase.firestore();
+    const snap = await db.collection('contratos').where('cliente_id', '==', clienteId).limit(limit).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.deleted);
+  },
+
   async getContratosActivosPorCliente(clienteId) {
     const db = firebase.firestore();
     const snap = await db.collection('contratos')

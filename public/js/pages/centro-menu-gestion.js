@@ -40,9 +40,7 @@ Object.assign(window.Centro, {
     if (this._menuEsc) { document.removeEventListener('keydown', this._menuEsc); this._menuEsc = null; }
   },
   abrirMenuDesdeDock() { this.abrirMenu(); },
-  _menuNorm(s) {
-    return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-  },
+  _menuNorm(s) { return this._norm(s); },
   _menuFiltrar(term) {
     const el = document.getElementById('cgMenu');
     if (!el) return;

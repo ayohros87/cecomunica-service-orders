@@ -29,9 +29,7 @@ Object.assign(window.Centro, {
   SS_COLAPSA_DESDE: 8,
   _ss: {},
 
-  _ssNorm(s) {
-    return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-  },
+  _ssNorm(s) { return this._norm(s); },
   _ssReset(id) { delete this._ss[id]; },
 
   _ssHtml(id, filas, opts = {}) {

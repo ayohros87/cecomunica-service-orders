@@ -77,6 +77,15 @@ window.FMT = {
     return (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
   },
 
+  // Para BUSCAR y ORDENAR texto libre: sin acentos, minúsculas y todo lo que
+  // no sea letra o número convertido en un espacio ("8-NT-1-21875" → "8 nt 1
+  // 21875"). Una sola definición (2026-10-09): el Centro la usa en el
+  // directorio, el panel de acciones y el selector de seriales — antes cada
+  // uno traía su copia.
+  normalizeTexto(s) {
+    return FMT.normalize(String(s == null ? "" : s)).replace(/[^a-z0-9]+/g, " ").trim();
+  },
+
   // PoC group names: trim + collapse internal whitespace. Case stays as typed
   // so admin/grupos.html can suggest casing fixes after the fact.
   normalizeGrupo(s) {

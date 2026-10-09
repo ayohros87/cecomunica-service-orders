@@ -1111,6 +1111,7 @@ input[readonly]#numero_de_serie,
   margin: 0 auto;
   padding: var(--sp-6) var(--sp-8);
 }
+.app-body--xwide { max-width: 1600px; }
 @media (max-width: 768px) {
   .app-body { padding: var(--sp-4) var(--sp-3); }
 }
@@ -1231,6 +1232,9 @@ input[readonly]#numero_de_serie,
 .app-wrap--narrow   { max-width: 720px;  }
 .app-wrap--default  { max-width: 1100px; }
 .app-wrap--wide     { max-width: 1400px; }
+/* Páginas de trabajo denso (Centro de gestión, Cotizaciones): 1600 px.
+   Alberto 2026-10-09: "ponme los 3 iguales". Mismo número para .app-body. */
+.app-wrap--xwide    { max-width: 1600px; }
 .app-wrap--full     { max-width: 100%;   }
 @media (max-width: 1024px) { .app-wrap { padding: 0 12px 24px; } }
 @media (max-width: 768px)  { .app-wrap { padding: 0 10px 20px; } }

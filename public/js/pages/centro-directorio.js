@@ -114,7 +114,7 @@ Object.assign(window.Centro, {
     const [firma, reg, vencen] = await Promise.all([
       S?.listContratosPorFirmar ? S.listContratosPorFirmar({ uid }).catch(e => { console.warn('[centro] firma:', e?.message || e); return []; }) : [],
       S?.listCuentasPorRegularizar ? S.listCuentasPorRegularizar({ uid }).catch(e => { console.warn('[centro] regularizar:', e?.message || e); return []; }) : [],
-      this._leerPorVencer().catch(e => { console.warn('[centro] vencen:', e?.message || e); return []; }),
+      S?.listContratosPorVencer ? S.listContratosPorVencer({ dias: 60 }).catch(e => { console.warn('[centro] vencen:', e?.message || e); return []; }) : [],
     ]);
     // La vendedora solo ve lo de SU cartera: la consulta de vencimientos es
     // global (índice estado + fecha), así que se recorta a sus clientes.
@@ -122,20 +122,6 @@ Object.assign(window.Centro, {
     this._senales = { firma, reg, vencen: mios ? vencen.filter(x => mios.has(x.cliente_id)) : vencen, at: Date.now() };
     this.pintarInicio();
   },
-  // Contratos operativos que vencen en los próximos 60 días (índice
-  // estado + fecha_vencimiento). No toca el pool.
-  async _leerPorVencer() {
-    const T = firebase.firestore.Timestamp;
-    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-    const fin = new Date(hoy); fin.setDate(fin.getDate() + 60);
-    const snap = await firebase.firestore().collection('contratos')
-      .where('estado', '==', 'activo')
-      .where('fecha_vencimiento', '>=', T.fromDate(hoy))
-      .where('fecha_vencimiento', '<=', T.fromDate(fin))
-      .orderBy('fecha_vencimiento').limit(300).get();
-    return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.deleted && this._aplicaVenc(c));
-  },
-
   // ── Recientes (por usuario, en este navegador) ──
   _recientesKey() { return `cg_recientes:${this.uid || 'anon'}`; },
   _recientes() {
@@ -150,11 +136,9 @@ Object.assign(window.Centro, {
     } catch { /* sin persistencia */ }
   },
 
-  // ── Normalización para buscar y ordenar: sin acentos, sin guiones ──
-  _dirNorm(s) {
-    return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-  },
-  _dirCompacto(s) { return this._dirNorm(s).replace(/ /g, ''); },
+  // ── Normalización para buscar y ordenar: la de todo el Centro (_norm) ──
+  _dirNorm(s) { return this._norm(s); },
+  _dirCompacto(s) { return this._norm(s).replace(/ /g, ''); },
   _coincide(c, words) {
     if (!words.length) return true;
     const hay = this._dirCompacto([c.nombre, c.cuenta_alias, c.ruc, c.rucdv_norm, c.representante, c.email, c.telefono].filter(Boolean).join(' '));
@@ -488,12 +472,10 @@ Object.assign(window.Centro, {
   },
   async _cargarTarjetas(docs, clave) {
     this._tarjetas = { clave, datos: null, cotizaciones: null, at: Date.now() };
-    const db = firebase.firestore();
     const datos = new Map();
     await Promise.all(docs.map(async (c) => {
       try {
-        const snap = await db.collection('contratos').where('cliente_id', '==', c.id).limit(60).get();
-        const cs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => !x.deleted);
+        const cs = await ContratosService.listContratosPorCliente(c.id);
         const lleva = (x) => (window.ContratoFirma ? ContratoFirma.lleva(x) : !['REEMP', 'DEMO'].includes(this._codigoTipo(x)));
         const vigentes = cs.filter(x => x.estado === 'activo');
         const firma = cs.filter(x => x.estado === 'aprobado' && !x.firmado && lleva(x) && !x.dormido && x.seriales_estado === 'asignados');
@@ -584,18 +566,19 @@ Object.assign(window.Centro, {
     const seq = ++this._busq.seq;
     this._busq.pool = []; this._busq.contratos = [];
     if (term.length < 3) return;
-    const db = firebase.firestore();
     const norm = term.toUpperCase().replace(/[^A-Z0-9]/g, '');
     const tareas = [];
-    if (norm.length >= 4 && /\d/.test(norm)) {
-      tareas.push(db.collection('equipos_pool').where('serial_norm', '>=', norm).where('serial_norm', '<', norm + '').limit(6).get()
-        .then(s => { if (seq !== this._busq.seq) return; this._busq.pool = s.docs.map(d => ({ id: d.id, ...d.data() })); })
+    // Un serial lleva dígito; con ≥ 4 caracteres el prefijo ya acota (mismo
+    // método que Almacén · Avanzado y el palette).
+    if (norm.length >= 4 && /\d/.test(norm) && window.EquiposPoolService?.buscarPorPrefijoSerial) {
+      tareas.push(EquiposPoolService.buscarPorPrefijoSerial(norm, { limite: 6 })
+        .then(xs => { if (seq === this._busq.seq) this._busq.pool = xs; })
         .catch(e => console.warn('[centro] buscar seriales:', e?.message || e)));
     }
-    const tok = /\d/.test(term) ? term.toLowerCase().replace(/\s+/g, '') : this._dirNorm(term).split(' ')[0];
-    if (tok && tok.length >= 3) {
-      tareas.push(db.collection('contratos').where('searchTokens', 'array-contains', tok).limit(6).get()
-        .then(s => { if (seq !== this._busq.seq) return; this._busq.contratos = s.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.deleted); })
+    // Contratos por token (prefijo del nombre del cliente o el número completo).
+    if (window.ContratosService?.searchByToken) {
+      tareas.push(ContratosService.searchByToken(term, { limit: 6 })
+        .then(xs => { if (seq === this._busq.seq) this._busq.contratos = xs.filter(c => !c.deleted); })
         .catch(e => console.warn('[centro] buscar contratos:', e?.message || e)));
     }
     if (!tareas.length) return;

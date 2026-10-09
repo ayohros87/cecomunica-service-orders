@@ -34,6 +34,13 @@ window.Centro = {
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   },
 
+  // Texto normalizado para buscar/ordenar (FMT.normalizeTexto, core/formatting.js):
+  // UNA definición para el directorio, el panel de acciones y el selector de
+  // seriales. El respaldo solo existe para los tests que montan el Centro sin FMT.
+  _norm(s) {
+    return (typeof FMT !== 'undefined' && FMT.normalizeTexto) ? FMT.normalizeTexto(s) : String(s == null ? '' : s).toLowerCase().trim();
+  },
+
   // El RUC como está en el documento del cliente ("155703071-2-2021 · DV 08"),
   // no el normalizado ("15570307122021-08") que nadie puede cotejar
   // (auditoría de módulos 2026-09-30, C5). El normalizado queda de respaldo

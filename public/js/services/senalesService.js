@@ -347,6 +347,25 @@ const SenalesService = {
   },
   async countContratosPorFirmar(opts) { return (await this.listContratosPorFirmar(opts)).length; },
 
+  /** Contratos operativos (SERV/ALQ/PROP/REEMP) activos que vencen en los
+   *  próximos `dias` (índice estado + fecha_vencimiento; no toca el pool).
+   *  Señal "Contratos por vencer" del inicio del Centro (2026-10-09). */
+  listContratosPorVencer({ dias = 60 } = {}) {
+    return this._memoList(`vencer:${dias}`, async () => {
+      const T = firebase.firestore.Timestamp;
+      const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+      const fin = new Date(hoy); fin.setDate(fin.getDate() + dias);
+      const snap = await firebase.firestore().collection('contratos')
+        .where('estado', '==', 'activo')
+        .where('fecha_vencimiento', '>=', T.fromDate(hoy))
+        .where('fecha_vencimiento', '<=', T.fromDate(fin))
+        .orderBy('fecha_vencimiento').limit(300).get();
+      const CON_VENC = ['SERV', 'ALQ', 'PROP', 'REEMP'];
+      const tipo = (c) => (window.Regularizacion?.codigoTipo ? Regularizacion.codigoTipo(c) : (c.codigo_tipo || String(c.contrato_id || '').match(/^[A-Z]+/)?.[0] || null));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.deleted && CON_VENC.includes(tipo(c)));
+    });
+  },
+
   // Equipos apartados por ANEXOS DORMIDOS (Alberto, 5-oct-2026;
   // window.AnexoDormido): el anexo sin firma a los 45 días sigue reservando
   // sus radios hasta que el vendedor lo retiene o lo suelta, o hasta que el
