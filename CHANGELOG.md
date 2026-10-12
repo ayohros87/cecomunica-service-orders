@@ -1,5 +1,22 @@
 # Changelog
 
+## [Dos rodeos menos, según el log de uso] — 2026-10-12
+
+> Con 4 días de acciones y orígenes en `uso_diario`: las vendedoras cargaban
+> el inicio 13-15 veces cada una para que las mandara al Centro, y recepción
+> terminaba cada lote PoC volviendo a la lista, filtrando y marcando los
+> recién creados para imprimir la hoja (8 de 8 entradas a la lista acababan
+> en imprimir-equipos).
+>
+> - **La vendedora aterriza en el Centro.** Desde el login va directo (el rol
+>   se lee una vez y queda en caché, cero lecturas de más) y, si entra por la
+>   URL del inicio con la pestaña tibia, salta antes de esperar a Auth y a
+>   Firestore. El camino frío sigue igual, con el rol confirmado.
+> - **"Lote guardado · Imprimir la hoja".** Al crear el lote PoC sale una hoja
+>   con el conteo y dos botones: imprimir la hoja de programación de SOLO esos
+>   equipos (otra pestaña, como desde la lista) o ir a la Base PoC.
+> - Verificado en el emulador: `tools/emulador-almacen/emu-test-flujos-ahorro.mjs`.
+
 ## [Centro: el inicio, versión 2] — 2026-10-09
 
 > Alberto: "que sea más navegable y más amigable, mejor a la vista, que sea un

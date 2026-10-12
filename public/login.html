@@ -105,12 +105,25 @@
   // Si ya hay sesión, ir al destino (?next, deep-link) o al home.
   // Solo se acepta una ruta relativa de la misma app (empieza con un único "/")
   // para evitar open-redirects (rechaza "//host" y URLs absolutas).
-  function destinoPostLogin() {
+  // Home por rol desde el login (2026-10-12): el vendedor aterriza en el
+  // Centro sin pasar por index.html (que solo lo redirigía, 2-3 s después).
+  // La lectura de usuarios/{uid} la hace Sesion y queda en caché, así que
+  // la página de destino arranca tibia: cero lecturas de más.
+  async function destinoPostLogin(user) {
     const next = new URLSearchParams(location.search).get('next');
     if (next && /^\/(?!\/)/.test(next)) return next;
+    try {
+      const rol = window.Sesion && user ? await Sesion.rol(user.uid) : null;
+      if (rol === 'vendedor') return "/clientes/centro.html";
+    } catch { /* sin perfil: el inicio decide */ }
     return "index.html";
   }
-  auth.onAuthStateChanged((user) => { if (user) location.href = destinoPostLogin(); });
+  let _yendo = false;
+  auth.onAuthStateChanged(async (user) => {
+    if (!user || _yendo) return;
+    _yendo = true;
+    location.href = await destinoPostLogin(user);
+  });
 
   // Mostrar/ocultar password
   function togglePass(){

@@ -174,7 +174,17 @@
   <script>
     // Rail: mismo arranque que las páginas de módulo (pintado optimista con la
     // sesión cacheada, luego el rol efectivo de "Ver como").
-    document.addEventListener('DOMContentLoaded', () => Layout.initRail('inicio'));
+    document.addEventListener('DOMContentLoaded', () => {
+      // Camino tibio del vendedor (2026-10-12): si la pestaña ya sabe que el
+      // rol es vendedor, se va al Centro AHORA, sin esperar a que Auth
+      // restaure la sesión ni a que Firestore confirme el rol (2-3 s por
+      // entrada; las vendedoras cargaban el inicio 13-15 veces en 4 días).
+      // El camino frío sigue abajo, con el rol confirmado. Un vendedor real
+      // no puede "Ver como", así que no hay impersonación que respetar.
+      const c = window.Sesion && Sesion.cacheAnonima ? Sesion.cacheAnonima() : null;
+      if (c && c.rol === 'vendedor') { location.replace('/clientes/centro.html'); return; }
+      Layout.initRail('inicio');
+    });
   </script>
   <script>
     // === VISIBILIDAD POR ROL (fuente única: js/core/modulos.js) ===

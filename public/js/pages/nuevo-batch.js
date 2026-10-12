@@ -1661,6 +1661,12 @@ document.getElementById("addCliente").onclick = async () => {
         Toast.show(cerradas
           ? `Listo: ${serialesFinal.length} equipo(s) creado(s) y ${cerradas} ficha(s) vieja(s) cerrada(s).`
           : 'Equipos creados correctamente.', 'ok');
+        // La hoja de programación sale de aquí mismo (2026-10-12). El log de
+        // uso mostró el rodeo de recepción tras cada lote: volver a la Base
+        // PoC, filtrar el cliente, marcar los recién creados e imprimir (8 de
+        // 8 entradas a la lista terminaban en imprimir-equipos). Ahora el lote
+        // recién guardado se imprime con un clic; "Ir a la Base PoC" sigue ahí.
+        await ofrecerImpresionDelLote(idsCreados || [], serialesFinal.length);
         window.location.href = "index.html";
         } catch (err) {
           console.error('[nuevo-batch] error creando equipos:', err);
@@ -1676,6 +1682,34 @@ document.getElementById("addCliente").onclick = async () => {
         }
       });
     });
+
+// Hoja de programación del lote recién creado, sin pasar por la lista. La
+// pestaña de impresión se abre DENTRO del clic del botón (onAction corre en
+// el handler del click), para que el navegador no la bloquee como popup.
+// Resuelve siempre: el guardado ya terminó y la página sigue a la Base PoC.
+async function ofrecerImpresionDelLote(ids, n) {
+  if (!ids.length || typeof window.Modal?.sheet !== 'function') return;
+  const esc = s => (window.FMT?.esc ? FMT.esc(s) : String(s));
+  const cliente = document.getElementById('cliente')?.selectedOptions?.[0]?.textContent || '';
+  try {
+    await Modal.sheet({
+      title: 'Lote guardado', icon: 'check-circle', size: 'sm', closable: false,
+      html: `<p style="margin:0;font-size:14.5px;line-height:1.5;">` +
+        `<strong>${n}</strong> equipo(s) de <strong>${esc(cliente)}</strong> ya están en la Base PoC. ` +
+        `¿Imprimes la hoja de programación ahora?</p>`,
+      buttons: [
+        { action: 'lista', label: 'Ir a la Base PoC' },
+        { action: 'imprimir', label: 'Imprimir la hoja', icon: 'printer', primary: true },
+      ],
+      onAction: (action) => {
+        if (action !== 'imprimir') return action;
+        window.open(`imprimir-equipos.html?ids=${encodeURIComponent(JSON.stringify(ids))}`, '_blank');
+        if (window.Uso) Uso.accion('poc.imprimir-lote');
+        return action;
+      },
+    });
+  } catch (e) { console.warn('[nuevo-batch] hoja del lote:', e); }
+}
 
 let detallesBatch = [];
 
