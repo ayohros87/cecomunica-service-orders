@@ -33,6 +33,7 @@ const EN_PODER_DEL_CLIENTE = new Set([
   pool.ESTADOS.EN_CLIENTE, pool.ESTADOS.ASIGNADO, pool.ESTADOS.PENDIENTE_COBRO, pool.ESTADOS.VENDIDO,
 ]);
 const norm = (s) => String(s || "").trim().toUpperCase();
+const esProgramacion = (o) => norm(o && o.tipo_de_servicio).startsWith("PROGRAMA");
 
 // Linaje del reemplazo, directo al pool (espejo del patrón onMapeoWrite pero
 // colgado de la gestión): entrante.reemplaza_a = saliente; saliente queda
@@ -215,12 +216,62 @@ module.exports = onDocumentWritten(
 
     const gRef = db.collection("gestiones").doc(gid);
 
+    // ── PROGRAMACIÓN dividida (Brenda, 2026-10-13) ──────────────────────
+    // Una hija nace con `dividida_de` y hereda `gestion`: se cuelga de
+    // `ordenes.programacion_ids` para que el Centro la liste, la anulación la
+    // limpie y la bandeja de bodega la vea como OS de la gestión. Va con la
+    // madre en el mismo arrayUnion por si la gestión era vieja y solo tenía
+    // `programacion_id` (singular).
+    if (!before && after.dividida_de && esProgramacion(after)) {
+      try {
+        await gRef.set({
+          ordenes: { programacion_ids: admin.firestore.FieldValue.arrayUnion(String(after.dividida_de), ordenId) },
+        }, { merge: true });
+        await G.registrarEvento(gid, "programacion",
+          `OS ${ordenId} creada al dividir la ${after.dividida_de}: ${(after.equipos || []).filter(e => e && !e.eliminado).length} equipo(s). La entrega de la gestión se registra cuando se entregue la última.`);
+      } catch (e) {
+        logger.warn("[onOrdenWriteGestion] no se pudo colgar la OS dividida de la gestión", { gid, ordenId, message: e.message });
+      }
+      return null;
+    }
+
     // ── PROGRAMACIÓN entregada → entrega registrada en el expediente ─────
-    const esProg = norm(after.tipo_de_servicio).startsWith("PROGRAMA");
+    const esProg = esProgramacion(after);
     const entregadaAhora = esProg
       && norm(before?.estado_reparacion) !== ENTREGADO
       && norm(after.estado_reparacion) === ENTREGADO;
     if (entregadaAhora) {
+      // Dividida: los efectos de la gestión (devolución de salientes, vigencia
+      // del tramo, cierre.entrega) corren con la ÚLTIMA hermana. Y como dos
+      // hermanas pueden entregarse casi a la vez y verse mutuamente
+      // entregadas, la última se RECLAMA en transacción antes de actuar
+      // (ver reference "eco de triggers": el candado va antes del efecto).
+      try {
+        const { hermanasPendientes } = require("../../lib/ordenDividida");
+        const { familia, pendientes } = await hermanasPendientes(ordenId, after);
+        if (pendientes.length) {
+          await G.registrarEvento(gid, "entrega",
+            `OS ${ordenId} entregada (orden dividida). Faltan por entregar: ${pendientes.join(", ")}. La entrega de la gestión se registra con la última.`);
+          logger.info("[onOrdenWriteGestion] entrega parcial de una orden dividida: la gestión espera", { gid, ordenId, pendientes });
+          return null;
+        }
+        if (familia.length > 1) {
+          const gano = await db.runTransaction(async (tx) => {
+            const s = await tx.get(gRef);
+            if (!s.exists) return false;
+            const o = s.data().ordenes || {};
+            if (o.entrega_reclamada_por && o.entrega_reclamada_por !== ordenId) return false;
+            tx.set(gRef, { ordenes: { entrega_reclamada_por: ordenId } }, { merge: true });
+            return true;
+          });
+          if (!gano) {
+            logger.info("[onOrdenWriteGestion] otra hermana ya registró la entrega de la gestión", { gid, ordenId });
+            return null;
+          }
+        }
+      } catch (e) {
+        logger.warn("[onOrdenWriteGestion] no se pudo leer la familia de la orden dividida", { gid, ordenId, message: e.message });
+      }
       try {
         const gSnap = await gRef.get();
         if (!gSnap.exists) return null;

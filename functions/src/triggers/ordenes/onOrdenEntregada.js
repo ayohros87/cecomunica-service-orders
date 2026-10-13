@@ -169,6 +169,27 @@ module.exports = onDocumentWritten(
     const contrato = after.contrato || {};
     if (!contrato.aplica || !contrato.contrato_doc_id) return null; // orden sin contrato
 
+    // Orden DIVIDIDA (Brenda, 2026-10-13): el contrato se da por entregado
+    // con la ÚLTIMA hermana, no con la primera — si no, facturación recibiría
+    // "contrato entregado" con la mitad de los radios todavía en el taller.
+    // Ver domain/ordenDividida.js. Best-effort: si la familia no se puede
+    // leer, se sigue como si no estuviera dividida (el comportamiento de
+    // siempre), que es preferible a dejar un contrato sin señal de entrega.
+    try {
+      const { hermanasPendientes } = require("../../lib/ordenDividida");
+      const { pendientes } = await hermanasPendientes(event.params.ordenId, after);
+      if (pendientes.length) {
+        logger.info("[onOrdenEntregada] Entrega de una orden dividida: el contrato espera a las hermanas", {
+          ordenId: event.params.ordenId, contratoDocId: contrato.contrato_doc_id, pendientes,
+        });
+        return null;
+      }
+    } catch (e) {
+      logger.warn("[onOrdenEntregada] No se pudo leer la familia de la orden dividida", {
+        ordenId: event.params.ordenId, message: e.message,
+      });
+    }
+
     const contratoDocId = contrato.contrato_doc_id;
     try {
       await db.collection("contratos").doc(contratoDocId).set({

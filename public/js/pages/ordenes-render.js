@@ -1419,10 +1419,13 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   }
 
   // Dividir una ENTRADA grande entre varios técnicos (Brenda, 2026-09-08:
-  // 34 radios de Gamboa en una sola orden). Solo mientras nadie la haya
-  // tomado —POR ASIGNAR y sin técnico— y con equipos suficientes para
+  // 34 radios de Gamboa en una sola orden) o una PROGRAMACIÓN por modelo o
+  // por lo que pida el cliente (Brenda, 2026-10-13). Solo mientras nadie la
+  // haya tomado —POR ASIGNAR y sin técnico— y con equipos suficientes para
   // repartir. Quienes asignan: recepción, jefe de taller y admin.
-  const esEntradaDivisible = typeof esOrdenEntrada === 'function' && esOrdenEntrada(o)
+  const esTipoDivisible = (typeof esOrdenEntrada === 'function' && esOrdenEntrada(o))
+    || String(o.tipo_de_servicio || "").toUpperCase().includes("PROGRAMA");
+  const esEntradaDivisible = esTipoDivisible
     && estadoUpper === "POR ASIGNAR" && !o.tecnico_uid && !o.tecnico_asignado
     && (o.equipos || []).filter(e => e && !e.eliminado).length >= 2
     && (rol === ROLES.ADMIN || rol === ROLES.RECEPCION || rol === ROLES.JEFE_TALLER);

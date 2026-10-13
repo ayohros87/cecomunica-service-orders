@@ -1,6 +1,7 @@
 // @ts-nocheck
 /* ========================================
- * ORDENES DIVIDIR — repartir una ENTRADA entre varias órdenes
+ * ORDENES DIVIDIR — repartir una ENTRADA o una PROGRAMACIÓN entre varias
+ * órdenes
  *
  * Petición de Brenda (2026-09-08): la devolución de Gamboa (34 NX-420-R)
  * cayó completa en la ENTRADA 2026090806 y, como una orden tiene UN técnico,
@@ -8,9 +9,16 @@
  * reparte los equipos en órdenes hermanas (mismo cliente, devolución, acuse)
  * para que cada una se asigne por separado.
  *
- * Dos formas de repartir, en la misma hoja:
+ * Segunda petición (2026-10-13): lo mismo para las PROGRAMACIONES — se
+ * ingresan todos los seriales de una vez y después se separan por modelo o
+ * por lo que pida el cliente. Las hermanas heredan contrato y gestión; el
+ * contrato y la gestión se dan por entregados con la ÚLTIMA hermana
+ * (functions/src/domain/ordenDividida.js).
+ *
+ * Tres formas de repartir, en la misma hoja:
  *   · Parejo — "Repartir en N órdenes": la madre se queda con el primer
  *     bloque y nacen N-1 hijas con bloques de tamaño parejo.
+ *   · Por modelo — una orden por modelo; la madre se queda con el primero.
  *   · A mano — marcar los equipos que pasan a UNA orden nueva (se puede
  *     repetir para sacar más).
  *
@@ -41,6 +49,23 @@
     return out;
   }
 
+  // Una orden por modelo, en el orden en que cada modelo aparece en la lista:
+  // la madre se queda con el primero. Equipos sin modelo van en su propio
+  // bloque "sin modelo". Devuelve [{ modelo, ids }] (vacío si hay 1 modelo).
+  function repartirPorModelo(equipos) {
+    const porModelo = new Map();
+    for (const e of (equipos || [])) {
+      const k = String(e.modelo || '').trim() || 'sin modelo';
+      if (!porModelo.has(k)) porModelo.set(k, []);
+      porModelo.get(k).push(e.id);
+    }
+    return [...porModelo].map(([modelo, ids]) => ({ modelo, ids }));
+  }
+
+  function esProgramacion(orden) {
+    return String(orden?.tipo_de_servicio || '').toUpperCase().includes('PROGRAMA');
+  }
+
   function puedeDividir(orden) {
     if (!orden) return false;
     const estado = (orden.estado_reparacion || 'POR ASIGNAR').toUpperCase();
@@ -48,7 +73,8 @@
       ? esOrdenEntrada(orden)
       : String(orden.tipo_de_servicio || '').toUpperCase().includes('ENTRADA');
     const activos = (orden.equipos || []).filter(e => e && !e.eliminado).length;
-    return esEntrada && estado === 'POR ASIGNAR' && !orden.tecnico_uid && !orden.tecnico_asignado && activos >= 2;
+    return (esEntrada || esProgramacion(orden)) && estado === 'POR ASIGNAR'
+      && !orden.tecnico_uid && !orden.tecnico_asignado && activos >= 2;
   }
 
   async function abrir(ordenId) {
@@ -56,9 +82,11 @@
     try { orden = await OrdenesService.getOrder(ordenId); } catch (_) { /* abajo */ }
     if (!orden) { Toast.show('Orden no encontrada', 'bad'); return; }
     if (!puedeDividir(orden)) {
-      Toast.show('Solo se divide una ENTRADA en POR ASIGNAR, sin técnico y con al menos 2 equipos.', 'bad');
+      Toast.show('Solo se divide una ENTRADA o una PROGRAMACIÓN en POR ASIGNAR, sin técnico y con al menos 2 equipos.', 'bad');
       return;
     }
+    const esProg = esProgramacion(orden);
+    const tipoLabel = esProg ? 'PROGRAMACIÓN' : 'ENTRADA';
     const equipos = (orden.equipos || []).filter(e => e && e.id && !e.eliminado);
     const total = equipos.length;
     const maxPartes = Math.min(8, total);
@@ -67,6 +95,23 @@
       const tams = repartir(equipos.map(e => e.id), n).map(g => g.length).join(' · ');
       opcionesN.push(`<option value="${n}"${n === 2 ? ' selected' : ''}>${n} órdenes (${tams})</option>`);
     }
+    const modelos = repartirPorModelo(equipos);
+    const intro = esProg
+      ? `Las órdenes nuevas nacen con el mismo cliente, el mismo contrato y la misma gestión,
+         en <b>POR ASIGNAR</b>: cada una se asigna, se programa y se entrega por separado.
+         El contrato y la gestión se dan por entregados cuando se entrega la última.
+         Esta orden se queda con los equipos que no muevas.`
+      : `Las órdenes nuevas nacen con el mismo cliente, la misma devolución y el acuse ya firmado,
+         en <b>POR ASIGNAR</b>: cada una se asigna a su técnico por separado. Esta orden se queda
+         con los equipos que no muevas.`;
+    const bloqueModelo = modelos.length >= 2 ? `
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2,#F8FAFC);">
+          <strong style="font-size:13px;">Repartir por modelo</strong>
+          <button type="button" class="btn btn-secondary" id="dvPorModelo" style="height:34px;">
+            <i data-lucide="layers" style="width:14px;height:14px;"></i> Una orden por modelo
+          </button>
+          <span style="font-size:12px;color:var(--fg-3);">${modelos.map(m => `${esc(m.modelo)}: ${m.ids.length}`).join(' · ')} · esta orden conserva ${esc(modelos[0].modelo)}</span>
+        </div>` : '';
 
     const filas = equipos.map((e, i) => {
       const serial = e.numero_de_serie || e.serial || '—';
@@ -95,12 +140,8 @@
     const resultado = await Modal.sheet({
       title: `Dividir orden ${ordenId}`, icon: 'layers', size: 'lg',
       html: `
-        <p style="margin:0 0 12px;font-size:13px;color:var(--fg-3);">
-          Las órdenes nuevas nacen con el mismo cliente, la misma devolución y el acuse ya firmado,
-          en <b>POR ASIGNAR</b>: cada una se asigna a su técnico por separado. Esta orden se queda
-          con los equipos que no muevas.
-        </p>
-
+        <p style="margin:0 0 12px;font-size:13px;color:var(--fg-3);">${intro}</p>
+        ${bloqueModelo}
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2,#F8FAFC);">
           <strong style="font-size:13px;">Repartir parejo</strong>
           <select id="dvPartes" class="form-input" style="height:34px;min-width:200px;">${opcionesN.join('')}</select>
@@ -158,6 +199,16 @@
           if (!ok) return;
           await ejecutar(ordenId, hijas, root);
         });
+        root.querySelector('#dvPorModelo')?.addEventListener('click', async () => {
+          const hijas = modelos.slice(1);
+          const ok = await Modal.confirm({
+            title: 'Repartir por modelo',
+            message: `Se crea${hijas.length === 1 ? '' : 'n'} ${hijas.length} orden${hijas.length === 1 ? '' : 'es'} nueva${hijas.length === 1 ? '' : 's'}: ${hijas.map(m => `${m.modelo} (${m.ids.length})`).join(', ')}; la ${ordenId} se queda con ${modelos[0].modelo} (${modelos[0].ids.length}). ¿Continuar?`,
+            confirmLabel: 'Repartir',
+          });
+          if (!ok) return;
+          await ejecutar(ordenId, hijas.map(m => m.ids), root);
+        });
         refrescar();
       },
       onAction: async (action, root) => {
@@ -166,7 +217,7 @@
         if (!ids.length || ids.length >= total) return false;
         const ok = await Modal.confirm({
           title: 'Mover a una orden nueva',
-          message: `${ids.length} equipo${ids.length === 1 ? '' : 's'} pasa${ids.length === 1 ? '' : 'n'} a una orden nueva de ENTRADA; la ${ordenId} se queda con ${total - ids.length}. ¿Continuar?`,
+          message: `${ids.length} equipo${ids.length === 1 ? '' : 's'} pasa${ids.length === 1 ? '' : 'n'} a una orden nueva de ${tipoLabel}; la ${ordenId} se queda con ${total - ids.length}. ¿Continuar?`,
           confirmLabel: 'Mover',
         });
         if (!ok) return false;
@@ -204,6 +255,6 @@
     }
   }
 
-  window.OrdenesDividir = { abrir, repartir, puedeDividir };
+  window.OrdenesDividir = { abrir, repartir, repartirPorModelo, puedeDividir };
   window.abrirDividirOrden = abrir;
 })();

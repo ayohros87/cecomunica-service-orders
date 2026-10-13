@@ -163,6 +163,49 @@ async function main() {
   assert.strictEqual(m2.equipos.filter(e => !e.eliminado).length, 26);
   ok("segunda vuelta acumula dividida_en y descuenta equipos");
 
+  // ── PROGRAMACIÓN (Brenda, 2026-10-13): por modelo, con contrato y gestión ──
+  const eqProg = [
+    ...Array.from({ length: 4 }, (_, i) => ({ id: `pa${i}`, modelo_id: "pnc", modelo: "PNC360S-R", serial: `PA${i}`, numero_de_serie: `PA${i}`, eliminado: false })),
+    ...Array.from({ length: 3 }, (_, i) => ({ id: `pb${i}`, modelo_id: "nx", modelo: "NX-420-R", serial: `PB${i}`, numero_de_serie: `PB${i}`, eliminado: false })),
+  ];
+  const prog = {
+    cliente_id: "cli2", cliente_nombre: "FEDERACION PANAMEÑA DE CICLISMO", vendedor_asignado: "v1",
+    tipo_de_servicio: "PROGRAMACIÓN", estado_reparacion: "POR ASIGNAR",
+    contrato: { aplica: true, contrato_doc_id: "cdoc1", contrato_id: "TEMP20261012-01", motivo_no_aplica: null },
+    gestion: { id: "TEMP20261012-01", tipo: "temporal" },
+    observaciones: "TEMP20261012-01: Alquiler Temporal del 18 al 20 de Octubre 2026",
+    equipos: eqProg,
+    creado_por_uid: "system", creado_por_email: null, eliminado: false,
+    os_logs: [{ action: "CREAR", by: "system:gestiones" }],
+  };
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("ordenes_de_servicio/2026101201").set(prog);
+    await ctx.firestore().doc("ordenes_de_servicio/2026101202").set({ ...prog, tipo_de_servicio: "REPARACIÓN" });
+  });
+  comoUsuario("recepcion", "r@ceco.com");
+  const rp = await OrdenesService.dividirOrden("2026101201", [eqProg.slice(4).map(e => e.id)]);
+  assert.strictEqual(rp.nuevas.length, 1);
+  assert.strictEqual(rp.restantes, 4);
+  const pm = (await dbR.doc("ordenes_de_servicio/2026101201").get()).data();
+  assert.deepStrictEqual(pm.equipos.map(e => e.id), ["pa0", "pa1", "pa2", "pa3"]);
+  assert.deepStrictEqual(pm.dividida_en, rp.nuevas);
+  assert.strictEqual(pm.observaciones, `TEMP20261012-01: Alquiler Temporal del 18 al 20 de Octubre 2026 Dividida: 3 equipos pasaron a la orden ${rp.nuevas[0]}.`);
+  const ph = (await dbR.doc(`ordenes_de_servicio/${rp.nuevas[0]}`).get()).data();
+  assert.strictEqual(ph.tipo_de_servicio, "PROGRAMACIÓN");
+  assert.strictEqual(ph.estado_reparacion, "POR ASIGNAR");
+  assert.deepStrictEqual(ph.equipos.map(e => e.id), ["pb0", "pb1", "pb2"]);
+  assert.deepStrictEqual(ph.contrato, prog.contrato);
+  assert.deepStrictEqual(ph.gestion, prog.gestion);
+  assert.strictEqual(ph.vendedor_asignado, "v1");
+  assert.strictEqual(ph.dividida_de, "2026101201");
+  assert.strictEqual(ph.entrada_inspeccion, undefined, "una PROGRAMACIÓN NO hereda entrada_inspeccion (el pool la trataría como inspección)");
+  assert.strictEqual(ph.fecha_recepcion, undefined, "ni recepción de mostrador");
+  assert.strictEqual(ph.recepcion_por_uid, undefined);
+  assert.strictEqual(ph.observaciones, "TEMP20261012-01: Alquiler Temporal del 18 al 20 de Octubre 2026 Dividida de la orden 2026101201: 3 equipos de la programación.");
+  ok("PROGRAMACIÓN: hija por modelo hereda contrato/gestión/vendedor y NO la recepción ni entrada_inspeccion");
+  await assert.rejects(() => OrdenesService.dividirOrden("2026101202", [["pa0"]]), /Solo se dividen/);
+  ok("REPARACIÓN: rechaza");
+
   console.log(`\n${n} checks OK`);
   await testEnv.cleanup();
 }

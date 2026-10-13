@@ -309,15 +309,23 @@ const OrdenesService = {
     });
   },
 
-  // ── Dividir una orden de ENTRADA ─────────────────────────────────────
+  // ── Dividir una orden de ENTRADA o de PROGRAMACIÓN ───────────────────
   // Petición de Brenda (2026-09-08, Gamboa: 34 NX-420-R en la 2026090806):
   // una devolución grande cae completa en UNA orden de inspección y, como la
   // orden tiene UN técnico, un solo técnico carga con los 34 radios. Dividir
   // reparte los equipos en órdenes hermanas —mismo cliente, devolución,
   // acuse y contrato— para que cada una se asigne a su técnico.
   //
-  // Solo ENTRADA en POR ASIGNAR y sin técnico: es el mismo candado con el
-  // que las tandas nuevas de la devolución siguen entrando a la orden
+  // PROGRAMACIÓN (Brenda, 2026-10-13): se ingresan todos los seriales de una
+  // vez y después se separan por modelo o por lo que pida el cliente. Las
+  // hermanas heredan contrato y gestión; en el servidor, el contrato y la
+  // gestión se dan por entregados con la ÚLTIMA hermana (onOrdenEntregada /
+  // onOrdenWriteGestion + domain/ordenDividida.js). El pool: la madre
+  // devuelve los equipos movidos a su origen y la hija los vuelve a meter al
+  // taller (dos movimientos de kardex, estado final consistente).
+  //
+  // Solo en POR ASIGNAR y sin técnico: es el mismo candado con el que las
+  // tandas nuevas de la devolución siguen entrando a la orden
   // (ESTADOS_APPEND_ENTRADA en onOrdenDevolucionWrite). Una vez tomada, la
   // orden es del técnico y no se toca.
   //
@@ -370,6 +378,11 @@ const OrdenesService = {
         : `Inspección de ${frase(n)}.${obs ? " " + obs : ""}`;
       return `${base} Dividida de la orden ${madre} para repartir la inspección entre técnicos.`;
     };
+    // PROGRAMACIÓN (Brenda, 2026-10-13): la observación de la madre describe
+    // la gestión o el contrato y vale igual para la hija; solo se anota de
+    // dónde salió y cuántos equipos trae.
+    const obsHijaProg = (obs, n, madre) =>
+      `${obs}${obs ? " " : ""}Dividida de la orden ${madre}: ${n} equipo${n === 1 ? "" : "s"} de la programación.`;
     const obsMadre = (obs, n, hijas, movidos) => {
       const base = RE_OBS_AUTO.test(obs)
         ? obs.replace(RE_OBS_AUTO, `Orden creada automáticamente: inspección de ${frase(n)}.`)
@@ -384,7 +397,14 @@ const OrdenesService = {
       if (!snap.exists) throw new Error("La orden ya no existe.");
       const o = snap.data();
       if (o.eliminado === true) throw new Error("La orden está eliminada.");
-      if (String(o.tipo_de_servicio || "").toUpperCase() !== "ENTRADA") throw new Error("Solo se dividen órdenes de ENTRADA.");
+      // ENTRADA (2026-09-08) y PROGRAMACIÓN (2026-10-13): las dos nacen con
+      // todos los equipos en una sola orden y se reparten antes de que el
+      // taller las tome. El acento se normaliza porque el tipo viene escrito
+      // de varias formas en las órdenes viejas.
+      const tipo = String(o.tipo_de_servicio || "").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+      const esEntrada = tipo === "ENTRADA";
+      const esProgramacion = tipo.startsWith("PROGRAMA");
+      if (!esEntrada && !esProgramacion) throw new Error("Solo se dividen órdenes de ENTRADA o PROGRAMACIÓN.");
       if ((o.estado_reparacion || "POR ASIGNAR").toUpperCase() !== "POR ASIGNAR" || o.tecnico_uid || o.tecnico_asignado) {
         throw new Error("La orden ya fue tomada por el taller: no se puede dividir.");
       }
@@ -402,8 +422,12 @@ const OrdenesService = {
       const uid = user?.uid || "";
       const email = user?.email || null;
       // Lo que una hija hereda: identidad de la orden (cliente, tipo,
-      // contrato, devolución de origen) y la recepción sellada por el acuse
-      // (mismos campos que copia onOrdenDevolucionWrite). NO hereda notas
+      // contrato, gestión) y, SOLO en una ENTRADA, la devolución de origen y
+      // la recepción sellada por el acuse (mismos campos que copia
+      // onOrdenDevolucionWrite). Una PROGRAMACIÓN no trae nada de eso: sus
+      // radios salen de bodega, no los recibió el mostrador — y heredar
+      // `entrada_inspeccion` haría que onOrdenWritePool la tratara como
+      // inspección (no movería inventario al entregar). NO hereda notas
       // técnicas, fotos ni searchTokens (los regenera onWriteSearchTokens).
       const heredado = {
         cliente_id: o.cliente_id || "",
@@ -412,15 +436,17 @@ const OrdenesService = {
         tipo_de_servicio: o.tipo_de_servicio,
         estado_reparacion: "POR ASIGNAR",
         contrato: o.contrato || { aplica: false, contrato_doc_id: null, contrato_id: null, motivo_no_aplica: null },
-        entrada_inspeccion: o.entrada_inspeccion || { tipo: "entrada", ref_id: null },
         ...(o.gestion ? { gestion: o.gestion } : {}),
-        fecha_recepcion: o.fecha_recepcion || now,
-        recepcion_por_uid: o.recepcion_por_uid || "system",
-        recepcion_por_email: o.recepcion_por_email || null,
-        ...(o.receptor_recepcion_nombre !== undefined ? { receptor_recepcion_nombre: o.receptor_recepcion_nombre } : {}),
-        ...(o.firma_recepcion_url !== undefined ? { firma_recepcion_url: o.firma_recepcion_url } : {}),
-        ...(o.recepcion_sin_firma !== undefined ? { recepcion_sin_firma: o.recepcion_sin_firma } : {}),
-        ...(o.recepcion_sin_firma_motivo !== undefined ? { recepcion_sin_firma_motivo: o.recepcion_sin_firma_motivo } : {}),
+        ...(esEntrada ? {
+          entrada_inspeccion: o.entrada_inspeccion || { tipo: "entrada", ref_id: null },
+          fecha_recepcion: o.fecha_recepcion || now,
+          recepcion_por_uid: o.recepcion_por_uid || "system",
+          recepcion_por_email: o.recepcion_por_email || null,
+          ...(o.receptor_recepcion_nombre !== undefined ? { receptor_recepcion_nombre: o.receptor_recepcion_nombre } : {}),
+          ...(o.firma_recepcion_url !== undefined ? { firma_recepcion_url: o.firma_recepcion_url } : {}),
+          ...(o.recepcion_sin_firma !== undefined ? { recepcion_sin_firma: o.recepcion_sin_firma } : {}),
+          ...(o.recepcion_sin_firma_motivo !== undefined ? { recepcion_sin_firma_motivo: o.recepcion_sin_firma_motivo } : {}),
+        } : {}),
       };
       const obsOriginal = String(o.observaciones || "");
       gruposLimpios.forEach((ids, i) => {
@@ -429,7 +455,7 @@ const OrdenesService = {
         tx.set(db.collection("ordenes_de_servicio").doc(hijaId), {
           ...heredado,
           equipos: eqs,
-          observaciones: obsHija(obsOriginal, eqs.length, ordenId),
+          observaciones: esEntrada ? obsHija(obsOriginal, eqs.length, ordenId) : obsHijaProg(obsOriginal, eqs.length, ordenId),
           dividida_de: ordenId,
           fecha_creacion: now,
           fecha_modificacion: now,
