@@ -734,6 +734,16 @@
         replyTo: CotState.replyToDe({ ejecutivoEmail: ej.email || cot.ejecutivo_email, creadoPorEmail: cot.creado_por_email }),
       });
       cot.estado = 'enviada';
+      // El correo que se escribió en el diálogo queda en la cotización
+      // (2026-10-13, Solangel): antes se mandaba a esa dirección pero el
+      // documento y el próximo envío seguían con la de Ventas, y había que
+      // entrar a editar solo para corregirlo.
+      if (payload.dest && payload.dest !== (cot.dirigido_email || '')) {
+        try {
+          await CotizacionesService.updateCotizacion(cot._docId, { dirigido_email: payload.dest });
+          cot.dirigido_email = payload.dest;
+        } catch (e) { console.warn('[cot-detalle] no se guardó el destinatario:', e); }
+      }
       Toast.show('Cotización enviada a ' + payload.dest, 'ok');
       render();
     } catch (err) {

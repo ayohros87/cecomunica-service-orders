@@ -35,6 +35,10 @@
     itbmsPct: Math.round(FMT.ITBMS_RATE * 100),
     descuentoPct: 0,
     intro: '',
+    // A quién va (vacío = representante y correo de la ficha del cliente).
+    dirigidoA: '',
+    dirigidoEmail: '',
+    dirigidoOrigen: '',   // texto de ayuda: de dónde salió el contacto precargado
   };
   // Líneas de pieza por equipo: { [equipoId]: [{ id, sku, nombre, cant, precio }] }
   const lineas = {};
@@ -224,6 +228,26 @@
     return consumosPorEquipo[eq.id] || consumosPorEquipo[eq.serial] || [];
   }
 
+  // Contacto de Reparaciones recordado: el "Atención a" y el correo de la
+  // última cotización de taller del cliente. Solo llena lo que está vacío
+  // (un borrador restaurado o lo que se tecleó mandan). Best-effort: si el
+  // rol no puede listar cotizaciones ajenas, se queda con la ficha.
+  async function precargarContactoTaller() {
+    if (!form.clienteId || form.dirigidoA || form.dirigidoEmail) return false;
+    const clienteAlPedir = form.clienteId;
+    let ultima = null;
+    try { ultima = await CotizacionesService.ultimaDeTallerPorCliente(clienteAlPedir); }
+    catch (e) { console.warn('[cotizar-orden] sin contacto de taller previo:', e?.code || e); return false; }
+    if (!ultima || form.clienteId !== clienteAlPedir || form.dirigidoA || form.dirigidoEmail) return false;
+    const cli = catalogos?.clientesById?.[form.clienteId] || {};
+    const a = String(ultima.dirigido_a || '').trim(), em = String(ultima.dirigido_email || '').trim();
+    // Si lo último fue exactamente la ficha, no hay nada que recordar.
+    if ((!a || a === (cli.representante || '')) && (!em || em === (cli.email || ''))) return false;
+    form.dirigidoA = a; form.dirigidoEmail = em;
+    form.dirigidoOrigen = `Contacto de la última cotización de taller (${ultima.cotizacion_id || ultima.id}). Cámbialo si va a otra persona.`;
+    return true;
+  }
+
   // ── Cliente / meta ─────────────────────────────────────────────────────────
   function renderCliente() {
     const cli = catalogos.clientesById[form.clienteId] || {};
@@ -241,6 +265,22 @@
           ${esc(cli.email || '')}
         </div>
       </div>
+
+      <!-- A quién va (2026-10-13, Solangel): el contacto de Reparaciones no es
+           el de Ventas, y antes había que editar la cotización ya creada solo
+           para cambiarlo. Se precarga con el de la última cotización de taller
+           de este cliente; vacío = el representante y el correo de la ficha. -->
+      <div class="cc-meta-grid" style="margin-top:12px;">
+        <div class="form-field">
+          <label class="form-label">Atención a</label>
+          <input type="text" class="form-input" id="inpDirigidoA" value="${esc(form.dirigidoA || '')}" placeholder="${esc(cli.representante || 'Nombre del contacto')}" autocomplete="off">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Correo del destinatario</label>
+          <input type="email" class="form-input" id="inpDirigidoEmail" value="${esc(form.dirigidoEmail || '')}" placeholder="${esc(cli.email || 'correo@empresa.com')}" autocomplete="off">
+        </div>
+      </div>
+      <div class="form-hint" id="hintDirigido" style="font-size:12px; color:var(--fg-3); margin-top:-6px;">${esc(form.dirigidoOrigen || 'Si lo dejas vacío va al representante y al correo de la ficha del cliente.')}</div>
 
       <div class="cc-meta-grid" style="margin-top:16px;">
         <div class="form-field">
@@ -288,14 +328,19 @@
         form.clienteId = newId;
         const cli2 = catalogos.clientesById[form.clienteId];
         if (cli2) form.itbmsPct = cli2.itbms_exento ? 0 : Math.round(FMT.ITBMS_RATE * 100);
+        // Otro cliente, otro contacto: se vuelve a buscar el de su taller.
+        form.dirigidoA = ''; form.dirigidoEmail = ''; form.dirigidoOrigen = '';
         touch();
         renderCliente(); renderResumen();
+        precargarContactoTaller().then((hubo) => { if (hubo) renderCliente(); });
       },
     });
     $('inpFecha').addEventListener('change', (e) => { form.fecha = e.target.value; touch(); });
     $('inpValidez').addEventListener('input', (e) => { form.validezDias = Number(e.target.value || 0); touch(); });
     $('selEjec').addEventListener('change', (e) => { form.ejecutivoId = e.target.value; touch(); });
     $('inpIntro').addEventListener('input', (e) => { form.intro = e.target.value; touch(); });
+    $('inpDirigidoA').addEventListener('input', (e) => { form.dirigidoA = e.target.value; form.dirigidoOrigen = ''; touch(); });
+    $('inpDirigidoEmail').addEventListener('input', (e) => { form.dirigidoEmail = e.target.value; form.dirigidoOrigen = ''; touch(); });
     const pc = $('panelCliente');
     pc.querySelectorAll('[data-cond-k]').forEach(inp => inp.addEventListener('input', (e) => {
       form.condiciones[Number(e.target.dataset.condK)].k = e.target.value; touch();
@@ -692,6 +737,9 @@
       ui.validezDias = Number(form.validezDias || 15);
       ui.itbmsPct = Number(form.itbmsPct || 0);
       ui.descuentoPct = Number(form.descuentoPct || 0);
+      // A quién va: vacío → toDoc cae al representante y correo de la ficha.
+      ui.dirigido_a = String(form.dirigidoA || '').trim();
+      ui.dirigido_email = String(form.dirigidoEmail || '').trim();
       ui.intro = form.intro || (esVisita
         ? `Cotización correspondiente a la visita técnica${orden.visita?.sitio ? ' en ' + orden.visita.sitio : ''} (orden ${ordenId}).`
         : `Cotización correspondiente a la orden de servicio ${ordenId}.`);
@@ -1136,6 +1184,18 @@
       const cli = catalogos.clientesById[form.clienteId];
       if (cli) form.itbmsPct = cli.itbms_exento ? 0 : Math.round(FMT.ITBMS_RATE * 100);
     }
+    // Motivo de ingreso precargado (2026-10-13, Solangel): el "detalle de la
+    // entrada" que tecleaba a mano es lo que recepción escribió en las
+    // observaciones de la orden. Va en la introducción; ella lo corrige.
+    {
+      const obs = String(orden.observaciones || '').trim();
+      if (!form.intro && obs && !esVisita) {
+        form.intro = `Cotización correspondiente a la orden de servicio ${ordenId}. Motivo de ingreso: ${obs}`;
+      }
+    }
+    // Contacto de Reparaciones recordado (antes del borrador, que manda).
+    await precargarContactoTaller();
+
     // Firmante por defecto: el usuario actual si es ejecutivo/supervisor; si no
     // (p.ej. un técnico) el supervisor de taller. Nunca un vendedor arbitrario.
     form.ejecutivoId = catalogos.ejecutivos.find(e => e.id === user.uid)?.id

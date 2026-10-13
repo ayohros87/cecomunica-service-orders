@@ -128,6 +128,20 @@ const CotizacionesService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
+  // La última cotización de TALLER (origen 'orden') de un cliente, para
+  // recordar a quién se dirigió (Solangel, 2026-10-13: el contacto de
+  // Reparaciones no es el de Ventas y lo corregía editando cada vez). Solo
+  // igualdades, sin orderBy: no necesita índice compuesto; se ordena aquí.
+  async ultimaDeTallerPorCliente(clienteId, { limit = 40 } = {}) {
+    if (!clienteId) return null;
+    const snap = await firebase.firestore().collection('cotizaciones')
+      .where('clienteId', '==', clienteId).where('origen', '==', 'orden').limit(limit).get();
+    const ms = (d) => { const f = d.fecha_creacion; return f?.toMillis ? f.toMillis() : (f?.seconds ? f.seconds * 1000 : 0); };
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(d => d.deleted !== true && (d.dirigido_a || d.dirigido_email))
+      .sort((a, b) => ms(b) - ms(a))[0] || null;
+  },
+
   // Todas las de ciertos estados (p. ej. "activas" de la señal S7), no solo
   // las de la primera página. Sin orderBy: igualdad/in sobre índices simples.
   async listPorEstados(estados, { creadoPorUid = null, limit = 200 } = {}) {

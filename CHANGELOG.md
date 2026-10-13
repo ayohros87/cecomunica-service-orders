@@ -1,5 +1,25 @@
 # Changelog
 
+## [Cotizar desde la orden: el contacto de Reparaciones se recuerda] — 2026-10-13
+
+> Solangel explicó su flujo: entra las piezas una por una desde la hoja física
+> (el catálogo tiene 16 piezas; 209 de las 413 líneas de taller de los últimos
+> seis meses van a mano), escribe a mano el motivo de ingreso, y edita la
+> cotización ya creada solo para cambiar el destinatario, porque el contacto
+> de Reparaciones no es el de Ventas.
+>
+> - **"Atención a" y "Correo del destinatario" en Cotizar orden**, precargados
+>   con el contacto de la última cotización de taller del mismo cliente (la
+>   ayuda dice de cuál salió). Vacíos, va al representante y correo de la ficha.
+> - **La introducción nace con el motivo de ingreso**: las observaciones que
+>   recepción escribió en la orden. Se corrige ahí mismo.
+> - **El correo cambiado al enviar queda en la cotización** (antes solo se
+>   usaba para ese envío y el documento seguía con el de Ventas).
+> - `tools/uso/piezas-a-mano.js` (solo lectura): piezas escritas a mano en las
+>   cotizaciones de taller que no están en el catálogo, para que inventario
+>   las dé de alta; deja un CSV al lado.
+> - Verificado en el emulador: `tools/emulador-almacen/emu-test-cotizar-contacto.mjs`.
+
 ## [Imprimir la orden a un clic] — 2026-10-13
 
 > Brenda abre la hoja de la orden unas 14 veces al día: la imprime en papel y
