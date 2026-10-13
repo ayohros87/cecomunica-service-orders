@@ -878,9 +878,19 @@ let guardandoBatch = false;
 
 // `recibir` = "Guardar y recibir": aterriza en la bandeja con el acuse de
 // recepción abierto (index.html?orden=<id>&recibir=1, ordenes-index.js).
-window.guardarBatch = async ({ recibir = false } = {}) => {
+window.guardarBatch = async ({ recibir = false, imprimir = false } = {}) => {
   if (!ordenId) { Toast.show("Falta el número de orden.", "bad"); return; }
   if (guardandoBatch) return;
+
+  // "Guardar e imprimir" (2026-10-13): la pestaña de la hoja se abre AQUÍ,
+  // dentro del clic, porque después de los await el navegador la bloquearía
+  // como popup. Se le pone la URL cuando la orden ya tiene los equipos y se
+  // cierra si el guardado no llega a término.
+  const ventanaHoja = imprimir ? window.open('', '_blank') : null;
+  if (ventanaHoja) {
+    try { ventanaHoja.document.write('<p style="font:14px system-ui;padding:24px;">Preparando la orden para imprimir…</p>'); } catch { /* sin acceso: igual se navega */ }
+  }
+  const abandonar = () => { if (ventanaHoja) { try { ventanaHoja.close(); } catch { /* ya cerrada */ } } };
 
   // Con contrato vinculado, el modelo del contrato manda por serial: corrige en
   // la tabla cualquier modelo que no coincida y avisa de seriales ajenos ANTES
@@ -891,7 +901,7 @@ window.guardarBatch = async ({ recibir = false } = {}) => {
       const ok = await Modal.confirm({ title: "Seriales fuera del contrato", confirmLabel: "Continuar de todos modos", message:
         `Estos seriales NO están en el contrato vinculado a la orden: ${fuera.join(", ")}.<br><br>` +
         `Se guardarán con el modelo elegido en la tabla.` });
-      if (!ok) return;
+      if (!ok) { abandonar(); return; }
     }
     if (corregidos) Toast.show(`${corregidos} modelo(s) ajustados al del contrato.`, "ok");
   }
@@ -917,6 +927,7 @@ window.guardarBatch = async ({ recibir = false } = {}) => {
     if (!serial) {
       Toast.show("Hay una fila sin serial. Complétala o elimínala.", "warn");
       tr.querySelector(".serie")?.focus();
+      abandonar();
       return;
     }
 
@@ -932,16 +943,16 @@ window.guardarBatch = async ({ recibir = false } = {}) => {
     }));
   }
 
-  if (!nuevosEquipos.length) { Toast.show("Agrega al menos un equipo con serial.", "warn"); return; }
+  if (!nuevosEquipos.length) { Toast.show("Agrega al menos un equipo con serial.", "warn"); abandonar(); return; }
 
-  // Los dos botones de guardar se trancan juntos.
-  const botones = [$("btnGuardar"), $("btnGuardarRecibir")].filter(Boolean);
+  // Los botones de guardar se trancan juntos.
+  const botones = [$("btnGuardar"), $("btnGuardarRecibir"), $("btnGuardarImprimir")].filter(Boolean);
   const soltar = () => { guardandoBatch = false; botones.forEach(b => { b.disabled = false; }); };
   guardandoBatch = true;
   botones.forEach(b => { b.disabled = true; });
   try {
     const ordenData = await OrdenesService.getOrder(ordenId);
-    if (!ordenData) { Toast.show("No se encontró la orden.", "bad"); soltar(); return; }
+    if (!ordenData) { Toast.show("No se encontró la orden.", "bad"); soltar(); abandonar(); return; }
     const equiposExistentes = ordenData.equipos || [];
 
     // La tabla deduplica contra sí misma, pero no contra lo YA guardado en la
@@ -958,6 +969,7 @@ window.guardarBatch = async ({ recibir = false } = {}) => {
     if (!aGuardar.length) {
       Toast.show(`Esos ${omitidos} serial(es) ya están guardados en la orden — nada que agregar.`, "warn");
       soltar();
+      abandonar();
       return;
     }
 
@@ -966,6 +978,14 @@ window.guardarBatch = async ({ recibir = false } = {}) => {
     let msg = `✅ Se guardaron ${aGuardar.length} equipo(s) en la orden.`;
     if (omitidos) msg += ` ${omitidos} ya estaban guardados.`;
     Toast.show(msg, "ok");
+    // La hoja de la orden, ya con los equipos, en la pestaña que se abrió al
+    // clic. imprimir-orden.html la lee de Firestore por ?id=.
+    if (ventanaHoja) {
+      try {
+        ventanaHoja.location.href = new URL(`imprimir-orden.html?id=${encodeURIComponent(ordenId)}`, location.href).href;
+        if (window.Uso) Uso.accion('ordenes.guardar-e-imprimir');
+      } catch (e) { console.warn('[nuevo-batch] no se pudo abrir la hoja:', e); }
+    }
     // Aterrizaje CON la orden a la vista (auditoría órdenes P1.9): ?orden= la
     // deja filtrada en la bandeja; &recibir=1 abre el acuse de recepción.
     const destino = `index.html?orden=${encodeURIComponent(ordenId)}` + (recibir ? "&recibir=1" : "");
@@ -975,6 +995,7 @@ window.guardarBatch = async ({ recibir = false } = {}) => {
     console.error("Error guardando batch:", e);
     Toast.show("No se pudieron guardar los equipos.", "bad");
     soltar();
+    abandonar();
   }
 };
 

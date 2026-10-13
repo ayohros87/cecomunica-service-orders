@@ -230,6 +230,10 @@
            (index.html?orden=<id>&recibir=1). Solo se muestra si la orden se
            recibe en mostrador (ordenes-nuevo-batch.js lo decide al cargar). -->
       <button type="button" id="btnGuardarRecibir" class="btn btn-secondary btn-lg" onclick="guardarBatch({ recibir: true })" hidden><i data-lucide="package-plus"></i> Guardar y recibir</button>
+      <!-- Guardar e imprimir (2026-10-13): recepción imprime la orden en papel
+           después de cargar los equipos (14 impresiones al día en el log de
+           uso). Abre la hoja en otra pestaña y aterriza igual en la bandeja. -->
+      <button type="button" id="btnGuardarImprimir" class="btn btn-secondary btn-lg" onclick="guardarBatch({ imprimir: true })"><i data-lucide="printer"></i> Guardar e imprimir</button>
       <button type="button" class="btn btn-ghost" onclick="window.location.href=(_ordenIdQS ? 'index.html?orden=' + encodeURIComponent(_ordenIdQS) : 'index.html')"><i data-lucide="arrow-left"></i> Cancelar</button>
     </div>
 

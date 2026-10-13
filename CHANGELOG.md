@@ -1,5 +1,23 @@
 # Changelog
 
+## [Imprimir la orden a un clic] — 2026-10-13
+
+> Brenda abre la hoja de la orden unas 14 veces al día: la imprime en papel y
+> también la usa para ver la orden completa. Hasta hoy "Imprimir orden" vivía
+> dentro del ⋯ de la fila (dos clics y buscar el ítem) y, tras cargar los
+> equipos del lote, había que volver a la bandeja, encontrar la orden y abrir
+> el menú.
+>
+> - **Icono de imprimir en la fila**, al lado del ⋯, para todos los roles que
+>   ya lo tenían en el menú (el menú lo conserva). La ficha lateral lo lista
+>   entre sus verbos.
+> - **"Guardar e imprimir" en Nuevo lote de equipos**: guarda los equipos,
+>   abre la hoja de la orden en otra pestaña (abierta dentro del clic para que
+>   el navegador no la bloquee) y aterriza en la bandeja con la orden a la
+>   vista, como "Guardar todos". Si el guardado no termina, la pestaña se
+>   cierra sola.
+> - Verificado en el emulador: `tools/emulador-almacen/emu-test-imprimir-orden.mjs`.
+
 ## [Dos rodeos menos, según el log de uso] — 2026-10-12
 
 > Con 4 días de acciones y orígenes en `uso_diario`: las vendedoras cargaban

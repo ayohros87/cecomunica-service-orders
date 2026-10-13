@@ -1292,6 +1292,18 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
   z-index: 1100; /* see comment on .orders-table th.acciones above */
 }
 
+/* Icono directo en la fila (Imprimir orden, 2026-10-13): mismo ghost que el
+   ⋯ para que la columna siga con una sola voz; el color llega en el hover. */
+.btn-fila-icono {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 32px; height: 30px; padding: 0 6px;
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  color: var(--fg-3, #6b7280); cursor: pointer; transition: var(--transition);
+}
+.btn-fila-icono .lucide { width: 16px; height: 16px; }
+.btn-fila-icono:hover { background: #f3f4f6; color: var(--accent); border-color: var(--border-default); }
+.btn-fila-icono:active { transform: scale(0.92); }
+
 /* Flujo action buttons — compact outline, no fill */
 .btn-flujo {
   display: inline-flex;

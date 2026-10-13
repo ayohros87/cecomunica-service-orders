@@ -1597,7 +1597,15 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     </button>`;
   }).join('');
 
-  return `
+  // Imprimir a un clic (2026-10-13): recepción imprime la orden en papel unas
+  // 14 veces al día y lo hacía desde dentro del ⋯ (dos clics y buscar el
+  // ítem). El icono va directo en la fila; la entrada del menú se queda.
+  const itemImprimir = menuItems.find(i => i.action === 'imprimir-orden' || i.action === 'imprimir-orden-doc');
+  const btnImprimir = itemImprimir
+    ? `<button type="button" class="btn-fila-icono" data-action="${itemImprimir.action}" data-orden-id="${ordenId}" data-stop-propagation="true" title="Imprimir orden" aria-label="Imprimir orden"><i data-lucide="printer"></i></button>`
+    : '';
+
+  return `${btnImprimir}
     <div class="overflow-menu">
       <button class="overflow-menu-btn" data-action="toggle-overflow-menu" data-stop-propagation="true" data-orden-id="${ordenId}" title="Más acciones">
         ⋯
