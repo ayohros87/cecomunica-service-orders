@@ -43,7 +43,7 @@ const CERRADAS = [
 // conEscucha: el pocService trae escuchar() (suscripción viva). Sin él se
 // simula un pocService.js VIEJO en caché, que solo tiene getAll/getCerradas.
 // `subs` deja entregar snapshots a mano: (docs, delServidor) o un error.
-function montar({ conEscucha = false } = {}) {
+function montar({ conEscucha = false, fichas = FICHAS } = {}) {
   const llamadas = { getAll: 0, getCerradas: 0, listPage: [], escuchar: 0 };
   const subs = [];
   const els = new Map();
@@ -72,7 +72,7 @@ function montar({ conEscucha = false } = {}) {
     FMT: { esc: (v) => String(v ?? "") },
     PocState: { nombreClienteDe: (d) => d.cliente || "", actualizarResumen() {}, esLectura: () => false },
     PocService: {
-      getAll: async () => { llamadas.getAll++; return FICHAS.map(f => ({ ...f })); },
+      getAll: async () => { llamadas.getAll++; return fichas.map(f => ({ ...f })); },
       getCerradas: async () => { llamadas.getCerradas++; return CERRADAS.map(f => ({ ...f })); },
       listPage: async (o) => { llamadas.listPage.push({ sortField: o.sortField, sortAsc: o.sortAsc }); return { docs: [], lastDoc: null }; },
       ...(conEscucha ? {
@@ -157,6 +157,56 @@ test("M4 · marcar una casilla mientras buscas no vuelve a bajar las fichas", as
   el("soloIncompletos").checked = true;
   P.manejarCambioIncompletos(); await esperar();
   assert.equal(llamadas.getAll, 1, "las casillas filtran en memoria");
+});
+
+// ── Agrupado por programación (Brenda, 2026-10-13) ───────────────────────
+// Al consultar un cliente, los radios salen por GRUPO (FEPACI 1, FEPACI 2…)
+// y dentro de cada grupo por Unit ID, en vez de en el orden en que se
+// registraron. Los sin grupo cierran la lista. Es el desempate al ordenar por
+// Cliente (el orden por defecto) y una columna ordenable por sí misma.
+const FEPACI = [
+  { id: "p12", unit_id: "275706", unit_id_num: 275706, cliente: "FEPACI", activo: true, grupos: ["FEPACI 2"] },
+  { id: "p03", unit_id: "275697", unit_id_num: 275697, cliente: "FEPACI", activo: true, grupos: ["FEPACI 1"] },
+  { id: "p18", unit_id: "275712", unit_id_num: 275712, cliente: "FEPACI", activo: true, grupos: ["FEPACI 2"] },
+  { id: "p01", unit_id: "275695", unit_id_num: 275695, cliente: "FEPACI", activo: true, grupos: ["FEPACI 1"] },
+  { id: "pSG", unit_id: "275690", unit_id_num: 275690, cliente: "FEPACI", activo: true, grupos: [] },
+  { id: "p11", unit_id: "275705", unit_id_num: 275705, cliente: "FEPACI", activo: true, grupos: ["FEPACI 2"] },
+  { id: "otro", unit_id: "1", unit_id_num: 1, cliente: "ZETA", activo: true, grupos: ["A"] },
+];
+
+test("G1 · buscar un cliente lo pinta por grupo y, dentro del grupo, por Unit ID; sin grupo al final", async () => {
+  const { P, el } = montar({ fichas: FEPACI });
+  el("filtroCampo").value = "cliente";
+  el("filtroValor").value = "fepaci";
+  P.filtrar(); await esperar();
+  assert.deepEqual(pintado(el), ["p01", "p03", "p11", "p12", "p18", "pSG"]);
+});
+
+test("G2 · ordenar por Grupos al revés invierte los grupos, pero los sin grupo siguen al final", async () => {
+  const { P, el } = montar({ fichas: FEPACI });
+  el("filtroCampo").value = "cliente";
+  el("filtroValor").value = "fepaci";
+  P.filtrar(); await esperar();
+  P.ordenarPor("grupos"); await esperar();          // asc
+  assert.deepEqual(pintado(el), ["p01", "p03", "p11", "p12", "p18", "pSG"]);
+  P.ordenarPor("grupos"); await esperar();          // desc
+  assert.deepEqual(pintado(el), ["p18", "p12", "p11", "p03", "p01", "pSG"]);
+});
+
+test("G3 · ordenar por Grupos sin buscar pide la página por cliente (Firestore no ordena por el array)", async () => {
+  const { P, llamadas, el } = montar({ fichas: FEPACI });
+  el("filtroValor").value = "";
+  P.ordenarPor("grupos"); await esperar();
+  const ultima = llamadas.listPage[llamadas.listPage.length - 1];
+  assert.ok(ultima);
+  assert.equal(ultima.sortField, "cliente");
+});
+
+test("G4 · la página del servidor se agrupa DENTRO de cada cliente sin mezclar clientes", () => {
+  const { P } = montar({ fichas: FEPACI });
+  P._campoOrden = "cliente"; P._direccionAsc = true;
+  const pagina = [FEPACI[0], FEPACI[1], FEPACI[4], FEPACI[6]];   // p12, p03, pSG | otro
+  assert.deepEqual([...P._ordenarDentroDelCliente(pagina).map(d => d.id)], ["p03", "p12", "pSG", "otro"]);
 });
 
 // ── Suscripción viva (2026-09-25) ────────────────────────────────────────

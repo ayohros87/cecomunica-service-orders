@@ -218,7 +218,22 @@
         PocService.getPocDevice(id, { source: 'server' }).catch(e => { console.warn('[imprimir] equipo', id, e); return null; })));
       const datos = docs.filter(Boolean);
 
+      // Mismo orden que la lista del PoC (Brenda, 2026-10-13): primero por
+      // grupo (la programación: FEPACI 1, FEPACI 2…), dentro de cada grupo
+      // por Unit ID, y los radios sin grupo al final.
+      const claveGrupo = (d) => {
+        const g = Array.isArray(d.grupos) ? d.grupos : (d.grupos ? [d.grupos] : []);
+        const limpios = g.map(x => String(x ?? "").trim()).filter(Boolean);
+        return limpios.length ? limpios.join(", ") : null;
+      };
       datos.sort((a, b) => {
+        const ga = claveGrupo(a), gb = claveGrupo(b);
+        if (ga === null || gb === null) {
+          if (ga !== gb) return ga === null ? 1 : -1;
+        } else {
+          const r = ga.localeCompare(gb, "es", { numeric: true, sensitivity: "base" });
+          if (r !== 0) return r;
+        }
         const ua = (a.unit_id || "").toString().padStart(10, '0');
         const ub = (b.unit_id || "").toString().padStart(10, '0');
         return ua.localeCompare(ub, undefined, { numeric: true });

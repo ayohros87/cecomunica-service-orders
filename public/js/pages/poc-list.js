@@ -527,7 +527,10 @@ window.PocList = {
     if (this._noMasDatos) return;
     this._cargando = true;
 
-    const campoOrden    = this._campoOrden || 'cliente';
+    // "Grupos" no se puede pedir a Firestore (es un array y no está indexado
+    // con `activo`): la página viene por cliente y se agrupa en memoria dentro
+    // de cada cliente (_ordenarDentroDelCliente).
+    const campoOrden    = (this._campoOrden === 'grupos' ? 'cliente' : this._campoOrden) || 'cliente';
     const direccionOrden = this._direccionAsc ? 'asc' : 'desc';
 
     // Watchdog for the "página pensando" report (F1). Firestore connectivity
@@ -600,7 +603,7 @@ window.PocList = {
     const soloInactivos   = document.getElementById('soloInactivos')?.checked;
     const soloSinContrato = document.getElementById('soloSinContrato')?.checked;
 
-    docs.forEach(d => {
+    this._ordenarDentroDelCliente(docs).forEach(d => {
       if (soloInactivos && d.activo) return;
       if (soloSinContrato && (d.contrato_id || d.contrato_doc_id || d.venta_factura)) return;
       if (soloIncompletos && !this._incompleta(d)) return;
@@ -669,13 +672,67 @@ window.PocList = {
   // comparador aplica la columna de orden activa al resultado, imitando el
   // orden de Firestore de la vista paginada: unit_id ordena por su espejo
   // numérico (unit_id_num) y los vacíos/no numéricos van primero en asc.
-  _ordenarDocs(docs) {
+  //
+  // Grupos (Brenda, 2026-10-13): al consultar un cliente, los radios salen
+  // AGRUPADOS por programación (FEPACI 1, FEPACI 2…) y dentro de cada grupo
+  // por Unit ID consecutivo, en vez de en el orden en que se registraron.
+  // Es el desempate al ordenar por Cliente (todas las fichas del cliente
+  // empatan) y también una columna ordenable por sí misma. Las fichas sin
+  // grupo van al FINAL en cualquier dirección: lo que no está clasificado no
+  // debe esconder a lo que sí. La hoja de imprimir usa el mismo criterio.
+  _claveGrupos(d) {
+    const g = Array.isArray(d.grupos) ? d.grupos : (d.grupos ? [d.grupos] : []);
+    const limpios = g.map(x => String(x ?? '').trim()).filter(Boolean);
+    return limpios.length ? limpios.join(', ') : null;
+  },
+  // grupo → Unit ID (espejo numérico, luego texto). Sin dirección: la aplica
+  // quien llama, salvo "sin grupo", que siempre cierra la lista.
+  _cmpGrupoUnit(a, b, dir = 1) {
+    const ga = this._claveGrupos(a), gb = this._claveGrupos(b);
+    if (ga === null || gb === null) {
+      if (ga === null && gb === null) return 0;
+      return ga === null ? 1 : -1;
+    }
+    let r = ga.localeCompare(gb, 'es', { numeric: true, sensitivity: 'base' });
+    if (r !== 0) return r * dir;
+    const ua = (typeof a.unit_id_num === 'number') ? a.unit_id_num : null;
+    const ub = (typeof b.unit_id_num === 'number') ? b.unit_id_num : null;
+    if (ua !== null && ub !== null) r = ua - ub;
+    else if (ua === null && ub !== null) r = 1;
+    else if (ua !== null && ub === null) r = -1;
+    if (r === 0) r = String(a.unit_id || '').localeCompare(String(b.unit_id || ''), 'es', { numeric: true });
+    return r * dir;
+  },
+  // Página del servidor (viene ordenada por cliente): se reordena solo DENTRO
+  // de cada cliente, respetando el orden de clientes que trajo Firestore.
+  _ordenarDentroDelCliente(docs) {
     const campo = this._campoOrden || 'cliente';
-    const dir   = this._direccionAsc ? 1 : -1;
+    if (campo !== 'cliente' && campo !== 'grupos') return docs;
+    const dir = this._direccionAsc ? 1 : -1;
+    const out = [];
+    let i = 0;
+    while (i < docs.length) {
+      const k = PocState.nombreClienteDe(docs[i]) || '';
+      let j = i + 1;
+      while (j < docs.length && (PocState.nombreClienteDe(docs[j]) || '') === k) j++;
+      out.push(...docs.slice(i, j).sort((a, b) => this._cmpGrupoUnit(a, b, dir)));
+      i = j;
+    }
+    return out;
+  },
+  // `porCliente`: la búsqueda es por Cliente. Con el orden por defecto
+  // (created_at desc, "lo último que se registró primero") se pasa a
+  // cliente → grupo → Unit ID: es lo que se quiere ver al consultar una
+  // cuenta. Si la persona ya eligió una columna, se respeta.
+  _ordenarDocs(docs, { porCliente = false } = {}) {
+    const porDefecto = porCliente && (this._campoOrden || 'created_at') === 'created_at';
+    const campo = porDefecto ? 'cliente' : (this._campoOrden || 'cliente');
+    const dir   = porDefecto ? 1 : (this._direccionAsc ? 1 : -1);
     const val = d => {
       if (campo === 'unit_id')    return (typeof d.unit_id_num === 'number') ? d.unit_id_num : null;
       if (campo === 'created_at') return d.created_at?.toMillis ? d.created_at.toMillis() : (d.created_at?.seconds ?? null);
       if (campo === 'cliente')    return PocState.nombreClienteDe(d) || null;
+      if (campo === 'grupos')     return null;   // todo empata: lo decide _cmpGrupoUnit
       const v = d[campo];
       return (v === undefined || v === null || v === '') ? null : v;
     };
@@ -691,7 +748,9 @@ window.PocList = {
       if (r === 0 && campo === 'unit_id') {
         r = String(a.unit_id || '').localeCompare(String(b.unit_id || ''), 'es', { numeric: true });
       }
-      return r * dir;
+      if (r !== 0) return r * dir;
+      if (campo === 'grupos' || campo === 'cliente') return this._cmpGrupoUnit(a, b, dir);
+      return 0;
     });
   },
 
@@ -757,7 +816,7 @@ window.PocList = {
         });
         // Respetar la columna de orden activa (antes la vista filtrada quedaba
         // clavada en created_at desc y "ordenar por Unit ID" no hacía nada).
-        this._ordenarDocs(coincidencias);
+        this._ordenarDocs(coincidencias, { porCliente: campo === 'cliente' });
         // Tope de pintado (2026-09-30): una búsqueda amplia (dos letras de un
         // cliente) podía pintar miles de filas de ~15 celdas y congelar la
         // página 1-4 s. Se pintan TOPE y el resto con "Mostrar más"; el
