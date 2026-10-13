@@ -175,6 +175,10 @@ module.exports = onDocumentWritten(
         entrega_confirmada: true,
         fecha_entrega_ultima: after.fecha_entrega || admin.firestore.FieldValue.serverTimestamp(),
         facturacion_entrega_at: admin.firestore.FieldValue.serverTimestamp(),
+        // Qué entregó: onEntregaFacturacion no abre "contrato entregado"
+        // cuando lo que salió fue un aumento (ese ya tiene su aviso).
+        entrega_gestion_id: after.gestion?.id || null,
+        entrega_gestion_tipo: after.gestion?.tipo || null,
       }, { merge: true });
       logger.info("[onOrdenEntregada] Entrega propagada al contrato", {
         ordenId: event.params.ordenId, contratoDocId,

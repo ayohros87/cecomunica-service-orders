@@ -96,6 +96,19 @@ module.exports = onDocumentUpdated(
       const conEquipo = (after.equipos || []).some((e) => Number(e.cantidad || 0) > 0);
       const esRenov = after.accion === "Renovación";
       if (!conEquipo || esRenov || after.renovacion_sin_equipo) return null;
+      // Contrato viejo cuyo PRIMER sello de entrega lo pone la orden de una
+      // GESTIÓN: un aumento (P.H. TORRE GLOBAL ALQ20250917-02, 2026-10-12) o un
+      // reemplazo (FORTUNATO MANGRAVITA ALQ20251006-02, 2026-10-06). El
+      // contrato ya se facturaba; lo nuevo de un aumento tiene su propio
+      // `aumento_entregado`. Crear aquí un `contrato_entregado` con TODO el
+      // contrato duplica la factura y la comisión. Lo mismo si los radios ya
+      // estaban en el cliente desde la migración (`legacy`).
+      if (after.entrega_gestion_tipo || after.seriales_estado === "legacy") {
+        logger.info("[onEntregaFacturacion] Entrega de un aumento o contrato legacy: el contrato ya factura", {
+          cid, gestion: after.entrega_gestion_id || null, seriales_estado: after.seriales_estado || null,
+        });
+        return null;
+      }
 
       await G.avisoFacturacion({
         subject: `FACTURACIÓN: equipos ENTREGADOS — ${after.cliente_nombre || "Cliente"} (${legible})`,
