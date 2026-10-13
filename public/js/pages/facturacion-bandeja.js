@@ -479,6 +479,22 @@ window.FacturacionBandeja = (() => {
   function porId(id) { return todos().find(a => a.id === id); }
 
   // ── Acciones ──────────────────────────────────────────────────────────
+  // La misma factura en el aviso de otro cliente casi siempre es un error de
+  // fila (2026-10-12: la 11080 quedó en IMPORTADORA y en WONG). No tranca:
+  // pregunta, como el "sin número".
+  async function confirmarFacturaRepetida(a, texto) {
+    const otros = await S().facturaEnOtroCliente(texto, a);
+    if (!otros.length) return true;
+    const num = S().numeroFactura(texto).numero;
+    const lista = [...new Set(otros.map(x => x.cliente_nombre || '—'))].map(n => `<b>${esc(n)}</b>`).join(', ');
+    return Modal.confirm({
+      title: `La factura ${esc(num)} ya está anotada`,
+      message: `Esa factura ya está en el aviso de ${lista}. Este aviso es de <b>${esc(a.cliente_nombre || '—')}</b>. ¿Seguro que es la misma factura? Si fue la fila equivocada, cancela.`,
+      confirmLabel: 'Sí, es la misma factura',
+      danger: true,
+    });
+  }
+
   async function conCandado(fn) {
     if (enVuelo) return;
     enVuelo = true;
@@ -528,6 +544,7 @@ window.FacturacionBandeja = (() => {
       ev.stopPropagation();
       const pop = t.closest('.fb-pop');
       const txt = pop.querySelector('[data-f="factura"]')?.value;
+      if (!(await confirmarFacturaRepetida(a, txt))) { pop.querySelector('[data-f="factura"]')?.focus(); return; }
       await conCandado(async () => {
         try {
           const num = await S().anotarFactura(a, txt);
@@ -564,6 +581,7 @@ window.FacturacionBandeja = (() => {
         });
         if (!ok) { pop.querySelector('[data-f="factura"]')?.focus(); return; }
       }
+      if (paso === 'qbo' && !(await confirmarFacturaRepetida(a, datos.factura))) { pop.querySelector('[data-f="factura"]')?.focus(); return; }
       await conCandado(async () => {
         try {
           const r = await S().marcarPaso(a, paso, datos);

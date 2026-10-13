@@ -269,6 +269,27 @@ window.FacturacionAvisosService = {
     });
     return estado;
   },
+  /**
+   * ¿Ese número de factura ya está anotado en el aviso de OTRO cliente?
+   * 2026-10-12: la 11080 (IMPORTADORA CENTROAMERICANA) quedó también en el
+   * aviso de WONG HOLDING y le salió el correo de "ya se facturó". El mismo
+   * cliente sí puede llevar varios avisos en una factura: ahí no se avisa.
+   * Si la consulta falla, no tranca: devuelve [].
+   */
+  async facturaEnOtroCliente(texto, aviso) {
+    const f = this.numeroFactura(texto);
+    if (!f.numero) return [];
+    try {
+      const snap = await this._col().where('pasos.qbo.factura', '==', f.numero).limit(10).get();
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(x => x.id !== aviso?.id && x.estado !== 'descartado'
+          && (x.cliente_id || x.cliente_nombre) !== (aviso?.cliente_id || aviso?.cliente_nombre));
+    } catch (e) {
+      console.warn('[facturacion] no se pudo revisar la factura repetida:', e?.message || e);
+      return [];
+    }
+  },
+
   async get(id) {
     const d = await this._col().doc(id).get();
     return d.exists ? { id: d.id, ...d.data() } : null;
