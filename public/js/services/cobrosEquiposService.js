@@ -102,6 +102,33 @@ const CobrosEquiposService = {
       .includes(this._rol());
   },
 
+  // Pedir la cotización de la reposición (2026-10-15, Solangel): quienes
+  // gestionan el cobro y la jefa de taller, que es quien cotiza y la envía.
+  // Las rules dejan al taller escribir SOLO `cotizacion_pedida`.
+  puedeCotizarReposicion() {
+    return this.puedeGestionar() || this._rol() === 'jefe_taller';
+  },
+
+  /**
+   * Marca el renglón para que el servidor (onCobroEquipoWrite) arme la
+   * cotización de taller de la reposición. El renglón tiene que estar abierto,
+   * con monto y sin cotización previa; no se escribe nada más aquí.
+   */
+  async pedirCotizacion(id) {
+    const snap = await this._col().doc(id).get();
+    if (!snap.exists) throw new Error('El renglón no existe');
+    const d = snap.data();
+    if (!this.ABIERTAS.includes(d.etapa)) throw new Error('El renglón ya está cerrado.');
+    if (d.cotizacion_doc_id) throw new Error(`Este renglón ya tiene la cotización ${d.cotizacion_id || ''}.`);
+    if (d.cotizacion_pedida) throw new Error('La cotización ya se pidió: en unos segundos aparece aquí.');
+    if (!(Number(d.monto_unit) > 0)) throw new Error('Ponle monto al renglón antes de cotizarlo.');
+    const a = this._autoria();
+    await this._col().doc(id).update({
+      cotizacion_pedida: { ...a, at: firebase.firestore.FieldValue.serverTimestamp() },
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  },
+
   // Aprobar un descuento por encima del margen: decisión comercial → gerente
   // (mismo criterio que la aprobación de cotizaciones comerciales) o admin.
   puedeAprobarDescuento() {

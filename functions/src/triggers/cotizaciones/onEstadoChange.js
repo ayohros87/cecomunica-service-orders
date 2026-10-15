@@ -147,7 +147,10 @@ module.exports = onDocumentUpdated(
     const before = event.data.before?.data() || {};
     const after  = event.data.after?.data()  || {};
 
-    if ((after.origen || "") !== "orden" || !after.orden_id) return null;
+    // La reposición de un equipo NO DEVUELTO (lib/reposicionNoDevuelto) es de
+    // taller pero puede no tener orden (el renglón nació de un contrato de
+    // papel): entra igual.
+    if ((after.origen || "") !== "orden" || (!after.orden_id && !after.cobro_equipo_id)) return null;
 
     const estadoAntes   = String(before.estado || "");
     const estadoDespues = String(after.estado  || "");
@@ -175,6 +178,23 @@ module.exports = onDocumentUpdated(
           });
         }
       }
+      // Equipo NO DEVUELTO (2026-10-15): el renglón de cobro se entera.
+      if (after.cobro_equipo_id) {
+        try { await require("../../lib/reposicionNoDevuelto").alAceptarse(event.params.docId, after); }
+        catch (e) {
+          logger.error("[onCotizacionEstadoChange] no devuelto aceptado: el renglón no se marcó", {
+            error: e.message, cotizacionId: event.params.docId, cobro: after.cobro_equipo_id,
+          });
+        }
+      }
+    }
+    if (estadoDespues === "rechazada" && after.cobro_equipo_id) {
+      try { await require("../../lib/reposicionNoDevuelto").alRechazarse(event.params.docId, after); }
+      catch (e) {
+        logger.error("[onCotizacionEstadoChange] no devuelto rechazado: el renglón no pasó a cobranza", {
+          error: e.message, cotizacionId: event.params.docId, cobro: after.cobro_equipo_id,
+        });
+      }
     }
     // El cliente NO aceptó la reposición → la gestión se cierra y el daño
     // pasa a cobranza (lib/reposicionDano). Una reparación normal rechazada
@@ -190,7 +210,7 @@ module.exports = onDocumentUpdated(
     // La cotización de una REPOSICIÓN no es de piezas: no bloquea los
     // materiales de la orden ni manda resumen a bodega (el radio de
     // reposición lo pide la gestión, no esta cotización).
-    if (after.gestion_id) return null;
+    if (after.gestion_id || after.cobro_equipo_id) return null;
 
     let emitida = null;
     if (ESTADOS_BLOQUEAN.includes(estadoDespues)) emitida = true;

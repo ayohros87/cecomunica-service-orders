@@ -128,6 +128,9 @@ exports.agregadoPoolDiario            = require("./src/triggers/scheduled/agrega
 // Gestiones por cliente (Ola 2 — reemplazo/demo): máquina de estados del
 // expediente (correos bodega/recepción/admin, OS de programación, cierre 4/4)
 exports.onGestionWrite                = require("./src/triggers/gestiones/onGestionWrite");
+// Equipos no devueltos: "Cotizar la reposición" arma la cotización de taller
+// en el servidor (Solangel, 2026-10-15)
+exports.onCobroEquipoWrite            = require("./src/triggers/cobros/onCobroEquipoWrite");
 // Venta facturada por recepción → bodega asigna seriales → OS de programación
 // y aviso a recepción con los seriales (Brenda, 2026-10-07)
 exports.onPedidoVentaWrite            = require("./src/triggers/ventas/onPedidoVentaWrite");

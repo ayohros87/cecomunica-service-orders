@@ -235,7 +235,9 @@ test("R · bodega espera al cliente; aceptar libera, rechazar cierra y va a cobr
     "rechazar una copia vieja no cierra el caso vivo");
   const est = leer("functions", "src", "triggers", "cotizaciones", "onEstadoChange.js");
   assert.match(est, /estadoDespues === "rechazada" && after\.gestion_id/);
-  assert.match(est, /if \(after\.gestion_id\) return null;/, "la reposición no bloquea los materiales de la orden");
+  // Desde 2026-10-15 la reposición de un equipo NO DEVUELTO (cobro_equipo_id)
+  // tampoco bloquea materiales: comparte la misma salida.
+  assert.match(est, /if \(after\.gestion_id \|\| after\.cobro_equipo_id\) return null;/, "la reposición no bloquea los materiales de la orden");
   const ent = leer("functions", "src", "triggers", "ordenes", "onOrdenEntregada.js");
   assert.match(ent, /CS\.esFacturable\(d\.data\(\)\) && !d\.data\(\)\.gestion_id/,
     "la entrega nunca factura una reposición que el cliente no aceptó");

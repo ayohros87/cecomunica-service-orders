@@ -45,7 +45,9 @@ window.MODULOS = (() => {
     contabilidad:  ["facturacion", "contratos", "centro", "firma"],
     vista:         ["ordenes", "poc", "firma"],
     tecnico:       ["ordenes", "poc", "firma"],
-    jefe_taller:   ["ordenes", "poc", "cotizaciones", "firma"],
+    // "no-devueltos" (2026-10-15): la jefa de taller cotiza la reposición de
+    // los equipos que el cliente no devolvió; los demás llegan por Almacén.
+    jefe_taller:   ["ordenes", "poc", "cotizaciones", "no-devueltos", "firma"],
     // "facturacion_bandeja" (2026-09-04): la cola de Recepción para facturar a
     // mano en QuickBooks. Es un módulo APARTE del espacio Finanzas a propósito:
     // la información financiera de la empresa (tarifas, costos, QuickBooks,
@@ -94,6 +96,11 @@ window.MODULOS = (() => {
       // trabaja DENTRO del espacio Almacén, en su pestaña (js/ui/almacen-nav.js).
       // El id sigue vivo en visiblesPorRol porque gatea la señal S9 del home
       // ("Piezas sin stock"), que aterriza directo en la página.
+      // Entrada directa para la jefa de taller (2026-10-15); para bodega y
+      // recepción es una pestaña del espacio Almacén y no sale en su rail.
+      { id: 'no-devueltos', label: 'Equipos no devueltos', icon: 'hand-coins', href: '/inventario/no-devueltos.html',
+        subtitulo: 'Cotizar y cobrar lo que el cliente no devolvió',
+        keywords: 'no devueltos equipos perdidos cobro reposicion cotizar' },
       { id: 'facturacion_bandeja', label: 'Facturación pendiente', icon: 'inbox', href: '/facturacion/bandeja.html',
         subtitulo: 'Qué facturar en QuickBooks y activar en POC',
         keywords: 'facturacion pendiente bandeja quickbooks poc recepcion avisos' },

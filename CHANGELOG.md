@@ -1,5 +1,26 @@
 # Changelog
 
+## [Equipo no devuelto: se cotiza antes de cobrarse] — 2026-10-15
+
+> Solangel: cuando un cliente no devuelve un radio, le manda la cotización del
+> valor de reposición, espera el visto bueno y después se factura. El sistema
+> no tenía ese paso (el renglón de "Equipos no devueltos" iba directo a
+> cobranza), así que lo hacía en Excel.
+>
+> - **"Cotizar la reposición"** en cada renglón abierto de Equipos no
+>   devueltos. El servidor arma la misma cotización de taller que usa el
+>   reemplazo por daño, en borrador, firmada por la jefatura de taller y
+>   enlazada al renglón (`cobro_equipo_id`). El renglón muestra COT-… y su estado.
+> - **El cliente acepta** → fila en Facturación pendiente que dice "equipo no
+>   devuelto" (no hay radio que entregar ni bodega que avisar). **Recepción
+>   marca QBO** → el renglón se cierra como facturado con el número y la ficha
+>   del equipo pasa a "vendido", como hacía a mano el botón Facturar.
+> - **El cliente rechaza** → el renglón sigue abierto y pasa a cobranza.
+> - **La jefa de taller ve la bandeja** desde su rail ("Equipos no devueltos"),
+>   sin las pestañas de Almacén; las reglas solo le dejan pedir la cotización.
+> - Verificado: `functions/test-emulator/no-devuelto-cotizacion.js` (crear,
+>   aceptar, facturar, rechazar, ecos) y `tools/emulador-almacen/emu-test-no-devueltos-taller.mjs`.
+
 ## [Cotizar desde la orden: el contacto de Reparaciones se recuerda] — 2026-10-13
 
 > Solangel explicó su flujo: entra las piezas una por una desde la hoja física

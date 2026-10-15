@@ -963,10 +963,16 @@ service cloud.firestore {
     match /cobros_equipos/{docId} {
       allow read:   if isSignedIn();
       allow create: if puedeGestionarSeriales();
-      allow update: if puedeGestionarSeriales()
+      allow update: if (puedeGestionarSeriales()
         && (request.resource.data.etapa != "condonado"
             || resource.data.etapa == "condonado"
-            || isAdmin());
+            || isAdmin()))
+        // La jefa de taller pide la cotización de la reposición de un equipo
+        // no devuelto (2026-10-15): SOLO esa marca, sobre un renglón abierto.
+        // El servidor (onCobroEquipoWrite) arma la cotización y escribe el resto.
+        || (isSignedIn() && userRole() == "jefe_taller"
+            && resource.data.etapa in ["pendiente", "en_cobranza"]
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["cotizacion_pedida", "updated_at"]));
       allow delete: if false;
     }
 

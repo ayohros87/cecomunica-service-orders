@@ -101,6 +101,9 @@
     const gestiona = S().puedeGestionar();
     const aprueba  = S().puedeAprobarDescuento();
     const condona  = S().puedeCondonar();
+    const cotiza   = S().puedeCotizarReposicion();
+    const COT_LABEL = { borrador: 'en borrador', enviada: 'enviada al cliente', aceptada: 'aceptada · a facturar',
+      rechazada: 'rechazada por el cliente', facturada: 'facturada' };
 
     tbody.innerHTML = rows.map(r => {
       const abierto = _abierto(r);
@@ -123,6 +126,19 @@
           ? `<button class="btn btn-secondary btn-sm nd-condonar" data-id="${esc(r.id)}"
                      title="No se le cobra al cliente (solo administración)">Condonar</button>` : ''}`;
 
+      // Cotizar la reposición (2026-10-15, Solangel): antes de cobrar, el
+      // cliente recibe la cotización del valor de reposición y la acepta; al
+      // marcar QBO en Facturación pendiente este renglón se cierra solo.
+      const cotHtml = r.cotizacion_doc_id
+        ? `<div class="nd-meta nd-cot">Cotización <a href="../cotizaciones/detalle-cotizacion.html?id=${encodeURIComponent(r.cotizacion_doc_id)}">${esc(r.cotizacion_id || r.cotizacion_doc_id)}</a> · ${esc(COT_LABEL[r.cotizacion_estado] || r.cotizacion_estado || '')}</div>`
+        : (r.cotizacion_pedida && abierto
+          ? `<div class="nd-meta nd-cot" title="El servidor la está armando; en unos segundos aparece aquí">Armando la cotización…</div>`
+          : '');
+      const btnCotizar = abierto && cotiza && !r.cotizacion_doc_id && !r.cotizacion_pedida && Number(r.monto_unit) > 0
+        ? `<button class="btn btn-secondary btn-sm nd-cotizar" data-id="${esc(r.id)}"
+                   title="Arma la cotización de taller de la reposición para enviársela al cliente"><i data-lucide="receipt"></i> Cotizar la reposición</button>`
+        : '';
+
       return `
       <tr>
         <td>
@@ -133,6 +149,7 @@
           ${r.gestion_id
             ? `<div class="nd-meta">reposición por daño ${esc(r.gestion_id)}${r.orden_id ? ` · <a href="../ordenes/index.html?ids=${encodeURIComponent(r.orden_id)}">orden ${esc(r.orden_id)}</a>` : ''}</div>`
             : ''}
+          ${cotHtml}
         </td>
         <td>${_equipoHtml(r)}</td>
         <td>
@@ -161,7 +178,7 @@
           ${r.factura_ref ? `<div class="nd-meta">factura ${esc(r.factura_ref)}</div>` : ''}
           ${!abierto && r.cerrado_motivo ? `<div class="nd-meta">${esc(r.cerrado_motivo)}</div>` : ''}
         </td>
-        <td><div class="nd-acciones">${acciones}</div></td>
+        <td><div class="nd-acciones">${btnCotizar}${acciones}</div></td>
       </tr>`;
     }).join('');
 
@@ -215,6 +232,36 @@
       await cargar();
     } catch (e) {
       Toast.show('No se pudo aprobar: ' + (e.message || e), 'bad');
+    }
+  }
+
+  // Pide al servidor la cotización de taller de la reposición. El renglón
+  // queda marcado y se repinta cuando llega la cotización (sondeo corto: la
+  // bandeja no es en vivo).
+  async function _cotizar(id) {
+    const r = _fila(id);
+    if (!r) return;
+    if (!(Number(r.monto_unit) > 0)) { Toast.show('Ponle monto al renglón antes de cotizarlo.', 'warn'); return; }
+    const ok = await Modal.confirm({
+      title: 'Cotizar la reposición',
+      confirmLabel: 'Armar la cotización',
+      message: `Se arma una cotización de taller por ${dinero(r.monto_total)}${r.cantidad > 1 ? ` (${r.cantidad} equipos)` : ''}`
+        + ` a nombre de <b>${esc(r.cliente_nombre || '—')}</b>, en borrador, para que la jefatura de taller la revise y la envíe.`
+        + ` Cuando el cliente la acepte y Recepción la facture, este renglón se cierra solo.`,
+    });
+    if (!ok) return;
+    try {
+      await S().pedirCotizacion(id);
+      if (window.Uso) Uso.accion('no_devueltos.cotizar');
+      Toast.show('Pedida. En unos segundos la cotización aparece en el renglón.', 'ok');
+      await cargar();
+      for (const ms of [3000, 5000]) {
+        await new Promise(res => setTimeout(res, ms));
+        await cargar();
+        if (_fila(id)?.cotizacion_doc_id) break;
+      }
+    } catch (e) {
+      Toast.show(e?.message || 'No se pudo pedir la cotización.', 'bad');
     }
   }
 
@@ -371,6 +418,7 @@
       if (b('.nd-facturar'))  return _facturar(b('.nd-facturar').dataset.id);
       if (b('.nd-condonar'))  return _condonar(b('.nd-condonar').dataset.id);
       if (b('.nd-recuperar')) return _recuperar(b('.nd-recuperar').dataset.id);
+      if (b('.nd-cotizar'))   return _cotizar(b('.nd-cotizar').dataset.id);
       const ser = b('.nd-serial');
       if (ser && window.EquipoFicha) EquipoFicha.abrir(ser.dataset.serial);
     });
@@ -387,6 +435,13 @@
           // Guarda única (2026-10-09): taller, bodega y finanzas (cobro del
           // equipo no devuelto); antes no había guarda.
           MODULOS.exigir(window.userRole, ['ordenes', 'almacen', 'facturacion']);
+          // La jefa de taller entra por su rail (2026-10-15), no por el
+          // espacio Almacén: las pestañas de Almacén la mandarían a páginas
+          // que su rol rechaza.
+          if (window.userRole === 'jefe_taller') {
+            const m = document.getElementById('wsTabs-mount');
+            if (m) m.style.display = 'none';
+          }
         })
         .catch(e => { console.warn('[NoDevueltos] no se pudo leer el rol:', e); })
         // Si la bandeja ya se pintó antes de saber el rol, se repinta para

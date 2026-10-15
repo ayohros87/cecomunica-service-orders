@@ -100,12 +100,16 @@ function renglonReposicion(g, monto) {
  * 'orden' + la orden del radio dañado, así la imprime, la envía y la factura
  * el mismo circuito que una reparación.
  */
-function docCotizacionReposicion({ gid, g, cliente = {}, firmante = {}, cotizacionId, fechaIso, validezDias = 15, monto }) {
+// `overrides` (2026-10-15, reposición de un equipo NO DEVUELTO, lib/
+// reposicionNoDevuelto): el mismo documento con otra introducción, otro
+// renglón y campos extra (cobro_equipo_id en vez de gestion_id). El daño no
+// pasa nada y queda exactamente igual.
+function docCotizacionReposicion({ gid, g, cliente = {}, firmante = {}, cotizacionId, fechaIso, validezDias = 15, monto }, overrides = {}) {
   const exento = cliente.itbms_exento === true;
   const t = totalesReposicion(monto, { exento });
   const it = (g.items || [])[0] || {};
   const ordenId = g.origen?.orden_id || "";
-  return {
+  const base = {
     cotizacion_id: cotizacionId,
     estado: "borrador",
     origen: "orden",
@@ -152,6 +156,9 @@ function docCotizacionReposicion({ gid, g, cliente = {}, firmante = {}, cotizaci
     creado_por_email: firmante.email || null,
     deleted: false,
   };
+  if (overrides.intro) base.intro = overrides.intro;
+  if (overrides.renglon) base.items = [overrides.renglon];
+  return { ...base, ...(overrides.extra || {}) };
 }
 
 // Fecha de hoy en Panamá (YYYY-MM-DD): la cotización se fecha como la vería

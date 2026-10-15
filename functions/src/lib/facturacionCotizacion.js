@@ -69,13 +69,23 @@ async function abrirFacturacionCotizacion(d, { momento = "entrega", orden = null
   // entrega que todavía no pasó.
   const salio = TRABAJO_SALIO.includes(norm(o.estado_reparacion));
   const esReposicion = !!cot.gestion_id;
+  // Reposición de un equipo NO DEVUELTO (2026-10-15): no hay radio en el
+  // taller ni bodega que asignar; se factura el valor de reposición y el
+  // renglón de "Equipos no devueltos" se cierra cuando Recepción marca QBO.
+  const esNoDevuelto = !!cot.cobro_equipo_id;
 
   let tituloTxt, asuntoTxt, queTxt, origenTxt, fechaEfectiva;
   if (momento === "aceptacion") {
     const ac = cot.aceptacion || {};
     const como = MEDIOS[ac.medio] || "";
     fechaEfectiva = ac.at?.toDate ? ac.at.toDate() : new Date();
-    if (ac.medio === SIN_RESPUESTA && !esReposicion) {
+    if (esNoDevuelto) {
+      tituloTxt = "Equipo no devuelto — reposición aceptada, hay que facturarla";
+      asuntoTxt = "reposición de equipo no devuelto aceptada";
+      queTxt = `el cliente aceptó ${como ? `(${esc(como)}) ` : ""}pagar la <b>reposición del equipo que no devolvió</b>. `
+        + `No hay radio que entregar: al marcar QBO el renglón de "Equipos no devueltos" se cierra como facturado`;
+      origenTxt = `Equipo no devuelto · reposición aceptada · cotización ${legible}`;
+    } else if (ac.medio === SIN_RESPUESTA && !esReposicion) {
       tituloTxt = "Cotización de taller sin respuesta del cliente — autorizada para facturar";
       asuntoTxt = "cotización de taller autorizada sin respuesta del cliente";
       queTxt = `el cliente <b>no respondió</b> la cotización y el taller la pasó a facturar porque ya corresponde`
@@ -120,7 +130,9 @@ async function abrirFacturacionCotizacion(d, { momento = "entrega", orden = null
     titulo: tituloTxt,
     cuerpo: `
       <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-        En la orden <b>${esc(ordenId || "—")}</b> de <b>${esc(cot.cliente_nombre || "—")}</b>, ${queTxt}.
+        ${esNoDevuelto
+          ? `Para <b>${esc(cot.cliente_nombre || "—")}</b>${ordenId ? ` (devolución <b>${esc(ordenId)}</b>)` : ""}, ${queTxt}.`
+          : `En la orden <b>${esc(ordenId || "—")}</b> de <b>${esc(cot.cliente_nombre || "—")}</b>, ${queTxt}.`}
         La cotización <b>${esc(legible)}</b> queda <b>pendiente de facturar</b>.</p>
       ${nota}
       ${filas ? `<table role="presentation" width="100%" style="border-collapse:collapse;font:13px Arial,sans-serif;margin:8px 0;">
@@ -160,7 +172,8 @@ async function abrirFacturacionCotizacion(d, { momento = "entrega", orden = null
         momento,
         // Dónde está el equipo al abrirse la fila: la pregunta que Recepción
         // se hace antes de facturar una reparación que todavía no se retira.
-        equipo_en_taller: momento === "aceptacion" && !salio && !esReposicion,
+        equipo_en_taller: momento === "aceptacion" && !salio && !esReposicion && !esNoDevuelto,
+        ...(esNoDevuelto ? { cobro_equipo_id: cot.cobro_equipo_id, no_devuelto: true } : {}),
         ...(momento === "aceptacion" ? {
           aceptacion_medio: cot.aceptacion?.medio || null,
           aceptacion_nota: cot.aceptacion?.nota || null,

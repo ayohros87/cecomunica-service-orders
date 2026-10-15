@@ -78,6 +78,10 @@ module.exports = onDocumentUpdated(
             facturacion: { estado: "pendiente", factura: null, facturada_at: null, facturada_por: null },
           }, { merge: true });
         }
+        if (after.contexto?.cobro_equipo_id) {
+          await require("../../lib/reposicionNoDevuelto").alDesfacturarse(after.contexto.cobro_equipo_id, cotId)
+            .catch((e) => logger.warn("[onCotizacionFacturada] el renglón de no devuelto no se reabrió", { avisoId, error: e.message }));
+        }
         logger.info("[onCotizacionFacturada] Paso deshecho: la cotización vuelve a por facturar", { avisoId, cotId });
       } catch (e) {
         logger.warn("[onCotizacionFacturada] No se pudo revertir el estado de facturación", { avisoId, error: e.message });
@@ -152,6 +156,21 @@ module.exports = onDocumentUpdated(
       logger.info("[onCotizacionFacturada] Aviso de factura encolado", { avisoId, cotizacion: legible, to, mailId });
     } catch (e) {
       logger.error("[onCotizacionFacturada] El aviso de factura no salió", { avisoId, error: e.message });
+    }
+
+    // Equipo NO DEVUELTO (2026-10-15): la factura cierra el renglón de la
+    // bandeja de cobro y pasa la ficha del pool a "vendido" (lo que antes
+    // hacía a mano el botón Facturar de esa bandeja). Idempotente: si el
+    // renglón ya está cerrado no toca nada.
+    if (c.cobro_equipo_id) {
+      try {
+        await require("../../lib/reposicionNoDevuelto").alFacturarse(c.cobro_equipo_id, {
+          cotDocId, cotizacionId: legible, factura: qa.factura || "", porEmail: qa.por_email || null, at: qa.at || null,
+          montoTotal: r.total,
+        });
+      } catch (e) {
+        logger.warn("[onCotizacionFacturada] el renglón de no devuelto no se cerró", { avisoId, cobro: c.cobro_equipo_id, error: e.message });
+      }
     }
 
     // El espejo en la cotización es lo que pinta el chip del listado. Va
