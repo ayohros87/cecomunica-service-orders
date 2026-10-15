@@ -439,7 +439,13 @@ window.HomeSignals = (() => {
     // cotizaciones, 3 contratos por firmar y 39 cuentas propias). Sus colas
     // de vendedor van con SOLO_SI_HAY: al admin que no vende no le llenan la
     // línea "Al día" con tres cosas que no son suyas.
-    administrador:     ['APR', 'OPC', 'S1', 'EST', 'S4Q', 'SAP', 'S7', 'FIRV', 'REGV', 'REGG', 'LPC'],
+    // Limpieza 2026-10-15 (uso real 30-sep→15-oct): el admin no registró
+    // una sola acción sobre órdenes — por crear, por asignar, sin movimiento,
+    // QC y lotes son colas de taller y recepción — pero sí abrió Facturación
+    // pendiente 14 veces y Comisiones 9 sin tener tarjeta. FAV y COM entran
+    // como tarjetas; las colas ajenas bajan a la línea "Seguimiento"
+    // (SEGUIMIENTO, abajo): se ven, no compiten.
+    administrador:     ['APR', 'SAP', 'FAV', 'COM', 'OPC', 'S1', 'EST', 'S4Q', 'LPC', 'S7', 'FIRV', 'REGV', 'REGG'],
     // gerencia también aprueba gestiones (misma regla que el Centro): la señal
     // unificada le trae las dos colas, antes solo veía contratos.
     // S1 (por asignar) solo para quien PUEDE asignar técnico ('asignar-tecnico'
@@ -477,6 +483,15 @@ window.HomeSignals = (() => {
   const SOLO_SI_HAY = {
     administrador: ['S7', 'FIRV', 'REGV'],
   };
+  // Por rol: señales que van a la línea "Seguimiento" (como la deuda) en vez
+  // de ser tarjeta, porque ese rol las MIRA pero no las trabaja (2026-10-15):
+  // el admin no asigna ni crea órdenes; recepción no asigna técnico (0 veces
+  // en 13 días: lo hace la jefa de taller), pero le salía en rojo.
+  const SEGUIMIENTO = {
+    administrador: ['OPC', 'S1', 'EST', 'S4Q', 'LPC'],
+    recepcion: ['S1'],
+  };
+  const _esSeguimiento = (id, rol) => !!SIGNALS[id]?.deuda || (SEGUIMIENTO[rol] || []).includes(id);
   // Home por rol (2026-10-09). AUTO_ABRIR: la única señal del rol se abre sola
   // como lista (el técnico entra y ve sus órdenes, no un número). GRUPOS: el
   // administrador tenía once tarjetas iguales; ahora van en tres bloques con
@@ -485,7 +500,7 @@ window.HomeSignals = (() => {
   const GRUPOS = {
     administrador: [
       { t: 'Aprobar', ids: ['APR', 'SAP'] },
-      { t: 'Operación trancada', ids: ['OPC', 'S1', 'EST', 'S4Q', 'LPC'] },
+      { t: 'Facturación', ids: ['FAV', 'COM'] },
       { t: 'Mis cosas', ids: ['S7', 'FIRV', 'REGV'] },
     ],
   };
@@ -696,8 +711,11 @@ window.HomeSignals = (() => {
       if (!tile) continue;
       const sig = SIGNALS[id];
       const grupoDe = grid.querySelector(`.kpis-grupo__items[data-ids~="${id}"]`);
+      // En el teléfono la franja Seguimiento se esconde: lo de la persona
+      // (`mia`) y lo de SEGUIMIENTO por rol vuelven a la fila de pastillas.
+      const segRol = (SEGUIMIENTO[mount._renderOpts?.rolEfectivo] || []).includes(id);
       const destino = tile.classList.contains('is-cero') ? items
-        : (sig?.deuda && deudaItems && !(movil && sig.mia)) ? deudaItems : (grupoDe || grid);
+        : ((sig?.deuda || segRol) && deudaItems && !(movil && (sig?.mia || segRol))) ? deudaItems : (grupoDe || grid);
       if (tile.parentElement === destino) continue;
       const foco = tile.contains(document.activeElement) ? document.activeElement : null;
       const siguiente = Array.from(destino.children).find(el => el.dataset.signal && orden.indexOf(el.dataset.signal) > orden.indexOf(id));
@@ -944,8 +962,8 @@ window.HomeSignals = (() => {
     // chica que no compite con ella; y lo que está en cero, en UNA línea de
     // texto junto a "Actualizado". Antes todo pesaba igual: 4 botones en 0 y
     // un 128 permanente al lado de "por asignar" enseñaban a no mirar la fila.
-    const dia = ids.filter(id => !SIGNALS[id].deuda);
-    const deuda = ids.filter(id => SIGNALS[id].deuda);
+    const dia = ids.filter(id => !_esSeguimiento(id, rolEfectivo));
+    const deuda = ids.filter(id => _esSeguimiento(id, rolEfectivo));
     // Grupos con rótulo (admin) solo en escritorio: en el teléfono las
     // tarjetas son UNA fila de pastillas y el rótulo no cabe.
     const grupos = (!_esMovil() && GRUPOS[rolEfectivo]) ? GRUPOS[rolEfectivo] : null;
@@ -1026,8 +1044,11 @@ window.HomeSignals = (() => {
       // conocidos salen YA, con su antigüedad en la franja ("Actualizado hace
       // N min"), y los reales los reemplazan al llegar. Las señales frescas
       // (aprobaciones) no se pintan viejas: esperan su conteo.
+      // Las frescas también nacen con su último valor (2026-10-15): si esperan
+      // "cargando" en su grupo, el grupo "Aprobar" en cero pintaba un recuadro
+      // blanco grande durante un segundo antes de esconderse. El recuento
+      // fresco las corrige enseguida, igual que en el camino de la caché.
       ids.forEach(id => {
-        if (SIGNALS[id].fresh) return;
         const v = ultimos.counts[id];
         if (typeof v === 'number' || typeof v === 'string') setVal(id, v, { sync: false });
       });
