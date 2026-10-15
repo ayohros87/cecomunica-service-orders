@@ -880,6 +880,9 @@ window.HomeSignals = (() => {
       if (!tile || !mount.contains(tile)) return;
       const id = tile.dataset.signal;
       const sig = SIGNALS[id];
+      // Uso (2026-10-15): qué señal se toca de verdad. `home.<id>` por clic
+      // (abrir el panel o navegar); el segundo clic, que cierra, no cuenta.
+      if (_panelAbierto !== id && window.Uso) Uso.accion(`home.${id}`);
       if (!sig || (typeof sig.items !== 'function' && typeof sig.panel !== 'function')) return; // tile normal: navega
       if (panel && !mount.contains(panel)) panel = null;
       ev.preventDefault();
@@ -1112,6 +1115,7 @@ window.HomeSignals = (() => {
       return;
     }
     mount._recontando = true;
+    if (forzar && window.Uso) Uso.accion('home.actualizar');
     const btns = mount.querySelectorAll('[data-signals-refresh]');
     btns.forEach(b => { b.disabled = true; });
     try {

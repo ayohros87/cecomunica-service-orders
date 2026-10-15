@@ -244,6 +244,16 @@
           const mod = card.getAttribute("data-mod");
           card.setAttribute("data-visible", visibles.has(mod) ? "true" : "false");
         });
+        // Uso (2026-10-15): ¿alguien navega por las tarjetas de módulo o solo
+        // por el rail? `home.modulo.<id>` por clic; el rail no se cuenta aquí.
+        const grid = document.getElementById('gridModulos');
+        if (!grid._usoWired) {
+          grid._usoWired = true;
+          grid.addEventListener('click', (ev) => {
+            const card = ev.target.closest('.mcard');
+            if (card && window.Uso) Uso.accion(`home.modulo.${card.getAttribute('data-mod')}`);
+          });
+        }
         if (effectiveRol === 'administrador') {
           document.getElementById('btnAdminPanel').style.display = '';
         }
