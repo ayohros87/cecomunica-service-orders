@@ -548,6 +548,13 @@ window.PocList = {
     // de cada cliente (_ordenarDentroDelCliente).
     const campoOrden    = (this._campoOrden === 'grupos' ? 'cliente' : this._campoOrden) || 'cliente';
     const direccionOrden = this._direccionAsc ? 'asc' : 'desc';
+    // "Activos" sin texto en el buscador (Brenda, 2026-10-17): la página del
+    // servidor no lo filtraba (solo la búsqueda y "Mostrar todo"), así que el
+    // segmento no hacía nada y "seleccionar todos" marcaba inactivos también.
+    // Índices activo+deleted+<orden> ya existen (los usa getAll).
+    const soloActivos   = !!document.getElementById('soloActivos')?.checked;
+    const soloInactivos = !!document.getElementById('soloInactivos')?.checked;
+    const filtroActivo  = soloActivos ? true : (soloInactivos ? false : null);
 
     // Watchdog for the "página pensando" report (F1). Firestore connectivity
     // intermittency can leave listPage pending forever, leaving the skeleton
@@ -569,7 +576,7 @@ window.PocList = {
     // verdad. El cursor y _noMasDatos SOLO se tocan en el pase de servidor.
     if (esReset) {
       PocService.listPage({
-        sortField: campoOrden, sortAsc: this._direccionAsc,
+        sortField: campoOrden, sortAsc: this._direccionAsc, activo: filtroActivo,
         cursorDoc: null, limit: 50, source: 'cache',
       }).then(({ docs }) => {
         if (_resuelto || !docs.length) return;   // el servidor ganó o caché frío
@@ -579,7 +586,7 @@ window.PocList = {
     }
 
     PocService.listPage({
-      sortField: campoOrden, sortAsc: this._direccionAsc,
+      sortField: campoOrden, sortAsc: this._direccionAsc, activo: filtroActivo,
       cursorDoc: this._lastDoc || null, limit: 50,
     }).then(({ docs, lastDoc }) => {
       _resuelto = true;
@@ -616,10 +623,12 @@ window.PocList = {
   // Compartido por el pase de servidor y el preview cache-first.
   _pintarPagina(tbody, docs) {
     const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
+    const soloActivos     = document.getElementById('soloActivos')?.checked;
     const soloInactivos   = document.getElementById('soloInactivos')?.checked;
     const soloSinContrato = document.getElementById('soloSinContrato')?.checked;
 
     this._ordenarDentroDelCliente(docs).forEach(d => {
+      if (soloActivos && !d.activo) return;      // la página ya viene filtrada; por si acaso (preview de caché)
       if (soloInactivos && d.activo) return;
       if (soloSinContrato && (d.contrato_id || d.contrato_doc_id || d.venta_factura)) return;
       if (soloIncompletos && !this._incompleta(d)) return;
@@ -1596,7 +1605,13 @@ window.PocList = {
   },
 
   toggleSeleccionMasiva(master) {
-    document.querySelectorAll('.seleccion-sim').forEach(cb => { cb.checked = master.checked; });
+    this.seleccionarTodo(!!master.checked);
+  },
+
+  // Marca (o desmarca) todas las filas de la lista. Lo usan la casilla del
+  // encabezado y el botón "Seleccionar los N" de la barra de arriba.
+  seleccionarTodo(marcar = true) {
+    document.querySelectorAll('#devicesTable .seleccion-sim').forEach(cb => { cb.checked = marcar; });
     this.actualizarSeleccion();
   },
 
@@ -1608,8 +1623,15 @@ window.PocList = {
     const todas = document.querySelectorAll('#devicesTable .seleccion-sim');
     const n = [...todas].filter(cb => cb.checked).length;
     // "16 de 48 seleccionados": el total de la lista al lado para que se vea
-    // de una vez si falta alguno (Brenda, 2026-10-16).
-    el.textContent = todas.length && n ? `${n} de ${todas.length} seleccionados` : `${n} ${n === 1 ? 'seleccionado' : 'seleccionados'}`;
+    // de una vez si falta alguno (Brenda, 2026-10-16). Sin nada marcado, un
+    // botón "Seleccionar los 48" a la vista: la casilla del encabezado es
+    // pequeña y Brenda no la encontraba (2026-10-17).
+    if (!n && todas.length && !PocState.esLectura()) {
+      el.innerHTML = `<button type="button" class="btn btn-ghost btn-sm" style="padding:0 6px;height:22px;font-size:12px;" onclick="PocList.seleccionarTodo(true)" title="Marca todos los radios de la lista (lo mismo que la casilla del encabezado)"><i data-lucide="check-square" style="width:13px;height:13px;"></i> Seleccionar los ${todas.length}</button>`;
+      if (window.Icons) Icons.pintar(el); else if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [el] });
+    } else {
+      el.textContent = todas.length && n ? `${n} de ${todas.length} seleccionados` : `${n} ${n === 1 ? 'seleccionado' : 'seleccionados'}`;
+    }
     el.classList.toggle('recibido', n > 0);
     // La casilla del encabezado refleja la selección (todo, nada o parte).
     const master = document.querySelector('#encabezadoTabla .check-all');

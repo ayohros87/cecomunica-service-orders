@@ -569,7 +569,12 @@ const PocService = {
   // source:'cache' lee SOLO la persistencia local (preview instantáneo; el
   // caller debe repintar con el pase de servidor — el cursor de un snapshot
   // de caché no es confiable para paginar).
-  async listPage({ sortField = 'cliente', sortAsc = true, onlyActivos = false, cursorDoc = null, limit = 50, source = null } = {}) {
+  // `activo`: true | false filtra en el servidor (segmento Activos/Inactivos
+  // sin texto en el buscador, Brenda 2026-10-17); null/undefined no filtra.
+  // Índices activo+deleted+<orden> en firestore.indexes.json. OJO: una ficha
+  // sin el campo `activo` no entra en ninguno de los dos (la lista la pinta
+  // como inactiva); son las que no pasaron por ninguna edición.
+  async listPage({ sortField = 'cliente', sortAsc = true, onlyActivos = false, activo = null, cursorDoc = null, limit = 50, source = null } = {}) {
     const db = firebase.firestore();
     let q = db.collection('poc_devices')
       .where('deleted', '!=', true)
@@ -577,6 +582,7 @@ const PocService = {
       .orderBy(this._sortFieldFor(sortField), sortAsc ? 'asc' : 'desc')
       .limit(limit);
     if (onlyActivos) q = q.where('activo', '==', true);
+    else if (activo === true || activo === false) q = q.where('activo', '==', activo);
     if (cursorDoc) q = q.startAfter(cursorDoc);
     const snap = await (source ? q.get({ source }) : q.get());
     return {
