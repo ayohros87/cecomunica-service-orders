@@ -279,6 +279,7 @@ window.PocState = {
       document.getElementById('btnNuevaConsola')?.remove();
       document.getElementById('btnVendedoresBatch')?.remove();
       document.getElementById('btnAdminGrupos')?.remove();  // solo admin/recepcion administran grupos
+      document.getElementById('btnDarDeBaja')?.remove();    // dar de baja escribe en las fichas
       document.querySelector('.check-all')?.setAttribute('disabled', 'disabled');
       document.getElementById('pocContratosWrap')?.remove(); // selección masiva por contrato: mismo criterio que el check-all
     }

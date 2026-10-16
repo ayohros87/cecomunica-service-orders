@@ -82,9 +82,21 @@ window.PocList = {
       return;
     }
     const v = document.getElementById('filtroValor')?.value.trim() || '';
-    if (v.length >= 2) this.filtrar();
+    if (v.length >= 2 || this._recientes()) this.filtrar();
     else if (!v) this.cargar(true);
     // 1 solo carácter: no barrer 5,000+ docs por una letra (ver filtrarDebounced)
+  },
+
+  // Chip "Baja reciente" (PocBaja): con él prendido la lista SIEMPRE sale de
+  // la búsqueda en memoria (el filtro es por fecha de baja, que la página del
+  // servidor no sabe pedir), con o sin texto en el buscador.
+  _recientes() { return !!document.getElementById('soloRecientes')?.checked; },
+
+  // Repinta según el buscador y los chips: con texto (o con "Baja reciente")
+  // se busca en memoria; sin nada, la página del servidor.
+  _recargar() {
+    const v = document.getElementById('filtroValor')?.value.trim() || '';
+    if (v || this._recientes()) this.filtrar(); else this.cargar(true);
   },
 
   // Buscador: debounce de 300 ms + mínimo 2 caracteres. Antes cada TECLA
@@ -98,7 +110,7 @@ window.PocList = {
         if (res) res.innerHTML = '<span class="resumen-badge">escribe al menos 2 caracteres…</span>';
         return;
       }
-      if (v) this.filtrar(); else this.cargar(true);
+      this._recargar();
     }, 300);
   },
 
@@ -342,6 +354,10 @@ window.PocList = {
       ? '<span class="status-dot status-activo" aria-hidden="true"></span> <span class="poc-estado-txt">Activo</span>'
       : '<span class="status-dot status-inactivo" aria-hidden="true"></span> <span class="poc-estado-txt">Inactivo</span>';
     tdEstado.title = d.activo ? 'Activo: el equipo está en servicio con el cliente' : 'Inactivo: la ficha sigue abierta pero el equipo no está en servicio';
+    // Sello de baja (PocBaja, Brenda 2026-10-16): cuándo y por qué pasó a
+    // inactivo, para distinguirlo de los que ya lo estaban. Una ficha cerrada
+    // ya lo dice con su chip "Cerrada".
+    if (!d.activo && !cerrada && window.PocBaja) tdEstado.insertAdjacentHTML('beforeend', PocBaja.subtextoHtml(d));
     row.appendChild(tdEstado);
 
     // serial (4), ip (5), unit_id (6), radio_name (7)
@@ -772,6 +788,8 @@ window.PocList = {
     const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
     const soloSinContrato = document.getElementById('soloSinContrato')?.checked;
     const incluirCerradas = document.getElementById('incluirCerradas')?.checked;
+    const soloRecientes   = this._recientes();
+    const ahora           = Date.now();
 
     // Las cerradas se suman al barrido vivo SOLO si el toggle está prendido:
     // la búsqueda de todos los días no paga esos ~1,800 docs.
@@ -791,6 +809,7 @@ window.PocList = {
           const nombreCliente = PocState.nombreClienteDe(d);
           const algunoVacio   = this._incompleta(d);
 
+          if (soloRecientes && !PocBaja.esReciente(d, ahora)) return;
           if (soloSinContrato && (d.contrato_id || d.contrato_doc_id || d.venta_factura)) return;
           if (soloIncompletos) {
             if (!algunoVacio) return;
@@ -798,7 +817,8 @@ window.PocList = {
           }
 
           const valorCampo = this._campoVisible(d, campo);
-          if (campo !== 'cliente' && (valorCampo == null || (typeof valorCampo === 'string' && valorCampo.trim() === ''))) return;
+          // Sin texto (solo pasa con "Baja reciente") no se descarta por campo vacío.
+          if (valor && campo !== 'cliente' && (valorCampo == null || (typeof valorCampo === 'string' && valorCampo.trim() === ''))) return;
 
           let contenido;
           if (campo === 'cliente')          contenido = nombreCliente.toLowerCase();
@@ -817,6 +837,13 @@ window.PocList = {
         // Respetar la columna de orden activa (antes la vista filtrada quedaba
         // clavada en created_at desc y "ordenar por Unit ID" no hacía nada).
         this._ordenarDocs(coincidencias, { porCliente: campo === 'cliente' });
+        // "Baja reciente": del día de baja más nuevo al más viejo; dentro del
+        // mismo día se conserva el orden de arriba (cliente, grupos, Unit ID),
+        // así las bajas de una misma tanda salen juntas. sort es estable.
+        if (soloRecientes) {
+          const dia = d => Math.floor(PocBaja.fechaMs(d) / 86400000);
+          coincidencias.sort((a, b) => dia(b) - dia(a));
+        }
         // Tope de pintado (2026-09-30): una búsqueda amplia (dos letras de un
         // cliente) podía pintar miles de filas de ~15 celdas y congelar la
         // página 1-4 s. Se pintan TOPE y el resto con "Mostrar más"; el
@@ -906,6 +933,8 @@ window.PocList = {
     document.getElementById('filtroCampo').value = 'cliente';
     const cerradas = document.getElementById('incluirCerradas');
     if (cerradas) cerradas.checked = false;
+    const recientes = document.getElementById('soloRecientes');
+    if (recientes) recientes.checked = false;
     document.getElementById('resumenEquipos').innerHTML =
       '<div class="loader" style="width:24px;height:24px;border-width:3px;"></div>';
     this.cargar(true);
@@ -967,18 +996,25 @@ window.PocList = {
     const i = document.getElementById('soloInactivos');
     if (a) a.checked = valor === 'activos';
     if (i) i.checked = valor === 'inactivos';
-    const valorFiltro = document.getElementById('filtroValor').value.trim();
-    if (valorFiltro) this.filtrar(); else this.cargar(true);
+    // "Activos" y "Baja reciente" se excluyen: el chip es de inactivos.
+    if (valor === 'activos') { const r = document.getElementById('soloRecientes'); if (r) r.checked = false; }
+    this._recargar();
   },
 
-  manejarCambioIncompletos() {
-    const valorFiltro = document.getElementById('filtroValor').value.trim();
-    if (valorFiltro) this.filtrar(); else this.cargar(true);
-  },
+  manejarCambioIncompletos() { this._recargar(); },
 
-  manejarCambioSinContrato() {
-    const valorFiltro = document.getElementById('filtroValor').value.trim();
-    if (valorFiltro) this.filtrar(); else this.cargar(true);
+  manejarCambioSinContrato() { this._recargar(); },
+
+  // Chip "Baja reciente" (PocBaja, Brenda 2026-10-16). Con "Activos" marcado
+  // no habría resultados posibles: el segmento vuelve a "Todos".
+  manejarCambioRecientes() {
+    if (this._recientes() && document.getElementById('soloActivos')?.checked) {
+      const seg = document.querySelector('input[name="pocEstadoActivo"][value="todos"]');
+      if (seg) seg.checked = true;
+      const a = document.getElementById('soloActivos');
+      if (a) a.checked = false;
+    }
+    this._recargar();
   },
 
   // "Incluir cerradas" solo tiene sentido BUSCANDO: la lista de todos los días
@@ -1569,9 +1605,18 @@ window.PocList = {
   actualizarSeleccion() {
     const el = document.getElementById('resumenSeleccionados');
     if (!el) return;
-    const n = document.querySelectorAll('#devicesTable .seleccion-sim:checked').length;
-    el.textContent = `${n} ${n === 1 ? 'seleccionado' : 'seleccionados'}`;
+    const todas = document.querySelectorAll('#devicesTable .seleccion-sim');
+    const n = [...todas].filter(cb => cb.checked).length;
+    // "16 de 48 seleccionados": el total de la lista al lado para que se vea
+    // de una vez si falta alguno (Brenda, 2026-10-16).
+    el.textContent = todas.length && n ? `${n} de ${todas.length} seleccionados` : `${n} ${n === 1 ? 'seleccionado' : 'seleccionados'}`;
     el.classList.toggle('recibido', n > 0);
+    // La casilla del encabezado refleja la selección (todo, nada o parte).
+    const master = document.querySelector('#encabezadoTabla .check-all');
+    if (master) {
+      master.checked = todas.length > 0 && n === todas.length;
+      master.indeterminate = n > 0 && n < todas.length;
+    }
   },
 
   // ── Contratos recientes (selección de un batch completo) ─────────
@@ -1707,7 +1752,7 @@ window.PocList = {
         ['device_id','ID'],['cliente_name','Cliente'],['cliente_id','Cliente ID'],
         ['operador','Operador'],['serial','Serial'],['unit_id','Unit ID'],
         ['sim_number','SIM'],['sim_phone','Teléfono'],['ip','IP'],
-        ['gps','GPS'],['activo','Activo'],['radio_name','Nombre del Radio'],
+        ['gps','GPS'],['activo','Activo'],['inactivo_desde_fmt','Inactivo desde'],['inactivo_motivo_txt','Motivo de baja'],['radio_name','Nombre del Radio'],
         ['modelo','Modelo'],['grupos','Grupos'],['notas','Notas'],
         ['created_at_fmt','Creado'],['updated_at_fmt','Modificado'],['updated_by_email','Actualizado por']
       ];
@@ -1721,6 +1766,8 @@ window.PocList = {
           serial: d.serial || '', unit_id: d.unit_id || '',
           sim_number: d.sim_number || '', sim_phone: d.sim_phone || '', ip: d.ip || '',
           gps: d.gps === true ? 'Sí' : 'No', activo: d.activo === false ? 'No' : 'Sí',
+          inactivo_desde_fmt: (!d.activo && PocBaja.fechaMs(d)) ? f(d.inactivo_desde) || FMT.date(new Date(PocBaja.fechaMs(d))) : '',
+          inactivo_motivo_txt: !d.activo ? [PocBaja.textoMotivo(d.inactivo_motivo), d.inactivo_detalle].filter(Boolean).join(' — ') : '',
           radio_name: d.radio_name || '', modelo: PocState.obtenerModeloTexto(d),
           grupos: gruposTxt, notas: d.notas || '',
           created_at_fmt: f(d.created_at), updated_at_fmt: f(d.updated_at),

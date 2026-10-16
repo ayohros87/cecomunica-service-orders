@@ -270,6 +270,23 @@ window.PocEdit = {
         });
       }
 
+      // Baja / reactivación (PocBaja, Brenda 2026-10-16): al pasar a inactivo
+      // se pide el motivo y la ficha queda sellada con fecha; al volver a
+      // activo se borra el sello. `activo` ausente se lee como inactivo, igual
+      // que la lista lo pinta.
+      const estabaActivo = !!originalData?.activo;
+      const quedaActivo  = !!updatePayload.activo;
+      if (estabaActivo && !quedaActivo) {
+        const baja = await PocBaja.pedirMotivo({
+          n: 1, confirmLabel: 'Guardar',
+          extraHtml: `<b>${FMT.esc(updatePayload.serial || originalData?.unit_id || 'El radio')}</b> pasa a <b>inactivo</b>. La ficha no se cierra: el radio sigue con el cliente y se puede reactivar.`,
+        });
+        if (!baja) return;
+        Object.assign(updatePayload, PocBaja.sello(user, baja));
+      } else if (!estabaActivo && quedaActivo) {
+        Object.assign(updatePayload, PocBaja.limpieza(originalData || {}));
+      }
+
       // SIM que ya está en otro radio: avisa con el radio y el cliente y pide
       // motivo; no bloquea (auditoría de módulos 2026-10-01, PoC R2/D2). Solo
       // si el SIM cambió, para no trancar la edición de otros campos.
@@ -307,6 +324,9 @@ window.PocEdit = {
         // when the user cleared the modelo we must also drop the inherited FK.
         if (!newModeloId) delete mergedData.modelo_id;
       }
+      // Los FieldValue.delete() del sello no sobreviven a stripSentinels:
+      // al reactivar, el snapshot de la fila también se queda sin sello.
+      if (!estabaActivo && quedaActivo) PocBaja.CAMPOS.forEach(k => delete mergedData[k]);
 
       // Equipo desactivado con SIM → ofrecer devolver el SIM al pool.
       const liberados = await SimLiberar.procesarDesactivados([

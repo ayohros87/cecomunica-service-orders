@@ -184,7 +184,19 @@ window.PocBulk = {
     const revisionSim = simItems.length ? await PocSimConflicto.revisar(simItems) : null;
     if (revisionSim?.cancelado) return;
 
-    if (!await Modal.confirm({ message: `Vas a actualizar ${filas.length} equipos. ¿Confirmas continuar?` })) return;
+    // Bajas (PocBaja, Brenda 2026-10-16): si alguna fila pasa de activo a
+    // inactivo, la confirmación pide el motivo UNA vez para todas y cada
+    // ficha queda sellada con fecha; las que vuelven a activo pierden el sello.
+    const bajas = filas.filter(f => !!f.prev.activo && !f.activo);
+    let sello = null;
+    if (bajas.length) {
+      const r = await PocBaja.pedirMotivo({
+        n: bajas.length, titulo: 'Guardar edición masiva', confirmLabel: 'Guardar',
+        extraHtml: `Vas a actualizar <b>${filas.length}</b> equipos; <b>${bajas.length}</b> ${bajas.length === 1 ? 'pasa' : 'pasan'} a <b>inactivo</b>.`,
+      });
+      if (!r) return;
+      sello = PocBaja.sello(user, r);
+    } else if (!await Modal.confirm({ message: `Vas a actualizar ${filas.length} equipos. ¿Confirmas continuar?` })) return;
 
     // 3) Escribir fila por fila; un fallo no aborta las demás.
     let actualizados = 0;
@@ -210,6 +222,10 @@ window.PocBulk = {
             if (k in prevData) newData[k] = firebase.firestore.FieldValue.delete();
           });
         }
+        const esBaja = !!prevData.activo && !f.activo;
+        const esAlta = !prevData.activo && f.activo;
+        if (esBaja && sello) Object.assign(newData, sello);
+        else if (esAlta)     Object.assign(newData, PocBaja.limpieza(prevData));
         if (simCambiados.has(f.id)) {
           const sc = PocSimConflicto.campo(revisionSim, f.id, user);
           if (sc) newData.sim_conflicto = sc;
@@ -221,16 +237,20 @@ window.PocBulk = {
         // top level of an update — strip them before embedding newData in the
         // audit log.
         const cleanFields = PocService.stripSentinels(newData);
+        // Al reactivar, los FieldValue.delete() del sello no pasan el strip:
+        // el "después" del log y de la liberación se queda sin sello a mano.
+        const despues = esAlta ? PocBaja.sinSello({ ...prevData, ...cleanFields }) : { ...prevData, ...cleanFields };
 
         PocService.addLog({
           equipo_id: f.id,
           fecha:     firebase.firestore.FieldValue.serverTimestamp(),
           usuario:   user?.email,
+          ...(esBaja && sello ? { accion: 'baja', motivo: PocBaja.textoMotivo(sello.inactivo_motivo) + (sello.inactivo_detalle ? ` — ${sello.inactivo_detalle}` : '') } : {}),
           ...(cleanFields.sim_conflicto ? { motivo: cleanFields.sim_conflicto.motivo, sim_conflicto: cleanFields.sim_conflicto } : {}),
-          cambios:   { antes: prevData, despues: { ...prevData, ...cleanFields } }
+          cambios:   { antes: prevData, despues }
         }).catch(e => console.warn('poc_log write failed (non-critical):', e));
 
-        cambiosParaLiberar.push({ id: f.id, antes: prevData, despues: { ...prevData, ...cleanFields } });
+        cambiosParaLiberar.push({ id: f.id, antes: prevData, despues });
 
         // SIM tecleado a mano en un equipo que sigue activo y que existe
         // disponible en el pool → marcarlo asignado. Best-effort.

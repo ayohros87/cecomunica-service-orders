@@ -85,6 +85,10 @@
             <i data-lucide="more-horizontal"></i> Más <i data-lucide="chevron-down" class="menu-caret"></i>
           </button>
           <div class="overflow-menu-dropdown" id="pocMasDrop">
+            <!-- Baja con fecha y motivo (Brenda, 2026-10-16): pasa a inactivo los
+                 radios ACTIVOS seleccionados sin el tope de 25 de la edición en
+                 masa, copia los seriales y arma el correo de desconexión. -->
+            <button id="btnDarDeBaja" class="overflow-menu-item" onclick="PocBaja.darDeBaja()" title="Pasa a inactivo los radios activos seleccionados, con fecha y motivo; copia los seriales y arma el correo para pedir la desconexión"><i data-lucide="power-off"></i> Dar de baja (desconexión)…</button>
             <button id="btnExportar" class="overflow-menu-item" onclick="PocList.exportarExcelSeleccionados()"><i data-lucide="upload"></i> Exportar a Excel</button>
             <a id="btnAdminGrupos" class="overflow-menu-item" href="../admin/grupos.html" title="Catálogo de grupos por empresa: agregar, renombrar, fusionar y eliminar"><i data-lucide="tags"></i> Administrar grupos</a>
           </div>
@@ -136,6 +140,11 @@
              SIM que tenían — es como recepción pide la desconexión del airtime
              después de cerrar la devolución. -->
         <label class="toggle-pill" title="Trae también las fichas cerradas: equipos que el cliente ya devolvió, con el SIM que tenían"><input type="checkbox" id="incluirCerradas" onchange="PocList.manejarCambioCerradas()"> <i data-lucide="archive" style="width:14px;height:14px;"></i> Incluir cerradas</label>
+        <!-- Baja reciente (Brenda, 2026-10-16): los radios que pasaron a inactivo
+             en los últimos 60 días (sello PocBaja), del más nuevo al más viejo,
+             separados de los que ya estaban inactivos. Con o sin texto en el
+             buscador; combina con el filtro por cliente. -->
+        <label class="toggle-pill" title="Radios dados de baja en los últimos 60 días, del más reciente al más viejo: los que acaban de pasar a inactivo, separados de los que ya lo estaban"><input type="checkbox" id="soloRecientes" onchange="PocList.manejarCambioRecientes()"> <i data-lucide="clock" style="width:14px;height:14px;"></i> Baja reciente</label>
 
         <!-- Selección rápida por contrato: los últimos contratos con equipos POC.
              Elegir uno filtra la tabla a ese contrato y deja TODOS seleccionados,
@@ -169,7 +178,7 @@
         <table class="app-table" aria-label="Base PoC">
           <thead>
             <tr id="encabezadoTabla">
-              <th style="width:36px;"><input type="checkbox" onclick="PocList.toggleSeleccionMasiva(this)" class="check-all" aria-label="Seleccionar todos"></th>
+              <th style="width:36px;"><input type="checkbox" onclick="PocList.toggleSeleccionMasiva(this)" class="check-all" aria-label="Seleccionar todos" title="Seleccionar todos los radios de la lista"></th>
               <th class="sortable" onclick="PocList.ordenarPor('cliente')">Cliente</th>
               <th>Operador</th>
               <th>Activo</th>

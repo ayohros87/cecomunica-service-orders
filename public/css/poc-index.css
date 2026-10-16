@@ -45,6 +45,8 @@ table.app-table tbody tr:nth-child(even):hover { background: var(--brand-soft); 
 .status-inactivo  { background:#ef4444; }
 .poc-estado-cell  { white-space: nowrap; }
 .poc-estado-txt   { font-size: 12px; color: var(--fg-3); vertical-align: 1px; }
+/* Sello de baja (PocBaja): "desde 14/10/2026 · Falta de pago" bajo "Inactivo" */
+.poc-inactivo-sub { display:block; font-size:10.5px; line-height:1.2; margin-top:2px; color:var(--fg-3); white-space:nowrap; }
 /* Segmento Todos/Activos/Inactivos */
 .poc-seg { display:inline-flex; border:1px solid var(--border-default); border-radius:var(--radius-pill); overflow:hidden; background:var(--surface-sunken); }
 .poc-seg label { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; font-size:12px; font-weight:500; color:var(--fg-2); cursor:pointer; white-space:nowrap; }
