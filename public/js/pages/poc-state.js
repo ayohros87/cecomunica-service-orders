@@ -281,6 +281,7 @@ window.PocState = {
       document.getElementById('btnAdminGrupos')?.remove();  // solo admin/recepcion administran grupos
       document.getElementById('btnDarDeBaja')?.remove();    // dar de baja escribe en las fichas
       document.querySelector('.check-all')?.setAttribute('disabled', 'disabled');
+      document.querySelector('.check-activos')?.setAttribute('disabled', 'disabled');
       document.getElementById('pocContratosWrap')?.remove(); // selección masiva por contrato: mismo criterio que el check-all
     }
   }

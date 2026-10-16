@@ -181,7 +181,9 @@
               <th style="width:36px;"><input type="checkbox" onclick="PocList.toggleSeleccionMasiva(this)" class="check-all" aria-label="Seleccionar todos" title="Seleccionar todos los radios de la lista"></th>
               <th class="sortable" onclick="PocList.ordenarPor('cliente')">Cliente</th>
               <th>Operador</th>
-              <th>Activo</th>
+              <!-- Casilla junto a "Activo" (Brenda, 2026-10-17): marca SOLO los
+                   radios activos de la lista, sin cambiar el segmento. -->
+              <th style="white-space:nowrap;"><label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="check-activos" onclick="PocList.seleccionarActivos(this.checked)" aria-label="Seleccionar solo los radios activos" title="Seleccionar solo los radios activos de la lista"> Activo</label></th>
               <th>Serial</th>
               <th>IP</th>
               <th class="sortable" onclick="PocList.ordenarPor('unit_id')">Unit ID</th>

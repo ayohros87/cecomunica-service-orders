@@ -1615,6 +1615,20 @@ window.PocList = {
     this.actualizarSeleccion();
   },
 
+  // Marca (o desmarca) SOLO los radios activos de la lista, sin tocar los
+  // inactivos: la casilla junto a "Activo" en el encabezado (Brenda,
+  // 2026-10-17) y el botón "solo los N activos" de la barra. Así, con el
+  // cliente en "Todos", se seleccionan de un clic los que hay que desconectar.
+  seleccionarActivos(marcar = true) {
+    const COL = PocState.COL;
+    document.querySelectorAll('#devicesTable tr[data-id]').forEach(r => {
+      if (r.cells[COL.activo]?.dataset.activo !== 'true') return;
+      const cb = r.querySelector('.seleccion-sim');
+      if (cb) cb.checked = marcar;
+    });
+    this.actualizarSeleccion();
+  },
+
   // Live count of checked rows, shown in the top summary strip. Lets the user
   // see "X de N" at a glance (e.g. 13 de 14) without printing the list.
   actualizarSeleccion() {
@@ -1626,18 +1640,30 @@ window.PocList = {
     // de una vez si falta alguno (Brenda, 2026-10-16). Sin nada marcado, un
     // botón "Seleccionar los 48" a la vista: la casilla del encabezado es
     // pequeña y Brenda no la encontraba (2026-10-17).
+    const COL = PocState.COL;
+    const filasActivas = [...document.querySelectorAll('#devicesTable tr[data-id]')].filter(r => r.cells[COL.activo]?.dataset.activo === 'true');
+    const nActivos = filasActivas.length;
+    const nActivosMarcados = filasActivas.filter(r => r.querySelector('.seleccion-sim')?.checked).length;
     if (!n && todas.length && !PocState.esLectura()) {
-      el.innerHTML = `<button type="button" class="btn btn-ghost btn-sm" style="padding:0 6px;height:22px;font-size:12px;" onclick="PocList.seleccionarTodo(true)" title="Marca todos los radios de la lista (lo mismo que la casilla del encabezado)"><i data-lucide="check-square" style="width:13px;height:13px;"></i> Seleccionar los ${todas.length}</button>`;
+      const btn = (fn, titulo, texto) => `<button type="button" class="btn btn-ghost btn-sm" style="padding:0 6px;height:22px;font-size:12px;" onclick="PocList.${fn}(true)" title="${titulo}"><i data-lucide="check-square" style="width:13px;height:13px;"></i> ${texto}</button>`;
+      el.innerHTML = btn('seleccionarTodo', 'Marca todos los radios de la lista (lo mismo que la casilla del encabezado)', `Seleccionar los ${todas.length}`)
+        // Lista mezclada: también "solo los N activos" (Brenda, 2026-10-17).
+        + (nActivos && nActivos < todas.length ? ' ' + btn('seleccionarActivos', 'Marca solo los radios activos de la lista (lo mismo que la casilla junto a "Activo")', `solo los ${nActivos} activos`) : '');
       if (window.Icons) Icons.pintar(el); else if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [el] });
     } else {
       el.textContent = todas.length && n ? `${n} de ${todas.length} seleccionados` : `${n} ${n === 1 ? 'seleccionado' : 'seleccionados'}`;
     }
     el.classList.toggle('recibido', n > 0);
-    // La casilla del encabezado refleja la selección (todo, nada o parte).
+    // Las casillas del encabezado reflejan la selección (todo, nada o parte).
     const master = document.querySelector('#encabezadoTabla .check-all');
     if (master) {
       master.checked = todas.length > 0 && n === todas.length;
       master.indeterminate = n > 0 && n < todas.length;
+    }
+    const chkActivos = document.querySelector('#encabezadoTabla .check-activos');
+    if (chkActivos) {
+      chkActivos.checked = nActivos > 0 && nActivosMarcados === nActivos;
+      chkActivos.indeterminate = nActivosMarcados > 0 && nActivosMarcados < nActivos;
     }
   },
 

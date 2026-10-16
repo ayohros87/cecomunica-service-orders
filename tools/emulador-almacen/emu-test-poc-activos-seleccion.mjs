@@ -63,7 +63,33 @@ await p.click('#resumenSeleccionados button');
 await s.quieto(300);
 ok((await resumen()) === `${f.length} de ${f.length} seleccionados`, `cliente + botón: "${await resumen()}"`);
 
-const errores = s.errores.filter(e => !/favicon|rebotó a login/.test(e));
+// 8. El caso de Brenda (2026-10-17): cliente en "Todos", lista mezclada, casilla
+//    junto a "Activo" → marca SOLO los activos; el botón "solo los N activos" también.
+await p.click('input[name="pocEstadoActivo"][value="todos"]');
+await s.quieto(1500);
+const mezcla = await p.evaluate(() => [...document.querySelectorAll('#devicesTable tr[data-id]')].map(r => r.cells[3]?.dataset.activo === 'true'));
+const nAct = mezcla.filter(Boolean).length;
+ok(mezcla.length > nAct && nAct > 0, `cliente en Todos: ${mezcla.length} filas, ${nAct} activas`);
+ok(new RegExp(`^Seleccionar los ${mezcla.length} solo los ${nAct} activos$`).test(await resumen()), `barra mezclada: "${await resumen()}"`);
+await p.click('#encabezadoTabla .check-activos');
+await s.quieto(300);
+let marcados = await p.evaluate(() => [...document.querySelectorAll('#devicesTable tr[data-id]')].filter(r => r.querySelector('.seleccion-sim').checked).map(r => r.cells[3]?.dataset.activo === 'true'));
+ok(marcados.length === nAct && marcados.every(Boolean), `casilla "Activo": ${marcados.length} marcados, todos activos`);
+ok((await resumen()) === `${nAct} de ${mezcla.length} seleccionados`, `resumen: "${await resumen()}"`);
+ok(await p.evaluate(() => { const m = document.querySelector('#encabezadoTabla .check-all'); return !m.checked && m.indeterminate; }), 'la casilla general queda en "parte"');
+await s.captura('09-solo-activos-marcados');
+await p.click('#encabezadoTabla .check-activos');
+await s.quieto(300);
+ok((await resumen()).startsWith(`Seleccionar los ${mezcla.length}`), `desmarcar la casilla "Activo" limpia la selección: "${await resumen()}"`);
+await p.click('#resumenSeleccionados button:nth-of-type(2)');
+await s.quieto(300);
+marcados = await p.evaluate(() => [...document.querySelectorAll('#devicesTable tr[data-id]')].filter(r => r.querySelector('.seleccion-sim').checked).map(r => r.cells[3]?.dataset.activo === 'true'));
+ok(marcados.length === nAct && marcados.every(Boolean), `botón "solo los N activos": ${marcados.length} marcados, todos activos`);
+ok(await p.evaluate(() => document.querySelector('#encabezadoTabla .check-activos').checked), 'la casilla "Activo" refleja la selección');
+
+// El 400 suelto es el cierre del canal de Firestore del emulador al cambiar de
+// segmento (no es una petición de la página: el logger de arriba no lo ve).
+const errores = s.errores.filter(e => !/favicon|rebotó a login|status of 400/.test(e));
 ok(!errores.length, 'sin errores de consola ' + JSON.stringify(errores.slice(0, 5)));
 await s.browser.close();
 console.log(fallos.length ? `\n${fallos.length} FALLO(S)` : '\nTODO OK');
