@@ -101,19 +101,28 @@ Object.assign(window.Centro, {
     // Selector compartido (P4): buscador, un grupo por contrato de origen,
     // luego custodia y migración; "Todos continúan" también por grupo. Con
     // 273 radios el modal medía 18,956 px y nadie revisaba 273 destinos.
-    const grupoDe = (fuente, u) => fuente === 'origen'
-      ? { grupo: u.asignacion?.contrato_doc_id || '__sin', grupoLabel: `Contrato ${u.asignacion?.contrato_id || ''}`.trim(), orden: 0 }
+    // Radios de un contrato vigente que NO se marcó como origen (2026-10-20,
+    // Zuleika, FETRATEDA: 14 radios, renueva 12 — la adición y el reemplazo de
+    // junio siguen en sus propios contratos). No entran en el plan: se ven,
+    // sin destino, y "Incluirlo en la renovación" los vuelve a meter. Antes
+    // no había destino para "sigue en su contrato" y la línea nunca cuadraba.
+    const fuera = ({ fuente, deOrigen }) => fuente === 'origen' && !deOrigen;
+    const grupoDe = (fuente, u, deOrigen) => fuente === 'origen'
+      ? { grupo: u.asignacion?.contrato_doc_id || '__sin', orden: deOrigen ? 0 : 7e8,
+          grupoLabel: `Contrato ${u.asignacion?.contrato_id || ''}`.trim() + (deOrigen ? '' : ' · sigue en su contrato, fuera de esta renovación') }
       : fuente === 'custodia' ? { grupo: '__custodia', grupoLabel: 'En campo · sin contrato', orden: 8e8 }
       : { grupo: '__migracion', grupoLabel: 'Migración · sin verificar', orden: 8.5e8 };
     const filas = [
-      ...unidades.map(({ u, fuente }) => ({
-        ...grupoDe(fuente, u), ok: true,
-        busca: `${u.serial || u.id} ${u.modelo_label || ''} ${u.asignacion?.contrato_id || ''}`,
+      ...unidades.map((x) => ({
+        ...grupoDe(x.fuente, x.u, x.deOrigen), ok: true,
+        busca: `${x.u.serial || x.u.id} ${x.u.modelo_label || ''} ${x.u.asignacion?.contrato_id || ''}`,
         celdas: `
-        <td class="cg-mono">${this.esc(u.serial || u.id)}</td>
-        <td>${this.esc(u.modelo_label || '—')}${u.propiedad === 'cliente' ? ' <span style="color:var(--fg-4); font-size:11px;">del cliente</span>' : ''}</td>
-        <td style="font-size:12.5px;">${this._wcFuenteHtml(fuente, u)}</td>
-        <td>${this._wcDestinoCelda(u.id, { destino: S.destinos[u.id] || '', reemplazo: S.reemplazos[u.id] || '', refurbished: !!S.refurb[u.id] })}</td>`,
+        <td class="cg-mono">${this.esc(x.u.serial || x.u.id)}</td>
+        <td>${this.esc(x.u.modelo_label || '—')}${x.u.propiedad === 'cliente' ? ' <span style="color:var(--fg-4); font-size:11px;">del cliente</span>' : ''}</td>
+        <td style="font-size:12.5px;">${this._wcFuenteHtml(x.fuente, x.u)}</td>
+        <td>${fuera(x)
+          ? '<span style="font-size:12.5px; color:var(--fg-3);">Sigue en su contrato — no entra en esta renovación</span>'
+          : this._wcDestinoCelda(x.u.id, { destino: S.destinos[x.u.id] || '', reemplazo: S.reemplazos[x.u.id] || '', refurbished: !!S.refurb[x.u.id] })}</td>`,
       })),
       ...agregados.map((a, i) => ({
         grupo: '__agregados', grupoLabel: 'Agregados por ti', orden: -1, grupoAbierto: true, ok: true,
@@ -132,9 +141,18 @@ Object.assign(window.Centro, {
     ];
     const vacio = !filas.length;
     const ss = vacio ? { barra: '', cuerpo: '' } : this._ssHtml('wcp', filas, { colspan: 4, modo: 'destinos', placeholder: 'Serial, modelo o contrato…',
-      accionesGrupo: (k) => k === '__agregados' ? '' : `
-        <button type="button" class="btn btn-ghost cg-act" style="padding:1px 8px; font-size:12px;" onclick="Centro._wcMarcarGrupo('${this.esc(k)}','continua')">Todos continúan</button>
-        <button type="button" class="btn btn-ghost cg-act" style="padding:1px 8px; font-size:12px;" onclick="Centro._wcMarcarGrupo('${this.esc(k)}','no_tiene')">Ninguno lo tiene</button>` });
+      accionesGrupo: (k) => {
+        if (k === '__agregados') return '';
+        const btn = (on, txt) => `<button type="button" class="btn btn-ghost cg-act" style="padding:1px 8px; font-size:12px;" onclick="${on}">${txt}</button>`;
+        // Un contrato del sistema se mete o se saca de la renovación desde su
+        // grupo (es el mismo check de "Contratos que se renuevan"). Con el
+        // contrato ya aprobado (_wcSoloPlan) el origen no se toca.
+        const contrato = !k.startsWith('__') && document.querySelector(`input[data-wco][value="${this._cssEsc(k)}"]`);
+        if (contrato && !ids.includes(k)) return this._wcSoloPlan ? '' : btn(`Centro._wcOrigenToggle('${this.esc(k)}', true)`, 'Incluirlo en la renovación');
+        return btn(`Centro._wcMarcarGrupo('${this.esc(k)}','continua')`, 'Todos continúan')
+          + btn(`Centro._wcMarcarGrupo('${this.esc(k)}','no_tiene')`, 'Ninguno lo tiene')
+          + (contrato && !this._wcSoloPlan ? btn(`Centro._wcOrigenToggle('${this.esc(k)}', false)`, 'Dejarlo fuera (sigue en su contrato)') : '');
+      } });
     cont.innerHTML = `
       ${vacio ? `<p style="font-size:12.5px; color:var(--fg-3); margin:0 0 8px;">El sistema no le atribuye ningún serial a este cliente. Agrega abajo los que tiene, o confirma que la cuenta no tiene equipos con serial.</p>
           <label class="cg-toggle" style="margin-bottom:8px;"><input type="checkbox" id="wcSinSeriales" ${S.sinSeriales ? 'checked' : ''} onchange="Centro._wcPlanState.sinSeriales=this.checked; Centro._wcConciliar()"> Confirmo que el cliente no tiene equipos con serial que declarar</label>`
@@ -168,6 +186,19 @@ Object.assign(window.Centro, {
     });
     this._wcConciliar();
     this._ssContar('wcp');
+  },
+
+  // Marca o desmarca un contrato como origen de la renovación desde su grupo
+  // del plan y re-pinta. Sin ningún origen marcado, OrigenContrato pide al
+  // guardar el escape "contrato de papel" con su referencia.
+  _wcOrigenToggle(docId, incluir) {
+    const chk = document.querySelector(`input[data-wco][value="${this._cssEsc(docId)}"]`);
+    if (!chk) return;
+    chk.checked = !!incluir;
+    this._wcSyncPlan();
+    if (!incluir && !this._wcOrigenIds().length && !document.getElementById('wcLegacy')?.checked) {
+      Toast.show('Ya no queda ningún contrato del sistema en la renovación: marca «El contrato original es de papel» y anota su referencia', 'warn');
+    }
   },
 
   _wcQuitarAgregado(i) {
@@ -308,6 +339,7 @@ Object.assign(window.Centro, {
       <div style="font-size:12.5px; color:var(--fg-3);">${this.esc(TransicionPlan.resumen(plan))}</div>
       ${partes.length ? `<div style="display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; margin-top:4px;">${partes.join('')}
         ${desajuste && !this._wcSoloPlan ? `<button type="button" class="btn btn-ghost cg-act" onclick="Centro._wcCuadrar()">Cuadrar cantidades con los seriales</button>` : ''}</div>` : ''}
+      ${desajuste && !this._wcSoloPlan ? `<div style="font-size:12px; color:var(--fg-3); margin-top:2px;">“Cuadrar” sube la línea a los seriales. ¿Renuevas <b>menos</b>? Los radios de un contrato que sigue aparte se sacan con “Dejarlo fuera” en su grupo; los que salen, con “Se devuelve”.</div>` : ''}
       ${corrige}${sinLinea}${otraMod}
       ${faltaModelo ? '<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;">Elige el modelo de cada serial agregado sin ficha.</div>' : ''}`;
     return { ok: !sinDestino && !desajuste && !r.sinLinea.length && !faltaModelo, plan, desajuste, sinLinea: r.sinLinea, faltaModelo, sinDestino, modalidad, otraModalidad: r.otraModalidad || [], modeloCorregido: r.modeloCorregido || [] };
