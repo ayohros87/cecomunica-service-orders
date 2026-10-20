@@ -69,3 +69,18 @@ test("el HTML escapa y pinta el bloque", () => {
   assert.match(html, /&lt;P1&gt;/);
   assert.match(html, /en 2 equipos/);
 });
+
+test("venta con el Nº de parte en `spec` no es una cotización de taller (COT-2026-0173)", () => {
+  const items = [
+    { modelo: "", nombre: "SC2020: 380-430MHz", spec: "1-19000-00011", equipo: null, cant: 3, precio: 900, desc: 0 },
+    { modelo: "", nombre: "SC20 High Capacity Battery", spec: "300-01853", equipo: null, cant: 3, precio: 0, desc: 0 },
+    { modelo: "", nombre: "SC20 1/4 wave Antenna", spec: "300-00418", equipo: null, cant: 3, precio: 0, desc: 0 },
+  ];
+  assert.deepEqual(T.resumenPiezas(items), []);
+  assert.equal(T.resumenPiezasHtml(items), "");
+  assert.equal(T.agruparPorEquipo(items).length, 1);
+  // El Nº de parte sigue saliendo, bajo su renglón y no como encabezado de grupo.
+  const html = T.filasPorEquipoHtml(items);
+  assert.ok(!html.includes("cq-grp"));
+  assert.ok(html.includes("300-01853"));
+});

@@ -218,17 +218,27 @@ window.CotizacionTotales = {
     const grupos = new Map();
     (items || []).forEach((it) => {
       const eq = it.equipo || null;
+      // Solo el texto que arma el taller ("Equipo: Serie …") identifica un
+      // radio. En una cotización comercial `spec` es texto libre del renglón
+      // —p.ej. el Nº de parte— y agrupar por él hacía de cada renglón un
+      // "equipo" (COT-2026-0173, venta: salía el Resumen de piezas).
+      const spec = this.esSpecEquipo(it.spec) ? String(it.spec).trim() : '';
       // La clave prefiere el id del equipo, pero cae al par serial+modelo: los
       // equipos de órdenes viejas no siempre traen id (ver prepararEquipos).
       const key = eq
         ? `eq:${eq.id || `${eq.serial || ''}|${eq.modelo || ''}`}`
-        : `spec:${String(it.spec || '').trim()}`;
+        : `spec:${spec}`;
       if (!grupos.has(key)) {
-        grupos.set(key, { key, equipo: eq, spec: String(it.spec || '').trim(), items: [] });
+        grupos.set(key, { key, equipo: eq, spec, items: [] });
       }
       grupos.get(key).items.push(it);
     });
     return [...grupos.values()];
+  },
+
+  /** ¿`spec` es el contexto del radio que estampa el taller (cotizar-orden.js)? */
+  esSpecEquipo(spec) {
+    return /^Equipo:/i.test(String(spec || '').trim());
   },
 
   /**
@@ -306,13 +316,16 @@ window.CotizacionTotales = {
       const filas = g.items.map((it) => {
         const esAlq = this.esAlquiler(it);
         const pctLinea = Number(it?.desc || 0);
+        // `spec` libre de una cotización comercial (Nº de parte, descripción)
+        // va bajo el renglón; el del taller ya salió en el encabezado.
+        const specLibre = this.esSpecEquipo(it.spec) ? '' : String(it.spec || '').trim();
         n++;
         return `
         <tr>
           <td class="idx">${String(n).padStart(2, '0')}</td>
           <td>
             <div class="cq-desc">${esc(it.nombre)}</div>
-            ${it.modelo ? `<div class="cq-spec"><span class="cq-model">${esc(it.modelo)}</span></div>` : ''}
+            ${it.modelo || specLibre ? `<div class="cq-spec">${it.modelo ? `<span class="cq-model">${esc(it.modelo)}</span>` : ''}${it.modelo && specLibre ? ' · ' : ''}${esc(specLibre)}</div>` : ''}
           </td>
           <td class="qty">${esc(it.cant)}</td>
           ${hayAlquiler ? `<td class="c cq-mod">${esAlq ? 'Alquiler' : 'Venta'}</td>` : ''}
