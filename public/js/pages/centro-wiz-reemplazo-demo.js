@@ -481,49 +481,23 @@ Object.assign(window.Centro, {
   // programación y nadie más que el cliente la sabe. Así el archivo cubre
   // TODOS los radios que entran y el hueco se ve, en vez de esconderse en un
   // archivo con menos renglones (Alberto, 2026-10-21).
-  //
-  // Los que 'se devuelven' también cuentan si entran radios nuevos: ASESORÍA
-  // EN PROTECCIÓN (SERV20261008-01) devuelve sus 21 PNC360S y recibe 21
-  // PNC360S-R — en el plan quedaron como "se devuelve", no "se reemplaza", y
-  // Zuleika no veía la opción. Cada nuevo hereda la programación de un
-  // devuelto (mismo modelo primero, luego en orden); los devueltos que
-  // sobran no van, porque no hay radio que la reciba.
   async jsonRenovacionRecepcion(id) {
     const c = (this.contratos || []).find(x => x.id === id);
     if (!c) { Toast.show('No se encontró el contrato.', 'bad'); return; }
-    const { pares, nuevos } = this._salientesDeRenovacion(c);
-    if (!pares.length) { Toast.show('Esta renovación no declara radios que salen y se cambian por otros.', 'warn'); return; }
+    const us = (c.transicion_plan?.nivel === 'serial' ? c.transicion_plan.unidades || [] : [])
+      .filter(u => u.destino === 'reemplaza' && String(u.serial || '').trim());
+    if (!us.length) { Toast.show('Esta renovación no declara radios que se reemplazan.', 'warn'); return; }
     await this._descargarJsonRecepcion({
       clienteId: c.cliente_id || this.cliente?.id || '',
       clienteNombre: c.cliente_nombre || this.cliente?.nombre || '',
-      pares, nuevos,
+      pares: us.map(u => ({
+        saliente: u.serial,
+        modelo_id: u.reemplazo_modelo_id || u.modelo_id || '',
+        modelo_label: u.reemplazo_modelo || u.modelo || '',
+      })),
+      nuevos: this._nuevosDeRenovacion(c),
       archivo: `renovacion-${c.contrato_id || c.id}.json`,
     });
-  },
-
-  // { pares: [{ saliente, modelo_id, modelo_label }], nuevos: [{ modelo_id, modelo_label }] }
-  // Pares = los 'reemplaza' + los 'devuelve' que caen en un nuevo de más.
-  _salientesDeRenovacion(c) {
-    const us = (c.transicion_plan?.nivel === 'serial' ? c.transicion_plan.unidades || [] : [])
-      .filter(u => String(u.serial || '').trim());
-    const pares = us.filter(u => u.destino === 'reemplaza').map(u => ({
-      saliente: u.serial,
-      modelo_id: u.reemplazo_modelo_id || u.modelo_id || '',
-      modelo_label: u.reemplazo_modelo || u.modelo || '',
-    }));
-    const clave = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/R$/, '');
-    const dev = us.filter(u => u.destino === 'devuelve')
-      .map(u => ({ serial: u.serial, id: u.modelo_id || '', txt: clave(u.modelo), usado: false }));
-    const nuevos = [];
-    for (const n of this._nuevosDeRenovacion(c)) {
-      const t = clave(n.modelo_label);
-      const d = dev.find(x => !x.usado && x.id && x.id === n.modelo_id)
-        || dev.find(x => !x.usado && x.txt && t && (x.txt === t || x.txt.includes(t) || t.includes(x.txt)))
-        || dev.find(x => !x.usado);
-      if (d) { d.usado = true; pares.push({ saliente: d.serial, modelo_id: n.modelo_id, modelo_label: n.modelo_label }); }
-      else nuevos.push(n);
-    }
-    return { pares, nuevos };
   },
 
   // Radios nuevos de más, por línea: cantidad − (continúan + reemplazos que

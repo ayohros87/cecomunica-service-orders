@@ -224,34 +224,3 @@ test("renovación con radios nuevos: van en blanco y marcados, y se avisa que el
   assert.match(aviso.message, /El vendedor tiene que conseguir con el cliente/);
   assert.match(h.cap.toasts.at(-1).msg, /a 3 les falta la programación: envíasela a recepción/);
 });
-
-// ASESORÍA EN PROTECCIÓN (SERV20261008-01, 2026-10-21): devuelve sus radios y
-// recibe nuevos — en el plan quedaron "se devuelve", ningún "se reemplaza", y
-// la opción no salía. Cada nuevo hereda la programación de un devuelto.
-test("renovación que devuelve y trae nuevos: los nuevos heredan de los devueltos", async () => {
-  const h = montarCentro();
-  h.Centro.contratos = [{ ...RENOV,
-    transicion_plan: { nivel: "serial", unidades: [
-      { serial: "21814A0123", modelo: "", modelo_id: null, destino: "devuelve" },
-      { serial: "21N18A0318", modelo: "", modelo_id: null, destino: "devuelve" },
-    ] },
-    equipos: [{ modelo_id: "mNuevo", modelo: "HYTERA PNC360S-R", cantidad: 3 }] }];
-  await h.Centro.jsonRenovacionRecepcion("ctr1");
-
-  assert.deepEqual(h.cap.pedidos, ["21814A0123", "21N18A0318"]);
-  const filas = h.leerJson();
-  assert.equal(filas.length, 3, "2 heredan de un devuelto + 1 nuevo en blanco");
-  assert.equal(filas[0].radio_name, "PATRULLA 12");
-  assert.equal(filas[0].modelo_label, "HYTERA PNC360S-R", "el modelo es el que ENTRA");
-  assert.equal(filas[1].serial_saliente, "21N18A0318");
-  assert.match(filas[2].falta, /RADIO NUEVO/);
-});
-
-test("renovación que solo devuelve, sin nuevos, no ofrece nada", async () => {
-  const h = montarCentro();
-  h.Centro.contratos = [{ ...RENOV,
-    transicion_plan: { nivel: "serial", unidades: [{ serial: "21814A0123", destino: "devuelve" }] },
-    equipos: [] }];
-  await h.Centro.jsonRenovacionRecepcion("ctr1");
-  assert.equal(h.cap.descargas.length, 0);
-});
