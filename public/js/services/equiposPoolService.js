@@ -289,10 +289,24 @@ const EquiposPoolService = {
     if (source) return this._leerResumen({ source });
     if (!this._resumenVuelo) {
       this._resumenVuelo = this._leerResumen({})
+        .then(r => (r.length ? r : this._reintentarResumenVacio()))
         .finally(() => setTimeout(() => { this._resumenVuelo = null; }, 3000));
     }
     return (await this._resumenVuelo).slice();
   },
+  // Resumen vacío = cada llamador cae a leer el pool (7,846 fichas). Auditoría
+  // de lecturas 2026-10-21: en el navegador de bodega (Firefox 115) Existencias
+  // llegaba aquí ~10 veces al día con `agregados_pool` lleno (115 docs) — el
+  // 25% de las lecturas del día. Antes de rendirse se pregunta una vez al
+  // SERVIDOR, sin pasar por la caché local, y queda anotado en uso_diario para
+  // saber si fue la caché (reintento-ok) o un resumen de verdad vacío.
+  async _reintentarResumenVacio() {
+    let r = [];
+    try { r = await this._leerResumen({ source: 'server' }); } catch (e) { console.warn('[pool] resumen (servidor):', e?.code || e); }
+    try { window.Uso?.accion(r.length ? 'almacen.resumen-vacio.reintento-ok' : 'almacen.resumen-vacio.pool-completo'); } catch (_) { /* telemetría */ }
+    return r;
+  },
+
   async _leerResumen({ source = null } = {}) {
     const db = firebase.firestore();
     const q = db.collection('agregados_pool');
