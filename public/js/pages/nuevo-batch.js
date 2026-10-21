@@ -97,8 +97,11 @@
 
     // Pares entrante→saliente del reemplazo elegido (los que bodega ya asignó).
     // Vacío si la fuente no es una gestión de reemplazo.
+    // También una renovación con radios que se reemplazan (ver más abajo).
     function paresReemplazo() {
-      const g = gestionDe(document.getElementById('contratoJalar')?.value || '');
+      const valor = document.getElementById('contratoJalar')?.value || '';
+      if (planRenovacionDe(valor)) return salientesDeRenovacion(valor).pares;
+      const g = gestionDe(valor);
       if (!g || g.tipo !== 'reemplazo') return [];
       return serialesDeGestion(g).filter(s => s.saliente);
     }
@@ -146,7 +149,57 @@
         for (const s of serialesDeGestion(gestionDe(valor))) map.set(ContratosService._serialKey(s.serial), s);
         return map;
       }
-      return ContratosService.getModeloPorSerial(valor);
+      // Renovación: los que CONTINÚAN están en el contrato (el plan los copia
+      // a la subcolección) pero no se cambian ni se reprograman — ya tienen su
+      // ficha en POC, y re-registrarlos les cambiaría el Unit ID. No entran.
+      const map = await ContratosService.getModeloPorSerial(valor);
+      const cont = continuanDeRenovacion(valor);
+      if (cont.size) for (const k of [...map.keys()]) if (cont.has(k)) map.delete(k);
+      return map;
+    }
+
+    // ── Renovación como fuente (Zuleika, 2026-10-21) ──────────────────────
+    // Una renovación con plan por serial dice qué radios salen ('reemplaza'),
+    // cuáles siguen ('continua') y, por diferencia con las líneas, cuántos
+    // son nuevos de más. Los que entran se parean con los que salen POR
+    // MODELO (el entrante declarado en el plan): antes de la entrega no hay
+    // pareo serial a serial, y dos radios del mismo modelo recién sacados de
+    // bodega son intercambiables. Lo que sobra es un radio NUEVO: no hay de
+    // dónde copiar su programación, la tiene que enviar el vendedor.
+    const FALTA_NUEVO = 'RADIO NUEVO — el vendedor debe enviar nombre, grupos y GPS';
+    const FALTA_RELLENO = 'NO VENÍA EN EL ARCHIVO — pídele al vendedor nombre, grupos y GPS';
+
+    function planRenovacionDe(valor) {
+      const c = (!valor || esValorGestion(valor) || esValorVenta(valor)) ? null : contratosPorId.get(valor);
+      return c?.transicion_plan?.nivel === 'serial' ? c.transicion_plan : null;
+    }
+    function continuanDeRenovacion(valor) {
+      const plan = planRenovacionDe(valor);
+      return new Set((plan?.unidades || []).filter(u => u.destino === 'continua')
+        .map(u => ContratosService._serialKey(u.serial_norm || u.serial)).filter(Boolean));
+    }
+    const _claveMod = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/R$/, '');
+
+    // { pares: [{serial, saliente}], nuevos: [serial] } de la renovación elegida.
+    function salientesDeRenovacion(valor) {
+      const plan = planRenovacionDe(valor);
+      const salen = (plan?.unidades || []).filter(u => u.destino === 'reemplaza' && String(u.serial || '').trim())
+        .map(u => ({ saliente: String(u.serial).trim(), id: u.reemplazo_modelo_id || u.modelo_id || '',
+          txt: _claveMod(u.reemplazo_modelo || u.modelo), usado: false }));
+      if (!salen.length) return { pares: [], nuevos: [] };
+      const entran = [...modeloContratoPorSerial.values()].filter(v => String(v.serial || '').trim());
+      const pares = [], sueltos = [];
+      for (const e of entran) {                       // 1 · mismo modelo_id
+        const s = salen.find(x => !x.usado && x.id && x.id === e.modelo_id);
+        if (s) { s.usado = true; pares.push({ serial: e.serial, saliente: s.saliente }); } else sueltos.push(e);
+      }
+      const nuevos = [];
+      for (const e of sueltos) {                      // 2 · mismo modelo por texto (-R tolerante)
+        const t = _claveMod(labelModelo(e.modelo_id, e.modelo));
+        const s = t && salen.find(x => !x.usado && x.txt && (x.txt === t || x.txt.includes(t) || t.includes(x.txt)));
+        if (s) { s.usado = true; pares.push({ serial: e.serial, saliente: s.saliente }); } else nuevos.push(e.serial);
+      }
+      return { pares, nuevos };
     }
 
     async function cargarModeloContrato(contratoDocId) {
@@ -238,7 +291,8 @@
     // filtra nada (mismo comportamiento que antes del filtro).
     function modelosDelArchivo() {
       const s = new Set();
-      (detallesBatch || []).forEach(d => { const id = resolverModeloIdJson(d); if (id) s.add(id); });
+      // Las filas de relleno no son del archivo: no deciden qué modelos entran.
+      (detallesBatch || []).filter(d => !d._relleno).forEach(d => { const id = resolverModeloIdJson(d); if (id) s.add(id); });
       return s;
     }
 
@@ -422,6 +476,32 @@
       detallesBatch = seriales.map(detalleDeEntrante);
     }
 
+    // Archivo del vendedor PARCIAL (Alberto, 2026-10-21): agrega al final una
+    // fila en blanco, marcada, por cada serial que el archivo no cubre, con el
+    // modelo que el contrato dice de ese serial. Las alinea alinearSerialesConJson
+    // con el resto; si después sobran (se quitaron seriales) se retiran solas.
+    function completarFilasFaltantes() {
+      if (detallePorSerial.size || !detallesBatch?.length) return 0;
+      const seriales = document.getElementById('seriales').value.split('\n').map(s => s.trim()).filter(Boolean);
+      const n = Math.max(0, seriales.length - detallesBatch.length);
+      for (let i = detallesBatch.length; i < seriales.length; i++) {
+        const c = modeloContratoPorSerial.get(ContratosService._serialKey(seriales[i]));
+        const label = c ? labelModelo(c.modelo_id, c.modelo) : '';
+        const d = normalizarDetalleBatch({ modelo_id: c?.modelo_id || '', modelo_label: label, cliente_id: detallesBatch[0]?.cliente_id || '' });
+        d._relleno = true;
+        d.falta = FALTA_RELLENO;
+        detallesBatch.push(d);
+      }
+      if (n) refrescarPreviews();
+      return n;
+    }
+    // Filas de relleno que ya no tienen serial (se quitaron del pegado).
+    function soltarRellenoSobrante() {
+      if (detallePorSerial.size || !detallesBatch?.length) return;
+      const n = document.getElementById('seriales').value.split('\n').map(s => s.trim()).filter(Boolean).length;
+      while (detallesBatch.length > n && detallesBatch[detallesBatch.length - 1]?._relleno) detallesBatch.pop();
+    }
+
     // Suelta el detalle jalado cuando cambia la fuente (otro cliente, otro
     // contrato, otra gestión): el nombre de un radio de OTRO reemplazo no tiene
     // nada que hacer en este lote.
@@ -469,8 +549,21 @@
           d._saliente = p.saliente;
           d._salienteCfg = cfg;
           d._sinSaliente = !cfg;
+          if (!cfg) d.falta = 'SIN FICHA DEL RADIO QUE SALE — el vendedor debe enviar nombre, grupos y GPS';
           detallePorSerial.set(k, d);
           if (cfg) { con++; if (cfg.cerrada) cerradas++; if (cfg.ambigua) ambiguas++; } else sin++;
+        }
+        // Renovación: los que entran sin saliente que les toque son radios
+        // nuevos. Van en blanco y marcados; su programación la manda el vendedor.
+        const nuevos = planRenovacionDe(document.getElementById('contratoJalar')?.value || '')
+          ? salientesDeRenovacion(document.getElementById('contratoJalar').value).nuevos : [];
+        for (const s of nuevos) {
+          const k = ContratosService._serialKey(s);
+          if (!k) continue;
+          const d = normalizarDetalleBatch({});
+          d._nuevo = true;
+          d.falta = FALTA_NUEVO;
+          detallePorSerial.set(k, d);
         }
         detalleFuente = document.getElementById('contratoJalar')?.value || '';
         // refrescarPreviews y no renderPreviewCombinado a secas: además de
@@ -482,7 +575,8 @@
         if (cerradas) partes.push(`${cerradas} de ficha ya cerrada`);
         if (ambiguas) partes.push(`${ambiguas} con más de una ficha viva (se tomó la más reciente)`);
         if (sin) partes.push(`${sin} sin ficha en POC — complétalos abajo`);
-        Toast.show(partes.join(' · ') + '.', sin ? 'warn' : 'ok');
+        if (nuevos.length) partes.push(`${nuevos.length} radio(s) nuevo(s) sin programación — el vendedor tiene que enviártela`);
+        Toast.show(partes.join(' · ') + '.', (sin || nuevos.length) ? 'warn' : 'ok');
         return con;
       } catch (e) {
         console.error('[nuevo-batch] no se pudo jalar la configuración del saliente:', e);
@@ -550,8 +644,10 @@
       // Con detalle jalado del saliente se agrega la columna "Origen": de qué
       // radio salió el nombre y los grupos de cada fila. Sin ella, recepción
       // estaría revisando datos que aparecieron solos.
-      const conOrigen = detallePorSerial.size > 0;
-      let malCount = 0, faltan = 0, sinGrupos = 0, sinNombre = 0, sinFicha = 0;
+      // Las filas con `falta` (radio nuevo, o que no venía en un archivo
+      // parcial) también la muestran: ahí dice qué hay que pedirle al vendedor.
+      const conOrigen = detallePorSerial.size > 0 || detallesBatch.some(d => d.falta);
+      let malCount = 0, faltan = 0, sinGrupos = 0, sinNombre = 0, sinFicha = 0, sinProgramacion = 0;
       const filas = detallesBatch.map((d, i) => {
         const serial = seriales[i] || '';
         if (!serial) faltan++;
@@ -596,10 +692,14 @@
         // caso a mirar: el radio que sale no tiene ficha en POC (nunca se
         // registró, o está con otro cliente) y no hay nada que copiar.
         let origenCell = '';
+        const vacia = !String(d.radio_name || '').trim() && !grupos.length;
+        if (d.falta && vacia) sinProgramacion++;
         if (conOrigen) {
           const sal = d._saliente || '';
           const cfg = d._salienteCfg || null;
-          if (sal && cfg) {
+          if (d.falta && !sal) {
+            origenCell = `<td class="origen-cell"><span class="${vacia ? 'falta' : ''}">${esc(d.falta)}</span></td>`;
+          } else if (sal && cfg) {
             const f = cfg.fecha ? cfg.fecha.toLocaleDateString('es-PA', { day: '2-digit', month: 'short' }) : '';
             const notas = [];
             if (cfg.cerrada) notas.push('ficha ya cerrada');
@@ -610,7 +710,7 @@
           } else if (sal) {
             sinFicha++;
             origenCell = `<td class="origen-cell"><span class="mono">← ${esc(sal)}</span>` +
-              `<div class="origen-sub falta">sin ficha en POC — llénalo a mano</div></td>`;
+              `<div class="origen-sub falta">sin ficha en POC — el vendedor debe enviar nombre, grupos y GPS</div></td>`;
           } else {
             origenCell = `<td class="origen-cell"><span class="falta">—</span></td>`;
           }
@@ -639,15 +739,26 @@
       if (malCount) problemas.push(`${malCount} sin cuadrar por modelo`);
       if (faltan)   problemas.push(`${faltan} sin serial`);
       if (sinFicha) problemas.push(`${sinFicha} sin ficha del saliente`);
+      if (sinProgramacion) problemas.push(`${sinProgramacion} sin programación — el vendedor tiene que enviarla`);
       if (sinNombre) problemas.push(`${sinNombre} sin nombre`);
       if (sinGrupos) problemas.push(`${sinGrupos} sin grupos`);
-      const aviso = problemas.length
+      // Archivo PARCIAL: hay más seriales que filas. Recepción puede cargar el
+      // lote completo agregando las filas que faltan en blanco (Alberto,
+      // 2026-10-21); si en cambio sobran seriales, los quita del pegado.
+      const sobran = detallePorSerial.size ? 0 : Math.max(0, seriales.length - detallesBatch.length);
+      const avisoParcial = sobran
+        ? `<div class="preview-aviso">⚠ El archivo trae ${detallesBatch.length} radio(s) y hay ${seriales.length} seriales: ` +
+          `<b>${sobran} radio(s) no venían en el archivo</b>. ` +
+          `<button type="button" class="gadd-btn" onclick="completarFilasFaltantes()">Agregar ${sobran === 1 ? 'la fila que falta' : `las ${sobran} filas que faltan`}</button> ` +
+          `y llénalas con lo que te envíe el vendedor, o quita esos seriales del lote.</div>`
+        : '';
+      const aviso = avisoParcial + (problemas.length
         ? `<div class="preview-aviso">⚠ ${problemas.join(' · ')}. Corrige abajo antes de guardar — edita los grupos o usa "a todo el modelo" para copiarlos.</div>`
-        : `<div class="preview-ok">✅ ${detallesBatch.length} equipos · ${conOrigen ? 'configuración jalada de los salientes' : 'seriales alineados'} y grupos completos</div>`;
+        : (sobran ? '' : `<div class="preview-ok">✅ ${detallesBatch.length} equipos · ${detallePorSerial.size ? 'configuración jalada de los salientes' : 'seriales alineados'} y grupos completos</div>`));
       // La tabla scrollea DENTRO de su caja: con la columna de origen y el
       // modelo sin partir, en pantalla angosta no debe empujar la página.
       preview.innerHTML = `${datalist}${aviso}<div id="previewPoolAviso"></div><div class="pv-scroll"><table>
-        <thead><tr><th>#</th><th>Serial</th>${conOrigen ? '<th>Reemplaza a</th>' : ''}<th>Nombre</th><th>Modelo</th><th>GPS</th><th>Grupos (editables)</th></tr></thead>
+        <thead><tr><th>#</th><th>Serial</th>${conOrigen ? `<th>${detallePorSerial.size ? 'Reemplaza a' : 'Programación'}</th>` : ''}<th>Nombre</th><th>Modelo</th><th>GPS</th><th>Grupos (editables)</th></tr></thead>
         <tbody>${filas}</tbody></table></div>`;
       avisarSerialesAjenos(seriales);
     }
@@ -764,6 +875,7 @@
       // Con detalle por serial no se reordena nada: cada fila sabe a qué serial
       // va, así que se re-arma la vista en el orden que tenga el pegado.
       if (detallePorSerial.size) realinearDetallesPorSerial();
+      soltarRellenoSobrante();
       if (detallesBatch?.length) {
         if (!detallePorSerial.size) alinearSerialesConJson();
         renderPreviewCombinado();
@@ -1038,6 +1150,9 @@ async function jalarSerialesDesdeContrato() {
         : 'Todos los seriales del contrato ya estaban en la lista.', r.agregados ? 'ok' : 'warn');
     }
 
+    const nCont = continuanDeRenovacion(contratoDocId).size;
+    if (nCont) Toast.show(`${nCont} radio(s) de esta renovación continúan: no se cambian y ya tienen su ficha en POC, así que no entran al lote.`, 'ok');
+
     // Reemplazo: el nombre, los grupos y el GPS salen de la ficha del radio que
     // sustituye cada uno. Va solo —sin archivo del vendedor no hay nada que
     // pisar— para que un reemplazo se registre sin cargar ningún JSON.
@@ -1297,6 +1412,18 @@ document.getElementById("addCliente").onclick = async () => {
           if (await recortarAModelosDelArchivo()) {
             seriales = document.getElementById("seriales").value.trim().split('\n').map(s => s.trim()).filter(s => s);
           }
+          // Archivo PARCIAL (menos filas que seriales): no se bloquea —
+          // recepción puede cargar el lote completo con los que faltan en
+          // blanco y marcados (Alberto, 2026-10-21).
+          if (detallesBatch.length < seriales.length) {
+            const n = seriales.length - detallesBatch.length;
+            const ok = await Modal.confirm({ title: 'El archivo viene incompleto', confirmLabel: `Agregar ${n === 1 ? 'la fila' : `las ${n} filas`} en blanco`, message:
+              `El archivo trae ${detallesBatch.length} radio(s) y hay ${seriales.length} seriales: <b>${n} no venían en el archivo</b>.<br><br>` +
+              `Se agregan en blanco y marcados para que los llenes con lo que te envíe el vendedor. ` +
+              `Si esos seriales no van en este lote, cancela y quítalos.` });
+            if (!ok) return;
+            completarFilasFaltantes();
+          }
           if (detallesBatch.length !== seriales.length) {
             Toast.show(`El archivo JSON tiene ${detallesBatch.length} filas pero ingresaste ${seriales.length} seriales. Deben coincidir para guardar modelo por equipo.`, 'bad');
             return;
@@ -1535,8 +1662,20 @@ document.getElementById("addCliente").onclick = async () => {
         // Candado suave: equipos que quedarían SIN grupos (fuente incompleta, como
         // el JSON de MIDES con los PNC460 vacíos). Se puede completar en el preview
         // con "a todo el modelo"; si aun así se guarda vacío, se avisa.
+        // Radios sin programación (nuevos, sin ficha del saliente o que no
+        // venían en el archivo): se pueden guardar en blanco, pero que quede
+        // dicho que la programación la debe el vendedor.
+        const vaciaDeFalta = (d) => d.falta && !String(d.radio_name || '').trim() && !limpiarGrupos(d.grupos || []).length;
+        const sinProg = (detallesBatch || []).filter(vaciaDeFalta).length;
+        if (sinProg) {
+          const ok = await Modal.confirm({ title: 'Radios sin programación', confirmLabel: 'Guardarlos en blanco', message:
+            `<b>${sinProg} radio(s) se guardarán sin nombre ni grupos</b> (marcados en la vista previa). ` +
+            `Su programación la tiene que enviar el vendedor; cuando llegue, complétala en POC.<br><br>` +
+            `Si ya te la envió, cancela y llénala en la vista previa.` });
+          if (!ok) { bloquear(false); return; }
+        }
         if (detallesBatch?.length) {
-          const sinGrupos = detallesBatch.filter(d => limpiarGrupos(d.grupos || []).length === 0).length;
+          const sinGrupos = detallesBatch.filter(d => !vaciaDeFalta(d) && limpiarGrupos(d.grupos || []).length === 0).length;
           if (sinGrupos) {
             const ok = await Modal.confirm({ title: 'Equipos sin grupos', confirmLabel: 'Guardar de todos modos', message:
               `${sinGrupos} equipo(s) se guardarán SIN grupos. Puedes completarlos en la vista previa ` +

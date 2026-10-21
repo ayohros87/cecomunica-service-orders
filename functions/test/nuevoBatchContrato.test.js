@@ -512,3 +512,59 @@ test("la factura de venta del cliente aparece en el select y jala serial + model
   h.sandbox.actualizarAvisoSinContrato();
   assert.equal(h.el("avisoSinContrato").hidden, true, "con factura elegida no es un lote suelto");
 });
+
+// ── Archivo PARCIAL y renovación como fuente (Zuleika / Alberto, 2026-10-21) ──
+// "Si el JSON está incompleto, ¿de qué sirve?": recepción tiene que poder
+// cargar el lote COMPLETO aunque el archivo traiga menos radios que seriales,
+// con los que faltan en blanco y marcados — la programación la manda el vendedor.
+const vmGet = (h, expr) => vm.runInContext(expr, h.sandbox);
+
+test("archivo parcial: se agregan las filas que faltan, en blanco y marcadas", async () => {
+  const P = { id: "docP", contrato_id: "ALQ-P", tipo_contrato: "Alquiler", estado: "aprobado", seriales: 5 };
+  const h = montar({ contratos: [P] });
+  await h.sandbox.cargarModelosCatalogo();
+  await subirArchivo(h, Array.from({ length: 3 }, (_, i) => ({
+    cliente_id: "CLI1", radio_name: `R${i + 1}`, modelo_label: "HYTERA PNC460-R", gps: false, grupos: ["G"] })));
+  assert.equal(lineas(h).length, 5, "precondición: el contrato trae 5 seriales");
+  assert.match(h.el("previewVendedor").innerHTML, /2 radio\(s\) no venían en el archivo/);
+
+  assert.equal(h.sandbox.completarFilasFaltantes(), 2);
+  const filas = vmGet(h, "detallesBatch");
+  assert.equal(filas.length, 5, "el lote queda completo");
+  assert.equal(filas.slice(0, 3).map(f => f.radio_name).join(","), "R1,R2,R3");
+  assert.ok(filas.slice(3).every(f => f.falta && !f.radio_name), "los que faltan van en blanco y marcados");
+  assert.match(h.el("previewVendedor").innerHTML, /NO VENÍA EN EL ARCHIVO/);
+  assert.match(h.el("previewVendedor").innerHTML, /el vendedor tiene que enviarla/);
+
+  // Si recepción quita esos seriales del pegado, las filas de relleno se van solas.
+  h.el("seriales").value = lineas(h).slice(0, 3).join("\n");
+  h.sandbox.refrescarPreviews();
+  assert.equal(vmGet(h, "detallesBatch").length, 3);
+});
+
+test("renovación: el que entra hereda del que sale, los nuevos van marcados y los que continúan no entran", async () => {
+  const R = {
+    id: "docR", contrato_id: "SERV-R", tipo_contrato: "Servicio", estado: "aprobado", accion: "Renovación",
+    composicion: [{ modelo_id: "mPNC360", modelo: "PNC360S-R", pfx: "R", n: 4 }],
+    transicion_plan: { nivel: "serial", unidades: [
+      { serial: "R0", serial_norm: "R0", modelo_id: "mPNC360", modelo: "PNC360S-R", destino: "continua" },
+      { serial: "VIEJO1", modelo_id: "mPNC360", modelo: "PNC360S-R", destino: "reemplaza" },
+    ] },
+  };
+  const h = montar({ contratos: [R] });
+  await h.sandbox.cargarModelosCatalogo();
+  h.sandbox.Serial = { clave: (s) => String(s || "").trim().toUpperCase() };
+  h.sandbox.PocService.configDelSaliente = async () =>
+    new Map([["VIEJO1", { radio_name: "PATRULLA 1", grupos: ["SEG"], gps: true, cerrada: false, ambigua: false }]]);
+  await conContratoElegido(h, "docR");
+
+  await h.sandbox.jalarSerialesDesdeContrato();
+
+  assert.equal(lineas(h).join(","), "R1,R2,R3", "R0 continúa: no se reprograma ni entra al lote");
+  assert.ok(h.toasts.some(t => /1 radio\(s\) de esta renovación continúan/.test(t.msg)));
+  const filas = vmGet(h, "detallesBatch");
+  assert.equal(filas[0].radio_name, "PATRULLA 1", "el que entra hereda del que sale");
+  assert.ok(filas.slice(1).every(f => /RADIO NUEVO/.test(f.falta) && !f.radio_name));
+  assert.ok(h.toasts.some(t => /2 radio\(s\) nuevo\(s\) sin programación — el vendedor/.test(t.msg)));
+  assert.match(h.el("previewVendedor").innerHTML, /RADIO NUEVO — el vendedor debe enviar/);
+});

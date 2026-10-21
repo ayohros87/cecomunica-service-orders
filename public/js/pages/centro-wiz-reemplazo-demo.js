@@ -474,8 +474,13 @@ Object.assign(window.Centro, {
   // necesita lo mismo que un REEMP: el vendedor no sabe cómo estaban
   // programados los que salen. Sale del mismo plan que bodega ya usa para
   // asignar: un renglón por saliente, con el modelo ENTRANTE (el declarado
-  // "por otro modelo" o, si no, el mismo). Los que continúan no se programan
-  // y los nuevos de más no tienen saliente del que copiar.
+  // "por otro modelo" o, si no, el mismo). Los que continúan no se cambian.
+  //
+  // Los NUEVOS de más (la línea trae más radios que continúan + reemplazos)
+  // van también, en blanco y marcados con `falta`: nunca tuvieron
+  // programación y nadie más que el cliente la sabe. Así el archivo cubre
+  // TODOS los radios que entran y el hueco se ve, en vez de esconderse en un
+  // archivo con menos renglones (Alberto, 2026-10-21).
   async jsonRenovacionRecepcion(id) {
     const c = (this.contratos || []).find(x => x.id === id);
     if (!c) { Toast.show('No se encontró el contrato.', 'bad'); return; }
@@ -490,14 +495,31 @@ Object.assign(window.Centro, {
         modelo_id: u.reemplazo_modelo_id || u.modelo_id || '',
         modelo_label: u.reemplazo_modelo || u.modelo || '',
       })),
+      nuevos: this._nuevosDeRenovacion(c),
       archivo: `renovacion-${c.contrato_id || c.id}.json`,
     });
   },
 
+  // Radios nuevos de más, por línea: cantidad − (continúan + reemplazos que
+  // caen en esa línea). Mismo pareo que "Cuadrar cantidades" del wizard.
+  _nuevosDeRenovacion(c) {
+    const lineas = (c.equipos || []).filter(l => Number(l.cantidad || 0) > 0);
+    if (!lineas.length || typeof TransicionPlan === 'undefined') return [];
+    const r = TransicionPlan.conciliarLineas(c.transicion_plan, lineas);
+    const out = [];
+    r.porLinea.forEach(({ idx, continuan, reemplazan }) => {
+      const l = lineas[idx];
+      const n = Math.max(0, Number(l.cantidad || 0) - continuan - reemplazan);
+      for (let i = 0; i < n; i++) out.push({ modelo_id: l.modelo_id || '', modelo_label: l.modelo || '' });
+    });
+    return out;
+  },
+
   // Común a los dos: nombre, grupos y GPS de cada saliente, en el formato que
   // lee el lote de POC. `pares` = [{ saliente, modelo_id, modelo_label }] en el
-  // orden en que deben salir las filas.
-  async _descargarJsonRecepcion({ clienteId, clienteNombre, pares, archivo }) {
+  // orden en que deben salir las filas; `nuevos` = [{ modelo_id, modelo_label }]
+  // van al final, en blanco.
+  async _descargarJsonRecepcion({ clienteId, clienteNombre, pares, nuevos = [], archivo }) {
     if (typeof PocService === 'undefined') { Toast.show('No se pudo consultar POC desde esta pantalla.', 'bad'); return; }
 
     try {
@@ -508,6 +530,8 @@ Object.assign(window.Centro, {
         fresh: true,
       });
 
+      const FALTA_SIN_FICHA = 'SIN FICHA DEL RADIO QUE SALE — el vendedor debe enviar nombre, grupos y GPS';
+      const FALTA_NUEVO = 'RADIO NUEVO — el vendedor debe enviar nombre, grupos y GPS';
       const filas = pares.map(p => {
         const cfg = cfgs.get(Serial.clave(p.saliente)) || null;
         return {
@@ -522,15 +546,35 @@ Object.assign(window.Centro, {
           // Referencia para quien lo lea; el lote de POC ignora estos dos.
           serial_saliente: p.saliente,
           ficha_saliente: cfg ? (cfg.cerrada ? 'cerrada' : 'viva') : 'sin ficha en POC',
+          // `falta` lo pinta el lote en la fila: qué hay que pedirle al vendedor.
+          ...(cfg ? {} : { falta: FALTA_SIN_FICHA }),
         };
       });
+      for (const n of nuevos) {
+        filas.push({
+          cliente_id: clienteId || '', cliente_nombre: clienteNombre || '',
+          radio_name: '', gps: false, grupos: [],
+          modelo_id: n.modelo_id, modelo_label: n.modelo_label,
+          serial_saliente: null, falta: FALTA_NUEVO,
+        });
+      }
 
-      const sin = filas.filter(f => !f.radio_name && !(f.grupos || []).length).length;
-      if (sin && !await Modal.confirm({
-        title: 'Salientes sin ficha en POC',
-        confirmLabel: 'Descargar de todos modos',
-        message: `${sin} de ${filas.length} radio(s) que salen no tienen ficha en POC con este cliente: van sin nombre ni grupos y recepción tendrá que llenarlos a mano.`,
-      })) return;
+      const sin = filas.filter(f => f.falta === FALTA_SIN_FICHA).length;
+      const nNuevos = nuevos.length;
+      if (sin || nNuevos) {
+        const partes = [];
+        if (nNuevos) partes.push(`<b>${nNuevos} radio(s) nuevo(s)</b>: nunca tuvieron programación`);
+        if (sin) partes.push(`<b>${sin} de ${pares.length} radio(s) que salen</b> no tienen ficha en POC con este cliente`);
+        const ok = await Modal.confirm({
+          title: nNuevos ? 'Faltan datos de programación' : 'Salientes sin ficha en POC',
+          confirmLabel: 'Descargar y pedir lo que falta',
+          message: `${partes.join('; ')}.<br><br>` +
+            `Van en el archivo <b>en blanco y marcados</b>. <b>El vendedor tiene que conseguir con el cliente ` +
+            `el nombre, los grupos y el GPS de esos ${sin + nNuevos} radio(s) y enviárselos a recepción</b>; ` +
+            `recepción los completa en el lote antes de guardar.`,
+        });
+        if (!ok) return;
+      }
 
       const blob = new Blob([JSON.stringify(filas, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -538,7 +582,8 @@ Object.assign(window.Centro, {
       a.href = url; a.download = archivo;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
-      Toast.show(`JSON de ${filas.length} radio(s) descargado${sin ? ` — ${sin} sin datos del saliente` : ''}.`, sin ? 'warn' : 'ok');
+      const faltan = sin + nNuevos;
+      Toast.show(`JSON de ${filas.length} radio(s) descargado${faltan ? ` — a ${faltan} les falta la programación: envíasela a recepción` : ''}.`, faltan ? 'warn' : 'ok');
     } catch (e) {
       console.error('[centro] JSON para recepción:', e);
       Toast.show('No se pudo leer la configuración de los radios salientes.', 'bad');

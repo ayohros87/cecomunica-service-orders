@@ -75,6 +75,8 @@ function montarCentro({ gestion = GR, config = CONFIG, confirmar = true } = {}) 
   Object.assign(ctx, { Serial: ctx.window.Serial, FMT: ctx.window.FMT,
     ContractTotals: ctx.window.ContractTotals, ContratoTarifario: ctx.window.ContratoTarifario });
   vm.runInContext(leer("public", "js", "services", "gestionesService.js"), ctx);
+  vm.runInContext(leer("public", "js", "domain", "transicionPlan.js"), ctx);
+  ctx.TransicionPlan = ctx.window.TransicionPlan;
   ctx.GestionesService = ctx.window.GestionesService;
   vm.runInContext(fuenteCentro(), ctx);
 
@@ -202,4 +204,23 @@ test("renovación sin reemplazos no descarga nada", async () => {
   await h.Centro.jsonRenovacionRecepcion("ctr1");
   assert.equal(h.cap.descargas.length, 0);
   assert.equal(h.cap.toasts.at(-1).t, "warn");
+});
+
+test("renovación con radios nuevos: van en blanco y marcados, y se avisa que el vendedor envía su programación", async () => {
+  const h = montarCentro();
+  h.Centro.contratos = [{ ...RENOV, equipos: [{ modelo_id: "mPNC370", modelo: "HYTERA PNC370-R", cantidad: 2 },
+    { modelo_id: "mViejo", modelo: "PNC360S-R", cantidad: 4 }] }];
+  await h.Centro.jsonRenovacionRecepcion("ctr1");
+
+  const filas = h.leerJson();
+  // 2 reemplazos + 1 continúa = 3 radios cubiertos de 6 en las líneas → 3 nuevos.
+  assert.equal(filas.length, 5, "2 que salen + 3 nuevos (el que continúa no va)");
+  const nuevos = filas.filter(f => /RADIO NUEVO/.test(f.falta || ""));
+  assert.equal(nuevos.length, 3);
+  assert.ok(nuevos.every(f => f.radio_name === "" && f.grupos.length === 0 && f.serial_saliente === null));
+  assert.equal(nuevos.filter(f => f.modelo_label === "HYTERA PNC370-R").length, 1);
+  const aviso = h.cap.modales.find(m => m.title === "Faltan datos de programación");
+  assert.ok(aviso);
+  assert.match(aviso.message, /El vendedor tiene que conseguir con el cliente/);
+  assert.match(h.cap.toasts.at(-1).msg, /a 3 les falta la programación: envíasela a recepción/);
 });

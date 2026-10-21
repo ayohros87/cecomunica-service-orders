@@ -367,3 +367,20 @@ test("el detalle va POR SERIAL: reordenar el pegado no cruza los nombres", async
   assert.equal(porSerial["24813A0527"], "PATRULLA 12");
   assert.equal(porSerial["24813A0999"], "GRUA 3", "cada nombre sigue a SU serial, no a su posición");
 });
+
+// Alberto, 2026-10-21: un radio sin programación se puede guardar, pero el
+// lote dice con todas sus letras que la programación la debe el vendedor.
+test("guardar un radio sin programación avisa que la manda el vendedor y no tranca", async () => {
+  const h = montarLote({ config: new Map() });
+  await conReemplazoJalado(h);
+  h.el("unit_id_inicial").value = "5001";
+  assert.match(h.el("previewVendedor").innerHTML, /sin ficha en POC — el vendedor debe enviar/);
+
+  await guardar(h);
+
+  const aviso = h.registro.modales.find(m => m.title === "Radios sin programación");
+  assert.ok(aviso, "recepción sabe que guarda en blanco y quién debe la programación");
+  assert.match(aviso.message, /la tiene que enviar el vendedor/);
+  assert.ok(!h.registro.modales.some(m => m.title === "Equipos sin grupos"), "un solo aviso, no dos por lo mismo");
+  assert.equal(h.registro.creados.length, 1, "se guarda igual");
+});

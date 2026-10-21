@@ -323,8 +323,10 @@ Object.assign(window.Centro, {
     const nReemp = c.transicion_plan?.nivel === 'serial'
       ? (c.transicion_plan.unidades || []).filter(u => u.destino === 'reemplaza').length : 0;
     if (nReemp) {
+      const nNuevos = this._nuevosDeRenovacion(c).length;
       A.push(this._acc({ id: 'json_recepcion', grupo: 'Documentos', label: 'JSON para recepción',
-        hint: `nombre, grupos y GPS de ${nReemp === 1 ? 'el radio que sale' : `los ${nReemp} radios que salen`}`,
+        hint: `nombre, grupos y GPS de ${nReemp === 1 ? 'el radio que sale' : `los ${nReemp} radios que salen`}` +
+          (nNuevos ? ` · ${nNuevos} nuevo(s) van en blanco: el vendedor envía su programación a recepción` : ''),
         onclick: `Centro.jsonRenovacionRecepcion('${id}')` }));
     }
     if (c.firmado_tipo === 'digital' && c.firma_solicitud_id) {
