@@ -313,6 +313,20 @@ window.PocList = {
       tdCliente.appendChild(document.createElement('br'));
       tdCliente.appendChild(sub);
     }
+    // Gestión del Centro (Brenda, 2026-10-21): un demo o reemplazo no tiene
+    // contrato firmado, así que sin esto la fila quedaba muda aunque la OS de
+    // programación sí enseña la gestión. Mismo enlace que en la bandeja.
+    if (d.gestion_id) {
+      const sub = document.createElement('a');
+      sub.className = 'eq-link';
+      sub.href = `../clientes/centro.html?id=${encodeURIComponent(d.cliente_id || '')}&g=${encodeURIComponent(d.gestion_id)}`;
+      const tipo = { reemplazo: 'Reemplazo', demo: 'Demo', aumento: 'Aumento', renovacion: 'Renovación' }[d.gestion_tipo] || 'Gestión';
+      sub.title = `${tipo} ${d.gestion_id} — abrir el expediente en el Centro de gestión`;
+      sub.textContent = `${tipo} ${d.gestion_id}`;
+      sub.style.cssText = 'display:inline-block;font-size:11px;color:#1d4ed8;font-family:var(--font-mono,monospace);margin-top:2px;';
+      tdCliente.appendChild(document.createElement('br'));
+      tdCliente.appendChild(sub);
+    }
     // Ficha cerrada: se dice de UNA vez de qué devolución salió. Sin esto la
     // fila parece viva y con datos a medias.
     if (cerrada) {
