@@ -320,11 +320,12 @@ Object.assign(window.Centro, {
     const firmadoAcc = this._accFirmado(c);
     if (firmadoAcc) A.push(firmadoAcc);
     // Renovación que cambia radios: la programación de los que salen, para
-    // recepción (Zuleika, 2026-10-21) — igual que el JSON de un REEMP.
-    const nReemp = c.transicion_plan?.nivel === 'serial'
-      ? (c.transicion_plan.unidades || []).filter(u => u.destino === 'reemplaza').length : 0;
+    // recepción (Zuleika, 2026-10-21) — igual que el JSON de un REEMP. Cuenta
+    // también los que se devuelven y dejan su lugar a un nuevo.
+    const sal = c.transicion_plan?.nivel === 'serial' ? this._salientesDeRenovacion(c) : { pares: [], nuevos: [] };
+    const nReemp = sal.pares.length;
     if (nReemp) {
-      const nNuevos = this._nuevosDeRenovacion(c).length;
+      const nNuevos = sal.nuevos.length;
       A.push(this._acc({ id: 'json_recepcion', grupo: 'Documentos', label: 'JSON para recepción', beta: 'programacion_renovacion',
         hint: `nombre, grupos y GPS de ${nReemp === 1 ? 'el radio que sale' : `los ${nReemp} radios que salen`}` +
           (nNuevos ? ` · ${nNuevos} nuevo(s) van en blanco: el vendedor envía su programación a recepción` : ''),

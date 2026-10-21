@@ -183,23 +183,36 @@
     const _claveMod = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/R$/, '');
 
     // { pares: [{serial, saliente}], nuevos: [serial] } de la renovación elegida.
+    // Los que 'se devuelven' entran al final, solo para los nuevos que sobren
+    // (ASESORÍA, 2026-10-21: 21 devueltos y 21 nuevos, ningún 'reemplaza').
     function salientesDeRenovacion(valor) {
       const plan = planRenovacionDe(valor);
-      const salen = (plan?.unidades || []).filter(u => u.destino === 'reemplaza' && String(u.serial || '').trim())
+      const conSerial = (plan?.unidades || []).filter(u => String(u.serial || '').trim());
+      const salen = conSerial.filter(u => u.destino === 'reemplaza')
         .map(u => ({ saliente: String(u.serial).trim(), id: u.reemplazo_modelo_id || u.modelo_id || '',
           txt: _claveMod(u.reemplazo_modelo || u.modelo), usado: false }));
-      if (!salen.length) return { pares: [], nuevos: [] };
+      const devueltos = conSerial.filter(u => u.destino === 'devuelve')
+        .map(u => ({ saliente: String(u.serial).trim(), id: u.modelo_id || '', txt: _claveMod(u.modelo), usado: false }));
+      if (!salen.length && !devueltos.length) return { pares: [], nuevos: [] };
       const entran = [...modeloContratoPorSerial.values()].filter(v => String(v.serial || '').trim());
       const pares = [], sueltos = [];
       for (const e of entran) {                       // 1 · mismo modelo_id
         const s = salen.find(x => !x.usado && x.id && x.id === e.modelo_id);
         if (s) { s.usado = true; pares.push({ serial: e.serial, saliente: s.saliente }); } else sueltos.push(e);
       }
-      const nuevos = [];
+      const sobran = [];
       for (const e of sueltos) {                      // 2 · mismo modelo por texto (-R tolerante)
         const t = _claveMod(labelModelo(e.modelo_id, e.modelo));
         const s = t && salen.find(x => !x.usado && x.txt && (x.txt === t || x.txt.includes(t) || t.includes(x.txt)));
-        if (s) { s.usado = true; pares.push({ serial: e.serial, saliente: s.saliente }); } else nuevos.push(e.serial);
+        if (s) { s.usado = true; pares.push({ serial: e.serial, saliente: s.saliente }); } else sobran.push(e);
+      }
+      const nuevos = [];
+      for (const e of sobran) {                       // 3 · un devuelto: modelo, luego en orden
+        const t = _claveMod(labelModelo(e.modelo_id, e.modelo));
+        const d = devueltos.find(x => !x.usado && x.id && x.id === e.modelo_id)
+          || devueltos.find(x => !x.usado && x.txt && t && (x.txt === t || x.txt.includes(t) || t.includes(x.txt)))
+          || devueltos.find(x => !x.usado);
+        if (d) { d.usado = true; pares.push({ serial: e.serial, saliente: d.saliente }); } else nuevos.push(e.serial);
       }
       return { pares, nuevos };
     }
