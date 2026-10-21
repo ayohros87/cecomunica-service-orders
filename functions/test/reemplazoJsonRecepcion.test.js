@@ -167,3 +167,39 @@ test("una gestión que no es reemplazo no descarga nada", async () => {
   assert.equal(h.cap.descargas.length, 0);
   assert.match(h.cap.toasts.at(-1).msg, /No se encontró/i);
 });
+
+// ── Renovación que cambia radios (Zuleika, 2026-10-21) ──────────────────────
+// Mismo archivo, desde el plan por serial: solo los 'se reemplaza', con el
+// modelo ENTRANTE (el "por otro modelo" o, si no lo hay, el mismo).
+const RENOV = {
+  id: "ctr1", contrato_id: "SERV20261021-01", accion: "Renovación",
+  cliente_id: "cli1", cliente_nombre: "MUNICIPIO DE ARRAIJAN",
+  transicion_plan: { nivel: "serial", unidades: [
+    { serial: "21814A0123", modelo: "PNC360S-R", modelo_id: "mViejo", destino: "reemplaza",
+      reemplazo_modelo_id: "mPNC370", reemplazo_modelo: "HYTERA PNC370-R" },
+    { serial: "21N18A0318", modelo: "PNC360S-R", modelo_id: "mViejo", destino: "reemplaza" },
+    { serial: "SIGUE0001", modelo: "PNC360S-R", modelo_id: "mViejo", destino: "continua" },
+  ] },
+};
+
+test("renovación: un renglón por radio que se reemplaza, con el modelo que entra", async () => {
+  const h = montarCentro();
+  h.Centro.contratos = [RENOV];
+  await h.Centro.jsonRenovacionRecepcion("ctr1");
+  assert.equal(h.cap.descargas[0].nombre, "renovacion-SERV20261021-01.json");
+  assert.deepEqual(h.cap.pedidos, ["21814A0123", "21N18A0318"]);
+  const filas = h.leerJson();
+  assert.equal(filas.length, 2);
+  assert.equal(filas[0].radio_name, "PATRULLA 12");
+  assert.equal(filas[0].modelo_label, "HYTERA PNC370-R");
+  assert.equal(filas[1].grupos.join(","), "OBRAS,SUPERVISORES");
+  assert.equal(filas[1].modelo_label, "PNC360S-R");
+});
+
+test("renovación sin reemplazos no descarga nada", async () => {
+  const h = montarCentro();
+  h.Centro.contratos = [{ ...RENOV, transicion_plan: { nivel: "serial", unidades: [RENOV.transicion_plan.unidades[2]] } }];
+  await h.Centro.jsonRenovacionRecepcion("ctr1");
+  assert.equal(h.cap.descargas.length, 0);
+  assert.equal(h.cap.toasts.at(-1).t, "warn");
+});

@@ -318,6 +318,15 @@ Object.assign(window.Centro, {
     // reconstruido, que es donde vive esa firma (no hay PDF que abrir).
     const firmadoAcc = this._accFirmado(c);
     if (firmadoAcc) A.push(firmadoAcc);
+    // Renovación que cambia radios: la programación de los que salen, para
+    // recepción (Zuleika, 2026-10-21) — igual que el JSON de un REEMP.
+    const nReemp = c.transicion_plan?.nivel === 'serial'
+      ? (c.transicion_plan.unidades || []).filter(u => u.destino === 'reemplaza').length : 0;
+    if (nReemp) {
+      A.push(this._acc({ id: 'json_recepcion', grupo: 'Documentos', label: 'JSON para recepción',
+        hint: `nombre, grupos y GPS de ${nReemp === 1 ? 'el radio que sale' : `los ${nReemp} radios que salen`}`,
+        onclick: `Centro.jsonRenovacionRecepcion('${id}')` }));
+    }
     if (c.firmado_tipo === 'digital' && c.firma_solicitud_id) {
       A.push(this._acc({ id: 'ver_firma', grupo: 'Documentos', label: 'Ver la firma del cliente',
         hint: 'trazo, nombre y cédula de quien firmó, contra el representante registrado',

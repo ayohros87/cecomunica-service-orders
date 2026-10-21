@@ -455,31 +455,72 @@ Object.assign(window.Centro, {
     if (!g || g.tipo !== 'reemplazo') { Toast.show('No se encontró la gestión.', 'bad'); return; }
     const items = (g.items || []).filter(it => String(it.serial_saliente || '').trim());
     if (!items.length) { Toast.show('Esta gestión no tiene seriales salientes declarados.', 'warn'); return; }
+    await this._descargarJsonRecepcion({
+      clienteId: g.cliente_id || this.cliente?.id || '',
+      clienteNombre: g.cliente_nombre || this.cliente?.nombre || '',
+      // El modelo que ENTRA: el de la ficha del radio asignado y, si aún no lo
+      // hay, el solicitado — nunca el del saliente.
+      pares: items.map(it => ({
+        saliente: it.serial_saliente,
+        modelo_id: it.modelo_id_nuevo || it.modelo_solicitado_id || it.modelo_id || '',
+        modelo_label: it.modelo_nuevo || it.modelo_solicitado || it.modelo || '',
+      })),
+      archivo: `reemplazo-${gid}.json`,
+    });
+  },
+
+  // ── JSON de la renovación para recepción (Zuleika, 2026-10-21) ──────────
+  // Una renovación que cambia radios ('se reemplaza' en el plan por serial)
+  // necesita lo mismo que un REEMP: el vendedor no sabe cómo estaban
+  // programados los que salen. Sale del mismo plan que bodega ya usa para
+  // asignar: un renglón por saliente, con el modelo ENTRANTE (el declarado
+  // "por otro modelo" o, si no, el mismo). Los que continúan no se programan
+  // y los nuevos de más no tienen saliente del que copiar.
+  async jsonRenovacionRecepcion(id) {
+    const c = (this.contratos || []).find(x => x.id === id);
+    if (!c) { Toast.show('No se encontró el contrato.', 'bad'); return; }
+    const us = (c.transicion_plan?.nivel === 'serial' ? c.transicion_plan.unidades || [] : [])
+      .filter(u => u.destino === 'reemplaza' && String(u.serial || '').trim());
+    if (!us.length) { Toast.show('Esta renovación no declara radios que se reemplazan.', 'warn'); return; }
+    await this._descargarJsonRecepcion({
+      clienteId: c.cliente_id || this.cliente?.id || '',
+      clienteNombre: c.cliente_nombre || this.cliente?.nombre || '',
+      pares: us.map(u => ({
+        saliente: u.serial,
+        modelo_id: u.reemplazo_modelo_id || u.modelo_id || '',
+        modelo_label: u.reemplazo_modelo || u.modelo || '',
+      })),
+      archivo: `renovacion-${c.contrato_id || c.id}.json`,
+    });
+  },
+
+  // Común a los dos: nombre, grupos y GPS de cada saliente, en el formato que
+  // lee el lote de POC. `pares` = [{ saliente, modelo_id, modelo_label }] en el
+  // orden en que deben salir las filas.
+  async _descargarJsonRecepcion({ clienteId, clienteNombre, pares, archivo }) {
     if (typeof PocService === 'undefined') { Toast.show('No se pudo consultar POC desde esta pantalla.', 'bad'); return; }
 
     try {
       const cfgs = await PocService.configDelSaliente({
-        clienteId: g.cliente_id || this.cliente?.id || null,
-        clienteNombre: g.cliente_nombre || this.cliente?.nombre || '',
-        salientes: items.map(it => it.serial_saliente),
+        clienteId: clienteId || null,
+        clienteNombre: clienteNombre || '',
+        salientes: pares.map(p => p.saliente),
         fresh: true,
       });
 
-      const filas = items.map(it => {
-        const cfg = cfgs.get(Serial.clave(it.serial_saliente)) || null;
+      const filas = pares.map(p => {
+        const cfg = cfgs.get(Serial.clave(p.saliente)) || null;
         return {
           // cliente_id/cliente_nombre los usa el lote para auto-elegir cliente.
-          cliente_id: g.cliente_id || '',
-          cliente_nombre: g.cliente_nombre || '',
+          cliente_id: clienteId || '',
+          cliente_nombre: clienteNombre || '',
           radio_name: cfg?.radio_name || '',
           gps: cfg?.gps || false,
           grupos: cfg ? cfg.grupos : [],
-          // El modelo que ENTRA: el de la ficha del radio asignado y, si aún
-          // no lo hay, el solicitado — nunca el del saliente.
-          modelo_id: it.modelo_id_nuevo || it.modelo_solicitado_id || it.modelo_id || '',
-          modelo_label: it.modelo_nuevo || it.modelo_solicitado || it.modelo || '',
+          modelo_id: p.modelo_id,
+          modelo_label: p.modelo_label,
           // Referencia para quien lo lea; el lote de POC ignora estos dos.
-          serial_saliente: it.serial_saliente,
+          serial_saliente: p.saliente,
           ficha_saliente: cfg ? (cfg.cerrada ? 'cerrada' : 'viva') : 'sin ficha en POC',
         };
       });
@@ -494,12 +535,12 @@ Object.assign(window.Centro, {
       const blob = new Blob([JSON.stringify(filas, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `reemplazo-${gid}.json`;
+      a.href = url; a.download = archivo;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
       Toast.show(`JSON de ${filas.length} radio(s) descargado${sin ? ` — ${sin} sin datos del saliente` : ''}.`, sin ? 'warn' : 'ok');
     } catch (e) {
-      console.error('[centro] JSON de reemplazo para recepción:', e);
+      console.error('[centro] JSON para recepción:', e);
       Toast.show('No se pudo leer la configuración de los radios salientes.', 'bad');
     }
   },
