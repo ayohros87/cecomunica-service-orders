@@ -635,3 +635,12 @@ test("renovación: el archivo del vendedor llena los radios nuevos y deja los he
   assert.equal(filas.map(f => f.radio_name).join(","), "PATRULLA 1,NUEVO-1,NUEVO-2");
   assert.equal(lineas(h).join(","), "R0,R1,R2", "los seriales no se movieron");
 });
+
+test("el aviso de archivo parcial lleva el chip Beta mientras no venza", async () => {
+  const P = { id: "docP", contrato_id: "ALQ-P", tipo_contrato: "Alquiler", estado: "aprobado", seriales: 3 };
+  const h = montar({ contratos: [P] });
+  h.sandbox.Beta = { chip: (k) => (k === "programacion_renovacion" ? '<span class="beta-chip">Beta</span>' : "") };
+  await h.sandbox.cargarModelosCatalogo();
+  await subirArchivo(h, [{ cliente_id: "CLI1", radio_name: "R1", modelo_label: "HYTERA PNC460-R", grupos: ["G"] }]);
+  assert.match(h.el("previewVendedor").innerHTML, /beta-chip">Beta<\/span> ⚠ El archivo trae 1/);
+});

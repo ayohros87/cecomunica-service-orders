@@ -52,6 +52,8 @@ import '/js/ui/busy.js';
 // Envío frenado = motivo fijo en el modal + intentos_fallidos (2026-10-05).
 import '/js/ui/intento.js';
 import '/js/ui/modal.js';
+// Chip "Beta" con vencimiento (2026-10-21).
+import '/js/ui/beta.js';
 import '/js/pages/contratos-upload.js';
 import '/js/domain/garantiaEquipo.js';
 import '/js/services/pocService.js';

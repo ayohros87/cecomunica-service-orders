@@ -17,7 +17,8 @@ Object.assign(window.Centro, {
      con el motivo, nunca escondido. Editar y Anular están SIEMPRE: son las dos
      que se buscan cuando algo salió mal. */
 
-  // Descriptor: { id, label, hint, grupo, ok, motivo, onclick|href|file, danger, primaria }
+  // Descriptor: { id, label, hint, grupo, ok, motivo, onclick|href|file, danger, primaria, beta }
+  // `beta` = clave de js/ui/beta.js: chip "Beta" junto al label mientras no venza.
   _acc(a) { return { grupo: 'Avanzar', ok: true, motivo: '', ...a }; },
 
   _accionesGestion(g) {
@@ -324,7 +325,7 @@ Object.assign(window.Centro, {
       ? (c.transicion_plan.unidades || []).filter(u => u.destino === 'reemplaza').length : 0;
     if (nReemp) {
       const nNuevos = this._nuevosDeRenovacion(c).length;
-      A.push(this._acc({ id: 'json_recepcion', grupo: 'Documentos', label: 'JSON para recepción',
+      A.push(this._acc({ id: 'json_recepcion', grupo: 'Documentos', label: 'JSON para recepción', beta: 'programacion_renovacion',
         hint: `nombre, grupos y GPS de ${nReemp === 1 ? 'el radio que sale' : `los ${nReemp} radios que salen`}` +
           (nNuevos ? ` · ${nNuevos} nuevo(s) van en blanco: el vendedor envía su programación a recepción` : ''),
         onclick: `Centro.jsonRenovacionRecepcion('${id}')` }));
@@ -371,7 +372,8 @@ Object.assign(window.Centro, {
     const item = (a) => {
       const hint = a.ok ? (a.hint || '') : (a.motivo || 'no se puede ahora');
       const cls = [a.ok ? '' : 'off', a.ok && a.primaria ? 'top' : '', a.ok && a.danger ? 'mal' : ''].filter(Boolean).join(' ');
-      const cuerpo = `${this.esc(a.label)}${hint ? `<span class="cg-menu-hint">${hint}</span>` : ''}`;
+      const beta = a.beta && window.Beta ? Beta.chip(a.beta) : '';
+      const cuerpo = `${this.esc(a.label)}${beta}${hint ? `<span class="cg-menu-hint">${hint}</span>` : ''}`;
       if (!a.ok) return `<button type="button" class="${cls}" disabled aria-disabled="true">${cuerpo}</button>`;
       if (a.file) return `<label class="${cls}" style="cursor:pointer; display:block;">${cuerpo}
         <input type="file" ${a.multiple ? 'multiple' : ''} accept="${this.esc(a.accept || '')}" style="display:none;"

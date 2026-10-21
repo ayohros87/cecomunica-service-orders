@@ -15,6 +15,8 @@ import '/js/services/simCardsService.js';
 import '/js/pages/poc-sim-liberar.js';
 import '/js/ui/toast.js';
 import '/js/ui/modal.js';
+// Chip "Beta" con vencimiento (2026-10-21).
+import '/js/ui/beta.js';
 import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';
 import '/js/pages/nuevo-batch.js';

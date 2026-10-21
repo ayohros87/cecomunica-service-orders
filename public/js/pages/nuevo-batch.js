@@ -166,6 +166,8 @@
     // pareo serial a serial, y dos radios del mismo modelo recién sacados de
     // bodega son intercambiables. Lo que sobra es un radio NUEVO: no hay de
     // dónde copiar su programación, la tiene que enviar el vendedor.
+    // Chip "Beta" de todo lo de programación en renovaciones (js/ui/beta.js).
+    const betaChip = () => (typeof Beta !== 'undefined' ? Beta.chip('programacion_renovacion') : '');
     const FALTA_NUEVO = 'RADIO NUEVO — el vendedor debe enviar nombre, grupos y GPS';
     const FALTA_RELLENO = 'NO VENÍA EN EL ARCHIVO — pídele al vendedor nombre, grupos y GPS';
 
@@ -634,12 +636,15 @@
       // El paso 1 se llama "Cargar el archivo del vendedor" y en un reemplazo
       // no hay archivo — decirlo en el encabezado evita que recepción lo busque.
       const nota = document.getElementById('nbPaso1Nota');
-      if (nota) nota.textContent = pares.length ? '— un reemplazo no necesita archivo' : '';
+      const esRenovacion = !!planRenovacionDe(document.getElementById('contratoJalar')?.value || '');
+      if (nota) nota.textContent = !pares.length ? ''
+        : esRenovacion ? '— los que se reemplazan no necesitan archivo; los nuevos sí' : '— un reemplazo no necesita archivo';
       const btn = document.getElementById('btnJalarSaliente');
       if (btn) {
-        btn.innerHTML = detallePorSerial.size
+        btn.innerHTML = (detallePorSerial.size
           ? '<i data-lucide="refresh-cw"></i> Volver a jalar del saliente'
-          : `<i data-lucide="copy"></i> Jalar nombre, grupos y GPS de ${pares.length} radio(s) saliente(s)`;
+          : `<i data-lucide="copy"></i> Jalar nombre, grupos y GPS de ${pares.length} radio(s) saliente(s)`)
+          + (esRenovacion ? betaChip() : '');
         if (window.lucide?.createIcons) { try { lucide.createIcons(); } catch (_) {} }
       }
     }
@@ -784,13 +789,13 @@
       // 2026-10-21); si en cambio sobran seriales, los quita del pegado.
       const sobran = detallePorSerial.size ? 0 : Math.max(0, seriales.length - detallesBatch.length);
       const avisoParcial = sobran
-        ? `<div class="preview-aviso">⚠ El archivo trae ${detallesBatch.length} radio(s) y hay ${seriales.length} seriales: ` +
+        ? `<div class="preview-aviso">${betaChip()} ⚠ El archivo trae ${detallesBatch.length} radio(s) y hay ${seriales.length} seriales: ` +
           `<b>${sobran} radio(s) no venían en el archivo</b>. ` +
           `<button type="button" class="gadd-btn" onclick="completarFilasFaltantes()">Agregar ${sobran === 1 ? 'la fila que falta' : `las ${sobran} filas que faltan`}</button> ` +
           `y llénalas con lo que te envíe el vendedor, o quita esos seriales del lote.</div>`
         : '';
       const aviso = avisoParcial + (problemas.length
-        ? `<div class="preview-aviso">⚠ ${problemas.join(' · ')}. Corrige abajo antes de guardar — edita los grupos o usa "a todo el modelo" para copiarlos.</div>`
+        ? `<div class="preview-aviso">${sinProgramacion ? betaChip() + ' ' : ''}⚠ ${problemas.join(' · ')}. Corrige abajo antes de guardar — edita los grupos o usa "a todo el modelo" para copiarlos.</div>`
         : (sobran ? '' : `<div class="preview-ok">✅ ${detallesBatch.length} equipos · ${detallePorSerial.size ? 'configuración jalada de los salientes' : 'seriales alineados'} y grupos completos</div>`));
       // La tabla scrollea DENTRO de su caja: con la columna de origen y el
       // modelo sin partir, en pantalla angosta no debe empujar la página.
@@ -1706,7 +1711,7 @@ document.getElementById("addCliente").onclick = async () => {
         const sinProg = (detallesBatch || []).filter(vaciaDeFalta).length;
         if (sinProg) {
           const ok = await Modal.confirm({ title: 'Radios sin programación', confirmLabel: 'Guardarlos en blanco', message:
-            `<b>${sinProg} radio(s) se guardarán sin nombre ni grupos</b> (marcados en la vista previa). ` +
+            `${betaChip()} <b>${sinProg} radio(s) se guardarán sin nombre ni grupos</b> (marcados en la vista previa). ` +
             `Su programación la tiene que enviar el vendedor; cuando llegue, complétala en POC.<br><br>` +
             `Si ya te la envió, cancela y llénala en la vista previa.` });
           if (!ok) { bloquear(false); return; }
@@ -1992,7 +1997,7 @@ async function aplicarLoteVendedor(dataRaw, { origen = 'Archivo cargado', alReem
   const clienteActual = document.getElementById("cliente")?.value || "";
   const otroCliente = !!(data[0]?.cliente_id && clienteActual && data[0].cliente_id !== clienteActual);
   if (pend && !otroCliente) {
-    const cuerpo = `En el lote hay <b>${pend} radio(s) sin programación</b> y este archivo trae ${data.length}.<br><br>` +
+    const cuerpo = `${betaChip()} En el lote hay <b>${pend} radio(s) sin programación</b> y este archivo trae ${data.length}.<br><br>` +
       `<b>Completar</b> llena solo esos ${pend} (por modelo) y deja todo lo demás como está. ` +
       `<b>Reemplazar</b> descarta el lote actual y empieza con este archivo.`;
     const accion = typeof Modal.sheet === 'function'

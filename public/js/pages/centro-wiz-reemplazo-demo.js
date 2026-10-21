@@ -568,7 +568,8 @@ Object.assign(window.Centro, {
         const ok = await Modal.confirm({
           title: nNuevos ? 'Faltan datos de programación' : 'Salientes sin ficha en POC',
           confirmLabel: 'Descargar y pedir lo que falta',
-          message: `${partes.join('; ')}.<br><br>` +
+          message: (nuevos.length && window.Beta ? `${Beta.chip('programacion_renovacion')} ${Beta.FUNCIONES.programacion_renovacion.nota}<br><br>` : '') +
+            `${partes.join('; ')}.<br><br>` +
             `Van en el archivo <b>en blanco y marcados</b>. <b>El vendedor tiene que conseguir con el cliente ` +
             `el nombre, los grupos y el GPS de esos ${sin + nNuevos} radio(s) y enviárselos a recepción</b>; ` +
             `recepción los completa en el lote antes de guardar.`,
