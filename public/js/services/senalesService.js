@@ -323,7 +323,10 @@ const SenalesService = {
         .where('deleted', '==', false)
         .where('creado_por_uid', '==', uid)
         .where('estado', 'in', ['borrador', 'enviada', 'aprobada']),
-      (c) => Math.max(fecha(c.fecha_modificacion), fecha(c.enviada_en), fecha(c.fecha_aprobacion), fecha(c.fecha_creacion)) >= corte
+      (c) => {
+        const ultima = Math.max(fecha(c.fecha_modificacion), fecha(c.enviada_en), fecha(c.fecha_aprobacion), fecha(c.fecha_creacion));
+        return !ultima || ultima >= corte;   // sin fecha conocida: no se puede juzgar la edad, cuenta
+      }
     );
   },
 

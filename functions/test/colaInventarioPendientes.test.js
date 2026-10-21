@@ -328,6 +328,9 @@ function cargarPagina(datos, transicionesActivas = true) {
     ROLES: { ADMIN: "administrador", INVENTARIO: "inventario", GERENTE: "gerente" },
     Toast: { show: noop },
     canRole: (rol) => ["administrador", "inventario", "recepcion", "vendedor", "gerente"].includes(rol),
+    // Gate de módulo (core/modulos.js): Almacén lo ven admin e inventario, o
+    // quien traiga `ademas` (gestionar-seriales). Mismo contrato que exigir().
+    MODULOS: { exigir: (rol, modulo, o = {}) => o.ademas === true || ["administrador", "inventario"].includes(rol) },
     verificarAccesoYAplicarVisibilidad: (cb) => { ctx._init = cb; },
   };
   ctx.Modal = { sheet: async () => null, confirm: async () => false };
@@ -400,9 +403,15 @@ test("con la cola de transiciones apagada no se consulta ni se cuenta", async ()
   assert.equal(conCola.transiciones.length, 1);
 });
 
-test("sin permiso de bodega la bandeja no se carga", () => {
+// Desde 2026-10-09 la guarda es única (MODULOS.exigir: aviso + al inicio);
+// la página ya no pinta su propio "solo administración e inventario".
+test("sin permiso de bodega la bandeja no se carga (la guarda única la rechaza)", () => {
   const { nodos, init, ctx } = cargarPagina({ seriales: [], cambios: [], transiciones: [], fallidas: [] });
   ctx.canRole = () => false;   // tecnico tampoco gestiona seriales
+  const pedidos = [];
+  ctx.MODULOS.exigir = (rol, modulo, o = {}) => { pedidos.push([rol, modulo, o.ademas === true]); return false; };
   init("tecnico");
-  assert.match(nodos.bodyAlmacen.innerHTML, /administración e inventario/);
+  assert.deepEqual(pedidos, [["tecnico", "almacen", false]], "pasa por MODULOS.exigir con el módulo almacen y sin permiso extra");
+  assert.equal(nodos.bodyAlmacen.innerHTML, "", "no pinta la bandeja");
+  assert.equal(nodos.loader.style.display, "none", "apaga el loader");
 });

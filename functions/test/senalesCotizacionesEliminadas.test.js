@@ -53,7 +53,10 @@ for (const agregados of [true, false]) {
     assert.equal(await service.countCotizacionesPorEstado('enviada'), 1, 'enviadas: solo la viva');
     assert.equal(await service.countMisCotizacionesActivas('u1'), 2, 'mis activas: borrador + enviada vivas');
     if (agregados) {
-      assert.equal(specs.length, 3, 'un solo agregado por señal: sin restas ni backfill');
+      // "Mis activas" va por scan desde 2026-10-21 (solo las movidas en 60
+      // días: filtro de fecha en cliente, pocas por persona, sin índice nuevo);
+      // las otras dos siguen siendo UN agregado cada una.
+      assert.equal(specs.length, 2, 'un solo agregado por señal: sin restas ni backfill');
       assert.ok(specs.every(w => w.some(([c, op, v]) => c === 'deleted' && op === '==' && v === false)),
         'cada agregado filtra deleted == false');
     }

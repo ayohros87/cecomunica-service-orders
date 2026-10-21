@@ -69,7 +69,8 @@ test("K2 · Almacén Hoy y Asignar usan el kit, sin fila propia ni onclick inlin
       `${nombre}: sin onclick inline en las filas`);
   }
   const html = leer("public", "almacen", "index.html");
-  assert.ok(/bandeja\.css/.test(html) && /ui\/bandeja\.js/.test(html), "almacen/index.html debe cargar el kit");
+  // Los scripts van por el entry de Vite: el helper los lista como los sirve producción.
+  assert.ok(/bandeja\.css/.test(html) && /ui\/bandeja\.js/.test(textoScripts("almacen/index.html")), "almacen/index.html debe cargar el kit");
   assert.ok(!/\.hy-row\s*\{|\.as-item\s*\{/.test(html), "almacen/index.html no debe redefinir la fila");
 });
 

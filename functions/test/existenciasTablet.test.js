@@ -21,8 +21,11 @@ test("la cabecera marca como secundarias exactamente Asignado, Cliente, Taller, 
   for (const t of ["<th>Modelo</th>", '<th style="text-align:right;">Bodega</th>', '<th style="text-align:right;">Conteo</th>']) {
     assert.ok(thead.includes(t), `${t} se queda en tablet`);
   }
-  assert.match(html, /@media \(max-width: 1024px\) \{\s*#tab-existencias \.ex-sec \{ display: none; \}/, "la media query esconde .ex-sec");
-  assert.match(html, /\.ex-sec-resumen \{ display: none; \}/, "en escritorio el resumen no se pinta");
+  // El CSS vive en css/almacen.css desde ca74f05 (antes inline en el HTML).
+  const css = leer("public", "css", "almacen.css");
+  assert.match(css, /@media \(max-width: 1024px\) \{\s*#tab-existencias \.ex-sec \{ display: none; \}/, "la media query esconde .ex-sec");
+  assert.match(css, /\.ex-sec-resumen \{ display: none; \}/, "en escritorio el resumen no se pinta");
+  assert.match(html, /css\/almacen\.css/, "almacen/index.html carga almacen.css");
 });
 
 test("las celdas secundarias llevan .ex-sec y la expansión trae su resumen", () => {

@@ -224,11 +224,14 @@ async function handler(request, deps = {}) {
     }
     const cSnap = await tx.get(cRef);
     const cot = cSnap.exists ? (cSnap.data() || {}) : null;
-    const decision = evaluar(cot, new Date());
+    // Un solo reloj, el de admin (inyectable en pruebas): la vigencia se
+    // juzga con la misma hora que sella la respuesta. Con `new Date()` aquí,
+    // las pruebas con reloj fijo vencían al pasar la fecha del fixture.
+    const ahora = fadmin.firestore.Timestamp.now();
+    const decision = evaluar(cot, ahora.toDate());
     if (decision.accion === "nada") {
       return { status: decision.status, ...respuestaActual(cot || {}), cot: null };
     }
-    const ahora = fadmin.firestore.Timestamp.now();
     const { cot: patch, espejo } = construirPatches({ ...input, ip, userAgent }, ahora);
     tx.update(cRef, patch);
     tx.set(vRef, espejo, { merge: true });
