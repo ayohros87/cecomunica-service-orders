@@ -55,13 +55,22 @@ Object.assign(window.Centro, {
     const modelos = (this.modelos || []).map(m => `<option value="${this.esc(m.id)}" ${st.reemplazo === m.id ? 'selected' : ''}>${this.esc(m.label)}</option>`).join('');
     return `<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
       <select class="form-select" data-wcp="${this.esc(id)}" onchange="Centro._wcDestinoChange(this)" style="min-width:170px; ${d ? '' : 'border-color:var(--warn, #F59E0B);'}">
-        ${opts.map(([v, l]) => `<option value="${v}" ${v === d ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        ${opts.map(([v, l]) => `<option value="${v}" ${v === d ? 'selected' : ''}${v ? ` title="${this.esc(l + ': ' + TransicionPlan.DESTINO_AYUDA[v])}"` : ''}>${l}</option>`).join('')}</select>
       <select class="form-select" data-wcpr="${this.esc(id)}" onchange="Centro._wcConciliar()" title="Por qué se reemplaza" style="min-width:190px; ${d === 'reemplaza' ? '' : 'display:none;'}">
         <option value="">por uno nuevo del mismo modelo</option>${modelos}</select>
       <label class="cg-toggle" data-wcpf-wrap="${this.esc(id)}" style="font-size:12px; padding:3px 8px; ${d === 'continua' ? '' : 'display:none;'}" title="Refurbished de batería, antena, clip y piezas para este radio">
         <input type="checkbox" data-wcpf="${this.esc(id)}" ${st.refurbished ? 'checked' : ''} onchange="Centro._wcConciliar()"> refurbished</label>
     </div>`;
   },
+  // Qué significa cada destino, arriba de la tabla. "Se reemplaza" y "Se
+  // devuelve" se usaban como sinónimos (Alberto, 2026-10-21).
+  _wcLeyendaDestinos() {
+    const A = TransicionPlan.DESTINO_AYUDA, L = TransicionPlan.DESTINO_LABEL;
+    const li = (k) => `<li><b>${L[k]}</b>: ${this.esc(A[k])}</li>`;
+    return `<ul style="font-size:12.5px; color:var(--fg-2); margin:0 0 8px; padding-left:18px; line-height:1.5;">
+      ${['continua', 'reemplaza', 'devuelve', 'no_tiene'].map(li).join('')}</ul>`;
+  },
+
   // Los ids del pool son alfanuméricos (serial normalizado); el escape es
   // solo por si un doc sufijado (colisión __modelo) o un jsdom sin CSS.escape.
   _cssEsc(s) { return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/["\\]/g, '\\$&'); },
@@ -156,7 +165,7 @@ Object.assign(window.Centro, {
     cont.innerHTML = `
       ${vacio ? `<p style="font-size:12.5px; color:var(--fg-3); margin:0 0 8px;">El sistema no le atribuye ningún serial a este cliente. Agrega abajo los que tiene, o confirma que la cuenta no tiene equipos con serial.</p>
           <label class="cg-toggle" style="margin-bottom:8px;"><input type="checkbox" id="wcSinSeriales" ${S.sinSeriales ? 'checked' : ''} onchange="Centro._wcPlanState.sinSeriales=this.checked; Centro._wcConciliar()"> Confirmo que el cliente no tiene equipos con serial que declarar</label>`
-        : `${ss.barra}<table class="cg-tabla"><thead><tr>
+        : `${this._wcLeyendaDestinos()}${ss.barra}<table class="cg-tabla"><thead><tr>
             <th>Serial</th><th>Modelo</th><th>Según el sistema</th><th>Destino <span style="font-weight:400; text-transform:none; letter-spacing:0;">(obligatorio en cada serial)</span></th></tr></thead>
           <tbody data-sscuerpo="wcp">${ss.cuerpo}</tbody></table>`}
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
@@ -322,6 +331,16 @@ Object.assign(window.Centro, {
       const nuevos = Math.max(0, cant - min);
       partes.push(`<span style="${ok ? '' : 'color:var(--warn-deep, #92400E); font-weight:600;'}">${this.esc(l.modelo)}${l.modalidad === 'propio' ? ' (del cliente)' : ''}: ${continuan} continúa${continuan === 1 ? '' : 'n'}${reemplazan ? ` + ${reemplazan} reemplazo${reemplazan === 1 ? '' : 's'}` : ''}${nuevos ? ` + ${nuevos} nuevo${nuevos === 1 ? '' : 's'}` : ''} · línea ${cant}</span>`);
     });
+    // "Se devuelve" + radios nuevos a la vez: casi siempre era un reemplazo
+    // mal marcado (ASESORÍA, 2026-10-21: 21 devueltos y 21 nuevos). Se
+    // pregunta, no se corrige: puede ser cierto que devuelva unos y compre otros.
+    const nDevuelven = plan.unidades.filter(u => u.destino === 'devuelve').length;
+    const nNuevos = r.porLinea.reduce((s, { idx, continuan, reemplazan }) =>
+      s + Math.max(0, Number(lineas[idx].cantidad || 0) - continuan - reemplazan), 0);
+    const devuelveYNuevos = nDevuelven && nNuevos
+      ? `<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;"><b>Marcaste ${nDevuelven} “Se devuelve” y entran ${nNuevos} radio(s) nuevo(s).</b>
+          ¿Los nuevos van <b>en lugar</b> de los que salen? Entonces márcalos <b>“Se reemplaza”</b>: así recepción recibe su programación.
+          “Se devuelve” es solo cuando el cliente entrega el radio y no recibe otro a cambio.</div>` : '';
     const faltaModelo = plan.unidades.some(u => u.fuente === 'agregado' && !u.modelo && !u.modelo_id);
     const sinLinea = r.sinLinea.length
       ? `<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;"><b>${r.sinLinea.length} serial(es) sin línea en el contrato</b>: ${r.sinLinea.map(u => this.esc(u.serial)).join(', ')} — agrega su modelo${r.sinLinea.some(u => u.destino === 'reemplaza') ? ' (el del reemplazo)' : ''} en “Equipos y tarifas” o cámbiales el destino.</div>` : '';
@@ -340,7 +359,7 @@ Object.assign(window.Centro, {
       ${partes.length ? `<div style="display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; margin-top:4px;">${partes.join('')}
         ${desajuste && !this._wcSoloPlan ? `<button type="button" class="btn btn-ghost cg-act" onclick="Centro._wcCuadrar()">Cuadrar cantidades con los seriales</button>` : ''}</div>` : ''}
       ${desajuste && !this._wcSoloPlan ? `<div style="font-size:12px; color:var(--fg-3); margin-top:2px;">“Cuadrar” sube la línea a los seriales. ¿Renuevas <b>menos</b>? Los radios de un contrato que sigue aparte se sacan con “Dejarlo fuera” en su grupo; los que salen, con “Se devuelve”.</div>` : ''}
-      ${corrige}${sinLinea}${otraMod}
+      ${devuelveYNuevos}${corrige}${sinLinea}${otraMod}
       ${faltaModelo ? '<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;">Elige el modelo de cada serial agregado sin ficha.</div>' : ''}`;
     return { ok: !sinDestino && !desajuste && !r.sinLinea.length && !faltaModelo, plan, desajuste, sinLinea: r.sinLinea, faltaModelo, sinDestino, modalidad, otraModalidad: r.otraModalidad || [], modeloCorregido: r.modeloCorregido || [] };
   },

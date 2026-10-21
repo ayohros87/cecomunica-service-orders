@@ -38,6 +38,15 @@ window.TransicionPlan = {
   DESTINOS: ['continua', 'devuelve', 'reemplaza', 'no_tiene'],
   FUENTES: ['origen', 'custodia', 'migracion', 'agregado'],
   DESTINO_LABEL: { continua: 'Continúa', devuelve: 'Se devuelve', reemplaza: 'Se reemplaza', no_tiene: 'El cliente no lo tiene' },
+  // Qué significa cada destino, para el vendedor. Los vendedores usaban "se
+  // devuelve" y "se reemplaza" como si fueran lo mismo (Alberto, 2026-10-21):
+  // la diferencia es si entra OTRO radio en su lugar.
+  DESTINO_AYUDA: {
+    continua: 'el cliente se queda con este mismo radio.',
+    reemplaza: 'el cliente entrega este radio y recibe OTRO en su lugar. El nuevo lleva su programación (nombre, grupos, GPS).',
+    devuelve: 'el cliente entrega este radio y NO recibe otro a cambio: tiene un radio menos.',
+    no_tiene: 'el sistema se lo atribuye, pero el cliente no lo tiene.',
+  },
 
   // El plan aplica donde el original SE SUSTITUYE — mismo corte que
   // OrigenContrato.obligatorio (Renovación/REEMP; la Adición agrega a un
