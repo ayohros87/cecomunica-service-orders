@@ -495,6 +495,43 @@
       if (n) refrescarPreviews();
       return n;
     }
+    // ── Segundo archivo del vendedor para lo que falta (Alberto, 2026-10-21) ──
+    // Con radios pendientes (marcados `falta` y todavía vacíos), un archivo o
+    // lote nuevo del vendedor puede COMPLETAR solo esos en vez de reemplazar
+    // el lote entero. Casa por modelo: el de cada fila pendiente es el que el
+    // contrato dice de su serial (o el de la fila); las filas del archivo sin
+    // modelo reconocible se toman en orden.
+    function filasPorCompletar() {
+      return (detallesBatch || []).map((d, i) => ({ d, i }))
+        .filter(({ d }) => d.falta && !String(d.radio_name || '').trim() && !(d.grupos || []).length);
+    }
+    function completarConArchivo(data, origen) {
+      if (detallePorSerial.size) realinearDetallesPorSerial();
+      const seriales = document.getElementById('seriales').value.split('\n').map(s => s.trim()).filter(Boolean);
+      const pend = filasPorCompletar().map(({ d, i }) => {
+        const c = modeloContratoPorSerial.get(ContratosService._serialKey(seriales[i] || ''));
+        return { d, mid: c?.modelo_id || resolverModeloIdJson(d) || '', ok: false };
+      });
+      const mids = data.map(f => resolverModeloIdJson(f));
+      const usadas = new Set();
+      const tomar = (p, cond) => {
+        const j = data.findIndex((_, k) => !usadas.has(k) && cond(k));
+        if (j < 0) return;
+        const f = data[j];
+        usadas.add(j);
+        p.ok = true;
+        p.d.radio_name = f.radio_name || '';
+        p.d.gps = !!f.gps;
+        p.d.grupos = Array.isArray(f.grupos) ? f.grupos.slice() : [];
+        p.d.falta = `Completado con ${origen}`;
+      };
+      for (const p of pend) if (p.mid) tomar(p, k => mids[k] && mids[k] === p.mid);   // 1 · mismo modelo
+      for (const p of pend) if (!p.ok) tomar(p, k => !mids[k]);                       // 2 · archivo sin modelo
+      for (const p of pend) if (!p.ok && !p.mid) tomar(p, () => true);                // 3 · fila sin modelo
+      const completados = pend.filter(p => p.ok).length;
+      return { completados, siguen: pend.length - completados, sobran: data.length - usadas.size };
+    }
+
     // Filas de relleno que ya no tienen serial (se quitaron del pegado).
     function soltarRellenoSobrante() {
       if (detallePorSerial.size || !detallesBatch?.length) return;
@@ -1743,6 +1780,18 @@ document.getElementById("addCliente").onclick = async () => {
             Toast.show(`Los equipos se crearon, pero el lote #${loteActivo.codigo} sigue en la cola. Descártalo con el motivo "ya cargado".`, "warn");
           }
         }
+        // Los lotes que solo completaron radios pendientes también quedan
+        // 'cargados' — si no, se quedarían en la cola como si faltaran.
+        for (const l of lotesQueCompletan) {
+          try {
+            const u = firebase.auth().currentUser;
+            const nombre = window.Sesion?.nombre ? await Sesion.nombre(u) : "";
+            await PocService.marcarLotePreparadoCargado(l.id, idsCreados || [], { user: u, nombre });
+          } catch (e) {
+            console.warn("[nuevo-batch] no se pudo marcar el lote que completa como cargado:", e);
+            Toast.show(`Los equipos se crearon, pero el lote #${l.codigo} sigue en la cola. Descártalo con el motivo "ya cargado".`, "warn");
+          }
+        }
 
         // Fichas viejas: se cierran DESPUÉS de crear el lote nuevo — si la
         // creación falla a medias, el cliente no se queda sin ningún
@@ -1919,10 +1968,10 @@ function procesarArchivoJSON(file) {
   reader.onload = async function (e) {
     try {
       const dataRaw = JSON.parse(e.target.result);
-      // Un archivo suelto no es un lote de la cola: si antes se abrió uno,
-      // este guardado ya no lo marca como cargado.
-      soltarLotePreparado();
-      await aplicarLoteVendedor(dataRaw, { origen: 'Archivo cargado' });
+      // Un archivo suelto no es un lote de la cola: si REEMPLAZA al que se
+      // abrió, este guardado ya no lo marca como cargado. Si solo completa
+      // los que faltan, el lote de la cola sigue siendo la base.
+      await aplicarLoteVendedor(dataRaw, { origen: `Archivo ${file.name || 'cargado'}`, alReemplazar: soltarLotePreparado });
     } catch (err) {
       Toast.show('Error al leer el archivo JSON: ' + err, 'bad');
     }
@@ -1933,9 +1982,38 @@ function procesarArchivoJSON(file) {
 // Cascada del lote del vendedor. La comparten el archivo JSON y los lotes
 // preparados de la cola (poc_lotes_preparados.filas es el mismo arreglo), así
 // que "Cargar" deja la página exactamente como soltar el archivo.
-async function aplicarLoteVendedor(dataRaw, { origen = 'Archivo cargado' } = {}) {
+async function aplicarLoteVendedor(dataRaw, { origen = 'Archivo cargado', alReemplazar = null } = {}) {
   if (!Array.isArray(dataRaw)) throw "Formato inválido";
   const data = dataRaw.map(normalizarDetalleBatch);
+
+  // Hay radios esperando su programación: este archivo puede ser lo que el
+  // vendedor mandó para ellos. Solo si es del MISMO cliente.
+  const pend = filasPorCompletar().length;
+  const clienteActual = document.getElementById("cliente")?.value || "";
+  const otroCliente = !!(data[0]?.cliente_id && clienteActual && data[0].cliente_id !== clienteActual);
+  if (pend && !otroCliente) {
+    const cuerpo = `En el lote hay <b>${pend} radio(s) sin programación</b> y este archivo trae ${data.length}.<br><br>` +
+      `<b>Completar</b> llena solo esos ${pend} (por modelo) y deja todo lo demás como está. ` +
+      `<b>Reemplazar</b> descarta el lote actual y empieza con este archivo.`;
+    const accion = typeof Modal.sheet === 'function'
+      ? await Modal.sheet({ title: '¿Este archivo completa lo que falta?', icon: 'file-plus', html: cuerpo, buttons: [
+          { action: 'cancelar', label: 'Cancelar' },
+          { action: 'reemplazar', label: 'Reemplazar el lote' },
+          { action: 'completar', label: `Completar los ${pend}`, primary: true },
+        ] })
+      : (await Modal.confirm({ title: '¿Este archivo completa lo que falta?', confirmLabel: `Completar los ${pend}`, message: cuerpo }) ? 'completar' : 'cancelar');
+    if (!accion || accion === 'cancelar') return null;
+    if (accion === 'completar') {
+      const r = completarConArchivo(data, origen);
+      refrescarPreviews();
+      const partes = [`${origen}: ${r.completados} radio(s) completados`];
+      if (r.siguen) partes.push(`${r.siguen} siguen sin programación — pídesela al vendedor`);
+      if (r.sobran) partes.push(`${r.sobran} fila(s) del archivo no tenían a quién completar (otro modelo o ya llenos)`);
+      Toast.show(partes.join(' · ') + '.', (r.siguen || r.sobran) ? 'warn' : 'ok');
+      return { modo: 'completar', ...r };
+    }
+  }
+  if (alReemplazar) alReemplazar();
   // El archivo manda sobre lo jalado del saliente: si recepción sube un
   // JSON, ese es el detalle del lote (y vuelve a casar por posición).
   olvidarDetalleSaliente();
@@ -1971,10 +2049,12 @@ async function aplicarLoteVendedor(dataRaw, { origen = 'Archivo cargado' } = {})
 // 2026-09-28, 4.7 #9). `loteActivo` es el lote abierto con "Cargar": al crear
 // los equipos se marca 'cargado' con sus ids.
 let loteActivo = null;
+let lotesQueCompletan = [];   // lotes de la cola que solo completaron radios pendientes
 let lotesPendientes = [];
 
 function soltarLotePreparado() {
   loteActivo = null;
+  lotesQueCompletan = [];
   const nota = document.getElementById("nbPaso1Nota");
   if (nota) nota.textContent = "";
 }
@@ -2010,7 +2090,7 @@ async function cargarLotesPreparados() {
   cont.innerHTML = lotesPendientes.map(l => {
     const vend = l.creado_por_nombre || l.creado_por_email || "—";
     const parte = l.partes > 1 ? ` · parte ${l.parte} de ${l.partes}` : "";
-    const activo = loteActivo && loteActivo.id === l.id;
+    const activo = (loteActivo && loteActivo.id === l.id) || lotesQueCompletan.some(x => x.id === l.id);
     return `<tr${activo ? ' class="nb-lote-activo"' : ""}>
       <td><strong>${_escLote(l.cliente_nombre || "sin cliente")}</strong><div class="nb-lote-sub">#${_escLote(l.codigo || l.id.slice(0, 6))}${parte}${l.notas ? " · " + _escLote(l.notas) : ""}</div></td>
       <td>${_escLote(vend)}</td>
@@ -2044,11 +2124,20 @@ async function cargarLotePreparado(id) {
     cargarLotesPreparados();
     return false;
   }
+  let r;
   try {
-    await aplicarLoteVendedor(lote.filas || [], { origen: `Lote #${lote.codigo || id.slice(0, 6)} de ${lote.creado_por_nombre || "ventas"}` });
+    r = await aplicarLoteVendedor(lote.filas || [], { origen: `Lote #${lote.codigo || id.slice(0, 6)} de ${lote.creado_por_nombre || "ventas"}`, alReemplazar: soltarLotePreparado });
   } catch (err) {
     Toast.show("El lote tiene un formato inválido: " + err, "bad");
     return false;
+  }
+  if (r === null) return false;
+  // Completó lo que faltaba: el lote base sigue mandando, y este también se
+  // marca 'cargado' al guardar (el vendedor lo ve en "Mis lotes enviados").
+  if (r?.modo === 'completar') {
+    lotesQueCompletan.push({ id, codigo: lote.codigo || id.slice(0, 6) });
+    cargarLotesPreparados();
+    return true;
   }
   loteActivo = { id, codigo: lote.codigo || id.slice(0, 6), cliente_nombre: lote.cliente_nombre || "" };
   const notas = document.getElementById("notas");

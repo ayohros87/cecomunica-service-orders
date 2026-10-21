@@ -568,3 +568,70 @@ test("renovación: el que entra hereda del que sale, los nuevos van marcados y l
   assert.ok(h.toasts.some(t => /2 radio\(s\) nuevo\(s\) sin programación — el vendedor/.test(t.msg)));
   assert.match(h.el("previewVendedor").innerHTML, /RADIO NUEVO — el vendedor debe enviar/);
 });
+
+// "¿Recepción puede agregar un segundo archivo del vendedor para los que le
+// faltan?" (Alberto, 2026-10-21): sí — completa SOLO los pendientes, por
+// modelo, sin tocar lo que ya estaba lleno.
+test("un segundo archivo completa solo los radios que faltaban", async () => {
+  const P = { id: "docP", contrato_id: "ALQ-P", tipo_contrato: "Alquiler", estado: "aprobado", seriales: 5 };
+  const h = montar({ contratos: [P] });
+  await h.sandbox.cargarModelosCatalogo();
+  await subirArchivo(h, Array.from({ length: 3 }, (_, i) => ({
+    cliente_id: "CLI1", radio_name: `R${i + 1}`, modelo_label: "HYTERA PNC460-R", gps: false, grupos: ["G"] })));
+  h.sandbox.completarFilasFaltantes();
+
+  await subirArchivo(h, [
+    { cliente_id: "CLI1", radio_name: "NUEVO-A", modelo_label: "HYTERA PNC460-R", gps: true, grupos: ["G2"] },
+    { cliente_id: "CLI1", radio_name: "NUEVO-B", modelo_label: "HYTERA PNC460-R", gps: false, grupos: ["G2"] },
+  ]);
+
+  const filas = vmGet(h, "detallesBatch");
+  assert.equal(filas.length, 5, "no reemplazó el lote");
+  assert.equal(filas.map(f => f.radio_name).join(","), "R1,R2,R3,NUEVO-A,NUEVO-B");
+  assert.equal(filas[3].gps, true);
+  assert.equal(vmGet(h, "filasPorCompletar().length"), 0);
+  assert.ok(h.toasts.some(t => /2 radio\(s\) completados/.test(t.msg)));
+  assert.doesNotMatch(h.el("previewVendedor").innerHTML, /sin programación/);
+});
+
+test("si recepción cancela, el segundo archivo no toca nada", async () => {
+  const P = { id: "docP", contrato_id: "ALQ-P", tipo_contrato: "Alquiler", estado: "aprobado", seriales: 4 };
+  const h = montar({ contratos: [P] });
+  await h.sandbox.cargarModelosCatalogo();
+  await subirArchivo(h, [{ cliente_id: "CLI1", radio_name: "R1", modelo_label: "HYTERA PNC460-R", grupos: ["G"] }]);
+  h.sandbox.completarFilasFaltantes();
+  h.estado.confirmar = false;
+
+  await subirArchivo(h, [{ cliente_id: "CLI1", radio_name: "X", modelo_label: "HYTERA PNC460-R", grupos: ["G"] }]);
+
+  const filas = vmGet(h, "detallesBatch");
+  assert.equal(filas.length, 4);
+  assert.equal(filas[0].radio_name, "R1");
+  assert.equal(vmGet(h, "filasPorCompletar().length"), 3);
+});
+
+test("renovación: el archivo del vendedor llena los radios nuevos y deja los heredados", async () => {
+  const R = {
+    id: "docR", contrato_id: "SERV-R", tipo_contrato: "Servicio", estado: "aprobado", accion: "Renovación",
+    composicion: [{ modelo_id: "mPNC360", modelo: "PNC360S-R", pfx: "R", n: 3 }],
+    transicion_plan: { nivel: "serial", unidades: [
+      { serial: "VIEJO1", modelo_id: "mPNC360", modelo: "PNC360S-R", destino: "reemplaza" },
+    ] },
+  };
+  const h = montar({ contratos: [R] });
+  await h.sandbox.cargarModelosCatalogo();
+  h.sandbox.Serial = { clave: (s) => String(s || "").trim().toUpperCase() };
+  h.sandbox.PocService.configDelSaliente = async () =>
+    new Map([["VIEJO1", { radio_name: "PATRULLA 1", grupos: ["SEG"], gps: true }]]);
+  await conContratoElegido(h, "docR");
+  await h.sandbox.jalarSerialesDesdeContrato();
+
+  await subirArchivo(h, [
+    { cliente_id: "CLI1", radio_name: "NUEVO-1", modelo_label: "HYTERA PNC360S-R", grupos: ["SEG"] },
+    { cliente_id: "CLI1", radio_name: "NUEVO-2", modelo_label: "HYTERA PNC360S-R", grupos: ["SEG"] },
+  ]);
+
+  const filas = vmGet(h, "detallesBatch");
+  assert.equal(filas.map(f => f.radio_name).join(","), "PATRULLA 1,NUEVO-1,NUEVO-2");
+  assert.equal(lineas(h).join(","), "R0,R1,R2", "los seriales no se movieron");
+});
