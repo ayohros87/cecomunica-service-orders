@@ -640,6 +640,11 @@ const PocService = {
   // includeMetadataChanges: sin él no llega el aviso de "ya sincronizó".
   // Devuelve la función para cancelar la suscripción.
   escuchar(nombre, onDatos, onError) {
+    if (nombre !== 'cerradas') return this._escucharVivas(onDatos, onError);
+    return this._escucharCompleto(nombre, onDatos, onError);
+  },
+
+  _escucharCompleto(nombre, onDatos, onError, alSincronizar = null) {
     const db = firebase.firestore();
     const q = nombre === 'cerradas'
       ? db.collection('poc_devices').where('deleted', '==', true)
@@ -648,8 +653,120 @@ const PocService = {
           .orderBy('deleted')
           .orderBy(this._sortFieldFor('created_at'), 'desc');
     return q.onSnapshot({ includeMetadataChanges: true },
-      snap => onDatos(snap.docs.map(d => ({ id: d.id, ...d.data() })), !snap.metadata.fromCache),
+      snap => {
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (alSincronizar && !snap.metadata.fromCache) alSincronizar(docs);
+        onDatos(docs, !snap.metadata.fromCache);
+      },
       onError);
+  },
+
+  // ── Vivas por DELTA (auditoría de lecturas 2026-10-21) ─────────────────
+  // La suscripción completa a las vivas (~3,900 fichas) se cobra entera cada
+  // vez que se reabre pasados 30 min: el buscador del PoC era el 15% de las
+  // lecturas del día. Ahora, si este navegador ya sincronizó alguna vez, el
+  // conjunto sale de:
+  //   · la caché LOCAL de Firestore (gratis) — lo que se vio la última vez,
+  //   · + lo que cambió desde entonces: `sync_at > marca` (el trigger
+  //     onPocDeviceSello lo sella en TODA escritura, venga de donde venga),
+  //   · validado con un count() del servidor de las vivas (~4 lecturas).
+  // Si el conteo no cuadra (caché recortada por el recolector, un doc borrado
+  // de verdad, un alta en el mismo segundo) se descarta y se va a la
+  // suscripción completa de siempre: nunca un conjunto incompleto en silencio.
+  // La marca es el mayor `sync_at` VISTO del servidor (nunca el reloj del
+  // equipo) menos un margen, por si un sello se confirma fuera de orden.
+  _SYNC_KEY: 'poc_vivas_sync_v1',
+  _SYNC_MARGEN_MS: 2 * 60 * 1000,
+
+  _leerMarca() {
+    try {
+      const uid = firebase.auth().currentUser?.uid;
+      const m = JSON.parse(localStorage.getItem(this._SYNC_KEY) || 'null');
+      return (uid && m && m.uid === uid && Number.isFinite(m.ms)) ? m.ms : null;
+    } catch (_) { return null; }
+  },
+  _guardarMarca(docs, previa = 0) {
+    let ms = previa || 0;
+    for (const d of docs) {
+      const t = d && d.sync_at && typeof d.sync_at.toMillis === 'function' ? d.sync_at.toMillis() : 0;
+      if (t > ms) ms = t;
+    }
+    try {
+      const uid = firebase.auth().currentUser?.uid;
+      if (uid) localStorage.setItem(this._SYNC_KEY, JSON.stringify({ uid, ms }));
+    } catch (_) { /* sin localStorage: la próxima vez, completa */ }
+    return ms;
+  },
+  _ordenVivas(a, b) {
+    const t = (x) => (x && x.created_at && typeof x.created_at.toMillis === 'function') ? x.created_at.toMillis() : -Infinity;
+    return t(b) - t(a);
+  },
+
+  _escucharVivas(onDatos, onError) {
+    const marca = this._leerMarca();
+    const completa = () => this._escucharCompleto('vivas', onDatos, onError, (docs) => this._guardarMarca(docs));
+    if (marca == null) return completa();
+
+    const db = firebase.firestore();
+    let cancelado = false;
+    let unsub = null;
+    let uso = 'delta';
+    const cancelar = () => { cancelado = true; try { if (unsub) unsub(); } catch (_) { /* ya cerrada */ } };
+    const aCompleta = (motivo) => {
+      if (cancelado) return;
+      try { if (unsub) unsub(); } catch (_) { /* ya cerrada */ }
+      console.info('[POC] vivas por delta → suscripción completa:', motivo);
+      try { window.Uso?.accion('poc.vivas.' + motivo); } catch (_) { /* telemetría */ }
+      uso = 'completa';
+      unsub = completa();
+    };
+
+    (async () => {
+      // La MISMA query que la suscripción completa: el orderBy por created_at
+      // también filtra (una ficha sin created_at nunca estuvo en el conjunto).
+      const qVivas = db.collection('poc_devices').where('deleted', '!=', true)
+        .orderBy('deleted').orderBy(this._sortFieldFor('created_at'), 'desc');
+      let mapa, total;
+      try {
+        const [cache, cuenta] = await Promise.all([
+          qVivas.get({ source: 'cache' }),
+          qVivas.count().get().then(s => s.data().count),
+        ]);
+        mapa = new Map(cache.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
+        total = cuenta;
+      } catch (e) {
+        return aCompleta('sin-cache');
+      }
+      if (cancelado) return;
+      let marcaVista = marca;
+      let validado = false;
+      const desde = firebase.firestore.Timestamp.fromMillis(Math.max(0, marca - this._SYNC_MARGEN_MS));
+      unsub = db.collection('poc_devices').where('sync_at', '>', desde)
+        .onSnapshot({ includeMetadataChanges: true }, (snap) => {
+          if (cancelado || uso !== 'delta') return;
+          // Hasta el primer snapshot del servidor el delta puede venir de la
+          // caché y estar incompleto: no vale.
+          if (!validado && snap.metadata.fromCache) return;
+          const cambios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          // Mismo criterio que qVivas (y que el count): `deleted != true` deja
+          // fuera la ficha sin el campo, y el orderBy la que no tiene created_at.
+          for (const d of cambios) {
+            if (d.deleted == null || d.deleted === true || d.created_at == null) mapa.delete(d.id); else mapa.set(d.id, d);
+          }
+          if (!validado) {
+            if (mapa.size !== total) return aCompleta('conteo-no-cuadra');
+            validado = true;
+            try { window.Uso?.accion('poc.vivas.delta-ok'); } catch (_) { /* telemetría */ }
+          }
+          marcaVista = this._guardarMarca(cambios, marcaVista);
+          onDatos([...mapa.values()].sort((a, b) => this._ordenVivas(a, b)), true);
+        }, (err) => {
+          if (!validado) aCompleta('error-delta');
+          else if (onError) onError(err);
+        });
+    })();
+
+    return () => { cancelar(); };
   },
 
   // ── Group administration ─────────────────────────────────────────────
