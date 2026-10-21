@@ -92,7 +92,13 @@ async function cargarCuenta(clienteId) {
 async function recalcularCuenta(clienteId, cfg = null) {
   const c = cfg || await config();
   const { ref, cliente, contratos, unidades, gestiones } = await cargarCuenta(clienteId);
-  if (!cliente || cliente.deleted) return null;
+  if (!cliente) return null;
+  // Cuenta borrada (p.ej. fusionada como duplicado): no se calcula, pero se le
+  // quita la marca — si no, el barrido de marcados la reprocesa cada 10 min.
+  if (cliente.deleted) {
+    if (cliente.regularizacion_dirty_at) await ref.update({ regularizacion_dirty_at: admin.firestore.FieldValue.delete() });
+    return null;
+  }
   const reg = R.calcular({ contratos, unidades, gestiones, opts: c });
   const r = await _guardar(ref, cliente, reg);
   return { clienteId, nombre: cliente.nombre || "", ...r };
