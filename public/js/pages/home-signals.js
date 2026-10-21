@@ -180,7 +180,7 @@ window.HomeSignals = (() => {
     },
     S7: {
       modulo: 'cotizaciones', icon: 'file-clock',
-      label: 'Mis cotizaciones activas', sub: 'borradores y enviadas',
+      label: 'Mis cotizaciones activas', sub: 'con movimiento en 60 días',
       // ?estado=activas: la lista aterriza con borrador+enviada+aprobada ya
       // filtradas y las trae TODAS, no solo las de la primera página
       // (auditoría UX 2026-09-28 §4.5 #12). Antes caía en "Todas".

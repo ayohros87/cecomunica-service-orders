@@ -303,15 +303,27 @@ const SenalesService = {
     );
   },
 
-  countMisCotizacionesActivas(uid) {
+  // Solo las que se movieron en los últimos `cotizacion_stale_dias` (60):
+  // Alberto tenía "4 activas" de febrero y junio (2026-10-21). Misma idea que
+  // el corte de "por asignar"/"listas para entregar": lo viejo no infla la
+  // tarjeta. Son pocas por persona: scan acotado con filtro en cliente (sin
+  // índice nuevo); la lista ?estado=activas las sigue mostrando todas.
+  COTIZACION_STALE_DIAS: 60,
+  async countMisCotizacionesActivas(uid) {
     const db = firebase.firestore();
+    let dias = this.COTIZACION_STALE_DIAS;
+    try {
+      const cfg = window.EmpresaService?.getDoc ? (await EmpresaService.getDoc('config')) || {} : {};
+      if (Number(cfg.cotizacion_stale_dias) >= 1) dias = Number(cfg.cotizacion_stale_dias);
+    } catch { /* default */ }
+    const corte = Date.now() - dias * 86400000;
+    const fecha = (v) => (v?.toDate ? v.toDate().getTime() : (v ? new Date(v).getTime() : 0)) || 0;
     return this._count(
       db.collection('cotizaciones')
         .where('deleted', '==', false)
         .where('creado_por_uid', '==', uid)
         .where('estado', 'in', ['borrador', 'enviada', 'aprobada']),
-      null,
-      { col: 'cotizaciones', wheres: [['deleted', '==', false], ['creado_por_uid', '==', uid], ['estado', 'in', ['borrador', 'enviada', 'aprobada']]] }
+      (c) => Math.max(fecha(c.fecha_modificacion), fecha(c.enviada_en), fecha(c.fecha_aprobacion), fecha(c.fecha_creacion)) >= corte
     );
   },
 
@@ -554,7 +566,30 @@ const SenalesService = {
       return rows.sort((a, b) => (a.vendedor ? 1 : 0) - (b.vendedor ? 1 : 0) || b.puntos - a.puntos);
     });
   },
-  async countCuentasPorRegularizar(opts) { return (await this.listCuentasPorRegularizar(opts)).filter(r => !r.pospuesto).length; },
+  // El total de TODAS las carteras (REGG, sin uid) lo escribe el servidor en
+  // empresa/senales_totales (lib/senalesTotales.js, tras cada barrido de
+  // regularización): antes el home bajaba 252 fichas de cliente para pintar
+  // "129" (2026-10-21). La cartera del vendedor (REGV) sigue en cliente: son
+  // pocas fichas y el snooze es suyo. Sin total o rancio (> 36 h): recuento.
+  async countCuentasPorRegularizar(opts = {}) {
+    if (!opts.uid) {
+      const t = await this._totalServidor('regg');
+      if (t !== null) return t;
+    }
+    return (await this.listCuentasPorRegularizar(opts)).filter(r => !r.pospuesto).length;
+  },
+  _TOTAL_MAX_MS: 36 * 60 * 60 * 1000,
+  async _totalServidor(campo) {
+    try {
+      const d = window.EmpresaService?.getDoc
+        ? await EmpresaService.getDoc('senales_totales', { fresh: true })
+        : (await firebase.firestore().collection('empresa').doc('senales_totales').get()).data();
+      const n = d?.[campo];
+      const at = d?.[`${campo}_at`]?.toDate?.();
+      if (typeof n !== 'number' || !at || Date.now() - at.getTime() > this._TOTAL_MAX_MS) return null;
+      return n;
+    } catch { return null; }
+  },
 
   _memoList(clave, fn) {
     const hit = this._listMemo.get(clave);
@@ -869,7 +904,13 @@ const SenalesService = {
       return rows.sort((a, b) => b.dias - a.dias);
     });
   },
-  async countComisionesListas() { return (await this.listComisionesListas()).length; },
+  // Total del servidor (onFacturacionAvisoWrite lo reescribe cuando cambia
+  // `comision` de un aviso); el recuento de 61 avisos queda de respaldo.
+  async countComisionesListas() {
+    const t = await this._totalServidor('com');
+    if (t !== null) return t;
+    return (await this.listComisionesListas()).length;
+  },
 
   // Conteos derivados de las filas (excluyen pospuestas, como el correo).
   async countListasParaEntregar() { return this._conteo(await this.listListasParaEntregar(), r => !r.pospuesto && !r.viejo); },

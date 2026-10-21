@@ -7,17 +7,27 @@
 //      idempotente). Recepción no puede escribir mail_queue por reglas.
 //   2) Derivar `estado` de los pasos (autoridad del servidor): 'hecho' cuando
 //      todos los que aplican están hechos, 'pendiente' si alguno se deshizo.
+//   3) Si cambió `comision` (o el aviso nace / se borra), recontar el total
+//      "Comisiones listas" del home en empresa/senales_totales (2026-10-21).
 // Cada escritura re-dispara el trigger; la segunda pasada es no-op.
 
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const FA = require("../../lib/facturacionAvisos");
+const ST = require("../../lib/senalesTotales");
 
 module.exports = onDocumentWritten(
   { document: "facturacion_avisos/{avisoId}", region: "us-central1" },
   async (event) => {
+    const before = event.data?.before?.data();
     const after = event.data?.after?.data();
+    // 3) Total de comisiones listas: solo cuando `comision` cambió de verdad.
+    //    Va primero y por su cuenta: nunca frena el reenvío ni el estado.
+    if (JSON.stringify(before?.comision ?? null) !== JSON.stringify(after?.comision ?? null)) {
+      try { await ST.escribirCom(); }
+      catch (e) { logger.warn("[onFacturacionAvisoWrite] no se pudo escribir senales_totales.com", { message: e.message }); }
+    }
     if (!after) return null;
     const avisoId = event.params.avisoId;
     const ref = db.collection("facturacion_avisos").doc(avisoId);

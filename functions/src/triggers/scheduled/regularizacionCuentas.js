@@ -14,6 +14,14 @@ const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const { APP_BASE_URL } = require("../../lib/inventario");
 const RC = require("../../domain/regularizacionCuentas");
+const ST = require("../../lib/senalesTotales");
+
+// Total "Cuentas por regularizar" para el home (empresa/senales_totales):
+// nunca tumba el barrido — el número viejo se queda y el home lo recontará.
+async function totalReggSeguro(origen) {
+  try { const n = await ST.escribirRegg(); logger.info(`[${origen}] senales_totales.regg`, { regg: n }); }
+  catch (e) { logger.warn(`[${origen}] no se pudo escribir senales_totales.regg`, { message: e.message }); }
+}
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
 
@@ -38,6 +46,7 @@ const regularizacionDiaria = onSchedule(
     const t0 = Date.now();
     const R = await RC.barridoCompleto();
     logger.info("[regularizacionDiaria] barrido", { ...R, nuevas_exceden: R.nuevas_exceden.length, ms: Date.now() - t0 });
+    await totalReggSeguro("regularizacionDiaria");
 
     if (R.nuevas_exceden.length) {
       const cfg = await RC.config();
@@ -81,6 +90,8 @@ const regularizacionMarcadas = onSchedule(
   async () => {
     const R = await RC.barridoMarcados({ max: 60 });
     if (R.revisadas) logger.info("[regularizacionMarcadas] barrido", R);
+    // Solo si algo cambió: recontar cada 10 min costaría más que lo que ahorra.
+    if (R.escritas) await totalReggSeguro("regularizacionMarcadas");
     return null;
   }
 );
