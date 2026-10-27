@@ -35,6 +35,12 @@ const WRITE = process.argv.includes("--write");
 const EMAIL = (process.argv.find((a) => a.startsWith("--email=")) || "").split("=")[1]
   || "script:aplica-modelos-poc-2026-10-21";
 const MOTIVO = "Modelo recuperado (revisión de Brenda 2026-10-21 sobre la propuesta del 2026-10-06)";
+// --extra=SERIAL:evidencia,SERIAL:evidencia → filas de "Por revisar" que Brenda
+// confirmó después por correo (sin marcarlas en el Excel). Se aplica el
+// "Modelo correcto" de la fila.
+const EXTRA = new Map((process.argv.find((a) => a.startsWith("--extra=")) || "")
+  .split("=").slice(1).join("=").split(",").filter(Boolean)
+  .map((x) => { const [s, ...ev] = x.split(":"); return [s.trim().toUpperCase(), ev.join(":").trim() || "confirmado por correo"]; }));
 
 const txt = (c) => {
   const x = c.value;
@@ -67,10 +73,11 @@ async function leerExcel() {
     if (r.hidden) { fuera.ocultas++; return; }
     const nivel = txt(r.getCell(1)).slice(0, 1), ev = txt(r.getCell(11)), mc = txt(r.getCell(10));
     const g = verde(r);
-    if (!(g || nivel === "A" || ev)) { fuera.sinEvidencia++; return; }
+    const extra = EXTRA.get(txt(r.getCell(5)).toUpperCase());
+    if (!(g || nivel === "A" || ev || extra)) { fuera.sinEvidencia++; return; }
     filas.push({ hoja: "Por revisar", fila: i, cliente: txt(r.getCell(2)), serial: txt(r.getCell(5)),
       label: mc, modelo_id: catalogo.get(mc) || "", device: txt(r.getCell(15)), ficha: txt(r.getCell(16)),
-      base: g ? `verde (${ev || "sin nota"})` : nivel === "A" ? "orden + prefijo" : ev });
+      base: g ? `verde (${ev || "sin nota"})` : nivel === "A" ? "orden + prefijo" : ev || extra });
   });
   return { filas, fuera };
 }
@@ -170,7 +177,9 @@ async function leerExcel() {
   }
   const dir = path.join(__dirname, "..", "..", "local-data", "modelos-poc-2026-10-21");
   fs.mkdirSync(dir, { recursive: true });
-  const out = path.join(dir, WRITE ? "bitacora-escrito.json" : "bitacora-dryrun.json");
+  // Un archivo por corrida: una segunda pasada no pisa la bitácora de la primera.
+  const sello = new Date().toISOString().replace(/[:.]/g, "-");
+  const out = path.join(dir, `${WRITE ? "bitacora-escrito" : "bitacora-dryrun"}-${sello}.json`);
   fs.writeFileSync(out, JSON.stringify({ at: new Date().toISOString(), resultado: r, saltadas: salto, cambios: bitacora }, null, 1));
   console.log(`\nBitácora: ${out}`);
   process.exit(0);
