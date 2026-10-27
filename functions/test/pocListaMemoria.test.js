@@ -159,11 +159,13 @@ test("M4 · marcar una casilla mientras buscas no vuelve a bajar las fichas", as
   assert.equal(llamadas.getAll, 1, "las casillas filtran en memoria");
 });
 
-// ── Agrupado por programación (Brenda, 2026-10-13) ───────────────────────
-// Al consultar un cliente, los radios salen por GRUPO (FEPACI 1, FEPACI 2…)
-// y dentro de cada grupo por Unit ID, en vez de en el orden en que se
-// registraron. Los sin grupo cierran la lista. Es el desempate al ordenar por
-// Cliente (el orden por defecto) y una columna ordenable por sí misma.
+// ── Orden en pantalla y en papel (Brenda, 2026-10-13 y 2026-10-27) ────
+// En PANTALLA la lista es cronológica: lo último registrado arriba y, dentro
+// de un mismo lote (todas las fichas comparten created_at porque se graban
+// en un solo batch), el Unit ID más alto primero. En PAPEL (Excel y hoja de
+// imprimir) y en la columna Grupos, los radios salen por programación:
+// cliente → grupo (FEPACI 1, FEPACI 2…) → Unit ID, sin grupo al final.
+const ts = (ms) => ({ toMillis: () => ms, seconds: Math.floor(ms / 1000) });
 const FEPACI = [
   { id: "p12", unit_id: "275706", unit_id_num: 275706, cliente: "FEPACI", activo: true, grupos: ["FEPACI 2"] },
   { id: "p03", unit_id: "275697", unit_id_num: 275697, cliente: "FEPACI", activo: true, grupos: ["FEPACI 1"] },
@@ -173,20 +175,31 @@ const FEPACI = [
   { id: "p11", unit_id: "275705", unit_id_num: 275705, cliente: "FEPACI", activo: true, grupos: ["FEPACI 2"] },
   { id: "otro", unit_id: "1", unit_id_num: 1, cliente: "ZETA", activo: true, grupos: ["A"] },
 ];
+// Dos lotes de FETRATEDA: el viejo (273070–273071) y el de la renovación
+// (275748–275750), como en la captura de Brenda del 2026-10-27.
+const FETRATEDA = [
+  { id: "v1", unit_id: "273070", unit_id_num: 273070, cliente: "FETRATEDA", activo: true, grupos: ["SEGURIDAD"], created_at: ts(1000) },
+  { id: "v2", unit_id: "273071", unit_id_num: 273071, cliente: "FETRATEDA", activo: true, grupos: ["SEGURIDAD"], created_at: ts(1000) },
+  { id: "n3", unit_id: "275750", unit_id_num: 275750, cliente: "FETRATEDA", activo: true, grupos: ["SEGURIDAD"], created_at: ts(5000) },
+  { id: "n1", unit_id: "275748", unit_id_num: 275748, cliente: "FETRATEDA", activo: true, grupos: ["ADMIN"], created_at: ts(5000) },
+  { id: "n2", unit_id: "275749", unit_id_num: 275749, cliente: "FETRATEDA", activo: true, grupos: [], created_at: ts(5000) },
+  { id: "otro", unit_id: "1", unit_id_num: 1, cliente: "ZETA", activo: true, grupos: ["A"], created_at: ts(9000) },
+];
 
-test("G1 · buscar un cliente lo pinta por grupo y, dentro del grupo, por Unit ID; sin grupo al final", async () => {
-  const { P, el } = montar({ fichas: FEPACI });
+test("G1 · buscar un cliente lo pinta cronológico: el lote nuevo arriba y, dentro del lote, el Unit ID más alto primero", async () => {
+  const { P, el } = montar({ fichas: FETRATEDA });
   el("filtroCampo").value = "cliente";
-  el("filtroValor").value = "fepaci";
+  el("filtroValor").value = "fetrateda";
   P.filtrar(); await esperar();
-  assert.deepEqual(pintado(el), ["p01", "p03", "p11", "p12", "p18", "pSG"]);
+  assert.deepEqual(pintado(el), ["n3", "n2", "n1", "v2", "v1"]);
 });
 
-test("G2 · ordenar por Grupos al revés invierte los grupos, pero los sin grupo siguen al final", async () => {
+test("G2 · ordenar por Grupos agrupa por programación y al revés invierte los grupos, pero los sin grupo siguen al final", async () => {
   const { P, el } = montar({ fichas: FEPACI });
   el("filtroCampo").value = "cliente";
   el("filtroValor").value = "fepaci";
   P.filtrar(); await esperar();
+  assert.deepEqual(pintado(el), ["p18", "p12", "p11", "p03", "p01", "pSG"]);   // sin fecha: todo empata, Unit ID ↓
   P.ordenarPor("grupos"); await esperar();          // asc
   assert.deepEqual(pintado(el), ["p01", "p03", "p11", "p12", "p18", "pSG"]);
   P.ordenarPor("grupos"); await esperar();          // desc
@@ -202,11 +215,26 @@ test("G3 · ordenar por Grupos sin buscar pide la página por cliente (Firestore
   assert.equal(ultima.sortField, "cliente");
 });
 
-test("G4 · la página del servidor se agrupa DENTRO de cada cliente sin mezclar clientes", () => {
+test("G4 · la página del servidor (lo último primero) desempata el lote por Unit ID sin mover los lotes entre sí", () => {
+  const { P } = montar({ fichas: FETRATEDA });
+  // Como la trae Firestore: lote nuevo barajado por ID de documento, luego el viejo.
+  const pagina = [FETRATEDA[3], FETRATEDA[2], FETRATEDA[4], FETRATEDA[1], FETRATEDA[0]];   // n1, n3, n2 | v2, v1
+  assert.deepEqual([...P._ordenarPagina(pagina).map(d => d.id)], ["n3", "n2", "n1", "v2", "v1"]);
+  P._direccionAsc = true;   // created_at ↑: del lote más viejo al más nuevo, Unit ID ↑
+  assert.deepEqual([...P._ordenarPagina([FETRATEDA[1], FETRATEDA[0], FETRATEDA[3], FETRATEDA[2]]).map(d => d.id)], ["v1", "v2", "n1", "n3"]);
+});
+
+test("G5 · ordenar por Grupos en la página del servidor agrupa DENTRO de cada cliente sin mezclar clientes", () => {
   const { P } = montar({ fichas: FEPACI });
-  P._campoOrden = "cliente"; P._direccionAsc = true;
+  P._campoOrden = "grupos"; P._direccionAsc = true;
   const pagina = [FEPACI[0], FEPACI[1], FEPACI[4], FEPACI[6]];   // p12, p03, pSG | otro
-  assert.deepEqual([...P._ordenarDentroDelCliente(pagina).map(d => d.id)], ["p03", "p12", "pSG", "otro"]);
+  assert.deepEqual([...P._ordenarPagina(pagina).map(d => d.id)], ["p03", "p12", "pSG", "otro"]);
+});
+
+test("G6 · el papel (Excel y hoja de imprimir) sale cliente → grupo → Unit ID, sin grupo al final", () => {
+  const { P } = montar({ fichas: FETRATEDA });
+  const hoja = [...FETRATEDA].sort((a, b) => P._cmpHoja(a, b)).map(d => d.id);
+  assert.deepEqual(hoja, ["n1", "v1", "v2", "n3", "n2", "otro"]);
 });
 
 // ── Suscripción viva (2026-09-25) ────────────────────────────────────────

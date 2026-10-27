@@ -559,7 +559,7 @@ window.PocList = {
 
     // "Grupos" no se puede pedir a Firestore (es un array y no está indexado
     // con `activo`): la página viene por cliente y se agrupa en memoria dentro
-    // de cada cliente (_ordenarDentroDelCliente).
+    // de cada cliente (_ordenarPagina).
     const campoOrden    = (this._campoOrden === 'grupos' ? 'cliente' : this._campoOrden) || 'cliente';
     const direccionOrden = this._direccionAsc ? 'asc' : 'desc';
     // "Activos" sin texto en el buscador (Brenda, 2026-10-17): la página del
@@ -641,7 +641,7 @@ window.PocList = {
     const soloInactivos   = document.getElementById('soloInactivos')?.checked;
     const soloSinContrato = document.getElementById('soloSinContrato')?.checked;
 
-    this._ordenarDentroDelCliente(docs).forEach(d => {
+    this._ordenarPagina(docs).forEach(d => {
       if (soloActivos && !d.activo) return;      // la página ya viene filtrada; por si acaso (preview de caché)
       if (soloInactivos && d.activo) return;
       if (soloSinContrato && (d.contrato_id || d.contrato_doc_id || d.venta_factura)) return;
@@ -707,69 +707,105 @@ window.PocList = {
     if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
-  // La búsqueda filtrada pinta client-side (getAll por created_at) — este
-  // comparador aplica la columna de orden activa al resultado, imitando el
-  // orden de Firestore de la vista paginada: unit_id ordena por su espejo
-  // numérico (unit_id_num) y los vacíos/no numéricos van primero en asc.
+  // ── Orden (Brenda, 2026-10-13 y 2026-10-27) ──────────────────────
+  // EN PANTALLA la lista es cronológica: lo último que se registró arriba
+  // y, dentro de un mismo lote, el Unit ID más alto primero (el "último ID
+  // utilizado" queda en la primera fila). Un lote se graba en un solo batch
+  // y todas sus fichas comparten created_at: Firestore desempata por el ID
+  // del documento (aleatorio) y los Unit ID salían barajados (SEPROSA,
+  // 2026-10-27). El desempate por Unit ID se pone aquí, en memoria.
   //
-  // Grupos (Brenda, 2026-10-13): al consultar un cliente, los radios salen
-  // AGRUPADOS por programación (FEPACI 1, FEPACI 2…) y dentro de cada grupo
-  // por Unit ID consecutivo, en vez de en el orden en que se registraron.
-  // Es el desempate al ordenar por Cliente (todas las fichas del cliente
-  // empatan) y también una columna ordenable por sí misma. Las fichas sin
-  // grupo van al FINAL en cualquier dirección: lo que no está clasificado no
-  // debe esconder a lo que sí. La hoja de imprimir usa el mismo criterio.
+  // EN PAPEL (hoja de imprimir y Excel) los radios salen por programación:
+  // cliente → grupo (FEPACI 1, FEPACI 2…) → Unit ID, con los sin grupo al
+  // FINAL (lo que no está clasificado no debe esconder a lo que sí). Ese
+  // orden también se ve en pantalla al ordenar por la columna Grupos. El
+  // 2026-10-13 se había puesto por grupos también al buscar un cliente;
+  // Brenda prefirió la pantalla como antes y los grupos en el archivo.
   _claveGrupos(d) {
     const g = Array.isArray(d.grupos) ? d.grupos : (d.grupos ? [d.grupos] : []);
     const limpios = g.map(x => String(x ?? '').trim()).filter(Boolean);
     return limpios.length ? limpios.join(', ') : null;
   },
-  // grupo → Unit ID (espejo numérico, luego texto). Sin dirección: la aplica
-  // quien llama, salvo "sin grupo", que siempre cierra la lista.
+  _unitNum(d) { return (typeof d.unit_id_num === 'number') ? d.unit_id_num : null; },
+  _msCreado(d) {
+    const t = d.created_at;
+    if (t?.toMillis) return t.toMillis();
+    return (typeof t?.seconds === 'number') ? t.seconds * 1000 : null;
+  },
+  // Unit ID ascendente: espejo numérico, luego texto; los no numéricos
+  // (CONSOLA_DSI) después de los numéricos.
+  _cmpUnit(a, b) {
+    const ua = this._unitNum(a), ub = this._unitNum(b);
+    let r = 0;
+    if (ua !== null && ub !== null) r = ua - ub;
+    else if (ua === null && ub !== null) r = 1;
+    else if (ua !== null && ub === null) r = -1;
+    if (r === 0) r = String(a.unit_id || '').localeCompare(String(b.unit_id || ''), 'es', { numeric: true });
+    return r;
+  },
+  // Cronológico: lo más nuevo primero; a igual fecha (mismo lote), el Unit
+  // ID más alto primero. Sin fecha al final.
+  _cmpReciente(a, b) {
+    const ma = this._msCreado(a), mb = this._msCreado(b);
+    if (ma !== mb) {
+      if (ma === null) return 1;
+      if (mb === null) return -1;
+      return mb - ma;
+    }
+    return -this._cmpUnit(a, b);
+  },
+  // grupo → Unit ID. `dir` invierte los grupos y los Unit ID, salvo "sin
+  // grupo", que siempre cierra la lista.
   _cmpGrupoUnit(a, b, dir = 1) {
     const ga = this._claveGrupos(a), gb = this._claveGrupos(b);
     if (ga === null || gb === null) {
       if (ga === null && gb === null) return 0;
       return ga === null ? 1 : -1;
     }
-    let r = ga.localeCompare(gb, 'es', { numeric: true, sensitivity: 'base' });
+    const r = ga.localeCompare(gb, 'es', { numeric: true, sensitivity: 'base' });
     if (r !== 0) return r * dir;
-    const ua = (typeof a.unit_id_num === 'number') ? a.unit_id_num : null;
-    const ub = (typeof b.unit_id_num === 'number') ? b.unit_id_num : null;
-    if (ua !== null && ub !== null) r = ua - ub;
-    else if (ua === null && ub !== null) r = 1;
-    else if (ua !== null && ub === null) r = -1;
-    if (r === 0) r = String(a.unit_id || '').localeCompare(String(b.unit_id || ''), 'es', { numeric: true });
-    return r * dir;
+    return this._cmpUnit(a, b) * dir;
   },
-  // Página del servidor (viene ordenada por cliente): se reordena solo DENTRO
-  // de cada cliente, respetando el orden de clientes que trajo Firestore.
-  _ordenarDentroDelCliente(docs) {
+  // Papel (hoja de imprimir y Excel): cliente → grupo → Unit ID.
+  _cmpHoja(a, b) {
+    const ca = PocState.nombreClienteDe(a) || '', cb = PocState.nombreClienteDe(b) || '';
+    const r = ca.localeCompare(cb, 'es', { sensitivity: 'base' });
+    return r !== 0 ? r : this._cmpGrupoUnit(a, b, 1);
+  },
+  // Página del servidor: viene ordenada por la columna activa; aquí solo se
+  // desempata DENTRO de cada tramo que Firestore dejó empatado (misma fecha
+  // de registro = mismo lote, o mismo cliente), sin mover tramos entre sí.
+  // Un lote partido entre dos páginas se desempata página por página.
+  _ordenarPagina(docs) {
     const campo = this._campoOrden || 'cliente';
-    if (campo !== 'cliente' && campo !== 'grupos') return docs;
     const dir = this._direccionAsc ? 1 : -1;
+    let clave, cmp;
+    if (campo === 'created_at')   { clave = d => String(this._msCreado(d));         cmp = (a, b) => this._cmpUnit(a, b) * dir; }
+    else if (campo === 'cliente') { clave = d => PocState.nombreClienteDe(d) || ''; cmp = (a, b) => this._cmpReciente(a, b); }
+    else if (campo === 'grupos')  { clave = d => PocState.nombreClienteDe(d) || ''; cmp = (a, b) => this._cmpGrupoUnit(a, b, dir); }
+    else return docs;
     const out = [];
     let i = 0;
     while (i < docs.length) {
-      const k = PocState.nombreClienteDe(docs[i]) || '';
+      const k = clave(docs[i]);
       let j = i + 1;
-      while (j < docs.length && (PocState.nombreClienteDe(docs[j]) || '') === k) j++;
-      out.push(...docs.slice(i, j).sort((a, b) => this._cmpGrupoUnit(a, b, dir)));
+      while (j < docs.length && clave(docs[j]) === k) j++;
+      out.push(...docs.slice(i, j).sort(cmp));
       i = j;
     }
     return out;
   },
-  // `porCliente`: la búsqueda es por Cliente. Con el orden por defecto
-  // (created_at desc, "lo último que se registró primero") se pasa a
-  // cliente → grupo → Unit ID: es lo que se quiere ver al consultar una
-  // cuenta. Si la persona ya eligió una columna, se respeta.
-  _ordenarDocs(docs, { porCliente = false } = {}) {
-    const porDefecto = porCliente && (this._campoOrden || 'created_at') === 'created_at';
-    const campo = porDefecto ? 'cliente' : (this._campoOrden || 'cliente');
-    const dir   = porDefecto ? 1 : (this._direccionAsc ? 1 : -1);
+  // La búsqueda filtrada pinta client-side (getAll por created_at) — este
+  // comparador aplica la columna de orden activa al resultado, imitando el
+  // orden de Firestore de la vista paginada (y su desempate, ver arriba):
+  // unit_id ordena por su espejo numérico (unit_id_num) y los vacíos/no
+  // numéricos van primero en asc.
+  _ordenarDocs(docs) {
+    const campo = this._campoOrden || 'cliente';
+    const dir   = this._direccionAsc ? 1 : -1;
     const val = d => {
-      if (campo === 'unit_id')    return (typeof d.unit_id_num === 'number') ? d.unit_id_num : null;
-      if (campo === 'created_at') return d.created_at?.toMillis ? d.created_at.toMillis() : (d.created_at?.seconds ?? null);
+      if (campo === 'unit_id')    return this._unitNum(d);
+      if (campo === 'created_at') return this._msCreado(d);
       if (campo === 'cliente')    return PocState.nombreClienteDe(d) || null;
       if (campo === 'grupos')     return null;   // todo empata: lo decide _cmpGrupoUnit
       const v = d[campo];
@@ -788,7 +824,9 @@ window.PocList = {
         r = String(a.unit_id || '').localeCompare(String(b.unit_id || ''), 'es', { numeric: true });
       }
       if (r !== 0) return r * dir;
-      if (campo === 'grupos' || campo === 'cliente') return this._cmpGrupoUnit(a, b, dir);
+      if (campo === 'created_at') return this._cmpUnit(a, b) * dir;
+      if (campo === 'cliente')    return this._cmpReciente(a, b);
+      if (campo === 'grupos')     return this._cmpGrupoUnit(a, b, dir);
       return 0;
     });
   },
@@ -859,9 +897,9 @@ window.PocList = {
         });
         // Respetar la columna de orden activa (antes la vista filtrada quedaba
         // clavada en created_at desc y "ordenar por Unit ID" no hacía nada).
-        this._ordenarDocs(coincidencias, { porCliente: campo === 'cliente' });
+        this._ordenarDocs(coincidencias);
         // "Baja reciente": del día de baja más nuevo al más viejo; dentro del
-        // mismo día se conserva el orden de arriba (cliente, grupos, Unit ID),
+        // mismo día se conserva el orden de arriba (lo último registrado primero),
         // así las bajas de una misma tanda salen juntas. sort es estable.
         if (soloRecientes) {
           const dia = d => Math.floor(PocBaja.fechaMs(d) / 86400000);
@@ -1802,7 +1840,10 @@ window.PocList = {
         Toast.show(`Has seleccionado ${ids.length} equipos. Reduce la selección (máx. 2000) o exporta por partes.`, 'bad');
         return;
       }
-      const docs = await Promise.all(ids.map(id => PocService.getPocDevice(id)));
+      // El archivo sale por programación: cliente → grupo → Unit ID (Brenda,
+      // 2026-10-27), no en el orden de la pantalla, que es cronológico.
+      const docs = (await Promise.all(ids.map(id => PocService.getPocDevice(id))))
+        .filter(Boolean).sort((a, b) => this._cmpHoja(a, b));
       const f = ts => {
         try {
           const d = ts?.toDate?.(); if (!d) return '';
