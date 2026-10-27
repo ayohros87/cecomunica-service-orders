@@ -196,9 +196,11 @@
       _orden = fresh;
       render();
     });
-    // Captura libre (sin contrato): datalist de modelos del catálogo, para
-    // que la unidad nazca con modelo_id cuando el operador elige uno conocido.
-    if (_orden.devolucion.modo === 'sin_contrato' && !_modelos) {
+    // Datalist de modelos del catálogo, para que la unidad nazca con
+    // modelo_id cuando el operador elige uno conocido. Lo usan la captura
+    // libre (sin contrato) y el formulario de corrección de una recibida
+    // (cualquier modo, 2026-10-27).
+    if (!_modelos) {
       try {
         _modelos = (typeof ModelosService !== 'undefined')
           ? (await ModelosService.getModelos())
@@ -346,18 +348,46 @@
       </div>`;
   }
 
-  // Corrección de una unidad YA recibida, precargada con lo registrado. Solo
-  // accesorios y daño: el serial no se toca (ver candado en corregirHtml).
+  // ¿Se pueden corregir el SERIAL y el MODELO de esta unidad recibida? Solo
+  // los que se TECLEARON en el mostrador (captura libre, check-in por modelo,
+  // lote pegado): una fila que vino del contrato (pool_doc_id) nombra la
+  // unidad exacta, y cambiarla es una sustitución (serial_original), no una
+  // corrección. Pedido de Brenda (2026-10-27): el acuse que firma el cliente
+  // tiene que decir el serial del radio que de verdad entregó, y un serial
+  // que el sistema no reconoció quedaba sin modelo y sin forma de arreglarlo.
+  // El backend (onOrdenDevolucionWrite) deshace el movimiento del serial
+  // viejo en el inventario y aplica el del correcto; la ENTRADA se corrige
+  // sola mientras el taller no la haya tomado.
+  function puedeCorregirIdentidad(e) {
+    return !e.pool_doc_id && !e.serial_original;
+  }
+
+  // Corrección de una unidad YA recibida, precargada con lo registrado:
+  // accesorios y daño siempre; serial y modelo si la unidad se tecleó aquí.
   function corregirHtml(e) {
+    const identidad = puedeCorregirIdentidad(e) ? `
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+          <input class="form-input" id="devCorregirSerial" value="${esc(e.serial || '')}" placeholder="Serial" autocomplete="off"
+                 title="Serial tal como aparece en la etiqueta del radio"
+                 style="height:30px;font-size:12px;max-width:200px;font-family:var(--font-mono,monospace);">
+          <input class="form-input" id="devCorregirModelo" list="devModelosList" value="${esc(e.modelo || '')}" placeholder="Modelo" autocomplete="off"
+                 title="Modelo del radio — se completa solo si el inventario reconoce el serial"
+                 style="height:30px;font-size:12px;max-width:200px;">
+        </div>` : '';
+    const nota = puedeCorregirIdentidad(e)
+      ? `Esto corrige el <b>acuse</b> de la devolución y la orden de ENTRADA mientras el taller no
+         la haya tomado; si ya la tiene, ajústala también allá. Cambiar el serial re-apunta el
+         inventario: el serial anterior vuelve a donde estaba y el correcto queda recibido.`
+      : `Esto corrige el <b>acuse</b> de la devolución. La orden de ENTRADA ya recibió su copia
+         cuando entró la tanda, así que si el taller ya la tiene, ajústala también allá.
+         El serial de esta unidad lo nombra el contrato: si llegó otro radio en su lugar,
+         regístralo con <b>Pegar lista de seriales</b> y elige "sustituye a…".`;
     return `
       <div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:8px;padding:8px;max-width:440px;">
-        ${checklistHtml(`Corregir lo registrado con ${esc(e.serial)}`, { accesorios: e.accesorios, dano: e.dano_visible })}
-        <div style="font-size:11px;color:#92400e;margin-top:6px;">
-          Esto corrige el <b>acuse</b> de la devolución. La orden de ENTRADA ya recibió su copia
-          cuando entró la tanda, así que si el taller ya la tiene, ajústala también allá.
-          El serial no se cambia desde aquí: ya movió el equipo en el inventario. Si el serial
-          está mal, corrígelo en <b>Inventario · Equipos por serial</b>.
-        </div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;">Corregir lo registrado con ${esc(e.serial)}</div>
+        ${identidad}
+        ${checklistHtml('¿Qué entregó el cliente?', { accesorios: e.accesorios, dano: e.dano_visible })}
+        <div style="font-size:11px;color:#92400e;margin-top:6px;">${nota}</div>
         <div style="display:flex;gap:6px;margin-top:8px;">
           <button type="button" class="btn btn-primary btn-sm" id="devCorregirConfirm">Guardar corrección</button>
           <button type="button" class="btn btn-sm" id="devCorregirCancel">Cancelar</button>
@@ -412,14 +442,15 @@
       det.push(con.length ? `Entregó: ${con.join(', ')}` : 'Sin accesorios');
     }
     if (e.dano_visible) det.push(`Daño: ${esc(e.dano_visible)}`);
-    if (e.corregido_at) det.push('<span title="Los accesorios o el daño se corrigieron después del check-in, antes de la firma.">corregido</span>');
+    if (e.serial_corregido_de) det.push(`<span title="El serial se corrigió después del check-in, antes de la firma. El inventario y la ENTRADA siguen al serial nuevo.">serial corregido (antes ${esc(e.serial_corregido_de)})</span>`);
+    else if (e.corregido_at) det.push('<span title="Los accesorios, el daño o el modelo se corrigieron después del check-in, antes de la firma.">corregido</span>');
     if (!e.acuse_id && editable) det.push('<b style="color:#92400e;">acuse pendiente de firma</b>');
     const linea = det.length ? `<div style="font-size:11px;color:var(--fg-3,#6b7280);">${det.join(' · ')}</div>` : '';
 
     // Corregir (antes de la firma) o explicar por qué ya no se puede.
     const accion = puedeCorregir(e, editable)
       ? `<button type="button" class="btn btn-ghost btn-sm dev-corregir" data-id="${esc(e.id)}"
-                 title="Corregir accesorios o daño de esta unidad — se puede mientras el cliente no firme el acuse"
+                 title="Corregir ${puedeCorregirIdentidad(e) ? 'serial, modelo, ' : ''}accesorios o daño de esta unidad — se puede mientras el cliente no firme el acuse"
                  style="padding:1px 5px;font-size:11px;margin-top:3px;">✎ Corregir</button>`
       : (editable && e.resolucion === 'recibido' && e.acuse_id
         ? `<div style="font-size:11px;color:var(--fg-3,#6b7280);margin-top:2px;"
@@ -685,7 +716,14 @@
     const filaDraft = _draftModelo ? `
       <tr>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);font-family:var(--font-mono,monospace);">${esc(_draftModelo.serial)}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);">${esc(_draftModelo.modelo || '—')}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);">
+          ${_draftModelo.idx == null ? `
+            <input class="form-input" id="devDraftModelo" list="devModelosList" value="${esc(_draftModelo.modelo || '')}" placeholder="Modelo" autocomplete="off"
+                   title="Modelo del radio — todavía se puede escribir o elegir antes de confirmar"
+                   style="height:28px;font-size:12px;max-width:180px;">
+            ${!(_draftModelo.modelo || '').trim() ? '<div style="font-size:11px;color:#92400e;margin-top:3px;">sin modelo: escríbelo o elígelo de la lista</div>' : ''}`
+            : esc(_draftModelo.modelo || '—')}
+        </td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);">${miniFormHtml(_draftModelo.serial)}</td>
       </tr>` : '';
 
@@ -1197,11 +1235,13 @@
       const clienteId = () => _orden?.cliente_id || null;
       const inpLibre = _overlay.querySelector('#devSerialLibre');
       if (inpLibre) {
-        const inpModeloLibre = _overlay.querySelector('#devModeloLibre');
-        SerialField.adjuntar(inpLibre, {
-          clienteId,
-          modelo: () => ({ modelo_id: null, modelo_label: inpModeloLibre?.value || '' }),
-        });
+        SerialField.adjuntar(inpLibre, { clienteId, ..._opcionesModeloDesdePool(_overlay.querySelector('#devModeloLibre')) });
+      }
+      // Corrección de serial/modelo de una unidad recibida: mismo chip y mismo
+      // autocompletado que la captura libre.
+      const inpCorr = _overlay.querySelector('#devCorregirSerial');
+      if (inpCorr) {
+        SerialField.adjuntar(inpCorr, { clienteId, ..._opcionesModeloDesdePool(_overlay.querySelector('#devCorregirModelo')) });
       }
       const porModeloDev = _orden?.devolucion?.esperados_por_modelo || [];
       _overlay.querySelectorAll('.dev-serial-modelo').forEach(inp => {
@@ -1362,6 +1402,18 @@
 
     if (_draftModelo) {
       const m = (dev.esperados_por_modelo || [])[_draftModelo.idx];
+      // Captura libre: el modelo se puede terminar de escribir en la fila del
+      // borrador (Brenda, 2026-10-27). Si cambió, se vuelve a cruzar con el
+      // catálogo para conservar modelo_id.
+      const inpDraft = _overlay.querySelector('#devDraftModelo');
+      if (inpDraft) {
+        const txt = (inpDraft.value || '').trim();
+        if (txt.toLowerCase() !== (_draftModelo.modelo || '').trim().toLowerCase()) {
+          const cat = (_modelos || []).find(x => x.nombre.toLowerCase() === txt.toLowerCase());
+          _draftModelo.modelo = cat ? cat.nombre : txt;
+          _draftModelo.modelo_id = cat ? cat.id : null;
+        }
+      }
       const nuevo = {
         id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
         serial: _draftModelo.serial,
@@ -1431,19 +1483,64 @@
       return;
     }
     const { accesorios, dano } = _leerChecklist();
-    const antes = { accesorios: e.accesorios || null, dano_visible: e.dano_visible || null };
+    // Serial y modelo (solo unidades tecleadas aquí — ver puedeCorregirIdentidad).
+    // Se leen ANTES de cualquier await: el confirm re-renderiza y los inputs
+    // desaparecen.
+    const inpSerial = _overlay.querySelector('#devCorregirSerial');
+    const inpModelo = _overlay.querySelector('#devCorregirModelo');
+    const serialNuevo = inpSerial ? (inpSerial.value || '').trim().toUpperCase() : (e.serial || '');
+    const modeloTxt = inpModelo ? (inpModelo.value || '').trim() : (e.modelo || '');
+    const cambioSerial = !!inpSerial && normSerial(serialNuevo) !== normSerial(e.serial);
+    if (inpSerial && !serialNuevo) { Toast.show('El serial no puede quedar vacío.', 'warn'); return; }
+    if (cambioSerial && (dev.esperados || []).some(x => x.id !== e.id && normSerial(x.serial) === normSerial(serialNuevo))) {
+      Toast.show('Ese serial ya está registrado en esta orden.', 'warn'); return;
+    }
+    const cat = inpModelo ? (_modelos || []).find(m => m.nombre.toLowerCase() === modeloTxt.toLowerCase()) : null;
+    const modeloNuevo = inpModelo ? (cat ? cat.nombre : modeloTxt) : (e.modelo || '');
+    const modeloIdNuevo = inpModelo ? (cat ? cat.id : (modeloTxt.toLowerCase() === (e.modelo || '').toLowerCase() ? (e.modelo_id || null) : null)) : (e.modelo_id || null);
+    if (cambioSerial) {
+      _editandoId = e.id; // el confirm no cierra el formulario si se cancela
+      const ok = await Modal.confirm({
+        title: 'Corregir el serial',
+        confirmLabel: 'Corregir serial',
+        message: `${esc(e.serial)} → <b>${esc(serialNuevo)}</b>.<br><br>`
+          + 'El inventario se re-apunta: el serial anterior vuelve a donde estaba (o se da de baja si nació '
+          + 'con el error) y el correcto queda recibido. La orden de ENTRADA se corrige sola mientras el taller '
+          + 'no la haya tomado. ¿Aplicar?',
+      });
+      if (!ok) { render(); return; }
+      _editandoId = null;
+    }
+    const antes = {
+      accesorios: e.accesorios || null, dano_visible: e.dano_visible || null,
+      serial: e.serial, modelo: e.modelo || '', modelo_id: e.modelo_id || null,
+      serial_corregido_de: e.serial_corregido_de,
+    };
     const user = firebase.auth().currentUser;
     e.accesorios = accesorios;
     e.dano_visible = dano || null;
+    if (cambioSerial) {
+      e.serial_corregido_de = e.serial_corregido_de || e.serial;
+      e.serial = serialNuevo;
+    }
+    if (inpModelo) {
+      e.modelo = modeloNuevo;
+      e.modelo_id = modeloIdNuevo;
+    }
     e.corregido_at = firebase.firestore.Timestamp.now();
     e.corregido_por = user?.uid || null;
     try {
       await _guardarDevolucion('DEVOLUCION_CORRIGE_RECIBIDO');
+      if (cambioSerial && typeof SerialField !== 'undefined') { SerialField.invalidar(antes.serial); SerialField.invalidar(serialNuevo); }
       Toast.show(`${e.serial}: corregido.`, 'ok');
     } catch (err) {
       console.error(err);
       e.accesorios = antes.accesorios;
       e.dano_visible = antes.dano_visible;
+      e.serial = antes.serial;
+      e.modelo = antes.modelo;
+      e.modelo_id = antes.modelo_id;
+      if (antes.serial_corregido_de) e.serial_corregido_de = antes.serial_corregido_de; else delete e.serial_corregido_de;
       delete e.corregido_at;
       delete e.corregido_por;
       Toast.show('No se pudo guardar la corrección.', 'bad');
@@ -1515,19 +1612,66 @@
     render();
   }
 
+  // El modelo se completa solo desde el inventario (Brenda, 2026-10-27): si
+  // el serial tiene UNA ficha con modelo y el campo está vacío, se rellena al
+  // salir del campo del serial; si el campo trae otro modelo, SerialField
+  // muestra "modelo distinto · usar este" y un clic lo pone. `modelo_id`
+  // viaja en el dataset para que el check-in conserve la identidad del
+  // catálogo aunque el nombre de la ficha no esté en la lista; se borra en
+  // cuanto el usuario vuelve a teclear el modelo.
+  function _opcionesModeloDesdePool(inpModelo) {
+    const poner = (u) => {
+      if (!inpModelo) return false;
+      inpModelo.value = u.modelo_label || '';
+      inpModelo.dataset.modeloId = u.modelo_id || '';
+      return true;
+    };
+    if (inpModelo && !inpModelo._devModeloWired) {
+      inpModelo._devModeloWired = true;
+      inpModelo.addEventListener('input', () => { delete inpModelo.dataset.modeloId; });
+    }
+    return {
+      modelo: () => ({ modelo_id: inpModelo?.dataset.modeloId || null, modelo_label: inpModelo?.value || '' }),
+      onUsarModelo: poner,
+      onInfo: ({ unidad }) => {
+        if (!unidad || !inpModelo || (inpModelo.value || '').trim()) return;
+        if (unidad.modelo_label || unidad.modelo_id) poner(unidad);
+      },
+    };
+  }
+
+  // Modelo de UNA ficha del pool para un serial (null si no hay ficha, hay
+  // varias, o la ficha no trae modelo). Para el flujo de escáner: el Enter
+  // dispara el check-in antes de que SerialField alcance a decorar el campo.
+  async function _modeloDelPool(serial) {
+    if (typeof EquiposPoolService === 'undefined') return null;
+    try {
+      const docs = await EquiposPoolService.findBySerial(serial);
+      const u = Array.isArray(docs) && docs.length === 1 ? docs[0] : null;
+      return u && (u.modelo_label || u.modelo_id) ? { modelo: u.modelo_label || '', modelo_id: u.modelo_id || null } : null;
+    } catch (_) { return null; }
+  }
+
   // Captura libre (modo sin_contrato): serial + modelo sin lista previa de
   // esperados. Si el modelo coincide con el catálogo, la unidad viaja con
-  // modelo_id (mejor identidad en el pool); texto libre también vale.
-  function checkinLibre() {
+  // modelo_id (mejor identidad en el pool); texto libre también vale. Sin
+  // modelo tecleado, se toma el de la ficha del inventario si la hay.
+  async function checkinLibre() {
     const serial = (_overlay.querySelector('#devSerialLibre')?.value || '').trim().toUpperCase();
-    const modeloTxt = (_overlay.querySelector('#devModeloLibre')?.value || '').trim();
+    const inpModelo = _overlay.querySelector('#devModeloLibre');
+    let modeloTxt = (inpModelo?.value || '').trim();
+    let modeloId = inpModelo?.dataset.modeloId || null;
     if (!serial) { Toast.show('Escribe o escanea el serial recibido.', 'warn'); return; }
     if ((_orden.devolucion.esperados || []).some(e => (e.serial || '').toUpperCase() === serial)) {
       Toast.show('Ese serial ya está registrado en esta orden.', 'warn'); return;
     }
+    if (!modeloTxt) {
+      const del = await _modeloDelPool(serial);
+      if (del) { modeloTxt = del.modelo; modeloId = del.modelo_id; }
+    }
     const cat = (_modelos || []).find(m => m.nombre.toLowerCase() === modeloTxt.toLowerCase());
     _cerrarCapturas();
-    _draftModelo = { idx: null, serial, modelo: cat ? cat.nombre : modeloTxt, modelo_id: cat ? cat.id : null };
+    _draftModelo = { idx: null, serial, modelo: cat ? cat.nombre : modeloTxt, modelo_id: cat ? cat.id : modeloId };
     render();
   }
 

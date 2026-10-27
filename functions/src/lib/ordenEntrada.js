@@ -122,6 +122,43 @@ function corregirEquiposEntrada(equipos, correcciones, ordenDevId, motivoEntrada
   return { equipos: lista, cambios };
 }
 
+// Corrección de IDENTIDAD espejada en la ENTRADA (pedido de Brenda,
+// 2026-10-27): recepción corrigió el serial o el modelo de una unidad
+// recibida ANTES de la firma del acuse. La fila de la ENTRADA se busca por el
+// serial ANTERIOR y se reescriben serial + numero_de_serie (las dos claves,
+// ver OrdenesService.updateEquipmentField) y el modelo si la corrección lo
+// trae. Las observaciones y los checkmarks no se tocan: esos van por
+// corregirEquiposEntrada. correcciones: [{ serial_antes, serial, modelo,
+// modelo_id, cambioSerial, cambioModelo }]. Devuelve además `aplicadas`
+// (de → a) para la bitácora de la ENTRADA.
+function corregirIdentidadEntrada(equipos, correcciones) {
+  const lista = (Array.isArray(equipos) ? equipos : []).map(x => ({ ...x }));
+  const aplicadas = [];
+  for (const c of (correcciones || [])) {
+    const antes = String(c.serial_antes || "").trim().toUpperCase();
+    const nuevo = String(c.serial || "").trim();
+    if (!antes || !nuevo) continue;
+    const i = lista.findIndex(x => !x.eliminado &&
+      String(x.numero_de_serie || x.serial || "").trim().toUpperCase() === antes);
+    if (i < 0) continue;
+    // El serial nuevo ya está en otra fila viva: sería duplicar el radio.
+    if (c.cambioSerial && lista.some((x, j) => j !== i && !x.eliminado &&
+        String(x.numero_de_serie || x.serial || "").trim().toUpperCase() === nuevo.toUpperCase())) continue;
+    const eq = lista[i];
+    lista[i] = {
+      ...eq,
+      ...(c.cambioSerial ? { serial: nuevo, numero_de_serie: nuevo } : {}),
+      ...(c.cambioModelo ? { modelo: String(c.modelo || "").trim(), modelo_id: c.modelo_id || null } : {}),
+    };
+    aplicadas.push({
+      serial_antes: String(eq.numero_de_serie || eq.serial || ""), serial: nuevo,
+      modelo_antes: String(eq.modelo || ""), modelo: String(c.modelo || "").trim(),
+      cambioSerial: !!c.cambioSerial, cambioModelo: !!c.cambioModelo,
+    });
+  }
+  return { equipos: lista, cambios: aplicadas.length, aplicadas };
+}
+
 // Número de orden con el formato de la app (AAAAMMDD + secuencia de 2 dígitos,
 // ej. 2026071604). create() falla si el ID ya existe → reintenta con el
 // siguiente consecutivo (carrera con una creación manual simultánea).
@@ -308,5 +345,5 @@ async function crearOrdenEntrada({ clienteId, clienteNombre, contratoDocId, cont
 
 module.exports = {
   crearOrdenEntrada, equipoDeEntrada, frasePiezas, obsEntradaAuto, RE_OBS_AUTO,
-  obsDeTanda, obsEquipoDevolucion, corregirEquiposEntrada,
+  obsDeTanda, obsEquipoDevolucion, corregirEquiposEntrada, corregirIdentidadEntrada,
 };

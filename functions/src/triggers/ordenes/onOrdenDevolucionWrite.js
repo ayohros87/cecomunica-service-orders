@@ -30,7 +30,8 @@ const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
-const { crearOrdenEntrada, equipoDeEntrada, frasePiezas, RE_OBS_AUTO, obsDeTanda, corregirEquiposEntrada } = require("../../lib/ordenEntrada");
+const { crearOrdenEntrada, equipoDeEntrada, frasePiezas, RE_OBS_AUTO, obsDeTanda, corregirEquiposEntrada, corregirIdentidadEntrada } = require("../../lib/ordenEntrada");
+const corr = require("../../domain/correccionRecibido");
 const { recepcionEmails } = require("../../lib/mailRecipients");
 const { APP_BASE_URL } = require("../../lib/inventario");
 const { pendientesDevolucion, resumenDevolucion, derivarEstadoDevolucion, cierraSolaDevolucion, ESTADO_CERRADA } = require("../../lib/devolucion");
@@ -547,6 +548,198 @@ async function aplicarCorreccionesEntrada(ordenId, after, correcciones) {
   });
 }
 
+// ── El pool recibe una unidad (tanda del check-in o serial corregido) ─────
+// Contrato de papel (sin_contrato): el serial puede no existir en el pool, o
+// estar en un estado sembrado que no refleja la realidad. upsertContacto
+// (alta por contacto) crea el doc si falta — con el failsafe de colisión — o
+// lo transiciona desde cualquier estado: la devolución física manda.
+// Excepciones: baja (terminal, guard del pool) y vendido (una devolución de
+// algo vendido amerita revisión manual, no un pisotón automático).
+// Con contrato: solo desde asignado/en_cliente, por id de ficha si la fila lo
+// trae (unidad exacta) o por serial.
+async function recibirEnPool(e, dev, refMov) {
+  if (dev.modo === "sin_contrato") {
+    return pool.upsertContacto({
+      serial: e.serial, modelo_id: e.modelo_id || null, modelo_label: e.modelo || "",
+      estado: pool.ESTADOS.DEVUELTO,
+      noTocarDesde: [pool.ESTADOS.VENDIDO],
+      tipo: "devolucion", refMov,
+      notas: "Recibido en devolución sin contrato (contrato de papel) — pendiente de inspección",
+      origen: "devolucion_sin_contrato",
+      extra: { verificado: false, propiedad: "cecomunica" },
+    });
+  }
+  const opts = {
+    aEstado: pool.ESTADOS.DEVUELTO,
+    soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
+    tipo: "devolucion", refMov,
+    notas: "Recibido en devolución — pendiente de inspección",
+    extra: { verificado: false },
+  };
+  return e.pool_doc_id
+    ? pool.transicionarPorId(e.pool_doc_id, opts)
+    : pool.transicionar(e.serial, e.modelo_id, e.modelo, opts);
+}
+
+// ── Serial o modelo corregidos en una unidad YA recibida (2026-10-27) ─────
+// Pedido de Brenda (FORTALEZA 2026102601): tecleó un serial que el sistema no
+// reconoció, el radio quedó sin modelo y la devolución no dejaba corregir ni
+// serial ni modelo. El acuse que firma el cliente sale de aquí, así que tiene
+// que decir el serial del radio que de verdad entregó. La ventana es la misma
+// que la de accesorios/daño: ANTES de la firma (domain/correccionRecibido).
+//
+// Serial: el check-in ya movió el serial VIEJO en el pool y ese movimiento
+// hay que deshacerlo según qué era la ficha:
+//   · nació por esta devolución (o su ENTRADA) → es la fantasma del dígito
+//     mal tecleado. Si el serial correcto no tiene ficha, se RENOMBRA (misma
+//     historia, mismo id — la búsqueda canónica es por serial_norm, igual que
+//     EquiposPoolService.corregirSerial); si ya la tiene, la fantasma se da
+//     de BAJA con el motivo escrito (los saneos cierran, no borran).
+//   · tenía historia previa → es otro radio que se movió por error: vuelve
+//     al estado del que salió (kardex), y si estaba en el taller por la
+//     ENTRADA, se suelta de ella.
+// Y el serial CORRECTO recibe el mismo movimiento que da el check-in.
+// Modelo: una ficha nacida aquí lo toma tal cual; una preexistente solo si
+// no tenía modelo o vino sin verificar (corregirModeloPorLinea decide).
+// Todo best-effort: lo que falle queda en el log y el resto se aplica.
+function _movCorreccion(tipo, de, a, refMov, notas) {
+  return {
+    at: admin.firestore.FieldValue.serverTimestamp(), por: "system", por_email: null,
+    tipo, de_estado: de || null, a_estado: a || null, ref: refMov, notas,
+  };
+}
+
+async function _ponerModeloFicha(ref, data, c, refMov, nacida) {
+  if (!c.cambioModelo && (data.modelo_id || String(data.modelo_label || "").trim())) return "sin-cambio";
+  if (!c.modelo_id && !c.modelo) return "sin-cambio";
+  if (!nacida) {
+    return pool.corregirModeloPorLinea(ref, {
+      modelo_id: c.modelo_id || null, modelo_label: c.modelo,
+      refMov, notas: "Modelo corregido en el check-in de la devolución",
+    });
+  }
+  const antes = data.modelo_label || data.modelo_id || "sin modelo";
+  await ref.set({
+    modelo_id: c.modelo_id || null, modelo_label: c.modelo,
+    updated_at: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  await ref.collection("movimientos").add(_movCorreccion("correccion_modelo", data.estado, data.estado, refMov,
+    `Modelo corregido en el check-in de la devolución: ${antes} → ${c.modelo || c.modelo_id}.`));
+  return "corregida";
+}
+
+async function corregirIdentidadRecibido(ordenId, after, c, entradaId) {
+  const refMov = { tipo: "orden", id: ordenId, label: `DEVOLUCIÓN ${ordenId}` };
+  const dev = after.devolucion || {};
+  const out = { serial_antes: c.serial_antes, serial: c.serial, viejo: null, nuevo: null, modelo: null };
+
+  if (!c.cambioSerial) {
+    const { ref, data } = await pool.resolver(c.serial, c.modelo_id_antes, c.modelo_antes);
+    if (!data) { out.modelo = "no-existe"; return out; }
+    const movs = (await ref.collection("movimientos").get()).docs.map(d => d.data());
+    out.modelo = await _ponerModeloFicha(ref, data, c, refMov, corr.fichaNacidaAqui(movs, [ordenId, entradaId]));
+    return out;
+  }
+
+  const viejo = await pool.resolver(c.serial_antes, c.modelo_id_antes, c.modelo_antes);
+  const nuevo = await pool.resolver(c.serial, c.modelo_id, c.modelo);
+  // Con OTRO modelo el serial correcto también "existe" (colisión Kenwood):
+  // renombrar la fantasma encima partiría el serial en dos fichas.
+  const nuevoExiste = !!(nuevo.data || nuevo.colisionConId);
+  if (viejo.data) {
+    const movs = (await viejo.ref.collection("movimientos").get()).docs.map(d => d.data());
+    const nacida = corr.fichaNacidaAqui(movs, [ordenId, entradaId]);
+    const d = viejo.data;
+    if (nacida && !nuevoExiste) {
+      await viejo.ref.set({
+        serial: c.serial, serial_norm: c.serial_norm,
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      await viejo.ref.collection("movimientos").add(_movCorreccion("correccion_serial", d.estado, d.estado, refMov,
+        `Serial corregido en el check-in de la devolución: ${c.serial_antes} → ${c.serial}. La ficha nació con el serial mal tecleado.`));
+      out.viejo = "renombrada";
+      out.nuevo = "renombrada";
+      out.modelo = await _ponerModeloFicha(viejo.ref, d, c, refMov, true);
+      return out;
+    }
+    if (nacida) {
+      await viejo.ref.set({
+        estado: pool.ESTADOS.BAJA,
+        baja_motivo: `Serial mal tecleado en el check-in de la devolución ${ordenId}: el radio es ${c.serial}, que ya tiene su ficha.`,
+        baja_at: admin.firestore.FieldValue.serverTimestamp(),
+        asignacion: null, orden_actual_id: null,
+        pendiente_devolucion: admin.firestore.FieldValue.delete(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      await viejo.ref.collection("movimientos").add(_movCorreccion("baja", d.estado, pool.ESTADOS.BAJA, refMov,
+        `Baja: ficha nacida con el serial mal tecleado (${c.serial_antes}); el radio recibido es ${c.serial}.`));
+      out.viejo = "baja";
+    } else {
+      const previo = corr.estadoPrevioADevolucion(movs, ordenId) || pool.destinoAlSalirDeOrden(d, null);
+      out.viejo = await pool.transicionarPorId(viejo.ref.id, {
+        aEstado: previo,
+        soloDesde: [pool.ESTADOS.DEVUELTO, pool.ESTADOS.EN_TALLER],
+        tipo: "correccion", refMov,
+        notas: `Se registró por error en el check-in de la devolución (el radio recibido es ${c.serial}): vuelve a ${previo}.`,
+        extra: { orden_actual_id: null },
+      });
+      if ((dev.poc || {})[c.antes_norm]) {
+        logger.warn("[onOrdenDevolucionWrite] el serial corregido tenía ficha POC cerrada por esta devolución — reabrirla a mano", {
+          ordenId, serial_antes: c.serial_antes, poc: dev.poc[c.antes_norm] });
+      }
+    }
+  } else {
+    out.viejo = "no-existe";
+  }
+
+  out.nuevo = await recibirEnPool({ serial: c.serial, modelo_id: c.modelo_id, modelo: c.modelo, pool_doc_id: null }, dev, refMov);
+  if (nuevo.data && (c.cambioModelo || !(nuevo.data.modelo_id || String(nuevo.data.modelo_label || "").trim()))) {
+    const movsN = (await nuevo.ref.collection("movimientos").get()).docs.map(d => d.data());
+    out.modelo = await _ponerModeloFicha(nuevo.ref, nuevo.data, { ...c, cambioModelo: true }, refMov,
+      corr.fichaNacidaAqui(movsN, [ordenId, entradaId]));
+  }
+  return out;
+}
+
+// Espejo de la identidad corregida en la ENTRADA: misma ventana que las
+// correcciones de accesorios (ENTRADA sin tomar por el taller). Queda en la
+// bitácora de la ENTRADA como EDITAR_SERIAL — mismo rastro que deja la
+// edición a mano (OrdenesService.updateEquipmentField), para que el caso TIL
+// PANAMA (serial cambiado sin saber quién ni cuándo) no se repita por aquí.
+async function aplicarIdentidadEntrada(ordenId, after, correcciones, entradaId) {
+  if (!entradaId) {
+    logger.info("[onOrdenDevolucionWrite] Corrección de serial/modelo sin ENTRADA vinculada — queda solo en la devolución", { ordenId });
+    return 0;
+  }
+  const eRef = db.collection("ordenes_de_servicio").doc(entradaId);
+  const r = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(eRef);
+    if (!snap.exists) return { cambios: 0, candado: "no-existe" };
+    const ent = snap.data();
+    const estado = (ent.estado_reparacion || "POR ASIGNAR").toUpperCase();
+    if (!ESTADOS_APPEND_ENTRADA.includes(estado) || ent.tecnico_asignado) return { cambios: 0, candado: "tomada" };
+    const c = corregirIdentidadEntrada(ent.equipos, correcciones);
+    if (c.cambios) {
+      const logs = c.aplicadas.filter(a => a.cambioSerial).map(a => ({
+        action: "EDITAR_SERIAL", by: "system", by_email: null,
+        at_iso: new Date().toISOString(),
+        de: a.serial_antes, a: a.serial,
+        origen: `DEVOLUCIÓN ${ordenId} — corregido en el check-in antes de la firma del acuse`,
+      }));
+      tx.update(eRef, {
+        equipos: c.equipos,
+        fecha_modificacion: admin.firestore.FieldValue.serverTimestamp(),
+        ...(logs.length ? { os_logs: admin.firestore.FieldValue.arrayUnion(...logs) } : {}),
+      });
+    }
+    return { cambios: c.cambios, candado: null };
+  });
+  logger.info("[onOrdenDevolucionWrite] Serial/modelo corregidos espejados en la ENTRADA", {
+    ordenId, entradaId, corregidas: r.cambios, solicitadas: correcciones.length, candado: r.candado,
+  });
+  return r.cambios;
+}
+
 module.exports = onDocumentWritten(
   { document: "ordenes_de_servicio/{ordenId}", region: "us-central1" },
   async (event) => {
@@ -575,41 +768,7 @@ module.exports = onDocumentWritten(
       const refMov = { tipo: "orden", id: ordenId, label: `DEVOLUCIÓN ${ordenId}` };
       try {
         if (res === "recibido") {
-          let r;
-          if (dev.modo === "sin_contrato") {
-            // Contrato de papel (fuera del sistema): el serial puede no existir
-            // en el pool, o estar en un estado sembrado que no refleja la
-            // realidad. upsertContacto (alta por contacto) crea el doc si falta
-            // — con el failsafe de colisión — o lo transiciona desde cualquier
-            // estado: la devolución física manda. Excepciones: baja (terminal,
-            // guard del pool) y vendido (una devolución de algo vendido amerita
-            // revisión manual, no un pisotón automático).
-            r = await pool.upsertContacto({
-              serial: e.serial, modelo_id: e.modelo_id || null, modelo_label: e.modelo || "",
-              estado: pool.ESTADOS.DEVUELTO,
-              noTocarDesde: [pool.ESTADOS.VENDIDO],
-              tipo: "devolucion", refMov,
-              notas: "Recibido en devolución sin contrato (contrato de papel) — pendiente de inspección",
-              origen: "devolucion_sin_contrato",
-              extra: { verificado: false, propiedad: "cecomunica" },
-            });
-          } else {
-            r = e.pool_doc_id
-              ? await pool.transicionarPorId(e.pool_doc_id, {
-                  aEstado: pool.ESTADOS.DEVUELTO,
-                  soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
-                  tipo: "devolucion", refMov,
-                  notas: "Recibido en devolución — pendiente de inspección",
-                  extra: { verificado: false },
-                })
-              : await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
-                  aEstado: pool.ESTADOS.DEVUELTO,
-                  soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
-                  tipo: "devolucion", refMov,
-                  notas: "Recibido en devolución — pendiente de inspección",
-                  extra: { verificado: false },
-                });
-          }
+          const r = await recibirEnPool(e, dev, refMov);
           logger.info("[onOrdenDevolucionWrite] recibido", { ordenId, serial: e.serial, r, modo: dev.modo || "recuperacion" });
           const poc = await cerrarPocDelCliente(e, after, ordenId, "Devolución recibida");
           if (poc) pocDeLaTanda[pool.normSerial(e.serial || "") || e.id] = poc;
@@ -761,6 +920,41 @@ module.exports = onDocumentWritten(
         });
       }
     }
+    // Serial o modelo corregidos en una unidad ya recibida, antes de la firma
+    // (Brenda, 2026-10-27): se deshace el movimiento del serial viejo, se
+    // aplica el del correcto y se espeja en la ENTRADA. Ver
+    // corregirIdentidadRecibido y domain/correccionRecibido.
+    const identidad = corr.detectarCorrecciones(antes, dev.esperados);
+    if (identidad.length) {
+      let entradaId = after.orden_entrada_id || null;
+      if (!entradaId) {
+        entradaId = ((await db.collection("ordenes_de_servicio").doc(ordenId).get()).data() || {}).orden_entrada_id || null;
+      }
+      const pocCorregido = {};
+      for (const c of identidad) {
+        try {
+          const r = await corregirIdentidadRecibido(ordenId, after, c, entradaId);
+          logger.info("[onOrdenDevolucionWrite] identidad corregida", { ordenId, ...r });
+          if (c.cambioSerial) {
+            // La ficha POC del serial correcto se cierra como en cualquier
+            // check-in; la llave del serial viejo sale del mapa de la orden.
+            const poc = await cerrarPocDelCliente({ serial: c.serial, pool_doc_id: null }, after, ordenId, "Devolución recibida (serial corregido)");
+            if (poc) pocCorregido[c.serial_norm] = poc;
+            if ((dev.poc || {})[c.antes_norm]) pocCorregido[c.antes_norm] = admin.firestore.FieldValue.delete();
+          }
+        } catch (e) {
+          logger.warn("[onOrdenDevolucionWrite] corrección de serial/modelo no aplicada al pool (no crítico)",
+            { ordenId, de: c.serial_antes, a: c.serial, error: e.message });
+        }
+      }
+      await guardarPocEnOrden(ordenId, pocCorregido);
+      try {
+        await aplicarIdentidadEntrada(ordenId, after, identidad, entradaId);
+      } catch (e) {
+        logger.warn("[onOrdenDevolucionWrite] Serial/modelo corregidos no llegaron a la ENTRADA (no crítico)", { ordenId, error: e.message });
+      }
+    }
+
     if (correcciones.length) {
       try {
         await aplicarCorreccionesEntrada(ordenId, after, correcciones);
