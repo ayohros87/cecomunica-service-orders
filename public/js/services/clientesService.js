@@ -481,8 +481,100 @@ const ClientesService = {
   // así que un cliente creado hoy en otra máquina no aparece nunca. Eso dejó a
   // bodega sin poder facturar una venta el 2026-08-10.
   async getAllClientes({ fresh = false } = {}) {
+    if (fresh) {
+      const porDelta = await this._clientesPorDelta();
+      if (porDelta) return porDelta;
+    }
+    const lista = await this._clientesPaginado({ fresh });
+    if (fresh) this._guardarMarcaClientes(lista);
+    return lista;
+  },
+
+  _queryClientesVivos() {
+    return firebase.firestore().collection('clientes').where('deleted', '==', false).orderBy('nombre');
+  },
+
+  // ── Lista por DELTA (auditoría de lecturas 2026-10-28) ─────────────────
+  // Revalidar contra el servidor bajaba la lista ENTERA en páginas de 500:
+  // el 21% de las lecturas del 27-oct (recepción, Solangel, Zuleika — los
+  // formularios con selector de clientes). Si este navegador ya bajó la lista
+  // completa alguna vez, ahora sale de:
+  //   · la caché LOCAL de Firestore (gratis),
+  //   · + lo que cambió desde entonces: `sync_at > marca` (lo sella el trigger
+  //     onClienteSello en TODA escritura),
+  //   · validado con un count() de la MISMA query.
+  // Si no cuadra (caché recortada, borrado físico, alta en el mismo instante)
+  // se descarta y va la lectura completa de siempre: nunca una lista
+  // incompleta en silencio. Es el esquema de PocService._escucharDelta.
+  _SYNC_KEY: 'clientes_vivos_sync_v1',
+  _SYNC_MARGEN_MS: 2 * 60 * 1000,
+
+  // El mismo criterio que la query: `deleted == false` estricto, y el orderBy
+  // deja fuera al que no tiene el campo nombre.
+  _enListaViva(d) {
+    return d.deleted === false && d.nombre !== undefined;
+  },
+
+  _leerMarcaClientes() {
+    try {
+      const uid = firebase.auth().currentUser?.uid;
+      const m = JSON.parse(localStorage.getItem(this._SYNC_KEY) || 'null');
+      return (uid && m && m.uid === uid && Number.isFinite(m.ms)) ? m.ms : null;
+    } catch (_) { return null; }
+  },
+  _guardarMarcaClientes(docs, previa = 0) {
+    let ms = previa || 0;
+    for (const d of docs) {
+      const t = d && d.sync_at && typeof d.sync_at.toMillis === 'function' ? d.sync_at.toMillis() : 0;
+      if (t > ms) ms = t;
+    }
+    try {
+      const uid = firebase.auth().currentUser?.uid;
+      if (uid) localStorage.setItem(this._SYNC_KEY, JSON.stringify({ uid, ms }));
+    } catch (_) { /* sin localStorage: la próxima vez, completa */ }
+    return ms;
+  },
+
+  async _clientesPorDelta() {
+    const marca = this._leerMarcaClientes();
+    if (marca == null) return null;
     const db = firebase.firestore();
-    const baseQ = db.collection('clientes').where('deleted', '==', false).orderBy('nombre');
+    const baseQ = this._queryClientesVivos();
+    const desde = firebase.firestore.Timestamp.fromMillis(Math.max(0, marca - this._SYNC_MARGEN_MS));
+    const motivo = (m) => { try { window.Uso?.accion(`clientes.lista.${m}`); } catch (_) { /* telemetría */ } };
+    let cache, total, delta;
+    try {
+      [cache, total, delta] = await Promise.all([
+        baseQ.get({ source: 'cache' }),
+        baseQ.count().get().then(s => s.data().count),
+        db.collection('clientes').where('sync_at', '>', desde).get(),
+      ]);
+    } catch (e) {
+      console.info('[Clientes] lista por delta → completa:', e?.message || e);
+      motivo('error-delta');
+      return null;
+    }
+    const mapa = new Map(cache.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
+    const cambios = delta.docs.map(d => ({ id: d.id, ...d.data() }));
+    for (const d of cambios) {
+      if (this._enListaViva(d)) mapa.set(d.id, d); else mapa.delete(d.id);
+    }
+    if (mapa.size !== total) {
+      console.info(`[Clientes] lista por delta → completa: conteo ${mapa.size} ≠ ${total}`);
+      motivo('conteo-no-cuadra');
+      return null;
+    }
+    this._guardarMarcaClientes(cambios, marca);
+    motivo('delta-ok');
+    // El orden de la query (nombre ↑, como lo compara Firestore).
+    return [...mapa.values()].sort((a, b) => {
+      const x = String(a.nombre ?? ''), y = String(b.nombre ?? '');
+      return x < y ? -1 : x > y ? 1 : 0;
+    });
+  },
+
+  async _clientesPaginado({ fresh = false } = {}) {
+    const baseQ = this._queryClientesVivos();
     const PAGE = 500;
     let lastDoc = null;
     const results = [];

@@ -134,10 +134,16 @@ test("V3 · la relectura ocurre una vez por apertura, no una por tecla", async (
 
 test("V4 · getAllClientes acepta fresh y salta la caché del SDK", () => {
   const src = leer("public", "js", "services", "clientesService.js");
-  const fn = src.slice(src.indexOf("async getAllClientes"));
-  const cuerpo = fn.slice(0, fn.indexOf("\n  },"));
-  assert.match(cuerpo, /fresh\s*=\s*false/,
+  const cuerpoDe = (nombre) => { const f = src.slice(src.indexOf(`async ${nombre}`)); return f.slice(0, f.indexOf("\n  },")); };
+  assert.match(cuerpoDe("getAllClientes"), /fresh\s*=\s*false/,
     "getAllClientes debe aceptar { fresh }");
+  // Desde 2026-10-28 `fresh` va primero por delta: también es servidor (el
+  // count() y los cambios por sync_at), y si no cuadra, la lectura completa.
+  const delta = cuerpoDe("_clientesPorDelta");
+  assert.match(delta, /count\(\)\.get\(\)/, "el delta se valida con un count() del servidor");
+  assert.match(delta, /where\('sync_at', '>'[^)]*\)\.get\(\)/, "los cambios se piden al servidor");
+  assert.match(delta, /mapa\.size !== total\)[\s\S]*?return null/, "si el conteo no cuadra, la lectura completa");
+  const cuerpo = cuerpoDe("_clientesPaginado");
   assert.match(cuerpo, /fresh\s*\?\s*await q\.get\(\)/,
     "con fresh=true la lectura tiene que ir al servidor, sin { source: 'cache' }");
   assert.match(cuerpo, /!fresh\s*&&\s*snap\.empty/,

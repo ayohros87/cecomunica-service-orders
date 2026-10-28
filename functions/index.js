@@ -152,6 +152,9 @@ exports.onClienteHistorial            = require("./src/triggers/clientes/onClien
 // Desactivar un cliente CIERRA sus contratos vigentes (regla 2026-09-14): la
 // desactivación es el acto que declara terminada la cuenta.
 exports.onClienteDesactivado          = require("./src/triggers/clientes/onClienteDesactivado");
+// Sello sync_at en toda escritura: la lista de clientes de los formularios se
+// arma por delta desde la caché local (auditoría de lecturas 2026-10-28).
+exports.onClienteSello                = require("./src/triggers/clientes/onClienteSello");
 // Regularización de cuentas (docs/plans/PLAN_REGULARIZACION_CUENTAS.md): la
 // deuda D1–D7 por cuenta vive en clientes/{id}.regularizacion. Barrido diario
 // 06:50 + barrido de marcadas cada 10 min; los triggers solo marcan.
