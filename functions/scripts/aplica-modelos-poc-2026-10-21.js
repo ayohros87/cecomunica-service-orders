@@ -19,7 +19,12 @@
  * movimiento en el kardex.
  *
  * USAGE (desde functions/):
- *   node scripts/aplica-modelos-poc-2026-10-21.js <xlsx> [--write] [--email=..]
+ *   node scripts/aplica-modelos-poc-2026-10-21.js <xlsx> [--write] [--email=..] [--prefijo]
+ *
+ * --prefijo (Alberto 2026-10-28): carga también las filas de "Por revisar" que
+ * solo tienen el prefijo del serial, con el "Modelo correcto" de Brenda. Es una
+ * sugerencia, no prueba: el device queda con modelo_por_prefijo: true para que
+ * el taller lo confirme cuando pase, y la ficha del pool NO se rellena.
  * Idempotente.
  */
 const fs = require("fs");
@@ -34,6 +39,7 @@ const XLSX  = process.argv[2];
 const WRITE = process.argv.includes("--write");
 const EMAIL = (process.argv.find((a) => a.startsWith("--email=")) || "").split("=")[1]
   || "script:aplica-modelos-poc-2026-10-21";
+const PREFIJO = process.argv.includes("--prefijo");
 const MOTIVO = "Modelo recuperado (revisión de Brenda 2026-10-21 sobre la propuesta del 2026-10-06)";
 // --extra=SERIAL:evidencia,SERIAL:evidencia → filas de "Por revisar" que Brenda
 // confirmó después por correo (sin marcarlas en el Excel). Se aplica el
@@ -74,10 +80,13 @@ async function leerExcel() {
     const nivel = txt(r.getCell(1)).slice(0, 1), ev = txt(r.getCell(11)), mc = txt(r.getCell(10));
     const g = verde(r);
     const extra = EXTRA.get(txt(r.getCell(5)).toUpperCase());
-    if (!(g || nivel === "A" || ev || extra)) { fuera.sinEvidencia++; return; }
+    const porPrefijo = !(g || nivel === "A" || ev || extra);
+    if (porPrefijo && !(PREFIJO && nivel === "B" && mc)) { fuera.sinEvidencia++; return; }
     filas.push({ hoja: "Por revisar", fila: i, cliente: txt(r.getCell(2)), serial: txt(r.getCell(5)),
       label: mc, modelo_id: catalogo.get(mc) || "", device: txt(r.getCell(15)), ficha: txt(r.getCell(16)),
-      base: g ? `verde (${ev || "sin nota"})` : nivel === "A" ? "orden + prefijo" : ev || extra });
+      porPrefijo,
+      base: g ? `verde (${ev || "sin nota"})` : nivel === "A" ? "orden + prefijo"
+        : porPrefijo ? "solo prefijo del serial (sin verificar)" : ev || extra });
   });
   return { filas, fuera };
 }
@@ -139,7 +148,7 @@ async function leerExcel() {
         if (!pool.mismoModelo(ficha, f.modelo_id, m.label)) {
           anota("ficha dice otra familia", f, `ficha "${ficha.modelo_label}" vs propuesto "${m.label}"`); continue;
         }
-      } else if (ficha && !ficha.modelo_id) tocaFicha = true;
+      } else if (ficha && !ficha.modelo_id && !f.porPrefijo) tocaFicha = true;
 
       bitacora.push({ hoja: f.hoja, fila: f.fila, cliente: f.cliente, serial: f.serial,
         device: s.id, ficha: fichaRef?.id || "", modelo: m.label, modelo_id: f.modelo_id, base: f.base,
@@ -149,6 +158,7 @@ async function leerExcel() {
       if (WRITE) {
         const ts = admin.firestore.FieldValue.serverTimestamp();
         await s.ref.update({ modelo_id: f.modelo_id, modelo_label: m.label,
+          ...(f.porPrefijo ? { modelo_por_prefijo: true } : {}),
           updated_at: ts, updated_by: null, updated_by_email: EMAIL });
         await db.collection("poc_logs").add({ equipo_id: s.id, fecha: ts, usuario: EMAIL,
           accion: "correccion_modelo", motivo: `${MOTIVO} — ${f.base}`,
