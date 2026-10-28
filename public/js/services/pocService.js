@@ -640,18 +640,21 @@ const PocService = {
   // includeMetadataChanges: sin él no llega el aviso de "ya sincronizó".
   // Devuelve la función para cancelar la suscripción.
   escuchar(nombre, onDatos, onError) {
-    if (nombre !== 'cerradas') return this._escucharVivas(onDatos, onError);
-    return this._escucharCompleto(nombre, onDatos, onError);
+    return this._escucharDelta(nombre === 'cerradas' ? 'cerradas' : 'vivas', onDatos, onError);
   },
 
-  _escucharCompleto(nombre, onDatos, onError, alSincronizar = null) {
+  _queryConjunto(nombre) {
     const db = firebase.firestore();
-    const q = nombre === 'cerradas'
+    return nombre === 'cerradas'
       ? db.collection('poc_devices').where('deleted', '==', true)
       : db.collection('poc_devices')
           .where('deleted', '!=', true)
           .orderBy('deleted')
           .orderBy(this._sortFieldFor('created_at'), 'desc');
+  },
+
+  _escucharCompleto(nombre, onDatos, onError, alSincronizar = null) {
+    const q = this._queryConjunto(nombre);
     return q.onSnapshot({ includeMetadataChanges: true },
       snap => {
         const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -661,7 +664,7 @@ const PocService = {
       onError);
   },
 
-  // ── Vivas por DELTA (auditoría de lecturas 2026-10-21) ─────────────────
+  // ── Vivas y cerradas por DELTA (auditoría de lecturas 2026-10-21) ──────
   // La suscripción completa a las vivas (~3,900 fichas) se cobra entera cada
   // vez que se reabre pasados 30 min: el buscador del PoC era el 15% de las
   // lecturas del día. Ahora, si este navegador ya sincronizó alguna vez, el
@@ -675,17 +678,30 @@ const PocService = {
   // suscripción completa de siempre: nunca un conjunto incompleto en silencio.
   // La marca es el mayor `sync_at` VISTO del servidor (nunca el reloj del
   // equipo) menos un margen, por si un sello se confirma fuera de orden.
-  _SYNC_KEY: 'poc_vivas_sync_v1',
+  //
+  // Las CERRADAS (~2,680) van igual desde el 2026-10-28: una búsqueda sin
+  // vivas ofrece "Ver el histórico" y abre ese conjunto — el 27-oct fueron
+  // 357 aperturas de recepción (16K lecturas, el 17% del día), cada una
+  // completa si pasaban 30 min. El sello cubre los cierres igual que todo.
+  _SYNC_KEYS: { vivas: 'poc_vivas_sync_v1', cerradas: 'poc_cerradas_sync_v1' },
   _SYNC_MARGEN_MS: 2 * 60 * 1000,
 
-  _leerMarca() {
+  // ¿La ficha está en el conjunto? El mismo criterio que _queryConjunto (y que
+  // su count): `deleted != true` deja fuera la ficha sin el campo, y el
+  // orderBy de las vivas la que no tiene created_at.
+  _enConjunto(nombre, d) {
+    if (nombre === 'cerradas') return d.deleted === true;
+    return d.deleted != null && d.deleted !== true && d.created_at != null;
+  },
+
+  _leerMarca(nombre) {
     try {
       const uid = firebase.auth().currentUser?.uid;
-      const m = JSON.parse(localStorage.getItem(this._SYNC_KEY) || 'null');
+      const m = JSON.parse(localStorage.getItem(this._SYNC_KEYS[nombre]) || 'null');
       return (uid && m && m.uid === uid && Number.isFinite(m.ms)) ? m.ms : null;
     } catch (_) { return null; }
   },
-  _guardarMarca(docs, previa = 0) {
+  _guardarMarca(nombre, docs, previa = 0) {
     let ms = previa || 0;
     for (const d of docs) {
       const t = d && d.sync_at && typeof d.sync_at.toMillis === 'function' ? d.sync_at.toMillis() : 0;
@@ -693,7 +709,7 @@ const PocService = {
     }
     try {
       const uid = firebase.auth().currentUser?.uid;
-      if (uid) localStorage.setItem(this._SYNC_KEY, JSON.stringify({ uid, ms }));
+      if (uid) localStorage.setItem(this._SYNC_KEYS[nombre], JSON.stringify({ uid, ms }));
     } catch (_) { /* sin localStorage: la próxima vez, completa */ }
     return ms;
   },
@@ -702,9 +718,9 @@ const PocService = {
     return t(b) - t(a);
   },
 
-  _escucharVivas(onDatos, onError) {
-    const marca = this._leerMarca();
-    const completa = () => this._escucharCompleto('vivas', onDatos, onError, (docs) => this._guardarMarca(docs));
+  _escucharDelta(nombre, onDatos, onError) {
+    const marca = this._leerMarca(nombre);
+    const completa = () => this._escucharCompleto(nombre, onDatos, onError, (docs) => this._guardarMarca(nombre, docs));
     if (marca == null) return completa();
 
     const db = firebase.firestore();
@@ -715,22 +731,21 @@ const PocService = {
     const aCompleta = (motivo) => {
       if (cancelado) return;
       try { if (unsub) unsub(); } catch (_) { /* ya cerrada */ }
-      console.info('[POC] vivas por delta → suscripción completa:', motivo);
-      try { window.Uso?.accion('poc.vivas.' + motivo); } catch (_) { /* telemetría */ }
+      console.info(`[POC] ${nombre} por delta → suscripción completa:`, motivo);
+      try { window.Uso?.accion(`poc.${nombre}.${motivo}`); } catch (_) { /* telemetría */ }
       uso = 'completa';
       unsub = completa();
     };
 
     (async () => {
-      // La MISMA query que la suscripción completa: el orderBy por created_at
-      // también filtra (una ficha sin created_at nunca estuvo en el conjunto).
-      const qVivas = db.collection('poc_devices').where('deleted', '!=', true)
-        .orderBy('deleted').orderBy(this._sortFieldFor('created_at'), 'desc');
+      // La MISMA query que la suscripción completa (en las vivas el orderBy
+      // por created_at también filtra).
+      const qConjunto = this._queryConjunto(nombre);
       let mapa, total;
       try {
         const [cache, cuenta] = await Promise.all([
-          qVivas.get({ source: 'cache' }),
-          qVivas.count().get().then(s => s.data().count),
+          qConjunto.get({ source: 'cache' }),
+          qConjunto.count().get().then(s => s.data().count),
         ]);
         mapa = new Map(cache.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
         total = cuenta;
@@ -748,18 +763,19 @@ const PocService = {
           // caché y estar incompleto: no vale.
           if (!validado && snap.metadata.fromCache) return;
           const cambios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          // Mismo criterio que qVivas (y que el count): `deleted != true` deja
-          // fuera la ficha sin el campo, y el orderBy la que no tiene created_at.
           for (const d of cambios) {
-            if (d.deleted == null || d.deleted === true || d.created_at == null) mapa.delete(d.id); else mapa.set(d.id, d);
+            if (this._enConjunto(nombre, d)) mapa.set(d.id, d); else mapa.delete(d.id);
           }
           if (!validado) {
             if (mapa.size !== total) return aCompleta('conteo-no-cuadra');
             validado = true;
-            try { window.Uso?.accion('poc.vivas.delta-ok'); } catch (_) { /* telemetría */ }
+            try { window.Uso?.accion(`poc.${nombre}.delta-ok`); } catch (_) { /* telemetría */ }
           }
-          marcaVista = this._guardarMarca(cambios, marcaVista);
-          onDatos([...mapa.values()].sort((a, b) => this._ordenVivas(a, b)), true);
+          marcaVista = this._guardarMarca(nombre, cambios, marcaVista);
+          // Las vivas salen como su query (created_at ↓); las cerradas nunca
+          // tuvieron orden de servidor: lo pone el caller.
+          const lista = [...mapa.values()];
+          onDatos(nombre === 'vivas' ? lista.sort((a, b) => this._ordenVivas(a, b)) : lista, true);
         }, (err) => {
           if (!validado) aCompleta('error-delta');
           else if (onError) onError(err);

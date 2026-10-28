@@ -19,7 +19,7 @@ const espera = (ms) => new Promise(r => setTimeout(r, ms));
 const hoy = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Panama' });
 const usoPoc = async () => {
   const d = (await db.collection('uso_diario').doc(hoy()).get()).data() || {};
-  return Object.fromEntries(Object.entries(d.acciones || {}).filter(([k]) => k.startsWith('poc.vivas.')));
+  return Object.fromEntries(Object.entries(d.acciones || {}).filter(([k]) => k.startsWith('poc.')));
 };
 const verdad = async () => {
   // La definición del app: la query de PocService (sin created_at no entra).
@@ -27,11 +27,16 @@ const verdad = async () => {
     .orderBy('deleted').orderBy('created_at', 'desc').get();
   return new Map(s.docs.map(d => [d.id, d.data()]));
 };
+const verdadCerradas = async () => {
+  const s = await db.collection('poc_devices').where('deleted', '==', true).get();
+  return new Map(s.docs.map(d => [d.id, d.data()]));
+};
 const conjunto = (s) => s.page.evaluate(async () => {
-  const docs = await PocList._getAllMemo();
+  const [docs, cerr] = await Promise.all([PocList._getAllMemo(), PocList._getCerradasMemo()]);
   await new Promise(r => setTimeout(r, 1500)); // que Uso.accion alcance a escribir
   return { ids: docs.map(d => d.id), nombres: Object.fromEntries(docs.map(d => [d.id, d.cliente_nombre || ''])),
-    marca: localStorage.getItem('poc_vivas_sync_v1') };
+    cerradas: cerr.map(d => d.id),
+    marca: localStorage.getItem('poc_vivas_sync_v1'), marcaC: localStorage.getItem('poc_cerradas_sync_v1') };
 });
 const abrirPoc = async (s) => {
   await s.page.goto(BASE + '/POC/index.html', { waitUntil: 'domcontentloaded' });
@@ -39,6 +44,7 @@ const abrirPoc = async (s) => {
   await espera(2500);
 };
 const mismoConjunto = (r, v) => r.ids.length === v.size && r.ids.every(id => v.has(id));
+const mismasCerradas = (r, v) => r.cerradas.length === v.size && r.cerradas.every(id => v.has(id));
 const esperarSello = async (ids, ms = 40000) => {
   const t0 = Date.now();
   while (Date.now() - t0 < ms) {
@@ -58,6 +64,9 @@ try {
   const v1 = await verdad();
   ok(mismoConjunto(r1, v1), `conjunto = servidor (${r1.ids.length} / ${v1.size})`);
   ok(!!r1.marca, `marca guardada: ${r1.marca}`);
+  const c1 = await verdadCerradas();
+  ok(mismasCerradas(r1, c1), `cerradas = servidor (${r1.cerradas.length} / ${c1.size})`);
+  ok(!!r1.marcaC, `marca de cerradas guardada: ${r1.marcaC}`);
 
   console.log('2) Cambios desde el SERVIDOR (como un trigger o un script): editar, cerrar, alta');
   const vivos = [...v1.keys()];
@@ -80,6 +89,10 @@ try {
   ok(r3.nombres[idEditar] === 'ZZ PRUEBA DELTA', 'la edición llegó');
   ok(!r3.ids.includes(idCerrar), 'la ficha cerrada salió');
   ok(r3.ids.includes(nuevo.id), 'el alta entró');
+  const c3 = await verdadCerradas();
+  ok(mismasCerradas(r3, c3), `cerradas = servidor (${r3.cerradas.length} / ${c3.size})`);
+  ok(r3.cerradas.includes(idCerrar), 'la ficha cerrada entró a las cerradas');
+  ok((u3['poc.cerradas.delta-ok'] || 0) > (u0['poc.cerradas.delta-ok'] || 0), 'las cerradas también por delta');
   ok((u3['poc.vivas.delta-ok'] || 0) > (u0['poc.vivas.delta-ok'] || 0), `usó el delta: ${JSON.stringify(u3)}`);
 
   console.log('4) En vivo: un cambio con la página abierta llega sin recargar');
@@ -100,6 +113,7 @@ try {
   const u5 = await usoPoc();
   ok(mismoConjunto(r5, v5), `conjunto = servidor (${r5.ids.length} / ${v5.size})`);
   ok(!r5.ids.includes(idBorrar), 'la ficha borrada no aparece');
+  ok(mismasCerradas(r5, await verdadCerradas()), `cerradas = servidor (${r5.cerradas.length})`);
   ok((u5['poc.vivas.conteo-no-cuadra'] || 0) > (u3['poc.vivas.conteo-no-cuadra'] || 0), `cayó a la completa: ${JSON.stringify(u5)}`);
 
   console.log('6) Y la vez siguiente vuelve al delta');
@@ -107,6 +121,7 @@ try {
   const r6 = await conjunto(s);
   const u6 = await usoPoc();
   ok(mismoConjunto(r6, await verdad()), `conjunto = servidor (${r6.ids.length})`);
+  ok(mismasCerradas(r6, await verdadCerradas()), `cerradas = servidor (${r6.cerradas.length})`);
   ok((u6['poc.vivas.delta-ok'] || 0) > (u5['poc.vivas.delta-ok'] || 0), 'usó el delta otra vez');
 } finally {
   console.log('errores de página:', s.errores.filter(e => !/favicon|DevTools/.test(e)).slice(0, 6));
