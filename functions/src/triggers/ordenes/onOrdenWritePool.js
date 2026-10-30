@@ -750,6 +750,68 @@ module.exports = onDocumentWritten(
       }
       if (yaEntregada || eliminada) return null;
 
+      // Descartados en el QC que se quedan en Cecomunica (petición Solangel
+      // 2026-10-30, caso SKY CHEFS B3600302): la cuarentena NO espera a la
+      // ENTREGA. La reparación puede quedar abierta días (el cliente no ha
+      // venido, el reemplazo va en otra orden) y mientras tanto bodega veía el
+      // radio "en taller" aunque el taller ya lo había dado por perdido. Al
+      // firmar el QC el radio pasa a devuelto_revision con su motivo en el
+      // kardex, que es la bandeja de baja de bodega. La rama de ENTREGAR de
+      // abajo sigue cubriendo las órdenes firmadas antes de este cambio;
+      // `soloDesde: EN_TALLER` hace idempotentes las dos.
+      // El descartado que SE DEVUELVE al cliente sin reparar no se toca: sale
+      // a en_cliente con la entrega, como siempre.
+      const descAhora = descarte.descartesPorSerial(after);
+      const descAntes = descarte.descartesPorSerial(before);
+      for (const e of despues) {
+        const k = pool.normSerial(e.serial);
+        const d = descAhora.get(k);
+        if (d && d.destino === "cecomunica") {
+          try {
+            const r = await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+              aEstado: pool.ESTADOS.DEVUELTO,
+              soloDesde: [pool.ESTADOS.EN_TALLER],
+              condicion: (doc) => doc.orden_actual_id === ordenId,
+              tipo: "descarte_qc",
+              refMov,
+              notas: ("Descartado en control de calidad — se queda en Cecomunica"
+                + (d.causa ? ` (${descarte.CAUSAS[d.causa]})` : "")
+                + (d.nota ? `: ${d.nota}` : "")).slice(0, 300),
+              extra: { orden_actual_id: null },
+            });
+            if (r === "no-existe") {
+              logger.error("[onOrdenWritePool] Descarte de QC con serial sin ficha", { ordenId, serial: e.serial });
+            }
+          } catch (err) {
+            logger.warn("[onOrdenWritePool] No se pudo dejar en cuarentena un descartado al firmar el QC", {
+              ordenId, serial: e.serial, message: err.message,
+            });
+          }
+          continue;
+        }
+        // Descarte retirado (el QC se repitió y esta vez el radio pasó): vuelve
+        // al taller. Solo si sigue en la cuarentena a la que lo mandó este
+        // trigger — si bodega ya lo dio de baja o lo aterrizó, no se mueve.
+        const dAntes = descAntes.get(k);
+        if (dAntes && dAntes.destino === "cecomunica") {
+          try {
+            await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+              aEstado: pool.ESTADOS.EN_TALLER,
+              soloDesde: [pool.ESTADOS.DEVUELTO],
+              condicion: (doc) => !doc.orden_actual_id,
+              tipo: "ingreso_taller",
+              refMov,
+              notas: "El control de calidad se repitió y el radio ya no está descartado: vuelve al taller",
+              extra: { orden_actual_id: ordenId },
+            });
+          } catch (err) {
+            logger.warn("[onOrdenWritePool] No se pudo devolver al taller un descarte retirado", {
+              ordenId, serial: e.serial, message: err.message,
+            });
+          }
+        }
+      }
+
       // Equipos removidos de una orden viva → salen del taller.
       for (const e of antes.filter((x) => !keysDespues.has(pool.normSerial(x.serial)))) {
         await devolverAlOrigen(e, "Equipo removido de la orden");

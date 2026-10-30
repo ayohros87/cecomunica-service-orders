@@ -15,7 +15,11 @@
 //      cuarentena (aunque viniera de en_cliente) y no se marca refurbished; el
 //      sano aterriza en bodega;
 //   5) al cerrar SIN RETIRAR, el descartado que se queda va a cuarentena y el
-//      resto a no_retirado.
+//      resto a no_retirado;
+//   6) al FIRMAR el QC (orden viva) el descartado que se queda pasa a
+//      cuarentena de una vez (Solangel 2026-10-30, SKY CHEFS B3600302); la
+//      entrega no lo mueve dos veces; un QC repetido que lo apruebe lo
+//      devuelve al taller, salvo que bodega ya lo haya dado de baja.
 //
 // Corre con (desde la raíz del repo):
 //   firebase emulators:exec --only firestore --project demo-descarte-entrega \
@@ -150,10 +154,77 @@ async function cierreSinRetirar() {
   ok("5) sin retirar: el descartado a cuarentena, el resto a no_retirado");
 }
 
+// 6) La cuarentena no espera a la ENTREGA (Solangel 2026-10-30, SKY CHEFS
+//    B3600302): al FIRMAR el QC el descartado que se queda ya pasa a
+//    devuelto_revision; la entrega posterior no lo mueve dos veces; el que se
+//    devuelve al cliente sigue en taller hasta entregarse; y si el QC se repite
+//    y el radio pasa, vuelve al taller.
+async function firmaQc() {
+  await limpiar();
+  const OS = "2026102208";
+  for (const s of ["B3600460", "B3600302", "DEVUELVE01"]) await ficha(s, "en_taller", { orden_actual_id: OS });
+  const equipos = [eq("a", "B3600460"), eq("b", "B3600302"), eq("c", "DEVUELVE01")];
+  const sinQc = { tipo_de_servicio: "REPARACIÓN", estado_reparacion: "COMPLETADO (EN OFICINA)",
+    cliente_id: "cli-sky", cliente_nombre: "SKY CHEFS DE PANAMA, S.A.", equipos };
+  const pe = {
+    a: { equipo_id: "a", serial: "B3600460", resultado: "aprobado" },
+    b: { equipo_id: "b", serial: "B3600302", resultado: "descartado", nota: "Los valores IFR varían", destino: "cecomunica", causa: "garantia" },
+    c: { equipo_id: "c", serial: "DEVUELVE01", resultado: "descartado", nota: "No lo repara", destino: "cliente", causa: "dano_cliente" },
+  };
+  // Firma del QC: misma orden, mismo estado, aparece qc.por_equipo.
+  await correr(OS, sinQc, reparacion(equipos, pe, "COMPLETADO (EN OFICINA)"));
+
+  const b = await leerFicha("B3600302");
+  assert.equal(b.estado, "devuelto_revision");
+  assert.equal(b.orden_actual_id, null);
+  const mb = (await movs("B3600302")).filter((m) => m.tipo === "descarte_qc");
+  assert.equal(mb.length, 1);
+  assert.match(mb[0].notas, /se queda en Cecomunica \(garantía\): Los valores IFR varían/);
+  ok("6) al firmar el QC el descartado que se queda pasa a cuarentena con su motivo");
+
+  assert.equal((await leerFicha("B3600460")).estado, "en_taller");
+  assert.equal((await leerFicha("DEVUELVE01")).estado, "en_taller");
+  ok("6) el aprobado y el que se devuelve sin reparar siguen en taller hasta la entrega");
+
+  // Entrega: no se mueve dos veces; los otros dos salen al cliente.
+  await correr(OS, reparacion(equipos, pe, "COMPLETADO (EN OFICINA)"), reparacion(equipos, pe, "ENTREGADO AL CLIENTE"));
+  assert.equal((await leerFicha("B3600302")).estado, "devuelto_revision");
+  assert.equal((await movs("B3600302")).filter((m) => m.tipo === "descarte_qc").length, 1);
+  assert.equal((await leerFicha("B3600460")).estado, "en_cliente");
+  assert.equal((await leerFicha("DEVUELVE01")).estado, "en_cliente");
+  ok("6) la entrega no repite el movimiento y entrega el resto");
+
+  // QC repetido en otra orden viva: el radio descartado ahora pasa → vuelve al taller.
+  const OS2 = "2026102209";
+  await ficha("REPITE01", "en_taller", { orden_actual_id: OS2 });
+  const eq2 = [eq("r", "REPITE01")];
+  const peMal = { r: { equipo_id: "r", serial: "REPITE01", resultado: "descartado", nota: "x", destino: "cecomunica", causa: "garantia" } };
+  const peBien = { r: { equipo_id: "r", serial: "REPITE01", resultado: "aprobado" } };
+  await correr(OS2, { ...sinQc, equipos: eq2 }, reparacion(eq2, peMal, "COMPLETADO (EN OFICINA)"));
+  assert.equal((await leerFicha("REPITE01")).estado, "devuelto_revision");
+  await correr(OS2, reparacion(eq2, peMal, "COMPLETADO (EN OFICINA)"), reparacion(eq2, peBien, "COMPLETADO (EN OFICINA)"));
+  const r = await leerFicha("REPITE01");
+  assert.equal(r.estado, "en_taller");
+  assert.equal(r.orden_actual_id, OS2);
+  ok("6) si el QC se repite y el radio pasa, vuelve al taller");
+
+  // Pero si bodega ya lo dio de baja, el QC repetido no lo resucita.
+  await ficha("BAJA01", "en_taller", { orden_actual_id: OS2 });
+  const eq3 = [eq("z", "BAJA01")];
+  const peZmal = { z: { equipo_id: "z", serial: "BAJA01", resultado: "descartado", destino: "cecomunica", causa: "garantia" } };
+  const peZbien = { z: { equipo_id: "z", serial: "BAJA01", resultado: "aprobado" } };
+  await correr(OS2, { ...sinQc, equipos: eq3 }, reparacion(eq3, peZmal, "COMPLETADO (EN OFICINA)"));
+  await db.doc("equipos_pool/BAJA01").set({ estado: "baja" }, { merge: true });
+  await correr(OS2, reparacion(eq3, peZmal, "COMPLETADO (EN OFICINA)"), reparacion(eq3, peZbien, "COMPLETADO (EN OFICINA)"));
+  assert.equal((await leerFicha("BAJA01")).estado, "baja");
+  ok("6) un radio ya dado de baja no vuelve al taller por un QC repetido");
+}
+
 (async () => {
   await entregaReparacion();
   await cierreEntrada();
   await cierreSinRetirar();
+  await firmaQc();
   console.log(`\n${n} PASS`);
   process.exit(0);
 })().catch((e) => { console.error("FAIL", e); process.exit(1); });
