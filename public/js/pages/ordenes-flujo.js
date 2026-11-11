@@ -991,6 +991,18 @@ window.generarNotaEntregaIntervenciones = async function (ordenId) {
   localStorage.setItem("notaEntregaData", JSON.stringify(data));
   if (win) { win.location = BASE + "nota-entrega-intervenciones.html"; }
   else { window.open(BASE + "nota-entrega-intervenciones.html", "_blank"); }
+
+  // Sello de la impresión (2026-11-11). La nota es el papel que el cliente
+  // firma al llevarse los radios y no dejaba rastro: la orden seguía en
+  // COMPLETADO sin que nadie supiera que ya salió (109 notas impresas contra
+  // 60 entregas marcadas en 30 días). Con el sello, la fila y la señal
+  // "Listas para entregar" dicen "nota impresa" y piden registrar la entrega.
+  // Fallo no-fatal: la impresión no espera.
+  if (orden.estado_reparacion === 'COMPLETADO (EN OFICINA)') {
+    OrdenesService.updateOrder(ordenId, {
+      nota_entrega_impresa: { at: firebase.firestore.FieldValue.serverTimestamp(), por_email: firebase.auth().currentUser?.email || '' },
+    }).catch(e => console.warn('[notaEntrega] sello de impresión', e));
+  }
 };
 
 function prepararEquiposParaNota(orden, incluirIntervencion = false) {

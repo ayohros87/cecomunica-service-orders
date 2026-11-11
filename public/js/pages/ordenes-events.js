@@ -28,7 +28,7 @@
     'casos-viejos', 'regularizar-reemplazo', 'entrega-tardia', 'proponer-reemplazo', 'marcar-cambio-serial',
     'editar-orden', 'resolver-contrato-anulado', 'go-fotos-taller', 'agregar-equipo', 'venta-facturada',
     'imprimir-orden', 'imprimir-orden-doc', 'nota-entrega-doc', 'ver-documentos', 'ver-cotizacion',
-    'cotizar-orden', 'gestionar-notas', 'ver-entrega', 'subir-nota-firmada', 'scan-serial', 'copiar-seriales',
+    'cotizar-orden', 'gestionar-notas', 'seguimiento-retiro', 'ver-entrega', 'subir-nota-firmada', 'scan-serial', 'copiar-seriales',
     'abrir-trabajo-equipo', 'abrir-intervencion-desktop', 'ver-trabajo-equipo', 'ver-intervencion-equipo',
     'agregar-foto-equipo', 'abrir-material-equipo',
     'filtrar-mias', 'filtrar-estado-chip', 'abrir-chip-cerradas', 'set-view-cards', 'set-view-table', 'ver-ficha',
@@ -509,6 +509,33 @@
       closeAllMenus();
       CargaDiferida.notas().then(() => gestionarNotasTecnicas(ordenId))
         .catch(() => Toast.show('Sin conexión — no se pudieron abrir las notas.', 'bad'));
+    },
+    // Seguimiento de retiro: una nota por orden (texto, quién, cuándo). Vacía
+    // la borra. El snapshot vivo repinta la fila.
+    'seguimiento-retiro': async (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (!ordenId) return;
+      closeAllMenus();
+      const o = (APP.state.orders || []).find(x => x.ordenId === ordenId) || {};
+      const nota = await Modal.prompt({
+        title: `Seguimiento de retiro · ${ordenId}`,
+        message: 'Qué se habló con el cliente y qué sigue. Lo ven recepción, taller y el vendedor en la fila, en el inicio y en el correo semanal.',
+        defaultValue: o.seguimiento_retiro?.nota || '',
+        placeholder: 'Ej.: hablé con Pedro, pasa a retirar el viernes',
+        multiline: true, confirmLabel: 'Guardar', cancelLabel: 'Cancelar',
+      });
+      if (nota === null) return;
+      const texto = String(nota).trim();
+      try {
+        await OrdenesService.updateOrder(ordenId, {
+          seguimiento_retiro: texto
+            ? { nota: texto, por_email: firebase.auth().currentUser?.email || '', at: firebase.firestore.FieldValue.serverTimestamp() }
+            : firebase.firestore.FieldValue.delete(),
+        });
+        Toast.show(texto ? 'Seguimiento guardado' : 'Seguimiento borrado', 'ok');
+      } catch (e) {
+        Toast.show('No se pudo guardar el seguimiento: ' + (e?.message || e), 'bad');
+      }
     },
     // Ver entrega/recepción — modal combinado con las fases que existan.
     'ver-entrega': (el) => {

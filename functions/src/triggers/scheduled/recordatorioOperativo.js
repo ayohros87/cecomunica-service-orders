@@ -55,6 +55,7 @@ const PEND = require("../../domain/pendientes");
 const cobros = require("../../lib/cobrosEquipos");
 const VIG = require("../../lib/vigencia");
 const { incidenciaSuperada } = require("../../lib/incidenciasEntrada");
+const RET = require("../../lib/escalacionRetiro");
 
 const ESTADOS_ABIERTOS = ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO"];
 const STALE_DIAS_DEFAULT = 10;
@@ -126,8 +127,10 @@ module.exports = onSchedule(
 
     // Config con fallbacks (nunca lanza).
     let staleDias = STALE_DIAS_DEFAULT, staleMax = STALE_MAX_DEFAULT, entradaDias = ENTRADA_DIAS_DEFAULT, devolucionSla = DEVOLUCION_SLA_DEFAULT, qcDias = QC_DIAS_DEFAULT, entregaDias = ENTREGA_DIAS_DEFAULT;
+    let retiro = { dias: PEND.DEFAULTS.retiro_dias, desde: null, extra: "" };
     try {
       const cfg = (await db.collection("empresa").doc("config").get()).data() || {};
+      retiro = RET.leerConfig(cfg);
       if (Number.isFinite(Number(cfg.orden_stale_dias)) && Number(cfg.orden_stale_dias) >= 1) staleDias = Number(cfg.orden_stale_dias);
       if (Number.isFinite(Number(cfg.orden_stale_max_dias)) && Number(cfg.orden_stale_max_dias) > staleDias) staleMax = Number(cfg.orden_stale_max_dias);
       if (Number.isFinite(Number(cfg.entrada_recordatorio_dias)) && Number(cfg.entrada_recordatorio_dias) >= 1) entradaDias = Number(cfg.entrada_recordatorio_dias);
@@ -489,6 +492,39 @@ module.exports = onSchedule(
         });
       }
       logger.info("[recordatorioOperativo] listas para entregar", { total: listas.length, notificado: !!(listas.length && to) });
+
+      // ── E2) Sin retirar: escalación semanal al vendedor (lib/escalacionRetiro)
+      // Mismo snapshot, subconjunto más viejo (retiro_escalacion_dias) y solo
+      // lo completado desde retiro_escalacion_desde. Los lunes: un correo
+      // diario con dos órdenes por vendedora sería ruido, como la escalación
+      // de gestiones a bodega (K).
+      if (RET.esDiaDeEnvio(now)) {
+        const filas = [];
+        const vendedores = new Map(); // uid → { email, nombre }
+        snap.forEach(d => {
+          const o = d.data() || {};
+          if (!RET.esEscalable(o, now, retiro)) return;
+          filas.push(RET.fila(d.id, o, now));
+          if (o.vendedor_asignado) vendedores.set(String(o.vendedor_asignado), null);
+        });
+        for (const uid of vendedores.keys()) {
+          const u = await db.collection("usuarios").doc(uid).get();
+          const v = u.exists ? (u.data() || {}) : {};
+          vendedores.set(uid, { email: String(v.email || "").toLowerCase(), nombre: v.nombre || v.email || "" });
+        }
+        filas.forEach(f => { f.vendedor = vendedores.get(f.vendedor_uid)?.nombre || "—"; });
+        const to = [await tallerEmailTo(), retiro.extra].filter(Boolean).join(",");
+        const cc = [...new Set([...vendedores.values()].map(v => v?.email).filter(Boolean))].join(",");
+        if (filas.length && to) {
+          await db.collection("mail_queue").add({
+            to, cc,
+            ...RET.armarCorreo(filas, retiro.dias, APP_BASE_URL),
+            meta: { source: "recordatorioOperativo", seccion: "sin_retirar", total: filas.length },
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        logger.info("[recordatorioOperativo] sin retirar", { total: filas.length, notificado: !!(filas.length && to), desde: retiro.desde });
+      }
     } catch (e) {
       logger.error("[recordatorioOperativo] sección listas-entregar falló", { message: e.message });
     }

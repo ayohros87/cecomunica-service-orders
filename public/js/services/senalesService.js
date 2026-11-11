@@ -637,6 +637,7 @@ const SenalesService = {
       staleMax:    Math.max(num(cfg.orden_stale_max_dias, D.stale_max_dias), staleDias + 1),
       entradaDias: num(cfg.entrada_recordatorio_dias, D.entrada_dias),
       entregaDias: num(cfg.entrega_recordatorio_dias, D.entrega_dias),
+      retiroDias:  num(cfg.retiro_escalacion_dias, D.retiro_dias),
     };
     return this._cfgMemo;
   },
@@ -709,6 +710,8 @@ const SenalesService = {
           tipo: o.tipo_de_servicio || '—',
           equipos: (o.equipos || []).filter(e => e && !e.eliminado).length,
           dias: Math.floor(PendientesDomain.edadDias(o.fecha_completado || o.fecha_modificacion, now) || 0) || Math.floor(PendientesDomain.edadDias(o.fecha_creacion, now) || 0),
+          nota_impresa: !!o.nota_entrega_impresa?.at,
+          seguimiento: o.seguimiento_retiro?.nota || '',
           ...this._snooze(o), ...this._curso(o),
         });
         rows[rows.length - 1].viejo = this._vieja(rows[rows.length - 1].dias, staleMax);

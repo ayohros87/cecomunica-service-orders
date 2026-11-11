@@ -129,7 +129,11 @@ window.HomeSignals = (() => {
       posponer: true, curso: true,
       row: (r, esc) => ({
         txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.id)}</span>`
-          + ` · ${r.equipos} equipo${r.equipos === 1 ? '' : 's'} · ${esc(r.tipo)}`,
+          + ` · ${r.equipos} equipo${r.equipos === 1 ? '' : 's'} · ${esc(r.tipo)}`
+          // "nota impresa": el cliente firmó el papel y casi seguro ya se
+          // llevó los radios — lo que falta es apretar el botón.
+          + (r.nota_impresa ? ' · <b>nota impresa</b>' : '')
+          + (r.seguimiento ? `<br><small>${esc(r.seguimiento)}</small>` : ''),
         dias: r.dias,
         // Deep-link ?entrega= abre el modal de entrega directamente
         // (el mismo que usan los correos de onComplete).
@@ -453,7 +457,10 @@ window.HomeSignals = (() => {
     // en core/roles.js: admin, jefe de taller, recepción). Gerencia y ventas lo
     // veían en rojo sin poder hacer nada con él (repaso del home 2026-09-29).
     gerente:           ['APR', 'SAP', 'FIR', 'REGG'],
-    jefe_taller:       ['S1', 'EST', 'S4Q', 'SAP'],
+    // ENT para la jefa de taller desde 2026-11-11: ella es quien persigue el
+    // retiro (lo llevaba en un Excel) y el chip "Listos" ya era su filtro
+    // más usado en la bandeja.
+    jefe_taller:       ['S1', 'EST', 'S4Q', 'SAP', 'ENT'],
     // FAV (avisos sin facturar > 7 d, P8 de Facturación 2026-10-02): la
     // bandeja envejecía porque nadie la veía envejecer (8 de 13 al 30-sep).
     recepcion:         ['OPC', 'S1', 'S2', 'ENT', 'LPC', 'FAV'],

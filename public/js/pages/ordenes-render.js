@@ -32,17 +32,43 @@ function obtenerIconoLapiz(id, campo, valorActual) {
 // SOLO en POR ASIGNAR / RECIBIDO EN MOSTRADOR estancados — 9 órdenes >30 días
 // eran inventario fantasma que la bandeja no distinguía de lo de ayer. Ámbar
 // a los 14 días, rojo a los 30. Sin animación ni bloqueo: informa, no estorba.
+// Desde 2026-11-11 también en COMPLETADO de PROGRAMACIÓN/REPARACIÓN (lo que
+// espera retiro del cliente): cuenta desde fecha_completado, ámbar al umbral
+// de escalación (retiro_escalacion_dias, 15) y rojo a los 30. Era el dato que
+// la jefa de taller llevaba en un Excel aparte. Si la nota de entrega ya se
+// imprimió, un segundo chip lo dice: casi siempre significa que el cliente ya
+// se llevó los radios y falta registrar la entrega.
 function edadChip(ordenData, estado) {
-  if (estado !== "POR ASIGNAR" && estado !== "RECIBIDO EN MOSTRADOR") return "";
+  const enRetiro = estado === "COMPLETADO (EN OFICINA)"
+    && typeof esOrdenEntrada === 'function' && !esOrdenEntrada(ordenData) && !esOrdenVisita(ordenData);
+  if (!enRetiro && estado !== "POR ASIGNAR" && estado !== "RECIBIDO EN MOSTRADOR") return "";
   // Para RECIBIDO cuenta desde la recepción si existe (estancado EN ese paso).
-  const f = (estado === "RECIBIDO EN MOSTRADOR" && ordenData.fecha_recepcion)
-    ? ordenData.fecha_recepcion : ordenData.fecha_creacion;
+  const f = enRetiro ? ordenData.fecha_completado
+    : (estado === "RECIBIDO EN MOSTRADOR" && ordenData.fecha_recepcion) ? ordenData.fecha_recepcion : ordenData.fecha_creacion;
   const ms = f?.toDate ? f.toDate().getTime() : (f ? new Date(f).getTime() : NaN);
-  if (!isFinite(ms)) return "";
-  const dias = Math.floor((Date.now() - ms) / 86400000);
-  if (dias < 14) return "";
-  const nivel = dias >= 30 ? "edad-chip--critica" : "edad-chip--alta";
-  return ` <span class="edad-chip ${nivel}" title="${dias} días en «${estadoCompacto(estado, ordenData).toLowerCase()}»">${dias} d</span>`;
+  let out = "";
+  if (isFinite(ms)) {
+    const dias = Math.floor((Date.now() - ms) / 86400000);
+    const umbral = enRetiro ? (window.SenalesService?._cfgMemo?.retiroDias || window.PendientesDomain?.DEFAULTS?.retiro_dias || 15) : 14;
+    if (dias >= umbral) {
+      const nivel = dias >= 30 ? "edad-chip--critica" : "edad-chip--alta";
+      const que = enRetiro ? `${dias} días lista sin que el cliente la retire` : `${dias} días en «${estadoCompacto(estado, ordenData).toLowerCase()}»`;
+      out += ` <span class="edad-chip ${nivel}" title="${que}">${dias} d</span>`;
+    }
+  }
+  const imp = enRetiro && ordenData.nota_entrega_impresa;
+  if (imp?.at) {
+    out += ` <span class="edad-chip edad-chip--nota" title="Nota de entrega impresa el ${formatFecha(imp.at)}${imp.por_email ? ' por ' + escapeHtml(imp.por_email) : ''}. Si el cliente ya se llevó los equipos, falta registrar la entrega.">nota impresa</span>`;
+  }
+  return out;
+}
+
+// Seguimiento de retiro (Solangel, 2026-10-22): la última nota de lo hablado
+// con el cliente que no retira. Una por orden; se edita desde el menú ⋯.
+function seguimientoRetiroHtml(ordenData, estado) {
+  const s = ordenData.seguimiento_retiro;
+  if (estado !== "COMPLETADO (EN OFICINA)" || !s?.nota) return "";
+  return `<div class="seg-retiro" title="Seguimiento de retiro · ${escapeHtml(s.por_email || '')} · ${formatFecha(s.at)}">${escapeHtml(s.nota)}</div>`;
 }
 
 // Tooltip del nombre de cliente truncado, en UNA pasada diferida.
@@ -166,7 +192,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
       <div class="cliente-cell">
         <span class="cliente-text">${escapeHtml(nombreClienteDe(ordenData))}</span>
         <span class="cliente-icon">${iconoAdvertencia}${iconoContrato}${gestionLink}</span>
-      </div>
+      </div>${seguimientoRetiroHtml(ordenData, estado)}
     </td>
     <td>${(() => {
       // Reskin F4 slice 3 (propuesta): avatar de iniciales junto al técnico.
@@ -275,6 +301,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
       </div>
       <div class="card-contrato__tier3">
         <span>Inicio: ${formatFecha(ordenData.fecha_creacion)}${edadChip(ordenData, estado)}</span>
+        ${seguimientoRetiroHtml(ordenData, estado)}
         ${progresoHtml}
         ${(() => { const k = _enlacesContexto(ordenData); return k.contrato ? `<span style="font-size:12px;">${k.contrato}</span>` : ''; })()}
         ${ordenData.gestion?.id ? `<a class="orden-gestion-link" data-stop-propagation="true" style="color:#1d4ed8;text-decoration:none;font-size:12px;"
@@ -343,6 +370,24 @@ function _buildTimelineHTML(ordenData) {
       label: 'Completada en oficina',
       ts: ordenData.fecha_completado,
       by: ordenData.completado_por_email || '',
+      kind: 'completado'
+    });
+  }
+  if (ordenData.nota_entrega_impresa?.at) {
+    entries.push({
+      icon: 'clipboard-list',
+      label: 'Nota de entrega impresa',
+      ts: ordenData.nota_entrega_impresa.at,
+      by: ordenData.nota_entrega_impresa.por_email || '',
+      kind: 'completado'
+    });
+  }
+  if (ordenData.seguimiento_retiro?.nota) {
+    entries.push({
+      icon: 'message-square',
+      label: `Seguimiento de retiro: ${ordenData.seguimiento_retiro.nota}`,
+      ts: ordenData.seguimiento_retiro.at,
+      by: ordenData.seguimiento_retiro.por_email || '',
       kind: 'completado'
     });
   }
@@ -1457,6 +1502,20 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
       action: "entregar-parcial",
       dataAttributes: `data-orden-id="${ordenId}"`,
       class: "highlighted"
+    });
+  }
+
+  // Seguimiento de retiro (Solangel, 2026-10-22): qué se habló con el cliente
+  // de una orden lista que no retira. Una nota por orden, visible en la fila,
+  // en la señal del home y en el correo semanal al vendedor; reemplaza el
+  // Excel de la jefa de taller. La escriben quienes llaman al cliente.
+  if (estadoUpper === "COMPLETADO (EN OFICINA)"
+      && [ROLES.ADMIN, ROLES.RECEPCION, ROLES.JEFE_TALLER, ROLES.VENDEDOR].includes(rol)) {
+    const seg = !!o.seguimiento_retiro?.nota;
+    menuItems.push({
+      icon: '<i data-lucide="message-square"></i>',
+      label: seg ? "Seguimiento de retiro" : "Anotar seguimiento de retiro",
+      action: "seguimiento-retiro", dataAttributes: `data-orden-id="${ordenId}"`, class: seg ? 'highlighted' : ''
     });
   }
 

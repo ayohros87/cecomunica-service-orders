@@ -17,6 +17,7 @@ window.PendientesDomain = (() => {
     entrada_dias: 7,       // días en cuarentena (devuelto_revision) sin inspección
     entrega_dias: 3,       // completada con QC listo sin marcar ENTREGADO
     qc_dias: 3,            // completada esperando la firma de QC
+    retiro_dias: 15,       // lista y sin retirar → chip ámbar y escalación al vendedor
   };
 
   // Estados de ordenes_de_servicio que cuentan como "abiertos" para estancadas.
