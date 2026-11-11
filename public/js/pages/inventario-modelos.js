@@ -828,7 +828,7 @@ window.cerrarSesion = cerrarSesion;
    Lo que rompe el pareo N/R o la facturación, en un solo lugar. Las
    comprobaciones de catálogo salen de listaModelos (en vivo); las que cruzan el
    pool y los contratos vienen del reporte diario admin_reportes/salud_catalogo
-   (cron saludCatalogo). Solo administrador y contabilidad ven esta página. */
+   (lo arma el job agregadoPoolDiario de las 05:30). Solo administrador y contabilidad ven esta página. */
 async function renderSalud(){
   const box = document.getElementById('saludCatalogo');
   if (!box || !window.ModeloFamilia) return;

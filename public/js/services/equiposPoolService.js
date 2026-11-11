@@ -268,6 +268,22 @@ const EquiposPoolService = {
         || (a.serial || '').localeCompare(b.serial || ''));
   },
 
+  // Todas las fichas de ciertas FILAS del catálogo, en cualquier ubicación —
+  // el filtro de modelo de la lista avanzada (una familia son 1-3 filas).
+  // Mismo orden que listar(). Si una tanda falla, LANZA: nunca media familia.
+  async listarPorModelos(modeloIds) {
+    const ids = [...new Set((modeloIds || []).filter(Boolean))];
+    if (!ids.length) return [];
+    const db = firebase.firestore();
+    const tandas = [];
+    for (let i = 0; i < ids.length; i += 30) tandas.push(ids.slice(i, i + 30));
+    const snaps = await Promise.all(tandas.map(t =>
+      db.collection('equipos_pool').where('modelo_id', 'in', t).get()));
+    return snaps.flatMap(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
+      .sort((a, b) => (a.modelo_label || '').localeCompare(b.modelo_label || '')
+        || (a.serial || '').localeCompare(b.serial || ''));
+  },
+
   // ── Resumen precalculado por modelo ──────────────────────────────────
   // `agregados_pool` lo mantiene el trigger onPoolAgregado (ver
   // functions/src/domain/agregadoPool.js). Un doc por modeloKey con los

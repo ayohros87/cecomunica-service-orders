@@ -6,6 +6,11 @@
 // vivos se calculan aquí una vez al día y se guardan en
 // admin_reportes/salud_catalogo (lectura: administrador y contabilidad).
 //
+// Ya NO tiene cron propio (2026-11-11): corría a las 06:45 y barría el pool
+// entero una hora después de que agregadoPoolDiario (05:30) lo barriera para
+// reconciliar el resumen — 7,860 lecturas repetidas cada día del año. Ahora
+// lo llama ese job con el pool que ya leyó (`poolSnap`, con CAMPOS_POOL).
+//
 // Secciones del reporte:
 //   · r_sin_base          — filas R sin variante_de cuya base existe por nombre
 //   · r_sin_qbo / r_sin_precio_venta / r_sin_precio_alquiler
@@ -17,15 +22,18 @@
 //   · contratos_sin_linea — radios de contratos vivos sin línea ni por familia
 "use strict";
 
-const { onSchedule } = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const { catalogo, ModeloFamilia } = require("../../domain/modeloCatalogo");
 
 const MAX_SERIALES = 40;
+// Lo que este reporte mira de cada ficha: quien comparta la lectura del pool
+// tiene que pedir al menos estos campos.
+const CAMPOS_POOL = ["estado", "modelo_id", "modelo_label", "condicion", "serial",
+  "familia_sin_fila_r", "asignacion.contrato_doc_id", "propiedad"];
 const label = (m) => `${m.marca || ""} ${m.modelo || ""}`.trim();
 
-async function calcularSaludCatalogo() {
+async function calcularSaludCatalogo({ poolSnap: poolLeido = null } = {}) {
   const { lista } = await catalogo({ force: true });
   const activos = lista.filter((m) => m.activo !== false);
 
@@ -45,7 +53,7 @@ async function calcularSaludCatalogo() {
   }
 
   // ── Pool ──
-  const poolSnap = await db.collection("equipos_pool").get();
+  const poolSnap = poolLeido || await db.collection("equipos_pool").select(...CAMPOS_POOL).get();
   const porModeloCond = new Map(); // modelo → { fila, ficha, n, seriales[] }
   const sinFilaR = new Map();
   for (const d of poolSnap.docs) {
@@ -111,8 +119,8 @@ async function calcularSaludCatalogo() {
   };
 }
 
-async function guardarSaludCatalogo() {
-  const rep = await calcularSaludCatalogo();
+async function guardarSaludCatalogo(opts = {}) {
+  const rep = await calcularSaludCatalogo(opts);
   await db.collection("admin_reportes").doc("salud_catalogo").set(rep);
   logger.info("[saludCatalogo] reporte guardado", {
     r_sin_base: rep.r_sin_base.length, r_sin_qbo: rep.r_sin_qbo.length,
@@ -121,9 +129,4 @@ async function guardarSaludCatalogo() {
   return rep;
 }
 
-module.exports = onSchedule(
-  { schedule: "every day 06:45", timeZone: "America/Panama", region: "us-central1", memory: "512MiB", timeoutSeconds: 300 },
-  async () => { await guardarSaludCatalogo(); },
-);
-module.exports.calcularSaludCatalogo = calcularSaludCatalogo;
-module.exports.guardarSaludCatalogo = guardarSaludCatalogo;
+module.exports = { CAMPOS_POOL, calcularSaludCatalogo, guardarSaludCatalogo };

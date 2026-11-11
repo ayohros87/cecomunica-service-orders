@@ -25,6 +25,7 @@ window.EquiposPool = {
   // filtro— lo sigue teniendo: render() lo pide ANTES de pintar (_datosListos).
   _completo: false,       // _equipos es el pool entero
   _cargadoEstado: null,   // qué ubicación hay en _equipos cuando NO es completo
+  _cargadoFamilia: null,  // o qué FAMILIA de modelo (todas sus ubicaciones)
   _conteos: null,         // conteos GLOBALES para tarjetas y pestañas (modo por pestaña)
   _pidiendo: null,        // carga en vuelo — una sola a la vez
   _errorCarga: null,      // la última carga falló: se muestra, no se reintenta en bucle
@@ -93,6 +94,7 @@ window.EquiposPool = {
     const eraCompleto = this._completo;
     this._completo = false;
     this._cargadoEstado = null;
+    this._cargadoFamilia = null;
     this._busquedaServidor = null;
     this._conteos = null;
     this._errorCarga = null;
@@ -132,6 +134,9 @@ window.EquiposPool = {
   _datosListos() {
     if (this._completo) return true;
     const f = this._filtrosActivos();
+    // Con el filtro de modelo puesto, todo lo demás (pestaña, búsqueda,
+    // toggles) se resuelve DENTRO de la familia, que está entera en memoria.
+    if (f.mod && this._cargadoFamilia === f.mod && !!this._conteos) return true;
     if (f.q && this._busquedaServidor && this._busquedaServidor === this._claveBusqueda(f.q) && !!this._conteos) return true;
     return this._bastaParcial() && this._cargadoEstado === this._tab && !!this._conteos;
   },
@@ -169,6 +174,31 @@ window.EquiposPool = {
   async _cargarDatos(forzarCompleto) {
     try {
       const f = this._filtrosActivos();
+      // Filtro de MODELO: solo las fichas de esa familia (2026-11-11). Es el
+      // camino de "+N más" y "ver en la lista" desde Existencias, que traen
+      // ?modelo=: antes cualquier filtro bajaba el pool entero (7,860 fichas,
+      // el 28% de las lecturas del 9-nov, casi todas de bodega) para mostrar
+      // las de UN modelo. Los contadores de pestaña salen de esas mismas
+      // fichas y las tarjetas de Pendientes del resumen global.
+      const fam = (!forzarCompleto && f.mod) ? this._familias?.get(f.mod) : null;
+      if (fam && fam.ids.size) {
+        const [docs, conteos] = await Promise.all([
+          EquiposPoolService.listarPorModelos([...fam.ids]),
+          this._conteos ? Promise.resolve(this._conteos) : this._cargarConteos(),
+        ]);
+        if (conteos) {
+          this._equipos = docs;
+          this._conteos = conteos;
+          this._cargadoFamilia = f.mod;
+          this._cargadoEstado = null;
+          this._busquedaServidor = null;
+          this._completo = false;
+          this._errorCarga = null;
+          return;
+        }
+        // Sin resumen no hay conteos globales: cae al pool entero, abajo.
+      }
+      this._cargadoFamilia = null;
       const claveQ = (!forzarCompleto && f.q) ? this._claveBusqueda(f.q) : '';
       if (claveQ) {
         const [docs, conteos] = await Promise.all([
@@ -199,6 +229,7 @@ window.EquiposPool = {
         if (!conteos) {
           console.warn('[Equipos] agregados_pool vacío — leyendo el pool completo');
           if (typeof Toast !== 'undefined') Toast.show('Resumen de inventario no disponible: se leyó el pool completo.', 'warn');
+          this._anotarPoolCompleto('sin-resumen');
           this._equipos = await EquiposPoolService.listar();
           this._completo = true;
           this._cargadoEstado = null;
@@ -208,6 +239,10 @@ window.EquiposPool = {
           this._conteos = conteos;
         }
       } else {
+        this._anotarPoolCompleto(forzarCompleto ? 'recarga'
+          : f.q ? 'busqueda' : f.mod ? 'modelo' : f.prop ? 'propiedad'
+          : f.sinVerificar ? 'sin-verificar' : f.compartidos ? 'compartidos'
+          : f.sinCliente ? 'sin-cliente' : f.listos ? 'listos' : `tab-${this._tab}`);
         this._equipos = await EquiposPoolService.listar();
         this._completo = true;
         this._cargadoEstado = null;
@@ -217,6 +252,14 @@ window.EquiposPool = {
       this._errorCarga = e;
       throw e;
     }
+  },
+
+  // Bajar el pool entero cuesta una lectura por ficha (7,860) cada vez que
+  // pasan 30 min desde la anterior. Queda anotado POR QUÉ se bajó
+  // (uso_diario.acciones['almacen.pool-completo.<motivo>']): lo que más se
+  // repita es el siguiente camino al que hay que darle su consulta propia.
+  _anotarPoolCompleto(motivo) {
+    try { window.Uso?.accion(`almacen.pool-completo.${motivo}`); } catch (_) { /* telemetría */ }
   },
 
   // Conteos GLOBALES para cuando _equipos es una sola pestaña: las tarjetas de
@@ -314,7 +357,9 @@ window.EquiposPool = {
           // el delta. Una ficha que no estaba cargada entra como nueva: es un
           // alta, o el ID nuevo de un serial corregido (el viejo ya restó).
           this._ajustarConteos(viejo, nuevo);
-          const queda = nuevo && nuevo.estado === this._cargadoEstado;
+          const queda = nuevo && (this._cargadoFamilia
+            ? this._enFamilia(nuevo, this._cargadoFamilia)
+            : nuevo.estado === this._cargadoEstado);
           if (queda) { if (i >= 0) this._equipos[i] = nuevo; else this._equipos.push(nuevo); }
           else if (i >= 0) this._equipos.splice(i, 1);
           continue;
@@ -362,6 +407,8 @@ window.EquiposPool = {
   async cargarModelos() {
     try {
       const todos = await ModelosService.getModelos();
+      this._modelosInactivos = (todos || []).filter(m => m.activo === false)
+        .map(m => ({ id: m.id, label: `${m.marca || ''} ${m.modelo || ''}`.trim() }));
       this._modelos = (todos || [])
         .filter(m => m.activo !== false)
         // `estado` (N/R) se conserva: es lo que determina la condición de la
@@ -372,6 +419,7 @@ window.EquiposPool = {
     } catch (e) {
       console.warn('No se pudo cargar el catálogo de modelos:', e);
       this._modelos = [];
+      this._modelosInactivos = [];
     }
     // Modal de editar: fila EXACTA del catálogo (N y R aparte). El de recibir
     // vive en js/ui/asistente-recibir.js y carga su propio catálogo.
@@ -388,13 +436,20 @@ window.EquiposPool = {
     // se agrupan en una sola opción (la condición N/R se ve por columna).
     this._familias = new Map(); // key → { label, ids: Set }
     for (const m of this._modelos) {
-      const key = EquiposPoolService._tightLabel(m.label).replace(/r$/, '');
+      const key = this._famKey(m.label);
       if (!key) continue;
       const fam = this._familias.get(key) || { label: m.label, ids: new Set() };
       fam.ids.add(m.id);
       // Prefiere como etiqueta la variante SIN sufijo -R (la base).
       if (m.label.length < fam.label.length) fam.label = m.label;
       this._familias.set(key, fam);
+    }
+    // Las filas INACTIVAS del catálogo no dan opción al filtro, pero sus
+    // fichas siguen en el pool (KENWOOD NX-420: 54): entran a la familia de su
+    // variante activa para que el filtro las siga mostrando.
+    for (const m of (this._modelosInactivos || [])) {
+      const fam = this._familias.get(this._famKey(m.label));
+      if (fam) fam.ids.add(m.id);
     }
     const selFam = document.getElementById('eqFiltroModelo');
     if (selFam) {
@@ -405,12 +460,21 @@ window.EquiposPool = {
     }
   },
 
+  _famKey(label) {
+    return EquiposPoolService._tightLabel(label).replace(/r$/, '');
+  },
+
   // ¿La unidad pertenece a la familia de modelo seleccionada en el filtro?
+  // Por FILA del catálogo (2026-11-11), igual que la consulta que trae la
+  // familia (listarPorModelos): antes se pareaba además por texto contenido, y
+  // "HYT-P50" traía los HYT-P50 PRO, "PD606" los PD606G, y las ~980 fichas sin
+  // modelo casaban con CUALQUIER filtro. Una ficha sin id solo entra si su
+  // etiqueta es la de la familia.
   _enFamilia(eq, famKey) {
     const fam = this._familias?.get(famKey);
     if (!fam) return true;
-    if (eq.modelo_id && fam.ids.has(eq.modelo_id)) return true;
-    return EquiposPoolService._mismoModelo(eq, null, fam.label);
+    if (eq.modelo_id) return fam.ids.has(eq.modelo_id);
+    return !!eq.modelo_label && this._famKey(eq.modelo_label) === famKey;
   },
 
   _modeloLabel(modeloId) {
@@ -719,10 +783,12 @@ window.EquiposPool = {
     // Con búsqueda activa se vuelven "cuántos resultados hay en cada ubicación",
     // que es exactamente lo que uno quiere saber al buscar un serial.
     const fAct = this._filtrosActivos();
-    if (C) {
+    if (C && !this._cargadoFamilia) {
       // Modo por pestaña: por construcción no hay búsqueda ni filtros
       // secundarios (_bastaParcial), así que el número de cada pestaña es su
       // total global — el mismo que daría contarlo con el pool entero.
+      // (Con una familia cargada va por la otra rama: sus fichas están todas
+      // en memoria y el filtro de modelo ya las acota.)
       const pe = C.porEstado;
       set('countBodega', `(${fmt(pe.en_bodega || 0)})`);
       set('countAsignados', `(${fmt(pe.asignado_contrato || 0)})`);
@@ -744,7 +810,14 @@ window.EquiposPool = {
 
     // Barra "Viendo: …" — hace obvios los filtros activos sin abrir dropdowns.
     // Con búsqueda el universo es el pool entero, no la pestaña.
-    const universo = fAct.q
+    // Con una familia cargada _equipos no es el universo: sale del resumen.
+    const deResumen = (C && this._cargadoFamilia)
+      ? ((fAct.q || this._tab === 'todos') ? C.total
+        : this._tab === 'otros' ? this.ESTADOS_OTROS.reduce((s, e) => s + (C.porEstado[e] || 0), 0)
+        : (C.porEstado[this._tab] || 0))
+      : null;
+    const universo = deResumen != null ? deResumen
+      : fAct.q
       ? this._equipos.length
       : this._equipos.filter(e => this._enTab(e, this._tab)).length;
     this._renderFiltrosActivos(fAct, lista.length, universo - lista.length);

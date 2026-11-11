@@ -5,10 +5,15 @@
 // Cuesta una lectura por ficha del pool UNA vez al día (~7,600) — contra las
 // ~197,000 diarias que costaba que Existencias barriera el pool en cada
 // apertura. Corre antes de la jornada para que el día empiece cuadrado.
+//
+// Con ese MISMO barrido se arma la salud del catálogo (2026-11-11): antes
+// tenía su cron a las 06:45 y volvía a leer el pool entero. Si el reporte de
+// salud falla, la reconciliación ya quedó hecha y no se repite.
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { getFirestore } = require("firebase-admin/firestore");
 const logger = require("firebase-functions/logger");
 const AG = require("../../domain/agregadoPool");
+const SALUD = require("./saludCatalogo");
 
 module.exports = onSchedule(
   {
@@ -17,10 +22,13 @@ module.exports = onSchedule(
     region: "us-central1",
     retryCount: 1,
     memory: "512MiB",
+    timeoutSeconds: 300,
   },
   async () => {
     const db = getFirestore();
-    const R = await AG.recalcular(db);
+    const campos = [...new Set([...AG.CAMPOS_POOL, ...SALUD.CAMPOS_POOL])];
+    const poolSnap = await db.collection("equipos_pool").select(...campos).get();
+    const R = await AG.recalcular(db, { poolSnap });
     // La deriva se reporta SIEMPRE, aunque ya esté corregida: si aparece cada
     // día hay un camino de escritura que no pasa por el trigger, y eso es un
     // defecto que hay que buscar, no un número que basta con reescribir.
@@ -42,6 +50,8 @@ module.exports = onSchedule(
         muestra: R.difs.slice(0, 20),
       });
     }
+    try { await SALUD.guardarSaludCatalogo({ poolSnap }); }
+    catch (e) { logger.error("[agregadoPool] la salud del catálogo falló", { message: e?.message }); }
     return null;
   }
 );

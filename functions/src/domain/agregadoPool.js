@@ -150,9 +150,13 @@ function armarReporte({ fichas, modelos, difs, sobrantes, veniaMarcado, motivoPr
 
 // Recalcula TODO desde el pool. Una lectura por ficha — se corre a diario, no
 // por escritura. Devuelve el reporte de deriva para poder auditarla.
-async function recalcular(db, { aplicar = true } = {}) {
-  const snap = await db.collection("equipos_pool")
-    .select("modelo_id", "modelo_label", "estado")
+// `poolSnap`: el pool ya leído por quien llama (el job de las 05:30 lo comparte
+// con la salud del catálogo para no barrerlo dos veces); tiene que traer al
+// menos CAMPOS_POOL.
+const CAMPOS_POOL = ["modelo_id", "modelo_label", "estado"];
+async function recalcular(db, { aplicar = true, poolSnap = null } = {}) {
+  const snap = poolSnap || await db.collection("equipos_pool")
+    .select(...CAMPOS_POOL)
     .get();
 
   const real = new Map();
@@ -250,5 +254,5 @@ async function recalcular(db, { aplicar = true } = {}) {
 
 module.exports = {
   COL, META, META_DOC, REPORTE, REPORTE_DOC, HISTORIAL_MAX,
-  claveDe, afecta, aplicarDelta, marcarDeriva, armarReporte, recalcular,
+  CAMPOS_POOL, claveDe, afecta, aplicarDelta, marcarDeriva, armarReporte, recalcular,
 };

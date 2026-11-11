@@ -466,18 +466,26 @@ const PocService = {
   //
   // Los Sets de grupos dedupan por forma cruda (case-sensitive trimmed) —
   // las helpers de gruposAnalisis hacen su propia normalización.
+  //
+  // `fresh` (Administración · Grupos) ya no baja la colección entera
+  // (2026-11-11): eran ~6,700 lecturas por apertura, y las cerradas no
+  // aportan nada aquí. Sale de las VIVAS por delta (vivasUnaVez): la caché
+  // local más lo que cambió desde la última vez, validado contra el servidor.
   async getClientesConGrupos({ fresh = false } = {}) {
     const db = firebase.firestore();
-    let snap = fresh
-      ? await db.collection('poc_devices').get()
-      : await db.collection('poc_devices').get({ source: 'cache' });
-    if (!fresh && snap.empty) snap = await db.collection('poc_devices').get();
+    let fichas;
+    if (fresh) {
+      fichas = await this.vivasUnaVez();
+    } else {
+      let snap = await db.collection('poc_devices').get({ source: 'cache' });
+      if (snap.empty) snap = await db.collection('poc_devices').get();
+      fichas = snap.docs.map(doc => doc.data());
+    }
     const ids = new Set();
     const nombres = new Set();
     const gruposPorId = new Map();
     const gruposPorNombre = new Map();
-    snap.forEach(doc => {
-      const d = doc.data();
+    fichas.forEach(d => {
       if (d.deleted === true) return;
       const grupos = (Array.isArray(d.grupos) ? d.grupos : [])
         .map(g => (g || '').toString().trim())
@@ -641,6 +649,26 @@ const PocService = {
   // Devuelve la función para cancelar la suscripción.
   escuchar(nombre, onDatos, onError) {
     return this._escucharDelta(nombre === 'cerradas' ? 'cerradas' : 'vivas', onDatos, onError);
+  },
+
+  // Las vivas UNA vez, por el mismo camino que la lista (por delta si este
+  // navegador ya sincronizó; completa si no): resuelve con el primer conjunto
+  // confirmado por el servidor y suelta la suscripción.
+  vivasUnaVez() {
+    return new Promise((resolve, reject) => {
+      let unsub = null;
+      let listo = false;
+      const fin = (fn, v) => {
+        if (listo) return;
+        listo = true;
+        try { if (unsub) unsub(); } catch (_) { /* ya cerrada */ }
+        fn(v);
+      };
+      unsub = this.escuchar('vivas',
+        (docs, delServidor) => { if (delServidor) fin(resolve, docs); },
+        (err) => fin(reject, err));
+      if (listo) { try { unsub(); } catch (_) { /* ya cerrada */ } }
+    });
   },
 
   _queryConjunto(nombre) {

@@ -101,7 +101,7 @@ async function recalcularCuenta(clienteId, cfg = null) {
   }
   const reg = R.calcular({ contratos, unidades, gestiones, opts: c });
   const r = await _guardar(ref, cliente, reg);
-  return { clienteId, nombre: cliente.nombre || "", ...r };
+  return { clienteId, nombre: cliente.nombre || "", cliente, ...r };
 }
 
 // Marca "hay que recalcular" — la llaman los triggers. Best-effort.
@@ -116,14 +116,23 @@ async function marcar(clienteId, motivo = "") {
 }
 
 // ── Barrido de marcados (cada pocos minutos) ──────────────────────────────
-async function barridoMarcados({ max = 60 } = {}) {
+// `delta(cliente, regNuevo)`: cuánto mueve cada cuenta escrita un total que
+// lleva quien llama (el "Cuentas por regularizar" del home); la suma vuelve en
+// `out.delta`. Así el total se ajusta con lo que el barrido ya tiene en la
+// mano, sin volver a consultar las cuentas con deuda.
+async function barridoMarcados({ max = 60, delta = null } = {}) {
   const cfg = await config();
   const snap = await db.collection("clientes").orderBy("regularizacion_dirty_at").limit(max).get();
-  const out = { revisadas: 0, escritas: 0, errores: 0 };
+  const out = { revisadas: 0, escritas: 0, errores: 0, delta: 0 };
   for (const d of snap.docs) {
     out.revisadas++;
-    try { const r = await recalcularCuenta(d.id, cfg); if (r?.escrito) out.escritas++; }
-    catch (e) { out.errores++; logger.warn("[regularizacion] marcado falló", { id: d.id, message: e?.message }); }
+    try {
+      const r = await recalcularCuenta(d.id, cfg);
+      if (r?.escrito) {
+        out.escritas++;
+        if (delta) out.delta += Number(delta(r.cliente, r.despues)) || 0;
+      }
+    } catch (e) { out.errores++; logger.warn("[regularizacion] marcado falló", { id: d.id, message: e?.message }); }
   }
   return out;
 }

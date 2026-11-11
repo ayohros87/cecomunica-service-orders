@@ -121,6 +121,7 @@ window.AlmacenExistencias = (() => {
       if (!resumen.length) {
         console.warn('[Existencias] agregados_pool vacío — leyendo el pool completo');
         if (typeof Toast !== 'undefined') Toast.show('Resumen de inventario no disponible: se leyó el pool completo.', 'warn');
+        try { window.Uso?.accion('almacen.pool-completo.existencias-sin-resumen'); } catch (_) { /* telemetría */ }
         ctx.filas = armarFilas({ resumen: resumenDesdePool(await EquiposPoolService.listar()), modelos, conteos });
       } else {
         ctx.filas = armarFilas({ resumen, modelos, conteos });

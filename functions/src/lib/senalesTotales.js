@@ -14,7 +14,16 @@
 // y solo si falta o está rancio vuelve al recuento viejo.
 //
 // Doc: { regg: n, regg_at, com: n, com_at, updated_at }
+//
+// REGG entre un recuento diario y el siguiente (2026-11-11): el barrido de
+// marcadas recontaba TODAS las cuentas con deuda (~250 lecturas) cada vez que
+// escribía una, unas 20 veces al día — más de lo que costaba el recuento del
+// home que esto vino a quitar. Ahora ajusta el total con la diferencia de las
+// cuentas que acaba de recalcular (deltaRegg + ajustarRegg, cero lecturas);
+// el recuento completo queda para regularizacionDiaria, que además fija
+// `regg_at` (la edad que el home mira para confiar en el número).
 
+const { FieldValue } = require("firebase-admin/firestore");
 const { admin, db } = require("./admin");
 const { estaPospuesto } = require("../domain/pendientes");
 
@@ -43,6 +52,14 @@ function comisionLista(a) {
   return faltan.length > 0 && faltan.every(([k]) => k === "pago");
 }
 
+/** Cuánto mueve el total una cuenta cuyo bloque `regularizacion` pasa a ser
+ *  `regNuevo`: +1 si entra a contar, −1 si sale, 0 si sigue igual. */
+function deltaRegg(cliente, regNuevo, now = new Date()) {
+  const antes = cuentaParaRegularizar(cliente, now);
+  const despues = cuentaParaRegularizar({ ...(cliente || {}), regularizacion: regNuevo }, now);
+  return (despues ? 1 : 0) - (antes ? 1 : 0);
+}
+
 async function totalCuentasPorRegularizar(now = new Date()) {
   const snap = await db.collection("clientes").where("regularizacion.puntos", ">", 0).get();
   let n = 0;
@@ -64,6 +81,13 @@ async function escribirRegg() {
   return regg;
 }
 
+/** Ajusta REGG sin recontar. No toca `regg_at`: esa fecha es la del último
+ *  recuento completo. */
+async function ajustarRegg(delta) {
+  if (!delta) return;
+  await DOC().set({ regg: FieldValue.increment(delta), updated_at: FieldValue.serverTimestamp() }, { merge: true });
+}
+
 async function escribirCom() {
   const com = await totalComisionesListas();
   const ts = admin.firestore.FieldValue.serverTimestamp();
@@ -71,4 +95,4 @@ async function escribirCom() {
   return com;
 }
 
-module.exports = { cuentaParaRegularizar, comisionLista, totalCuentasPorRegularizar, totalComisionesListas, escribirRegg, escribirCom };
+module.exports = { cuentaParaRegularizar, comisionLista, deltaRegg, totalCuentasPorRegularizar, totalComisionesListas, escribirRegg, ajustarRegg, escribirCom };

@@ -88,10 +88,15 @@ const regularizacionDiaria = onSchedule(
 const regularizacionMarcadas = onSchedule(
   { schedule: "every 10 minutes", timeZone: "America/Panama", region: "us-central1", retryCount: 0, memory: "256MiB", timeoutSeconds: 300 },
   async () => {
-    const R = await RC.barridoMarcados({ max: 60 });
+    const R = await RC.barridoMarcados({ max: 60, delta: (cliente, reg) => ST.deltaRegg(cliente, reg) });
     if (R.revisadas) logger.info("[regularizacionMarcadas] barrido", R);
-    // Solo si algo cambió: recontar cada 10 min costaría más que lo que ahorra.
-    if (R.escritas) await totalReggSeguro("regularizacionMarcadas");
+    // El total del home se ajusta con la diferencia de lo recalculado, sin
+    // recontar (el recuento era ~250 lecturas por barrido con cambios, unas
+    // 20 veces al día). El recuento completo lo hace regularizacionDiaria.
+    if (R.delta) {
+      try { await ST.ajustarRegg(R.delta); }
+      catch (e) { logger.warn("[regularizacionMarcadas] no se pudo ajustar senales_totales.regg", { message: e.message }); }
+    }
     return null;
   }
 );

@@ -11,6 +11,8 @@
 //   T3 — comisión lista: aplica + vendedor + solo falta `pago`.
 //   T4 — comisión NO lista: no aplica, ya pagada/periodo, sin vendedor,
 //        falta otro requisito además del pago, o no falta nada.
+//   T5 — el barrido de marcadas ajusta el total con la diferencia de cada
+//        cuenta (+1 entra, −1 sale, 0 sigue igual) y NO vuelve a recontar.
 //
 // Corre con `npm test` (node --test). No necesita emulador ni red.
 const { test } = require("node:test");
@@ -58,4 +60,26 @@ test("T4 — comisión NO lista: no aplica, pagada, sin vendedor, falta otro req
   assert.equal(ST.comisionLista(aviso({ ...base, requisitos: req({ factura: true, pago: true }) })), false);
   assert.equal(ST.comisionLista(aviso({ aplica: true, vendedor_email: "v@x", requisitos: {} })), false);
   assert.equal(ST.comisionLista({}), false);
+});
+
+test("T5 — delta del total: +1 entra, −1 sale, 0 sigue igual; el barrido de marcadas no recuenta", () => {
+  // Entra: no tenía deuda y ahora sí.
+  assert.equal(ST.deltaRegg({ nombre: "X" }, { puntos: 2 }, now), 1);
+  assert.equal(ST.deltaRegg(cuenta({ regularizacion: { puntos: 0 } }), { puntos: 1 }, now), 1);
+  // Sale: saldó la deuda, o lo que queda es solo de bodega.
+  assert.equal(ST.deltaRegg(cuenta(), { puntos: 0 }, now), -1);
+  assert.equal(ST.deltaRegg(cuenta(), { puntos: 2, solo_bodega: true }, now), -1);
+  // Sigue igual: cambian los puntos pero sigue contando (o sigue sin contar).
+  assert.equal(ST.deltaRegg(cuenta(), { puntos: 9 }, now), 0);
+  assert.equal(ST.deltaRegg({ nombre: "X" }, { puntos: 0 }, now), 0);
+  // Pospuesta o inactiva: no contaba ni cuenta, cambie lo que cambie.
+  assert.equal(ST.deltaRegg(cuenta({ pendiente_snooze: { hasta: "2026-12-01", motivo: "en trámite" } }), { puntos: 0 }, now), 0);
+  assert.equal(ST.deltaRegg(cuenta({ activo: false, regularizacion: { puntos: 0 } }), { puntos: 4 }, now), 0);
+
+  // El barrido de cada 10 minutos ajusta; el recuento completo es del diario.
+  const fs = require("node:fs"), path = require("node:path");
+  const src = fs.readFileSync(path.join(__dirname, "..", "src", "triggers", "scheduled", "regularizacionCuentas.js"), "utf8");
+  const marcadas = src.slice(src.indexOf("const regularizacionMarcadas"));
+  assert.ok(marcadas.includes("ST.ajustarRegg("), "regularizacionMarcadas debe ajustar el total por delta");
+  assert.ok(!/totalReggSeguro|escribirRegg/.test(marcadas), "regularizacionMarcadas no debe recontar las cuentas");
 });
