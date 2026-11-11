@@ -253,7 +253,8 @@
 
     pintar(s) {
       const r = s.resumen || {};
-      document.getElementById('fTitulo').textContent = s.titulo || `Contrato ${s.contrato_id || ''}`;
+      document.getElementById('fTitulo').textContent = s.titulo
+        || `${/RENOVACI[OÓ]N/.test(s.documento?.titulo || '') ? 'Contrato de renovación' : 'Contrato'} ${s.contrato_id || ''}`;
       document.getElementById('fSub').textContent =
         `${s.cliente_nombre || ''} · ${r.tipo_contrato || ''} · ${r.duracion || ''}`;
       const filas = [...(r.equipos || []).map(l =>
@@ -339,6 +340,7 @@
         `<tr><td>${Number(x.cantidad || 1)}</td><td>${this.esc(x.concepto)} <span style="color:#8a99a8;font-size:11px;">${x.recurrente ? 'mensual' : 'único'}</span></td><td class="num">$${Number(x.monto || 0).toFixed(2)}</td></tr>`)].join('');
       const anexo = Array.isArray(d.anexo) ? d.anexo : [];
       cont.innerHTML = `
+        ${d.titulo ? `<h3 style="text-align:center;">${this.esc(d.titulo)}</h3>` : ''}
         <h3>1. Partes</h3>
         <p><b>C COMUNICA, S.A.</b> (RUC 32977-27-249966 DV 39), en adelante <b>LA EMPRESA</b>, y
           <b>${this.esc(s.cliente_nombre || 'EL CLIENTE')}</b>${d.cliente_rucdv ? ` (RUC ${this.esc(d.cliente_rucdv)})` : ''},

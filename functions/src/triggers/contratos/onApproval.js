@@ -355,7 +355,27 @@ const onContratoActivado = onDocumentUpdated(
     // El contrato ya es real: crear/actualizar en QuickBooks y POC. Si lleva
     // equipo por entregar, la facturación arranca en la fecha de ENTREGA (la
     // OS le llega a recepción por su flujo normal).
-    if (transitionedToActivo) {
+    //
+    // Entregado ANTES de firmarse (2026-11-11, entrega con la firma del
+    // contrato pendiente): onEntregaFacturacion ya abrió `contrato_entregado`
+    // el día de la entrega, con su comisión. Abrir ahora `contrato_activo`
+    // sería la misma alta dos veces en la bandeja —y dos comisiones—, así que
+    // la firma tardía no crea aviso: el que existe ya lleva el requisito de
+    // firma, que onRequisitos refresca solo.
+    let yaAvisadoPorEntrega = false;
+    if (transitionedToActivo && after.entrega_confirmada === true) {
+      try {
+        const FA0 = require("../../lib/facturacionAvisos");
+        yaAvisadoPorEntrega = (await db.collection(FA0.COL)
+          .doc(FA0.avisoId("contrato_entregado", contratoId)).get()).exists;
+        if (yaAvisadoPorEntrega) {
+          logger.info("[onContratoActivado] El contrato ya se avisó a facturación al entregarse: no se duplica", { contratoId });
+        }
+      } catch (e) {
+        logger.warn("[onContratoActivado] No se pudo verificar el aviso por entrega", { contratoId, message: e.message });
+      }
+    }
+    if (transitionedToActivo && !yaAvisadoPorEntrega) {
       const conEquipo = (after.equipos || []).some(e => Number(e.cantidad || 0) > 0)
         && !after.renovacion_sin_equipo;
       const esRenov = after.accion === "Renovación";

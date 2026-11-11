@@ -717,6 +717,13 @@ Object.assign(window.Centro, {
     return `<span class="${CC.chipClass(c)}" title="${this.esc(CC.resumen(c))}">${this.esc(CC.etiqueta(c))}</span>`;
   },
 
+  // Chip "Renovación" junto al tipo (2026-11-11, pedido de Brenda): SERV es
+  // el prefijo de todo contrato del Centro y la acción iba solo en texto.
+  _renovChipHtml(c) {
+    return c?.accion === 'Renovación'
+      ? ' <span class="cg-chip cg-chip--info" title="Renovación de equipos — no es un contrato de cliente nuevo">Renovación</span>' : '';
+  },
+
   // Fila estándar de un contrato operativo (la comparten la tabla principal
   // y el pliegue de "menores"). SIN acciones por contrato (decisión
   // 2026-08-28): renovar/aumentar/terminar son actos de la CUENTA y viven en
@@ -727,7 +734,7 @@ Object.assign(window.Centro, {
   _filaContrato(c) {
     return `<tr>
       <td class="cg-mono"><a href="#" onclick="Centro.verContrato('${this.esc(c.id)}'); return false;">${this.esc(c.contrato_id || c.id)}</a></td>
-      <td>${this._compChipHtml(c)}</td>
+      <td>${this._compChipHtml(c)}${this._renovChipHtml(c)}</td>
       <td>${this.esc(this._estadoLabel(c))}${c.cancelacion_pendiente && this._esVigente(c)
         ? ` <span class="cg-venc por_vencer" title="El equipo ya volvió y el contrato sigue vigente — hay que cerrarlo">por cerrar</span>` : ''}</td>
       <td style="text-align:right;">${this._unidadesActivas(c)}</td>
@@ -790,7 +797,7 @@ Object.assign(window.Centro, {
     const reg = c.regularizacion;
     this._abrirModalA({
       titulo: `<span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>
-        <span style="font-weight:400; color:var(--fg-3); font-size:13.5px;"> · ${this._compChipHtml(c)} · ${this.esc(this._estadoLabel(c))}</span>`,
+        <span style="font-weight:400; color:var(--fg-3); font-size:13.5px;"> · ${this._compChipHtml(c)}${this._renovChipHtml(c)} · ${this.esc(this._estadoLabel(c))}</span>`,
       cuerpo: `
       <div style="margin:0 0 10px;">${this._vidaHtml(c)}</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 24px; margin-bottom:10px;">
@@ -1254,6 +1261,13 @@ Object.assign(window.Centro, {
   // Un "—" a secas se lee como "falta", y una RENOVACIÓN no entrega nada nunca
   // — por eso el motivo va escrito (caso R. Smith Coronado, ALQ20260601-02).
   _entregaTxt(c) {
+    // Entregado con la firma del contrato pendiente (2026-11-11): se dice
+    // aquí, con la fecha, aunque el contrato todavía no esté activo.
+    if (c && ContratoFirma.entregadoSinFirma(c)) {
+      const dias = ContratoFirma.diasEntregadoSinFirma(c);
+      const f = c.entrega_sin_firma?.fecha_entrega || c.fecha_entrega_ultima;
+      return `<span class="cg-venc por_vencer">sí${f ? ` · ${this._fmtFecha(f)}` : ''} — con la firma del contrato pendiente${dias != null ? ` (${dias === 0 ? 'hoy' : dias === 1 ? 'hace 1 día' : `hace ${dias} días`})` : ''}</span>`;
+    }
     if (!c || c.estado !== 'activo') return '';
     if (c.entrega_confirmada === true) {
       return `sí ✓${c.fecha_entrega_ultima ? ` · ${this._fmtFecha(c.fecha_entrega_ultima)}` : ''}`;

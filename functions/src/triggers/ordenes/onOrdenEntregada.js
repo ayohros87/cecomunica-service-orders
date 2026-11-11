@@ -17,6 +17,10 @@ const { admin, db } = require("../../lib/admin");
 //   3) Entrega COMPLETA con cotización de taller → abre la fila en
 //      "Facturación pendiente" para que Recepción emita la factura y el
 //      taller se entere cuando salga (2026-09-14, pedido de Solangel).
+//   4) Entrega con el CONTRATO SIN FIRMAR (2026-11-11, pedido de Brenda) →
+//      marca el contrato con `entrega_sin_firma`. No lo firma ni lo activa:
+//      es lo que pinta "Entregado · firma pendiente" y lo que el cron
+//      (recordatorioOperativo, sección L) le recuerda al vendedor cada día.
 const ENTREGADO = "ENTREGADO AL CLIENTE";
 // "El trabajo SALIÓ" — el momento en que una reparación cotizada se puede
 // facturar. No es un solo estado: una reparación de taller termina cuando el
@@ -32,6 +36,7 @@ const norm = (s) => String(s || "").trim().toUpperCase();
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
 const { emailNotaTanda, numeroDeTanda } = require("../../lib/notaTandaEntrega");
 const CS = require("../../lib/cotizacionServicio");
+const { esperandoFirma } = require("../../domain/contratoFirma");
 
 // ── Copia de la nota de entrega parcial al cliente ────────────────────────
 // La UI marca entrega.tandas[].envio = {status:'solicitado', to} y aquí se
@@ -169,6 +174,34 @@ module.exports = onDocumentWritten(
     const contrato = after.contrato || {};
     if (!contrato.aplica || !contrato.contrato_doc_id) return null; // orden sin contrato
 
+    // ¿Salieron radios con el contrato todavía sin firmar? Pasa por la puerta
+    // de recepción ("Entregar con la firma del contrato pendiente", que deja
+    // `entrega_contrato_sin_firma` en la orden) o por el override de admin; la
+    // marca se decide mirando el CONTRATO, así que cubre las dos. Se estampa
+    // una sola vez (la primera entrega) y va ANTES del corte de la orden
+    // dividida: el vendedor tiene que enterarse con la primera hermana que
+    // sale, no con la última. Reemplazo/demo no llevan firma y un aumento
+    // cuelga de un contrato ya activo: `esperandoFirma` los deja pasar.
+    let marcaSinFirma = null;
+    try {
+      const cSnap = await db.collection("contratos").doc(contrato.contrato_doc_id).get();
+      const c = cSnap.exists ? cSnap.data() : null;
+      if (c && c.deleted !== true && !c.entrega_sin_firma && esperandoFirma(c)) {
+        const d = after.entrega_contrato_sin_firma || {};
+        marcaSinFirma = {
+          orden_id: event.params.ordenId,
+          fecha_entrega: after.fecha_entrega || admin.firestore.FieldValue.serverTimestamp(),
+          via: d.via || null,
+          por_email: d.por_email || after.entrega_por_email || null,
+          at: admin.firestore.FieldValue.serverTimestamp(),
+        };
+      }
+    } catch (e) {
+      logger.warn("[onOrdenEntregada] No se pudo leer el contrato para la marca de firma pendiente", {
+        ordenId: event.params.ordenId, message: e.message,
+      });
+    }
+
     // Orden DIVIDIDA (Brenda, 2026-10-13): el contrato se da por entregado
     // con la ÚLTIMA hermana, no con la primera — si no, facturación recibiría
     // "contrato entregado" con la mitad de los radios todavía en el taller.
@@ -179,6 +212,10 @@ module.exports = onDocumentWritten(
       const { hermanasPendientes } = require("../../lib/ordenDividida");
       const { pendientes } = await hermanasPendientes(event.params.ordenId, after);
       if (pendientes.length) {
+        if (marcaSinFirma) {
+          await db.collection("contratos").doc(contrato.contrato_doc_id)
+            .set({ entrega_sin_firma: marcaSinFirma }, { merge: true });
+        }
         logger.info("[onOrdenEntregada] Entrega de una orden dividida: el contrato espera a las hermanas", {
           ordenId: event.params.ordenId, contratoDocId: contrato.contrato_doc_id, pendientes,
         });
@@ -200,6 +237,7 @@ module.exports = onDocumentWritten(
         // cuando lo que salió fue un aumento (ese ya tiene su aviso).
         entrega_gestion_id: after.gestion?.id || null,
         entrega_gestion_tipo: after.gestion?.tipo || null,
+        ...(marcaSinFirma ? { entrega_sin_firma: marcaSinFirma } : {}),
       }, { merge: true });
       logger.info("[onOrdenEntregada] Entrega propagada al contrato", {
         ordenId: event.params.ordenId, contratoDocId,

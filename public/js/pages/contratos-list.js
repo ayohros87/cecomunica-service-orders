@@ -38,6 +38,15 @@ window.ContratosLista = {
     if (!grupo) return CS.esc(CC.etiqueta(data));
     return `<span class="${CC.chipClass(data)}" title="${CS.esc(CC.resumen(data))}">${CS.esc(CC.etiqueta(data))}</span>`;
   },
+  // Acción del contrato. La RENOVACIÓN va en chip (2026-11-11, pedido de
+  // Brenda): con el prefijo SERV para todo, en texto plano se confundía con
+  // un contrato de cliente nuevo al fiscalizar la facturación.
+  accionHtml(data) {
+    if (data.accion === 'Renovación') {
+      return `<span class="chip-estado" style="background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;" title="Renovación de equipos — no es un contrato de cliente nuevo"><i data-lucide="refresh-cw" style="width:12px;height:12px;"></i> Renovación</span>`;
+    }
+    return CS.esc(data.accion || '-');
+  },
   composicionSel() {
     return document.querySelector('#filtroComposicionChips .bj-filtro.active')?.dataset.comp || '';
   },
@@ -187,6 +196,16 @@ window.ContratosLista = {
     // seguía puesto: la tabla salía con 13 encabezados y 12 celdas. Mismo
     // criterio que usa contratos-equipos.js.
     return canRole(window.userRole, 'ver-montos-contrato');
+  },
+
+  // Entregado con la firma del contrato pendiente (2026-11-11, pedido de
+  // Brenda): los equipos ya salieron y el contrato sigue sin firmar. Se apaga
+  // solo al firmarse (ContratoFirma.entregadoSinFirma se deriva).
+  entregaSinFirmaPill(data) {
+    if (!(window.ContratoFirma && ContratoFirma.entregadoSinFirma(data))) return '';
+    const dias = ContratoFirma.diasEntregadoSinFirma(data);
+    const hace = dias == null ? '' : dias === 0 ? ' hoy' : dias === 1 ? ' hace 1 día' : ` hace ${dias} días`;
+    return `<span class="chip-estado" style="background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;" title="Los equipos se entregaron${hace} y el contrato sigue sin la firma del cliente"><i data-lucide="pen-line" style="width:12px;height:12px;"></i> Entregado · firma pendiente</span>`;
   },
 
   // Columna "Papel": qué documento le toca a este contrato. Es la misma regla
@@ -354,12 +373,13 @@ window.ContratosLista = {
       <td class="td-primary"><span class="contrato-id">${data.contrato_id || '-'}</span> ${iconoComision}</td>
       <td><strong style="color:var(--fg-1); font-weight:600;">${esc(data.cliente_nombre || '-')}</strong></td>
       <td>${ContratosLista.tipoHtml(data)}</td>
-      <td>${esc(data.accion || '-')}</td>
+      <td>${ContratosLista.accionHtml(data)}</td>
       <td style="text-align:center;" data-contrato-equipos="${id}"><span style="opacity:0.3;"><i data-lucide="loader"></i></span></td>
       <td class="estado-cell">
         <div style="display:inline-flex; flex-direction:column; align-items:flex-start; gap:4px;">
           <span class="chip-estado ${estadoClase}">${estadoTexto}</span>
           ${ContratosLista.serialesChip(data)}
+          ${ContratosLista.entregaSinFirmaPill(data)}
           ${ContratosLista.bajaPill(data)}
           ${ContratosLista.cambioSerialPill(data)}
           ${ContratosLista.sustitucionPill(data)}
@@ -410,6 +430,7 @@ window.ContratosLista = {
           <div class="chip-estado ${estadoClase}">${estadoTexto}</div>
           ${ContratosLista.papelChip(data)}
           ${ContratosLista.serialesChip(data)}
+          ${ContratosLista.entregaSinFirmaPill(data)}
           ${ContratosLista.bajaPill(data)}
           ${ContratosLista.cambioSerialPill(data)}
           ${ContratosLista.sustitucionPill(data)}
@@ -417,7 +438,7 @@ window.ContratosLista = {
         </div>
       </div>
       <div class="row">
-        <div class="t2">${ContratosLista.tipoHtml(data)} · ${esc(data.accion || '-')}</div>
+        <div class="t2">${ContratosLista.tipoHtml(data)} · ${ContratosLista.accionHtml(data)}</div>
         ${ContratosLista.verMontos() ? `<div class="t1">${totalStr}</div>` : ''}
       </div>
       <div class="acciones">${accionesMovilHtml}</div>

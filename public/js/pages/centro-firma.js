@@ -51,6 +51,9 @@ Object.assign(window.Centro, {
           documento: {
             cliente_rucdv: rucdv || '',
             observaciones: c.observaciones || '',
+            // Título bajo el que firma (2026-11-11): la renovación lo dice, y
+            // el documento firmado se reconstruye con ESTE título.
+            ...(window.DocumentoContrato?.titulo ? { titulo: DocumentoContrato.titulo(c).largo } : {}),
             // Cada serial con SU TARIFA (2026-09-02): línea del contrato por
             // modelo+modalidad + servicios amarrados al serial. Lo que el
             // cliente firma es exactamente esto — congelado.

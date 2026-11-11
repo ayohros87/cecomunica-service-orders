@@ -194,7 +194,10 @@ Object.assign(window.Centro, {
     // renovación en trámite esconde "Agregar equipos" y "Actualizar seriales"
     // del menú. Mismo criterio que la señal "Contratos por firmar" y el cron
     // que los duerme: con la entrega confirmada ya nadie espera esa firma.
-    const abierto = (c) => c.entrega_confirmada !== true && (!ContratoFirma.lleva(c) || !c.firmado);
+    // …salvo el entregado con la firma PENDIENTE (2026-11-11): recepción
+    // entregó dejando la marca `entrega_sin_firma` y esa firma sí se espera.
+    const abierto = (c) => ContratoFirma.entregadoSinFirma(c)
+      || (c.entrega_confirmada !== true && (!ContratoFirma.lleva(c) || !c.firmado));
     // Los 45 días ya no ESCONDEN el trámite (C3: la ficha decía "nada
     // pendiente" mientras el home contaba el contrato). Con seriales
     // asignados, el cron lo DUERME a los 45 días (decisión 7, 1-oct-2026) y el
@@ -340,6 +343,7 @@ Object.assign(window.Centro, {
       : c.estado === 'pendiente_aprobacion' ? ['cg-chip--warn', 'Esperando aprobación']
       : !llevaFirma ? (c.entrega_confirmada === true ? ['cg-chip--ok', 'Entregado'] : ['cg-chip--info', 'Aprobado — por entregar'])
       : !c.firmado && !this._serialesListos(c) ? ['cg-chip--info', 'Esperando seriales']
+      : ContratoFirma.entregadoSinFirma(c) ? ['cg-chip--warn', 'Entregado · firma pendiente']
       : !c.firmado ? ['cg-chip--warn', 'Esperando firma']
       : c.estado === 'activo' && reg?.motivo === 'sobrantes' ? ['cg-chip--warn', 'Activo — regularización parcial']
       : c.estado === 'activo' && reg ? ['cg-chip--info', 'Activo — regularización pendiente']

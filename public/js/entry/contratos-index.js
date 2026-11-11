@@ -7,6 +7,8 @@ import '/js/services/contratosService.js';
 import '/js/domain/documentoContrato.js';
 // Columna "Tipo" = composición (Alquiler / Propio / Mixto) y su filtro (2026-09-28).
 import '/js/domain/contratoComposicion.js';
+// Chip "Entregado · firma pendiente" (2026-11-11).
+import '/js/domain/contratoFirma.js';
 import '/js/services/usuariosService.js';
 import '/js/services/ordenesService.js';
 import '/js/services/equiposPoolService.js';

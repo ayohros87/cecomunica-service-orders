@@ -34,10 +34,37 @@ function llevaFirma(c) { return !SIN_FIRMA[codigoTipo(c)]; }
 /** ¿Está esperando esa firma AHORA? */
 function esperandoFirma(c) { return llevaFirma(c) && c?.estado === "aprobado" && c.firmado !== true; }
 
+// ENTREGADO CON LA FIRMA PENDIENTE (2026-11-11, pedido de Brenda): recepción
+// entregó los radios dejando la firma digital de quien recibe y el contrato
+// sigue sin firmar. La marca `entrega_sin_firma` la estampa onOrdenEntregada;
+// el estado se DERIVA, así que se apaga solo cuando el contrato se firma. Sin
+// la marca —lo entregado antes de esa fecha— no cuenta: es histórico.
+function entregadoSinFirma(c) {
+  return !!(c && c.entrega_sin_firma) && c.deleted !== true && llevaFirma(c)
+    && c.estado === "aprobado" && c.firmado !== true;
+}
+
+// Cuándo fue esa entrega (Date o null).
+function fechaEntregaSinFirma(c) {
+  const aDate = (v) => !v ? null : (v.toDate ? v.toDate() : (typeof v.seconds === "number" ? new Date(v.seconds * 1000) : new Date(v)));
+  const m = (c && c.entrega_sin_firma) || {};
+  return [m.fecha_entrega, m.at, c && c.fecha_entrega_ultima].map(aDate).find(d => d && !isNaN(d)) || null;
+}
+
+// Días de CALENDARIO (Panamá, UTC-5) desde esa entrega: el cron corre a las
+// 07:15 y "entregado ayer por la tarde" tiene que leerse como 1 día, no 0.
+function diasEntregadoSinFirma(c, now = new Date()) {
+  const f = fechaEntregaSinFirma(c);
+  if (!f) return null;
+  const dia = (d) => Math.floor((d.getTime() - 5 * 3600000) / 86400000);
+  return Math.max(0, dia(now) - dia(f));
+}
+
 /** Cómo llamarlo en una frase ("tu demo fue aprobado"). */
 function nombreContrato(c) { return SIN_FIRMA[codigoTipo(c)]?.nombre || "contrato"; }
 
 /** Por qué no lleva firma, para escribirlo en el correo. */
 function porQueSinFirma(c) { return SIN_FIRMA[codigoTipo(c)]?.porQue || ""; }
 
-module.exports = { SIN_FIRMA, codigoTipo, llevaFirma, esperandoFirma, nombreContrato, porQueSinFirma };
+module.exports = { SIN_FIRMA, codigoTipo, llevaFirma, esperandoFirma, nombreContrato, porQueSinFirma,
+  entregadoSinFirma, fechaEntregaSinFirma, diasEntregadoSinFirma };

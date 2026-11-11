@@ -1,5 +1,46 @@
 # Changelog
 
+## [Renovación a la vista en el documento · entrega con la firma del contrato pendiente] — 2026-11-11
+
+> Dos pedidos de Brenda (correos del 2-nov).
+>
+> **La renovación se reconoce en el papel.** Todo contrato del Centro sale con
+> prefijo SERV, sea de cliente nuevo o renovación de equipos, y la primera
+> página decía lo mismo en los dos; el 28-oct una renovación de Riba Smith La
+> Siesta se fiscalizó como contrato regular y terminó en notas de crédito.
+>
+> - Con Acción = Renovación el documento se titula **CONTRATO DE RENOVACIÓN DE
+>   SERVICIO DE COMUNICACIÓN** (y "CONTRATO DE RENOVACIÓN" junto al número). El
+>   prefijo y la numeración no cambian (`DocumentoContrato.titulo`).
+> - **Un documento firmado no cambia de título**: la firma digital conserva el
+>   que quedó congelado en su solicitud (`documento.titulo`, desde hoy) y la
+>   firma en papel el de su fecha. Las renovaciones ya firmadas lo dicen en un
+>   aviso de pantalla que no se imprime.
+> - Chip **Renovación** en el archivo de contratos y en el Centro.
+>
+> **Entregar con la firma del contrato pendiente.** El candado del 2026-09-03
+> no dejaba abrir la firma digital de recibido si el contrato no estaba
+> firmado; cuando el cliente llegaba a retirar así (SERVICIOS DE INSPECCIÓN Y
+> ASISTENCIA VEHICULAR, 2-nov) solo quedaba una nota en papel.
+>
+> - La hoja "Falta la firma del contrato" le ofrece a **recepción** "Entregar
+>   con la firma del contrato pendiente": la entrega de siempre, con la firma
+>   **digital** de quien recibe. El write declara la excepción
+>   (`entrega_contrato_sin_firma`) y las rules la aceptan solo a recepción,
+>   solo al entregar y solo para ese contrato. El override de admin también
+>   deja la marca.
+> - **No firma ni activa el contrato.** `onOrdenEntregada` lo marca
+>   (`entrega_sin_firma`) y queda como **Entregado · firma pendiente** en el
+>   archivo, el Centro (sigue en trámite) y la señal "Contratos por firmar".
+> - **Recordatorio diario al vendedor** (recordatorioOperativo, sección L) con
+>   cliente, contrato, fecha de entrega y días; se apaga solo al firmarse.
+> - Firmar después de entregar ya no abre una segunda alta en Facturación
+>   pendiente: vale la que nació con la entrega.
+> - El candado del **anexo** de un aumento (GA) no se tocó.
+> - Verificado: `functions/test/tituloRenovacion.test.js`,
+>   `functions/test/entregaFirmaPendiente.test.js` y
+>   `functions/test-emulator/rules-entrega-firma-pendiente.js`.
+
 ## [Equipo no devuelto: se cotiza antes de cobrarse] — 2026-10-15
 
 > Solangel: cuando un cliente no devuelve un radio, le manda la cotización del

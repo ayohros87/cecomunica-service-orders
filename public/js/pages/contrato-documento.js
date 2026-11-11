@@ -100,7 +100,8 @@
       av.style.display = 'block';
       av.textContent = c.estado === 'pendiente_aprobacion'
         ? 'Borrador — el contrato está pendiente de aprobación; el documento aún no lleva firmas.'
-        : 'El contrato está aprobado pero aún sin la firma del cliente.';
+        : 'El contrato está aprobado pero aún sin la firma del cliente.'
+          + (window.ContratoFirma?.entregadoSinFirma?.(c) ? ' Los equipos ya se entregaron: la firma del contrato quedó pendiente.' : '');
     }
 
     // ── Encabezado ──
@@ -185,6 +186,22 @@
       ? (durNum === 1 ? 'día' : 'días') : 'meses';
     const durHtml = `<b>${durNum
       ? `${NUM_LETRAS[durNum] || durNum} (${durNum}) ${durUnidad}` : esc(c.duracion || '____ meses')}</b>`;
+    // Título: la renovación lo dice en la primera página (pedido de Brenda,
+    // 2026-11-11). Va aquí y no en el encabezado porque depende de la
+    // solicitud de firma: un documento firmado conserva su título.
+    if (window.DocumentoContrato?.titulo) {
+      const tit = DocumentoContrato.titulo(c, sFirma?.documento || null);
+      $('hTitulo').textContent = tit.corto;
+      $('hTituloLargo').textContent = tit.largo;
+      if (tit.renovacion) document.title = 'Contrato de Renovación — Documento';
+      if (tit.conserva_anterior) {
+        const origen = (c.contrato_origen_refs || []).filter(Boolean).join(', ') || c.origen_legacy_ref || '';
+        const av = $('avisoRenovacion');
+        av.style.display = 'block';
+        av.innerHTML = `<b>RENOVACIÓN</b> — este contrato es una renovación de equipos${origen ? ` (renueva ${esc(origen)})` : ''}.
+          Se firmó antes de que el documento llevara el título «Contrato de renovación», por eso conserva el título con el que el cliente lo firmó.`;
+      }
+    }
     $('txtInventario').innerHTML = frozen?.inventario_html || ContratoV2Texto.inventarioHtml;
     $('txtVigencia').innerHTML = frozen?.vigencia_html || ContratoV2Texto.vigenciaHtml(durHtml);
     $('olClausulas').innerHTML = frozen?.clausulas_html || ContratoV2Texto.clausulasHtml;

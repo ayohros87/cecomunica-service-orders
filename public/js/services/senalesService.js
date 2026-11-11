@@ -353,7 +353,12 @@ const SenalesService = {
       const rows = [];
       snap.forEach(d => {
         const c = d.data() || {};
-        if (c.deleted === true || c.firmado === true || c.entrega_confirmada === true || !lleva(c)) return;
+        if (c.deleted === true || c.firmado === true || !lleva(c)) return;
+        // Entregado con la firma pendiente (2026-11-11): la entrega ya no lo
+        // saca de la cola — es justo el que más urge firmar. Lo entregado
+        // antes de esa marca sigue fuera (histórico).
+        const entregado = !!window.ContratoFirma?.entregadoSinFirma?.(c);
+        if (c.entrega_confirmada === true && !entregado) return;
         // Dormido (decisión 7, 1-oct-2026): a los 45 días sin firma el cron lo
         // saca de la cola; lo reactiva el vendedor desde el Centro.
         if (c.dormido === true) return;
@@ -365,6 +370,7 @@ const SenalesService = {
           contrato: c.contrato_id || d.id,
           clase: c.accion && c.accion !== 'No Aplica' ? `${c.tipo_contrato || 'Contrato'} · ${c.accion}` : (c.tipo_contrato || 'Contrato'),
           con_orden: Number(c.os_count || 0) > 0,
+          entregado_sin_firma: entregado,
           creado_por_uid: c.creado_por_uid || null,
           // Espera la firma desde lo último que la acercó (seriales listos,
           // enlace enviado, reactivación): la misma cuenta que lleva el cron

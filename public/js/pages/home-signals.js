@@ -44,7 +44,8 @@ window.HomeSignals = (() => {
     return {
       txt: `<b>${esc(r.cliente)}</b> <span class="bj-id">${esc(r.contrato)}</span> · ${esc(r.clase)}`
         + (r.vendedor ? ` · ${esc(r.vendedor)}` : '')
-        + (r.con_orden ? ' · <b>tranca la entrega</b>' : ''),
+        + (r.entregado_sin_firma ? ' · <b>ya entregado, firma pendiente</b>'
+          : r.con_orden ? ' · <b>tranca la entrega</b>' : ''),
       dias: r.dias,
       cta: r.cliente_id
         ? { label: 'Pedir firma', href: `clientes/centro.html?id=${encodeURIComponent(r.cliente_id)}&contrato=${encodeURIComponent(r.id)}` }

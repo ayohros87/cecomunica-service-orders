@@ -101,6 +101,9 @@
     <a class="sec" id="lnkClasico" href="#">Formato anterior</a>
   </div>
   <div class="aviso-estado" id="avisoEstado"></div>
+  <!-- Renovación firmada bajo el título anterior: se avisa en pantalla, fuera
+       de la hoja (no se imprime) — el papel firmado no se toca. -->
+  <div class="aviso-estado" id="avisoRenovacion" style="background:#EFF6FF; border-color:#3B82F6; color:#1E40AF;"></div>
 
   <div class="wrap" id="doc" style="display:none;">
 
@@ -114,11 +117,13 @@
           ventas@cecomunica.com · +507 279-5570
         </div>
         <img src="../brand/logo-lockup-horizontal-compact.svg" alt="CECOMUNICA" style="height:44px;">
-        <div class="numdoc">CONTRATO DE SERVICIO<br><span id="hNumero">—</span><br>
+        <div class="numdoc"><span id="hTitulo">CONTRATO DE SERVICIO</span><br><span id="hNumero">—</span><br>
           <span style="font-weight:400;color:#555;" id="hTipoDur">—</span></div>
       </div>
 
-      <h1>CONTRATO DE SERVICIO DE COMUNICACIÓN</h1>
+      <!-- Renovación: el título lo cambia contrato-documento.js
+           (DocumentoContrato.titulo) — nunca en un documento ya firmado. -->
+      <h1 id="hTituloLargo">CONTRATO DE SERVICIO DE COMUNICACIÓN</h1>
 
       <h2>1. Partes</h2>
       <p id="sPartes">—</p>

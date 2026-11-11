@@ -502,6 +502,16 @@
       <p class="form-hint" id="entregaClienteEmailHint">Cargando email registrado…</p>
     </div>
 
+    <!-- Entrega con la firma del CONTRATO pendiente (2026-11-11): lo enciende
+         abrirModalEntrega cuando llega con opts.contratoSinFirma. -->
+    <div id="entregaAvisoContratoSinFirma" class="hidden"
+         style="border:1px solid #FDE68A;background:#FFFBEB;color:#92400E;border-radius:8px;padding:8px 12px;font-size:13px;margin:0 0 12px;">
+      <b>Entrega con la firma del contrato pendiente.</b> El contrato
+      <b id="entregaAvisoContratoSinFirmaNum"></b> todavía no está firmado: esta entrega deja la
+      constancia de quién recibe, <b>no firma el contrato</b>. Queda marcado y el vendedor recibe
+      un recordatorio diario hasta que el contrato firmado esté en la plataforma.
+    </div>
+
     <!-- Checkbox A: Entrega con firma en papel (sin firma digital) — ARRIBA
          del bloque de firma (auditoría UX 2026-09-28, 4.2 #11): 7 de cada 10
          entregas de septiembre salieron por aquí y la casilla estaba al fondo,

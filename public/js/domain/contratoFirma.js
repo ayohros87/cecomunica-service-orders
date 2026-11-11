@@ -76,6 +76,28 @@ window.ContratoFirma = {
     return Math.floor((now - base) / 86400000);
   },
 
+  // ENTREGADO CON LA FIRMA PENDIENTE (2026-11-11, pedido de Brenda): recepción
+  // entregó los radios dejando la firma digital de quien recibe y el contrato
+  // sigue sin firmar. La marca `entrega_sin_firma` la estampa onOrdenEntregada;
+  // el estado se DERIVA, así que se apaga solo cuando el contrato se firma.
+  // Sin la marca —lo entregado antes de esa fecha— no cuenta: es histórico.
+  // Espejo de functions/src/domain/contratoFirma.js.
+  entregadoSinFirma(c) {
+    return !!c?.entrega_sin_firma && c.deleted !== true && this.lleva(c)
+      && c.estado === 'aprobado' && c.firmado !== true;
+  },
+
+  // Días de CALENDARIO (Panamá, UTC-5) desde esa entrega: lo que dice la
+  // pantalla es lo que dice el recordatorio diario al vendedor.
+  diasEntregadoSinFirma(c, now = new Date()) {
+    const aDate = (v) => !v ? null : (v.toDate ? v.toDate() : (typeof v.seconds === 'number' ? new Date(v.seconds * 1000) : new Date(v)));
+    const m = c?.entrega_sin_firma || {};
+    const f = [m.fecha_entrega, m.at, c?.fecha_entrega_ultima].map(aDate).find(d => d && !isNaN(d));
+    if (!f) return null;
+    const dia = (d) => Math.floor((d.getTime() - 5 * 3600000) / 86400000);
+    return Math.max(0, dia(now) - dia(f));
+  },
+
   /** Por qué no la lleva, para decirlo en la pantalla. */
   porQue(c) { return this.SIN_FIRMA[this.codigoTipo(c)]?.porQue || ''; },
 

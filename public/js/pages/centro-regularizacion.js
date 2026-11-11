@@ -275,6 +275,9 @@ Object.assign(window.Centro, {
   _estadoLabel(c) {
     const e = c?.estado || '';
     if (e === 'aprobado' && c.dormido === true) return 'Dormido (sin firma)';
+    // Entregado con la firma del contrato pendiente (2026-11-11): no es
+    // histórico — hay una firma que conseguir.
+    if (ContratoFirma.entregadoSinFirma(c)) return 'Entregado · firma pendiente';
     // Histórico que opera sin firma en el sistema (legacy o ya entregado):
     // "sin firma" sonaba a falta en contratos de 2024-2025 con radios en el
     // cliente (auditoría de módulos 2026-09-30, C6; igual que el archivo).
@@ -456,7 +459,7 @@ Object.assign(window.Centro, {
           'Se asignan en Almacén · Asignar; al quedar asignados se habilita el envío para firma',
           B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`), 'bodega');
       } else if (ContratoFirma.esperando(c) && this.puedeCrearGestion()) {
-        it('warn', `El contrato ${id} espera la firma del cliente`,
+        it('warn', `El contrato ${id} espera la firma del cliente${ContratoFirma.entregadoSinFirma(c) ? ' — los equipos ya se entregaron' : ''}`,
           c.firma_solicitud_estado === 'pendiente' ? 'El enlace de firma ya se envió — se puede reenviar' : 'Envíale el enlace de firma digital, o imprime el contrato y sube el firmado desde el expediente',
           B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`) + B('Enviar para firma', `Centro.enviarFirma('${this.esc(c.id)}')`, true), 'cliente_enlace');
       // Un contrato sin firma (reemplazo, demo) no le pide nada al cliente: lo

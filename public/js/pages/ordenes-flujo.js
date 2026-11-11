@@ -318,23 +318,44 @@ function abrirModalFirmaPendiente(orden, contrato) {
        si ya firmó en papel. Apenas quede firmado, esta entrega sale sin más trámite.`;
   // Hoja del kit (Modal.sheet, 2026-09-08); el override de admin cierra y abre la entrega.
   const url = `../clientes/centro.html?id=${encodeURIComponent(clienteId)}`;
+  // Entrega con la firma del contrato PENDIENTE (2026-11-11, pedido de Brenda,
+  // caso SERVICIOS DE INSPECCIÓN Y ASISTENCIA VEHICULAR): el cliente llega a
+  // retirar con el contrato todavía sin firmar y lo único que quedaba era una
+  // nota en papel con una firma ilegible. Recepción puede entregar dejando la
+  // firma DIGITAL de quien recibe; la orden y el contrato quedan marcados y al
+  // vendedor le llega un recordatorio diario hasta que entre la firma del
+  // contrato (recordatorioOperativo, sección L). NO firma ni activa el
+  // contrato. Solo el contrato: el anexo de un aumento sigue con su candado.
+  const esRecepcion = (APP.state.userRole || '') === (typeof ROLES !== 'undefined' ? ROLES.RECEPCION : 'recepcion');
+  const marca = {
+    contrato_doc_id: contrato.id,
+    contrato_id: contrato.contrato_id || orden.contrato?.contrato_id || '',
+  };
   Modal.sheet({
     title: 'Falta la firma del contrato', icon: 'pen-line', size: 'md',
     html: `
       <p style="margin:0 0 8px;font-size:13.5px;color:var(--fg-2,#374151);">
         Esta orden entrega equipos bajo el contrato
         <b>${escapeHtml(contrato.contrato_id || orden.contrato?.contrato_id || '—')}</b>,
-        que todavía <b>no está firmado</b> en la plataforma. Los radios no se
-        entregan sin la firma del cliente.
+        que todavía <b>no está firmado</b> en la plataforma. Lo normal es que el
+        cliente firme el contrato antes de recibir los radios.
       </p>
-      <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">${detalle}</p>`,
+      <p style="margin:0 0 ${esRecepcion ? 8 : 4}px;font-size:13.5px;color:var(--fg-2,#374151);">${detalle}</p>
+      ${esRecepcion ? `<p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">
+        <b>¿El cliente ya está aquí para retirar?</b> Puedes entregar con la firma del contrato
+        pendiente: quien recibe deja su <b>firma digital de recibido</b>, el contrato queda marcado
+        como «entregado con firma pendiente» y al vendedor le llega un recordatorio diario hasta
+        que el contrato firmado esté en la plataforma.</p>` : ''}`,
     buttons: [
       ...(esAdmin ? [{ action: 'override', label: 'Entregar sin firma (admin)' }] : []),
+      ...(esRecepcion ? [{ action: 'pendiente', label: 'Entregar con la firma del contrato pendiente' }] : []),
       { action: 'cerrar', label: 'Cerrar' },
       ...(clienteId ? [{ action: 'ficha', label: 'Abrir la ficha y gestionar la firma', primary: true, icon: 'pen-line' }] : []),
     ],
     onAction: (a) => {
-      if (a === 'override') { setTimeout(() => abrirModalEntrega(orden.ordenId), 0); return 'override'; }
+      // El override de admin también deja la marca (antes no dejaba rastro).
+      if (a === 'override') { setTimeout(() => abrirModalEntrega(orden.ordenId, { contratoSinFirma: { ...marca, via: 'admin' } }), 0); return 'override'; }
+      if (a === 'pendiente') { setTimeout(() => abrirModalEntrega(orden.ordenId, { contratoSinFirma: { ...marca, via: 'recepcion' } }), 0); return 'pendiente'; }
       if (a === 'ficha') { location.href = url; return 'ficha'; }
       return null;
     },
@@ -1364,6 +1385,22 @@ window.copiarSeriales = function (ordenId) {
     _reset();
     _applyModo(opts.modo || 'entrega');
 
+    // Entrega con la firma del CONTRATO pendiente (ver abrirModalFirmaPendiente):
+    // la marca viaja en el write de la entrega y es lo que las rules aceptan
+    // en lugar del contrato firmado. Por la puerta de recepción la firma de
+    // quien recibe es DIGITAL sí o sí — tener esa constancia es la razón de
+    // la excepción —, así que se esconde la rama de firma en papel.
+    _contratoSinFirma = (opts.contratoSinFirma && opts.contratoSinFirma.contrato_doc_id) ? opts.contratoSinFirma : null;
+    const avisoSF = document.getElementById('entregaAvisoContratoSinFirma');
+    if (avisoSF) {
+      avisoSF.classList.toggle('hidden', !_contratoSinFirma);
+      const num = document.getElementById('entregaAvisoContratoSinFirmaNum');
+      if (num) num.textContent = _contratoSinFirma?.contrato_id || '';
+    }
+    if (_contratoSinFirma && _contratoSinFirma.via !== 'admin') {
+      document.getElementById('modalEntrega')?.querySelector('.modal-entrega__alert')?.classList.add('hidden');
+    }
+
     const orden = APP.state.orders.find(o => o.ordenId === ordenId) || {};
     _renderResumenEntrega(orden);
     // La leyenda ENTRADA aplica en AMBOS modos, decidida por tipo de orden:
@@ -1411,6 +1448,7 @@ window.copiarSeriales = function (ordenId) {
     if (modal) modal.classList.add('hidden');  // preserve .hidden invariant
     _tabletReset(true);
     _ordenId = null;
+    _contratoSinFirma = null;
     // Reset modo so the next open defaults to 'entrega' even if the
     // modal was last used for recepción.
     _modo = 'entrega';
@@ -1432,6 +1470,9 @@ window.copiarSeriales = function (ordenId) {
   // compartido entre órdenes, así que la solicitud se cancela al cerrar o
   // reabrir en vez de sobrevivirlo. La firma llega como URL (la tablet ya la
   // subió a ordenes_firmas/) y el confirm la usa tal cual, sin canvas.
+  // Marca de "entrega con la firma del contrato pendiente" del modal abierto
+  // ({contrato_doc_id, contrato_id, via}) o null en una entrega normal.
+  let _contratoSinFirma = null;
   let _solTablet = null;    // id de la solicitud pendiente en firmas_tablet
   let _unsubTablet = null;
   let _firmaTablet = null;  // {url, nombre} cuando la tablet ya firmó
@@ -1791,6 +1832,24 @@ window.copiarSeriales = function (ordenId) {
         os_logs: firebase.firestore.FieldValue.arrayUnion({ action: 'ENTREGAR', by: user.uid })
       };
       let emailOpts = { noRecibido, notas: notasEntrega };
+
+      // Entrega con la firma del contrato pendiente: la marca va en ESTE write
+      // (las rules la exigen a recepción en lugar del contrato firmado) y
+      // onOrdenEntregada la lleva al contrato.
+      if (_contratoSinFirma) {
+        if (noRecibido && _contratoSinFirma.via !== 'admin') {
+          Toast.show('Con la firma del contrato pendiente, quien recibe firma digitalmente', 'bad');
+          return;
+        }
+        firestoreData.entrega_contrato_sin_firma = {
+          contrato_doc_id: _contratoSinFirma.contrato_doc_id,
+          contrato_id: _contratoSinFirma.contrato_id || null,
+          via: _contratoSinFirma.via || 'recepcion',
+          por_uid: user.uid,
+          por_email: user.email || null,
+          at: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+      }
 
       if (noRecibido) {
         // ── Branch A: entrega con firma en papel (sin firma digital) ──

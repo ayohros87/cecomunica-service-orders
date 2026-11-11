@@ -385,6 +385,26 @@ async function main() {
   await assertFails(as("recepcion").doc("ordenes_de_servicio/oProgTemp").set(ENTREGADO, { merge: true }));
   ok("firma: TEMPORAL sin firmar NO se entrega — la exencion no se derrama");
 
+  // Entrega con la firma del contrato PENDIENTE (2026-11-11, pedido de
+  // Brenda): recepcion entrega declarando la excepcion en el MISMO write, con
+  // el contrato al que aplica. Aqui se prueba contra el ruleset COMPLETO que
+  // la escritura legitima termina de evaluarse (presupuesto de 1000
+  // expresiones) con una orden de tamano real; las denegaciones se prueban
+  // aisladas en rules-entrega-firma-pendiente.js.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const equipos = Array.from({ length: 30 }, (_, i) => ({ id: "e" + i, numero_de_serie: "S" + i, modelo: "PNC360S" }));
+    await db.doc("ordenes_de_servicio/oProgPendiente").set({
+      estado_reparacion: "COMPLETADO (EN OFICINA)", tipo_de_servicio: "PROGRAMACIÓN",
+      qc_requerido: true, qc: { resultado: "aprobado", equipos_n: 30 }, equipos,
+      contrato: { aplica: true, contrato_doc_id: "cSinFirma" } });
+  });
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oProgPendiente").set({
+    estado_reparacion: "ENTREGADO AL CLIENTE", receptor_nombre: "Ana Perez", firma_url: "https://x/f.png",
+    entrega_contrato_sin_firma: { contrato_doc_id: "cSinFirma", contrato_id: "ALQ-1", via: "recepcion", por_uid: "recepcion" },
+  }, { merge: true }));
+  ok("firma pendiente: recepcion entrega (30 equipos) declarando la excepcion para ESE contrato");
+
   // ── Anular la ORDEN cuando su contrato se anulo (2026-09-15) ────────────
   // La salida que faltaba: sin ella una orden con el contrato anulado no se
   // podia entregar (el candado deniega), ni editar (solo POR ASIGNAR), ni

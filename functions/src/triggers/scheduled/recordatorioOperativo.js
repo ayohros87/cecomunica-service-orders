@@ -31,6 +31,10 @@
 //     en `pendiente_bodega`. Recordatorio a bodega y, pasado el tope,
 //     escalación semanal a administración (vendedor y bodega en copia).
 //
+//  L) ENTREGADO CON LA FIRMA DEL CONTRATO PENDIENTE: contratos cuyos equipos
+//     ya salieron (`entrega_sin_firma`) y siguen sin firmar. Recordatorio
+//     DIARIO al vendedor hasta que el contrato firmado esté en la plataforma.
+//
 // Solo escriben F (el escalado de etapa), G (limpia de la orden las
 // incidencias que el kardex ya superó) y K (sus contadores en
 // `bodega_aviso`, junto al `firma_recordatorio_at` de J); las demás solo mandan correos
@@ -1082,6 +1086,94 @@ module.exports = onSchedule(
       logger.info("[recordatorioOperativo] gestiones en bodega", { pendientes: snap.size, recordados, escalados });
     } catch (e) {
       logger.error("[recordatorioOperativo] sección gestiones en bodega falló", { message: e.message });
+    }
+
+    // ── L) Entregado con la firma del contrato pendiente (2026-11-11) ────
+    // Pedido de Brenda (caso SERVICIOS DE INSPECCIÓN Y ASISTENCIA VEHICULAR):
+    // recepción ya puede entregar con el contrato sin firmar, dejando la firma
+    // digital de quien recibe. La empresa cumplió; lo que queda es del
+    // vendedor — conseguir el contrato firmado. Un contrato entregado sale de
+    // "Contratos por firmar", del trámite del Centro y del cron de los 45
+    // días, así que sin este aviso nadie lo vuelve a mirar.
+    //
+    // DIARIO y sin contador: lo que lo apaga es el hecho (firmado / activo /
+    // anulado — `entregadoSinFirma` se deriva), no una marca que alguien
+    // tenga que limpiar. Solo cuenta lo entregado desde que existe la marca;
+    // los aprobados viejos sin firma son histórico y no se persiguen.
+    //
+    // No se cruza con la sección J ("Anexo sin firmar"): aquella mira
+    // GESTIONES de aumento en `pendiente_firma`, cuyo contrato marco ya está
+    // activo; esta mira CONTRATOS en `aprobado`. Un caso cae en una o en otra.
+    try {
+      const G = require("../../lib/gestiones");
+      const CF = require("../../domain/contratoFirma");
+      const snap = await db.collection("contratos")
+        .where("estado", "==", "aprobado")
+        .limit(1000)
+        .get();
+
+      let pendientes = 0;
+      let avisados = 0;
+      for (const d of snap.docs) {
+        const c = d.data() || {};
+        if (!CF.entregadoSinFirma(c)) continue;
+        pendientes++;
+
+        const legible = c.contrato_id || d.id;
+        const fEnt = CF.fechaEntregaSinFirma(c);
+        const dias = CF.diasEntregadoSinFirma(c, now);
+        const cuando = fEnt
+          ? fEnt.toLocaleDateString("es-PA", { timeZone: "America/Panama", day: "2-digit", month: "long", year: "numeric" })
+          : null;
+        const hace = dias == null ? "" : dias === 0 ? "hoy" : dias === 1 ? "hace 1 día" : `hace ${dias} días`;
+
+        // El vendedor que elaboró el contrato (el mismo al que le llegó
+        // "APROBADO — sigue la firma del cliente"); si no tiene buzón, el
+        // vendedor del cliente y, de último, el buzón de aprobaciones.
+        let to = null;
+        if (c.creado_por_uid) {
+          try {
+            const u = await db.collection("usuarios").doc(c.creado_por_uid).get();
+            const e = u.exists ? u.data().email : null;
+            if (G.isEmail(e)) to = e.trim().toLowerCase();
+          } catch { /* cae al vendedor del cliente */ }
+        }
+        if (!to) to = await G.vendedorEmailDeCliente(c.cliente_id);
+        if (!to) to = await G.aprobacionesTo();
+        if (!to) { logger.warn("[recordatorioOperativo] contrato entregado sin firma, sin buzón", { cid: d.id }); continue; }
+
+        const orden = c.entrega_sin_firma?.orden_id || null;
+        const enValidacion = c.firmado_pendiente_validacion === true;
+        await db.collection("mail_queue").add({
+          to,
+          subject: `Contrato sin firmar: equipos entregados ${hace || "al cliente"} — ${c.cliente_nombre || "Cliente"} (${legible})`,
+          preheader: "La entrega ya se hizo; falta el contrato firmado por el cliente",
+          bodyContent: `
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Equipos entregados, contrato sin firmar</h2>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              Los equipos del contrato <b>${esc(legible)}</b> de <b>${esc(c.cliente_nombre || "—")}</b>
+              se entregaron${cuando ? ` el <b>${esc(cuando)}</b>` : ""}${hace ? ` (<b>${hace}</b>)` : ""}${orden ? `, orden ${linkOrden(orden, orden)}` : ""},
+              y el contrato <b>todavía no está firmado</b> en la plataforma.
+            </p>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              La empresa ya cumplió con la entrega. ${enValidacion
+                ? "La firma digital <b>ya llegó</b>, pero firmó una persona distinta al representante registrado: falta que administración <b>valide al firmante</b>."
+                : "Falta dar seguimiento al cliente: envíale el <b>enlace de firma digital</b> desde su ficha, o sube el <b>contrato firmado</b> si ya firmó en papel."}
+              Mientras no esté firmado, el contrato no queda activo.
+            </p>
+            <p style="margin:0;font:13px/1.5 Arial,sans-serif;color:#6b7280;">
+              Este recordatorio llega cada día y se detiene solo cuando el contrato firmado esté en la plataforma.
+            </p>`,
+          ctaUrl: `${APP_BASE_URL}/clientes/centro.html?id=${encodeURIComponent(c.cliente_id || "")}&contrato=${encodeURIComponent(d.id)}`,
+          ctaLabel: "Gestionar la firma",
+          meta: { source: "recordatorioOperativo", seccion: "entregado_sin_firma", contrato: d.id, dias },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        avisados++;
+      }
+      logger.info("[recordatorioOperativo] entregados con firma pendiente", { aprobados: snap.size, pendientes, avisados });
+    } catch (e) {
+      logger.error("[recordatorioOperativo] sección entregados sin firma falló", { message: e.message });
     }
 
     return null;

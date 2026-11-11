@@ -88,6 +88,9 @@ service cloud.firestore {
         // 2026-10-07): la marca que activa el candado de factura. Si la UI
         // pudiera borrarla, el candado se saltaría.
         "factura_venta_requerida", "factura_venta_seriales",
+        // Entregado con la firma del contrato pendiente (onOrdenEntregada,
+        // 2026-11-11): es lo que persigue al vendedor a diario.
+        "entrega_sin_firma",
         "os_count", "equipos_total", "tiene_os", "os_linked",
         "os_serials_preview", "os_has_equipos", "os_last_orden_id",
         "os_equipos_count_last", "os_dirty",
@@ -561,7 +564,16 @@ service cloud.firestore {
           || get(/databases/$(database)/documents/contratos/$(cid)).data.get("codigo_tipo", "") in ["REEMP", "DEMO"]
           || get(/databases/$(database)/documents/contratos/$(cid)).data.get("tipo_contrato", "") in ["Reemplazo", "Demo"]
           || get(/databases/$(database)/documents/contratos/$(cid)).data.get("firmado", false) == true
-          || get(/databases/$(database)/documents/contratos/$(cid)).data.get("estado", "") == "activo";
+          || get(/databases/$(database)/documents/contratos/$(cid)).data.get("estado", "") == "activo"
+          // Entrega con la firma del contrato PENDIENTE (2026-11-11, pedido de
+          // Brenda): recepción entrega dejando la firma digital de quien
+          // recibe, y el MISMO write declara la excepción con el contrato al
+          // que aplica. No firma ni activa nada: onOrdenEntregada marca el
+          // contrato y el cron persigue al vendedor a diario. Va de ÚLTIMA
+          // para que la entrega normal corte antes y no gaste presupuesto.
+          || (userRole() == "recepcion"
+              && request.resource.data.get("estado_reparacion", "") == "ENTREGADO AL CLIENTE"
+              && request.resource.data.get("entrega_contrato_sin_firma", {}).get("contrato_doc_id", "") == cid);
       }
       // Entregar los equipos de un AUMENTO exige el anexo firmado (2026-09-03,
       // segunda vuelta del planteamiento de Zuleika): la OS de programación

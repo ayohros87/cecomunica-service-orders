@@ -43,4 +43,42 @@ window.DocumentoContrato = {
 
   // Etiqueta para la columna "Papel" del archivo.
   papel(c) { return this.esV2(c) ? 'v2' : 'clásico'; },
+
+  // ── Título del documento (2026-11-11, pedido de Brenda) ───────────────
+  // Solo del navegador: el backend no pinta el título. Los contratos del
+  // Centro salen todos con prefijo SERV, sean de cliente nuevo o renovación
+  // de equipos, y la primera página decía lo mismo en los dos. Brenda
+  // fiscaliza la facturación desde el documento y el 28-oct leyó una
+  // renovación de Riba Smith La Siesta como contrato regular (terminó en
+  // notas de crédito). La renovación lo dice ahora en el título.
+  TITULOS: {
+    servicio:   { corto: 'CONTRATO DE SERVICIO',   largo: 'CONTRATO DE SERVICIO DE COMUNICACIÓN' },
+    renovacion: { corto: 'CONTRATO DE RENOVACIÓN', largo: 'CONTRATO DE RENOVACIÓN DE SERVICIO DE COMUNICACIÓN' },
+  },
+  // Lo firmado ANTES de este día se firmó bajo el título anterior.
+  CORTE_TITULO_RENOVACION: Date.parse('2026-11-12T00:00:00-05:00'),
+
+  esRenovacion(c) { return !!c && c.accion === 'Renovación'; },
+
+  // Qué título lleva el papel. Un documento FIRMADO no cambia de título: la
+  // firma digital conserva el que quedó congelado en su solicitud
+  // (`documento.titulo`, que los enlaces anteriores no traen) y la firma en
+  // papel el de su fecha. `conserva_anterior` = es renovación pero el papel
+  // sigue diciendo "servicio": la pantalla lo avisa fuera de la hoja.
+  // `congelado` = firma_solicitudes/{id}.documento del contrato firmado.
+  titulo(c, congelado = null) {
+    const T = this.TITULOS;
+    if (!this.esRenovacion(c)) return { ...T.servicio, renovacion: false, conserva_anterior: false };
+    const firmado = c.firmado === true || c.estado === 'activo';
+    let nuevo = true;
+    if (firmado) {
+      const digital = !!c.firmado_digital || c.firmado_tipo === 'digital';
+      nuevo = digital
+        ? congelado?.titulo === T.renovacion.largo
+        : this._millis(c.firmado_fecha || c.fecha_activacion) >= this.CORTE_TITULO_RENOVACION;
+    }
+    return nuevo
+      ? { ...T.renovacion, renovacion: true, conserva_anterior: false }
+      : { ...T.servicio, renovacion: false, conserva_anterior: true };
+  },
 };
