@@ -492,6 +492,12 @@ window.HomeSignals = (() => {
     administrador: ['OPC', 'S1', 'EST', 'S4Q', 'LPC'],
     recepcion: ['S1'],
   };
+  // Por rol: señales que NAVEGAN a su bandeja en vez de abrirse aquí como
+  // lista (2026-11-11). Recepción trabaja las entregas desde la bandeja de
+  // Órdenes con el chip de estado: en cuatro semanas abrió el panel de
+  // "Listas para entregar" 2 veces y entró a Órdenes por el inicio 36.
+  const NAVEGA = { recepcion: ['ENT'] };
+  const _navega = (id, rol) => (NAVEGA[rol] || []).includes(id);
   const _esSeguimiento = (id, rol) => !!SIGNALS[id]?.deuda || (SEGUIMIENTO[rol] || []).includes(id);
   // Home por rol (2026-10-09). AUTO_ABRIR: la única señal del rol se abre sola
   // como lista (el técnico entra y ve sus órdenes, no un número). GRUPOS: el
@@ -631,14 +637,14 @@ window.HomeSignals = (() => {
     });
   }
 
-  function _tileHtml(id, sig) {
+  function _tileHtml(id, sig, navega = false) {
     // Con `items` la tarjeta se ABRE aquí mismo en filas (bandeja de
     // pendientes) en vez de navegar; el chevron lo anuncia. El href se
     // conserva como "Abrir en su módulo" dentro del panel.
     // Rótulo y (número + contexto) van cada uno en UNA línea que no envuelve
     // — lo que no cabe se recorta por CSS, así que el subtítulo completo va
     // en el title= de la tarjeta y no como tercera línea de texto.
-    const abre = typeof sig.items === 'function' || typeof sig.panel === 'function';
+    const abre = !navega && (typeof sig.items === 'function' || typeof sig.panel === 'function');
     const nueva = _esNueva(sig);
     const titulo = `${sig.label} — ${sig.sub}${nueva ? ` · Nuevo: ${sig.nuevo.nota}` : ''}`;
     return `
@@ -901,8 +907,11 @@ window.HomeSignals = (() => {
       const sig = SIGNALS[id];
       // Uso (2026-10-15): qué señal se toca de verdad. `home.<id>` por clic
       // (abrir el panel o navegar); el segundo clic, que cierra, no cuenta.
-      if (_panelAbierto !== id && window.Uso) Uso.accion(`home.${id}`);
+      // La apertura automática del técnico (AUTO_ABRIR) no es un clic de nadie:
+      // contaba 41 "clics" en S5 en cuatro semanas.
+      if (_panelAbierto !== id && window.Uso && !mount._autoAbriendo) Uso.accion(`home.${id}`);
       if (!sig || (typeof sig.items !== 'function' && typeof sig.panel !== 'function')) return; // tile normal: navega
+      if (_navega(id, mount._renderOpts?.rolEfectivo)) return;   // este rol la trabaja en su bandeja
       if (panel && !mount.contains(panel)) panel = null;
       ev.preventDefault();
       if (_panelAbierto === id) {                            // segundo clic: cierra
@@ -971,12 +980,12 @@ window.HomeSignals = (() => {
     const tilesDia = grupos
       ? grupos.map((g, k) => {
           const propios = dia.filter(id => g.ids.includes(id) || (k === grupos.length - 1 && !grupos.some(x => x.ids.includes(id))));
-          return `<div class="kpis-grupo" style="flex-grow:${Math.max(1, propios.length)}"${propios.length ? '' : ' hidden'}><span class="kpis-grupo__label">${g.t}</span><div class="kpis-grupo__items" data-ids="${propios.join(' ')}">${propios.map(id => _tileHtml(id, SIGNALS[id])).join('')}</div></div>`;
+          return `<div class="kpis-grupo" style="flex-grow:${Math.max(1, propios.length)}"${propios.length ? '' : ' hidden'}><span class="kpis-grupo__label">${g.t}</span><div class="kpis-grupo__items" data-ids="${propios.join(' ')}">${propios.map(id => _tileHtml(id, SIGNALS[id], _navega(id, rolEfectivo))).join('')}</div></div>`;
         }).join('')
-      : dia.map(id => _tileHtml(id, SIGNALS[id])).join('');
+      : dia.map(id => _tileHtml(id, SIGNALS[id], _navega(id, rolEfectivo))).join('');
     mount.innerHTML = `<div class="kpis${grupos ? ' kpis--grupos' : ''}" data-n="${dia.length}">${tilesDia}<button type="button" class="kpis-refresh" data-signals-refresh title="Volver a contar ahora" aria-label="Volver a contar"><i data-lucide="refresh-cw"></i></button></div>
       <div class="kpis-deuda"${deuda.length ? '' : ' hidden'}><span class="kpis-deuda__label">Seguimiento</span>
-        <div class="kpis-deuda__items" role="group" aria-label="Atrasos en seguimiento">${deuda.map(id => _tileHtml(id, SIGNALS[id])).join('')}</div></div>
+        <div class="kpis-deuda__items" role="group" aria-label="Atrasos en seguimiento">${deuda.map(id => _tileHtml(id, SIGNALS[id], _navega(id, rolEfectivo))).join('')}</div></div>
       <div class="kpis-foot">
         <div class="kpis-zero" hidden><span class="kpis-zero__label">Al día:</span>
           <div class="kpis-zero__items" role="group" aria-label="Sin pendientes"></div></div>
@@ -996,7 +1005,11 @@ window.HomeSignals = (() => {
     mount._renderOpts = { rolEfectivo, uid, user };
     if (AUTO_ABRIR[rolEfectivo] && ids.includes(AUTO_ABRIR[rolEfectivo])) {
       const tile = mount.querySelector(`[data-signal="${AUTO_ABRIR[rolEfectivo]}"]`);
-      if (tile) setTimeout(() => { if (_panelAbierto !== AUTO_ABRIR[rolEfectivo]) tile.click(); }, 0);
+      if (tile) setTimeout(() => {
+        if (_panelAbierto === AUTO_ABRIR[rolEfectivo]) return;
+        mount._autoAbriendo = true;
+        try { tile.click(); } finally { mount._autoAbriendo = false; }
+      }, 0);
     }
 
     const setVal = (id, n, opts) => _pintaVal(mount, id, n, opts);
