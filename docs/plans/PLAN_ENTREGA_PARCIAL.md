@@ -247,6 +247,17 @@ números reales de cuántos casos quedan de verdad.
 
 ## 5. Hallazgo: el tope de evaluación de las reglas
 
+> **Corrección del 2026-11-12.** Lo que sigue se midió mal en septiembre. El
+> mensaje `maximum of 1000 expressions` que acompaña a una denegación es una
+> pasada de diagnóstico del emulador, no la causa del rechazo: quitando el
+> candado, la misma escritura pasa. O sea, los `assertFails` contra el ruleset
+> completo **sí** prueban el candado. Y hay margen: la escritura legítima más
+> cara (entregar con la firma del contrato pendiente) gasta cerca del 66% del
+> tope, y el tamaño de la orden no cuesta (3, 30 y 100 equipos dan lo mismo).
+> Se mide con `functions/test-emulator/sonda-presupuesto-rules.js`; conviene
+> correrla antes de sumar un candado a este match. El texto original se deja
+> abajo como historia.
+
 Midiendo las reglas nuevas contra el emulador apareció algo **previo a este
 trabajo** y que conviene tener anotado:
 

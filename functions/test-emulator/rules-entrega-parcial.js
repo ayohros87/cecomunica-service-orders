@@ -1,20 +1,19 @@
-// Reglas de la ENTREGA PARCIAL por tandas — prueba aislada del presupuesto.
+// Reglas de la ENTREGA PARCIAL por tandas — prueba aislada de la función.
 //
 // Corre con:
 //   firebase emulators:exec --only firestore "node functions/test-emulator/rules-entrega-parcial.js"
 //
 // POR QUÉ ESTE ARCHIVO EXISTE, aparte de rules.js:
-// el match de ordenes_de_servicio ya llega al tope de evaluación de Firestore
-// ("maximum of 1000 expressions") en los caminos de DENEGACIÓN — pasa incluso
-// con una transición ilegal que falla en el primer guard, sin tocar nada de la
-// entrega parcial. Es una condición PREVIA a esta función y falla cerrado
-// (deniega), así que no rompe nada; pero significa que un assertFails contra
-// el ruleset completo no prueba nada: la escritura habría sido rechazada
-// igual aunque el candado no existiera.
+// se evalúa el MISMO texto de `entregaTandasOk()` con un `allow update`
+// recortado a esa función, así que cada assertFails solo puede deberse a ella
+// y no a otro guard de la cadena. Si alguien borra la función, este archivo se
+// cae — que es el punto.
 //
-// Para probar el candado de verdad se evalúa el MISMO texto de
-// `entregaTandasOk()` con un `allow update` recortado, que deja presupuesto de
-// sobra. Si alguien borra la función, este archivo se cae — que es el punto.
+// Nació (2026-09-09) creyendo que las denegaciones llegaban al tope de 1000
+// expresiones y que por eso un assertFails contra el ruleset completo no
+// probaba nada. No era así: ese mensaje es la pasada de diagnóstico del
+// emulador y quien rechaza es el candado (comprobado 2026-11-12, ver
+// sonda-presupuesto-rules.js). El aislamiento se conserva por lo de arriba.
 const fs = require("fs");
 const path = require("path");
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require("@firebase/rules-unit-testing");

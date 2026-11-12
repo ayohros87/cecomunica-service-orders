@@ -7,12 +7,13 @@
 // firmar, dejando la firma digital de quien recibe, si el MISMO write declara
 // la excepción (`entrega_contrato_sin_firma.contrato_doc_id`).
 //
-// Por qué aislada (igual que rules-entrega-parcial.js): el match de
-// ordenes_de_servicio llega al tope de 1000 expresiones en los caminos de
-// DENEGACIÓN, así que un assertFails contra el ruleset completo no prueba el
-// candado. Aquí se evalúa el MISMO texto de `contratoFirmadoParaEntregar()`
-// con un `allow update` recortado a esa función. Que la entrega legítima
-// termina de evaluarse con el ruleset completo lo prueba rules.js.
+// Por qué aislada (igual que rules-entrega-parcial.js): se evalúa el MISMO
+// texto de `contratoFirmadoParaEntregar()` con un `allow update` recortado a
+// esa función, así que cada assertFails solo puede deberse a ella. Que la
+// entrega legítima termina de evaluarse con el ruleset completo lo prueba
+// rules.js. (El "1000 expressions" que acompaña a las denegaciones del ruleset
+// completo es diagnóstico del emulador, no la causa — ver
+// sonda-presupuesto-rules.js, 2026-11-12.)
 const fs = require("fs");
 const path = require("path");
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require("@firebase/rules-unit-testing");

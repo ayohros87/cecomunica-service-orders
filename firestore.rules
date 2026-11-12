@@ -489,7 +489,7 @@ service cloud.firestore {
           // motivo escrito (≥10 chars, lo mismo que el borrado lógico): cerrar
           // un caso sin decir por qué es como no cerrarlo. La UI además pide
           // 30 días de antigüedad; eso no se replica aquí porque las reglas no
-          // saben restar fechas sin encarecer un match que ya va justo.
+          // saben restar fechas sin encarecer el match.
           || (de == "COMPLETADO (EN OFICINA)" && a == "CERRADA (SIN RETIRAR)"
               && request.resource.data.get("sin_retirar", {}).get("motivo", "").size() >= 10)
           // ANULADA: el contrato de la orden se anuló y no va a proceder
@@ -499,7 +499,8 @@ service cloud.firestore {
           // por qué es como no cerrarlo. La otra salida —el papel se rehizo—
           // no pasa por aquí: repuntar el contrato deja el estado intacto y
           // `de == a` ya lo permite. Va en UNA cláusula con `in` porque este
-          // match está al tope de 1000 expresiones al denegar.
+          // match gasta hasta el 66% del tope de 1000 expresiones al entregar
+          // (medido 2026-11-12, test-emulator/sonda-presupuesto-rules.js).
           || (a == "ANULADA"
               && de in ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO", "COMPLETADO (EN OFICINA)"]
               && request.resource.data.get("anulada_motivo", "").size() >= 10)
@@ -554,7 +555,8 @@ service cloud.firestore {
       // js/domain/contratoFirma.js. El tipo se mira en el DOC del contrato, no
       // en el prefijo del número: hay un reemplazo numerado ALQ20251024-01.
       // Los dos tipos van en UN `in […]` y no en cuatro cláusulas sueltas: este
-      // match ya está al tope de 1000 expresiones en los caminos de denegación.
+      // match gasta hasta el 66% del tope de 1000 expresiones al entregar
+      // (medido 2026-11-12, test-emulator/sonda-presupuesto-rules.js).
       function contratoFirmadoParaEntregar() {
         let c = resource.data.get("contrato", {});
         let cid = c.get("contrato_doc_id", "");
@@ -735,8 +737,8 @@ service cloud.firestore {
       // isAdmin() del allow.
       //
       // UNA sola función con `let`, y no dos: el presupuesto de evaluación de
-      // este match ya va justo (una denegación en ordenTransicionLegal llega al
-      // tope de 1000 expresiones — ver docs/plans/PLAN_ENTREGA_PARCIAL.md §6).
+      // este match se cuida (la entrega gasta hasta el 66% del tope de 1000
+      // expresiones — ver docs/plans/PLAN_ENTREGA_PARCIAL.md §5).
       // Partirla en dos volvía a leer los mismos arrays cuatro veces.
       //
       // No se exige aquí el tipo REPARACIÓN a propósito: `tipo_de_servicio`
@@ -1336,7 +1338,10 @@ service cloud.firestore {
       // barata: lo que no está dormido paga una comparación, y lo dormido no
       // depende de que el resto falle barato. Ojo: un RECHAZO de un admin
       // recorre la cadena entera y llega al tope de 1,000 expresiones (visto
-      // el 5-oct-2026 en el emulador, igual que ordenes_de_servicio).
+      // el 5-oct-2026 en el emulador, igual que ordenes_de_servicio). En las
+      // órdenes se comprobó el 12-nov-2026 que ese mensaje es la pasada de
+      // diagnóstico del emulador y no la causa del rechazo; aquí no se ha
+      // vuelto a medir.
       allow update: if isSignedIn() && (
                       esDecisionAnexoDormido()
                       || esAprobacionGestion() || esAnulacionGestion() || esCartaGestion()

@@ -354,10 +354,7 @@ async function main() {
     // El DEMO tampoco la lleva (segunda vuelta del mismo repaso): es un
     // prestamo de evaluacion y 14 de 14 demos entregados nunca se firmaron.
     // El TEMP SI: es un alquiler de evento con precio, y va aqui como control
-    // negativo para que la exencion no se derrame al resto de los tipos. Ojo:
-    // su assertFails no PRUEBA el candado (este match llega al tope de 1000
-    // expresiones al denegar y la denegacion se habria dado igual sin el) —
-    // lo que sostiene la exencion son los assertSucceeds de arriba.
+    // negativo para que la exencion no se derrame al resto de los tipos.
     await db.doc("contratos/cDemo").set({ estado: "aprobado", codigo_tipo: "DEMO", contrato_id: "DEMO-1" });
     await db.doc("contratos/cTemp").set({ estado: "aprobado", codigo_tipo: "TEMP", contrato_id: "TEMP-1" });
     await db.doc("ordenes_de_servicio/oProgDemo").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cDemo" } });
@@ -1424,13 +1421,12 @@ async function main() {
   // mandó esas unidades a en_cliente. Es un hecho consumado — la lista solo
   // crece, y sumarle una exige los mismos candados que entregar del todo.
   //
-  // ⚠️ Los assertFails de aquí abajo son un SMOKE TEST, no la prueba del
-  // candado: este match ya llega al tope de evaluación de Firestore ("maximum
-  // of 1000 expressions") en los caminos de denegación — pasa hasta con una
-  // transición ilegal que ni toca la entrega parcial. Falla cerrado, así que
-  // no rompe nada, pero un assertFails contra el ruleset completo se cumpliría
-  // igual sin el candado. La prueba de verdad, con presupuesto aislado, vive
-  // en test-emulator/rules-entrega-parcial.js.
+  // Los assertFails de aquí abajo SÍ prueban el candado. El "maximum of 1000
+  // expressions" que acompaña a cada denegación es la pasada de diagnóstico
+  // del emulador, no la causa del rechazo: quitando el candado la escritura
+  // pasa (comprobado 2026-11-12, ver test-emulator/sonda-presupuesto-rules.js).
+  // test-emulator/rules-entrega-parcial.js repite estos casos con el allow
+  // recortado a la función.
   const EQUIPOS3 = [{ id: "e1", serial: "S1" }, { id: "e2", serial: "S2" }, { id: "e3", serial: "S3" }];
   const T1 = { n: 1, numero: "oT-E1", receptor_nombre: "Ana", equipos: [{ id: "e1", serial: "S1" }] };
   const T2 = { n: 2, numero: "oT-E2", receptor_nombre: "Ana", equipos: [{ id: "e2", serial: "S2" }] };
