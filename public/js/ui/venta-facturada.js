@@ -87,6 +87,7 @@ window.VentaFacturada = {
       onSelect: (id, c) => {
         this._clienteSel = c ? { id: c.id, nombre: c.nombre } : null;
         if (this._esReposicion()) this._verificarPerdidos();
+        this._pintarAvisoContrato();
       },
     });
   },
@@ -149,6 +150,50 @@ window.VentaFacturada = {
       this._toast(/permission/i.test(`${e?.code} ${e?.message}`)
         ? 'No se pudo anular: bodega ya asignó los seriales.' : 'No se pudo anular el pedido.', 'bad');
     }
+  },
+
+  // VENTA PEDIDA POR LOS DOS CAMINOS (2026-11-16, SHIRLEY DE LA ROSA, factura
+  // 11349): ventas hizo el SERV con línea propio y recepción pidió la misma
+  // venta aquí. A bodega le salió dos veces en Asignar y la OS nació como
+  // "venta directa" sin contrato, así que el feed pedía una segunda orden para
+  // el SERV. Antes de pedir, se avisa si el cliente tiene un contrato vigente
+  // con radios propios y SIN factura de venta: esa factura casi siempre va ahí.
+  // Es un aviso y no un candado: una línea propio también puede ser de radios
+  // que el cliente ya tenía, y puede haber una venta aparte.
+  async _contratosConPropioSinFactura(clienteId) {
+    if (!clienteId) return [];
+    const VIGENTES = ['pendiente', 'pendiente_aprobacion', 'pendiente_firma', 'aprobado', 'activo'];
+    const snap = await firebase.firestore().collection('contratos')
+      .where('cliente_id', '==', clienteId).limit(60).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(c => !c.deleted && VIGENTES.includes(c.estado) && !c.factura_venta?.numero)
+      .map(c => {
+        const todoPropio = c.codigo_tipo === 'PROP' || /^propio$/i.test(c.tipo_contrato || '');
+        const n = (c.equipos || [])
+          .filter(e => todoPropio || String(e.modalidad || '').toLowerCase() === 'propio')
+          .reduce((s, e) => s + Number(e.cantidad || 0), 0);
+        return { id: c.id, contrato_id: c.contrato_id || c.id, n, estado: c.estado };
+      })
+      .filter(c => c.n > 0);
+  },
+
+  async _pintarAvisoContrato() {
+    const cont = this._el?.querySelector('#vfAvisoContrato');
+    if (!cont) return;
+    const cli = this._clienteActual();
+    this._avisoContratos = [];
+    cont.innerHTML = '';
+    if (!cli) return;
+    try { this._avisoContratos = await this._contratosConPropioSinFactura(cli.id); }
+    catch (e) { console.warn('No se pudieron revisar los contratos del cliente:', e); return; }
+    if (this._clienteActual()?.id !== cli.id || !this._avisoContratos.length) return;
+    const esc = this._esc.bind(this);
+    cont.innerHTML = `
+      <div style="border:1px solid var(--status-warn,#b45309); background:var(--status-warn-bg,#fffbeb); border-radius:8px; padding:var(--sp-2) var(--sp-3); font-size:12.5px; margin-bottom:var(--sp-3);">
+        <b>Ojo: este cliente tiene ${this._avisoContratos.length === 1 ? 'un contrato' : 'contratos'} con radios propios sin factura de venta</b>
+        (${this._avisoContratos.map(c => `${esc(c.contrato_id)}, ${c.n} radio(s)`).join('; ')}).
+        Si la factura es de esos radios, no la pidas aquí: regístrala en el contrato (Contratos → Equipos → Registrar factura de venta). Bodega asigna los seriales en el contrato y la orden sale de ahí.
+      </div>`;
   },
 
   _esReposicion() { return !!this._el?.querySelector('#vfReposicion')?.checked; },
@@ -239,6 +284,26 @@ window.VentaFacturada = {
     if (lineas.some(l => !l.modelo_id)) { this._toast('Elige el modelo en cada línea (o quita la línea vacía).', 'bad'); return; }
     if (!lineas.length || lineas.some(l => l.cantidad < 1)) { this._toast('Indica al menos un modelo con su cantidad.', 'bad'); return; }
 
+    if (!repo) {
+      let conPropio = [];
+      try { conPropio = await this._contratosConPropioSinFactura(cli.id); }
+      catch (e) { console.warn('No se pudieron revisar los contratos del cliente:', e); }
+      if (conPropio.length) {
+        const esc = this._esc.bind(this);
+        const lista = conPropio.map(c => `<b>${esc(c.contrato_id)}</b> (${c.n} radio(s) propio(s))`).join(', ');
+        const seguir = await Modal.confirm({
+          title: '¿Esta venta es la del contrato?',
+          message: `${esc(cli.nombre)} tiene ${lista} sin factura de venta.<br><br>
+            Si la factura <b>${esc(factura)}</b> es de esos radios, <b>no la pidas aquí</b>: regístrala en el contrato
+            (Contratos → Equipos → Registrar factura de venta). Si la pides aquí también, bodega asigna dos veces y sale una orden de más.<br><br>
+            Envíala solo si es <b>otra venta</b>, aparte del contrato.`,
+          confirmLabel: 'Es otra venta: enviar',
+          cancelLabel: 'No enviar',
+        });
+        if (!seguir) return;
+      }
+    }
+
     const btn = this._el.querySelector('#vfBtnGuardar');
     btn.disabled = true; this._busy = true;
     try {
@@ -287,6 +352,7 @@ window.VentaFacturada = {
               <input class="form-input" id="vfFactura" type="text" placeholder="11044">
             </div>
           </div>
+          <div id="vfAvisoContrato"></div>
           <label style="display:flex; gap:8px; align-items:flex-start; font-size:13px; margin-bottom:var(--sp-3);">
             <input type="checkbox" id="vfReposicion" style="margin-top:3px;">
             <span>Es la <b>reposición de un radio alquilado robado o perdido</b> que el cliente pagó.
@@ -338,6 +404,7 @@ window.VentaFacturada = {
         root.querySelector('#vfBtnGuardar').addEventListener('click', () => this.guardar());
         root.querySelector('#vfReposicion').addEventListener('change', () => this._toggleReposicion());
         root.querySelector('#vfPerdidos').addEventListener('change', () => this._verificarPerdidos());
+        root.querySelector('#vfCliente').addEventListener('change', () => this._pintarAvisoContrato());
         root.querySelector('#vfLineas').appendChild(this._filaLinea());
         if (typeof lucide !== 'undefined') lucide.createIcons();
         root.querySelector('#vfCliente').focus();
