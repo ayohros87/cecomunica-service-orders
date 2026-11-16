@@ -197,6 +197,15 @@ const EquiposPoolService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
+  // UNA ficha por serial (o null): la que no está de baja, si hay colisión.
+  // Los wizards del Centro trataban el arreglo de findBySerial como si fuera
+  // la ficha (caso FALCON 2026-11-16: "Según el sistema: —", sin pool_id y
+  // sin modelo — el contrato no se podía guardar).
+  async fichaPorSerial(serial) {
+    const docs = await this.findBySerial(serial);
+    return docs.find(d => d.estado !== 'baja') || docs[0] || null;
+  },
+
   // Búsqueda por PREFIJO de serial normalizado (auditoría de módulos
   // 2026-09-30, L1): Avanzado bajaba el pool completo (7,800 lecturas) para
   // buscar un serial en el navegador. Un rango sobre serial_norm cuesta lo

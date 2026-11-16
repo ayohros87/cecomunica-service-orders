@@ -97,7 +97,7 @@ Object.assign(window.Centro, {
       Toast.show(`${norm} ya está en la lista`, 'warn'); return;
     }
     let ficha = null;
-    try { ficha = await EquiposPoolService.findBySerial(raw); } catch (_) { /* sin red: se agrega sin ficha */ }
+    try { ficha = await EquiposPoolService.fichaPorSerial(raw); } catch (_) { /* sin red: se agrega sin ficha */ }
     if (ficha?.estado === 'baja') { Toast.show(`${norm} está dado de BAJA — no se puede reactivar desde aquí`, 'bad'); return; }
     if (ficha?.asignacion?.contrato_doc_id) {
       Toast.show(`${norm} ya está amarrado al contrato ${ficha.asignacion.contrato_id || ''} — no hace falta regularizarlo`, 'warn');

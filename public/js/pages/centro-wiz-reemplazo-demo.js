@@ -338,7 +338,7 @@ Object.assign(window.Centro, {
       .some(e => EquiposPoolService.normalizarSerial(e.serial || e.id) === norm);
     if (yaEnLista) { Toast.show(`${norm} ya está en la lista de arriba`, 'warn'); return; }
     let ficha = null;
-    try { ficha = await EquiposPoolService.findBySerial(raw); } catch (_) { /* sin red: se declara igual */ }
+    try { ficha = await EquiposPoolService.fichaPorSerial(raw); } catch (_) { /* sin red: se declara igual */ }
     if (ficha) {
       // Existe pero no salió en la lista: está en bodega, en taller, con otro
       // cliente… Antes esto cortaba ("revísalo en Inventario"); ahora se deja

@@ -62,6 +62,37 @@ Object.assign(window.Centro, {
         <input type="checkbox" data-wcpf="${this.esc(id)}" ${st.refurbished ? 'checked' : ''} onchange="Centro._wcConciliar()"> refurbished</label>
     </div>`;
   },
+  // Destino de un serial AGREGADO a mano: el cliente lo tiene, así que
+  // continúa, se reemplaza o se devuelve (no hay "no lo tiene"). Antes era
+  // "Continúa" fijo y una renovación con reemplazo de TODOS los radios no
+  // podía meter el que faltaba (FALCON 2026-11-16, 22806A0233).
+  _wcDestinoAgregadoCelda(a, i) {
+    const d = ['continua', 'reemplaza', 'devuelve'].includes(a.destino) ? a.destino : 'continua';
+    const opts = [['continua', 'Continúa'], ['reemplaza', 'Se reemplaza'], ['devuelve', 'Se devuelve']];
+    const modelos = (this.modelos || []).map(m => `<option value="${this.esc(m.id)}" ${a.reemplazo === m.id ? 'selected' : ''}>${this.esc(m.label)}</option>`).join('');
+    return `<span style="display:inline-flex; gap:6px; align-items:center; flex-wrap:wrap;">
+      <select class="form-select" data-wcpad="${i}" onchange="Centro._wcDestinoAgregadoChange(this)" style="min-width:150px;">
+        ${opts.map(([v, l]) => `<option value="${v}" ${v === d ? 'selected' : ''} title="${this.esc(l + ': ' + TransicionPlan.DESTINO_AYUDA[v])}">${l}</option>`).join('')}</select>
+      <select class="form-select" data-wcpar="${i}" onchange="Centro._wcDestinoAgregadoChange(this)" title="Por qué se reemplaza" style="min-width:190px; ${d === 'reemplaza' ? '' : 'display:none;'}">
+        <option value="">por uno nuevo del mismo modelo</option>${modelos}</select>
+      <label class="cg-toggle" data-wcpaf-wrap="${i}" style="font-size:12px; padding:3px 8px; ${d === 'continua' ? '' : 'display:none;'}" title="Refurbished de batería, antena, clip y piezas para este radio">
+        <input type="checkbox" data-wcpaf="${i}" ${a.refurbished ? 'checked' : ''} onchange="Centro._wcConciliar()"> refurbished</label>
+    </span>`;
+  },
+  _wcDestinoAgregadoChange(sel) {
+    const i = sel.dataset.wcpad ?? sel.dataset.wcpar;
+    const a = this._wcPlanState.agregados[Number(i)];
+    if (!a) return;
+    const dSel = document.querySelector(`select[data-wcpad="${i}"]`);
+    const rSel = document.querySelector(`select[data-wcpar="${i}"]`);
+    a.destino = dSel?.value || 'continua';
+    a.reemplazo = rSel?.value || '';
+    if (rSel) rSel.style.display = a.destino === 'reemplaza' ? '' : 'none';
+    const f = document.querySelector(`[data-wcpaf-wrap="${i}"]`);
+    if (f) f.style.display = a.destino === 'continua' ? '' : 'none';
+    this._wcConciliar();
+  },
+
   // Qué significa cada destino, arriba de la tabla. "Se reemplaza" y "Se
   // devuelve" se usaban como sinónimos (Alberto, 2026-10-21).
   _wcLeyendaDestinos() {
@@ -141,9 +172,7 @@ Object.assign(window.Centro, {
         <td>${a.pool ? this.esc(a.modelo || '—') : this._selModelo(`data-wcpa-modelo="${i}" onchange="Centro._wcConciliar()" style="min-width:180px;"`, a.modelo_id, a.modelo)}
           ${a.aviso ? `<div style="font-size:11.5px; color:var(--warn-deep, #92400E);">${this.esc(a.aviso)}</div>` : ''}</td>
         <td style="font-size:12.5px;">${this._wcFuenteHtml('agregado', a)}</td>
-        <td style="white-space:nowrap;"><span style="font-size:12.5px;">Continúa</span>
-          <label class="cg-toggle" style="font-size:12px; padding:3px 8px; margin-left:6px;" title="Refurbished de batería, antena, clip y piezas para este radio">
-            <input type="checkbox" data-wcpaf="${i}" ${a.refurbished ? 'checked' : ''} onchange="Centro._wcConciliar()"> refurbished</label>
+        <td style="white-space:nowrap;">${this._wcDestinoAgregadoCelda(a, i)}
           <button type="button" class="btn btn-ghost" style="padding:2px 8px; margin-left:6px;" title="Quitar"
             onclick="Centro._wcQuitarAgregado(${i})">✕</button></td>`,
       })),
@@ -229,7 +258,7 @@ Object.assign(window.Centro, {
       || this.equipos.some(e => e.id === norm || EquiposPoolService.normalizarSerial(e.serial) === norm);
     if (ya) { Toast.show(`${norm} ya está en la lista`, 'warn'); return; }
     let ficha = null;
-    try { ficha = await EquiposPoolService.findBySerial(raw); } catch (_) { /* sin red: se agrega sin ficha */ }
+    try { ficha = await EquiposPoolService.fichaPorSerial(raw); } catch (_) { /* sin red: se agrega sin ficha */ }
     const L = EquiposPoolService.ESTADO_LABELS || {};
     let aviso = '';
     if (ficha) {
@@ -298,10 +327,19 @@ Object.assign(window.Centro, {
         const m = this._modeloDeSelect(document.querySelector(`select[data-wcpa-modelo="${i}"]`));
         modelo_id = m?.id || null; modelo = m?.label || '';
       }
-      const refurbished = !!document.querySelector(`input[data-wcpaf="${i}"]`)?.checked;
-      conDestino.push({ pool_id: a.pool_id, serial: a.serial, serial_norm: a.serial_norm, modelo_id, modelo,
-        destino: 'continua', fuente: 'agregado', modalidad: a.propiedad === 'cliente' ? 'propio' : 'alquiler',
-        ...(a.pool && a.corregible ? { modelo_corregible: true } : {}),
+      const destino = ['continua', 'reemplaza', 'devuelve'].includes(a.destino) ? a.destino : 'continua';
+      const refurbished = destino === 'continua' && !!document.querySelector(`input[data-wcpaf="${i}"]`)?.checked;
+      const rm = destino === 'reemplaza' && a.reemplazo ? (this.modelos || []).find(m => m.id === a.reemplazo) : null;
+      // Ficha sin modelo (o de migración sin verificar): el modelo que el
+      // vendedor eligió en el aviso, igual que en las filas del pool.
+      const elegido = destino === 'continua' && a.pool && a.corregible && a.pool_id
+        ? (this._wcPlanState.modeloElegido || {})[a.pool_id] : null;
+      conDestino.push({ pool_id: a.pool_id, serial: a.serial, serial_norm: a.serial_norm,
+        modelo_id: elegido ? elegido.id : modelo_id, modelo: elegido ? elegido.label : modelo,
+        destino, fuente: 'agregado', modalidad: a.propiedad === 'cliente' ? 'propio' : 'alquiler',
+        ...(elegido ? { modelo_corregido: { de_id: a.modelo_id || null, de: a.modelo || '' } }
+          : a.pool && a.corregible ? { modelo_corregible: true } : {}),
+        ...(rm ? { reemplazo_modelo_id: rm.id, reemplazo_modelo: rm.label } : {}),
         ...(refurbished ? { refurbished: true } : {}) });
     });
     if (!conDestino.length) return null;
@@ -350,12 +388,14 @@ Object.assign(window.Centro, {
       ? `<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;"><b>Marcaste ${nDevuelven} “Se devuelve” y entran ${nNuevos} radio(s) nuevo(s).</b>
           ¿Los nuevos van <b>en lugar</b> de los que salen? Entonces márcalos <b>“Se reemplaza”</b>: así recepción recibe su programación.
           “Se devuelve” es solo cuando el cliente entrega el radio y no recibe otro a cambio.</div>` : '';
-    const faltaModelo = plan.unidades.some(u => u.fuente === 'agregado' && !u.modelo && !u.modelo_id);
+    // Solo el agregado SIN ficha trae su selector de modelo en la fila; uno
+    // con ficha sin modelo se resuelve en el aviso "¿qué modelo es?".
+    const faltaModelo = plan.unidades.some(u => u.fuente === 'agregado' && !u.pool_id && !u.modelo && !u.modelo_id);
     // Sin línea por NO tener modelo (o uno de migración sin verificar): se
     // pregunta el modelo serial por serial, entre las líneas del contrato.
     // Lo demás (modelo verificado que no está en ninguna línea) sigue
     // pidiendo agregar la línea.
-    const sinModelo = r.sinLinea.filter(u => u.modelo_corregible && u.destino === 'continua');
+    const sinModelo = r.sinLinea.filter(u => this._wcEsSinModelo(u));
     const otrosSinLinea = r.sinLinea.filter(u => !sinModelo.includes(u));
     const sinLinea = (sinModelo.length ? this._wcSinModeloHtml(sinModelo, lineas) : '')
       + (otrosSinLinea.length
@@ -380,7 +420,18 @@ Object.assign(window.Centro, {
     return { ok: !sinDestino && !desajuste && !r.sinLinea.length && !faltaModelo, plan, desajuste, sinLinea: r.sinLinea, faltaModelo, sinDestino, modalidad, otraModalidad: r.otraModalidad || [], modeloCorregido: r.modeloCorregido || [] };
   },
 
-  // Seriales que continúan SIN modelo y no caben en ninguna línea: un
+  // ¿Este serial está sin línea SOLO porque no se sabe su modelo? Continúa
+  // con ficha sin modelo (o de migración sin verificar), o se reemplaza "por
+  // uno del mismo modelo" sin que se sepa cuál es ese modelo.
+  _wcEsSinModelo(u) {
+    if (!u) return false;
+    if (u.destino === 'continua') return u.modelo_corregible === true;
+    if (u.destino === 'reemplaza') return !u.reemplazo_modelo_id && !u.reemplazo_modelo
+      && !u.modelo_id && !String(u.modelo || '').trim();
+    return false;
+  },
+
+  // Seriales SIN modelo que no caben en ninguna línea: un
   // selector por serial con los modelos de las líneas. Elegir sube la línea
   // (si no es la corrección post-aprobación, donde las líneas no se tocan).
   _wcSinModeloHtml(unidades, lineas) {
@@ -390,9 +441,9 @@ Object.assign(window.Centro, {
       if (!k || vistos.has(k)) return false;
       vistos.add(k); return true;
     });
-    const sel = (u) => `<select class="form-select" data-wcpsm="${this.esc(u.pool_id)}" onchange="Centro._wcElegirModelo(this)"
+    const sel = (u) => `<select class="form-select" data-wcpsm="${this.esc(u.pool_id || u.serial_norm)}" data-wcpsm-destino="${this.esc(u.destino)}" onchange="Centro._wcElegirModelo(this)"
         style="width:auto; min-width:180px; padding:2px 6px; font-size:12.5px;" aria-label="Modelo de ${this.esc(u.serial)}">
-        <option value="">— ¿qué modelo es? —</option>
+        <option value="">${u.destino === 'reemplaza' ? '— se reemplaza por… —' : '— ¿qué modelo es? —'}</option>
         ${opts.map(l => `<option value="${this.esc(l.modelo_id || '')}" data-label="${this.esc(l.modelo)}">${this.esc(l.modelo)}</option>`).join('')}
       </select>`;
     return `<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:6px;">
@@ -407,8 +458,23 @@ Object.assign(window.Centro, {
     const id = s.dataset.wcpsm;
     const o = s.selectedOptions[0];
     if (!id || !s.value || !o) return;
-    this._wcPlanState.modeloElegido = this._wcPlanState.modeloElegido || {};
-    this._wcPlanState.modeloElegido[id] = { id: s.value, label: o.dataset.label || o.textContent.trim() };
+    const S = this._wcPlanState;
+    if (s.dataset.wcpsmDestino === 'reemplaza') {
+      // Se reemplaza sin modelo conocido: lo elegido es el modelo que ENTRA
+      // — el mismo "por qué se reemplaza" de la fila, ya contestado.
+      const a = S.agregados.find(x => (x.pool_id || x.serial_norm) === id);
+      if (a) {
+        a.reemplazo = s.value;
+        const i = S.agregados.indexOf(a);
+        const r = document.querySelector(`select[data-wcpar="${i}"]`); if (r) r.value = s.value;
+      } else {
+        S.reemplazos[id] = s.value;
+        const r = document.querySelector(`select[data-wcpr="${this._cssEsc(id)}"]`); if (r) r.value = s.value;
+      }
+    } else {
+      S.modeloElegido = S.modeloElegido || {};
+      S.modeloElegido[id] = { id: s.value, label: o.dataset.label || o.textContent.trim() };
+    }
     // Solo SUBE la línea elegida a lo que necesita: no baja ninguna (puede
     // traer radios nuevos a propósito).
     if (!this._wcSoloPlan) this._wcCuadrar({ soloSubir: true });
@@ -473,7 +539,9 @@ Object.assign(window.Centro, {
       if (u.fuente === 'agregado' || (u.pool_id && !this.equipos.some(e => e.id === u.pool_id))) {
         agregados.push({ serial: u.serial, serial_norm: u.serial_norm, pool: !!u.pool_id, pool_id: u.pool_id || null,
           modelo_id: u.modelo_id || null, modelo: u.modelo || '', propiedad: u.modalidad === 'propio' ? 'cliente' : null, aviso: '',
-          refurbished: u.refurbished === true });
+          refurbished: u.refurbished === true,
+          destino: ['continua', 'reemplaza', 'devuelve'].includes(u.destino) ? u.destino : 'continua',
+          reemplazo: u.reemplazo_modelo_id || '' });
       } else if (u.pool_id) {
         destinos[u.pool_id] = u.destino;
         if (u.reemplazo_modelo_id) reemplazos[u.pool_id] = u.reemplazo_modelo_id;
@@ -565,7 +633,7 @@ Object.assign(window.Centro, {
     const soloSubir = !!(opts && opts.soloSubir);
     // Seriales sin modelo que no caben en ninguna línea: "Cuadrar" no sabe
     // en cuál meterlos — se dice, en vez de no hacer nada (caso FALCON).
-    const sinModelo = r.sinLinea.filter(u => u.modelo_corregible && u.destino === 'continua').length;
+    const sinModelo = r.sinLinea.filter(u => this._wcEsSinModelo(u)).length;
     if (sinModelo && !soloSubir) Toast.show(`Hay ${sinModelo} serial(es) sin modelo: elige qué modelo es cada uno (en el aviso de seriales) y su línea sube sola`, 'warn');
     const cants = [...document.querySelectorAll('input[data-wcm-cant]')];
     const selects = [...document.querySelectorAll('select[data-wcm-modelo]')];
@@ -745,7 +813,7 @@ Object.assign(window.Centro, {
         if (!vPlan.ok) { Toast.show(`⚠️ ${vPlan.mensaje}`, 'warn'); return; }
         if (conc.faltaModelo) { Toast.show('⚠️ Elige el modelo de cada serial agregado sin ficha', 'warn'); return; }
         if (conc.sinLinea.length) {
-          const sm = conc.sinLinea.filter(u => u.modelo_corregible && u.destino === 'continua').length;
+          const sm = conc.sinLinea.filter(u => this._wcEsSinModelo(u)).length;
           Toast.show(sm === conc.sinLinea.length
             ? `⚠️ ${sm} serial(es) sin modelo — elige qué modelo es cada uno en el aviso del paso 2`
             : `⚠️ ${conc.sinLinea.length} serial(es) sin línea en el contrato — agrega su modelo (o el del reemplazo) o cámbiales el destino`, 'warn');
