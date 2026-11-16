@@ -115,9 +115,21 @@ window.EquiposPool = {
   },
 
   // Pestañas que son UNA ubicación: las únicas que se sirven cargando solo
-  // esa ubicación. Todos y Otros (baja+vendido) cruzan el pool.
+  // esa ubicación. Solo Todos cruza el pool. "Baja / Venta" (otros) son dos
+  // estados y ~235 fichas: se traen esos dos (2026-11-16). Era la pestaña que
+  // bodega tenía guardada, y por no estar aquí cada apertura de la lista
+  // bajaba las 7,860 fichas (telemetría almacen.pool-completo.tab-otros: 22
+  // veces en tres días, todas de bodega).
   TABS_DE_UN_ESTADO: ['en_bodega', 'asignado_contrato', 'en_cliente', 'en_taller',
-    'devuelto_revision', 'por_clasificar', 'no_retirado'],
+    'devuelto_revision', 'por_clasificar', 'no_retirado', 'otros'],
+
+  // Las fichas de UNA pestaña parcial, con el orden de listar().
+  async _listarTab(tab) {
+    if (tab !== 'otros') return EquiposPoolService.listar({ estado: tab });
+    const partes = await Promise.all(this.ESTADOS_OTROS.map(e => EquiposPoolService.listar({ estado: e })));
+    return partes.flat().sort((a, b) => (a.modelo_label || '').localeCompare(b.modelo_label || '')
+      || (a.serial || '').localeCompare(b.serial || ''));
+  },
 
   // ¿Alcanza con la pestaña? Solo si NADA de lo que hay en pantalla mira fuera
   // de ella. La búsqueda barre el pool entero (N1, auditoría 2026-08-04) y los
@@ -220,7 +232,7 @@ window.EquiposPool = {
       if (!forzarCompleto && this._bastaParcial()) {
         const tab = this._tab;
         const [lista, conteos] = await Promise.all([
-          EquiposPoolService.listar({ estado: tab }),
+          this._listarTab(tab),
           this._conteos ? Promise.resolve(this._conteos) : this._cargarConteos(),
         ]);
         // Sin resumen no hay de dónde sacar los conteos globales: en vez de
@@ -359,7 +371,7 @@ window.EquiposPool = {
           this._ajustarConteos(viejo, nuevo);
           const queda = nuevo && (this._cargadoFamilia
             ? this._enFamilia(nuevo, this._cargadoFamilia)
-            : nuevo.estado === this._cargadoEstado);
+            : this._enTab(nuevo, this._cargadoEstado));
           if (queda) { if (i >= 0) this._equipos[i] = nuevo; else this._equipos.push(nuevo); }
           else if (i >= 0) this._equipos.splice(i, 1);
           continue;

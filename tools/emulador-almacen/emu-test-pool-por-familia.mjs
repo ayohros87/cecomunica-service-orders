@@ -125,6 +125,23 @@ const globalCliente = pool.filter(u => u.estado === 'en_cliente').length;
 const v4 = await s.page.evaluate(() => ({ filtrados: EquiposPool._filtrados().length, fam: EquiposPool._cargadoFamilia }));
 ok(v4.filtrados === globalCliente && !v4.fam, `En cliente sin filtro: ${v4.filtrados} (esperado ${globalCliente})`);
 ok(await enteras(s, 'equipos_pool') === 0, 'tampoco aquí se leyó el pool entero');
+
+// ── 3b. "Baja / Venta": dos estados, no el pool (era la pestaña guardada de bodega) ──
+console.log('\n3b. Pestaña Baja / Venta');
+await s.page.evaluate(() => EquiposPool.setTab('otros'));
+ok(await quieto(s, () => EquiposPool._cargadoEstado === 'otros' && !/Cargando/.test(document.getElementById('eqTabla').textContent)), 'carga solo baja + vendido');
+const globalOtros = pool.filter(u => u.estado === 'baja' || u.estado === 'vendido').length;
+const v4b = await s.page.evaluate(() => ({ filtrados: EquiposPool._filtrados().length, enMemoria: EquiposPool._equipos.length,
+  completo: EquiposPool._completo, otros: document.getElementById('countOtros').textContent, todos: document.getElementById('countTodos').textContent }));
+ok(v4b.filtrados === globalOtros && v4b.enMemoria === globalOtros && !v4b.completo, `Baja / Venta: ${v4b.filtrados} fichas en memoria (esperado ${globalOtros} de ${pool.length})`);
+ok(v4b.otros === `(${globalOtros.toLocaleString('es-PA')})` && v4b.todos === `(${pool.length.toLocaleString('es-PA')})`, `contadores: ${v4b.otros} ${v4b.todos}`);
+// Recargar la página con esa pestaña guardada (lo que hacía bodega cada vez).
+await s.page.evaluate(() => EquiposPool._guardarFiltros());
+await s.page.goto(BASE + '/almacen/index.html?tab=serial', { waitUntil: 'domcontentloaded' });
+ok(await quieto(s, () => window.EquiposPool && EquiposPool._cargadoEstado === 'otros' && !/Cargando/.test(document.getElementById('eqTabla').textContent)), 'al volver a abrir la lista con Baja / Venta guardada, carga solo esa pestaña');
+ok(await enteras(s, 'equipos_pool') === 0, 'NO se leyó equipos_pool entero');
+await s.page.evaluate(() => EquiposPool.setTab('en_cliente'));
+await quieto(s, () => EquiposPool._cargadoEstado === 'en_cliente');
 const usoMedio = await usoPool();
 ok(JSON.stringify(usoMedio) === JSON.stringify(usoAntes), 'ninguna anotación almacen.pool-completo.* hasta aquí');
 
