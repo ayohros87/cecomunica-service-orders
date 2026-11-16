@@ -106,6 +106,11 @@ window.TransicionPlan = {
       // La ficha no tiene modelo, o el que tiene lo puso una migración sin
       // verificar: la línea del contrato puede corregirlo (ver conciliarLineas).
       ...(u.destino === 'continua' && u.modelo_corregible === true ? { modelo_corregible: true } : {}),
+      // El vendedor ELIGIÓ el modelo de un serial sin modelo (caso FALCON
+      // 2026-11-16): lo que decía la ficha viaja para que el servidor la
+      // corrija (lib/planRenovacion), igual que tras aplicarModeloDeLinea.
+      ...(u.destino === 'continua' && u.modelo_corregido && typeof u.modelo_corregido === 'object'
+        ? { modelo_corregido: { de_id: u.modelo_corregido.de_id || null, de: u.modelo_corregido.de || '' } } : {}),
     })).filter(u => u.serial_norm);
     return {
       nivel: 'serial',
