@@ -574,13 +574,34 @@
         </label>
         <input type="text" id="entregaReceptorNombre"
                placeholder="Nombre completo"
-               autocomplete="name" class="modal-entrega__nombre">
+               autocomplete="name" class="modal-entrega__nombre"
+               oninput="window._entregaIdDatosCambiaron && window._entregaIdDatosCambiaron()">
       </div>
 
       <!-- ID box: upload first, then sin-id checkbox below it -->
       <div class="modal-entrega__alert--no-id">
-        <!-- With ID: file upload -->
+        <!-- With ID: cédula + "la verifiqué" + foto opcional.
+             VERIFICACIÓN (Brenda, 2026-11-17): recepción pide la cédula física
+             y la compara con lo que quien retira escribió en la tablet. El
+             gancho deja constancia de quién la verificó y cuándo; sin él (o sin
+             "no presentó identificación") la entrega no se confirma. -->
         <div id="entregaConIdBloque">
+          <div class="form-field">
+            <label for="entregaReceptorCedula" class="modal-entrega__label">
+              Cédula o pasaporte de quien recibe <span class="req"></span>
+            </label>
+            <input type="text" id="entregaReceptorCedula" autocomplete="off"
+                   placeholder="Ej.: 8-123-4567" class="modal-entrega__nombre"
+                   oninput="window._entregaIdDatosCambiaron && window._entregaIdDatosCambiaron()">
+          </div>
+          <div class="modal-entrega__cb-row" onclick="document.getElementById('entregaIdVerificada').click()">
+            <input type="checkbox" id="entregaIdVerificada"
+                   class="modal-entrega__cb-input modal-entrega__cb-input--brand"
+                   onclick="event.stopPropagation()">
+            <label for="entregaIdVerificada" class="modal-entrega__cb-label">
+              Verifiqué la cédula física: el nombre y el número coinciden con lo escrito
+            </label>
+          </div>
           <label class="modal-entrega__label--muted">
             Foto de identificación <span class="modal-entrega__hint">(opcional)</span>
           </label>
@@ -598,7 +619,7 @@
                  data-action="entrega-sin-id-change"
                  onclick="event.stopPropagation()">
           <label for="entregaSinId" class="modal-entrega__cb-label modal-entrega__cb-label--regular">
-            Cliente no desea proporcionar identificación
+            No presentó identificación
           </label>
         </div>
 
@@ -606,7 +627,7 @@
         <div id="entregaSinIdBloque" class="hidden">
           <div class="form-field">
             <label class="modal-entrega__label">
-              Motivo (no proporciona ID) <span class="req"></span>
+              Motivo (no presentó identificación) <span class="req"></span>
             </label>
             <textarea id="entregaSinIdMotivo" rows="2"
                       placeholder="Indique el motivo..." class="modal-entrega__motivo-id"></textarea>

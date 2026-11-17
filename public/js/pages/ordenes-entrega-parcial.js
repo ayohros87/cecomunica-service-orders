@@ -213,6 +213,7 @@
               <div class="f-name">${esc(t.receptor_nombre || '—')}</div>
               ${t.receptor_cedula ? `<div style="font-size:11.5px;color:#5C554A;">Cédula ${esc(t.receptor_cedula)}</div>` : ''}
               ${t.sin_id ? `<div style="font-size:11px;color:#5C554A;">Sin identificación — ${esc(t.sin_id_motivo || '')}</div>` : ''}
+              ${t.id_verificada ? `<div style="font-size:11px;color:#5C554A;">Identificación verificada al momento de la entrega</div>` : ''}
               <div class="f-role">Recibe — por el cliente</div>
             </div>
             <div class="f-col">
@@ -391,13 +392,16 @@
             <input type="text" id="epReceptor" class="form-input" placeholder="Nombre completo" autocomplete="off">
           </div>
           <div>
-            <label class="form-label" for="epCedula">Cédula</label>
-            <input type="text" id="epCedula" class="form-input" placeholder="Opcional" autocomplete="off">
+            <label class="form-label" for="epCedula">Cédula o pasaporte *</label>
+            <input type="text" id="epCedula" class="form-input" placeholder="Ej.: 8-123-4567" autocomplete="off">
           </div>
         </div>
 
+        <label id="epIdVerificadaRow" style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:8px;cursor:pointer;">
+          <input type="checkbox" id="epIdVerificada"> Verifiqué la cédula física: el nombre y el número coinciden con lo escrito
+        </label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;">
-          <input type="checkbox" id="epSinId"> El cliente no presentó identificación
+          <input type="checkbox" id="epSinId"> No presentó identificación
         </label>
         <div id="epSinIdWrap" class="hidden" style="margin-bottom:10px;">
           <input type="text" id="epSinIdMotivo" class="form-input" placeholder="¿Por qué? (obligatorio)">
@@ -453,7 +457,15 @@
         });
         root.querySelector('#epSinId').addEventListener('change', (e) => {
           root.querySelector('#epSinIdWrap').classList.toggle('hidden', !e.target.checked);
+          // Sin identificación no hay cédula que verificar.
+          root.querySelector('#epIdVerificadaRow').classList.toggle('hidden', e.target.checked);
+          if (e.target.checked) root.querySelector('#epIdVerificada').checked = false;
         });
+        // El gancho vale para el nombre y número que había al marcarlo: si
+        // cambian, se desmarca y recepción vuelve a mirar el documento.
+        const idDatosCambiaron = () => { root.querySelector('#epIdVerificada').checked = false; };
+        root.querySelector('#epReceptor').addEventListener('input', idDatosCambiaron);
+        root.querySelector('#epCedula').addEventListener('input', idDatosCambiaron);
 
         pad = FirmaPad.mount(root.querySelector('#epFirma'), { alto: 140 });
         root.querySelector('#epLimpiarFirma').addEventListener('click', () => pad && pad.clear());
@@ -517,6 +529,7 @@
                 if (inp && !inp.value.trim() && f.nombre) inp.value = f.nombre;
                 const ced = root.querySelector('#epCedula');
                 if (ced && !ced.value.trim() && f.cedula) ced.value = f.cedula;
+                idDatosCambiaron();
                 pintarTablet();
                 Toast.show('Firma recibida de la tablet.', 'ok');
               },
@@ -538,7 +551,7 @@
         // firma queda archivada en la solicitud; la orden solo guarda la que
         // esté vigente al confirmar.
         root.querySelector('#epTabletDescartar').addEventListener('click', () => {
-          firmaTablet = null; pintarTablet();
+          firmaTablet = null; idDatosCambiaron(); pintarTablet();
         });
         pintarTablet();
         // Ver / Imprimir / Enviar de las tandas ya registradas.
@@ -557,6 +570,12 @@
         const sinId = !!root.querySelector('#epSinId').checked;
         const sinIdMotivo = sinId ? (root.querySelector('#epSinIdMotivo').value || '').trim() : '';
         if (sinId && !sinIdMotivo) { Toast.show('Indique por qué el cliente no presenta identificación', 'bad'); return false; }
+        // Constancia de que recepción miró la cédula física (2026-11-17).
+        const receptorCedula = sinId ? '' : ((root.querySelector('#epCedula').value || '').trim()
+          || (firmaTablet?.cedula || '').trim());
+        const idVerificada = !sinId && !!root.querySelector('#epIdVerificada').checked;
+        if (!sinId && receptorCedula.length < 4) { Toast.show('Escriba la cédula o pasaporte de quien recibe, o marque que no presentó identificación', 'bad'); return false; }
+        if (!sinId && !idVerificada) { Toast.show('Marque que verificó la cédula física de quien recibe, o que no presentó identificación', 'bad'); return false; }
 
         if (!firmaTablet && (!pad || pad.isEmpty())) {
           Toast.show(solTablet
@@ -590,10 +609,9 @@
           const r = await OrdenesService.registrarTandaEntrega(ordenId, {
             equipoIds: ids,
             receptorNombre,
-            receptorCedula: (root.querySelector('#epCedula').value || '').trim()
-              || firmaTablet?.cedula || '',
+            receptorCedula,
             firmaUrl,
-            sinId, sinIdMotivo,
+            sinId, sinIdMotivo, idVerificada,
             notas: (root.querySelector('#epNotas').value || '').trim(),
           });
 

@@ -941,7 +941,7 @@ const OrdenesService = {
    */
   async registrarTandaEntrega(ordenId, {
     equipoIds, receptorNombre, receptorCedula = '', firmaUrl = null,
-    sinId = false, sinIdMotivo = '', notas = '',
+    sinId = false, sinIdMotivo = '', notas = '', idVerificada = false,
   }) {
     const db = firebase.firestore();
     const user = firebase.auth().currentUser;
@@ -993,6 +993,12 @@ const OrdenesService = {
         firma_url: firmaUrl || null,
         sin_id: !!sinId,
         sin_id_motivo: sinId ? String(sinIdMotivo || '').trim() : null,
+        // Quién verificó la cédula física y cuándo (2026-11-17).
+        id_verificada: (idVerificada && !sinId) ? {
+          por_uid: user?.uid || '',
+          por_email: user?.email || null,
+          at: firebase.firestore.Timestamp.now(),
+        } : null,
         notas: String(notas || '').trim() || null,
         equipos: elegidos.map(e => ({
           id: e.id || null,

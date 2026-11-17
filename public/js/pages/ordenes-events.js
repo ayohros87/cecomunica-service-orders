@@ -842,6 +842,12 @@ function mostrarEntregaRecepcion(ordenId) {
     _faseFilas([
       ['Recibido por', esc((enPapel ? (o.entrega_persona_interna || o.receptor_nombre) : o.receptor_nombre) || '—')],
       ['Fecha y hora', esc(_entregaFecha(o.fecha_entrega) || '—')],
+      // Constancia de que recepción miró la cédula física (2026-11-17). Sin
+      // el número: la cédula es PII y se ve aparte (admin).
+      ['Identificación', o.id_verificada
+        ? esc(`Cédula verificada por ${o.id_verificada.por_email || '—'}`
+            + (_entregaFecha(o.id_verificada.at) ? ` · ${_entregaFecha(o.id_verificada.at)}` : ''))
+        : (o.sin_id ? 'No presentó identificación' : '')],
     ]) + (enPapel ? papelHtml : _faseFirma(o.firma_url, 'Firma del receptor')) + idHtml
   ) : '';
 
@@ -999,11 +1005,12 @@ function verEntregaComprobante(ordenId) {
       </tr>`;
   }).join('');
 
-  // La nota de identificación solo afirma "Verificada" si realmente hubo foto;
-  // si el cliente no presentó ID se indica; si no hay dato, se omite.
+  // La nota de identificación solo afirma "Verificada" si recepción marcó que
+  // miró la cédula física (id_verificada, 2026-11-17) o si hubo foto; si el
+  // cliente no presentó ID se indica; si no hay dato, se omite.
   const idNota = o.sin_id
     ? `<p class="nota"><strong>Identificación:</strong> Cliente no presentó identificación${o.sin_id_motivo ? ' — ' + esc(o.sin_id_motivo) : ''}.</p>`
-    : (o.identificacion_path || o.identificacion_url)
+    : (o.id_verificada || o.identificacion_path || o.identificacion_url)
       ? `<p class="nota"><strong>Identificación:</strong> Verificada al momento de la entrega.</p>`
       : '';
 

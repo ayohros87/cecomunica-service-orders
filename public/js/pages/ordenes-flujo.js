@@ -1181,6 +1181,10 @@ window.copiarSeriales = function (ordenId) {
 
     const sinIdCb = g('entregaSinId');
     if (sinIdCb) sinIdCb.checked = false;
+    const cedulaInp = g('entregaReceptorCedula');
+    if (cedulaInp) cedulaInp.value = '';
+    const idVerif = g('entregaIdVerificada');
+    if (idVerif) idVerif.checked = false;
     const fotoId = g('entregaFotoId');
     if (fotoId) fotoId.value = '';
     const preview = g('entregaPreviewId');
@@ -1558,6 +1562,12 @@ window.copiarSeriales = function (ordenId) {
           // (editable); si recepción ya había escrito uno, se respeta.
           const inp = document.getElementById('entregaReceptorNombre');
           if (inp && !inp.value.trim() && f.nombre) inp.value = f.nombre;
+          // La cédula que escribió en la tablet: es contra lo que recepción
+          // compara el documento físico. Si ya había una escrita, se respeta.
+          const ced = document.getElementById('entregaReceptorCedula');
+          if (ced && !ced.value.trim() && f.cedula) ced.value = f.cedula;
+          // Llegó una firma (quizá de otra persona): se verifica contra ella.
+          window._entregaIdDatosCambiaron();
           _tabletUI();
           Toast.show('Firma recibida de la tablet.', 'ok');
         },
@@ -1575,7 +1585,7 @@ window.copiarSeriales = function (ordenId) {
   // Descarta la firma recibida y vuelve al recuadro (p.ej. firmó la persona
   // equivocada). La firma queda archivada en la solicitud, pero la orden
   // solo guarda la que esté vigente al confirmar.
-  window._entregaTabletDescartar = () => { _firmaTablet = null; _tabletUI(); };
+  window._entregaTabletDescartar = () => { _firmaTablet = null; window._entregaIdDatosCambiaron(); _tabletUI(); };
 
   // Exposed for data-action change handlers in ordenes-events.js.
   // Use classList.toggle('hidden', ...) — the global `.hidden` class
@@ -1596,6 +1606,14 @@ window.copiarSeriales = function (ordenId) {
       const t = String(leg.dataset.tipo || '').toUpperCase();
       leg.classList.toggle('hidden', !t.includes('ENTRADA'));
     }
+  };
+
+  // El gancho "verifiqué la cédula" vale para el nombre y número que había
+  // cuando se marcó: si cambian (se corrigen a mano o llegan de la tablet),
+  // se desmarca y recepción vuelve a mirar el documento.
+  window._entregaIdDatosCambiaron = function () {
+    const cb = document.getElementById('entregaIdVerificada');
+    if (cb) cb.checked = false;
   };
 
   window._toggleEntregaSinId = function () {
@@ -1913,7 +1931,14 @@ window.copiarSeriales = function (ordenId) {
 
         if (!receptorNombre) { Toast.show('Ingrese el nombre de quien recibe', 'bad'); return; }
         if (!_firmaTablet && _isCanvasEmpty()) { Toast.show('La firma es obligatoria', 'bad'); return; }
-        if (sinId && !sinIdMotivo) { Toast.show('Indique por qué el cliente no proporciona ID', 'bad'); return; }
+        if (sinId && !sinIdMotivo) { Toast.show('Indique por qué el cliente no presentó identificación', 'bad'); return; }
+        // Constancia de que recepción miró la cédula física (2026-11-17): o
+        // la verificó, o quien retira no presentó identificación (con motivo).
+        const receptorCedula = sinId ? '' : (document.getElementById('entregaReceptorCedula')?.value || '').trim()
+          || (_firmaTablet?.cedula || '').trim();
+        const idVerificada = !sinId && !!document.getElementById('entregaIdVerificada')?.checked;
+        if (!sinId && receptorCedula.length < 4) { Toast.show('Escriba la cédula o pasaporte de quien recibe, o marque que no presentó identificación', 'bad'); return; }
+        if (!sinId && !idVerificada) { Toast.show('Marque que verificó la cédula física de quien recibe, o que no presentó identificación', 'bad'); return; }
 
         // Firma: de la tablet (ya subida a Storage por /firmar/tablet.html)
         // o del canvas del modal.
@@ -1947,8 +1972,16 @@ window.copiarSeriales = function (ordenId) {
         }
 
         firestoreData.receptor_nombre = receptorNombre;
-        // Cédula de quien recibe — hoy solo la captura la firma en tablet.
-        firestoreData.receptor_cedula = _firmaTablet?.cedula || null;
+        // Cédula de quien recibe: la del campo del modal (prellenado con la
+        // que escribió en la tablet) — también cuando firma en el recuadro.
+        firestoreData.receptor_cedula = receptorCedula || null;
+        // Quién verificó la cédula física y cuándo. Sin copia del número: ya
+        // está en receptor_cedula, y así no hay un segundo dato personal.
+        firestoreData.id_verificada = idVerificada ? {
+          por_uid: user.uid,
+          por_email: user.email || null,
+          at: firebase.firestore.FieldValue.serverTimestamp(),
+        } : null;
         firestoreData.firma_url = firmaUrl;
         firestoreData.identificacion_path = identificacionPath;
         firestoreData.sin_id = sinId;
