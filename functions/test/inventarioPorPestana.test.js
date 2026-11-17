@@ -16,7 +16,8 @@
 //   P4 — buscar estando en una pestaña carga el pool entero ANTES de responder,
 //        y nunca pinta "ningún equipo coincide" con media lista en memoria.
 //   P5 — la búsqueda encuentra una ficha que está en OTRA ubicación (N1).
-//   P6 — Todos y Otros cargan el pool entero.
+//   P6 — Todos carga el pool entero; Baja / Venta (otros) trae solo sus dos
+//        estados (52a3048).
 //   P7 — cualquier filtro secundario carga el pool entero.
 //   P8 — mover una ficha fuera de la pestaña la saca de la lista y corrige los
 //        conteos con el delta.
@@ -297,14 +298,31 @@ test("P5b · un serial con dígito se busca por prefijo en el servidor, cruza ub
   assert.equal(P._completo, true);
 });
 
-test("P6 · Todos y Otros cargan el pool entero", async () => {
-  for (const tab of ["todos", "otros"]) {
-    const { P, consultas } = montar({ tab });
-    await P.cargar();
-    await asentar(P);
-    assert.equal(barridosCompletos(consultas), 1, `la pestaña ${tab} necesita el pool entero`);
-    assert.equal(P._completo, true, tab);
-  }
+test("P6 · Todos carga el pool entero", async () => {
+  const { P, consultas } = montar({ tab: "todos" });
+  await P.cargar();
+  await asentar(P);
+  assert.equal(barridosCompletos(consultas), 1, "la pestaña todos necesita el pool entero");
+  assert.equal(P._completo, true);
+});
+
+// "Baja / Venta" (otros) son dos estados: se traen esos dos y nada más
+// (52a3048, 2026-11-16). Era la pestaña guardada de bodega y bajaba las
+// 7,860 fichas en cada apertura.
+test("P6b · Baja / Venta trae solo baja y vendido, sin barrer el pool", async () => {
+  const pool = [...POOL.map(p => ({ ...p })),
+    { id: "X1", serial: "X1", serial_norm: "X1", modelo_id: "m2", modelo_label: "NX420", estado: "baja", verificado: true }];
+  const { P, consultas, els } = montar({ tab: "otros", pool });
+  await P.cargar();
+  await asentar(P);
+  assert.equal(barridosCompletos(consultas), 0, "no se baja el pool");
+  const porEstado = consultas.filter(c => c.col === "equipos_pool" && !c.count && c.filtros?.some(f => f[0] === "estado"))
+    .map(c => c.filtros.find(f => f[0] === "estado")[2]).sort();
+  assert.deepEqual(porEstado, ["baja", "vendido"]);
+  assert.equal(P._completo, false);
+  assert.deepEqual(P._equipos.map(e => e.serial).sort(), ["V1", "X1"]);
+  const html = els.get("eqTabla").innerHTML;
+  assert.ok(html.includes("V1") && html.includes("X1") && !html.includes("B1"), "pinta solo baja y vendido");
 });
 
 test("P7 · cualquier filtro secundario carga el pool entero", async () => {
