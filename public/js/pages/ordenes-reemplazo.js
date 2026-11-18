@@ -270,6 +270,10 @@
       size: 'md',
       closable: () => !enviando,
       html: `
+        ${(typeof esOrdenVisita === 'function' && esOrdenVisita(orden)) ? `
+        <div role="note" style="padding:8px 12px;border:1px solid #FCD34D;background:#FFFBEB;color:#92400E;border-radius:8px;margin-bottom:12px;font-size:13px;line-height:1.45;">
+          <b>¿Ya lo cambiaste en sitio</b> por un radio que llevabas? Entonces no es aquí: cierra esto y usa
+          <b>"Registrar cambio de radio en sitio"</b> en el menú ⋯ de la visita. Esto le pide a bodega un radio NUEVO.</div>` : ''}
         <div style="padding:10px 12px;border:1px solid var(--border-default, #D5DDE5);border-radius:8px;margin-bottom:12px;">
           <div style="font-family:var(--font-mono,monospace);font-size:14px;font-weight:600;">${esc(serial)}</div>
           <div style="font-size:13px;color:var(--fg-2);">${esc(modelo)}</div>

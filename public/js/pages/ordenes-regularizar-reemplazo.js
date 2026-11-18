@@ -127,8 +127,11 @@
         </div>
         <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;">
           <input type="checkbox" id="rrEnCasa" checked style="margin-top:3px;">
-          <span><b>Me traje el radio que salió</b> (lo entrego en oficina para revisión). Si se quedó con el cliente, desmárcalo: queda pendiente de devolución.</span>
+          <span><b>Me traje el radio que salió.</b> Si se quedó con el cliente, desmárcalo: queda pendiente de devolución.</span>
         </label>
+        <p style="margin:6px 0 0 24px;font-size:12.5px;color:#475569;line-height:1.45;">
+          El radio que te trajiste se entrega en <b>recepción</b>: recepción lo recibe y abre su revisión de taller (ENTRADA).
+          Si fue daño del cliente, el cobro sale de esa revisión, con la cotización del taller.</p>
         <label class="form-label" for="rrMotivo" style="margin-top:10px;">¿Qué pasó? *</label>
         <textarea id="rrMotivo" class="form-input" rows="2" placeholder="Ej.: no transmitía; se cambió en sitio. Si parece daño del cliente, dilo aquí."></textarea>
         <div id="rrAviso" role="alert" style="display:none;margin-top:10px;padding:8px 12px;border:1px solid #FCD34D;background:#FFFBEB;color:#92400E;border-radius:6px;font-size:13px;"></div>`,

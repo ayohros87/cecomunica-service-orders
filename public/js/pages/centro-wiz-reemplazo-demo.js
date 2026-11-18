@@ -176,7 +176,13 @@ Object.assign(window.Centro, {
     const r = this._elegBase(e);
     if (!r.ok || ['en_cliente', 'asignado_contrato'].includes(e.estado) || e.sin_ficha) return r;
     const L = (window.EquiposPoolService && EquiposPoolService.ESTADO_LABELS) || {};
-    const aviso = `El sistema lo tiene "${L[e.estado] || e.estado || 'sin estado'}" — al marcarlo confirmas que el cliente lo tiene.`;
+    // Ya VOLVIÓ a la casa (MACELLO 2026-11-18): lo más probable es que el
+    // técnico ya lo cambió en sitio. Pedir reemplazo aquí es pedir otro radio
+    // más; el cambio en sitio lo registra el técnico en su visita.
+    const volvio = e.estado === 'devuelto_revision';
+    const aviso = volvio
+      ? `Este radio YA VOLVIÓ a CECOMUNICA${e.orden_actual_id ? ` (orden ${e.orden_actual_id})` : ''}. Si el técnico ya lo cambió en una visita, NO pidas reemplazo: el técnico lo registra en la visita con "Registrar cambio de radio en sitio". Pídelo solo si el cliente se quedó sin radio.`
+      : `El sistema lo tiene "${L[e.estado] || e.estado || 'sin estado'}" — al marcarlo confirmas que el cliente lo tiene.`;
     return { ...r, desfase: e.estado || 'sin_estado', why: r.why ? `${r.why} ${aviso}` : aviso };
   },
   _elegBase(e) {
