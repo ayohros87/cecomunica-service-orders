@@ -218,30 +218,12 @@
         PocService.getPocDevice(id, { source: 'server' }).catch(e => { console.warn('[imprimir] equipo', id, e); return null; })));
       const datos = docs.filter(Boolean);
 
-      // La hoja sale por programación (Brenda, 2026-10-13 y 2026-10-27):
-      // cliente, luego grupo (FEPACI 1, FEPACI 2…), dentro de cada grupo
-      // por Unit ID, y los radios sin grupo al final. La pantalla del PoC es
-      // cronológica; el orden por grupos es del papel y del Excel.
-      const claveGrupo = (d) => {
-        const g = Array.isArray(d.grupos) ? d.grupos : (d.grupos ? [d.grupos] : []);
-        const limpios = g.map(x => String(x ?? "").trim()).filter(Boolean);
-        return limpios.length ? limpios.join(", ") : null;
-      };
-      const nombreCliente = (d) => String(d.cliente || d.cliente_nombre || "");
-      datos.sort((a, b) => {
-        const rc = nombreCliente(a).localeCompare(nombreCliente(b), "es", { sensitivity: "base" });
-        if (rc !== 0) return rc;
-        const ga = claveGrupo(a), gb = claveGrupo(b);
-        if (ga === null || gb === null) {
-          if (ga !== gb) return ga === null ? 1 : -1;
-        } else {
-          const r = ga.localeCompare(gb, "es", { numeric: true, sensitivity: "base" });
-          if (r !== 0) return r;
-        }
-        const ua = (a.unit_id || "").toString().padStart(10, '0');
-        const ub = (b.unit_id || "").toString().padStart(10, '0');
-        return ua.localeCompare(ub, undefined, { numeric: true });
-      });
+      // La hoja sale EN EL ORDEN DE LA PANTALLA (Brenda, 2026-11-18): los ids
+      // llegan en el orden de las filas marcadas y aquí no se reordenan. Del
+      // 2026-10-13 al 2026-11-18 salía cliente → grupo → Unit ID y los radios
+      // recién programados (Unit ID más alto) caían al final de la hoja
+      // (MENZIES). Para verla por grupos: ordenar la pantalla por la columna
+      // Grupos antes de imprimir. El Excel sí sigue saliendo por grupos.
 
       await cargarClientesPara(datos);
       await cargarModelosPara(datos);

@@ -1,7 +1,7 @@
 // Tres acciones en masa de la Base PoC (Brenda, 2026-11-18):
 //   A. Más → "Reconectar…": los inactivos seleccionados vuelven a activo, sin
 //      sello de baja y con poc_log accion 'reconexion';
-//   B. Más → "Agregar grupos…": suma grupos del catálogo a los seleccionados
+//   B. Más → "Agregar o quitar grupos…": suma (y B2 quita) grupos del catálogo a los seleccionados
 //      de UN cliente conservando los que cada radio ya tenía;
 //   C. "Asignar del pool" con MENOS SIMs que radios: se asignan los marcados
 //      a los primeros radios y los pendientes quedan seleccionados.
@@ -180,6 +180,45 @@ const celda = await p.evaluate((id, g) => {
 }, paraGrupos[0], GRUPO);
 ok(celda.html && celda.marcado, 'la fila se repinta con el grupo nuevo y conserva la selección');
 
+// ── B2. Quitar grupos (misma hoja, modo Quitar) ───────────────────────────
+// Los 4 tienen GRUPO ahora. Se le quita a 3 y el cuarto lo conserva.
+const paraQuitar = paraGrupos.slice(0, 3);
+await marcar(paraQuitar);
+await menuMas('#btnAgregarGrupos');
+await p.waitForSelector('#pocGruposMasaChips .grupo-chip', { timeout: 8000 });
+const chipAg = await p.evaluate((g) => [...document.querySelectorAll('#pocGruposMasaChips .grupo-chip')].find(x => x.dataset.grupo === g).disabled, GRUPO);
+ok(chipAg === true, 'en modo Agregar el grupo que ya tienen todos sale apagado');
+await p.click('#pocGruposMasaModo [data-modo="quitar"]');
+const modoQ = await p.evaluate((g) => ({
+  chip: [...document.querySelectorAll('#pocGruposMasaChips .grupo-chip')].find(x => x.dataset.grupo === g).disabled,
+  boton: document.querySelector('.modal-footer [data-sheet-action="confirmar"]').textContent.trim(),
+  intro: document.getElementById('pocGruposMasaIntro').textContent.replace(/\s+/g, ' ').trim(),
+}), GRUPO);
+ok(modoQ.chip === false && modoQ.boton === 'Quitar' && /quieres quitar/.test(modoQ.intro), 'modo Quitar: chip habilitado y botón "Quitar": ' + JSON.stringify(modoQ));
+await p.evaluate((g) => { [...document.querySelectorAll('#pocGruposMasaChips .grupo-chip')].find(x => x.dataset.grupo === g).click(); }, GRUPO);
+const resumenQ = await p.evaluate(() => document.getElementById('pocGruposMasaResumen').textContent.replace(/\s+/g, ' ').trim());
+ok(/quita 1 grupo de 3 radios/.test(resumenQ), 'resumen en modo Quitar: "' + resumenQ + '"');
+await s.captura('03b-hoja-grupos-quitar');
+await p.click('.modal-footer [data-sheet-action="confirmar"]');
+await p.waitForSelector('.overlay [data-action="confirm"]', { timeout: 6000 });
+const pregunta = await p.evaluate(() => document.querySelector('.overlay [data-action="confirm"]').closest('.modal').textContent.replace(/\s+/g, ' ').trim());
+ok(/Vas a quitar/.test(pregunta) && /sigue en el catálogo/.test(pregunta) && /Quitar de 3 radios/.test(pregunta), 'quitar pide confirmación aparte: ' + pregunta.slice(0, 160));
+await p.click('.overlay [data-action="confirm"]');
+await esperarToast('Grupo quitado');
+await s.quieto(1500);
+toasts = await s.toasts();
+ok(toasts.some(t => /Grupo quitado de 3 radios\./.test(t.msg)), 'toast de quitar: ' + JSON.stringify(toasts.slice(-2).map(t => t.msg)));
+for (const id of paraQuitar) {
+  const g = (await doc(id)).grupos;
+  ok(!g.includes(GRUPO) && g.length === gruposAntes[id].length && gruposAntes[id].every(x => g.includes(x)),
+    `ficha ${id.slice(0, 6)}…: sin ${GRUPO} y con sus ${gruposAntes[id].length} grupos de antes`);
+}
+ok((await doc(paraGrupos[3])).grupos.includes(GRUPO), 'el que no estaba seleccionado conserva el grupo');
+const lq = (await logs(paraQuitar[0], 'grupos_quitar')).filter(l => l.motivo.includes(GRUPO));
+ok(lq.length >= 1 && lq.every(l => l.antes?.grupos?.includes(GRUPO) && !l.despues?.grupos?.includes(GRUPO)), 'poc_log accion=grupos_quitar con antes y después');
+const catDespues = await p.evaluate(async (cid) => (await firebase.firestore().collection('clientes').doc(cid).get()).data()?.poc_grupos || [], cli.id);
+ok(catDespues.includes(GRUPO), 'el catálogo del cliente conserva el grupo');
+
 // ── C. Asignación parcial de SIMs ─────────────────────────────────────────
 const paraSim = activos.slice(0, 3);
 await marcar(paraSim);
@@ -241,6 +280,17 @@ await pausa(600);
 toasts = await s.toasts();
 ok(toasts.some(t => /Marcaste 2 SIMs para 1 equipos\. Desmarca los que sobran/.test(t.msg)), 'más SIMs que radios: bloqueado con aviso ' + JSON.stringify(toasts.slice(-2).map(t => t.msg)));
 await p.evaluate(() => PocSimPool.cerrar());
+
+// ── D. La hoja de imprimir sale en el orden de la pantalla ────────────────
+// (en la misma pestaña: una pestaña nueva no hereda la sesión del emulador)
+const paraHoja = (await filas()).map(f => f.id).slice(0, 6);
+const serialesPantalla = await p.evaluate((ids) => ids.map(id => PocList._docsPorId.get(id)?.serial || ''), paraHoja);
+await s.ir('/POC/imprimir-equipos.html?ids=' + encodeURIComponent(JSON.stringify(paraHoja)), { esperar: 1500 });
+await p.waitForFunction((n) => document.querySelectorAll('#cuerpoTabla tr').length >= n, { timeout: 20000 }, paraHoja.length).catch(() => {});
+const serialesHoja = await p.evaluate(() => [...document.querySelectorAll('#cuerpoTabla tr')].map(r => r.cells[1]?.textContent.trim() || ''));
+ok(serialesHoja.length === paraHoja.length && serialesPantalla.every((sr, i) => sr && serialesHoja[i] === sr),
+  'imprimir conserva el orden de la pantalla: ' + JSON.stringify(serialesPantalla) + ' → ' + JSON.stringify(serialesHoja));
+await s.captura('06-hoja-imprimir');
 
 const errores = s.errores.filter(e => !/favicon|rebotó a login|clipboard|Clipboard/.test(e));
 ok(!errores.length, 'sin errores de consola ' + JSON.stringify(errores.slice(0, 5)));
