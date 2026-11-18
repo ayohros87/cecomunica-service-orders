@@ -323,9 +323,11 @@ window.AlmacenExistencias = (() => {
     if (!filas.length) {
       // Mientras se teclea un serial la tabla no debe decir "sin modelos" a
       // secas: el buscador también encuentra seriales (auditoría UX 2026-09-28).
+      // "Ningún modelo coincide…" se leía como error del serial (Brenda y
+      // Solís, 2026-11-18): la frase empieza por lo que sí se puede hacer.
       const q = ctx.q.trim();
       tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--fg-3); padding:var(--sp-5);">
-        ${q ? `Ningún modelo coincide con «${esc(q)}». Pulsa <b>Enter</b> para buscar el serial.`
+        ${q ? `¿«${esc(q)}» es un serial? Pulsa <b>Enter</b> para buscarlo. <span style="opacity:.75;">(No hay un modelo con ese nombre.)</span>`
             : 'Sin modelos que cumplan el filtro.'}</td></tr>`;
     } else {
       tbody.innerHTML = filas.map(filaHtml).join('');

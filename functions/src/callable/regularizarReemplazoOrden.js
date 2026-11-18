@@ -16,7 +16,11 @@
 //     la custodia del cliente de la orden, reemplaza_a + reemplazo_origen,
 //     kardex `reemplazo`; saliente → a revisión si quedó en casa (sale del
 //     contrato), o pendiente_devolucion si el cliente se lo quedó.
-// No manda correos ni crea órdenes: la entrega ya ocurrió.
+// No crea órdenes: la entrega ya ocurrió. Desde el 2026-11-18 (Brenda, Solís y
+// Solangel probando el caso MACELLO) SÍ avisa por correo a bodega, con copia a
+// recepción y al taller: un radio salió de bodega sin que bodega lo asignara y
+// nadie se enteraba. Y lo que se escribe en "¿Qué pasó?" queda en el kardex de
+// los dos radios, no solo en la gestión.
 //
 // VISITA TÉCNICA (2026-11-18, MACELLO): el técnico cambia el radio EN SITIO
 // con uno que lleva consigo. Ese entrante nunca está en la orden (la visita
@@ -54,7 +58,45 @@ async function reservarNumero() {
 const equipoDe = (orden, serial) => (orden.equipos || []).find((e) => e && !e.eliminado
   && pool.normSerial(e.numero_de_serie || e.serial || "") === pool.normSerial(serial));
 
-async function ejecutar({ usuario, uid = null, ordenId, serialSaliente, serialEntrante, salienteEnCasa = true, motivo = "" }) {
+// Aviso a bodega (corto: resultado primero, una sola acción). Nunca lanza: el
+// cambio ya quedó registrado y un correo caído no lo deshace.
+async function avisarBodega({ gid, ordenId, esVisita, cliente, sal, ent, modSal, modEnt, contratoId, salienteEnCasa, motivo, quien }) {
+  try {
+    const G = require("../lib/gestiones");
+    const { bodegaEmailTo, recepcionEmails, tallerEmailTo } = require("../lib/mailRecipients");
+    const { APP_BASE_URL } = require("../lib/inventario");
+    const [bodega, recepcion, taller] = await Promise.all([bodegaEmailTo(), recepcionEmails(), tallerEmailTo()]);
+    const copia = [...new Set([...recepcion, ...String(taller || "").split(",")].map((e) => String(e).trim().toLowerCase()).filter(G.isEmail))];
+    const to = bodega || copia.join(", ");
+    if (!to) { logger.warn("[regularizarReemplazoOrden] sin destinatarios para el aviso", { gid }); return null; }
+    const cc = bodega ? copia.filter((e) => !bodega.toLowerCase().includes(e)).join(", ") : "";
+    const e = G.escapeHtml;
+    const p = (html) => `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">${html}</p>`;
+    const donde = esVisita ? `en la visita <b>${e(ordenId)}</b>` : `en la orden <b>${e(ordenId)}</b>`;
+    return await G.encolarCorreo({
+      to, cc: cc || null,
+      subject: `Cambio de radio${esVisita ? " en sitio" : ""}: ${sal} → ${ent} · ${cliente}`,
+      preheader: `Ya quedó registrado en inventario (gestión ${gid})`,
+      bodyContent: `
+        <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">Cambio de radio ${esVisita ? "en sitio" : "registrado"}</h2>
+        ${p(`<b>${e(cliente)}</b> — ${donde}. Ya quedó registrado en inventario; no hay que asignar nada.`)}
+        ${p(`<b>Se dejó con el cliente:</b> ${e(ent)}${modEnt ? ` · ${e(modEnt)}` : ""}${contratoId ? ` (contrato ${e(contratoId)})` : ""}<br>
+             <b>Se recibió del cliente:</b> ${e(sal)}${modSal ? ` · ${e(modSal)}` : ""}`)}
+        ${p(`<b>Qué pasó:</b> ${e(motivo || "—")}<br><b>Lo registró:</b> ${e(quien)}`)}
+        ${p(salienteEnCasa
+          ? `El radio <b>${e(sal)}</b> se entrega en <b>recepción</b> para su revisión de taller.`
+          : `El radio <b>${e(sal)}</b> se quedó con el cliente: queda <b>pendiente de devolución</b>.`)}`,
+      ctaUrl: `${APP_BASE_URL}/almacen/index.html`,
+      ctaLabel: "Abrir Almacén",
+      meta: { source: "regularizarReemplazoOrden", gestion_id: gid, orden_id: ordenId },
+    });
+  } catch (err) {
+    logger.error("[regularizarReemplazoOrden] aviso a bodega no enviado", { gid, message: err.message });
+    return null;
+  }
+}
+
+async function ejecutar({ usuario, nombre = "", uid = null, ordenId, serialSaliente, serialEntrante, salienteEnCasa = true, motivo = "" }) {
   if (!ordenId || typeof ordenId !== "string") throw new HttpsError("invalid-argument", "Falta la orden.");
   const sal = String(serialSaliente || "").trim(); const ent = String(serialEntrante || "").trim();
   if (!sal || !ent) throw new HttpsError("invalid-argument", "Falta el serial saliente o el entrante.");
@@ -139,6 +181,9 @@ async function ejecutar({ usuario, uid = null, ordenId, serialSaliente, serialEn
 
   // Pool: entrante.
   const refMov = { tipo: "gestion", id: gid, label: gid };
+  // "¿Qué pasó?" va también al kardex: bodega mira el movimiento del radio,
+  // no la gestión (Solís, 2026-11-18).
+  const quePaso = String(motivo || "").trim() ? ` — Qué pasó: ${String(motivo).trim().slice(0, 300)}` : "";
   const asignacionEnt = contratoDocId
     ? { contrato_doc_id: contratoDocId, contrato_id: contratoId, cliente_id: orden.cliente_id, cliente_nombre: orden.cliente_nombre || orden.cliente || "", gestion_doc_id: gid }
     : { contrato_doc_id: null, contrato_id: "", cliente_id: orden.cliente_id, cliente_nombre: orden.cliente_nombre || orden.cliente || "", gestion_doc_id: gid };
@@ -146,24 +191,27 @@ async function ejecutar({ usuario, uid = null, ordenId, serialSaliente, serialEn
   let entRes = "sin-cambio";
   if (entregada && rEnt.data.estado !== pool.ESTADOS.EN_CLIENTE) {
     entRes = await pool.transicionarPorId(rEnt.ref.id, { aEstado: pool.ESTADOS.EN_CLIENTE, tipo: "reemplazo", refMov,
-      notas: `Reemplaza a ${sal} (gestión ${gid}) — regularizado: ${esVisita ? `dejado en sitio en la visita ${ordenId}` : `entregado con la orden ${ordenId}`}`,
+      notas: `Reemplaza a ${sal} (gestión ${gid}) — regularizado: ${esVisita ? `dejado en sitio en la visita ${ordenId}` : `entregado con la orden ${ordenId}`}${quePaso}`,
       extra: { asignacion: asignacionEnt, orden_actual_id: null, verificado: false, ...linaje } });
   } else {
     await rEnt.ref.set({ ...linaje, ...(rEnt.data.asignacion?.cliente_id ? {} : { asignacion: asignacionEnt }), updated_at: now }, { merge: true });
-    await rEnt.ref.collection("movimientos").add({ at: now, por: usuario, por_email: usuario, tipo: "reemplazo", de_estado: null, a_estado: null, ref: refMov, notas: `Reemplaza a ${sal} (gestión ${gid}) — regularizado desde la orden ${ordenId}` });
+    await rEnt.ref.collection("movimientos").add({ at: now, por: usuario, por_email: usuario, tipo: "reemplazo", de_estado: null, a_estado: null, ref: refMov, notas: `Reemplaza a ${sal} (gestión ${gid}) — regularizado desde la orden ${ordenId}${quePaso}` });
   }
   // Pool: saliente.
   let salRes = "sin-cambio";
   if (salienteEnCasa) {
     salRes = await pool.transicionarPorId(rSal.ref.id, { aEstado: pool.ESTADOS.DEVUELTO, soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE, pool.ESTADOS.EN_TALLER, pool.ESTADOS.EN_BODEGA],
-      tipo: "reemplazo", refMov, notas: `Sustituido por ${ent} en la orden ${ordenId} (gestión ${gid}): quedó en CECOMUNICA — sale del contrato y queda por revisar`,
+      tipo: "reemplazo", refMov, notas: `Sustituido por ${ent} en la orden ${ordenId} (gestión ${gid}): quedó en CECOMUNICA — sale del contrato y queda por revisar${quePaso}`,
       extra: { asignacion: null, orden_actual_id: null } });
   } else {
     await rSal.ref.set({ pendiente_devolucion: true, updated_at: now }, { merge: true });
-    await rSal.ref.collection("movimientos").add({ at: now, por: usuario, por_email: usuario, tipo: "reemplazo", de_estado: null, a_estado: null, ref: refMov, notas: `Reemplazado por ${ent} (gestión ${gid}) — el cliente se lo quedó: pendiente de devolución` });
+    await rSal.ref.collection("movimientos").add({ at: now, por: usuario, por_email: usuario, tipo: "reemplazo", de_estado: null, a_estado: null, ref: refMov, notas: `Reemplazado por ${ent} (gestión ${gid}) — el cliente se lo quedó: pendiente de devolución${quePaso}` });
   }
+  const mailId = await avisarBodega({ gid, ordenId, esVisita, cliente: orden.cliente_nombre || orden.cliente || "", sal, ent,
+    modSal: modSal.modelo, modEnt: modEnt.modelo, contratoId, salienteEnCasa: !!salienteEnCasa, motivo: String(motivo || "").trim(),
+    quien: nombre ? `${nombre} (${usuario})` : usuario });
   logger.info("[regularizarReemplazoOrden]", { ordenId, gid, sal, ent, usuario, entRes, salRes, cambioModelo: !!cambioModelo });
-  return { ok: true, gestion_id: gid, entrante: entRes, saliente: salRes, cambio_modelo: !!cambioModelo, contrato: contratoId || null };
+  return { ok: true, gestion_id: gid, entrante: entRes, saliente: salRes, cambio_modelo: !!cambioModelo, contrato: contratoId || null, aviso_mail_id: mailId };
 }
 
 module.exports = onCall(
@@ -175,7 +223,7 @@ module.exports = onCall(
     const u = uSnap.exists ? uSnap.data() : null;
     if (!u || !ROLES.has(u.rol) || u.activo === false) throw new HttpsError("permission-denied", "Tu rol no registra reemplazos a posteriori.");
     const { ordenId, serialSaliente, serialEntrante, salienteEnCasa = true, motivo = "" } = request.data || {};
-    return ejecutar({ usuario: u.email || uid, uid, ordenId, serialSaliente, serialEntrante, salienteEnCasa: !!salienteEnCasa, motivo });
+    return ejecutar({ usuario: u.email || uid, nombre: u.nombre || u.displayName || "", uid, ordenId, serialSaliente, serialEntrante, salienteEnCasa: !!salienteEnCasa, motivo });
   },
 );
 module.exports.ejecutar = ejecutar;

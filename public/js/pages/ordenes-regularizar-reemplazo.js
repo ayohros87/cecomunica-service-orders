@@ -20,6 +20,11 @@
    serial. Se registra un cambio a la vez y la visita admite varios (el
    candado es por serial saliente). El técnico también puede registrarlo.
 
+   2026-11-18 (Brenda): "Radio que SALIÓ" se leía ambiguo (¿salió de bodega o
+   del cliente?) → "Radio recibido del cliente (equipo reemplazado)". El
+   callable ahora avisa por correo a bodega, recepción y taller, y lo escrito
+   en "¿Qué pasó?" queda en el kardex de los dos radios.
+
    Diferido (CargaDiferida.regularizarReemplazo). Expone
    window.abrirRegularizarReemplazo(ordenId).
    ============================================================= */
@@ -53,15 +58,15 @@
         <p style="margin:0 0 10px;font-size:13.5px;line-height:1.45;">
           <b>${esc(orden.cliente_nombre || orden.cliente || 'Cliente')}</b>. En esta orden un radio del cliente salió y otro entró en su lugar sin gestión de reemplazo.
           Se crea la gestión <b>REEMP</b> ya cerrada con esta orden como su programación; el entrante queda con el cliente (en el contrato del saliente, si lo tenía) y el saliente sale del contrato.
-          No manda correos ni abre órdenes nuevas.
+          No abre órdenes nuevas; bodega, recepción y taller reciben un correo con el cambio.
         </p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
-            <label class="form-label" for="rrSal">Radio que SALIÓ (del cliente)</label>
+            <label class="form-label" for="rrSal">Radio recibido del cliente (equipo reemplazado)</label>
             <select id="rrSal" class="form-input">${equipos.map(e => op(e, e === salDefault)).join('')}</select>
           </div>
           <div>
-            <label class="form-label" for="rrEnt">Radio que ENTRÓ en su lugar</label>
+            <label class="form-label" for="rrEnt">Radio entregado al cliente (en su lugar)</label>
             <select id="rrEnt" class="form-input">${equipos.map(e => op(e, e === entDefault)).join('')}</select>
           </div>
         </div>
@@ -112,25 +117,25 @@
         <p style="margin:0 0 10px;font-size:13.5px;line-height:1.45;">
           <b>${esc(orden.cliente_nombre || orden.cliente || 'Cliente')}</b>. Usa esto cuando en la visita cambiaste un radio del cliente por uno que llevabas.
           El que dejaste queda con el cliente (en el contrato del que salió) y el que salió sale del contrato.
-          No se le pide nada a bodega ni se manda correo. <b>Un cambio a la vez</b>: si cambiaste varios, repítelo por cada radio.
+          No se le pide nada a bodega: recibe un correo con el cambio, igual que recepción y taller. <b>Un cambio a la vez</b>: si cambiaste varios, repítelo por cada radio.
         </p>
         ${yaHechos.length ? `<p style="margin:0 0 10px;font-size:12.5px;color:#475569;">Ya registrados en esta visita: ${yaHechos.map(h => `${esc(h.saliente)} → ${esc(h.entrante)}`).join(' · ')}</p>` : ''}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
-            <label class="form-label" for="rrSal">Radio que SALIÓ (del cliente)</label>
+            <label class="form-label" for="rrSal">Radio recibido del cliente (equipo reemplazado)</label>
             <select id="rrSal" class="form-input">${equipos.map(op).join('')}</select>
           </div>
           <div>
-            <label class="form-label" for="rrEnt">Serial del radio que DEJASTE *</label>
+            <label class="form-label" for="rrEnt">Radio que dejaste con el cliente (serial) *</label>
             <input id="rrEnt" class="form-input" autocomplete="off" spellcheck="false" placeholder="Ej.: 18607A0484" style="text-transform:uppercase;">
           </div>
         </div>
         <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;">
           <input type="checkbox" id="rrEnCasa" checked style="margin-top:3px;">
-          <span><b>Me traje el radio que salió.</b> Si se quedó con el cliente, desmárcalo: queda pendiente de devolución.</span>
+          <span><b>Me traje el radio del cliente.</b> Si se quedó con el cliente, desmárcalo: queda pendiente de devolución.</span>
         </label>
         <p style="margin:6px 0 0 24px;font-size:12.5px;color:#475569;line-height:1.45;">
-          El radio que te trajiste se entrega en <b>recepción</b>: recepción lo recibe y abre su revisión de taller (ENTRADA).
+          El radio que recibiste del cliente se entrega en <b>recepción</b>: recepción lo recibe y abre su revisión de taller (ENTRADA).
           Si fue daño del cliente, el cobro sale de esa revisión, con la cotización del taller.</p>
         <label class="form-label" for="rrMotivo" style="margin-top:10px;">¿Qué pasó? *</label>
         <textarea id="rrMotivo" class="form-input" rows="2" placeholder="Ej.: no transmitía; se cambió en sitio. Si parece daño del cliente, dilo aquí."></textarea>
@@ -145,9 +150,9 @@
         const avisar = (m) => { avisoEl.textContent = m; avisoEl.style.display = ''; return false; };
         const sal = root.querySelector('#rrSal').value;
         const ent = String(root.querySelector('#rrEnt').value || '').trim().toUpperCase();
-        if (!sal) return avisar('Elige el radio que salió.');
+        if (!sal) return avisar('Elige el radio que recibiste del cliente.');
         if (!ent) return avisar('Escribe el serial del radio que dejaste.');
-        if (normSerial(sal) === normSerial(ent)) return avisar('El radio que salió y el que dejaste no pueden ser el mismo.');
+        if (normSerial(sal) === normSerial(ent)) return avisar('El radio recibido y el que dejaste no pueden ser el mismo.');
         const motivo = (root.querySelector('#rrMotivo').value || '').trim();
         if (motivo.length < 10) return avisar('Di en una frase qué pasó (mínimo 10 caracteres).');
         const salienteEnCasa = !!root.querySelector('#rrEnCasa').checked;

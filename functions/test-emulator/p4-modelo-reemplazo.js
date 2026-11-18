@@ -161,6 +161,22 @@ const ficha = (id, extra = {}) => db.collection("equipos_pool").doc(id).set({ se
   assert.ok(vo.reemplazos_regularizados.VSAL1 && vo.reemplazos_regularizados.VSAL2);
   const vg = (await db.collection("gestiones").doc(v1.gestion_id).get()).data();
   assert.equal(vg.ordenes.visita_id, "2026111602"); assert.equal(vg.ordenes.programacion_id, undefined);
+  // 2026-11-18 (Brenda/Solís): el "¿Qué pasó?" queda en el kardex de los dos
+  // radios y bodega recibe el correo (aquí sin bodega configurada cae a
+  // recepción/taller; si no hay nadie, no se encola y no truena).
+  const movE = (await db.collection("equipos_pool").doc("VENT1").collection("movimientos").get()).docs.map(d => d.data().notas || "");
+  const movS = (await db.collection("equipos_pool").doc("VSAL1").collection("movimientos").get()).docs.map(d => d.data().notas || "");
+  assert.ok(movE.some(n => /Qué pasó: no transmitía; cambio en sitio/.test(n)), "el motivo va al kardex del entrante");
+  assert.ok(movS.some(n => /Qué pasó: no transmitía; cambio en sitio/.test(n)), "el motivo va al kardex del saliente");
+  await db.collection("usuarios").doc("bod").set({ rol: "inventario", email: "bodega@x.com", activo: true });
+  await db.collection("equipos_pool").doc("VSAL3").set({ serial: "VSAL3", serial_norm: "VSAL3", modelo_id: "m360", modelo_label: "HYTERA PNC360S", estado: "en_cliente", asignacion: { contrato_doc_id: "c2", contrato_id: "GR-C2", cliente_id: "cli", cliente_nombre: "LIGO" } });
+  await db.collection("equipos_pool").doc("VENT3").set({ serial: "VENT3", serial_norm: "VENT3", modelo_id: "m360", modelo_label: "HYTERA PNC360S", estado: "en_bodega" });
+  await db.collection("ordenes_de_servicio").doc("2026111602").set({ equipos: [{ id: "v1", numero_de_serie: "VSAL1", modelo: "PNC360S" }, { id: "v2", numero_de_serie: "VSAL2", modelo: "PNC360S" }, { id: "v3", numero_de_serie: "VSAL3", modelo: "PNC360S" }] }, { merge: true });
+  const v3 = await regularizar.ejecutar({ usuario: "tec@x", nombre: "Jesús Santos", ordenId: "2026111602", serialSaliente: "VSAL3", serialEntrante: "VENT3", salienteEnCasa: true, motivo: "batería hinchada; cambio en sitio" });
+  assert.ok(v3.aviso_mail_id, "se encola el aviso a bodega");
+  const mail = (await db.collection("mail_queue").doc(v3.aviso_mail_id).get()).data();
+  assert.match(mail.to, /bodega@x\.com/); assert.match(mail.subject, /VSAL3 → VENT3/);
+  assert.match(mail.bodyContent, /batería hinchada/); assert.match(mail.bodyContent, /Jesús Santos/);
   await rechaza(regularizar.ejecutar, { ordenId: "2026111602", serialSaliente: "VSAL1", serialEntrante: "VENT2" }, /ya se registró/);
   console.log("  ok   E1 visita: entrante escrito, visita cerrada, varios cambios, candado por serial");
 
