@@ -193,6 +193,13 @@ const ficha = (id, extra = {}) => db.collection("equipos_pool").doc(id).set({ se
   // Candados: no visita, visita cerrada, serial fuera de bodega → no se mueve NINGUNO.
   await rechaza(salida.ejecutar, { accion: "sacar", ordenId: "2026111803", seriales: ["SAL01"] }, /no es una visita/);
   await rechaza(salida.ejecutar, { accion: "sacar", ordenId: "2026111602", seriales: ["SAL01"] }, /ya está cerrada/);
+  // Revisión 2026-11-18: las visitas viejas terminaron en otros estados, y sin técnico no hay salida.
+  for (const [id, est] of [["2025030101", "ENTREGADO AL CLIENTE"], ["2025030102", "COMPLETADO (EN OFICINA)"]]) {
+    await db.collection("ordenes_de_servicio").doc(id).set({ estado_reparacion: est, tipo_de_servicio: "VISITA TECNICA", cliente_id: "cli", tecnico_asignado: "Jesús Santos", equipos: [] });
+    await rechaza(salida.ejecutar, { accion: "sacar", ordenId: id, seriales: ["SAL01"] }, /ya está cerrada/);
+  }
+  await rechaza(salida.ejecutar, { accion: "sacar", ordenId: "2026111802", seriales: ["SAL01"] }, /no tiene técnico asignado/);
+  await db.collection("ordenes_de_servicio").doc("2026111802").set({ tecnico_asignado: "Ovidio Adames" }, { merge: true });
   await rechaza(salida.ejecutar, { accion: "sacar", ordenId: "2026111801", seriales: ["SAL01", "SALTALLER1"] }, /No se movió ningún radio.*SALTALLER1/);
   assert.equal((await db.collection("equipos_pool").doc("SAL01").get()).data().estado, "en_bodega", "todo o nada");
   const s1 = await salida.ejecutar({ usuario: "bodega@x", accion: "sacar", ordenId: "2026111801", seriales: ["sal01", "SAL02", "SAL03", "SAL02"] });
@@ -220,7 +227,16 @@ const ficha = (id, extra = {}) => db.collection("equipos_pool").doc(id).set({ se
   assert.equal(vo2.radios_salida.SAL02.estado, "devuelto"); assert.equal(vo2.radios_salida.SAL03.estado, "llevado");
   const kx = (await db.collection("equipos_pool").doc("SAL02").collection("movimientos").get()).docs.map(d => d.data().tipo).sort();
   assert.deepEqual(kx, ["regreso_visita", "salida_visita"]);
-  console.log("  ok   Salida a visita: sacar todo-o-nada, dejado en sitio, devolver sobrantes");
+  // Recibir de vuelta SÍ se puede con la visita ya cerrada (es cuando sobran).
+  await db.collection("ordenes_de_servicio").doc("2026111801").set({ estado_reparacion: "CERRADA (VISITA)" }, { merge: true });
+  await salida.ejecutar({ usuario: "bodega@x", accion: "devolver", ordenId: "2026111801", seriales: ["SAL03"] });
+  assert.equal((await db.collection("equipos_pool").doc("SAL03").get()).data().estado, "en_bodega");
+  // Fusión de duplicados: la ficha "en bodega" hereda el con_tecnico y su visita.
+  const { flujoAHeredar } = require("../src/domain/fusionPool");
+  const h = flujoAHeredar({ estado: "en_bodega" }, [{ id: "X__dup", estado: "con_tecnico", salida_visita: { orden_id: "2026111801", tecnico: "Jesús Santos" } }]);
+  assert.equal(h.estado, "con_tecnico"); assert.equal(h.salida_visita.orden_id, "2026111801");
+  assert.equal(flujoAHeredar({ estado: "en_bodega" }, [{ id: "Y", estado: "en_cliente", salida_visita: { orden_id: "z" } }]).salida_visita, null);
+  console.log("  ok   Salida a visita: sacar todo-o-nada, dejado en sitio, devolver sobrantes, candados de visita, fusión");
 
   await limpiar();
   console.log("\nTODO OK");

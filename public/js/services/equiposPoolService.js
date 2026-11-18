@@ -1147,6 +1147,15 @@ const EquiposPoolService = {
         const e = new Error(`El equipo ya no está "${this.ESTADO_LABELS[esperado] || esperado}" (ahora: ${this.ESTADO_LABELS[de] || de})`);
         e.code = 'estado-cambio'; throw e;
       }
+      // Un radio que salió con un técnico a una visita solo se mueve por sus
+      // dos puertas (callables): bodega lo recibe de vuelta o el técnico lo
+      // deja en sitio. Movido a mano desde aquí, la visita lo seguiría
+      // mostrando como "llevado" y la ficha conservaría `salida_visita`.
+      if (de === this.ESTADOS.CON_TECNICO) {
+        const v = snap.data().salida_visita?.orden_id;
+        const e = new Error(`Este radio salió con un técnico${v ? ` a la visita ${v}` : ''}. Recíbelo en Almacén → Hoy → "Recibir de vuelta"; si se dejó con el cliente, el técnico lo registra en la visita.`);
+        e.code = 'con-tecnico'; throw e;
+      }
       tx.update(docRef, { estado: aEstado, ...extra, ...this._autoria(user) });
       tx.set(docRef.collection('movimientos').doc(), this._movimiento({
         tipo: tipo || 'cambio_estado', de_estado: de, a_estado: aEstado, ref, notas,

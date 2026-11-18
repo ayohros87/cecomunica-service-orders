@@ -106,6 +106,7 @@ module.exports = onCall({ region: "us-central1" }, async (request) => {
         orden_actual_id: herencia.orden_actual_id,
         asignacion: herencia.asignacion,
         poc_device_id: herencia.poc_device_id,
+        ...(herencia.salida_visita ? { salida_visita: herencia.salida_visita } : {}),
         ...custodiaPatch(herencia.estado, herencia.asignacion, keeper),
       });
       batch.set(keeper.ref.collection("movimientos").doc(), {

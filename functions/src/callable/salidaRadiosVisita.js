@@ -12,6 +12,13 @@
 // La tercera salida (se dejó con el cliente) la hace regularizarReemplazoOrden
 // al registrar el cambio en sitio: con_tecnico → en_cliente, línea "dejado".
 //
+// Candados de la salida (revisión del 2026-11-18): la visita tiene que estar
+// ABIERTA — no basta con que no diga "CERRADA": las visitas viejas terminaron
+// en "ENTREGADO AL CLIENTE" o "COMPLETADO" y un número mal escrito les sacaba
+// radios — y tener TÉCNICO asignado (si no, el radio queda "con el técnico"
+// sin decir cuál). Recibir de vuelta sí se puede con la visita ya cerrada: es
+// justo cuando sobran radios.
+//
 // Todo o nada en la validación: si un serial no sirve no se mueve ninguno,
 // para que bodega corrija la lista y no quede media salida registrada.
 "use strict";
@@ -25,6 +32,10 @@ const ROLES = new Set(["administrador", "inventario"]);
 const MAX_SERIALES = 30;
 const FV = admin.firestore.FieldValue;
 const esVisitaOrden = (o) => String(o?.tipo_de_servicio || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().includes("VISITA");
+
+// Estados en los que una visita ya terminó (los tres últimos son de visitas
+// anteriores a CERRADA (VISITA)).
+const visitaTerminada = (estado) => /^(CERRADA|ENTREGAD|COMPLETAD|ANULAD)/.test(String(estado || "").toUpperCase());
 
 function tecnicoDe(orden) {
   return String(orden.tecnico_asignado || orden.tecnico_nombre || orden.tecnico || orden.tecnico_email || "").trim();
@@ -46,7 +57,8 @@ async function ejecutar({ usuario, accion, ordenId, seriales }) {
   if (!esVisitaOrden(orden)) throw new HttpsError("failed-precondition", `La orden ${ordenId} no es una visita técnica.`);
   const estadoOrden = String(orden.estado_reparacion || "").toUpperCase();
   if (orden.eliminado === true || estadoOrden === "ANULADA") throw new HttpsError("failed-precondition", "La visita está anulada.");
-  if (accion === "sacar" && estadoOrden.startsWith("CERRADA")) throw new HttpsError("failed-precondition", "La visita ya está cerrada: no se le pueden sacar radios.");
+  if (accion === "sacar" && visitaTerminada(estadoOrden)) throw new HttpsError("failed-precondition", `La visita ya está cerrada (${orden.estado_reparacion}): no se le pueden sacar radios.`);
+  if (accion === "sacar" && !tecnicoDe(orden)) throw new HttpsError("failed-precondition", "La visita no tiene técnico asignado. Pídele al taller que la asigne y registra la salida después.");
 
   // Validar todo antes de mover nada.
   const fichas = [];
@@ -116,3 +128,4 @@ module.exports = onCall(
   },
 );
 module.exports.ejecutar = ejecutar;
+module.exports.visitaTerminada = visitaTerminada;

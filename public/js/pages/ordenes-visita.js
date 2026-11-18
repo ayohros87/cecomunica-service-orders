@@ -294,6 +294,16 @@
       catch (e) { console.warn('[abrirCierreVisita] consumos', e); }
     }
     const cotizarDefault = hayPiezas || (inf.motivo && inf.motivo !== 'preventivo');
+    // Radios que bodega le entregó para esta visita y siguen "llevados"
+    // (2026-11-18): al cerrar se le recuerda al técnico. No tranca el cierre.
+    const llevados = Object.values(orden.radios_salida || {}).filter(r => r && r.estado === 'llevado' && r.serial);
+    const llevadosHtml = llevados.length ? `
+          <div role="alert" style="margin-top:12px;padding:8px 12px;border:1px solid #FCD34D;background:#FFFBEB;color:#92400E;border-radius:10px;font-size:13px;line-height:1.45;">
+            <b>Tienes ${llevados.length === 1 ? 'un radio' : `${llevados.length} radios`} de bodega de esta visita:</b>
+            ${llevados.map(r => esc(String(r.serial).toUpperCase())).join(' · ')}.
+            Si lo${llevados.length === 1 ? '' : 's'} dejaste con el cliente, regístralo en el menú ⋯ → "Registrar cambio de radio en sitio".
+            Si no, devuélvelo${llevados.length === 1 ? '' : 's'} a bodega.
+          </div>` : '';
     const cotizarHtml = puedeCotizar ? `
           <label class="form-check" style="margin-top:12px;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line,#e5e7eb);border-radius:10px;background:#f8fafc;">
             <input type="checkbox" id="cierreCotizar" ${cotizarDefault ? 'checked' : ''}>
@@ -337,7 +347,7 @@
             <textarea class="form-input form-textarea" id="cierreSinFirmaMotivo" rows="2"
               placeholder="Ej.: no había personal de la empresa en el sitio al finalizar"></textarea>
           </div>
-          ${cotizarHtml}`,
+          ${cotizarHtml}${llevadosHtml}`,
       footerHtml: `
           <button class="btn btn-secondary" data-close="1">Cancelar</button>
           <button class="btn btn-primary" id="cierreConfirmarBtn"><i data-lucide="check"></i> Cerrar visita</button>`,

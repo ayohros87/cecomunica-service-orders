@@ -21,12 +21,15 @@ const REPOSO = new Set([ESTADOS.EN_BODEGA, ESTADOS.POR_CLASIFICAR]);
 const VIVOS = new Set([
   ESTADOS.EN_TALLER, ESTADOS.ASIGNADO, ESTADOS.EN_CLIENTE, ESTADOS.DEVUELTO,
   ESTADOS.PENDIENTE_COBRO, ESTADOS.NO_RETIRADO,
+  // Salió con un técnico a una visita (2026-11-18): si la ficha conservada
+  // está "en bodega", el radio volvería al estante en papel estando afuera.
+  ESTADOS.CON_TECNICO,
 ].filter(Boolean));
 
 /**
  * @param {object} keeper     ficha conservada (datos)
  * @param {object[]} absorbidas fichas que se absorben (datos, con `id`)
- * @returns {null | {de_ficha, estado, orden_actual_id, asignacion, poc_device_id}}
+ * @returns {null | {de_ficha, estado, orden_actual_id, asignacion, poc_device_id, salida_visita}}
  *   null si la conservada no está en reposo o ninguna absorbida trae flujo.
  *   Con varias vivas gana la que tiene orden abierta (es la que un trigger
  *   va a buscar), y entre iguales la más recientemente tocada.
@@ -45,6 +48,9 @@ function flujoAHeredar(keeper, absorbidas) {
     orden_actual_id: g.orden_actual_id || null,
     asignacion: g.asignacion || null,
     poc_device_id: keeper.poc_device_id || g.poc_device_id || null,
+    // Con qué visita salió (solo con_tecnico): sin esto bodega no puede
+    // recibirlo de vuelta ni el técnico dejarlo en sitio.
+    salida_visita: g.estado === ESTADOS.CON_TECNICO ? (g.salida_visita || null) : null,
   };
 }
 

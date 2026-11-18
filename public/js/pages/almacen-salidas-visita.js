@@ -8,6 +8,13 @@
    El que se deja con el cliente sale de aquí solo, cuando el técnico
    registra el cambio en sitio en la visita.
 
+   Revisión del 2026-11-18: (1) la fila de una visita que YA CERRÓ con
+   radios afuera sale en alerta ("Visita cerrada: faltan N") — antes nada
+   distinguía un radio olvidado de uno en camino; (2) la hoja de salida
+   ofrece las visitas abiertas con su técnico en vez de exigir el número
+   de memoria; (3) una visita sin técnico o ya terminada no admite salida
+   (el callable también lo rechaza).
+
    Todo pasa por el callable salidaRadiosVisita (bodega y admin).
    Pinta en #hoySalidas, encima de la bandeja; carga por su cuenta y,
    si falla, falla solo este bloque.
@@ -17,7 +24,12 @@ window.AlmacenSalidasVisita = (() => {
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
   const $ = (id) => document.getElementById(id);
-  const ctx = { rol: '', radios: [] };
+  const ctx = { rol: '', radios: [], visitas: new Map() };
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  // Mismo criterio que el callable: las visitas viejas terminaron en
+  // ENTREGADO AL CLIENTE / COMPLETADO, no en CERRADA (VISITA).
+  const terminada = (estado) => /^(CERRADA|ENTREGAD|COMPLETAD|ANULAD)/.test(norm(estado));
+  const tecnicoDe = (o) => String(o?.tecnico_asignado || o?.tecnico_nombre || o?.tecnico || '').trim();
   const opera = () => ctx.rol === ROLES.ADMIN || ctx.rol === ROLES.INVENTARIO;
   const ms = (t) => t?.toMillis?.() ?? (t?.seconds ? t.seconds * 1000 : 0);
   const llamar = (data) => firebase.functions().httpsCallable('salidaRadiosVisita')(data).then(r => r.data);
@@ -29,6 +41,15 @@ window.AlmacenSalidasVisita = (() => {
     try {
       ctx.radios = await EquiposPoolService.listar({ estado: 'con_tecnico' });
       render();
+      // El estado de cada visita (pocas): para marcar las que ya cerraron
+      // con radios afuera. Si falla, la lista queda como estaba.
+      const ids = [...new Set(ctx.radios.map(r => r.salida_visita?.orden_id).filter(Boolean))];
+      if (ids.length) {
+        const db = firebase.firestore();
+        const snaps = await Promise.all(ids.map(id => db.collection('ordenes_de_servicio').doc(id).get().catch(() => null)));
+        ctx.visitas = new Map(snaps.filter(s => s?.exists).map(s => [s.id, s.data() || {}]));
+        render();
+      }
     } catch (e) {
       console.warn('[Hoy] radios con técnicos:', e?.code || e);
       el.innerHTML = Bandeja.nota('No se pudieron leer los radios con técnicos.');
@@ -49,9 +70,13 @@ window.AlmacenSalidasVisita = (() => {
       .map(([visita, rs]) => {
         const sv = rs[0].salida_visita || {};
         const lista = rs.map(r => `<b style="font-family:var(--mono,monospace);">${esc(r.serial)}</b>${r.modelo_label ? ` <span style="color:var(--fg-3);">${esc(r.modelo_label)}</span>` : ''}`).join(' · ');
+        const o = ctx.visitas.get(visita);
+        const cerro = !!o && (o.eliminado === true || terminada(o.estado_reparacion));
         return Bandeja.fila({
-          chip: `${rs.length} radio${rs.length === 1 ? '' : 's'}`, tono: 'info', at: ms(sv.at) || null,
-          txt: `<b>${esc(sv.tecnico || 'Técnico')}</b> · visita <a href="/ordenes/index.html?ids=${encodeURIComponent(visita)}">${esc(visita)}</a>${sv.cliente_nombre ? ` · ${esc(sv.cliente_nombre)}` : ''}<span style="display:block;white-space:normal;line-height:1.6;">${lista}</span>`,
+          chip: cerro ? `Visita cerrada: falta${rs.length === 1 ? '' : 'n'} ${rs.length}` : `${rs.length} radio${rs.length === 1 ? '' : 's'}`,
+          tono: cerro ? 'alerta' : 'info', at: ms(sv.at) || null,
+          data: cerro ? { 'salida-cerrada': '1' } : null,
+          txt: `<b>${esc(sv.tecnico || 'Técnico')}</b> · visita <a href="/ordenes/index.html?ids=${encodeURIComponent(visita)}">${esc(visita)}</a>${sv.cliente_nombre ? ` · ${esc(sv.cliente_nombre)}` : ''}<span style="display:block;white-space:normal;line-height:1.6;">${lista}</span>${cerro ? '<span style="display:block;white-space:normal;font-size:12.5px;color:#92400E;">La visita ya cerró y estos radios no se registraron ni como dejados con el cliente ni de vuelta. Pídeselos al técnico.</span>' : ''}`,
           ctaHtml: opera() ? Bandeja.cta({ label: 'Recibir de vuelta', icono: 'undo-2', ghost: true, data: { 'salida-devolver': visita } }) : '',
         });
       }).join('');
@@ -70,8 +95,24 @@ window.AlmacenSalidasVisita = (() => {
     const o = s.data() || {};
     const tipo = String(o.tipo_de_servicio || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
     if (!tipo.includes('VISITA')) return { error: `La orden ${id} es ${o.tipo_de_servicio || 'sin tipo'}, no una visita técnica.` };
-    if (String(o.estado_reparacion || '').toUpperCase().startsWith('CERRADA')) return { error: `La visita ${id} ya está cerrada.` };
+    if (o.eliminado === true || terminada(o.estado_reparacion)) return { error: `La visita ${id} ya está cerrada (${o.estado_reparacion || 'eliminada'}).` };
+    if (!tecnicoDe(o)) return { error: `La visita ${id} no tiene técnico asignado. Pídele al taller que la asigne primero.` };
     return { o };
+  }
+
+  // Visitas abiertas con técnico, para elegir en vez de escribir el número.
+  // Si la consulta falla, la hoja sigue sirviendo con el número a mano.
+  async function visitasAbiertas() {
+    try {
+      const q = await firebase.firestore().collection('ordenes_de_servicio')
+        .where('estado_reparacion', 'in', ['ASIGNADO', 'POR ASIGNAR']).get();
+      return q.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(o => o.eliminado !== true && norm(o.tipo_de_servicio).includes('VISITA') && tecnicoDe(o))
+        .sort((a, b) => String(b.id).localeCompare(String(a.id)));
+    } catch (e) {
+      console.warn('[Hoy] visitas abiertas:', e?.code || e);
+      return [];
+    }
   }
 
   function abrirSalida() {
@@ -84,7 +125,9 @@ window.AlmacenSalidasVisita = (() => {
           Registra los radios que el técnico se lleva. Quedan <b>con el técnico</b> (no disponibles) hasta que
           los deje con el cliente —él lo registra en la visita— o los traiga de vuelta.</p>
         <label class="form-label" for="svVisita">Número de la visita *</label>
-        <input id="svVisita" class="form-input" inputmode="numeric" autocomplete="off" placeholder="Ej.: 2026111801">
+        <input id="svVisita" class="form-input" inputmode="numeric" autocomplete="off" placeholder="Ej.: 2026111801" list="svVisitas">
+        <datalist id="svVisitas"></datalist>
+        <div id="svAbiertas" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
         <p id="svInfo" style="margin:6px 0 0;font-size:13px;color:var(--fg-3);min-height:18px;"></p>
         <label class="form-label" for="svSeriales" style="margin-top:10px;">Seriales que se lleva * <span style="font-weight:400;color:var(--fg-3);">(uno por línea; sirve el escáner)</span></label>
         <textarea id="svSeriales" class="form-input" rows="5" spellcheck="false" style="text-transform:uppercase;font-family:var(--mono,monospace);min-height:120px;height:auto;"></textarea>
@@ -92,6 +135,19 @@ window.AlmacenSalidasVisita = (() => {
       buttons: [{ action: 'cancelar', label: 'Cancelar' }, { action: 'ok', label: 'Registrar salida', primary: true }],
       onMount: (root) => {
         const inp = root.querySelector('#svVisita'); const info = root.querySelector('#svInfo');
+        visitasAbiertas().then(vs => {
+          const dl = root.querySelector('#svVisitas'); const caja = root.querySelector('#svAbiertas');
+          if (!dl || !caja || !vs.length) return;
+          const rotulo = (o) => `${tecnicoDe(o)} · ${o.cliente_nombre || o.cliente || ''}`;
+          dl.innerHTML = vs.map(o => `<option value="${esc(o.id)}">${esc(rotulo(o))}</option>`).join('');
+          caja.innerHTML = `<span style="font-size:12.5px;color:var(--fg-3);align-self:center;">Visitas abiertas:</span>`
+            + vs.slice(0, 8).map(o => `<button type="button" class="btn btn-sm btn-secondary" data-sv-visita="${esc(o.id)}" title="${esc(rotulo(o))}">${esc(o.id)} · ${esc(tecnicoDe(o))}</button>`).join('');
+          caja.addEventListener('click', (ev) => {
+            const b = ev.target.closest('[data-sv-visita]'); if (!b) return;
+            inp.value = b.dataset.svVisita; inp.dispatchEvent(new Event('change'));
+            root.querySelector('#svSeriales')?.focus();
+          });
+        });
         inp.addEventListener('change', async () => {
           visita = null; const id = inp.value.trim();
           if (!id) { info.textContent = ''; return; }
