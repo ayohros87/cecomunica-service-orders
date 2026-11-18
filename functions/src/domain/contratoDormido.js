@@ -120,9 +120,15 @@ function diasEsperandoAnexo(g, now = new Date()) {
   return Math.floor((now - base) / 86400000);
 }
 
+// El anexo de un cliente que formaliza con ORDEN DE COMPRA espera la OC, no
+// una firma: mismos 90 días que el contrato (2026-11-18).
+function umbralDormirAnexo(gestion, dias = DIAS_DORMIDO) {
+  return (gestion || {}).formalizacion?.tipo === "orden_compra" ? Math.max(dias, DIAS_DORMIDO_OC) : dias;
+}
+
 function decidirDormirAnexo({ gestion, now = new Date(), dias = DIAS_DORMIDO } = {}) {
   const viva = anexoEsperaFirmaViva(gestion);
-  return _decidir(viva, viva ? diasEsperandoAnexo(gestion, now) : null, dias);
+  return _decidir(viva, viva ? diasEsperandoAnexo(gestion, now) : null, umbralDormirAnexo(gestion, dias));
 }
 
 // Parche de la gestión al dormirla: SOLO la marca (el estado sigue
@@ -188,5 +194,5 @@ const CAMPOS_GESTION = ["dormido", "dormido_at", "dormido_motivo", "dormido_dias
 module.exports = {
   DIAS_DORMIDO, MOTIVO, CAMPOS_GESTION, esperaFirmaViva, baseEspera, diasEsperando,
   umbralDormir, decidirDormir, patchDormir, patchCaducarSolicitud, patchReactivar,
-  anexoEsperaFirmaViva, baseEsperaAnexo, diasEsperandoAnexo, decidirDormirAnexo, patchDormirAnexo,
+  anexoEsperaFirmaViva, baseEsperaAnexo, diasEsperandoAnexo, umbralDormirAnexo, decidirDormirAnexo, patchDormirAnexo,
 };

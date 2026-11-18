@@ -398,7 +398,11 @@ Object.assign(window.Centro, {
     const itbmsAplica = document.getElementById('waItbms')?.checked !== false;
     const totales = this._totAumento(lineas, cargos, itbmsAplica);
     try {
+      // Cliente con orden de compra (2026-11-18): el anexo se formaliza con
+      // una OC nueva. Las actualizaciones de seriales no se firman: no llevan.
+      const formalizacionA = this._aumRegulariza ? null : ContratoFirma.formalizacionDeCliente(this.cliente);
       const gid = await GestionesService.crear({ ...Centro._estampaReg(),
+        ...(formalizacionA ? { formalizacion: formalizacionA } : {}),
         tipo: 'aumento',
         cliente_id: this.cliente.id,
         cliente_nombre: this.cliente.nombre || '',

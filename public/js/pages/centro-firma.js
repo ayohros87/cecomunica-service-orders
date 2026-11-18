@@ -198,10 +198,16 @@ Object.assign(window.Centro, {
       Toast.show('Lo reactiva el vendedor o administración', 'warn'); return;
     }
     this._cerrarModal();
-    const dias = g.dormido_dias ? `${g.dormido_dias} días sin firma` : 'más de 45 días sin firma';
+    const ocA = !!window.ContratoFirma?.anexoEsOC(g);
+    const dias = g.dormido_dias ? `${g.dormido_dias} días sin ${ocA ? 'orden de compra' : 'firma'}` : `más de ${ocA ? ContratoFirma.DIAS_DORMIDO_OC : 45} días sin ${ocA ? 'orden de compra' : 'firma'}`;
     const ok = await Modal.confirm({
-      title: 'Reactivar la solicitud de firma', confirmLabel: 'Reactivar y generar enlace',
-      message: `El anexo <b class="cg-mono">${this.esc(g.id)}</b> quedó dormido por ${this.esc(dias)}.
+      title: ocA ? 'Reactivar: volver a esperar la OC' : 'Reactivar la solicitud de firma',
+      confirmLabel: ocA ? 'Reactivar' : 'Reactivar y generar enlace',
+      message: ocA
+        ? `El anexo <b class="cg-mono">${this.esc(g.id)}</b> quedó dormido por ${this.esc(dias)}.
+        Vuelve a ser un trámite vivo y el plazo para soltar los equipos deja de correr. Sube la OC cuando llegue;
+        si en ${ContratoFirma.DIAS_DORMIDO_OC} días no llega, se vuelve a dormir.`
+        : `El anexo <b class="cg-mono">${this.esc(g.id)}</b> quedó dormido por ${this.esc(dias)}.
         Vuelve a ser un trámite vivo y se genera un <b>enlace de firma nuevo</b>; el anterior sigue caducado.
         El plazo para soltar los equipos deja de correr. Si en 45 días no firma, se vuelve a dormir.`,
     });
@@ -217,6 +223,7 @@ Object.assign(window.Centro, {
       Toast.show('Anexo reactivado — ahora genera el enlace', 'ok');
     } catch (e) { console.error(e); Toast.show('No se pudo reactivar: ' + (e.message || e), 'bad'); return; }
     this.pintarGestiones?.(); this.pintarSenales?.(); this.pintarResumen?.(); this.armarMenu?.();
+    if (ocA) return;
     await this.enviarFirmaAnexo(g.id);
   },
 
@@ -505,6 +512,8 @@ Object.assign(window.Centro, {
     const g = (this.gestiones || []).find(x => x.id === gid);
     if (!g || g.estado !== 'pendiente_firma') { Toast.show('El anexo debe estar aprobado y pendiente de firma', 'warn'); return; }
     if (GestionesService.dormida(g)) { Toast.show('El anexo está dormido — reactívalo primero', 'warn'); return; }
+    // Cliente con orden de compra (2026-11-18): no hay enlace — se sube la OC.
+    if (window.ContratoFirma?.anexoEsOC(g)) { this.subirOCAnexo(gid); return; }
     const a = g.aumento || {};
     this._cerrarModal();
     let sid = (g.firma_solicitud_id && g.firma_solicitud_estado === 'pendiente') ? g.firma_solicitud_id : null;

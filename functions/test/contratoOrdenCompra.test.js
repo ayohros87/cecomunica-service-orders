@@ -179,3 +179,107 @@ test("OC7 · el registro de la OC escribe lo que exige rules::esActivacionPorFir
   const rules = leer("firestore.rules");
   assert.match(rules, /function esActivacionPorFirmado\(\)[\s\S]*?firmado_url[\s\S]*?\["administrador", "vendedor"\]/);
 });
+
+// ── Segunda vuelta (2026-11-18): no dañar lo que existe, OC parcial, anexos ──
+
+test("OC8 · cambiar el perfil del cliente NO toca el histórico ni lo formalizado", () => {
+  const { front } = montar();
+  // Formas reales de producción (conteo del 18-nov-2026).
+  const legacy = base({ seriales_estado: "legacy" });                       // 149 así
+  const entregadoViejo = base({ entrega_confirmada: true });                  // 27 así
+  const entregadoConMarca = base({ entrega_confirmada: true, entrega_sin_firma: { orden_id: "OS1" } });
+  const sinCircuito = base({ seriales_estado: undefined });
+  const enTramite = base();
+  const pendiente = base({ estado: "pendiente_aprobacion", seriales_estado: undefined });
+  const firmado = base({ firmado: true, estado: "activo" });
+  const validando = base({ firmado_pendiente_validacion: true });
+  const reemp = base({ codigo_tipo: "REEMP", tipo_contrato: "Reemplazo" });
+  assert.equal(front.enTramiteFormalizacion(legacy), false, "el histórico legacy no se toca");
+  assert.equal(front.enTramiteFormalizacion(entregadoViejo), false, "lo entregado antes de la marca no se toca");
+  assert.equal(front.enTramiteFormalizacion(sinCircuito), false);
+  assert.equal(front.enTramiteFormalizacion(firmado), false);
+  assert.equal(front.enTramiteFormalizacion(validando), false);
+  assert.equal(front.enTramiteFormalizacion(reemp), false);
+  assert.equal(front.enTramiteFormalizacion(enTramite), true);
+  assert.equal(front.enTramiteFormalizacion(pendiente), true);
+  assert.equal(front.enTramiteFormalizacion(entregadoConMarca), true, "entregado con la firma pendiente sí está en trámite");
+});
+
+test("OC9 · el plan del perfil: quién cambia y quién no (y por qué)", () => {
+  const ctx = { window: {}, console, JSON, Date, Math, Number, String, Array, Object, Set, Map, RegExp, parseInt, isNaN };
+  vm.createContext(ctx);
+  vm.runInContext(leer("public", "js", "domain", "contratoFirma.js"), ctx);
+  vm.runInContext(leer("public", "js", "services", "clientesService.js"), ctx);
+  const S = ctx.window.ClientesService;
+  const cs = [
+    base({ id: "a", contrato_id: "ALQ-A" }),                                         // en trámite → cambia
+    base({ id: "b", contrato_id: "ALQ-B", seriales_estado: "legacy" }),              // histórico → no
+    base({ id: "c", contrato_id: "ALQ-C", estado: "activo", firmado: true }),        // firmado → no
+    base({ id: "d", contrato_id: "ALQ-D", firma_solicitud_estado: "pendiente" }),    // enlace enviado → no
+    base({ id: "e", contrato_id: "ALQ-E", formalizacion: { tipo: "firma", origen: "contrato" } }), // a mano → no
+    base({ id: "f", contrato_id: "REEMP-F", codigo_tipo: "REEMP" }),                 // sin firma → ni se nombra
+  ];
+  const p = S.planFormalizacion(cs, "oc_gobierno");
+  assert.deepEqual([...p.cambian.map(x => x.id)], ["a"]);
+  assert.deepEqual([...p.quedan.map(x => x.id)].sort(), ["b", "c", "d", "e"]);
+  assert.match(p.quedan.find(x => x.id === "d").porQue, /enlace de firma enviado/);
+  assert.match(p.quedan.find(x => x.id === "b").porQue, /histórico/);
+  // Volver a firma: solo el que estaba con OC por el cliente.
+  const conOC = [base({ id: "g", formalizacion: GOB }), base({ id: "h", formalizacion: { ...GOB, origen: "contrato" } })];
+  assert.deepEqual([...S.planFormalizacion(conOC, "firma").cambian.map(x => x.id)], ["g"]);
+  // La ficha muestra el plan ANTES de guardar y no cancela enlaces.
+  const ficha = leer("public", "js", "pages", "clientes-ficha.js");
+  assert.match(ficha, /planFormalizacion\([\s\S]*?Modal\.confirm\([\s\S]*?updateCliente/);
+  assert.ok(!/firma_solicitudes/.test(ficha), "cambiar el perfil no retira enlaces de firma");
+});
+
+test("OC10 · OC parcial (año fiscal) y OC siguiente", () => {
+  const { front, C } = montar("vendedor");
+  const c = base({ duracion_meses: 36, duracion: "36 meses" });
+  assert.equal(front.montoEsperadoOC(c, { meses: 12 }).monto, 12 * 214, "la primera cubre 12 meses");
+  assert.equal(front.cuadraOC(c, 12 * 214, { meses: 12 }).ok, true);
+  assert.equal(front.cuadraOC(c, 12 * 214).ok, false, "sin decir los meses, se compara contra los 36");
+  assert.equal(front.montoEsperadoOC(base({ primer_pago: 314, duracion_meses: 36 }), { meses: 12 }).monto, 314 + 11 * 214);
+  assert.equal(front.montoEsperadoOC(c, { meses: 12, siguiente: true }).monto, 12 * 214, "la siguiente: solo mensualidades");
+  const activo = base({ duracion_meses: 36, estado: "activo", firmado: true, formalizacion: GOB, firmado_tipo: "orden_compra",
+    orden_compra: { numero: "OC-1", monto: 2568, cubre_hasta: "2027-11-18", refrendo: { numero: "R" } }, oc_meses_cubiertos: 12 });
+  assert.equal(front.ocParcial(activo), true);
+  assert.equal(front.ocParcial({ ...activo, oc_meses_cubiertos: 36 }), false, "cubierto todo el plazo");
+  C.contratos = [activo];
+  assert.ok(C._accionesContrato(activo).map(a => a.id).includes("oc_siguiente"));
+  assert.equal(front.diasOCVigente(activo, new Date("2027-11-08T12:00:00-05:00")), 10);
+  assert.equal(front.sumarMeses(new Date("2026-01-31T12:00:00-05:00"), 1), "2026-02-28", "fin de mes sin desbordarse");
+});
+
+test("OC11 · anexo de aumento: OC en vez del anexo firmado", () => {
+  const { front, C } = montar("vendedor");
+  const g = { id: "GA1", tipo: "aumento", estado: "pendiente_firma", formalizacion: CORP, cierre: {},
+    aumento: { contrato_id: "ALQ-1", duracion_meses: 12, totales: { total_mensual: 107, primer_pago: 107 }, lineas: [{ cantidad: 5 }] } };
+  assert.equal(front.anexoEsOC(g), true);
+  assert.equal(front.montoEsperadoAnexoOC(g).monto, 12 * 107);
+  assert.equal(front.cuadraAnexoOC(g, 1284).ok, true);
+  assert.equal(front.anexoEsOC({ ...g, aumento: { ...g.aumento, es_regularizacion: true } }), false, "la actualización de seriales no lleva");
+  C.gestiones = [g];
+  const ids = C._accionesGestion(g).map(a => a.id);
+  assert.ok(ids.includes("orden_compra"), "se ofrece la OC del anexo");
+  assert.ok(!ids.includes("firma") && !ids.includes("subir_firmado"), "no se manda a firmar el anexo");
+  // Gobierno ya con OC: refrendo pendiente.
+  const gG = { ...g, formalizacion: GOB, estado: "pendiente_bodega", orden_compra: { numero: "OC-9", monto: 1284, refrendo: null } };
+  assert.equal(front.anexoRefrendoPendiente(gG), true);
+  assert.ok(C._accionesGestion(gG).map(a => a.id).includes("refrendo"));
+  // Dormido a los 90 días también.
+  assert.equal(D.umbralDormirAnexo(g), 90);
+  assert.equal(D.umbralDormirAnexo({ ...g, formalizacion: undefined }), 45);
+  // El wizard del aumento estampa la formalización del cliente.
+  assert.match(leer("public", "js", "pages", "centro-wiz-aumento.js"), /formalizacionDeCliente\(this\.cliente\)[\s\S]{0,200}formalizacion: formalizacionA/);
+});
+
+test("OC12 · el cliente se marca desde el Centro (vendedor incluido)", () => {
+  const { C } = montar("vendedor");
+  assert.equal(C._puedeFormalizacionCliente(), true);
+  const { C: T } = montar("tecnico");
+  assert.equal(T._puedeFormalizacionCliente(), false);
+  // Override puntual: solo en trámite (el histórico no se ofrece).
+  assert.equal(C._puedeCambiarFormalizacion(base({ seriales_estado: "legacy" })), false);
+  assert.equal(C._puedeCambiarFormalizacion(base()), true);
+});

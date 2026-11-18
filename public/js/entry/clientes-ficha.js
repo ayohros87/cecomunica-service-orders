@@ -16,4 +16,6 @@ import '/js/ui/formKit.js';
 import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';
 import '/js/ui/toast.js';
+// Formalización por orden de compra: qué contratos en trámite cambian (2026-11-18).
+import '/js/domain/contratoFirma.js';
 import '/js/pages/clientes-ficha.js';

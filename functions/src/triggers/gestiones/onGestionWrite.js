@@ -814,8 +814,11 @@ module.exports = onDocumentWritten(
     // reactivación tampoco: el estado sigue 'pendiente_firma'.
     // `desfase_inventario` (A01, 2026-10-07) lo escribe este mismo trigger
     // para la cola "Por cuadrar" de bodega: su eco tampoco decide nada.
+    // `orden_compra` (2026-11-18): el REFRENDO de la OC de un anexo llega
+    // después y solo toca ese campo — es papel del expediente, no decide nada.
+    // Al registrar la OC cambia junto con `estado`, y eso sí pasa.
     if (soloCambiaron(before, after, ["seriales_norm", "correccion_en_curso", "cobro",
-      "bodega_aviso", "firma_recordatorio_at", "desfase_inventario",
+      "bodega_aviso", "firma_recordatorio_at", "desfase_inventario", "orden_compra",
       ...require("../../domain/contratoDormido").CAMPOS_GESTION])) return null;
 
     // ── A0) ANULADA → revertir los efectos regados (caso P223344) ────────

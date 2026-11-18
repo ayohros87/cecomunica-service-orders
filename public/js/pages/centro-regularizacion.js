@@ -464,6 +464,13 @@ Object.assign(window.Centro, {
         it('warn', `El contrato ${id} espera ${ContratoFirma.requisito(c)}${ContratoFirma.entregadoSinFirma(c) ? ' — los equipos ya se entregaron' : ''}`,
           `${ContratoFirma.esGobierno(c) ? 'Gobierno: el refrendo puede llegar después y no frena la entrega. ' : ''}El monto debe cuadrar con el contrato`,
           B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`) + B('Subir la OC', `Centro.subirOrdenCompra('${this.esc(c.id)}')`, true), 'cliente_enlace');
+      } else if (ContratoFirma.ocParcial(c) && (ContratoFirma.diasOCVigente(c) ?? 999) <= ContratoFirma.DIAS_AVISO_OC_SIGUIENTE && this.puedeCrearGestion()) {
+        // OC por año fiscal: la vigente está por vencer (o venció) y el
+        // contrato sigue — hay que pedirle a la entidad la siguiente.
+        const d = ContratoFirma.diasOCVigente(c);
+        it('warn', `La orden de compra del contrato ${id} ${d < 0 ? `venció hace ${-d} día(s)` : `vence en ${d} día(s)`}`,
+          `Cubre ${ContratoFirma.mesesCubiertosOC(c)} de ${ContratoFirma.mesesContrato(c)} meses — pide a la entidad la OC siguiente y regístrala`,
+          B('Registrar la OC siguiente', `Centro.registrarOCSiguiente('${this.esc(c.id)}')`, true), 'cliente_enlace');
       } else if (ContratoFirma.refrendoPendiente(c) && this.puedeCrearGestion()) {
         it('info', `La OC del contrato ${id} espera el refrendo de la Contraloría`,
           `OC ${this.esc(c.orden_compra?.numero || '')} registrada; regístralo cuando llegue (no frena la entrega)`,
@@ -575,6 +582,10 @@ Object.assign(window.Centro, {
           ver + (cot ? `<a class="btn btn-primary cg-act" href="../cotizaciones/detalle-cotizacion.html?id=${encodeURIComponent(cot)}">Abrir la cotización</a>` : ''), 'cliente');
       } else if (g.tipo === 'aumento' && g.estado === 'pendiente_firma' && GestionesService.dormida(g)) {
         // Dormido (2-oct-2026): no es trámite; se reactiva desde su menú.
+      } else if (g.tipo === 'aumento' && g.estado === 'pendiente_firma' && window.ContratoFirma?.anexoEsOC(g) && this.puedeCrearGestion()) {
+        it('warn', `El anexo de aumento ${gid} espera la orden de compra`,
+          `${ContratoFirma.anexoEsGobierno(g) ? 'Gobierno: el refrendo puede llegar después. ' : ''}El monto debe cuadrar con el anexo`,
+          ver + B('Subir la OC', `Centro.subirOCAnexo('${this.esc(g.id)}')`, true), 'cliente_enlace');
       } else if (g.tipo === 'aumento' && g.estado === 'pendiente_firma' && !g.firma_pendiente_validacion && this.puedeCrearGestion()) {
         it('warn', `El anexo de aumento ${gid} espera la firma del cliente`,
           g.firma_solicitud_estado === 'pendiente' ? 'El enlace de firma ya se envió — se puede reenviar' : 'Envíale el enlace de firma digital (o imprime y sube el firmado)',

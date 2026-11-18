@@ -995,20 +995,24 @@ module.exports = onSchedule(
         const cc = await G.aprobacionesTo();
         if (!to && !cc) { logger.warn("[recordatorioOperativo] aumento sin buzón", { gid: d.id }); continue; }
         const seriales = (g.aumento?.seriales_asignados || []).map(s => s.serial).filter(Boolean);
+        // Cliente con orden de compra (2026-11-18): lo que falta es la OC.
+        const conOC = g.formalizacion?.tipo === "orden_compra";
         await db.collection("mail_queue").add({
           to: to || cc,
           ...(to && cc ? { cc } : {}),
-          subject: `Anexo sin firmar hace ${edad} días — ${g.cliente_nombre || "Cliente"} (${d.id})`,
-          preheader: `${seriales.length || "Los"} equipo(s) apartados esperando la firma del cliente`,
+          subject: conOC
+            ? `Anexo sin orden de compra hace ${edad} días — ${g.cliente_nombre || "Cliente"} (${d.id})`
+            : `Anexo sin firmar hace ${edad} días — ${g.cliente_nombre || "Cliente"} (${d.id})`,
+          preheader: `${seriales.length || "Los"} equipo(s) apartados esperando ${conOC ? "la orden de compra" : "la firma del cliente"}`,
           bodyContent: `
-            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Falta la firma del anexo</h2>
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">${conOC ? "Falta la orden de compra del anexo" : "Falta la firma del anexo"}</h2>
             <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
               El aumento <b>${esc(d.id)}</b> de <b>${esc(g.cliente_nombre || "—")}</b> lleva
-              <b>${edad} días</b> aprobado y esperando la firma del cliente
+              <b>${edad} días</b> aprobado y esperando ${conOC ? "la orden de compra de la entidad" : "la firma del cliente"}
               ${g.aumento?.contrato_id ? `(contrato <b>${esc(g.aumento.contrato_id)}</b>)` : ""}.
             </p>
             <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-              Mientras no entre la firma, ${seriales.length ? `los <b>${seriales.length}</b> equipos siguen apartados` : "el equipo sigue apartado"}
+              Mientras no entre ${conOC ? "la orden de compra" : "la firma"}, ${seriales.length ? `los <b>${seriales.length}</b> equipos siguen apartados` : "el equipo sigue apartado"}
               sin poder asignarse a otro cliente, y el tramo <b>no se factura</b> — arranca desde la entrega.
             </p>
             ${seriales.length ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">

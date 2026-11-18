@@ -169,7 +169,9 @@ window.ContratoFirma = {
    * más las mensualidades restantes del plazo. {monto, detalle} o null si el
    * contrato no permite calcularlo (por días, sin plazo).
    */
-  montoEsperadoOC(c) {
+  //  opts.meses     — la OC cubre solo esos meses (OC parcial; por defecto, todo el plazo)
+  //  opts.siguiente — es una OC SIGUIENTE: sin primer pago, solo mensualidades
+  montoEsperadoOC(c, { meses: mesesOC, siguiente = false } = {}) {
     const r2 = (n) => Math.round(Number(n || 0) * 100) / 100;
     const mensual = Number(c?.total_mensual ?? c?.total_con_itbms ?? 0);
     const primer = Number(c?.primer_pago ?? mensual);
@@ -177,8 +179,12 @@ window.ContratoFirma = {
       // Un temporal por días se cobra entero en el primer pago.
       return primer > 0 ? { monto: r2(primer), detalle: `${Number(c.duracion_dias)} día(s): el total del contrato` } : null;
     }
-    const meses = this._meses(c);
-    if (!meses || !(mensual > 0 || primer > 0)) return null;
+    const plazo = this._meses(c);
+    if (!plazo || !(mensual > 0 || primer > 0)) return null;
+    const meses = Number(mesesOC) > 0 ? Math.min(Number(mesesOC), plazo) : plazo;
+    if (siguiente) {
+      return { monto: r2(mensual * meses), detalle: `${meses} × $${mensual.toFixed(2)}` };
+    }
     const monto = r2(primer + mensual * (meses - 1));
     const detalle = primer !== mensual
       ? `primer pago $${primer.toFixed(2)} + ${meses - 1} × $${mensual.toFixed(2)}`
@@ -186,8 +192,92 @@ window.ContratoFirma = {
     return { monto, detalle };
   },
   /** {ok, esperado, diferencia, detalle} — ok=null si no hay con qué comparar. */
-  cuadraOC(c, monto) {
-    const e = this.montoEsperadoOC(c);
+  cuadraOC(c, monto, opts = {}) {
+    const e = this.montoEsperadoOC(c, opts);
+    if (!e) return { ok: null, esperado: null, diferencia: null, detalle: '' };
+    const diferencia = Math.round((Number(monto) - e.monto) * 100) / 100;
+    return { ok: Math.abs(diferencia) <= this.TOLERANCIA_OC, esperado: e.monto, diferencia, detalle: e.detalle };
+  },
+
+  // ── ¿Este contrato está EN TRÁMITE de formalizarse? (2026-11-18) ──
+  // Es el único universo al que se le puede cambiar firma ↔ OC, sea desde la
+  // ficha del cliente o en el contrato puntual. Lo que NO entra, a propósito:
+  //  · lo ya formalizado (firmado, con OC, firma por validar) y lo activo;
+  //  · el HISTÓRICO 'aprobado' sin firma — seriales 'legacy', o sin circuito
+  //    de seriales, o entregado antes de que existiera la marca de "entregado
+  //    sin firma". Son ~180 contratos (nov-2026) que operan así desde siempre;
+  //    marcarlos con OC les ofrecería "Subir la OC", y subirla los ACTIVARÍA
+  //    y arrancaría a facturar. Eso es dañar lo que ya existe.
+  //  · REEMP/DEMO (no llevan nada).
+  enTramiteFormalizacion(c) {
+    if (!c || c.deleted === true || !this.lleva(c)) return false;
+    if (c.firmado === true || c.firmado_pendiente_validacion) return false;
+    if (c.estado === 'pendiente_aprobacion') return true;
+    if (c.estado !== 'aprobado') return false;
+    if (!c.seriales_estado || c.seriales_estado === 'legacy') return false;
+    if (c.entrega_confirmada === true && !c.entrega_sin_firma) return false;
+    return true;
+  },
+
+  // ── OC PARCIAL (2026-11-18): la entidad emite una OC por año fiscal ──
+  // Una OC puede cubrir solo N de los M meses del contrato. La primera cubre
+  // el primer pago + (N−1) mensualidades; las SIGUIENTES, N mensualidades.
+  // Lo cubierto se acumula en `oc_meses_cubiertos`; cuando no alcanza el
+  // plazo, el Centro pide la OC siguiente antes de que venza la vigente.
+  mesesContrato(c) { return this._meses(c); },
+  mesesCubiertosOC(c) { return Number(c?.oc_meses_cubiertos || 0); },
+  /** ¿Falta OC para el resto del plazo? */
+  ocParcial(c) {
+    const m = this._meses(c);
+    return this.esOC(c) && c?.firmado === true && !!c.orden_compra && !!m && this.mesesCubiertosOC(c) > 0
+      && this.mesesCubiertosOC(c) < m && !['anulado', 'vencido', 'cancelado'].includes(c.estado) && c.deleted !== true;
+  },
+  /** Días que le quedan a la OC vigente (negativo = vencida), o null. */
+  diasOCVigente(c, now = new Date()) {
+    const h = c?.orden_compra?.cubre_hasta;
+    if (!h) return null;
+    const d = new Date(`${h}T12:00:00-05:00`);
+    if (isNaN(d)) return null;
+    return Math.ceil((d - now) / 86400000);
+  },
+  DIAS_AVISO_OC_SIGUIENTE: 30,
+  /** "YYYY-MM-DD" N meses después de `desde` (Date), en hora de Panamá. */
+  sumarMeses(desde, n) {
+    const d = new Date(desde.getTime() - 5 * 3600000);
+    const y = d.getUTCFullYear(), m = d.getUTCMonth() + Number(n), dia = d.getUTCDate();
+    const fin = new Date(Date.UTC(y, m, 1));
+    const ultimo = new Date(Date.UTC(fin.getUTCFullYear(), fin.getUTCMonth() + 1, 0)).getUTCDate();
+    fin.setUTCDate(Math.min(dia, ultimo));
+    return fin.toISOString().slice(0, 10);
+  },
+
+  // ── ANEXO DE AUMENTO con orden de compra (2026-11-18) ──
+  // La gestión copia al nacer la formalización del cliente (no la del marco:
+  // lo que manda es cómo trabaja HOY el cliente). Las actualizaciones de
+  // seriales (es_regularizacion) no se firman ni llevan OC.
+  anexoEsOC(g) {
+    return g?.tipo === 'aumento' && g?.formalizacion?.tipo === 'orden_compra' && g?.aumento?.es_regularizacion !== true;
+  },
+  anexoEsGobierno(g) { return this.anexoEsOC(g) && g.formalizacion.sector === 'gobierno'; },
+  anexoRefrendoPendiente(g) {
+    return this.anexoEsGobierno(g) && !!g.orden_compra && !g.orden_compra.refrendo
+      && g.deleted !== true && g.estado !== 'anulada';
+  },
+  /** Lo que la OC del anexo debe cubrir: sus totales por sus meses. */
+  montoEsperadoAnexoOC(g, { meses } = {}) {
+    const a = g?.aumento || {};
+    const t = a.totales || {};
+    const mensual = Number(t.total_mensual ?? t.totalMensual ?? 0);
+    const primer = Number(t.primer_pago ?? t.primerPago ?? mensual);
+    const plazo = Number(a.duracion_meses || 0);
+    const n = Number(meses) > 0 ? Math.min(Number(meses), plazo || Number(meses)) : plazo;
+    if (!(n > 0) || !(mensual > 0 || primer > 0)) return null;
+    const r2 = (x) => Math.round(x * 100) / 100;
+    return { monto: r2(primer + mensual * (n - 1)), detalle: primer !== mensual
+      ? `primer pago $${primer.toFixed(2)} + ${n - 1} × $${mensual.toFixed(2)}` : `${n} × $${mensual.toFixed(2)}` };
+  },
+  cuadraAnexoOC(g, monto, opts = {}) {
+    const e = this.montoEsperadoAnexoOC(g, opts);
     if (!e) return { ok: null, esperado: null, diferencia: null, detalle: '' };
     const diferencia = Math.round((Number(monto) - e.monto) * 100) / 100;
     return { ok: Math.abs(diferencia) <= this.TOLERANCIA_OC, esperado: e.monto, diferencia, detalle: e.detalle };

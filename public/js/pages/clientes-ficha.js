@@ -524,50 +524,39 @@ window.FichaCliente = {
       if (!ok) throw new Error('cancelaste la desactivación del cliente');
     }
 
+    // Cómo formaliza sus contratos (2026-11-18): antes de guardar se dice
+    // QUÉ contratos cambian y cuáles NO se tocan (firmados, activos,
+    // históricos, con enlace enviado). El cambio nunca daña lo que ya existe:
+    // ver ClientesService.planFormalizacion.
     const formAntes = this.cliente.formalizacion_contrato || 'firma';
+    let planF = null;
+    if ('formalizacion_contrato' in payload && payload.formalizacion_contrato !== formAntes && window.ContratoFirma) {
+      const contratos = await ClientesService.contratosDeCliente(this.cliente.id);
+      planF = ClientesService.planFormalizacion(contratos, payload.formalizacion_contrato);
+      const ok = await Modal.confirm({
+        title: 'Cambiar cómo formaliza sus contratos',
+        message: `Pasa a <b>${this.esc(ClientesService.FORMALIZACIONES[payload.formalizacion_contrato] || '')}</b>.<br><br>`
+          + ClientesService.planFormalizacionHtml(planF, (v) => this.esc(v)),
+        confirmLabel: planF.cambian.length ? `Guardar y cambiar ${planF.cambian.length} contrato(s)` : 'Guardar',
+      });
+      if (!ok) throw new Error('cancelaste el cambio de formalización');
+    }
+
     await ClientesService.updateCliente(this.cliente.id, payload);
     this.cliente = { ...this.cliente, ...payload };
     this.pintar();
     const n = Object.keys(cambios).length;
     let extra = '';
-    if ('formalizacion_contrato' in payload && payload.formalizacion_contrato !== formAntes) {
+    if (planF && planF.cambian.length) {
       try {
-        const k = await this._propagarFormalizacion(payload.formalizacion_contrato);
-        if (k) extra = ` · ${k} contrato(s) por formalizar ahora esperan ${payload.formalizacion_contrato === 'firma' ? 'la firma' : 'la orden de compra'}`;
-      } catch (e) { console.warn('[ficha] no se pudo pasar la formalización a los contratos abiertos', e); }
+        const k = await ClientesService.aplicarFormalizacion(this.cliente.id, payload.formalizacion_contrato, planF);
+        extra = ` · ${k} contrato(s) en trámite ahora esperan ${payload.formalizacion_contrato === 'firma' ? 'la firma' : 'la orden de compra'}`;
+      } catch (e) {
+        console.error('[ficha] no se pudo pasar la formalización a los contratos en trámite', e);
+        Toast.show('La ficha se guardó, pero no se pudo cambiar los contratos en trámite: ' + (e?.message || e), 'bad', 8000);
+      }
     }
     Toast.show(`Cambios guardados — ${n === 1 ? '1 campo' : n + ' campos'} al historial${extra}`, 'ok', extra ? 7000 : undefined);
-  },
-
-  // El cliente cambió cómo formaliza (firma ↔ orden de compra, 2026-11-18):
-  // los contratos que TODAVÍA esperan formalizarse lo siguen. No se tocan los
-  // ya firmados/con OC, los REEMP/DEMO (no llevan firma), ni los que se
-  // cambiaron a mano en el Centro (origen 'contrato': esa excepción manda).
-  // Pasar a OC retira el enlace de firma pendiente. Devuelve cuántos cambió.
-  async _propagarFormalizacion(clave) {
-    const db = firebase.firestore();
-    const DEF = {
-      oc_gobierno: { tipo: 'orden_compra', sector: 'gobierno', origen: 'cliente' },
-      oc_corporativo: { tipo: 'orden_compra', sector: 'corporativo', origen: 'cliente' },
-    };
-    const nueva = DEF[clave] || null;
-    const snap = await db.collection('contratos').where('cliente_id', '==', this.cliente.id).get();
-    let k = 0;
-    for (const d of snap.docs) {
-      const c = d.data() || {};
-      const tipo = c.codigo_tipo || String(c.contrato_id || '').match(/^[A-Z]+/)?.[0] || '';
-      if (c.deleted === true || ['REEMP', 'DEMO'].includes(tipo) || ['Reemplazo', 'Demo'].includes(c.tipo_contrato)) continue;
-      if (!['pendiente_aprobacion', 'aprobado'].includes(c.estado) || c.firmado === true) continue;
-      if (c.formalizacion?.origen === 'contrato') continue;
-      const upd = { formalizacion: nueva ? nueva : firebase.firestore.FieldValue.delete() };
-      if (nueva && c.firma_solicitud_estado === 'pendiente' && c.firma_solicitud_id) {
-        await db.collection('firma_solicitudes').doc(c.firma_solicitud_id).update({ estado: 'cancelado' });
-        upd.firma_solicitud_estado = 'cancelado';
-      }
-      await d.ref.update(upd);
-      k++;
-    }
-    return k;
   },
 
   // A dónde sigue el alta (convención ?from= compartida con el form viejo).

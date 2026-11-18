@@ -1152,11 +1152,27 @@ service cloud.firestore {
           && soloTocaG(["carta_path","carta_at","carta_por"]);
       }
       // Subir el anexo de aumento FIRMADO: pendiente_firma → pendiente_bodega.
+      // Desde 2026-11-18 también la ORDEN DE COMPRA del anexo (clientes de
+      // gobierno/corporativos): mismo paso, con `orden_compra` y el tipo.
       function esFirmaAnexoGestion() {
         return userRole() in ["administrador","gerente","vendedor","recepcion"]
           && resource.data.estado == "pendiente_firma"
           && request.resource.data.estado == "pendiente_bodega"
-          && soloTocaG(["estado","cierre","anexo_firmado_path","anexo_firmado_at","anexo_firmado_por"]);
+          && soloTocaG(["estado","cierre","anexo_firmado_path","anexo_firmado_at","anexo_firmado_por",
+                        "anexo_firmado_tipo","orden_compra"]);
+      }
+      // Refrendo de la OC de un anexo (gobierno, 2026-11-18): llega DESPUÉS de
+      // registrada la OC y no frena nada. Solo se escribe una vez —la OC ya
+      // tiene que estar y sin refrendo— y no toca nada más: ni el número ni el
+      // monto de la OC cambian por esta puerta.
+      function esRefrendoAnexoGestion() {
+        return userRole() in ["administrador","gerente","vendedor"]
+          && resource.data.get("orden_compra", null) != null
+          && resource.data.orden_compra.get("refrendo", null) == null
+          && soloTocaG(["orden_compra"])
+          && request.resource.data.orden_compra.numero == resource.data.orden_compra.numero
+          && request.resource.data.orden_compra.monto == resource.data.orden_compra.monto
+          && request.resource.data.orden_compra.get("refrendo", null) != null;
       }
       // Aprobar la ACTUALIZACIÓN DE SERIALES = aplicarla (2026-09-09, Alberto:
       // "ese camino vamos a hacerlo sin firma solamente, ya que si vamos a
@@ -1349,7 +1365,7 @@ service cloud.firestore {
                       || esAprobacionActualizacionSeriales()
                       || esEnlaceFirmaGestion() || esAsignacionGestion()
                       || esCorreccionSerialesGestion() || esMarcaTallerGestion()
-                      || esEdicionGestion());
+                      || esEdicionGestion() || esRefrendoAnexoGestion());
       allow delete: if false;
       // Linaje del reemplazo (espejo del patrón contratos/{cid}/mapeos):
       // append-only — onMapeoWrite generalizado los consume en la Ola 2.

@@ -14,7 +14,7 @@ const path = require("node:path");
 const cron = fs.readFileSync(
   path.join(__dirname, "..", "src", "triggers", "scheduled", "recordatorioOperativo.js"), "utf8");
 const i = cron.indexOf("── J) Aumentos esperando la firma del anexo");
-const bloque = cron.slice(i, i + 4600);
+const bloque = cron.slice(i, i + 5600);  // 2026-11-18: la sección creció con la variante de orden de compra
 
 test("la sección existe y mira solo aumentos en pendiente_firma", () => {
   assert.ok(i > 0, "la sección J está en el cron");

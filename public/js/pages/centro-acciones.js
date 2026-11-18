@@ -87,8 +87,9 @@ Object.assign(window.Centro, {
     // contrato dormido — genera un enlace de firma nuevo.
     const dormida = GestionesService.dormida(g);
     if (dormida) {
-      A.push(this._acc({ id: 'reactivar', label: 'Reactivar la solicitud de firma…', primaria: true,
-        hint: `dormido ${g.dormido_dias ? `tras ${g.dormido_dias} días` : 'a los 45 días'} sin firma — vuelve a ser trámite y sale un enlace nuevo`,
+      const ocA = !!window.ContratoFirma?.anexoEsOC(g);
+      A.push(this._acc({ id: 'reactivar', label: ocA ? 'Reactivar: volver a esperar la OC…' : 'Reactivar la solicitud de firma…', primaria: true,
+        hint: `dormido ${g.dormido_dias ? `tras ${g.dormido_dias} días` : `a los ${ocA ? ContratoFirma.DIAS_DORMIDO_OC : 45} días`} sin ${ocA ? 'orden de compra' : 'firma'} — vuelve a ser trámite${ocA ? '' : ' y sale un enlace nuevo'}`,
         onclick: `Centro.reactivarAnexo('${id}')`,
         ok: [ROLES.ADMIN, 'admin', ROLES.GERENTE, ROLES.VENDEDOR].includes(this.rol),
         motivo: 'lo reactiva el vendedor o administración' }));
@@ -108,7 +109,20 @@ Object.assign(window.Centro, {
           onclick: `Centro.soltarAnexo('${id}')`, ok: pS.ok, motivo: pS.motivo }));
       }
     }
-    if (esAum && !esAct && g.estado === 'pendiente_firma' && !dormida) {
+    // Anexo de un cliente con ORDEN DE COMPRA (2026-11-18): la OC del aumento
+    // ocupa el lugar del anexo firmado (mismo paso: pendiente_firma → bodega).
+    const anexoOC = esAum && !!window.ContratoFirma?.anexoEsOC(g);
+    if (anexoOC && !esAct && g.estado === 'pendiente_firma' && !dormida) {
+      A.push(this._acc({ id: 'orden_compra', label: 'Subir la orden de compra del anexo…', primaria: true,
+        hint: `${ContratoFirma.anexoEsGobierno(g) ? 'gobierno: el refrendo puede llegar después' : 'corporativo'} — el monto debe cuadrar con el anexo`,
+        onclick: `Centro.subirOCAnexo('${id}')`, ok: this._puedeSubirOC(), motivo: 'la sube el vendedor o administración' }));
+    }
+    if (window.ContratoFirma?.anexoRefrendoPendiente(g)) {
+      A.push(this._acc({ id: 'refrendo', label: 'Registrar el refrendo…',
+        hint: `la OC ${this.esc(g.orden_compra?.numero || '')} del anexo está sin refrendo — no frena la entrega`,
+        onclick: `Centro.registrarRefrendoAnexo('${id}')`, ok: this._puedeSubirOC(), motivo: 'lo registra el vendedor o administración' }));
+    }
+    if (esAum && !anexoOC && !esAct && g.estado === 'pendiente_firma' && !dormida) {
       const conEnlace = g.firma_solicitud_estado === 'pendiente';
       A.push(this._acc({ id: 'firma', label: conEnlace ? 'Ver o reenviar el enlace de firma' : 'Enviar anexo para firma por enlace',
         primaria: !conEnlace, hint: conEnlace ? 'el cliente ya lo tiene — se puede reenviar' : 'el cliente firma con el dedo, desde el celular',
@@ -283,6 +297,14 @@ Object.assign(window.Centro, {
         hint: `${ContratoFirma.esGobierno(c) ? 'gobierno: el refrendo puede llegar después' : 'corporativo'} — el monto debe cuadrar con el contrato; activa el contrato`,
         onclick: `Centro.subirOrdenCompra('${id}')`, ok: this._puedeSubirOC(),
         motivo: 'la sube el vendedor o administración' }));
+    }
+    // OC PARCIAL (año fiscal): falta la OC del resto del plazo.
+    if (ContratoFirma.ocParcial(c)) {
+      const dias = ContratoFirma.diasOCVigente(c);
+      const pronto = dias != null && dias <= ContratoFirma.DIAS_AVISO_OC_SIGUIENTE;
+      A.push(this._acc({ id: 'oc_siguiente', label: 'Registrar la OC siguiente…', primaria: pronto,
+        hint: `la OC vigente cubre ${ContratoFirma.mesesCubiertosOC(c)} de ${ContratoFirma.mesesContrato(c)} meses${dias != null ? (dias < 0 ? ` — venció hace ${-dias} día(s)` : ` — vence en ${dias} día(s)`) : ''}`,
+        onclick: `Centro.registrarOCSiguiente('${id}')`, ok: this._puedeSubirOC(), motivo: 'la sube el vendedor o administración' }));
     }
     if (ContratoFirma.refrendoPendiente(c)) {
       A.push(this._acc({ id: 'refrendo', label: 'Registrar el refrendo…', primaria: true,

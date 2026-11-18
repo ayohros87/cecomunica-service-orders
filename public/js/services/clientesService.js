@@ -694,6 +694,90 @@ const ClientesService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }));
   },
+
+  // ── Cómo formaliza el cliente sus contratos (2026-11-18) ──────────────
+  // firma | oc_gobierno | oc_corporativo. Cambiarlo NO debe dañar lo que ya
+  // existe: solo lo siguen los contratos EN TRÁMITE de formalizarse
+  // (ContratoFirma.enTramiteFormalizacion). Lo firmado, lo activo, el
+  // histórico 'aprobado' sin firma y los REEMP/DEMO no se tocan; tampoco el
+  // que tiene un enlace de firma YA enviado (el cliente puede estar firmando:
+  // se avisa y se cambia a mano en ese contrato si hace falta), ni el que se
+  // cambió a mano (origen 'contrato': esa excepción manda).
+  FORMALIZACIONES: {
+    firma: 'Firma del contrato',
+    oc_gobierno: 'Orden de compra refrendada (gobierno)',
+    oc_corporativo: 'Orden de compra (corporativo)',
+  },
+
+  /** Qué pasaría: { cambian:[{id, contrato_id, porQue}], quedan:[{id, contrato_id, porQue}] }. */
+  planFormalizacion(contratos, clave) {
+    const CF = window.ContratoFirma;
+    const nueva = CF.FORMALIZACION[clave] || null;
+    const cambian = [], quedan = [];
+    for (const c of (contratos || [])) {
+      if (!c || c.deleted === true) continue;
+      const num = c.contrato_id || c.id;
+      const actual = CF.claveFormalizacion(c);
+      if (!CF.enTramiteFormalizacion(c)) {
+        // Solo se nombran los que alguien podría echar de menos: vivos.
+        if (['aprobado', 'activo'].includes(c.estado) && CF.lleva(c)) {
+          quedan.push({ id: c.id, contrato_id: num, porQue: c.firmado
+            ? (c.firmado_tipo === 'orden_compra' ? 'ya tiene su orden de compra' : 'ya está firmado')
+            : c.estado === 'activo' ? 'ya está activo' : 'histórico: opera así desde antes; no se toca' });
+        }
+        continue;
+      }
+      if (c.formalizacion?.origen === 'contrato') {
+        quedan.push({ id: c.id, contrato_id: num, porQue: 'se cambió a mano en el contrato; esa decisión se respeta' });
+        continue;
+      }
+      if (actual === clave || (!nueva && actual === 'firma')) continue;
+      if (nueva && c.firma_solicitud_estado === 'pendiente') {
+        quedan.push({ id: c.id, contrato_id: num, porQue: 'tiene un enlace de firma enviado — si va con OC, cámbialo en el contrato' });
+        continue;
+      }
+      cambian.push({ id: c.id, contrato_id: num, porQue: nueva ? `pasa a esperar ${CF.requisito({ ...c, formalizacion: nueva })}` : 'vuelve a esperar la firma' });
+    }
+    return { cambian, quedan };
+  },
+
+  async contratosDeCliente(clienteId) {
+    const snap = await firebase.firestore().collection('contratos').where('cliente_id', '==', clienteId).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  /** Marca la ficha y aplica el plan (solo `cambian`). Devuelve cuántos contratos cambió. */
+  async aplicarFormalizacion(clienteId, clave, plan) {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    const CF = window.ContratoFirma;
+    const f = CF.FORMALIZACION[clave] || null;
+    const val = f ? clave : 'firma';
+    await db.collection('clientes').doc(clienteId).update({
+      formalizacion_contrato: val,
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      updated_by: user?.uid || null,
+    });
+    let k = 0;
+    for (const x of (plan?.cambian || [])) {
+      await db.collection('contratos').doc(x.id).update({
+        formalizacion: f ? { tipo: f.tipo, sector: f.sector, origen: 'cliente' } : firebase.firestore.FieldValue.delete(),
+      });
+      k++;
+    }
+    return k;
+  },
+
+  /** Lista HTML del plan para el confirm (cambian / no se tocan). */
+  planFormalizacionHtml(plan, esc = (v) => String(v)) {
+    const li = (x) => `<li><b>${esc(x.contrato_id)}</b> — ${esc(x.porQue)}</li>`;
+    return (plan.cambian.length
+      ? `<p style="margin:0 0 6px;"><b>Cambian (${plan.cambian.length}):</b></p><ul style="margin:0 0 10px; padding-left:18px;">${plan.cambian.map(li).join('')}</ul>`
+      : '<p style="margin:0 0 10px;">Ningún contrato en trámite cambia: aplica a los contratos y renovaciones <b>nuevos</b>.</p>')
+      + (plan.quedan.length
+        ? `<p style="margin:0 0 6px;"><b>No se tocan (${plan.quedan.length}):</b></p><ul style="margin:0; padding-left:18px; max-height:28vh; overflow:auto;">${plan.quedan.map(li).join('')}</ul>`
+        : '');
+  },
 };
 
 window.ClientesService = ClientesService;

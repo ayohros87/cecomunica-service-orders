@@ -702,6 +702,14 @@ Object.assign(window.Centro, {
           : `Cotización ${g.cobro?.cotizacion_id || 'de la reposición'} — la anota el taller`, 'cliente'],
         ...defs.slice(i + 1)];
     }
+    // Cliente con orden de compra (2026-11-18): el paso es la OC, no la firma.
+    if (window.ContratoFirma?.anexoEsOC(g)) {
+      defs = defs.map(d => d[0] === 'firma'
+        ? ['firma', `Orden de compra del anexo${ContratoFirma.anexoEsGobierno(g) ? ' (refrendo después)' : ''}`,
+          g.orden_compra ? `OC ${g.orden_compra.numero || ''} · $${Number(g.orden_compra.monto || 0).toFixed(2)}${ContratoFirma.anexoEsGobierno(g) ? (g.orden_compra.refrendo ? ' · refrendada' : ' · refrendo pendiente') : ''}`
+            : 'debe cuadrar con los totales del anexo', d[3]]
+        : d);
+    }
     return defs;
   },
 
@@ -789,8 +797,10 @@ Object.assign(window.Centro, {
           <b>Total mensual:</b> <span class="num">$${Number(a.totales.total_mensual || 0).toFixed(2)}</span>
           ${a.totales.itbms_aplica ? `<span style="color:var(--fg-4);">(inc. ITBMS ${(a.totales.itbms_porcentaje * 100).toFixed(0)}%)</span>` : '<span style="color:var(--fg-4);">(ITBMS exento)</span>'}
           ${a.totales.cargos_uni ? ` · <b>Primer pago:</b> <span class="num">$${Number(a.totales.primer_pago || 0).toFixed(2)}</span>` : ''}</p>` : ''}
-        ${g.anexo_firmado_path ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">✓ Anexo firmado registrado (${this.esc(g.anexo_firmado_por || '')})
-          <button class="btn btn-ghost cg-act" onclick="Centro.verAnexo('${this.esc(g.anexo_firmado_path)}')">Ver anexo</button></p>` : ''}
+        ${g.anexo_firmado_path ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">✓ ${g.anexo_firmado_tipo === 'orden_compra'
+            ? `Orden de compra <b>${this.esc(g.orden_compra?.numero || '')}</b> registrada${g.orden_compra?.monto ? ` por $${Number(g.orden_compra.monto).toFixed(2)}` : ''}${ContratoFirma.anexoEsGobierno(g) ? (g.orden_compra?.refrendo ? ` · refrendo ${this.esc(g.orden_compra.refrendo.numero || '')}` : ' · <b>refrendo pendiente</b>') : ''}`
+            : 'Anexo firmado registrado'} (${this.esc(g.anexo_firmado_por || '')})
+          <button class="btn btn-ghost cg-act" onclick="Centro.verAnexo('${this.esc(g.orden_compra?.refrendo?.storage_path || g.anexo_firmado_path)}')">${g.anexo_firmado_tipo === 'orden_compra' ? 'Ver la OC' : 'Ver anexo'}</button></p>` : ''}
         ${g.anexo_firma_digital ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">
           ✓ Anexo firmado <b>digitalmente</b> por ${this.esc(g.anexo_firma_digital.firmante_nombre || '—')}
           (cédula ${this.esc(g.anexo_firma_digital.firmante_cedula || '—')})
