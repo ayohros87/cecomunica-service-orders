@@ -186,9 +186,12 @@ async function _destinatarios(clienteId) {
  * @param {Array}  [p.porModelo] — [{ modelo, modelo_id?, cantidad }] (bajas por
  *        cantidad, sin serial conocido: el check-in captura el serial al llegar)
  * @param {string} p.motivo — texto para observaciones y correo
+ * @param {string} [p.enCamino] — quién trae los equipos a recepción (cambio de
+ *        radio en sitio, 2026-11-18): ya NO están con el cliente, vienen con
+ *        el técnico. Solo cambia la redacción de observaciones y correo.
  * @returns {string|null} ordenId, o null (best-effort).
  */
-async function crearOrdenDevolucion({ clienteId, clienteNombre, contratoDocId, contratoId, contratoOrigenIds, modo, origen, unidades, porModelo, motivo }) {
+async function crearOrdenDevolucion({ clienteId, clienteNombre, contratoDocId, contratoId, contratoOrigenIds, modo, origen, unidades, porModelo, motivo, enCamino = "" }) {
   let lista = (unidades || []).filter(u => (u.serial || "").toString().trim());
   const modelos = (porModelo || []).filter(m => Number(m.cantidad || 0) > 0);
   if (!lista.length && !modelos.length) return null;
@@ -246,7 +249,9 @@ async function crearOrdenDevolucion({ clienteId, clienteNombre, contratoDocId, c
   const totalUnidades = lista.length + modelos.reduce((s, m) => s + Number(m.cantidad || 0), 0);
   const observaciones = `Orden creada automáticamente: ${modo === "confirmacion"
     ? `confirmar la devolución de ${totalUnidades} equipo(s) (anulación — verificar si salieron del taller)`
-    : `recuperar ${totalUnidades} equipo(s) que están con el cliente`}. ${motivo} — contrato ${contratoId || contratoDocId || "—"}.`;
+    : enCamino
+      ? `recibir ${totalUnidades} equipo(s) que ${enCamino} trae a recepción`
+      : `recuperar ${totalUnidades} equipo(s) que están con el cliente`}. ${motivo} — contrato ${contratoId || contratoDocId || "—"}.`;
 
   const data = {
     cliente_id: clienteId || "",
@@ -324,13 +329,17 @@ async function crearOrdenDevolucion({ clienteId, clienteNombre, contratoDocId, c
            Lo usual es que los equipos <b>nunca hayan salido del taller</b> (anulación por error en el contrato):
            confirma unidad por unidad con el check-in — "nunca salió" los regresa a bodega directo;
            "recibido" los manda a inspección.`
+        : enCamino
+          ? `Estos equipos se le cambiaron al cliente y <b>${escapeHtml(enCamino)} los trae a recepción</b> (${escapeHtml(motivo || "")}).
+           Cuando lleguen, registra cada unidad con el check-in: el taller recibe al instante su orden de
+           ENTRADA de inspección. Si no llegan, este tiquete queda abierto como pendiente.`
         : `Estos equipos están <b>con el cliente</b> y deben recuperarse (${escapeHtml(motivo || "")}).
            Registra cada unidad con el check-in al recibirla; cada tanda recibida alimenta al
            instante la orden de ENTRADA de inspección del taller.`;
       await db.collection("mail_queue").add({
         to: destinatarios[0],
         cc: destinatarios.length > 1 ? destinatarios.slice(1).join(",") : null,
-        subject: `${modo === "confirmacion" ? "Confirmar devolución" : "Equipos por recuperar"}: orden ${ordenId} – ${clienteNombre || "Cliente"}`,
+        subject: `${modo === "confirmacion" ? "Confirmar devolución" : (enCamino ? "Equipos por recibir en recepción" : "Equipos por recuperar")}: orden ${ordenId} – ${clienteNombre || "Cliente"}`,
         preheader: `${totalUnidades} equipo(s) · ${motivo || ""}`,
         bodyContent: `
           <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#9A3412;">Orden de devolución ${escapeHtml(ordenId)}</h2>

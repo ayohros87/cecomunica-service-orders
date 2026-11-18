@@ -179,7 +179,26 @@ const ficha = (id, extra = {}) => db.collection("equipos_pool").doc(id).set({ se
   assert.match(mail.bodyContent, /batería hinchada/); assert.match(mail.bodyContent, /Jesús Santos/);
   await rechaza(regularizar.ejecutar, { ordenId: "2026111602", serialSaliente: "VSAL1", serialEntrante: "VENT2" }, /ya se registró/);
   assert.match(mail.bodyContent, /salió sin registrarse/, "el entrante seguía en bodega: el correo lo dice");
-  console.log("  ok   E1 visita: entrante escrito, visita cerrada, varios cambios, candado por serial");
+  // 2026-11-18: el radio recibido del cliente abre SOLA su devolución, con el
+  // cliente y el serial puestos; los cambios de la misma visita caen en el
+  // mismo tiquete; el correo a bodega la nombra.
+  assert.ok(v1.devolucion_id, "el cambio en sitio abre la devolución");
+  assert.equal(v2.devolucion_id, v1.devolucion_id, "los cambios de la misma visita comparten tiquete");
+  assert.equal(v3.devolucion_id, v1.devolucion_id);
+  const dv = (await db.collection("ordenes_de_servicio").doc(v1.devolucion_id).get()).data();
+  assert.equal(dv.tipo_de_servicio, "DEVOLUCION"); assert.equal(dv.cliente_id, "cli"); assert.equal(dv.estado_reparacion, "POR ASIGNAR");
+  assert.deepEqual(dv.devolucion.origen, { tipo: "cambio_en_sitio", ref_id: "2026111602" });
+  assert.deepEqual(dv.devolucion.esperados.map(e => e.serial).sort(), ["VSAL1", "VSAL2", "VSAL3"]);
+  assert.ok(dv.devolucion.esperados.every(e => e.resolucion === null && e.pool_doc_id), "quedan pendientes de recibir, con su ficha");
+  assert.equal(dv.contrato.contrato_doc_id, "c2");
+  assert.match(dv.observaciones, /trae a recepción/);
+  assert.match(mail.bodyContent, new RegExp(`devolución <b>${v1.devolucion_id}</b>`));
+  const voD = (await db.collection("ordenes_de_servicio").doc("2026111602").get()).data();
+  assert.equal(voD.reemplazos_regularizados.VSAL1.devolucion_id, v1.devolucion_id);
+  assert.equal(voD.reemplazos_regularizados.VSAL1.gestion_id, v1.gestion_id, "el merge no pisa la línea del reemplazo");
+  assert.equal((await db.collection("gestiones").doc(v1.gestion_id).get()).data().ordenes.devolucion_id, v1.devolucion_id);
+  assert.equal(re.devolucion_id, null, "en una orden de taller no se abre devolución: el radio ya está adentro");
+  console.log("  ok   E1 visita: entrante escrito, visita cerrada, varios cambios, candado por serial, devolución abierta sola");
 
   // ── Salida de radios a la visita (2026-11-18) ──
   const salida = require("../src/callable/salidaRadiosVisita");

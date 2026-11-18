@@ -22,6 +22,16 @@
 // nadie se enteraba. Y lo que se escribe en "¿Qué pasó?" queda en el kardex de
 // los dos radios, no solo en la gestión.
 //
+// Radio recibido del cliente en una VISITA (2026-11-18): se abre sola la orden
+// de DEVOLUCIÓN con el cliente y el serial ya puestos. Antes recepción la
+// creaba a mano cuando el técnico llegaba con el radio — eligiendo el cliente
+// de memoria (así nació la devolución de EUROLATIN a nombre de MENZIES) — y
+// si el técnico no lo entregaba, nadie lo sabía. Ahora el tiquete queda
+// abierto hasta que recepción hace el check-in (y de ahí sale la ENTRADA del
+// taller, como siempre). Varios cambios de la misma visita caen en el mismo
+// tiquete (dedupe por origen cambio_en_sitio + visita). En una orden de
+// TALLER no se abre: ahí el radio ya está dentro, en esa misma orden.
+//
 // VISITA TÉCNICA (2026-11-18, MACELLO): el técnico cambia el radio EN SITIO
 // con uno que lleva consigo. Ese entrante nunca está en la orden (la visita
 // lista los radios del cliente), así que se escribe a mano; la visita no se
@@ -60,7 +70,7 @@ const equipoDe = (orden, serial) => (orden.equipos || []).find((e) => e && !e.el
 
 // Aviso a bodega (corto: resultado primero, una sola acción). Nunca lanza: el
 // cambio ya quedó registrado y un correo caído no lo deshace.
-async function avisarBodega({ gid, ordenId, esVisita, cliente, sal, ent, modSal, modEnt, contratoId, salienteEnCasa, motivo, quien, sinSalida = false }) {
+async function avisarBodega({ gid, ordenId, esVisita, cliente, sal, ent, modSal, modEnt, contratoId, salienteEnCasa, motivo, quien, sinSalida = false, devolucionId = null }) {
   try {
     const G = require("../lib/gestiones");
     const { bodegaEmailTo, recepcionEmails, tallerEmailTo } = require("../lib/mailRecipients");
@@ -85,8 +95,8 @@ async function avisarBodega({ gid, ordenId, esVisita, cliente, sal, ent, modSal,
         ${p(`<b>Qué pasó:</b> ${e(motivo || "—")}<br><b>Lo registró:</b> ${e(quien)}`)}
         ${sinSalida ? p(`<b style="color:#B45309;">Ojo:</b> el radio <b>${e(ent)}</b> figuraba en bodega: salió sin registrarse la salida a la visita. Las próximas veces, entrégalo desde Almacén → Hoy → "Salida a visita".`) : ""}
         ${p(salienteEnCasa
-          ? `El radio <b>${e(sal)}</b> se entrega en <b>recepción</b> para su revisión de taller.`
-          : `El radio <b>${e(sal)}</b> se quedó con el cliente: queda <b>pendiente de devolución</b>.`)}`,
+          ? `El radio <b>${e(sal)}</b> se entrega en <b>recepción</b> para su revisión de taller${devolucionId ? `: recepción lo recibe en la devolución <b>${e(devolucionId)}</b>, que ya está abierta` : ""}.`
+          : `El radio <b>${e(sal)}</b> se quedó con el cliente: queda <b>pendiente de devolución</b>${devolucionId ? ` (devolución <b>${e(devolucionId)}</b>)` : ""}.`)}`,
       ctaUrl: `${APP_BASE_URL}/almacen/index.html`,
       ctaLabel: "Abrir Almacén",
       meta: { source: "regularizarReemplazoOrden", gestion_id: gid, orden_id: ordenId },
@@ -221,11 +231,33 @@ async function ejecutar({ usuario, nombre = "", uid = null, ordenId, serialSalie
     await rSal.ref.set({ pendiente_devolucion: true, updated_at: now }, { merge: true });
     await rSal.ref.collection("movimientos").add({ at: now, por: usuario, por_email: usuario, tipo: "reemplazo", de_estado: null, a_estado: null, ref: refMov, notas: `Reemplazado por ${ent} (gestión ${gid}) — el cliente se lo quedó: pendiente de devolución${quePaso}` });
   }
-  const mailId = await avisarBodega({ gid, ordenId, esVisita, cliente: orden.cliente_nombre || orden.cliente || "", sal, ent,
+  // Devolución del radio recibido del cliente (solo visitas; ver cabecera).
+  // Best-effort: si falla, el cambio ya quedó y recepción la abre a mano.
+  let devolucionId = null;
+  if (esVisita) {
+    try {
+      const { crearOrdenDevolucion } = require("../lib/ordenDevolucion");
+      devolucionId = await crearOrdenDevolucion({
+        clienteId: orden.cliente_id, clienteNombre: orden.cliente_nombre || orden.cliente || "",
+        contratoDocId, contratoId, contratoOrigenIds: [],
+        modo: "recuperacion", origen: { tipo: "cambio_en_sitio", ref_id: ordenId },
+        unidades: [{ serial: sal, modelo: modSal.modelo, modelo_id: modSal.modelo_id, pool_doc_id: rSal.ref.id }],
+        motivo: `Cambio de radio en sitio en la visita ${ordenId}: ${sal} se reemplazó por ${ent} (gestión ${gid})${quePaso}`,
+        enCamino: salienteEnCasa ? (nombre || orden.tecnico_asignado || "el técnico") : "",
+      });
+      if (devolucionId) {
+        await oSnap.ref.set({ reemplazos_regularizados: { [serialKey]: { devolucion_id: devolucionId } } }, { merge: true });
+        await gref.set({ ordenes: { devolucion_id: devolucionId } }, { merge: true });
+      }
+    } catch (err) {
+      logger.error("[regularizarReemplazoOrden] no se abrió la devolución del radio recibido", { gid, ordenId, sal, message: err.message });
+    }
+  }
+  const mailId = await avisarBodega({ gid, ordenId, esVisita, devolucionId, cliente: orden.cliente_nombre || orden.cliente || "", sal, ent,
     modSal: modSal.modelo, modEnt: modEnt.modelo, contratoId, salienteEnCasa: !!salienteEnCasa, motivo: String(motivo || "").trim(),
     quien: nombre ? `${nombre} (${usuario})` : usuario, sinSalida });
   logger.info("[regularizarReemplazoOrden]", { ordenId, gid, sal, ent, usuario, entRes, salRes, cambioModelo: !!cambioModelo });
-  return { ok: true, gestion_id: gid, entrante: entRes, saliente: salRes, cambio_modelo: !!cambioModelo, contrato: contratoId || null, aviso_mail_id: mailId };
+  return { ok: true, gestion_id: gid, entrante: entRes, saliente: salRes, cambio_modelo: !!cambioModelo, contrato: contratoId || null, aviso_mail_id: mailId, devolucion_id: devolucionId };
 }
 
 module.exports = onCall(

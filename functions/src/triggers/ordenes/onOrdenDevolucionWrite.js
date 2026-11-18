@@ -769,6 +769,18 @@ module.exports = onDocumentWritten(
       try {
         if (res === "recibido") {
           const r = await recibirEnPool(e, dev, refMov);
+          // Cambio de radio en sitio (2026-11-18): el radio ya quedó "por
+          // revisar" cuando el técnico registró el cambio, así que el recibo
+          // no mueve el estado. Que el kardex diga cuándo llegó de verdad a
+          // recepción (antes de esto, "por revisar" podía ser un radio que
+          // seguía en el carro del técnico).
+          if (r === "sin-cambio" && dev.origen?.tipo === "cambio_en_sitio" && e.pool_doc_id) {
+            await db.collection("equipos_pool").doc(e.pool_doc_id).collection("movimientos").add({
+              at: admin.firestore.FieldValue.serverTimestamp(), por: e.resuelto_por || "system", por_email: null,
+              tipo: "devolucion", de_estado: null, a_estado: null, ref: refMov,
+              notas: `Recibido en recepción (devolución ${ordenId}) tras el cambio en sitio de la visita ${dev.origen.ref_id || "—"} — pendiente de inspección`,
+            });
+          }
           logger.info("[onOrdenDevolucionWrite] recibido", { ordenId, serial: e.serial, r, modo: dev.modo || "recuperacion" });
           const poc = await cerrarPocDelCliente(e, after, ordenId, "Devolución recibida");
           if (poc) pocDeLaTanda[pool.normSerial(e.serial || "") || e.id] = poc;

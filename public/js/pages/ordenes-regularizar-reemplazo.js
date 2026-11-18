@@ -142,7 +142,7 @@
           <span><b>Me traje el radio del cliente.</b> Si se quedó con el cliente, desmárcalo: queda pendiente de devolución.</span>
         </label>
         <p style="margin:6px 0 0 24px;font-size:12.5px;color:#475569;line-height:1.45;">
-          El radio que recibiste del cliente se entrega en <b>recepción</b>: recepción lo recibe y abre su revisión de taller (ENTRADA).
+          El radio que recibiste del cliente se entrega en <b>recepción</b>: al registrar el cambio se abre sola su orden de DEVOLUCIÓN, y queda pendiente hasta que recepción lo reciba.
           Si fue daño del cliente, el cobro sale de esa revisión, con la cotización del taller.</p>
         <label class="form-label" for="rrMotivo" style="margin-top:10px;">¿Qué pasó? *</label>
         <textarea id="rrMotivo" class="form-input" rows="2" placeholder="Ej.: no transmitía; se cambió en sitio. Si parece daño del cliente, dilo aquí."></textarea>
@@ -175,7 +175,7 @@
       },
     });
     if (!res || typeof res !== 'object') return;
-    Toast.show(`✅ Cambio registrado: gestión ${res.gestion_id}${res.contrato ? ` (contrato ${res.contrato})` : ''}`, 'ok', 8000);
+    Toast.show(`✅ Cambio registrado: gestión ${res.gestion_id}${res.contrato ? ` (contrato ${res.contrato})` : ''}${res.devolucion_id ? ` · entrega el radio del cliente en recepción (devolución ${res.devolucion_id})` : ''}`, 'ok', 10000);
   }
 
   window.abrirRegularizarReemplazo = abrirRegularizarReemplazo;
