@@ -137,6 +137,33 @@ const ficha = (id, extra = {}) => db.collection("equipos_pool").doc(id).set({ se
   assert.equal((await db.collection("equipos_pool").doc("ENT002").get()).data().reemplaza_a, "SAL002");
   console.log("  ok   E1 saliente con el cliente: pendiente de devolución");
 
+  // Visita técnica (2026-11-18, MACELLO): cambio en sitio con un radio que el
+  // técnico llevaba (NO está en la orden), visita ya cerrada, varios cambios.
+  await db.collection("equipos_pool").doc("VSAL1").set({ serial: "VSAL1", serial_norm: "VSAL1", modelo_id: "m360", modelo_label: "HYTERA PNC360S", estado: "en_cliente", asignacion: { contrato_doc_id: "c2", contrato_id: "GR-C2", cliente_id: "cli", cliente_nombre: "LIGO" } });
+  await db.collection("equipos_pool").doc("VSAL2").set({ serial: "VSAL2", serial_norm: "VSAL2", modelo_id: "m360", modelo_label: "HYTERA PNC360S", estado: "en_cliente", asignacion: { contrato_doc_id: "c2", contrato_id: "GR-C2", cliente_id: "cli", cliente_nombre: "LIGO" } });
+  await db.collection("equipos_pool").doc("VENT1").set({ serial: "VENT1", serial_norm: "VENT1", modelo_id: "m360", modelo_label: "HYTERA PNC360S", estado: "en_bodega" });
+  await db.collection("equipos_pool").doc("VENT2").set({ serial: "VENT2", serial_norm: "VENT2", modelo_id: "m360", modelo_label: "HYTERA PNC360S", estado: "en_bodega" });
+  await db.collection("equipos_pool").doc("VTALLER").set({ serial: "VTALLER", serial_norm: "VTALLER", modelo_id: "m360", modelo_label: "HYTERA PNC360S", estado: "en_taller" });
+  await db.collection("ordenes_de_servicio").doc("2026111602").set({ estado_reparacion: "CERRADA (VISITA)", tipo_de_servicio: "VISITA TECNICA", cliente_id: "cli", cliente_nombre: "LIGO",
+    equipos: [{ id: "v1", numero_de_serie: "VSAL1", modelo: "PNC360S" }, { id: "v2", numero_de_serie: "VSAL2", modelo: "PNC360S" }] });
+  await rechaza(regularizar.ejecutar, { ordenId: "2026111602", serialSaliente: "VSAL1", serialEntrante: "VTALLER" }, /no en bodega/);
+  await rechaza(regularizar.ejecutar, { ordenId: "2026111602", serialSaliente: "VSAL1", serialEntrante: "NOEXISTE9" }, /no existe en el inventario/);
+  const v1 = await regularizar.ejecutar({ usuario: "tec@x", ordenId: "2026111602", serialSaliente: "VSAL1", serialEntrante: "VENT1", salienteEnCasa: true, motivo: "no transmitía; cambio en sitio" });
+  const v2 = await regularizar.ejecutar({ usuario: "tec@x", ordenId: "2026111602", serialSaliente: "VSAL2", serialEntrante: "VENT2", salienteEnCasa: true, motivo: "pantalla rota; cambio en sitio" });
+  assert.notEqual(v1.gestion_id, v2.gestion_id, "cada cambio es su gestión");
+  const ve1 = (await db.collection("equipos_pool").doc("VENT1").get()).data();
+  assert.equal(ve1.estado, "en_cliente", "el radio dejado en sitio queda con el cliente aunque la visita esté cerrada");
+  assert.equal(ve1.asignacion.contrato_doc_id, "c2"); assert.equal(ve1.reemplaza_a, "VSAL1");
+  const vs1 = (await db.collection("equipos_pool").doc("VSAL1").get()).data();
+  assert.equal(vs1.estado, "devuelto_revision"); assert.equal(vs1.asignacion, null);
+  const vo = (await db.collection("ordenes_de_servicio").doc("2026111602").get()).data();
+  assert.equal(vo.gestion, undefined, "a la visita no se le cuelga gestión");
+  assert.ok(vo.reemplazos_regularizados.VSAL1 && vo.reemplazos_regularizados.VSAL2);
+  const vg = (await db.collection("gestiones").doc(v1.gestion_id).get()).data();
+  assert.equal(vg.ordenes.visita_id, "2026111602"); assert.equal(vg.ordenes.programacion_id, undefined);
+  await rechaza(regularizar.ejecutar, { ordenId: "2026111602", serialSaliente: "VSAL1", serialEntrante: "VENT2" }, /ya se registró/);
+  console.log("  ok   E1 visita: entrante escrito, visita cerrada, varios cambios, candado por serial");
+
   await limpiar();
   console.log("\nTODO OK");
   process.exit(0);

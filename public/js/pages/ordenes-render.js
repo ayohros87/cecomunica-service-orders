@@ -1519,6 +1519,13 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     });
   }
 
+  // El técnico registra el cambio que hizo en sitio (2026-11-18, MACELLO):
+  // antes solo admin/recepción veían la acción y el técnico no tenía cómo.
+  const itemCambioEnSitio = (esVisita && !!o.cliente_id && estadoUpper !== "ANULADA"
+    && (o.equipos || []).some(e => e && !e.eliminado && (e.numero_de_serie || e.serial)))
+    ? { icon: '<i data-lucide="replace"></i>', label: "Registrar cambio de radio en sitio…", action: "regularizar-reemplazo", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
+    : null;
+
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     // Editar: SOLO cuando aplica (POR ASIGNAR). El item gris permanente era
     // ruido — en la mayoría de las filas no se podía usar (auditoría P2).
@@ -1550,13 +1557,16 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     // Registrar como reemplazo a posteriori (2026-10-07, E1): el taller cambió
     // el radio del cliente en esta orden sin gestión de reemplazo (LIGO,
     // CEMENTO BAYANO). Solo órdenes de cliente con ≥2 radios y sin gestión.
-    const puedeRegularizar = !o.gestion?.id && !!o.cliente_id && !esVisita && !esDevolucion
+    // En la VISITA (2026-11-18, MACELLO) el técnico cambia radios en sitio con
+    // los que lleva: basta un radio del cliente en la orden, admite varios
+    // cambios y sirve aunque la visita ya esté cerrada.
+    const nRadios = (o.equipos || []).filter(e => e && !e.eliminado && (e.numero_de_serie || e.serial)).length;
+    const puedeRegularizar = !!o.cliente_id && !esDevolucion && estadoUpper !== "ANULADA"
       && !(typeof esOrdenEntrada === 'function' && esOrdenEntrada(o))
-      && (o.equipos || []).filter(e => e && !e.eliminado && (e.numero_de_serie || e.serial)).length >= 2
-      && estadoUpper !== "ANULADA";
+      && (esVisita ? nRadios >= 1 : (!o.gestion?.id && nRadios >= 2));
     if (puedeRegularizar) {
       menuItems.push({
-        icon: '<i data-lucide="replace"></i>', label: "Registrar como reemplazo…",
+        icon: '<i data-lucide="replace"></i>', label: esVisita ? "Registrar cambio de radio en sitio…" : "Registrar como reemplazo…",
         action: "regularizar-reemplazo", dataAttributes: `data-orden-id="${ordenId}"`, class: "",
       });
     }
@@ -1581,7 +1591,9 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
       { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
       { icon: '<i data-lucide="file-text"></i>', label: tieneNota ? "Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' }
     );
+    if (itemCambioEnSitio) menuItems.push(itemCambioEnSitio);
   } else if (rol === ROLES.JEFE_TALLER) {
+    if (itemCambioEnSitio) menuItems.push(itemCambioEnSitio);
     // Supervisor de taller: imprime la orden y sus documentos, y gestiona
     // notas técnicas — sin editar/eliminar la orden (eso queda en admin).
     menuItems.push(

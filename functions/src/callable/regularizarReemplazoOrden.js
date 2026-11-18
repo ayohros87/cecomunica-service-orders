@@ -17,6 +17,14 @@
 //     kardex `reemplazo`; saliente → a revisión si quedó en casa (sale del
 //     contrato), o pendiente_devolucion si el cliente se lo quedó.
 // No manda correos ni crea órdenes: la entrega ya ocurrió.
+//
+// VISITA TÉCNICA (2026-11-18, MACELLO): el técnico cambia el radio EN SITIO
+// con uno que lleva consigo. Ese entrante nunca está en la orden (la visita
+// lista los radios del cliente), así que se escribe a mano; la visita no se
+// "entrega", así que el entrante pasa a en_cliente igual (se dejó en sitio).
+// Una visita suele cambiar varios radios: cada par es su propia gestión GR y
+// el candado es por SERIAL (`reemplazos_regularizados`), no por orden. A la
+// visita no se le escribe `gestion` — no es programación de nadie.
 "use strict";
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
@@ -25,7 +33,8 @@ const { admin, db } = require("../lib/admin");
 const pool = require("../domain/equiposPool");
 const { catalogo, ModeloFamilia } = require("../domain/modeloCatalogo");
 
-const ROLES = new Set(["administrador", "recepcion", "jefe_taller", "inventario", "gerente"]);
+const ROLES = new Set(["administrador", "recepcion", "jefe_taller", "inventario", "gerente", "tecnico", "tecnico_operativo"]);
+const esVisitaOrden = (o) => String(o?.tipo_de_servicio || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().includes("VISITA");
 const FV = admin.firestore.FieldValue;
 
 function fechaStrPanama(d = new Date()) {
@@ -54,9 +63,13 @@ async function ejecutar({ usuario, uid = null, ordenId, serialSaliente, serialEn
   if (!oSnap.exists) throw new HttpsError("not-found", "La orden no existe.");
   const orden = oSnap.data() || {};
   if (orden.eliminado === true || String(orden.estado_reparacion || "") === "ANULADA") throw new HttpsError("failed-precondition", "La orden está anulada o eliminada.");
-  if (orden.gestion?.id) throw new HttpsError("failed-precondition", `La orden ya pertenece a la gestión ${orden.gestion.id}: el reemplazo se registra allá.`);
+  const esVisita = esVisitaOrden(orden);
+  if (orden.gestion?.id && !esVisita) throw new HttpsError("failed-precondition", `La orden ya pertenece a la gestión ${orden.gestion.id}: el reemplazo se registra allá.`);
   if (!orden.cliente_id) throw new HttpsError("failed-precondition", "La orden no tiene cliente registrado.");
-  const eSal = equipoDe(orden, sal); const eEnt = equipoDe(orden, ent);
+  const previo = (orden.reemplazos_regularizados || {})[pool.normSerial(sal)];
+  if (previo) throw new HttpsError("failed-precondition", `El reemplazo de ${sal} ya se registró (gestión ${previo.gestion_id}).`);
+  const eSal = equipoDe(orden, sal);
+  const eEnt = equipoDe(orden, ent) || (esVisita ? { modelo_id: null, modelo: "" } : null);
   if (!eSal) throw new HttpsError("failed-precondition", `El saliente ${sal} no está en la orden.`);
   if (!eEnt) throw new HttpsError("failed-precondition", `El entrante ${ent} no está en la orden.`);
 
@@ -69,6 +82,11 @@ async function ejecutar({ usuario, uid = null, ordenId, serialSaliente, serialEn
   if ([pool.ESTADOS.BAJA, pool.ESTADOS.VENDIDO].includes(rEnt.data.estado)) throw new HttpsError("failed-precondition", `El entrante está ${rEnt.data.estado}.`);
   const entConOtro = rEnt.data.asignacion?.cliente_id && rEnt.data.asignacion.cliente_id !== orden.cliente_id && rEnt.data.estado === pool.ESTADOS.EN_CLIENTE;
   if (entConOtro) throw new HttpsError("failed-precondition", `El entrante ${ent} figura con ${rEnt.data.asignacion.cliente_nombre || "otro cliente"}. Corrige su ubicación primero.`);
+  // En la visita el serial se escribe a mano: un dígito mal puesto no puede
+  // sacar del taller o de revisión un radio que nunca salió de la casa.
+  const okVisita = [pool.ESTADOS.EN_BODEGA, pool.ESTADOS.POR_CLASIFICAR].includes(rEnt.data.estado)
+    || (rEnt.data.estado === pool.ESTADOS.EN_CLIENTE && rEnt.data.asignacion?.cliente_id === orden.cliente_id);
+  if (esVisita && !okVisita) throw new HttpsError("failed-precondition", `El entrante ${ent} figura "${rEnt.data.estado}", no en bodega. Revisa el serial o corrige su ubicación primero.`);
 
   const asigSal = rSal.data.asignacion || {};
   const contratoDocId = asigSal.cliente_id === orden.cliente_id ? (asigSal.contrato_doc_id || null) : null;
@@ -77,7 +95,9 @@ async function ejecutar({ usuario, uid = null, ordenId, serialSaliente, serialEn
   const modEnt = { modelo_id: rEnt.data.modelo_id || eEnt.modelo_id || null, modelo: rEnt.data.modelo_label || eEnt.modelo || "" };
   const cambioModelo = (modSal.modelo_id || modSal.modelo) && (modEnt.modelo_id || modEnt.modelo) && !pool.mismoModelo(modSal, modEnt.modelo_id, modEnt.modelo)
     && !ModeloFamilia.mismaFamilia(modSal, modEnt);
-  const entregada = /^ENTREGAD/.test(String(orden.estado_reparacion || "").toUpperCase());
+  // En una visita el radio se dejó en sitio: cuenta como entregado aunque la
+  // orden siga abierta o haya cerrado como CERRADA (VISITA).
+  const entregada = esVisita || /^ENTREGAD/.test(String(orden.estado_reparacion || "").toUpperCase());
   const gid = await reservarNumero();
   const now = FV.serverTimestamp();
   const serialKey = pool.normSerial(sal);
@@ -95,7 +115,7 @@ async function ejecutar({ usuario, uid = null, ordenId, serialSaliente, serialEn
     origen: { tipo: "regularizacion", orden_id: ordenId, por_uid: uid, por_email: usuario, at: now },
     aprobacion: { requiere: false, aprobado_por_email: usuario, at: now, motivo: "Regularización: el reemplazo ya se hizo en el taller" },
     items: [item], contratos_afectados: contratoDocId ? [contratoDocId] : [],
-    ordenes: { programacion_id: ordenId, programacion_ids: [ordenId] },
+    ordenes: esVisita ? { visita_id: ordenId } : { programacion_id: ordenId, programacion_ids: [ordenId] },
     cierre: { aprobacion: true, asignacion: true, programacion: true, entrega: entregada, entrada: !!salienteEnCasa || !entregada },
     cerrada_at: now, cerrada_por: usuario, cerrada_motivo: "regularizacion",
     responsable_uid: uid, creado_por_uid: uid, creado_por_email: usuario, fecha_creacion: now, updated_at: now,
@@ -111,8 +131,9 @@ async function ejecutar({ usuario, uid = null, ordenId, serialSaliente, serialEn
 
   // La orden.
   await oSnap.ref.set({
-    gestion: { id: gid, tipo: "reemplazo", regularizada: true },
-    [`reemplazos_regularizados.${serialKey}`]: { gestion_id: gid, saliente: sal, entrante: ent, at: now, por_email: usuario },
+    ...(esVisita ? {} : { gestion: { id: gid, tipo: "reemplazo", regularizada: true } }),
+    // Mapa anidado: con set+merge una clave con punto NO es ruta, sería un campo literal.
+    reemplazos_regularizados: { [serialKey]: { gestion_id: gid, saliente: sal, entrante: ent, at: now, por_email: usuario } },
     os_logs: FV.arrayUnion({ action: "REGULARIZAR_REEMPLAZO", by: uid || usuario, at: admin.firestore.Timestamp.now(), nota: `${sal} → ${ent} (gestión ${gid})` }),
   }, { merge: true });
 
@@ -125,7 +146,7 @@ async function ejecutar({ usuario, uid = null, ordenId, serialSaliente, serialEn
   let entRes = "sin-cambio";
   if (entregada && rEnt.data.estado !== pool.ESTADOS.EN_CLIENTE) {
     entRes = await pool.transicionarPorId(rEnt.ref.id, { aEstado: pool.ESTADOS.EN_CLIENTE, tipo: "reemplazo", refMov,
-      notas: `Reemplaza a ${sal} (gestión ${gid}) — regularizado: entregado con la orden ${ordenId}`,
+      notas: `Reemplaza a ${sal} (gestión ${gid}) — regularizado: ${esVisita ? `dejado en sitio en la visita ${ordenId}` : `entregado con la orden ${ordenId}`}`,
       extra: { asignacion: asignacionEnt, orden_actual_id: null, verificado: false, ...linaje } });
   } else {
     await rEnt.ref.set({ ...linaje, ...(rEnt.data.asignacion?.cliente_id ? {} : { asignacion: asignacionEnt }), updated_at: now }, { merge: true });
