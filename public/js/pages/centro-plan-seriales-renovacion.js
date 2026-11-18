@@ -398,8 +398,7 @@ Object.assign(window.Centro, {
     const sinModelo = r.sinLinea.filter(u => this._wcEsSinModelo(u));
     const otrosSinLinea = r.sinLinea.filter(u => !sinModelo.includes(u));
     const sinLinea = (sinModelo.length ? this._wcSinModeloHtml(sinModelo, lineas) : '')
-      + (otrosSinLinea.length
-      ? `<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;"><b>${otrosSinLinea.length} serial(es) sin línea en el contrato</b>: ${otrosSinLinea.map(u => this.esc(u.serial)).join(', ')} — agrega su modelo${otrosSinLinea.some(u => u.destino === 'reemplaza') ? ' (el del reemplazo)' : ''} en “Equipos y tarifas” o cámbiales el destino.</div>` : '');
+      + this._wcOtrosSinLineaHtml(otrosSinLinea);
     // Seriales que entraron en una línea de OTRA modalidad (segundo pase de
     // conciliarLineas): se dice, no se bloquea. La ficha del pool suele venir
     // de una migración sin verificar y la línea es lo que el vendedor declara.
@@ -429,6 +428,60 @@ Object.assign(window.Centro, {
     if (u.destino === 'reemplaza') return !u.reemplazo_modelo_id && !u.reemplazo_modelo
       && !u.modelo_id && !String(u.modelo || '').trim();
     return false;
+  },
+
+  // Seriales con modelo CONOCIDO que ninguna línea cubre (Karla, PANDEPORTES
+  // 2026-11-18: las líneas decían NX-420 / NX-920 como la orden de compra y
+  // el radio era un HYTERA PNC460 verificado; el aviso pedía "agrega su
+  // modelo" sin decir CUÁL era). Se agrupa por el modelo que falta, se dice
+  // con nombre y un botón agrega esa línea con la cantidad justa.
+  _wcOtrosSinLineaHtml(unidades) {
+    if (!Array.isArray(unidades) || !unidades.length) return '';
+    const grupos = new Map();
+    for (const u of unidades) {
+      const entra = u.destino === 'reemplaza' && (u.reemplazo_modelo_id || u.reemplazo_modelo);
+      const id = entra ? (u.reemplazo_modelo_id || '') : (u.modelo_id || '');
+      const label = entra ? (u.reemplazo_modelo || '') : (u.modelo || '');
+      const modalidad = u.modalidad || 'alquiler';
+      const k = `${id || label}|${modalidad}|${entra ? 'r' : 'c'}`;
+      const g = grupos.get(k) || { id, label, modalidad, reemplazo: !!entra, seriales: [] };
+      g.seriales.push(u.serial || u.serial_norm || '');
+      grupos.set(k, g);
+    }
+    return [...grupos.values()].map(g => `<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;">
+      <b>${g.seriales.length} serial(es) sin línea en el contrato</b>: ${this.esc(g.seriales.join(', '))} —
+      ${g.label
+        ? `${g.reemplazo ? 'se reemplaza(n) por' : (g.seriales.length === 1 ? 'es un' : 'son')} <b>${this.esc(g.label)}</b> y ninguna línea de “Equipos y tarifas” es de ese modelo.`
+        : 'agrega su modelo en “Equipos y tarifas”.'}
+      ${g.label && !this._wcSoloPlan ? this._wcBtnLinea(g, `+ Agregar la línea ${g.label}`) : ''}
+      <span style="color:var(--fg-3);">${g.label && !this._wcSoloPlan ? 'O cámbiales el destino.' : 'Agrégala o cámbiales el destino.'}</span></div>`).join('');
+  },
+
+  _wcBtnLinea(g, texto) {
+    return `<button type="button" class="btn btn-ghost cg-act" style="margin:2px 4px;"
+      data-modelo-id="${this.esc(g.id || '')}" data-modelo="${this.esc(g.label || '')}"
+      data-cant="${g.seriales.length}" data-modalidad="${this.esc(g.modalidad || 'alquiler')}"
+      onclick="Centro._wcAgregarLinea(this)">${this.esc(texto)}</button>`;
+  },
+
+  // Agrega a “Equipos y tarifas” la línea del modelo REAL de esos seriales,
+  // con su cantidad. El precio lo pone el vendedor (queda con el foco).
+  _wcAgregarLinea(btn) {
+    const cont = document.getElementById('wcLineas');
+    if (!cont || !btn) return;
+    cont.insertAdjacentHTML('beforeend', this._lineaModeloPre('wcm', true, {
+      modelo_id: btn.dataset.modeloId || null, modelo: btn.dataset.modelo || '',
+      cantidad: Number(btn.dataset.cant) || 1, precio: '', modalidad: btn.dataset.modalidad || 'alquiler' }));
+    // Sube (nunca baja) las líneas a sus seriales: a la nueva pueden caerle
+    // más radios de la misma familia (el verificado, la variante -R).
+    this._wcCuadrar({ soloSubir: true });
+    const c = this._wcConciliar();
+    const fila = cont.lastElementChild;
+    fila?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    fila?.querySelector('input[data-wcm-precio]')?.focus({ preventScroll: true });
+    const sobran = (c.modalidad && c.modalidad.nuevos) || 0;
+    Toast.show(`Línea ${btn.dataset.modelo} agregada — ponle su precio mensual${sobran
+      ? `. Ojo: las líneas traen ${sobran} radio(s) más que los seriales; baja o quita la que ya no aplique` : ''}`, sobran ? 'warn' : 'ok');
   },
 
   // Seriales SIN modelo que no caben en ninguna línea: un
@@ -488,16 +541,22 @@ Object.assign(window.Centro, {
     const grupos = new Map();
     for (const x of lista) {
       const k = `${x.de}→${x.a}`;
-      const g = grupos.get(k) || { de: x.de, a: x.a, seriales: [] };
+      const g = grupos.get(k) || { de: x.de, a: x.a, id: x.de_id, label: x.de,
+        modalidad: x.unidad.modalidad || 'alquiler', seriales: [] };
       g.seriales.push(x.unidad.serial || x.unidad.serial_norm || '');
       grupos.set(k, g);
     }
+    // Con modelo en la ficha, la salida para "no, el radio SÍ es ese" es un
+    // botón: su propia línea (PANDEPORTES 2026-11-18 — las líneas copiaban la
+    // orden de compra y 30 HYTERA iban a quedar como KENWOOD en el inventario).
     return [...grupos.values()].map(g => `<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;">
-      <b>Vas a cambiar el modelo de ${g.seriales.length} equipo(s)</b>:
+      <b>Vas a cambiar el modelo de ${g.seriales.length} equipo(s) en el inventario</b>:
       ${g.de ? `el sistema los tiene como <b>${this.esc(g.de)}</b> (de una migración que nadie verificó)` : 'el sistema no tiene su modelo'}
       y quedarán como <b>${this.esc(g.a)}</b>, el modelo de la línea del contrato.
       <span style="color:var(--fg-3);">${this.esc(g.seriales.join(', '))}</span>
-      — si no es ese modelo, cámbiales el destino o corrige la línea.</div>`).join('');
+      — ${g.de && !this._wcSoloPlan
+        ? `la línea lleva el modelo del radio que el cliente tiene en la mano, no el texto de la orden de compra. ¿De verdad son ${this.esc(g.de)}? ${this._wcBtnLinea(g, `Son ${g.de}: ponerlos en su línea`)}`
+        : 'si no es ese modelo, cámbiales el destino o corrige la línea.'}</div>`).join('');
   },
 
   // Aviso (nunca bloqueo) de los seriales que cayeron en una línea de otra
