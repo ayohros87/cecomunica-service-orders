@@ -68,6 +68,8 @@ import '/js/pages/centro-ficha.js';
 import '/js/pages/centro-regularizacion.js';
 import '/js/pages/centro-ficha-bloques.js';
 import '/js/pages/centro-firma.js';
+// Formalización por orden de compra (gobierno/corporativo) en vez de firma (2026-11-18).
+import '/js/pages/centro-orden-compra.js';
 import '/js/pages/centro-gestiones.js';
 import '/js/pages/centro-acciones.js';
 import '/js/pages/centro-menu-gestion.js';

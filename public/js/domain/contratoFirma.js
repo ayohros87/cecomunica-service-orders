@@ -98,6 +98,101 @@ window.ContratoFirma = {
     return Math.max(0, dia(now) - dia(f));
   },
 
+  // ── FORMALIZACIÓN POR ORDEN DE COMPRA (2026-11-18, Alberto) ──────────────
+  // Hay clientes de gobierno y corporativos que no firman nuestro contrato:
+  // formalizan con su ORDEN DE COMPRA (o un contrato hecho por la entidad), y
+  // en gobierno esa OC además se REFRENDA en la Contraloría. Para ellos la OC
+  // ocupa el lugar de la firma: subirla cumple el requisito por la MISMA vía
+  // que el "subir firmado" (firmado=true + firmado_url, activa el contrato),
+  // así el candado de la entrega, la activación, la facturación y la comisión
+  // no cambian — ni las rules, que están en el 66% del tope de expresiones.
+  // Nuestro contrato sigue visible como términos estándar de referencia.
+  //
+  // Decisiones de Alberto (18-nov-2026):
+  //  · se entrega con la OC aunque el refrendo no haya llegado — el refrendo
+  //    queda como pendiente aparte, no frena nada;
+  //  · se marca por CLIENTE (clientes.formalizacion_contrato) y el contrato la
+  //    copia al nacer; se puede cambiar en un contrato puntual;
+  //  · el monto de la OC debe CUADRAR con el contrato;
+  //  · 90 días para dormirse (no 45): una OC de gobierno tarda;
+  //  · la sube el vendedor (o administración), igual que el firmado;
+  //  · las renovaciones también llevan OC nueva (nacen por la misma vía).
+  // Espejo de functions/src/domain/contratoFirma.js.
+  FORMALIZACION: {
+    oc_gobierno: { tipo: 'orden_compra', sector: 'gobierno', label: 'Orden de compra refrendada (gobierno)' },
+    oc_corporativo: { tipo: 'orden_compra', sector: 'corporativo', label: 'Orden de compra (corporativo)' },
+  },
+  DIAS_DORMIDO_OC: 90,
+  // Diferencia que se tolera entre la OC y el contrato (redondeos del ITBMS).
+  TOLERANCIA_OC: 1,
+
+  /** Formalización que le toca a un contrato NUEVO de este cliente (objeto para el doc, o null = firma). */
+  formalizacionDeCliente(cli) {
+    const f = this.FORMALIZACION[cli?.formalizacion_contrato];
+    return f ? { tipo: f.tipo, sector: f.sector, origen: 'cliente' } : null;
+  },
+  /** Clave del selector ('firma' | 'oc_gobierno' | 'oc_corporativo') de un contrato. */
+  claveFormalizacion(c) {
+    const f = c?.formalizacion;
+    if (f?.tipo !== 'orden_compra') return 'firma';
+    return f.sector === 'gobierno' ? 'oc_gobierno' : 'oc_corporativo';
+  },
+  /** ¿Se formaliza con orden de compra en vez de firma? */
+  esOC(c) { return this.lleva(c) && c?.formalizacion?.tipo === 'orden_compra'; },
+  /** ¿Es OC de gobierno (lleva refrendo)? */
+  esGobierno(c) { return this.esOC(c) && c.formalizacion.sector === 'gobierno'; },
+  /** OC de gobierno ya registrada, todavía sin el refrendo de la Contraloría. */
+  refrendoPendiente(c) {
+    return this.esGobierno(c) && c.firmado === true && !!c.orden_compra && !c.orden_compra.refrendo
+      && c.deleted !== true && !['anulado', 'vencido', 'cancelado'].includes(c.estado);
+  },
+  /** Días para dormirse según cómo se formaliza. */
+  diasDormido(c) { return this.esOC(c) ? this.DIAS_DORMIDO_OC : this.DIAS_DORMIDO; },
+  /** Lo que se espera del cliente, para las frases ("espera la orden de compra"). */
+  requisito(c) {
+    if (!this.esOC(c)) return 'la firma del cliente';
+    return this.esGobierno(c) ? 'la orden de compra (refrendada)' : 'la orden de compra';
+  },
+
+  // Meses del contrato: el derivado si está, si no el texto ("18 meses").
+  // Un contrato por DÍAS no tiene meses: null.
+  _meses(c) {
+    if (Number(c?.duracion_dias) > 0) return null;
+    if (Number(c?.duracion_meses) > 0) return Number(c.duracion_meses);
+    const s = String(c?.duracion || '').toLowerCase();
+    if (/d[ií]a/.test(s)) return null;
+    const n = parseInt(s.replace(/\D/g, ''), 10);
+    return n > 0 ? n : null;
+  },
+  /**
+   * Monto que la OC debe cubrir: el primer pago (mensualidad + cargos únicos)
+   * más las mensualidades restantes del plazo. {monto, detalle} o null si el
+   * contrato no permite calcularlo (por días, sin plazo).
+   */
+  montoEsperadoOC(c) {
+    const r2 = (n) => Math.round(Number(n || 0) * 100) / 100;
+    const mensual = Number(c?.total_mensual ?? c?.total_con_itbms ?? 0);
+    const primer = Number(c?.primer_pago ?? mensual);
+    if (Number(c?.duracion_dias) > 0) {
+      // Un temporal por días se cobra entero en el primer pago.
+      return primer > 0 ? { monto: r2(primer), detalle: `${Number(c.duracion_dias)} día(s): el total del contrato` } : null;
+    }
+    const meses = this._meses(c);
+    if (!meses || !(mensual > 0 || primer > 0)) return null;
+    const monto = r2(primer + mensual * (meses - 1));
+    const detalle = primer !== mensual
+      ? `primer pago $${primer.toFixed(2)} + ${meses - 1} × $${mensual.toFixed(2)}`
+      : `${meses} × $${mensual.toFixed(2)}`;
+    return { monto, detalle };
+  },
+  /** {ok, esperado, diferencia, detalle} — ok=null si no hay con qué comparar. */
+  cuadraOC(c, monto) {
+    const e = this.montoEsperadoOC(c);
+    if (!e) return { ok: null, esperado: null, diferencia: null, detalle: '' };
+    const diferencia = Math.round((Number(monto) - e.monto) * 100) / 100;
+    return { ok: Math.abs(diferencia) <= this.TOLERANCIA_OC, esperado: e.monto, diferencia, detalle: e.detalle };
+  },
+
   /** Por qué no la lleva, para decirlo en la pantalla. */
   porQue(c) { return this.SIN_FIRMA[this.codigoTipo(c)]?.porQue || ''; },
 

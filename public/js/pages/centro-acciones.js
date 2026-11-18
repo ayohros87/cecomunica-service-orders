@@ -262,8 +262,9 @@ Object.assign(window.Centro, {
     // DORMIDO (decisión 7, 1-oct-2026): lo único que avanza es reactivarlo —
     // vendedor o administración; genera un enlace de firma nuevo.
     if (ContratoFirma.dormido(c)) {
-      A.push(this._acc({ id: 'reactivar', label: 'Reactivar la solicitud de firma…', primaria: true,
-        hint: `dormido ${c.dormido_dias ? `tras ${c.dormido_dias} días` : 'a los 45 días'} sin firma — vuelve a ser trámite y sale un enlace nuevo`,
+      const oc = ContratoFirma.esOC(c);
+      A.push(this._acc({ id: 'reactivar', label: oc ? 'Reactivar: volver a esperar la OC…' : 'Reactivar la solicitud de firma…', primaria: true,
+        hint: `dormido ${c.dormido_dias ? `tras ${c.dormido_dias} días` : `a los ${ContratoFirma.diasDormido(c)} días`} sin ${oc ? 'orden de compra' : 'firma'} — vuelve a ser trámite${oc ? '' : ' y sale un enlace nuevo'}`,
         onclick: `Centro.reactivarContrato('${id}')`,
         ok: [ROLES.ADMIN, 'admin', ROLES.GERENTE, ROLES.VENDEDOR].includes(this.rol),
         motivo: 'lo reactiva el vendedor o administración' }));
@@ -273,7 +274,23 @@ Object.assign(window.Centro, {
         hint: 'después se le manda a firmar al cliente',
         onclick: `Centro.aprobarContrato('${id}')`, ok: mando, motivo: 'lo aprueba administración o gerencia' }));
     }
-    if (esperaFirma) {
+    // ORDEN DE COMPRA (2026-11-18): gobierno/corporativo no firman nuestro
+    // contrato — la OC (refrendada, en gobierno) ocupa el lugar de la firma.
+    // Subirla es la misma vía que el firmado: activa el contrato.
+    const conOC = ContratoFirma.esOC(c);
+    if (esperaFirma && conOC) {
+      A.push(this._acc({ id: 'orden_compra', label: 'Subir la orden de compra…', primaria: true,
+        hint: `${ContratoFirma.esGobierno(c) ? 'gobierno: el refrendo puede llegar después' : 'corporativo'} — el monto debe cuadrar con el contrato; activa el contrato`,
+        onclick: `Centro.subirOrdenCompra('${id}')`, ok: this._puedeSubirOC(),
+        motivo: 'la sube el vendedor o administración' }));
+    }
+    if (ContratoFirma.refrendoPendiente(c)) {
+      A.push(this._acc({ id: 'refrendo', label: 'Registrar el refrendo…', primaria: true,
+        hint: `la OC ${this.esc(c.orden_compra?.numero || '')} está registrada sin el refrendo de la Contraloría — no frena la entrega`,
+        onclick: `Centro.registrarRefrendo('${id}')`, ok: this._puedeSubirOC(),
+        motivo: 'lo registra el vendedor o administración' }));
+    }
+    if (esperaFirma && !conOC) {
       A.push(this._acc({ id: 'firma', label: conEnlace ? 'Ver o reenviar el enlace de firma' : 'Enviar para firma',
         primaria: !conEnlace, hint: conEnlace ? 'el cliente ya lo tiene — se puede reenviar' : 'el cliente firma con el dedo, desde el celular',
         onclick: `Centro.enviarFirma('${id}')`, ok: puedeG && (conEnlace || this._serialesListos(c)),
@@ -341,6 +358,13 @@ Object.assign(window.Centro, {
     // Antes cada uno tenía el suyo: el Centro ofrecía "Editar…" y la página
     // devolvía al usuario con un aviso, o al revés.
     const ed = ContratoEdicion.puedeEditarse(c);
+    // Firma <-> orden de compra en ESTE contrato (el cliente manda por defecto).
+    if (this._puedeCambiarFormalizacion(c)) {
+      const f = ContratoFirma.FORMALIZACION[ContratoFirma.claveFormalizacion(c)];
+      A.push(this._acc({ id: 'formalizacion', grupo: 'Corregir', label: 'Cambiar cómo se formaliza…',
+        hint: `hoy: ${f ? f.label.toLowerCase() : 'firma del cliente'} — solo este contrato, con motivo`,
+        onclick: `Centro.cambiarFormalizacion('${id}')`, ok: puedeG, motivo: 'tu rol no mueve contratos' }));
+    }
     A.push(this._acc({ id: 'editar', grupo: 'Corregir', label: 'Editar…',
       hint: 'tipo, duración, equipos, cargos y observaciones',
       onclick: `Centro.editarContrato('${id}')`,

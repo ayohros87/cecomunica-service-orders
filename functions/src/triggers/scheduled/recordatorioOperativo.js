@@ -1180,28 +1180,34 @@ module.exports = onSchedule(
 
         const orden = c.entrega_sin_firma?.orden_id || null;
         const enValidacion = c.firmado_pendiente_validacion === true;
+        // Orden de compra (2026-11-18): lo que falta es la OC, no una firma.
+        const conOC = CF.formalizaConOC(c);
         await db.collection("mail_queue").add({
           to,
-          subject: `Contrato sin firmar: equipos entregados ${hace || "al cliente"} — ${c.cliente_nombre || "Cliente"} (${legible})`,
-          preheader: "La entrega ya se hizo; falta el contrato firmado por el cliente",
+          subject: conOC
+            ? `Contrato sin orden de compra: equipos entregados ${hace || "al cliente"} — ${c.cliente_nombre || "Cliente"} (${legible})`
+            : `Contrato sin firmar: equipos entregados ${hace || "al cliente"} — ${c.cliente_nombre || "Cliente"} (${legible})`,
+          preheader: conOC ? "La entrega ya se hizo; falta registrar la orden de compra" : "La entrega ya se hizo; falta el contrato firmado por el cliente",
           bodyContent: `
-            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Equipos entregados, contrato sin firmar</h2>
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">${conOC ? "Equipos entregados, falta la orden de compra" : "Equipos entregados, contrato sin firmar"}</h2>
             <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
               Los equipos del contrato <b>${esc(legible)}</b> de <b>${esc(c.cliente_nombre || "—")}</b>
               se entregaron${cuando ? ` el <b>${esc(cuando)}</b>` : ""}${hace ? ` (<b>${hace}</b>)` : ""}${orden ? `, orden ${linkOrden(orden, orden)}` : ""},
-              y el contrato <b>todavía no está firmado</b> en la plataforma.
+              y ${conOC ? `<b>${esc(CF.requisitoFormalizacion(c))}</b> todavía no está registrada` : "el contrato <b>todavía no está firmado</b>"} en la plataforma.
             </p>
             <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-              La empresa ya cumplió con la entrega. ${enValidacion
+              La empresa ya cumplió con la entrega. ${conOC
+                ? "Falta dar seguimiento a la entidad y <b>subir la orden de compra</b> desde la ficha del cliente (el monto debe cuadrar con el contrato)."
+                : enValidacion
                 ? "La firma digital <b>ya llegó</b>, pero firmó una persona distinta al representante registrado: falta que administración <b>valide al firmante</b>."
                 : "Falta dar seguimiento al cliente: envíale el <b>enlace de firma digital</b> desde su ficha, o sube el <b>contrato firmado</b> si ya firmó en papel."}
-              Mientras no esté firmado, el contrato no queda activo.
+              Mientras no ${conOC ? "esté la OC" : "esté firmado"}, el contrato no queda activo.
             </p>
             <p style="margin:0;font:13px/1.5 Arial,sans-serif;color:#6b7280;">
-              Este recordatorio llega cada día y se detiene solo cuando el contrato firmado esté en la plataforma.
+              Este recordatorio llega cada día y se detiene solo cuando ${conOC ? "la orden de compra" : "el contrato firmado"} esté en la plataforma.
             </p>`,
           ctaUrl: `${APP_BASE_URL}/clientes/centro.html?id=${encodeURIComponent(c.cliente_id || "")}&contrato=${encodeURIComponent(d.id)}`,
-          ctaLabel: "Gestionar la firma",
+          ctaLabel: conOC ? "Subir la orden de compra" : "Gestionar la firma",
           meta: { source: "recordatorioOperativo", seccion: "entregado_sin_firma", contrato: d.id, dias },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });

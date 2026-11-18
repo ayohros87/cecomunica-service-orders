@@ -274,10 +274,10 @@ Object.assign(window.Centro, {
   // 2026-09-28, T1). 'aprobado' sin activar ni firmar es el que espera firma.
   _estadoLabel(c) {
     const e = c?.estado || '';
-    if (e === 'aprobado' && c.dormido === true) return 'Dormido (sin firma)';
+    if (e === 'aprobado' && c.dormido === true) return ContratoFirma.esOC(c) ? 'Dormido (sin OC)' : 'Dormido (sin firma)';
     // Entregado con la firma del contrato pendiente (2026-11-11): no es
     // histórico — hay una firma que conseguir.
-    if (ContratoFirma.entregadoSinFirma(c)) return 'Entregado · firma pendiente';
+    if (ContratoFirma.entregadoSinFirma(c)) return ContratoFirma.esOC(c) ? 'Entregado · OC pendiente' : 'Entregado · firma pendiente';
     // Histórico que opera sin firma en el sistema (legacy o ya entregado):
     // "sin firma" sonaba a falta en contratos de 2024-2025 con radios en el
     // cliente (auditoría de módulos 2026-09-30, C6; igual que el archivo).
@@ -456,8 +456,18 @@ Object.assign(window.Centro, {
       } else if (ContratoFirma.esperando(c) && !this._serialesListos(c) && !c.firma_solicitud_id) {
         // Sin seriales no se firma: el anexo saldría vacío (auditoría UX 2026-09-28).
         it('info', `El contrato ${id} espera que bodega asigne los seriales`,
-          'Se asignan en Almacén · Asignar; al quedar asignados se habilita el envío para firma',
+          ContratoFirma.esOC(c) ? 'Se asignan en Almacén · Asignar; la orden de compra se puede subir igual'
+            : 'Se asignan en Almacén · Asignar; al quedar asignados se habilita el envío para firma',
           B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`), 'bodega');
+      } else if (ContratoFirma.esperando(c) && ContratoFirma.esOC(c) && this.puedeCrearGestion()) {
+        // Orden de compra (2026-11-18): no hay enlace — se sube la OC.
+        it('warn', `El contrato ${id} espera ${ContratoFirma.requisito(c)}${ContratoFirma.entregadoSinFirma(c) ? ' — los equipos ya se entregaron' : ''}`,
+          `${ContratoFirma.esGobierno(c) ? 'Gobierno: el refrendo puede llegar después y no frena la entrega. ' : ''}El monto debe cuadrar con el contrato`,
+          B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`) + B('Subir la OC', `Centro.subirOrdenCompra('${this.esc(c.id)}')`, true), 'cliente_enlace');
+      } else if (ContratoFirma.refrendoPendiente(c) && this.puedeCrearGestion()) {
+        it('info', `La OC del contrato ${id} espera el refrendo de la Contraloría`,
+          `OC ${this.esc(c.orden_compra?.numero || '')} registrada; regístralo cuando llegue (no frena la entrega)`,
+          B('Registrar el refrendo', `Centro.registrarRefrendo('${this.esc(c.id)}')`, true), 'cliente_enlace');
       } else if (ContratoFirma.esperando(c) && this.puedeCrearGestion()) {
         it('warn', `El contrato ${id} espera la firma del cliente${ContratoFirma.entregadoSinFirma(c) ? ' — los equipos ya se entregaron' : ''}`,
           c.firma_solicitud_estado === 'pendiente' ? 'El enlace de firma ya se envió — se puede reenviar' : 'Envíale el enlace de firma digital, o imprime el contrato y sube el firmado desde el expediente',
@@ -526,11 +536,13 @@ Object.assign(window.Centro, {
       const ref = c.fecha_aprobacion || c.fecha_creacion;
       const d = ref?.toDate ? ref.toDate() : (ref ? new Date(ref) : null);
       const n = d && !isNaN(d) ? Math.floor((Date.now() - d) / 86400000) : null;
-      if (n == null || n < 45) continue;
-      it('warn', `El contrato <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span> fue aprobado hace ${n} días y sigue sin firma`,
-        'Envíale el enlace de firma o sube el firmado; si ya no va, anúlalo',
+      const oc = ContratoFirma.esOC(c);
+      if (n == null || n < (oc ? ContratoFirma.DIAS_DORMIDO_OC : 45)) continue;
+      it('warn', `El contrato <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span> fue aprobado hace ${n} días y sigue sin ${oc ? 'orden de compra' : 'firma'}`,
+        oc ? 'Sube la OC cuando llegue; si ya no va, anúlalo' : 'Envíale el enlace de firma o sube el firmado; si ya no va, anúlalo',
         B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`)
-        + (this.puedeCrearGestion() ? B('Enviar para firma', `Centro.enviarFirma('${this.esc(c.id)}')`, true) : ''), 'cliente_enlace');
+        + (this.puedeCrearGestion() ? (oc ? B('Subir la OC', `Centro.subirOrdenCompra('${this.esc(c.id)}')`, true)
+          : B('Enviar para firma', `Centro.enviarFirma('${this.esc(c.id)}')`, true)) : ''), 'cliente_enlace');
     }
 
     // Gestiones con trabajo pendiente.

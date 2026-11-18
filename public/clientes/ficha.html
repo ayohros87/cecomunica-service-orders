@@ -146,6 +146,15 @@
             <label class="form-label" for="itbms_motivo_exencion">Motivo de exención</label>
             <input class="form-input" id="itbms_motivo_exencion" data-fk="Motivo de exención" placeholder="Resolución, entidad estatal, ZLC…">
           </div>
+          <div class="form-field">
+            <label class="form-label" for="formalizacion_contrato">Formaliza los contratos con</label>
+            <select class="form-select" id="formalizacion_contrato" data-fk="Formaliza los contratos con">
+              <option value="firma">Firma del contrato</option>
+              <option value="oc_gobierno">Orden de compra refrendada (gobierno)</option>
+              <option value="oc_corporativo">Orden de compra (corporativo)</option>
+            </select>
+            <span class="form-hint">Con orden de compra, el vendedor sube la OC en lugar de mandar el contrato a firmar. Se aplica a los contratos y renovaciones nuevos y a los que esperan firma.</span>
+          </div>
         </div>
       </div>
 

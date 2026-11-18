@@ -941,6 +941,11 @@ Object.assign(window.Centro, {
       // una cuenta con deuda → queda dicho; DEMO/TEMP se estampan pero no
       // cuentan como puntuales (Regularizacion.esPuntual).
       Object.assign(contrato, Centro._estampaReg());
+      // Orden de compra en vez de firma (2026-11-18): el contrato —y la
+      // renovación, que nace por aquí mismo— copia lo que dice la ficha del
+      // cliente. Se puede cambiar en el contrato puntual desde el Centro.
+      const formalizacion = window.ContratoFirma?.formalizacionDeCliente(cli);
+      if (formalizacion && ContratoFirma.lleva(contrato)) contrato.formalizacion = formalizacion;
       if (nuevoConVigente) {
         Object.assign(contrato, { motivo_contrato_nuevo: motivoNuevo, motivo_contrato_nuevo_por_uid: this.uid || null });
       }

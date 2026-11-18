@@ -302,6 +302,10 @@ window.FichaCliente = {
     set('direccion', c.direccion); set('direccion_facturacion', c.direccion_facturacion);
     set('itbms_motivo_exencion', c.itbms_motivo_exencion);
     document.getElementById('itbms_exento').value = c.itbms_exento ? 'true' : 'false';
+    if (document.getElementById('formalizacion_contrato')) {
+      document.getElementById('formalizacion_contrato').value =
+        ['oc_gobierno', 'oc_corporativo'].includes(c.formalizacion_contrato) ? c.formalizacion_contrato : 'firma';
+    }
     document.getElementById('activo').checked = c.activo !== false;
     this._syncMotivo();
 
@@ -453,6 +457,7 @@ window.FichaCliente = {
       itbms_motivo_exencion: g('itbms_motivo_exencion').value,
       activo: g('activo').checked,
     };
+    if (g('formalizacion_contrato')) raw.formalizacion_contrato = g('formalizacion_contrato').value;
     const vend = this.vendedores.find(v => v.id === g('vendedor').value);
     raw.vendedor_asignado = vend ? vend.id : null;
     raw.vendedor_email = vend ? vend.email : null;
@@ -519,11 +524,50 @@ window.FichaCliente = {
       if (!ok) throw new Error('cancelaste la desactivación del cliente');
     }
 
+    const formAntes = this.cliente.formalizacion_contrato || 'firma';
     await ClientesService.updateCliente(this.cliente.id, payload);
     this.cliente = { ...this.cliente, ...payload };
     this.pintar();
     const n = Object.keys(cambios).length;
-    Toast.show(`Cambios guardados — ${n === 1 ? '1 campo' : n + ' campos'} al historial`, 'ok');
+    let extra = '';
+    if ('formalizacion_contrato' in payload && payload.formalizacion_contrato !== formAntes) {
+      try {
+        const k = await this._propagarFormalizacion(payload.formalizacion_contrato);
+        if (k) extra = ` · ${k} contrato(s) por formalizar ahora esperan ${payload.formalizacion_contrato === 'firma' ? 'la firma' : 'la orden de compra'}`;
+      } catch (e) { console.warn('[ficha] no se pudo pasar la formalización a los contratos abiertos', e); }
+    }
+    Toast.show(`Cambios guardados — ${n === 1 ? '1 campo' : n + ' campos'} al historial${extra}`, 'ok', extra ? 7000 : undefined);
+  },
+
+  // El cliente cambió cómo formaliza (firma ↔ orden de compra, 2026-11-18):
+  // los contratos que TODAVÍA esperan formalizarse lo siguen. No se tocan los
+  // ya firmados/con OC, los REEMP/DEMO (no llevan firma), ni los que se
+  // cambiaron a mano en el Centro (origen 'contrato': esa excepción manda).
+  // Pasar a OC retira el enlace de firma pendiente. Devuelve cuántos cambió.
+  async _propagarFormalizacion(clave) {
+    const db = firebase.firestore();
+    const DEF = {
+      oc_gobierno: { tipo: 'orden_compra', sector: 'gobierno', origen: 'cliente' },
+      oc_corporativo: { tipo: 'orden_compra', sector: 'corporativo', origen: 'cliente' },
+    };
+    const nueva = DEF[clave] || null;
+    const snap = await db.collection('contratos').where('cliente_id', '==', this.cliente.id).get();
+    let k = 0;
+    for (const d of snap.docs) {
+      const c = d.data() || {};
+      const tipo = c.codigo_tipo || String(c.contrato_id || '').match(/^[A-Z]+/)?.[0] || '';
+      if (c.deleted === true || ['REEMP', 'DEMO'].includes(tipo) || ['Reemplazo', 'Demo'].includes(c.tipo_contrato)) continue;
+      if (!['pendiente_aprobacion', 'aprobado'].includes(c.estado) || c.firmado === true) continue;
+      if (c.formalizacion?.origen === 'contrato') continue;
+      const upd = { formalizacion: nueva ? nueva : firebase.firestore.FieldValue.delete() };
+      if (nueva && c.firma_solicitud_estado === 'pendiente' && c.firma_solicitud_id) {
+        await db.collection('firma_solicitudes').doc(c.firma_solicitud_id).update({ estado: 'cancelado' });
+        upd.firma_solicitud_estado = 'cancelado';
+      }
+      await d.ref.update(upd);
+      k++;
+    }
+    return k;
   },
 
   // A dónde sigue el alta (convención ?from= compartida con el form viejo).
@@ -583,6 +627,7 @@ window.FichaCliente = {
     telefono: 'Teléfono', email: 'Correo', email_acuses: 'Correo de acuses',
     direccion: 'Dirección', direccion_facturacion: 'Dirección de facturación',
     itbms_exento: 'ITBMS exento', itbms_motivo_exencion: 'Motivo de exención',
+    formalizacion_contrato: 'Formaliza los contratos con',
     tags: 'Etiquetas', vendedor_asignado: 'Vendedor (uid)', vendedor_email: 'Vendedor',
     activo: 'Activo', deleted: 'Eliminado', ip: 'IP',
     qbo_customer_id: 'QuickBooks (id)', qbo_customer_name: 'QuickBooks (cliente)',

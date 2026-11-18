@@ -11,6 +11,7 @@ const logger = require("firebase-functions/logger");
 const { admin, db } = require("./admin");
 const { APP_BASE_URL } = require("./inventario");
 const D = require("../domain/contratoDormido");
+const F = require("../domain/contratoFirma");
 
 function esc(v) {
   return String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -86,18 +87,23 @@ async function dormirContratosSinFirma({ dryRun = false, now = new Date(), dias 
     if (!to) continue;
     try {
       const url = `${APP_BASE_URL}/clientes/centro.html?id=${encodeURIComponent(c.cliente_id || "")}&contrato=${encodeURIComponent(doc.id)}`;
+      // Con orden de compra (2026-11-18) no hay firma ni enlace: lo que no
+      // llegó es la OC, y reactivarlo es volver a esperarla.
+      const conOC = F.formalizaConOC(c);
+      const falta = F.requisitoFormalizacion(c);
       await db.collection("mail_queue").add({
         to,
-        subject: `Contrato ${c.contrato_id || doc.id} quedó dormido: ${dec.dias} días sin firma`,
+        subject: `Contrato ${c.contrato_id || doc.id} quedó dormido: ${dec.dias} días sin ${conOC ? "orden de compra" : "firma"}`,
         html: `
           <div style="font-family:Arial,sans-serif;color:#111;max-width:520px;">
             <h2 style="font:700 20px Arial,sans-serif;color:#0B2A47;margin:0 0 12px;">Contrato dormido</h2>
             <p style="margin:0 0 12px;">El contrato <b>${esc(c.contrato_id || doc.id)}</b> de
-            <b>${esc(c.cliente_nombre || "—")}</b> lleva <b>${dec.dias} días</b> aprobado sin la firma del cliente.
-            La solicitud y el enlace de firma caducaron y el contrato quedó <b>dormido</b>: ya no cuenta en
+            <b>${esc(c.cliente_nombre || "—")}</b> lleva <b>${dec.dias} días</b> aprobado sin ${esc(falta)}.
+            ${conOC ? "" : "La solicitud y el enlace de firma caducaron y "}${conOC ? "El" : "el"} contrato quedó <b>dormido</b>: ya no cuenta en
             "Contratos por firmar" ni frena otros trámites de la cuenta.</p>
-            <p style="margin:0 0 12px;">Si el cliente todavía va a firmar, reactívalo desde la ficha del cliente
-            (<b>Reactivar la solicitud</b>): se genera un enlace nuevo.</p>
+            <p style="margin:0 0 12px;">${conOC
+              ? "Si la entidad todavía va a emitir la orden de compra, reactívalo desde la ficha del cliente (<b>Reactivar…</b>) y súbela cuando llegue."
+              : "Si el cliente todavía va a firmar, reactívalo desde la ficha del cliente (<b>Reactivar la solicitud</b>): se genera un enlace nuevo."}</p>
             <p style="margin:0;"><a href="${esc(url)}" style="color:#0B2A47;">Abrir la ficha del cliente</a></p>
           </div>`,
         meta: { tipo: "contrato_dormido", contrato_doc_id: doc.id, contrato_id: c.contrato_id || null },

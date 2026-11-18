@@ -174,9 +174,12 @@ test("P8 · recordatorio DIARIO al vendedor, que se apaga solo", () => {
   assert.match(bloque, /c\.creado_por_uid/);
   assert.match(bloque, /if \(!to\) to = await G\.vendedorEmailDeCliente\(c\.cliente_id\);/);
   // Cliente, número, fecha de entrega y días.
-  assert.match(bloque, /subject: `Contrato sin firmar: equipos entregados \$\{hace \|\| "al cliente"\} — \$\{c\.cliente_nombre \|\| "Cliente"\} \(\$\{legible\}\)`/);
+  // Desde 2026-11-18 el asunto tiene dos variantes: el contrato que espera la
+  // firma, y el que se formaliza con ORDEN DE COMPRA (gobierno/corporativo).
+  assert.match(bloque, /`Contrato sin firmar: equipos entregados \$\{hace \|\| "al cliente"\} — \$\{c\.cliente_nombre \|\| "Cliente"\} \(\$\{legible\}\)`/);
+  assert.match(bloque, /`Contrato sin orden de compra: equipos entregados \$\{hace \|\| "al cliente"\} — \$\{c\.cliente_nombre \|\| "Cliente"\} \(\$\{legible\}\)`/);
   assert.match(bloque, /se entregaron\$\{cuando \?/);
-  assert.match(bloque, /se detiene solo cuando el contrato firmado esté en la plataforma/);
+  assert.match(bloque, /se detiene solo cuando \$\{conOC \? "la orden de compra" : "el contrato firmado"\} esté en la plataforma/);
   assert.match(bloque, /seccion: "entregado_sin_firma"/);
   // No se pisa con el aviso del anexo: aquel mira gestiones, este contratos.
   const j = cron.slice(cron.indexOf("── J) Aumentos esperando la firma del anexo"), cron.indexOf("── K)"));

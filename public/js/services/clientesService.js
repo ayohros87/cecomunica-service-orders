@@ -127,6 +127,14 @@ const ClientesService = {
     // asignado, solo se toca si quien guarda trae la clave: un formulario que
     // no pregunta (la fusión de duplicados) mandaría el payload canónico
     // completo y le pondría "cédula" al pasaporte de una ficha ajena.
+    // Cómo formaliza sus contratos (2026-11-18): firma, u orden de compra
+    // (gobierno: refrendada; corporativo). Mismo criterio que el documento del
+    // representante: solo se toca si quien guarda trae la clave.
+    if ('formalizacion_contrato' in raw) {
+      cliente.formalizacion_contrato = ['oc_gobierno', 'oc_corporativo'].includes(raw.formalizacion_contrato)
+        ? raw.formalizacion_contrato : "firma";
+    }
+
     if ('representante_doc_tipo' in raw) {
       cliente.representante_doc_tipo = raw.representante_doc_tipo === "pasaporte" ? "pasaporte" : "cedula";
     }

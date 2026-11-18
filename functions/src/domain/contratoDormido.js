@@ -31,7 +31,7 @@
 // reactiva el vendedor. No entran las actualizaciones de seriales
 // (es_regularizacion: ya no se firman, se aplican) ni el anexo ya firmado que
 // espera la validación del firmante.
-const { llevaFirma } = require("./contratoFirma");
+const { llevaFirma, formalizaConOC, DIAS_DORMIDO_OC } = require("./contratoFirma");
 
 const DIAS_DORMIDO = 45;
 const MOTIVO = "sin_firma_45d";
@@ -82,9 +82,16 @@ function _decidir(viva, edad, dias) {
   return { dormir: true, dias: edad, porQue: `${edad} días sin firma` };
 }
 
+// Un contrato que se formaliza con ORDEN DE COMPRA (gobierno/corporativo) se
+// duerme a los 90 días, no a los 45 (Alberto, 18-nov-2026): la OC de una
+// entidad —y su refrendo— tarda más que una firma.
+function umbralDormir(contrato, dias = DIAS_DORMIDO) {
+  return formalizaConOC(contrato) ? Math.max(dias, DIAS_DORMIDO_OC) : dias;
+}
+
 function decidirDormir({ contrato, now = new Date(), dias = DIAS_DORMIDO } = {}) {
   const viva = esperaFirmaViva(contrato);
-  return _decidir(viva, viva ? diasEsperando(contrato, now) : null, dias);
+  return _decidir(viva, viva ? diasEsperando(contrato, now) : null, umbralDormir(contrato, dias));
 }
 
 // ── Anexos de aumento (gestiones tipo 'aumento' en 'pendiente_firma') ──
@@ -180,6 +187,6 @@ const CAMPOS_GESTION = ["dormido", "dormido_at", "dormido_motivo", "dormido_dias
 
 module.exports = {
   DIAS_DORMIDO, MOTIVO, CAMPOS_GESTION, esperaFirmaViva, baseEspera, diasEsperando,
-  decidirDormir, patchDormir, patchCaducarSolicitud, patchReactivar,
+  umbralDormir, decidirDormir, patchDormir, patchCaducarSolicitud, patchReactivar,
   anexoEsperaFirmaViva, baseEsperaAnexo, diasEsperandoAnexo, decidirDormirAnexo, patchDormirAnexo,
 };

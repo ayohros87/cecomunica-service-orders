@@ -809,8 +809,9 @@ Object.assign(window.Centro, {
           || (c.origen_legacy_ref ? `papel: ${this.esc(c.origen_legacy_ref)}` : ''))}
         ${dato('Renovado por', renovador ? `<span class="cg-mono">${this.esc(renovador.contrato_id || renovador.id)}</span>` : '')}
         ${dato('Contrato aparte (no anexo)', c.motivo_contrato_nuevo ? `<i>${this.esc(c.motivo_contrato_nuevo)}</i>` : '')}
-        ${dato('Firmado', this._firmadoTxt(c)
-          || (!ContratoFirma.lleva(c) ? `<span style="color:var(--fg-3);">no lleva firma — ${ContratoFirma.porQue(c)}</span>` : ''))}
+        ${dato(ContratoFirma.esOC(c) ? 'Orden de compra' : 'Firmado', this._firmadoTxt(c)
+          || (!ContratoFirma.lleva(c) ? `<span style="color:var(--fg-3);">no lleva firma — ${ContratoFirma.porQue(c)}</span>`
+            : ContratoFirma.esOC(c) ? `<span style="color:var(--fg-3);">pendiente — ${ContratoFirma.esGobierno(c) ? 'gobierno: OC refrendada' : 'corporativo: OC'}; nuestro contrato queda como términos de referencia</span>` : ''))}
         ${dato('Entregado', this._entregaTxt(c))}
         ${dato('Firma por enlace', c.firmado_pendiente_validacion
           ? '<span class="cg-venc por_vencer">recibida — validar firmante</span>'
@@ -1217,6 +1218,8 @@ Object.assign(window.Centro, {
   // con su comisión por unos radios que solo cambiaron de número de serie.
   _aceptaFirmado(c) {
     if (!ContratoFirma.lleva(c)) return false;
+    // Con orden de compra (2026-11-18) no se sube un firmado: se sube la OC.
+    if (ContratoFirma.esOC(c)) return false;
     // Un dormido se reactiva primero (la firma reabre el trámite).
     if (ContratoFirma.dormido(c)) return false;
     return (c?.estado === 'aprobado' && !c.firmado)
@@ -1231,6 +1234,13 @@ Object.assign(window.Centro, {
   _accFirmado(c) {
     if (!c?.firmado) return null;
     const cuando = c.firmado_fecha ? `firmado ${this._fmtFecha(c.firmado_fecha)}` : '';
+    if (c.firmado_tipo === 'orden_compra' && c.firmado_url) {
+      const oc = c.orden_compra || {};
+      return this._acc({ id: 'firmado', grupo: 'Documentos',
+        label: oc.refrendo?.url ? 'Ver la OC refrendada (PDF)' : 'Ver la orden de compra (PDF)',
+        blank: true, hint: `OC ${oc.numero || ''}${c.firmado_fecha ? ` · registrada ${this._fmtFecha(c.firmado_fecha)}` : ''}`,
+        href: this.esc(c.firmado_url) });
+    }
     if (c.firmado_url) {
       // _menuAccionesHtml mete `href` crudo en el atributo: se escapa aquí.
       return this._acc({ id: 'firmado', grupo: 'Documentos', label: 'Ver el firmado (PDF)',
@@ -1246,6 +1256,7 @@ Object.assign(window.Centro, {
   // Fila "Firmado" de la vista previa. Antes decía "sí ✓" y ahí se acababa.
   _firmadoTxt(c) {
     if (!c?.firmado) return '';
+    if (c.firmado_tipo === 'orden_compra') return this._ocTxt(c);
     const cuando = c.firmado_fecha ? ` · ${this._fmtFecha(c.firmado_fecha)}` : '';
     if (c.firmado_url) {
       return `<a href="${this.esc(c.firmado_url)}" target="_blank" rel="noopener">Ver el PDF firmado</a>${cuando}`;

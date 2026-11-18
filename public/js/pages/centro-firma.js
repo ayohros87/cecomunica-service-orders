@@ -14,6 +14,8 @@ Object.assign(window.Centro, {
     if (!c || c.estado !== 'aprobado') { Toast.show('Solo contratos APROBADOS se envían a firma', 'warn'); return; }
     // Candado, no solo el botón escondido: un reemplazo no se manda a firmar.
     if (!ContratoFirma.lleva(c)) { Toast.show(`Este contrato no lleva firma: ${ContratoFirma.porQue(c)}`, 'warn'); return; }
+    // Con orden de compra (2026-11-18) no hay enlace: se sube la OC.
+    if (ContratoFirma.esOC(c)) { this.subirOrdenCompra(id); return; }
     let sid = (c.firma_solicitud_id && c.firma_solicitud_estado === 'pendiente') ? c.firma_solicitud_id : null;
     // El enlace congela el Anexo A con lo que haya en el pool: sin seriales
     // asignados el cliente firmaría un contrato sin equipos (auditoría UX
@@ -142,6 +144,28 @@ Object.assign(window.Centro, {
       Toast.show('Lo reactiva el vendedor o administración', 'warn'); return;
     }
     this._cerrarModal();
+    // Con orden de compra no hay enlace que regenerar: se vuelve a esperar la
+    // OC y el reloj de 90 días arranca otra vez (2026-11-18).
+    if (ContratoFirma.esOC(c)) {
+      const okOC = await Modal.confirm({
+        title: 'Reactivar: volver a esperar la OC', confirmLabel: 'Reactivar',
+        message: `El contrato <b class="cg-mono">${this.esc(c.contrato_id || c.id)}</b> quedó dormido por
+          ${this.esc(String(c.dormido_dias || ContratoFirma.DIAS_DORMIDO_OC))} días sin la orden de compra. Vuelve a ser un trámite vivo;
+          si en ${ContratoFirma.DIAS_DORMIDO_OC} días no llega la OC, se vuelve a dormir.`,
+      });
+      if (!okOC) { this.abrirGestion(`ct-${c.id}`); return; }
+      try {
+        await ContratosService.updateContrato(c.id, {
+          dormido: false,
+          dormido_reactivado_at: firebase.firestore.FieldValue.serverTimestamp(),
+          dormido_reactivado_por_uid: this.uid || null,
+        });
+        c.dormido = false; c.dormido_reactivado_at = new Date();
+        Toast.show('Contrato reactivado — sube la OC cuando llegue', 'ok');
+      } catch (e) { console.error(e); Toast.show('No se pudo reactivar: ' + (e.message || e), 'bad'); return; }
+      this.pintarContratos?.(); this.pintarGestiones?.(); this.pintarSenales?.(); this.armarMenu?.();
+      return;
+    }
     const dias = c.dormido_dias ? `${c.dormido_dias} días sin firma` : 'más de 45 días sin firma';
     const ok = await Modal.confirm({
       title: 'Reactivar la solicitud de firma', confirmLabel: 'Reactivar y generar enlace',

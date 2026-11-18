@@ -268,6 +268,13 @@ Object.assign(window.Centro, {
   _firmaPasoSub(c) {
     const E = (v) => this.esc(v);
     const id = E(c.id);
+    // Orden de compra (2026-11-18): no hay enlace ni papel firmado — la OC.
+    if (ContratoFirma.esOC(c)) {
+      if (c.firmado) return this._ocTxt(c) || 'orden de compra registrada';
+      return `falta la orden de compra${ContratoFirma.esGobierno(c) ? ' (gobierno: el refrendo puede llegar después)' : ''}
+        · <a href="#" onclick="event.stopPropagation(); Centro.subirOrdenCompra('${id}'); return false;">subir la OC</a>
+        · <span style="color:var(--fg-4);">el monto debe cuadrar con el contrato; nuestro contrato queda como términos de referencia</span>`;
+    }
     const hace = (ts) => { const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null); if (!d || isNaN(d)) return ''; const n = Math.floor((Date.now() - d) / 86400000); return n <= 0 ? 'hoy' : n === 1 ? 'hace 1 día' : `hace ${n} días`; };
     if (c.firmado) {
       return c.firmado_tipo === 'digital' ? `firmó por enlace${c.firmado_digital?.firmante_nombre ? ` · ${E(c.firmado_digital.firmante_nombre)}` : ''}`
@@ -327,8 +334,14 @@ Object.assign(window.Centro, {
         c.seriales_estado === 'asignados' ? 'bodega asignó los seriales'
           : this._serialesListos(c) ? 'no hay equipo que asignar'
           : 'bodega los asigna en Almacén · Asignar — sin eso no se envía a firma', 'bodega'],
-      ['Firma del cliente', !!c.firmado, this._firmaPasoSub(c), 'cliente_enlace'],
-      ['Activación', c.estado === 'activo', 'automática al validarse la firma', 'sistema'],
+      [ContratoFirma.esOC(c) ? 'Orden de compra' : 'Firma del cliente', !!c.firmado, this._firmaPasoSub(c), 'cliente_enlace'],
+      ['Activación', c.estado === 'activo', ContratoFirma.esOC(c) ? 'automática al registrarse la OC' : 'automática al validarse la firma', 'sistema'],
+      // Gobierno: el refrendo NO frena la entrega (Alberto, 18-nov-2026), pero
+      // queda a la vista hasta que se registra.
+      ...(ContratoFirma.esGobierno(c) ? [['Refrendo de la Contraloría', !!c.orden_compra?.refrendo,
+        c.orden_compra?.refrendo ? `refrendo ${E(c.orden_compra.refrendo.numero || '')}${c.orden_compra.refrendo.fecha ? ` · ${E(c.orden_compra.refrendo.fecha)}` : ''}`
+          : c.firmado ? `pendiente · <a href="#" onclick="event.stopPropagation(); Centro.registrarRefrendo('${E(c.id)}'); return false;">registrarlo</a> — no frena la entrega`
+          : 'llega con la OC o después; no frena la entrega', 'cliente_enlace']] : []),
       pasoProg,
       pasoEntrega,
       ['Regularización de la cuenta', c.estado === 'activo' && !reg, regSub, reg?.motivo === 'sobrantes' ? 'cuenta' : 'sistema'],
@@ -339,12 +352,14 @@ Object.assign(window.Centro, {
     ];
     const done = pasos.filter(p => p[1]).length;
     const dormido = ContratoFirma.dormido(c);
-    const [chipCls, chipTxt] = dormido ? ['cg-chip--warn', `Dormido · ${c.dormido_dias || ContratoFirma.DIAS_DORMIDO}+ días sin firma`]
+    const conOC = ContratoFirma.esOC(c);
+    const [chipCls, chipTxt] = dormido ? ['cg-chip--warn', `Dormido · ${c.dormido_dias || ContratoFirma.diasDormido(c)}+ días sin ${conOC ? 'OC' : 'firma'}`]
       : c.estado === 'pendiente_aprobacion' ? ['cg-chip--warn', 'Esperando aprobación']
       : !llevaFirma ? (c.entrega_confirmada === true ? ['cg-chip--ok', 'Entregado'] : ['cg-chip--info', 'Aprobado — por entregar'])
       : !c.firmado && !this._serialesListos(c) ? ['cg-chip--info', 'Esperando seriales']
-      : ContratoFirma.entregadoSinFirma(c) ? ['cg-chip--warn', 'Entregado · firma pendiente']
-      : !c.firmado ? ['cg-chip--warn', 'Esperando firma']
+      : ContratoFirma.entregadoSinFirma(c) ? ['cg-chip--warn', conOC ? 'Entregado · OC pendiente' : 'Entregado · firma pendiente']
+      : !c.firmado ? ['cg-chip--warn', conOC ? 'Esperando la OC' : 'Esperando firma']
+      : ContratoFirma.refrendoPendiente(c) ? ['cg-chip--warn', 'Activo — refrendo pendiente']
       : c.estado === 'activo' && reg?.motivo === 'sobrantes' ? ['cg-chip--warn', 'Activo — regularización parcial']
       : c.estado === 'activo' && reg ? ['cg-chip--info', 'Activo — regularización pendiente']
       : c.estado === 'activo' ? ['cg-chip--ok', 'Activo'] : ['cg-chip--info', 'En trámite'];
@@ -376,8 +391,11 @@ Object.assign(window.Centro, {
         <div class="cg-exp">
           <div>
             <p style="font-size:13px; margin:0 0 8px;">${dormido
-              ? `<b>Dormido:</b> pasaron ${this.esc(String(c.dormido_dias || ContratoFirma.DIAS_DORMIDO))} días aprobado sin la firma del cliente; la solicitud y el enlace caducaron.
-                 No cuenta en "Contratos por firmar" ni frena otros trámites de la cuenta. <b>Reactivar</b> genera un enlace nuevo.`
+              ? (conOC
+                ? `<b>Dormido:</b> pasaron ${this.esc(String(c.dormido_dias || ContratoFirma.DIAS_DORMIDO_OC))} días aprobado sin la orden de compra.
+                 No cuenta en "Contratos por firmar" ni frena otros trámites de la cuenta. <b>Reactivar</b> vuelve a esperarla.`
+                : `<b>Dormido:</b> pasaron ${this.esc(String(c.dormido_dias || ContratoFirma.DIAS_DORMIDO))} días aprobado sin la firma del cliente; la solicitud y el enlace caducaron.
+                 No cuenta en "Contratos por firmar" ni frena otros trámites de la cuenta. <b>Reactivar</b> genera un enlace nuevo.`)
               : esRenov
               ? `Renueva y <b>consolida la cuenta</b>: sus orígenes quedan marcados como renovados al activarse.`
               : `Contrato nuevo pendiente del ciclo aprobación → seriales de bodega → firma → activo.`}

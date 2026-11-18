@@ -95,7 +95,17 @@
     // Un REEMPLAZO no lleva firma del cliente (2026-09-15): avisarle "aprobado
     // pero sin firma" era declarar incompleto un documento que está completo.
     const llevaFirma = !window.ContratoFirma || ContratoFirma.lleva(c);
-    if (c.estado === 'pendiente_aprobacion' || (llevaFirma && !c.firmado && c.estado !== 'activo')) {
+    // Orden de compra (2026-11-18): la OC de la entidad reemplaza este
+    // documento; queda como términos estándar de referencia y se dice arriba.
+    if (window.ContratoFirma?.esOC?.(c) && c.estado !== 'pendiente_aprobacion') {
+      const av = $('avisoEstado');
+      const oc = c.orden_compra;
+      av.style.display = 'block';
+      av.textContent = (oc
+        ? `Formalizado con la orden de compra ${oc.numero || ''}${ContratoFirma.esGobierno(c) ? (oc.refrendo ? ` (refrendo ${oc.refrendo.numero || ''})` : ' — refrendo pendiente') : ''}.`
+        : `Se formaliza con la orden de compra${ContratoFirma.esGobierno(c) ? ' refrendada' : ''} de la entidad — todavía no se ha registrado.`)
+        + ' Este documento queda como términos estándar de referencia; no lleva la firma del cliente.';
+    } else if (c.estado === 'pendiente_aprobacion' || (llevaFirma && !c.firmado && c.estado !== 'activo')) {
       const av = $('avisoEstado');
       av.style.display = 'block';
       av.textContent = c.estado === 'pendiente_aprobacion'

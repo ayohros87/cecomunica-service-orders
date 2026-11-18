@@ -66,5 +66,26 @@ function nombreContrato(c) { return SIN_FIRMA[codigoTipo(c)]?.nombre || "contrat
 /** Por qué no lleva firma, para escribirlo en el correo. */
 function porQueSinFirma(c) { return SIN_FIRMA[codigoTipo(c)]?.porQue || ""; }
 
+// FORMALIZACIÓN POR ORDEN DE COMPRA (2026-11-18, Alberto): clientes de
+// gobierno y corporativos formalizan con su OC (refrendada, en gobierno) en vez
+// de firmar nuestro contrato. La OC cumple el requisito por la misma vía que el
+// firmado (firmado=true), así que el candado, la activación y la facturación no
+// cambian; lo que cambia es el plazo para dormirse (90 días) y cómo se le
+// habla al vendedor. El porqué completo está en el archivo del front.
+const DIAS_DORMIDO_OC = 90;
+
+/** ¿Se formaliza con orden de compra en vez de firma? */
+function formalizaConOC(c) { return llevaFirma(c) && c?.formalizacion?.tipo === "orden_compra"; }
+
+/** ¿OC de gobierno (lleva refrendo de la Contraloría)? */
+function esOCGobierno(c) { return formalizaConOC(c) && c.formalizacion.sector === "gobierno"; }
+
+/** Lo que se espera del cliente, para los correos ("espera la orden de compra"). */
+function requisitoFormalizacion(c) {
+  if (!formalizaConOC(c)) return "la firma del cliente";
+  return esOCGobierno(c) ? "la orden de compra (refrendada)" : "la orden de compra";
+}
+
 module.exports = { SIN_FIRMA, codigoTipo, llevaFirma, esperandoFirma, nombreContrato, porQueSinFirma,
-  entregadoSinFirma, fechaEntregaSinFirma, diasEntregadoSinFirma };
+  entregadoSinFirma, fechaEntregaSinFirma, diasEntregadoSinFirma,
+  DIAS_DORMIDO_OC, formalizaConOC, esOCGobierno, requisitoFormalizacion };
