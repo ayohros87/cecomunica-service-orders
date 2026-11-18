@@ -51,7 +51,9 @@ window.AlmacenExistencias = (() => {
   // `no_retirado` (radio del cliente sin retirar) también va aquí: antes no
   // estaba ni en COLS ni en OTROS y esas unidades no sumaban en ninguna
   // columna ni salían al desplegar el modelo (auditoría UX 2026-09-28).
-  const OTROS = ['vendido', 'baja', 'por_clasificar', 'en_poc', 'pendiente_cobro', 'no_retirado'];
+  // `con_tecnico` (salió con un técnico a una visita, 2026-11-18): no está en
+  // el estante ni con un cliente; su seguimiento vive en Almacén · Hoy.
+  const OTROS = ['vendido', 'baja', 'por_clasificar', 'en_poc', 'pendiente_cobro', 'no_retirado', 'con_tecnico'];
 
   // Filas cuyas unidades se están trayendo — evita que dos clicks seguidos
   // sobre la misma fila lancen dos consultas.

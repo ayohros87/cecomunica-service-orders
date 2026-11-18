@@ -43,6 +43,8 @@ import '/js/ui/entity-picker.js';
 import '/js/ui/asignador-seriales.js';
 import '/js/pages/almacen-asignar.js';
 import '/js/pages/almacen-hoy.js';
+// Radios con técnicos: salida de bodega a una visita y regreso (2026-11-18).
+import '/js/pages/almacen-salidas-visita.js';
 // Runner común de lotes (Existencias y Avanzado) — auditoría UX 2026-09-28.
 import '/js/ui/asistente-lote.js';
 import '/js/pages/almacen-existencias.js';

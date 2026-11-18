@@ -53,6 +53,14 @@ const ESTADOS = {
   // al estante (→ en_bodega) o se da por abandonado (→ baja, solo admin).
   // Plan: docs/plans/PLAN_ENTREGA_PARCIAL.md §3.
   NO_RETIRADO: "no_retirado",
+  // El radio SALIÓ de bodega con un técnico para una VISITA (2026-11-18,
+  // MACELLO: Jesús se llevó 3 radios que seguían "en bodega" y bodega no
+  // sabía que no estaban). No está disponible para alquilar ni con ningún
+  // cliente. `salida_visita` dice con qué visita salió. Sale por dos puertas,
+  // las dos por el callable salidaRadiosVisita / regularizarReemplazoOrden:
+  // se dejó con el cliente (cambio en sitio → en_cliente) o volvió sin usar
+  // (bodega lo recibe → en_bodega).
+  CON_TECNICO: "con_tecnico",
   BAJA:       "baja",
 };
 

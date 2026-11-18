@@ -178,7 +178,49 @@ const ficha = (id, extra = {}) => db.collection("equipos_pool").doc(id).set({ se
   assert.match(mail.to, /bodega@x\.com/); assert.match(mail.subject, /VSAL3 → VENT3/);
   assert.match(mail.bodyContent, /batería hinchada/); assert.match(mail.bodyContent, /Jesús Santos/);
   await rechaza(regularizar.ejecutar, { ordenId: "2026111602", serialSaliente: "VSAL1", serialEntrante: "VENT2" }, /ya se registró/);
+  assert.match(mail.bodyContent, /salió sin registrarse/, "el entrante seguía en bodega: el correo lo dice");
   console.log("  ok   E1 visita: entrante escrito, visita cerrada, varios cambios, candado por serial");
+
+  // ── Salida de radios a la visita (2026-11-18) ──
+  const salida = require("../src/callable/salidaRadiosVisita");
+  const pf = (id, extra = {}) => db.collection("equipos_pool").doc(id).set({ serial: id, serial_norm: id, modelo_id: "m360", modelo_label: "HYTERA PNC360S", estado: "en_bodega", ...extra });
+  await pf("SAL01"); await pf("SAL02"); await pf("SAL03"); await pf("SALTALLER1", { estado: "en_taller" });
+  await pf("SCLI1", { estado: "en_cliente", asignacion: { contrato_doc_id: "c2", contrato_id: "GR-C2", cliente_id: "cli", cliente_nombre: "LIGO" } });
+  await db.collection("ordenes_de_servicio").doc("2026111801").set({ estado_reparacion: "ASIGNADO", tipo_de_servicio: "VISITA TECNICA", cliente_id: "cli", cliente_nombre: "LIGO",
+    tecnico_asignado: "Jesús Santos", equipos: [{ id: "s1", numero_de_serie: "SCLI1", modelo: "PNC360S" }] });
+  await db.collection("ordenes_de_servicio").doc("2026111802").set({ estado_reparacion: "ASIGNADO", tipo_de_servicio: "VISITA TECNICA", cliente_id: "cli2", cliente_nombre: "OTRO", equipos: [] });
+  await db.collection("ordenes_de_servicio").doc("2026111803").set({ estado_reparacion: "ASIGNADO", tipo_de_servicio: "REPARACION", cliente_id: "cli", equipos: [] });
+  // Candados: no visita, visita cerrada, serial fuera de bodega → no se mueve NINGUNO.
+  await rechaza(salida.ejecutar, { accion: "sacar", ordenId: "2026111803", seriales: ["SAL01"] }, /no es una visita/);
+  await rechaza(salida.ejecutar, { accion: "sacar", ordenId: "2026111602", seriales: ["SAL01"] }, /ya está cerrada/);
+  await rechaza(salida.ejecutar, { accion: "sacar", ordenId: "2026111801", seriales: ["SAL01", "SALTALLER1"] }, /No se movió ningún radio.*SALTALLER1/);
+  assert.equal((await db.collection("equipos_pool").doc("SAL01").get()).data().estado, "en_bodega", "todo o nada");
+  const s1 = await salida.ejecutar({ usuario: "bodega@x", accion: "sacar", ordenId: "2026111801", seriales: ["sal01", "SAL02", "SAL03", "SAL02"] });
+  assert.equal(s1.radios.length, 3, "duplicados colapsan");
+  const p1 = (await db.collection("equipos_pool").doc("SAL01").get()).data();
+  assert.equal(p1.estado, "con_tecnico"); assert.equal(p1.salida_visita.orden_id, "2026111801"); assert.equal(p1.salida_visita.tecnico, "Jesús Santos");
+  await rechaza(salida.ejecutar, { accion: "sacar", ordenId: "2026111802", seriales: ["SAL01"] }, /ya salió con la visita 2026111801/);
+  // Cambio en sitio: con un radio de OTRA visita se rechaza; con el de esta, queda dejado.
+  await rechaza(regularizar.ejecutar, { ordenId: "2026111802", serialSaliente: "SCLI1", serialEntrante: "SAL01" }, /no está en la orden|salió de bodega con la visita/);
+  const r1 = await regularizar.ejecutar({ usuario: "tec@x", ordenId: "2026111801", serialSaliente: "SCLI1", serialEntrante: "SAL01", salienteEnCasa: true, motivo: "no transmitía; cambio en sitio" });
+  const p1b = (await db.collection("equipos_pool").doc("SAL01").get()).data();
+  assert.equal(p1b.estado, "en_cliente"); assert.equal(p1b.salida_visita, undefined, "la salida se cierra al dejarlo");
+  const mail2 = (await db.collection("mail_queue").doc(r1.aviso_mail_id).get()).data();
+  assert.doesNotMatch(mail2.bodyContent, /salió sin registrarse/);
+  const g1 = (await db.collection("gestiones").doc(r1.gestion_id).get()).data();
+  assert.equal(g1.items[0].salida_bodega, "registrada");
+  // Devolver: el dejado ya no está con el técnico; el sobrante vuelve a bodega.
+  await rechaza(salida.ejecutar, { accion: "devolver", ordenId: "2026111801", seriales: ["SAL01"] }, /no con el técnico/);
+  await rechaza(salida.ejecutar, { accion: "devolver", ordenId: "2026111802", seriales: ["SAL02"] }, /no con esta/);
+  await salida.ejecutar({ usuario: "bodega@x", accion: "devolver", ordenId: "2026111801", seriales: ["SAL02"] });
+  const p2 = (await db.collection("equipos_pool").doc("SAL02").get()).data();
+  assert.equal(p2.estado, "en_bodega"); assert.equal(p2.salida_visita, undefined);
+  const vo2 = (await db.collection("ordenes_de_servicio").doc("2026111801").get()).data();
+  assert.equal(vo2.radios_salida.SAL01.estado, "dejado"); assert.equal(vo2.radios_salida.SAL01.serial, "sal01");
+  assert.equal(vo2.radios_salida.SAL02.estado, "devuelto"); assert.equal(vo2.radios_salida.SAL03.estado, "llevado");
+  const kx = (await db.collection("equipos_pool").doc("SAL02").collection("movimientos").get()).docs.map(d => d.data().tipo).sort();
+  assert.deepEqual(kx, ["regreso_visita", "salida_visita"]);
+  console.log("  ok   Salida a visita: sacar todo-o-nada, dejado en sitio, devolver sobrantes");
 
   await limpiar();
   console.log("\nTODO OK");

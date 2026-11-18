@@ -2404,6 +2404,7 @@ table.app-table.editable tbody tr:hover { background: transparent; }
    leerse distinto del ámbar de "en taller" (donde estaría si nadie lo notara)
    y del rojo de "por cobrar" (que sí es plata). */
 .eqpool-chip-no_retirado       { background: #ede9fe; color: #6d28d9; }
+.eqpool-chip-con_tecnico       { background: #e0f2fe; color: #0369a1; }
 .eqpool-chip-baja              { background: #f1f5f9; color: #64748b; }
 .eqpool-chip-en_poc            { background: #f1f5f9; color: #64748b; }
 .eqpool-chip-desconocido       { background: #f1f5f9; color: #64748b; }

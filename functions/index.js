@@ -111,6 +111,8 @@ exports.trasladarCuentaCliente        = require("./src/callable/trasladarCuentaC
 // Completar modelo en lote (propuesta) y regularizar un reemplazo hecho por fuera (2026-10-07).
 exports.proponerModeloSinFicha        = require("./src/callable/proponerModeloSinFicha");
 exports.regularizarReemplazoOrden     = require("./src/callable/regularizarReemplazoOrden");
+// Salida de radios a una visita técnica: bodega se los entrega al técnico y los recibe de vuelta (2026-11-18).
+exports.salidaRadiosVisita            = require("./src/callable/salidaRadiosVisita");
 exports.onOrdenEntregada              = require("./src/triggers/ordenes/onOrdenEntregada");
 exports.facturacionDiaria             = require("./src/triggers/scheduled/facturacionDiaria");
 exports.calcularFacturaContrato       = require("./src/callable/calcularFacturaContrato");

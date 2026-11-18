@@ -40,6 +40,9 @@ const EquiposPoolService = {
     // NUESTRO estante pero es SUYO — el reverso de pendiente_cobro. Ver
     // equiposPool.js (functions) para por qué no es en_taller ni en_bodega.
     NO_RETIRADO: 'no_retirado',
+    // Salió de bodega con un técnico para una VISITA (2026-11-18). Ver
+    // equiposPool.js (functions) y el callable salidaRadiosVisita.
+    CON_TECNICO: 'con_tecnico',
     BAJA:       'baja',
   },
 
@@ -60,6 +63,7 @@ const EquiposPoolService = {
     vendido:           'Vendido',
     pendiente_cobro:   'No devuelto · por cobrar',
     no_retirado:       'Listo · el cliente no lo retiró',
+    con_tecnico:       'Con técnico · salida a visita',
     baja:              'Baja',
   },
 

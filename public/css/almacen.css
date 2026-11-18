@@ -54,6 +54,7 @@ tr.ex-expansion > td {
 .ex-serial[data-dot="vendido"] i           { background: #0f766e; }
 .ex-serial[data-dot="pendiente_cobro"] i   { background: #b91c1c; }
 .ex-serial[data-dot="no_retirado"] i       { background: #6d28d9; }
+.ex-serial[data-dot="con_tecnico"] i       { background: #0369a1; }
 .ex-serial[data-dot="baja"] i              { background: #64748b; }
 .ex-serial[data-dot="en_poc"] i            { background: #64748b; }
 .ex-mas { font-size: 12px; margin-left: 4px; white-space: nowrap; }

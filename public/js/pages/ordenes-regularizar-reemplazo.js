@@ -111,6 +111,9 @@
     const yaHechos = Object.values(hechos);
     if (!equipos.length) { Toast.show('Todos los radios de esta visita ya tienen su reemplazo registrado.', 'info'); return; }
     const op = (e) => `<option value="${esc(e.numero_de_serie || e.serial)}">${esc(e.numero_de_serie || e.serial)} · ${esc(e.modelo || '')}</option>`;
+    // Radios que bodega le entregó al técnico para ESTA visita (Almacén → Hoy →
+    // "Salida a visita", 2026-11-18): se sugieren al escribir el serial.
+    const llevados = Object.values(orden.radios_salida || {}).filter(r => r && r.estado === 'llevado' && r.serial);
     const res = await Modal.sheet({
       title: `Registrar cambio en sitio · visita ${ordenId}`, icon: 'replace', size: 'md',
       html: `
@@ -127,9 +130,13 @@
           </div>
           <div>
             <label class="form-label" for="rrEnt">Radio que dejaste con el cliente (serial) *</label>
-            <input id="rrEnt" class="form-input" autocomplete="off" spellcheck="false" placeholder="Ej.: 18607A0484" style="text-transform:uppercase;">
+            <input id="rrEnt" class="form-input" autocomplete="off" spellcheck="false" placeholder="Ej.: 18607A0484" style="text-transform:uppercase;"${llevados.length ? ' list="rrLlevados"' : ''}>
+            ${llevados.length ? `<datalist id="rrLlevados">${llevados.map(r => `<option value="${esc(String(r.serial).toUpperCase())}">${esc(r.modelo || '')}</option>`).join('')}</datalist>` : ''}
           </div>
         </div>
+        ${llevados.length
+          ? `<p style="margin:6px 0 0;font-size:12.5px;color:#475569;">Salieron de bodega con esta visita: ${llevados.map(r => `<b>${esc(String(r.serial).toUpperCase())}</b>`).join(' · ')}</p>`
+          : `<p style="margin:6px 0 0;font-size:12.5px;color:#92400E;">Bodega no registró radios para esta visita. Si te llevaste uno, se acepta igual, pero bodega recibe el aviso de que salió sin registrarse.</p>`}
         <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;">
           <input type="checkbox" id="rrEnCasa" checked style="margin-top:3px;">
           <span><b>Me traje el radio del cliente.</b> Si se quedó con el cliente, desmárcalo: queda pendiente de devolución.</span>

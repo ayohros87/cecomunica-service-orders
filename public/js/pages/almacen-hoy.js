@@ -694,7 +694,10 @@ window.AlmacenHoy = (() => {
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
-  function recargar() { return cargar(); }
+  function recargar() {
+    if (window.AlmacenSalidasVisita) AlmacenSalidasVisita.cargar();
+    return cargar();
+  }
 
   // Bodega SUELTA los equipos de un anexo dormido vencido con la orden ya
   // trabajada (5-oct-2026): anular el anexo con motivo — la anulación de
@@ -882,6 +885,9 @@ window.AlmacenHoy = (() => {
     // módulo suyo).
     const ok = MODULOS.exigir(rol, 'almacen', { ademas: typeof canRole === 'function' && canRole(rol, 'gestionar-seriales') });
     if (!ok) { const loader = $('loader'); if (loader) loader.style.display = 'none'; return; }
+    // Radios con técnicos (salida a visita, 2026-11-18): bloque propio encima
+    // de la bandeja; carga y falla por su cuenta.
+    if (window.AlmacenSalidasVisita) AlmacenSalidasVisita.init(rol);
 
     // La barra de pestañas y el deep-link ?tab= se resuelven en el parse
     // (scripts inline de la página) para que nada brinque; aquí solo se

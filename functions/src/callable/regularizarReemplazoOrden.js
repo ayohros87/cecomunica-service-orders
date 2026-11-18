@@ -60,7 +60,7 @@ const equipoDe = (orden, serial) => (orden.equipos || []).find((e) => e && !e.el
 
 // Aviso a bodega (corto: resultado primero, una sola acción). Nunca lanza: el
 // cambio ya quedó registrado y un correo caído no lo deshace.
-async function avisarBodega({ gid, ordenId, esVisita, cliente, sal, ent, modSal, modEnt, contratoId, salienteEnCasa, motivo, quien }) {
+async function avisarBodega({ gid, ordenId, esVisita, cliente, sal, ent, modSal, modEnt, contratoId, salienteEnCasa, motivo, quien, sinSalida = false }) {
   try {
     const G = require("../lib/gestiones");
     const { bodegaEmailTo, recepcionEmails, tallerEmailTo } = require("../lib/mailRecipients");
@@ -83,6 +83,7 @@ async function avisarBodega({ gid, ordenId, esVisita, cliente, sal, ent, modSal,
         ${p(`<b>Se dejó con el cliente:</b> ${e(ent)}${modEnt ? ` · ${e(modEnt)}` : ""}${contratoId ? ` (contrato ${e(contratoId)})` : ""}<br>
              <b>Se recibió del cliente:</b> ${e(sal)}${modSal ? ` · ${e(modSal)}` : ""}`)}
         ${p(`<b>Qué pasó:</b> ${e(motivo || "—")}<br><b>Lo registró:</b> ${e(quien)}`)}
+        ${sinSalida ? p(`<b style="color:#B45309;">Ojo:</b> el radio <b>${e(ent)}</b> figuraba en bodega: salió sin registrarse la salida a la visita. Las próximas veces, entrégalo desde Almacén → Hoy → "Salida a visita".`) : ""}
         ${p(salienteEnCasa
           ? `El radio <b>${e(sal)}</b> se entrega en <b>recepción</b> para su revisión de taller.`
           : `El radio <b>${e(sal)}</b> se quedó con el cliente: queda <b>pendiente de devolución</b>.`)}`,
@@ -126,9 +127,18 @@ async function ejecutar({ usuario, nombre = "", uid = null, ordenId, serialSalie
   if (entConOtro) throw new HttpsError("failed-precondition", `El entrante ${ent} figura con ${rEnt.data.asignacion.cliente_nombre || "otro cliente"}. Corrige su ubicación primero.`);
   // En la visita el serial se escribe a mano: un dígito mal puesto no puede
   // sacar del taller o de revisión un radio que nunca salió de la casa.
-  const okVisita = [pool.ESTADOS.EN_BODEGA, pool.ESTADOS.POR_CLASIFICAR].includes(rEnt.data.estado)
+  // Salida de radios a la visita (2026-11-18): lo normal es que el entrante
+  // haya salido de bodega con ESTA visita (con_tecnico). Si salió con otra,
+  // es un dígito mal puesto o un radio que se pasó de visita: que lo vea
+  // bodega. Uno que sigue "en bodega" se acepta (no trancar al técnico en el
+  // sitio), pero el correo a bodega lo dice: salió sin registrarse.
+  const salioConOtra = rEnt.data.estado === pool.ESTADOS.CON_TECNICO && rEnt.data.salida_visita?.orden_id !== ordenId;
+  if (salioConOtra) throw new HttpsError("failed-precondition", `El entrante ${ent} salió de bodega con la visita ${rEnt.data.salida_visita?.orden_id || "?"}, no con esta. Revisa el serial o pídele a bodega que lo corrija.`);
+  const salioConEsta = rEnt.data.estado === pool.ESTADOS.CON_TECNICO;
+  const okVisita = salioConEsta || [pool.ESTADOS.EN_BODEGA, pool.ESTADOS.POR_CLASIFICAR].includes(rEnt.data.estado)
     || (rEnt.data.estado === pool.ESTADOS.EN_CLIENTE && rEnt.data.asignacion?.cliente_id === orden.cliente_id);
   if (esVisita && !okVisita) throw new HttpsError("failed-precondition", `El entrante ${ent} figura "${rEnt.data.estado}", no en bodega. Revisa el serial o corrige su ubicación primero.`);
+  const sinSalida = esVisita && !salioConEsta && rEnt.data.estado !== pool.ESTADOS.EN_CLIENTE;
 
   const asigSal = rSal.data.asignacion || {};
   const contratoDocId = asigSal.cliente_id === orden.cliente_id ? (asigSal.contrato_doc_id || null) : null;
@@ -148,6 +158,7 @@ async function ejecutar({ usuario, nombre = "", uid = null, ordenId, serialSalie
     contrato_doc_id: contratoDocId, contrato_id: contratoId,
     serial_nuevo: ent, pool_doc_id_nuevo: rEnt.ref.id, modelo_id_nuevo: modEnt.modelo_id, modelo_nuevo: modEnt.modelo,
     saliente_en_casa: !!salienteEnCasa, elegibilidad: "regularizacion", motivo_codigo: "regularizacion",
+    ...(esVisita ? { salida_bodega: salioConEsta ? "registrada" : (sinSalida ? "sin_registrar" : "ya_con_cliente") } : {}),
     motivo_detalle: String(motivo || "").slice(0, 300),
   };
   const g = {
@@ -176,6 +187,8 @@ async function ejecutar({ usuario, nombre = "", uid = null, ordenId, serialSalie
     ...(esVisita ? {} : { gestion: { id: gid, tipo: "reemplazo", regularizada: true } }),
     // Mapa anidado: con set+merge una clave con punto NO es ruta, sería un campo literal.
     reemplazos_regularizados: { [serialKey]: { gestion_id: gid, saliente: sal, entrante: ent, at: now, por_email: usuario } },
+    // La línea de la salida de bodega queda cerrada: este radio se dejó en sitio.
+    ...(salioConEsta ? { radios_salida: { [pool.normSerial(ent)]: { estado: "dejado", dejado_at: now, gestion_id: gid, reemplaza_a: sal } } } : {}),
     os_logs: FV.arrayUnion({ action: "REGULARIZAR_REEMPLAZO", by: uid || usuario, at: admin.firestore.Timestamp.now(), nota: `${sal} → ${ent} (gestión ${gid})` }),
   }, { merge: true });
 
@@ -192,7 +205,8 @@ async function ejecutar({ usuario, nombre = "", uid = null, ordenId, serialSalie
   if (entregada && rEnt.data.estado !== pool.ESTADOS.EN_CLIENTE) {
     entRes = await pool.transicionarPorId(rEnt.ref.id, { aEstado: pool.ESTADOS.EN_CLIENTE, tipo: "reemplazo", refMov,
       notas: `Reemplaza a ${sal} (gestión ${gid}) — regularizado: ${esVisita ? `dejado en sitio en la visita ${ordenId}` : `entregado con la orden ${ordenId}`}${quePaso}`,
-      extra: { asignacion: asignacionEnt, orden_actual_id: null, verificado: false, ...linaje } });
+      extra: { asignacion: asignacionEnt, orden_actual_id: null, verificado: false, ...linaje,
+        ...(salioConEsta ? { salida_visita: FV.delete() } : {}) } });
   } else {
     await rEnt.ref.set({ ...linaje, ...(rEnt.data.asignacion?.cliente_id ? {} : { asignacion: asignacionEnt }), updated_at: now }, { merge: true });
     await rEnt.ref.collection("movimientos").add({ at: now, por: usuario, por_email: usuario, tipo: "reemplazo", de_estado: null, a_estado: null, ref: refMov, notas: `Reemplaza a ${sal} (gestión ${gid}) — regularizado desde la orden ${ordenId}${quePaso}` });
@@ -209,7 +223,7 @@ async function ejecutar({ usuario, nombre = "", uid = null, ordenId, serialSalie
   }
   const mailId = await avisarBodega({ gid, ordenId, esVisita, cliente: orden.cliente_nombre || orden.cliente || "", sal, ent,
     modSal: modSal.modelo, modEnt: modEnt.modelo, contratoId, salienteEnCasa: !!salienteEnCasa, motivo: String(motivo || "").trim(),
-    quien: nombre ? `${nombre} (${usuario})` : usuario });
+    quien: nombre ? `${nombre} (${usuario})` : usuario, sinSalida });
   logger.info("[regularizarReemplazoOrden]", { ordenId, gid, sal, ent, usuario, entRes, salRes, cambioModelo: !!cambioModelo });
   return { ok: true, gestion_id: gid, entrante: entRes, saliente: salRes, cambio_modelo: !!cambioModelo, contrato: contratoId || null, aviso_mail_id: mailId };
 }
