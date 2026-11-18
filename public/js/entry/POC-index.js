@@ -23,6 +23,7 @@ import '/js/pages/poc-state.js';
 import '/js/pages/poc-sim-liberar.js';
 import '/js/pages/poc-sim-conflicto.js'; // SIM en otro radio: avisa y pide motivo (R2/D2)
 import '/js/pages/poc-baja.js';          // baja con fecha y motivo + chip "Baja reciente" (Brenda, 2026-10-16)
+import '/js/pages/poc-grupos-masa.js';   // agregar grupos a varios radios del mismo cliente (Brenda, 2026-11-18)
 import '/js/pages/poc-edit.js';
 import '/js/pages/poc-bulk.js';
 import '/js/pages/poc-sim.js';

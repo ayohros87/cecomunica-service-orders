@@ -89,6 +89,12 @@
                  radios ACTIVOS seleccionados sin el tope de 25 de la edición en
                  masa, copia los seriales y arma el correo de desconexión. -->
             <button id="btnDarDeBaja" class="overflow-menu-item" onclick="PocBaja.darDeBaja()" title="Pasa a inactivo los radios activos seleccionados, con fecha y motivo; copia los seriales y arma el correo para pedir la desconexión"><i data-lucide="power-off"></i> Dar de baja (desconexión)…</button>
+            <!-- El camino de vuelta (Brenda, 2026-11-18): el cliente pagó y los
+                 mismos radios vuelven a activo en una sola gestión. -->
+            <button id="btnReconectar" class="overflow-menu-item" onclick="PocBaja.reconectar()" title="Vuelve a activo los radios inactivos seleccionados y les quita la fecha de baja; copia los seriales y arma el correo para pedir la reconexión"><i data-lucide="power"></i> Reconectar…</button>
+            <!-- Sumar grupos del catálogo a varios radios del mismo cliente sin
+                 entrar a cada ficha (Brenda / MENZIES, 2026-11-18). -->
+            <button id="btnAgregarGrupos" class="overflow-menu-item" onclick="PocGruposMasa.abrir()" title="Agrega grupos del catálogo del cliente a los radios seleccionados, conservando los que cada uno ya tiene"><i data-lucide="list-plus"></i> Agregar grupos…</button>
             <button id="btnExportar" class="overflow-menu-item" onclick="PocList.exportarExcelSeleccionados()"><i data-lucide="upload"></i> Exportar a Excel</button>
             <a id="btnAdminGrupos" class="overflow-menu-item" href="../admin/grupos.html" title="Catálogo de grupos por empresa: agregar, renombrar, fusionar y eliminar"><i data-lucide="tags"></i> Administrar grupos</a>
           </div>
@@ -342,7 +348,7 @@
           </div>
 
           <p style="margin:var(--sp-2) 0 0; font-size:13px;"><span id="poolContador"></span>
-            <span class="form-hint" style="display:block;">Los SIMs se asignan en orden: primer SIM marcado → primer equipo de la tabla. El operador del equipo se toma del SIM.</span>
+            <span class="form-hint" style="display:block;">Los SIMs se asignan en orden: primer SIM marcado → primer equipo de la tabla. El operador del equipo se toma del SIM. Si marcas menos SIMs que equipos, se asignan esos y el resto queda seleccionado para después.</span>
           </p>
         </div>
         <div class="modal-footer">

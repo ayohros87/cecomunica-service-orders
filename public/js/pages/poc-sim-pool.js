@@ -128,28 +128,51 @@ window.PocSimPool = {
 
   async procesar() {
     const simIds = this.seleccionados();
-    if (simIds.length !== this._devices.length) {
-      Toast.show(`Seleccionaste ${this._devices.length} equipos pero ${simIds.length} SIMs. Deben coincidir.`, 'bad');
+    if (!simIds.length) { Toast.show('Marca al menos un SIM del pool.', 'bad'); return; }
+    if (simIds.length > this._devices.length) {
+      Toast.show(`Marcaste ${simIds.length} SIMs para ${this._devices.length} equipos. Desmarca los que sobran.`, 'bad');
       return;
     }
+    // Asignación PARCIAL (Brenda, 2026-11-18): si faltan SIMs en el pool se
+    // guardan los que sí aparecieron — antes "deben coincidir" bloqueaba todo
+    // y había que volver a seleccionar los radios y repetir la búsqueda. Los
+    // SIMs van, en orden, a los PRIMEROS equipos de la tabla; el resto queda
+    // pendiente y seleccionado para seguir con ellos.
+    const conSim    = this._devices.slice(0, simIds.length);
+    const pendientes = this._devices.slice(simIds.length);
+
     // Un SIM "disponible" en el pool puede estar puesto en un radio vivo (24
     // hoy): avisa con el radio y el cliente y pide motivo, no bloquea
     // (auditoría de módulos 2026-10-01, PoC R2/D2).
-    const revisionSim = await PocSimConflicto.revisar(this._devices.map((d, i) => ({
+    const revisionSim = await PocSimConflicto.revisar(conSim.map((d, i) => ({
       id: d.id, sim_number: simIds[i], serial: d.serial || '', cliente: PocState.nombreClienteDe(d),
     })));
     if (revisionSim.cancelado) return;
 
+    const esc = FMT.esc;
+    const etiqueta = (d) => esc(String(d.serial || d.unit_id || d.id));
+    let mensaje = `Vas a asignar ${simIds.length} SIMs del pool a los equipos seleccionados. El operador de cada equipo se tomará del SIM. ¿Continuar?`;
+    if (pendientes.length) {
+      // Con menos SIMs que equipos hay que VER qué radio recibe cuál y cuáles
+      // se quedan sin SIM: el emparejamiento es por orden, no se elige.
+      const pares = conSim.map((d, i) => `<li><span class="td-mono">${etiqueta(d)}</span> ← <span class="td-mono">${esc(simIds[i])}</span></li>`).join('');
+      mensaje = `Marcaste <b>${simIds.length}</b> SIM${simIds.length === 1 ? '' : 's'} para <b>${this._devices.length}</b> equipos. Se asigna${simIds.length === 1 ? '' : 'n'} así:
+        <ul style="margin:8px 0 8px 18px;max-height:180px;overflow:auto;">${pares}</ul>
+        <b>${pendientes.length === 1 ? 'Queda sin SIM' : `Quedan sin SIM (${pendientes.length})`}:</b> <span class="td-mono">${pendientes.map(etiqueta).join(', ')}</span>.
+        ${pendientes.length === 1 ? 'Seguirá seleccionado' : 'Seguirán seleccionados'} para asignarle${pendientes.length === 1 ? '' : 's'} SIM después. ¿Continuar?`;
+    }
     if (!await Modal.confirm({
-      message: `Vas a asignar ${simIds.length} SIMs del pool a los equipos seleccionados. El operador de cada equipo se tomará del SIM. ¿Continuar?`,
+      ...(pendientes.length ? { title: 'Asignación parcial', confirmLabel: `Asignar ${simIds.length}` } : {}),
+      message: mensaje,
     })) return;
 
     const user = firebase.auth().currentUser;
     let ok = 0;
     const fallidos = [];
+    const asignadosIds = [];
 
-    for (let i = 0; i < this._devices.length; i++) {
-      const device = this._devices[i];
+    for (let i = 0; i < conSim.length; i++) {
+      const device = conSim[i];
       const clienteNombre = PocState.nombreClienteDe(device);
       let simAsignado;
       try {
@@ -159,6 +182,7 @@ window.PocSimPool = {
           cliente_nombre: clienteNombre,
         }, user);
         ok++;
+        asignadosIds.push(device.id);
       } catch (e) {
         console.error(`Fallo asignando SIM ${simIds[i]} a ${device.serial}:`, e);
         fallidos.push(simIds[i]);
@@ -208,13 +232,28 @@ window.PocSimPool = {
       }
     }
 
+    // Parcial: los que ya recibieron SIM se desmarcan y quedan seleccionados
+    // SOLO los pendientes — "Asignar del pool" otra vez sigue con ellos.
+    if (pendientes.length && asignadosIds.length) {
+      const hechos = new Set(asignadosIds);
+      document.querySelectorAll('#devicesTable tr[data-id]').forEach(fila => {
+        if (!hechos.has(fila.dataset.id)) return;
+        const cb = fila.querySelector('.seleccion-sim');
+        if (cb) cb.checked = false;
+      });
+      PocList.actualizarSeleccion();
+    }
+
     if (fallidos.length) {
       Toast.show(`${ok} asignados. ${fallidos.length} SIMs ya no estaban disponibles (los tomó otra sesión): ${fallidos.slice(0, 3).join(', ')}${fallidos.length > 3 ? '…' : ''}`, 'bad');
+    } else if (pendientes.length) {
+      Toast.show(`${ok} equipo${ok === 1 ? '' : 's'} con SIM del pool. ${pendientes.length === 1 ? 'Queda 1 seleccionado' : `Quedan ${pendientes.length} seleccionados`} sin SIM.`, 'ok');
     } else {
       Toast.show(`${ok} equipos actualizados con SIM y operador del pool.`, 'ok');
     }
     this.cerrar();
     // Sin refresh(): las filas ya se repintaron con aplicarCambioLocal y la
-    // selección se conserva para Imprimir / Copiar seriales.
+    // selección se conserva para Imprimir / Copiar seriales (en la asignación
+    // completa; en la parcial quedan solo los pendientes, ver arriba).
   },
 };

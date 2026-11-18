@@ -222,11 +222,154 @@ window.PocBaja = {
     else PocList.refresh();
   },
 
+  // ── Acción del menú Más: "Reconectar…" (Brenda, 2026-11-18) ─────────
+  // El camino de vuelta de darDeBaja: el cliente se puso al día y los mismos
+  // radios vuelven a activo en una sola gestión, sin el tope de 25 de la
+  // edición en masa. Solo toca los INACTIVOS seleccionados; les quita el
+  // sello de baja y deja un poc_log con accion 'reconexion'. Flujo: chip
+  // "Baja reciente" → seleccionar todos → Más → Reconectar.
+  async reconectar() {
+    if (PocState.esLectura()) { Toast.show('Solo administración o recepción reconectan radios.', 'bad'); return; }
+    if (window.PocBulk?._modo) { Toast.show('Termina o cancela la edición en masa primero.', 'bad'); return; }
+    const sel = PocList.obtenerSeleccionados();
+    if (!sel.length) { Toast.show('Selecciona los radios que vas a reconectar.', 'bad'); return; }
+    const docs = sel.map(s => PocList._docsPorId.get(s.id)).filter(Boolean);
+    // Una ficha CERRADA (deleted) no se reconecta: el radio ya no está con el
+    // cliente; se reabre desde su ficha, que es otra decisión.
+    const inactivos = docs.filter(d => d.activo === false && d.deleted !== true);
+    if (!inactivos.length) { Toast.show('Ninguno de los seleccionados está inactivo.', 'warn'); return; }
+    const omitidos = sel.length - inactivos.length;
+
+    const esc = FMT.esc;
+    const clientes = [...new Set(inactivos.map(d => PocState.nombreClienteDe(d) || '—'))];
+    const quien = clientes.length === 1 ? `de <b>${esc(clientes[0])}</b>` : `de ${clientes.length} clientes`;
+    const n = inactivos.length;
+    // Lo que conviene mirar antes de reconectar: radios cuya baja NO fue por
+    // falta de pago (devolución, cambio de equipo) y radios que quedaron sin
+    // SIM porque se devolvió al pool al darlos de baja.
+    const otroMotivo = inactivos.filter(d => d.inactivo_motivo && d.inactivo_motivo !== 'falta_pago');
+    const sinSim     = inactivos.filter(d => !String(d.sim_number || '').trim());
+    const lista = (arr, extra) => arr.slice(0, 6).map(d =>
+      `${esc(String(d.serial || d.unit_id || d.id))}${extra ? extra(d) : ''}`).join(', ') + (arr.length > 6 ? `… (+${arr.length - 6})` : '');
+    const avisos = [];
+    if (otroMotivo.length) {
+      avisos.push(`<b>${otroMotivo.length}</b> no ${otroMotivo.length === 1 ? 'se dio' : 'se dieron'} de baja por falta de pago: `
+        + lista(otroMotivo, d => ` (${esc(this.textoMotivo(d.inactivo_motivo))})`) + '.');
+    }
+    if (sinSim.length) {
+      avisos.push(`<b>${sinSim.length}</b> ${sinSim.length === 1 ? 'quedó' : 'quedaron'} sin SIM en la ficha: ${lista(sinSim)}. Asígnale${sinSim.length === 1 ? '' : 's'} SIM después de reconectar.`);
+    }
+    const html = `
+      <p style="margin:0 0 12px;font-size:14.5px;line-height:1.5;">
+        ${n === 1 ? 'Un radio' : `<b>${n}</b> radios`} ${quien} ${n === 1 ? 'vuelve' : 'vuelven'} a <b>activo</b> y ${n === 1 ? 'pierde' : 'pierden'} la fecha y el motivo de baja.
+        ${omitidos ? `<br><span style="color:var(--fg-3);font-size:13px;">${omitidos} de los seleccionados no ${omitidos === 1 ? 'está inactivo' : 'están inactivos'} y no se toca${omitidos === 1 ? '' : 'n'}.</span>` : ''}
+      </p>
+      ${avisos.length ? `<div id="pocReconAvisos" style="margin:0 0 12px;padding:10px 12px;border-radius:8px;background:#fef9c3;color:#713f12;font-size:13px;line-height:1.45;">${avisos.map(a => `<div>${a}</div>`).join('')}</div>` : ''}
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:13.5px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pocReconCopiar" checked> Copiar los seriales al portapapeles al terminar</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pocReconCorreo"> Abrir un correo con los radios para pedir la reconexión</label>
+      </div>`;
+    const r = await Modal.sheet({
+      title: n === 1 ? 'Reconectar el radio' : `Reconectar ${n} radios`,
+      icon: 'power',
+      size: 'sm',
+      html,
+      buttons: [
+        { action: 'cancel',    label: 'Cancelar' },
+        { action: 'confirmar', label: 'Reconectar', primary: true },
+      ],
+      onAction: (action, root) => {
+        if (action !== 'confirmar') return null;
+        return {
+          copiar: !!root.querySelector('#pocReconCopiar')?.checked,
+          correo: !!root.querySelector('#pocReconCorreo')?.checked,
+        };
+      },
+    });
+    if (!r) return;
+
+    const user = firebase.auth().currentUser;
+    const db   = firebase.firestore();
+    let hechos = 0;
+    const TANDA = 200;   // 2 escrituras por radio; el batch admite 500
+    try {
+      for (let i = 0; i < inactivos.length; i += TANDA) {
+        const batch = db.batch();
+        for (const d of inactivos.slice(i, i + TANDA)) {
+          const motivoBaja = this.textoMotivo(d.inactivo_motivo) + (d.inactivo_detalle ? ` — ${String(d.inactivo_detalle).trim()}` : '');
+          batch.update(db.collection('poc_devices').doc(d.id), {
+            activo: true, ...this.limpieza(d),
+            updated_at:       firebase.firestore.FieldValue.serverTimestamp(),
+            updated_by:       user?.uid   || null,
+            updated_by_email: user?.email || null,
+          });
+          batch.set(db.collection('poc_logs').doc(), {
+            equipo_id: d.id,
+            fecha:     firebase.firestore.FieldValue.serverTimestamp(),
+            usuario:   user?.email || null,
+            accion:    'reconexion',
+            origen:    'poc-lista',
+            motivo:    motivoBaja ? `Reconexión (baja previa: ${motivoBaja})` : 'Reconexión',
+            cambios:   { antes: PocService.stripSentinels(d), despues: PocService.stripSentinels(this.sinSello({ ...d, activo: true })) },
+          });
+        }
+        await batch.commit();
+        hechos += Math.min(TANDA, inactivos.length - i);
+      }
+    } catch (e) {
+      console.error('[PocBaja] reconectar', e);
+      Toast.show(`Se reconectaron ${hechos} de ${inactivos.length}. Error: ${e.message || e}`, 'bad');
+      PocList.refresh();
+      return;
+    }
+
+    const seriales = inactivos.map(d => String(d.serial || '').trim()).filter(Boolean);
+    if (r.copiar && seriales.length) {
+      try { await navigator.clipboard.writeText(seriales.join('\n')); }
+      catch (_) { Toast.show('No se pudieron copiar los seriales (permiso del portapapeles).', 'warn'); }
+    }
+    if (r.correo) this.abrirCorreo(inactivos, null, clientes, { reconexion: true });
+
+    Toast.show(`${hechos} radio${hechos === 1 ? '' : 's'} reconectado${hechos === 1 ? '' : 's'}${r.copiar && seriales.length ? ' · seriales copiados' : ''}.`, 'ok');
+
+    // Con "Baja reciente" o "Inactivos" prendidos los reconectados saldrían de
+    // la lista en el acto y no habría cómo ver qué pasó: la lista vuelve a
+    // "Todos" (con el cliente que esté en el buscador) y los enseña en verde.
+    const chip = document.getElementById('soloRecientes');
+    if (chip) chip.checked = false;
+    const seg = document.querySelector('input[name="pocEstadoActivo"][value="todos"]');
+    if (seg) seg.checked = true;
+    PocList.cambiarEstadoActivo('todos');
+  },
+
   // Correo listo para Mariche: serial, Unit ID y nombre del radio (la
   // desconexión del airtime se pide con el Unit ID y el nombre; el serial
   // es lo que Brenda archiva). Sin destinatario: ella lo pone.
-  abrirCorreo(radios, r, clientes) {
+  // `reconexion:true` arma el mismo correo para el camino de vuelta.
+  abrirCorreo(radios, r, clientes, { reconexion = false } = {}) {
     const cliente = clientes.length === 1 ? clientes[0] : clientes.join(', ');
+    if (reconexion) {
+      const asuntoR = `Reconexión de ${radios.length} radio${radios.length === 1 ? '' : 's'} — ${cliente}`;
+      const lineasR = radios.map(d => {
+        const partes = [String(d.serial || '').trim() || '(sin serial)'];
+        if (d.unit_id)    partes.push(`Unit ID ${d.unit_id}`);
+        if (d.radio_name) partes.push(String(d.radio_name));
+        if (d.sim_number) partes.push(`SIM ${d.sim_number}`);
+        return '- ' + partes.join(' · ');
+      });
+      const cuerpoR = [
+        'Buen día,',
+        '',
+        `Favor gestionar la reconexión de ${radios.length === 1 ? 'este radio' : `estos ${radios.length} radios`} de ${cliente}:`,
+        '',
+        ...lineasR,
+        '',
+        'Gracias.',
+      ].join('\r\n');
+      const urlR = `mailto:?subject=${encodeURIComponent(asuntoR)}&body=${encodeURIComponent(cuerpoR)}`;
+      try { window.open(urlR, '_self'); } catch (_) { location.href = urlR; }
+      return;
+    }
     const asunto  = `Desconexión de ${radios.length} radio${radios.length === 1 ? '' : 's'} — ${cliente}`;
     const lineas  = radios.map(d => {
       const partes = [String(d.serial || '').trim() || '(sin serial)'];
