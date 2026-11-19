@@ -234,12 +234,17 @@ test("R · bodega espera al cliente; aceptar libera, rechazar cierra y va a cobr
   assert.match(lib, /g\.cobro\.cotizacion_doc_id !== docId\) return \{ ok: false, motivo: "otra_cotizacion" \}/,
     "rechazar una copia vieja no cierra el caso vivo");
   const est = leer("functions", "src", "triggers", "cotizaciones", "onEstadoChange.js");
-  assert.match(est, /estadoDespues === "rechazada" && after\.gestion_id/);
+  // Desde 2026-11-19 una cotización puede cobrar VARIAS reposiciones de la
+  // misma orden (gestion_ids): `esReposicion` las lee todas.
+  assert.match(est, /const esReposicion = gestionesDe\(after\)\.length > 0;/);
+  assert.match(est, /estadoDespues === "rechazada" && esReposicion/);
+  assert.match(est, /alAceptarseTodas\(event\.params\.docId, after\)/, "aceptarla libera todas sus gestiones");
+  assert.match(est, /alRechazarseTodas\(event\.params\.docId, after\)/, "rechazarla las cierra todas");
   // Desde 2026-10-15 la reposición de un equipo NO DEVUELTO (cobro_equipo_id)
   // tampoco bloquea materiales: comparte la misma salida.
-  assert.match(est, /if \(after\.gestion_id \|\| after\.cobro_equipo_id\) return null;/, "la reposición no bloquea los materiales de la orden");
+  assert.match(est, /if \(esReposicion \|\| after\.cobro_equipo_id\) return null;/, "la reposición no bloquea los materiales de la orden");
   const ent = leer("functions", "src", "triggers", "ordenes", "onOrdenEntregada.js");
-  assert.match(ent, /CS\.esFacturable\(d\.data\(\)\) && !d\.data\(\)\.gestion_id/,
+  assert.match(ent, /CS\.esFacturable\(d\.data\(\)\) && !CS\.gestionesDe\(d\.data\(\)\)\.length/,
     "la entrega nunca factura una reposición que el cliente no aceptó");
   const cob = leer("functions", "src", "lib", "cobrosEquipos.js");
   assert.match(cob, /where\("gestion_id", "==", gestion_id\)/, "una gestión = una deuda");

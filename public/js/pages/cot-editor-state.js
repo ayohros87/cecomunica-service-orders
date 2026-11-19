@@ -255,6 +255,8 @@
       // Cloud Functions).
       aceptacion: doc.aceptacion || null,
       gestion_id: doc.gestion_id || '',
+      // Varias reposiciones de la misma orden en una cotización (2026-11-19).
+      gestion_ids: Array.isArray(doc.gestion_ids) ? doc.gestion_ids.filter(Boolean) : [],
       facturacion: doc.facturacion || null,
       // Timestamps del ciclo de vida — usados por el historial para mostrar
       // las fechas reales en vez de derivarlas de la fecha de creación.
@@ -362,6 +364,9 @@
       origen: ui.origen || 'comercial',
       ...(ui.orden_id ? { orden_id: ui.orden_id } : {}),
       ...(ui.gestion_id ? { gestion_id: ui.gestion_id } : {}),
+      // Sin esto, "Duplicar"/"Rehacer" una cotización que cobra varias
+      // reposiciones dejaba la copia amarrada solo a la primera gestión.
+      ...((ui.gestion_ids || []).length ? { gestion_ids: ui.gestion_ids } : {}),
       // Casilla "Incluir carta de presentación" — es solo la preferencia del
       // vendedor. En las de taller queda en true y sin efecto: el corte por
       // origen lo aplica llevaCarta(), no este campo.

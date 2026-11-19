@@ -111,7 +111,7 @@ test("C · onCotizacionEstadoChange: entra sin orden si es un no devuelto, avisa
   assert.match(src, /\(!after\.orden_id && !after\.cobro_equipo_id\)/, "un renglón de contrato de papel no tiene orden");
   assert.match(src, /reposicionNoDevuelto"\)\.alAceptarse/);
   assert.match(src, /reposicionNoDevuelto"\)\.alRechazarse/);
-  assert.match(src, /if \(after\.gestion_id \|\| after\.cobro_equipo_id\) return null;/, "no bloquea materiales de ninguna orden");
+  assert.match(src, /if \(esReposicion \|\| after\.cobro_equipo_id\) return null;/, "no bloquea materiales de ninguna orden");
   const fc = leer("functions", "src", "lib", "facturacionCotizacion.js");
   assert.match(fc, /const esNoDevuelto = !!cot\.cobro_equipo_id/);
   assert.match(fc, /Equipo no devuelto — reposición aceptada/);

@@ -58,6 +58,7 @@ exports.onOrdenDevolucionWrite        = require("./src/triggers/ordenes/onOrdenD
 exports.onPocDeviceWritePool          = require("./src/triggers/poc/onPocDeviceWritePool");
 exports.onPocDeviceSello              = require("./src/triggers/poc/onPocDeviceSello");
 exports.onOrdenCompletada             = require("./src/triggers/ordenes/onComplete");
+exports.onConsumoPiezasBodega         = require("./src/triggers/ordenes/onConsumoPiezasBodega");
 exports.onContratoOrdenWrite          = onContratoOrdenWrite;
 exports.onOrdenWriteSyncContratoCache = onOrdenWriteSyncContratoCache;
 exports.onOrdenHardDelete             = onOrdenHardDelete;

@@ -68,7 +68,8 @@ async function abrirFacturacionCotizacion(d, { momento = "entrega", orden = null
   // sigue en el taller. La fila lo dice para que Recepción no busque una
   // entrega que todavía no pasó.
   const salio = TRABAJO_SALIO.includes(norm(o.estado_reparacion));
-  const esReposicion = !!cot.gestion_id;
+  const gestiones = CS.gestionesDe(cot);
+  const esReposicion = gestiones.length > 0;
   // Reposición de un equipo NO DEVUELTO (2026-10-15): no hay radio en el
   // taller ni bodega que asignar; se factura el valor de reposición y el
   // renglón de "Equipos no devueltos" se cierra cuando Recepción marca QBO.
@@ -96,7 +97,7 @@ async function abrirFacturacionCotizacion(d, { momento = "entrega", orden = null
     } else if (esReposicion) {
       tituloTxt = "Reposición por daño aceptada — hay que facturarla";
       asuntoTxt = "reposición por daño aceptada";
-      queTxt = `el cliente aceptó ${como ? `(${esc(como)}) ` : ""}pagar la <b>reposición del radio que dañó</b>. Bodega ya recibió el aviso para asignar el equipo que lo sustituye`;
+      queTxt = `el cliente aceptó ${como ? `(${esc(como)}) ` : ""}pagar la <b>reposición ${gestiones.length > 1 ? `de los ${gestiones.length} radios que dañó` : "del radio que dañó"}</b>. Bodega ya recibió el aviso para asignar ${gestiones.length > 1 ? "los equipos que los sustituyen" : "el equipo que lo sustituye"}`;
       origenTxt = `Reposición por daño aceptada · cotización ${legible}`;
     } else {
       tituloTxt = "Cotización de taller aceptada — hay que facturarla";
@@ -178,7 +179,7 @@ async function abrirFacturacionCotizacion(d, { momento = "entrega", orden = null
           aceptacion_medio: cot.aceptacion?.medio || null,
           aceptacion_nota: cot.aceptacion?.nota || null,
         } : {}),
-        ...(esReposicion ? { gestion_id: cot.gestion_id, reposicion_dano: true } : {}),
+        ...(esReposicion ? { gestion_id: gestiones[0], gestion_ids: gestiones, reposicion_dano: true } : {}),
         origen_texto: origenTxt,
       },
       resumen: r,

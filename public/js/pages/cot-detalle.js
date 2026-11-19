@@ -61,12 +61,16 @@
           }).join('')}
         </div>
         ${cerrada ? `<div class="cc-panel-body" style="padding-top:0; font-size:12.5px; color:var(--fg-3);">
-          Cerrada como <b>${esc(CotState.estadoLabel(cot.estado, cot))}</b>${cot.cierre_motivo ? ' — ' + esc(cot.cierre_motivo) : ''}. ${cot.estado === 'vencida' && !cot.gestion_id
+          Cerrada como <b>${esc(CotState.estadoLabel(cot.estado, cot))}</b>${cot.cierre_motivo ? ' — ' + esc(cot.cierre_motivo) : ''}. ${cot.estado === 'vencida' && !(cot.gestion_id || (cot.gestion_ids || []).length)
             ? 'Si ya corresponde facturarla, usa <b>Respuesta del cliente</b> → <b>Pasar a facturar sin respuesta del cliente</b>.'
             : 'No va a facturación.'}</div>` : ''}
-        ${cot.gestion_id ? `<div class="cc-panel-body" style="padding-top:0; font-size:12.5px; color:var(--fg-2);">
-          <b>Reposición por daño</b> · gestión <span style="font-family:var(--font-mono);">${esc(cot.gestion_id)}</span>.
-          Al aceptarla, Bodega recibe el aviso para asignar el radio de reposición; si el cliente no la acepta, el caso pasa a cobranza.</div>` : ''}
+        ${(cot.gestion_id || (cot.gestion_ids || []).length) ? (() => {
+          const gs = [...new Set([cot.gestion_id, ...(cot.gestion_ids || [])].filter(Boolean))];
+          return `<div class="cc-panel-body" style="padding-top:0; font-size:12.5px; color:var(--fg-2);">
+          <b>Reposición por daño</b> · ${gs.length > 1 ? `${gs.length} gestiones` : 'gestión'} <span style="font-family:var(--font-mono);">${esc(gs.join(', '))}</span>.
+          Al aceptarla, Bodega recibe el aviso para asignar ${gs.length > 1 ? 'los radios' : 'el radio'} de reposición; si el cliente no la acepta, el caso pasa a cobranza.
+          ${cot.estado === 'borrador' ? 'Si se aprueban más reposiciones de la misma orden antes de enviarla, se suman aquí.' : ''}</div>`;
+        })() : ''}
       </div>`;
   }
 
@@ -303,7 +307,7 @@
           ${soloLectura ? '' : '<button class="btn btn-ghost" id="btnDuplicar"><i data-lucide="copy"></i> Duplicar</button>'}
           ${!soloLectura && ['enviada', 'aprobada', 'vencida'].includes(cot.estado) ? '<button class="btn btn-ghost" id="btnRehacer" title="La descarta con motivo y abre la copia para corregirla"><i data-lucide="refresh-cw"></i> Rehacer</button>' : ''}
           ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada' || cot.estado === 'convertida') ? '<button class="btn btn-ghost" id="btnEnviar"><i data-lucide="send"></i> Reenviar al cliente</button>' : ''}
-          ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada' || (cot.estado === 'vencida' && !cot.gestion_id)) ? (esTaller()
+          ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada' || (cot.estado === 'vencida' && !(cot.gestion_id || (cot.gestion_ids || []).length))) ? (esTaller()
             ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#065F46; color:#fff; border-color:#065F46;"><i data-lucide="circle-check"></i> Respuesta del cliente</button>'
             : '<button class="btn btn-secondary" id="btnCerrar" style="background:#0B2A47; color:#fff; border-color:#0B2A47;"><i data-lucide="flag"></i> Cerrar cotización</button>') : ''}
           ${!soloLectura && CotState.esEditable(cot.estado) ? '<button class="btn btn-secondary" id="btnEditar"><i data-lucide="pencil"></i> Editar</button>' : ''}
@@ -590,7 +594,7 @@
       totalTexto: resumenImporte(t),
       cliente: cli?.razon || cot.cliente_nombre || '',
       taller: esTaller(),
-      reposicion: !!cot.gestion_id,
+      reposicion: !!(cot.gestion_id || (cot.gestion_ids || []).length),
       vencida: cot.estado === 'vencida',
     });
     if (!cierre) return;

@@ -201,15 +201,18 @@ test("C1 · sin equipos no se pinta ningún encabezado de grupo", () => {
 });
 
 // ── D — resumen de piezas a bodega ────────────────────────────────────────
-// Se ejercita la agregación tal como la hace el trigger, con los consumos que
-// escribe ordenes-equipos.js.
+// Se ejercita la agregación tal como la hace lib/piezasBodega (2026-11-19:
+// salió del trigger de cotizaciones, ahora la usan tres puertas), con los
+// consumos que escribe ordenes-equipos.js.
 function cargarResumen() {
-  const mod = leer("functions", "src", "triggers", "cotizaciones", "onEstadoChange.js");
-  // Se extrae solo el agregador: cargar el módulo entero arrastraría
-  // firebase-functions y el registro del trigger.
+  const mod = leer("functions", "src", "lib", "piezasBodega.js");
+  // Se extrae solo el agregador (y su `ordenar`): cargar el módulo entero
+  // arrastraría firebase-functions y firebase-admin.
   const ini = mod.indexOf("async function resumenPiezasDeOrden");
   const fin = mod.indexOf("/**", ini);
-  const cuerpo = mod.slice(ini, fin)
+  const iOrd = mod.indexOf("function ordenar(");
+  const ordenar = mod.slice(iOrd, mod.indexOf("\n}\n", iOrd) + 3);
+  const cuerpo = (ordenar + mod.slice(ini, fin))
     .replace(/const snap = await db[\s\S]*?\.get\(\);/, "const snap = { forEach: (f) => CONSUMOS.forEach((c) => f({ data: () => c })) };");
   const ctx = { console, CONSUMOS: [] };
   vm.createContext(ctx);

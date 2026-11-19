@@ -836,9 +836,17 @@ module.exports = onDocumentWritten(
       // que nadie la envíe ni la marque aceptada sobre un caso anulado.
       if (RD.esReposicionDano(after)) {
         try {
-          if (await RD.alAnularse(gid, after)) {
+          const queHizo = await RD.alAnularse(gid, after);
+          const cotLeg = after.cobro?.cotizacion_id || "";
+          if (queHizo === "descartada") {
             await G.registrarEvento(gid, "cotizacion_descartada",
-              `La cotización ${after.cobro?.cotizacion_id || ""} de la reposición se descartó junto con la gestión.`);
+              `La cotización ${cotLeg} de la reposición se descartó junto con la gestión.`);
+          } else if (queHizo === "renglon_quitado") {
+            await G.registrarEvento(gid, "cotizacion_renglon_quitado",
+              `La cotización ${cotLeg} cobra otras reposiciones de la misma orden y sigue en borrador: se le quitó el renglón de este radio.`);
+          } else if (queHizo === "enviada_con_otras") {
+            await G.registrarEvento(gid, "cotizacion_por_corregir",
+              `OJO: la cotización ${cotLeg} ya salió al cliente e incluye este radio junto con otros. No se modificó: hay que rehacerla sin este renglón (Rehacer) antes de que el cliente la acepte.`);
           }
         } catch (e) {
           logger.error("[onGestionWrite] cotización de reposición no descartada", { gid, error: e.message });

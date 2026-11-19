@@ -28,6 +28,10 @@
     { key: 'preventivo',  label: 'Preventivo' },
     { key: 'correctivo',  label: 'Correctivo' },
     { key: 'emergencia',  label: 'Emergencia' },
+    // 2026-11-19 (Solangel): la visita de renovación de contrato es un
+    // refurbish SIN costo para el cliente. Bodega la ve en el encabezado del
+    // aviso de piezas (functions/src/lib/piezasBodega.js MOTIVOS_VISITA).
+    { key: 'renovacion',  label: 'Renovación de contrato' },
   ];
 
   function _ordenDe(ordenId) {
@@ -288,12 +292,14 @@
     const puedeCotizar = typeof canRole === 'function'
       && canRole(window.APP?.state?.userRole || '', 'preparar-cotizacion')
       && !orden.cotizacion_doc_id;
+    // Solo las piezas CON costo piden cotización: las "sin costo" (garantía,
+    // renovación de contrato) le llegan a bodega al cerrar, sin cotizar nada.
     let hayPiezas = false;
     if (puedeCotizar) {
-      try { hayPiezas = ((await OrdenesService.getConsumos(ordenId)) || []).length > 0; }
+      try { hayPiezas = ((await OrdenesService.getConsumos(ordenId)) || []).some(c => (c.tipo || 'cobro') !== 'garantia'); }
       catch (e) { console.warn('[abrirCierreVisita] consumos', e); }
     }
-    const cotizarDefault = hayPiezas || (inf.motivo && inf.motivo !== 'preventivo');
+    const cotizarDefault = hayPiezas || (inf.motivo && !['preventivo', 'renovacion'].includes(inf.motivo));
     // Radios que bodega le entregó para esta visita y siguen "llevados"
     // (2026-11-18): al cerrar se le recuerda al técnico. No tranca el cierre.
     const llevados = Object.values(orden.radios_salida || {}).filter(r => r && r.estado === 'llevado' && r.serial);
@@ -307,7 +313,7 @@
     const cotizarHtml = puedeCotizar ? `
           <label class="form-check" style="margin-top:12px;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line,#e5e7eb);border-radius:10px;background:#f8fafc;">
             <input type="checkbox" id="cierreCotizar" ${cotizarDefault ? 'checked' : ''}>
-            <span class="form-check-label">Al cerrar, <b>preparar la cotización</b> de esta visita${hayPiezas ? ' (ya hay piezas registradas)' : ''}</span>
+            <span class="form-check-label">Al cerrar, <b>preparar la cotización</b> de esta visita${hayPiezas ? ' (ya hay piezas con costo registradas)' : ''}</span>
           </label>` : '';
 
     let overlay = null, sheetApi = null;

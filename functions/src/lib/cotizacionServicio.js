@@ -86,4 +86,16 @@ function resumenCotizacion(cot = {}) {
   };
 }
 
-module.exports = { ESTADOS_FACTURABLES, esFacturable, renglones, resumenCotizacion };
+/**
+ * Gestiones de reemplazo por daño que cobra esta cotización. Era una sola
+ * (`gestion_id`); desde 2026-11-19 varias reposiciones de la misma orden van
+ * en UNA cotización (`gestion_ids`). Se leen los dos campos: las cotizaciones
+ * anteriores solo tienen el primero.
+ */
+function gestionesDe(cot = {}) {
+  const ids = [cot?.gestion_id, ...(Array.isArray(cot?.gestion_ids) ? cot.gestion_ids : [])]
+    .map((x) => String(x || "").trim()).filter(Boolean);
+  return [...new Set(ids)];
+}
+
+module.exports = { ESTADOS_FACTURABLES, esFacturable, renglones, resumenCotizacion, gestionesDe };

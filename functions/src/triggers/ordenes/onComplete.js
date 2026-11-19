@@ -103,6 +103,18 @@ module.exports = onDocumentUpdated(
       }
     }
 
+    // Piezas usadas → bodega (2026-11-19, propuesta de Solangel). Al completar
+    // la reparación o cerrar la visita sale el conteo de lo que el técnico
+    // registró, haya o no cotización: una visita sin costo (renovación de
+    // contrato) no cotiza nada y bodega no se enteraba. En su propio try: no
+    // debe tumbar el correo de "orden completada" de abajo.
+    try {
+      const r = await require("../../lib/piezasBodega").avisarPiezasABodega({ ordenId, orden: after, momento: "cierre" });
+      if (r.enviado) logger.info("[onOrdenCompletada] piezas avisadas a bodega", { ordenId, unidades: r.unidades });
+    } catch (e) {
+      logger.error("[onOrdenCompletada] aviso de piezas a bodega falló", { message: e.message, ordenId });
+    }
+
     try {
       // Deep-link al índice de órdenes, que abre el modal de Entrega/Recepción
       // (firma + receptor + equipos).

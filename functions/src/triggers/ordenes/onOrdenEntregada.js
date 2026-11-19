@@ -115,7 +115,7 @@ async function abrirFacturacionDeCotizaciones(ordenId, after) {
   // asigna el radio que la sustituye. Si la orden del radio dañado se entrega
   // antes de que el cliente conteste, facturarla sería cobrar algo que el
   // cliente no aceptó.
-  const cots = snap.docs.filter((d) => CS.esFacturable(d.data()) && !d.data().gestion_id);
+  const cots = snap.docs.filter((d) => CS.esFacturable(d.data()) && !CS.gestionesDe(d.data()).length);
   if (!cots.length) return;
   // Una sola implementación para las dos puertas (entrega y aceptación):
   // lib/facturacionCotizacion. Idempotente — si la cotización ya se pasó a

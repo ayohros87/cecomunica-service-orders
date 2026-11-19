@@ -105,10 +105,10 @@ test("S2 · el botón se ofrece en enviada, aprobada y vencida (detalle y listad
   const det = leer("public", "js", "pages", "cot-detalle.js");
   // Desde d3a5be6 (decisión 12 de Alberto) la comercial vencida también se
   // cierra; el taller sigue teniendo su "Pasar a facturación".
-  assert.match(det, /cot\.estado === 'aprobada' \|\| cot\.estado === 'enviada' \|\| \(cot\.estado === 'vencida' && !cot\.gestion_id\)\) \? \(esTaller\(\)/);
+  assert.match(det, /cot\.estado === 'aprobada' \|\| cot\.estado === 'enviada' \|\| \(cot\.estado === 'vencida' && !\(cot\.gestion_id \|\| \(cot\.gestion_ids \|\| \[\]\)\.length\)\)\) \? \(esTaller\(\)/);
   assert.match(det, /vencida: cot\.estado === 'vencida'/);
   const idx = leer("public", "js", "pages", "cotizaciones-index.js");
-  assert.match(idx, /c\.estado === 'aprobada' \|\| c\.estado === 'enviada' \|\| \(c\.estado === 'vencida' && !c\.gestion_id\)\) \? \(esTallerC\(c\)/);
+  assert.match(idx, /c\.estado === 'aprobada' \|\| c\.estado === 'enviada' \|\| \(c\.estado === 'vencida' && !\(c\.gestion_id \|\| \(c\.gestion_ids \|\| \[\]\)\.length\)\)\) \? \(esTallerC\(c\)/);
   assert.match(idx, /vencida: cot\.estado === 'vencida'/);
 });
 

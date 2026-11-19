@@ -1585,7 +1585,7 @@ function _materialSubtotalRefresh() {
   const listo = _materialFueraCat ? !!_materialFueraCatDatos().nombre : !!_materialSeleccionada;
   if (!listo) { out.textContent = ""; return; }
   const sub = tipo === "cobro" ? qty * precio : 0;
-  out.innerHTML = `Subtotal: <strong>${FMT.money(sub)}</strong>${tipo === "garantia" ? " (garantía — no se cobra)" : ""}`;
+  out.innerHTML = `Subtotal: <strong>${FMT.money(sub)}</strong>${tipo === "garantia" ? " (sin costo — no se le cobra al cliente)" : ""}`;
 }
 
 // Sugerencias al abrir (auditoría órdenes P1.6): la analítica "más usadas

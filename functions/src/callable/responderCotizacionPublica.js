@@ -162,12 +162,12 @@ function correoVendedor({ docId, cot, respuesta, nombre, comentario }) {
   // vendedor sigue con el contrato o la venta.
   const siguiente = acepto
     ? (taller
-      ? (cot.gestion_id
+      ? ((cot.gestion_id || (cot.gestion_ids || []).length)
         ? "Recepción recibe la fila en Facturación pendiente y Bodega el aviso para asignar el radio de reposición."
         : "Recepción recibe la fila en Facturación pendiente, aunque el equipo siga en el taller.")
       : "Comunícate con el cliente para cerrar la venta o preparar el contrato.")
     : (taller
-      ? (cot.gestion_id
+      ? ((cot.gestion_id || (cot.gestion_ids || []).length)
         ? "No se repone el radio: el caso se cierra y el daño pasa a cobranza."
         : "No se factura nada y el candado de materiales de la orden se reabre.")
       : "Queda como oportunidad perdida. Si hay espacio para una nueva propuesta, llámalo.");

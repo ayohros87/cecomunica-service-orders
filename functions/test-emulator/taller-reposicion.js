@@ -20,6 +20,11 @@
 //   C) El cliente NO acepta → gestión cerrada sin reemplazo + renglón en
 //      cobranza por el monto aprobado + aviso a administración. Una sola deuda.
 //   D) Se anula la gestión con la cotización viva → la cotización se descarta.
+//   E) Varias reposiciones de la MISMA orden (2026-11-19) → una cotización con
+//      un renglón por radio; anular una le quita su renglón; aceptarla libera
+//      todas a bodega y abre UNA fila de facturación.
+//   F) La reposición ya estaba cotizada a mano → unirACotizacion: la automática
+//      se descarta sin cerrar las gestiones y se factura la del taller.
 const assert = require("node:assert/strict");
 const admin = require("firebase-admin");
 
@@ -240,6 +245,154 @@ async function main() {
   assert.equal(cD.estado, "descartada", "D: la cotización se descarta con la gestión");
   assert.match(cD.cierre_motivo, /Se anuló la gestión GR20260925-03/);
   console.log("  PASS D · anular la gestión descarta su cotización viva");
+
+  // ── E · varias reposiciones de la MISMA orden → UNA cotización ──────────
+  // (2026-11-19, WESTIN 2026111702: cuatro radios dañados eran cuatro
+  // cotizaciones de un renglón.)
+  const OE = "2026111702";
+  await db.doc(`ordenes_de_servicio/${OE}`).set({
+    tipo_de_servicio: "REPARACION", estado_reparacion: "COMPLETADO (EN OFICINA)", cliente_nombre: "GAMBOA, S.A.", cliente_id: CLIENTE,
+  });
+  const danoDe = (gid, ordenId, serial) => {
+    const g = gestionDano(gid);
+    g.origen = { ...g.origen, orden_id: ordenId, serial, equipo_id: `eq-${serial}` };
+    g.items = [{ ...g.items[0], serial_saliente: serial }];
+    return g;
+  };
+  const GE = ["GR20261119-01", "GR20261119-02", "GR20261119-03", "GR20261119-04"];
+  const SE = ["23418A0382", "23418A0384", "23418A0383", "24220A2258"];
+  for (let i = 0; i < 4; i++) await escribirGestion(GE[i], danoDe(GE[i], OE, SE[i]), { crear: true });
+  // Las cuatro aprobaciones casi a la vez (en producción cayeron en 24 s).
+  await Promise.all(GE.map((gid) => aprobarConCargo(gid, 180)));
+  const gsE = await Promise.all(GE.map(async (gid) => (await db.doc(`gestiones/${gid}`).get()).data()));
+  const cotE = gsE[0].cobro.cotizacion_doc_id;
+  assert.ok(cotE, "E: la reposición quedó cotizada");
+  assert.ok(gsE.every((g) => g.cobro.cotizacion_doc_id === cotE && g.cobro.estado === "cotizada" && g.cobro.cotizacion_en_curso === undefined),
+    "E: las cuatro gestiones apuntan a la MISMA cotización");
+  const delaOrden = (await db.collection("cotizaciones").where("orden_id", "==", OE).get()).docs;
+  assert.equal(delaOrden.length, 1, "E: una sola cotización para la orden");
+  let cE = delaOrden[0].data();
+  assert.equal(cE.estado, "borrador");
+  assert.equal(cE.items.length, 4, "E: un renglón por radio");
+  assert.deepEqual([...cE.gestion_ids].sort(), [...GE].sort(), "E: gestion_ids trae las cuatro");
+  assert.ok(GE.includes(cE.gestion_id), "E: gestion_id conserva la primera (compatibilidad)");
+  assert.deepEqual(cE.items.map((x) => x.equipo.serial).sort(), [...SE].sort());
+  assert.equal(cE.subtotal, 720, "E: 4 × $180");
+  assert.equal(cE.total_con_itbms, 770.4, "E: + 7% de ITBMS");
+  assert.equal(cE.total, 770.4);
+  assert.match(cE.intro, /reposición de 4 radios/, "E: la introducción habla de los cuatro");
+  const listasE = (await pasos("cotizacion_reposicion")).filter((m) => GE.includes(m.meta.gestion_id));
+  assert.equal(listasE.length, 4, "E: la jefa se entera de cada aprobación");
+  assert.equal(listasE.filter((m) => /^Enviar al cliente/.test(m.subject)).length, 1, "E: un 'enviar al cliente'");
+  assert.equal(listasE.filter((m) => /^Se sumó a COT-/.test(m.subject)).length, 3, "E: y tres 'se sumó'");
+  assert.equal(((await db.doc(`ordenes_de_servicio/${OE}`).get()).data().cotizaciones_ids || []).length, 1, "E: la orden la enlaza una vez");
+  console.log("  PASS E1 · cuatro reposiciones aprobadas a la vez → una cotización de cuatro renglones");
+
+  // Anular una con la cotización en borrador: se le quita su renglón.
+  await escribirGestion(GE[3], { estado: "anulada", anulada_motivo: "ese radio sí tenía garantía", anulada_por_uid: "uAdmin" });
+  cE = (await db.doc(`cotizaciones/${cotE}`).get()).data();
+  assert.equal(cE.estado, "borrador", "E: la cotización sigue viva para las otras tres");
+  assert.equal(cE.items.length, 3);
+  assert.ok(!cE.items.some((x) => x.equipo.serial === SE[3]), "E: sin el renglón del radio anulado");
+  assert.deepEqual([...cE.gestion_ids].sort(), GE.slice(0, 3).sort());
+  assert.equal(cE.subtotal, 540);
+  assert.match(cE.intro, /reposición de 3 radios/);
+  console.log("  PASS E2 · anular una en borrador le quita su renglón y recalcula");
+
+  // Ya enviada: la siguiente reposición de la orden NO se le suma.
+  await escribirCot(cotE, { estado: "enviada", enviada_en: admin.firestore.Timestamp.now() });
+  const G5 = "GR20261119-05";
+  await escribirGestion(G5, danoDe(G5, OE, "23418A0390"), { crear: true });
+  await aprobarConCargo(G5, 180);
+  const cot5 = (await db.doc(`gestiones/${G5}`).get()).data().cobro.cotizacion_doc_id;
+  assert.notEqual(cot5, cotE, "E: a una cotización que ya salió al cliente no se le suma nada");
+  assert.equal((await db.doc(`cotizaciones/${cotE}`).get()).data().items.length, 3);
+
+  // La orden se entrega antes de que el cliente conteste: no se factura.
+  const avisosAntes = (await db.collection("facturacion_avisos").get()).size;
+  const oeRef = db.doc(`ordenes_de_servicio/${OE}`);
+  const oeB = await oeRef.get();
+  await oeRef.update({ estado_reparacion: "ENTREGADO AL CLIENTE", fecha_entrega: admin.firestore.Timestamp.now() });
+  await onEntregada.run({ data: { before: oeB, after: await oeRef.get() }, params: { ordenId: OE } });
+  assert.equal((await db.collection("facturacion_avisos").get()).size, avisosAntes, "E: la entrega no factura una reposición sin aceptar");
+
+  // El cliente acepta: las tres siguen a bodega y hay UNA fila de facturación.
+  const antesAcepta3 = await Promise.all(GE.slice(0, 3).map((gid) => db.doc(`gestiones/${gid}`).get()));
+  await escribirCot(cotE, {
+    estado: "convertida", fecha_conversion: admin.firestore.Timestamp.now(),
+    aceptacion: { medio: "correo", nota: "", por_email: JEFA, at: admin.firestore.Timestamp.now() },
+  });
+  for (const gid of GE.slice(0, 3)) {
+    const g = (await db.doc(`gestiones/${gid}`).get()).data();
+    assert.equal(g.estado, "pendiente_bodega", `E: ${gid} sigue a bodega`);
+    assert.equal(g.cobro.estado, "aceptada");
+  }
+  assert.equal((await db.doc(`gestiones/${GE[3]}`).get()).data().estado, "anulada", "E: la anulada no revive");
+  assert.equal((await db.doc(`gestiones/${G5}`).get()).data().estado, "pendiente_cliente", "E: la de la otra cotización sigue esperando");
+  const avE = await db.doc(`facturacion_avisos/cotizacion_servicio__${cotE}`).get();
+  assert.ok(avE.exists, "E: una fila de facturación");
+  assert.equal((await db.collection("facturacion_avisos").get()).size, avisosAntes + 1, "E: una sola");
+  assert.equal(avE.data().contexto.reposicion_dano, true);
+  assert.equal(avE.data().contexto.gestion_ids.length, 3);
+  assert.equal(avE.data().detalle.renglones.length, 3);
+  const bodegaAntes = (await pasos("bodega")).length;
+  for (let i = 0; i < 3; i++) {
+    await onGestion.run({ data: { before: antesAcepta3[i], after: await db.doc(`gestiones/${GE[i]}`).get() }, params: { gid: GE[i] } });
+  }
+  assert.equal((await pasos("bodega")).length, bodegaAntes + 3, "E: bodega recibe el aviso de cada radio");
+  console.log("  PASS E3 · enviada no admite más; la entrega no la factura; aceptarla libera las tres y abre una fila");
+
+  // ── F · ya estaba cotizada A MANO: se une, no se duplica ────────────────
+  const OF = "2026111703";
+  await db.doc(`ordenes_de_servicio/${OF}`).set({
+    tipo_de_servicio: "REPARACION", estado_reparacion: "COMPLETADO (EN OFICINA)", cliente_nombre: "GAMBOA, S.A.", cliente_id: CLIENTE,
+  });
+  await db.doc("cotizaciones/cotMano").set({
+    cotizacion_id: "COT-2026-0253", estado: "enviada", origen: "orden", orden_id: OF, clienteId: CLIENTE, cliente_nombre: "GAMBOA, S.A.",
+    itbmsPct: 7, itbms_aplica: true, itbms_monto: 21, subtotal: 300, total: 321, total_con_itbms: 321,
+    creado_por_email: JEFA, creado_por_uid: "uJefa", deleted: false,
+    items: [
+      { id: "m1", nombre: "RADIO HYTERA PNC 360", modelo: "", cant: 1, precio: 150, desc: 0, equipo: { serial: "F0001", modelo: "PNC360S-R" } },
+      { id: "m2", nombre: "RADIO HYTERA PNC 360", modelo: "", cant: 1, precio: 150, desc: 0, equipo: { serial: "F0002", modelo: "PNC360S-R" } },
+    ],
+  });
+  const GF = ["GR20261119-11", "GR20261119-12"];
+  for (const [i, gid] of GF.entries()) {
+    await escribirGestion(gid, danoDe(gid, OF, `F000${i + 1}`), { crear: true });
+    await aprobarConCargo(gid, 180);
+  }
+  const cotAuto = (await db.doc(`gestiones/${GF[0]}`).get()).data().cobro.cotizacion_doc_id;
+  assert.equal((await db.doc(`gestiones/${GF[1]}`).get()).data().cobro.cotizacion_doc_id, cotAuto);
+  const RDm = require("../src/lib/reposicionDano");
+  const ensayo = await RDm.unirACotizacion({ origenDocIds: [cotAuto], destinoDocId: "cotMano", execute: false });
+  assert.deepEqual(ensayo.gestiones.sort(), [...GF].sort(), "F: el ensayo dice qué movería");
+  assert.equal((await db.doc(`cotizaciones/${cotAuto}`).get()).data().estado, "borrador", "F: el ensayo no escribe");
+  const deudasAntes = (await db.collection("cobros_equipos").get()).size;
+  const cotAutoBefore = await db.doc(`cotizaciones/${cotAuto}`).get();
+  await RDm.unirACotizacion({ origenDocIds: [cotAuto], destinoDocId: "cotMano", porEmail: "alberto@cecomunica.com" });
+  const cAuto = await db.doc(`cotizaciones/${cotAuto}`).get();
+  await onEstado.run({ data: { before: cotAutoBefore, after: cAuto }, params: { docId: cotAuto } });
+  assert.equal(cAuto.data().estado, "descartada", "F: la automática se descarta");
+  assert.match(cAuto.data().cierre_motivo, /Duplicada: la reposición ya estaba cotizada en COT-2026-0253/);
+  for (const gid of GF) {
+    const g = (await db.doc(`gestiones/${gid}`).get()).data();
+    assert.equal(g.estado, "pendiente_cliente", "F: descartar la duplicada NO cierra la gestión");
+    assert.equal(g.cobro.cotizacion_doc_id, "cotMano", "F: ahora se cobra en la que hizo el taller");
+    assert.equal(g.cobro.cotizacion_id, "COT-2026-0253");
+  }
+  assert.equal((await db.collection("cobros_equipos").get()).size, deudasAntes, "F: ni manda nada a cobranza");
+  assert.deepEqual([...(await db.doc("cotizaciones/cotMano").get()).data().gestion_ids].sort(), [...GF].sort());
+  await assert.rejects(() => RDm.unirACotizacion({ origenDocIds: [cotE], destinoDocId: "cotMano" }), /otra orden/, "F: no une cotizaciones de otra orden");
+  await escribirCot("cotMano", {
+    estado: "convertida", fecha_conversion: admin.firestore.Timestamp.now(),
+    aceptacion: { medio: "verbal", nota: "", por_email: JEFA, at: admin.firestore.Timestamp.now() },
+  });
+  for (const gid of GF) assert.equal((await db.doc(`gestiones/${gid}`).get()).data().estado, "pendiente_bodega", "F: aceptar la del taller libera las dos");
+  const avF = await db.doc("facturacion_avisos/cotizacion_servicio__cotMano").get();
+  assert.ok(avF.exists, "F: se factura la del taller");
+  assert.equal(avF.data().resumen.total, 321, "F: por lo que el taller le cotizó al cliente");
+  assert.ok(!(await db.doc(`facturacion_avisos/cotizacion_servicio__${cotAuto}`).get()).exists, "F: la duplicada no se factura");
+  console.log("  PASS F · reposición ya cotizada a mano → se une a esa, la automática se descarta, una sola factura");
 
   console.log("\nTALLER + REPOSICIÓN POR DAÑO: TODOS LOS RECORRIDOS PASARON");
 }
