@@ -644,7 +644,12 @@ function abrirImpresionOrden(ordenId) {
   if (!ordenId) return;
   const orden = (window.APP?.state?.orders || []).find(o => o.ordenId === ordenId);
   if (orden) {
+    const esVisita = String(orden.tipo_de_servicio || '').toLowerCase().includes('visita');
     localStorage.setItem('imprimirOrdenData', JSON.stringify({
+      // Versión del paquete. v2 (2026-11-19): los equipos llevan id e
+      // intervención del técnico, que la visita impresa necesita; la página
+      // de impresión descarta un paquete de visita sin `v` y lee de Firestore.
+      v: 2,
       ordenId: orden.ordenId,
       tipo_de_servicio: orden.tipo_de_servicio || '',
       tecnico_asignado: orden.tecnico_asignado || '',
@@ -670,9 +675,13 @@ function abrirImpresionOrden(ordenId) {
       } : null,
       // Sin los descartados que se quedan en Cecomunica: tras el QC, este
       // papel es el que firma el cliente al retirar (domain/descarteEntrega.js).
+      // En una VISITA no hay retiro ni QC: van todos los radios atendidos,
+      // con lo que el técnico le hizo a cada uno (la tabla "Radios atendidos"
+      // de la visita impresa; las piezas las pide la página de impresión).
       equipos: (orden.equipos || []).filter(e => !e.eliminado
-          && !(window.DescarteEntrega && DescarteEntrega.seQueda(orden, e))).map(e => ({
-        sin_reparar: !!(window.DescarteEntrega && DescarteEntrega.sinReparar(orden, e)),
+          && (esVisita || !(window.DescarteEntrega && DescarteEntrega.seQueda(orden, e)))).map(e => ({
+        sin_reparar: !esVisita && !!(window.DescarteEntrega && DescarteEntrega.sinReparar(orden, e)),
+        id: e.id || '',
         numero_de_serie: e.numero_de_serie || '',
         modelo: e.modelo || '',
         bateria: !!e.bateria,
@@ -681,7 +690,10 @@ function abrirImpresionOrden(ordenId) {
         fuente: !!e.fuente,
         antena: !!e.antena,
         cubrepolvo: !!e.cubrepolvo,
-        observaciones: e.observaciones || ''
+        observaciones: e.observaciones || '',
+        trabajo_tecnico: e.trabajo_tecnico || '',
+        intervencion_no_disponible: !!e.intervencion_no_disponible,
+        motivo_no_disponible: e.motivo_no_disponible || ''
       }))
     }));
   }
@@ -731,26 +743,139 @@ function _entregaFecha(ts) {
 }
 
 // Lightbox de imagen — overlay dinámico, cierra con backdrop/Escape/✕.
+//
+// Con zoom (2026-11-19, Brenda): la nota de entrega firmada en papel se sube
+// como foto y en el modal sale a 240px — no se leía la firma ni el nombre de
+// quien recibió. Aquí se abre sola, se amplía (botones, rueda, clic) y se
+// arrastra; "Abrir en pestaña nueva" deja el zoom del navegador como respaldo.
+// La usan las firmas/notas del modal de entrega y la cédula (admin, URL
+// firmada temporal): por eso no se guarda nada ni se vuelve a pedir la URL.
+//
+// Geometría: la imagen queda centrada en el marco y se transforma con
+// translate(t) scale(s) desde su centro, así un punto p del marco (medido
+// desde el centro) muestra el punto (p − t)/s de la imagen. Para ampliar SIN
+// que lo que está bajo el cursor se mueva: t' = p − (p − t)·s'/s.
 function _entregaLightbox(url, alt) {
+  const esc = _entregaEsc;
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
   overlay.style.display = 'flex';
   overlay.style.zIndex = '10000';
   overlay.innerHTML = `
-    <div class="modal" style="max-width:90vw;max-height:90vh;padding:8px;">
-      <div style="display:flex;justify-content:flex-end;">
-        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
+    <div class="modal" aria-label="${esc(alt || 'Imagen')}"
+         style="width:min(96vw,1200px);max-width:none;max-height:94vh;padding:8px;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0 2px 8px;">
+        <button type="button" class="btn btn-sm" data-lb="out" aria-label="Alejar" title="Alejar" style="min-width:36px;">−</button>
+        <span data-lb-pct class="muted" style="min-width:46px;text-align:center;font-size:12px;">100%</span>
+        <button type="button" class="btn btn-sm" data-lb="in" aria-label="Acercar" title="Acercar" style="min-width:36px;">+</button>
+        <button type="button" class="btn btn-sm" data-lb="fit">Ajustar</button>
+        <a class="btn btn-sm" href="${esc(url)}" target="_blank" rel="noopener">Abrir en pestaña nueva</a>
+        <span style="flex:1 1 auto;"></span>
+        <button type="button" class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
       </div>
-      <img src="${_entregaEsc(url)}" alt="${_entregaEsc(alt || 'Imagen')}"
-           style="max-width:86vw;max-height:78vh;object-fit:contain;display:block;border-radius:6px;">
+      <div data-lb-stage style="flex:1 1 76vh;min-height:140px;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;background:#f1f5f9;border-radius:6px;touch-action:none;cursor:zoom-in;">
+        <img src="${esc(url)}" alt="${esc(alt || 'Imagen')}" draggable="false"
+             style="max-width:100%;max-height:100%;object-fit:contain;display:block;transform-origin:center center;user-select:none;-webkit-user-drag:none;">
+      </div>
+      <div class="muted" style="font-size:12px;padding:6px 2px 0;">Clic o rueda del mouse para ampliar · arrastra para moverte por la imagen</div>
     </div>`;
-  const cleanup = () => { overlay.remove(); document.removeEventListener('keydown', kb); };
-  const kb = e => { if (e.key === 'Escape') cleanup(); };
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay || e.target.closest('[data-close]')) cleanup();
+
+  const stage = overlay.querySelector('[data-lb-stage]');
+  const img = stage.querySelector('img');
+  const pct = overlay.querySelector('[data-lb-pct]');
+  const MIN = 1, MAX = 8;
+  let s = 1, tx = 0, ty = 0;
+  let arrastrando = false, movio = false, ox = 0, oy = 0, pid = null;
+
+  const pintar = () => {
+    // Tope del arrastre: la imagen ampliada no se sale del marco.
+    const mx = Math.max(0, (img.offsetWidth * s - stage.clientWidth) / 2);
+    const my = Math.max(0, (img.offsetHeight * s - stage.clientHeight) / 2);
+    tx = Math.min(mx, Math.max(-mx, tx));
+    ty = Math.min(my, Math.max(-my, ty));
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+    pct.textContent = `${Math.round(s * 100)}%`;
+    stage.style.cursor = s > 1 ? (arrastrando ? 'grabbing' : 'grab') : 'zoom-in';
+  };
+  // Amplía alrededor de un punto del marco (medido desde su centro).
+  const zoomA = (nuevo, px = 0, py = 0) => {
+    let n = Math.min(MAX, Math.max(MIN, nuevo));
+    if (n < 1.02) n = 1;               // el redondeo de la rueda no deja un 101%
+    if (n !== s) {
+      tx = px - (px - tx) * (n / s);
+      ty = py - (py - ty) * (n / s);
+      s = n;
+      if (s === 1) { tx = 0; ty = 0; }
+    }
+    pintar();
+  };
+  const puntoDe = (e) => {
+    const r = stage.getBoundingClientRect();
+    return [e.clientX - r.left - r.width / 2, e.clientY - r.top - r.height / 2];
+  };
+
+  stage.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const [px, py] = puntoDe(e);
+    zoomA(s * (e.deltaY < 0 ? 1.2 : 1 / 1.2), px, py);
+  }, { passive: false });
+
+  stage.addEventListener('pointerdown', (e) => {
+    if (arrastrando || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    arrastrando = true; movio = false; ox = e.clientX; oy = e.clientY; pid = e.pointerId;
+    try { stage.setPointerCapture(pid); } catch { /* sin captura igual funciona dentro del marco */ }
+    pintar();
   });
-  document.addEventListener('keydown', kb);
+  stage.addEventListener('pointermove', (e) => {
+    if (!arrastrando || e.pointerId !== pid) return;
+    const dx = e.clientX - ox, dy = e.clientY - oy;
+    if (!movio && Math.hypot(dx, dy) < 4) return;   // un clic con pulso no es arrastre
+    movio = true;
+    if (s > 1) { tx += dx; ty += dy; }
+    ox = e.clientX; oy = e.clientY;
+    pintar();
+  });
+  const soltar = (e) => {
+    if (!arrastrando || e.pointerId !== pid) return;
+    arrastrando = false;
+    try { stage.releasePointerCapture(pid); } catch { /* ya suelta */ }
+    // Clic sin arrastre: amplía donde se tocó; si ya estaba ampliada, ajusta.
+    if (!movio && e.type === 'pointerup') {
+      if (s === 1) zoomA(2.5, ...puntoDe(e)); else zoomA(1);
+    } else pintar();
+  };
+  stage.addEventListener('pointerup', soltar);
+  stage.addEventListener('pointercancel', soltar);
+
+  img.addEventListener('error', () => {
+    stage.innerHTML = '<div class="muted" style="padding:24px;text-align:center;">No se pudo cargar la imagen. Prueba con "Abrir en pestaña nueva" o vuelve a abrirla.</div>';
+  });
+
+  const cleanup = () => {
+    overlay.remove();
+    window.removeEventListener('keydown', kb, true);
+    window.removeEventListener('resize', pintar);
+  };
+  // En captura y cortando la propagación del Escape: el modal de entrega que
+  // queda debajo (Modal.sheet) también escucha keydown y se cerraría con él.
+  const kb = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cleanup(); }
+    else if (e.key === '+' || e.key === '=') zoomA(s * 1.5);
+    else if (e.key === '-') zoomA(s / 1.5);
+    else if (e.key === '0') zoomA(1);
+  };
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay || e.target.closest('[data-close]')) { cleanup(); return; }
+    const b = e.target.closest('[data-lb]');
+    if (!b) return;
+    if (b.dataset.lb === 'in') zoomA(s * 1.5);
+    else if (b.dataset.lb === 'out') zoomA(s / 1.5);
+    else zoomA(1);
+  });
+  window.addEventListener('keydown', kb, true);
+  window.addEventListener('resize', pintar);
   document.body.appendChild(overlay);
+  overlay.querySelector('[data-close]')?.focus();
 }
 
 // Modal combinado "Ver entrega/recepción" — una sola vista con las fases que
@@ -764,10 +889,18 @@ function _faseFilas(pares) {
     .map(([k, v]) => `<div style="display:flex;gap:8px;padding:3px 0;"><span class="muted" style="min-width:170px;">${k}</span><strong>${v}</strong></div>`)
     .join('');
 }
+// La imagen va dentro de un <button> (foco y Enter gratis): un clic la abre
+// sola en el lightbox con zoom — el modal la enseña a 240px y ahí no se lee
+// una nota firmada (2026-11-19, Brenda). El clic lo atiende el modal de
+// entrega por `data-zoom-img`.
 function _faseFirma(url, cap) {
   return url
     ? `<div style="margin-top:8px;"><div class="muted" style="margin-bottom:4px;">${cap}</div>
-         <img src="${_entregaEsc(url)}" alt="${_entregaEsc(cap)}" style="max-width:240px;border:1px solid var(--line,#e5e7eb);border-radius:8px;background:#fff;display:block;"></div>`
+         <button type="button" data-zoom-img="1" title="Clic para ampliar" aria-label="Ampliar: ${_entregaEsc(cap)}"
+                 style="display:block;padding:0;margin:0;border:0;background:none;cursor:zoom-in;">
+           <img src="${_entregaEsc(url)}" alt="${_entregaEsc(cap)}" style="max-width:240px;border:1px solid var(--line,#e5e7eb);border-radius:8px;background:#fff;display:block;">
+         </button>
+         <div class="muted" style="font-size:12px;margin-top:3px;">Clic para ampliar</div></div>`
     : '';
 }
 
@@ -955,6 +1088,12 @@ function mostrarEntregaRecepcion(ordenId) {
   const cleanup = () => sheetApi.close(null);
   overlay.addEventListener('click', async (e) => {
     if (e.target === overlay || e.target.closest('[data-close]')) { cleanup(); return; }
+    const zoomBtn = e.target.closest('[data-zoom-img]');
+    if (zoomBtn) {
+      const im = zoomBtn.querySelector('img');
+      if (im) _entregaLightbox(im.currentSrc || im.src, im.alt);
+      return;
+    }
     if (e.target.closest('[data-ver-comprobante]')) { verEntregaComprobante(ordenId); return; }
     if (e.target.closest('[data-ver-acuse]')) { verRecepcionComprobante(ordenId); return; }
     const verBtn = e.target.closest('[data-ver-id]');
@@ -1018,6 +1157,45 @@ function verEntregaComprobante(ordenId) {
     ? `<img src="${esc(o.firma_url)}" alt="Firma del receptor" class="firma-img">`
     : `<div class="firma-line"></div>`;
 
+  // Entrega con firma EN PAPEL (`no_recibido`, nombre histórico del flag): la
+  // prueba de que el cliente recibió es la foto de la nota firmada, y el
+  // comprobante salía con la línea de firma vacía (2026-11-19, Brenda: "no se
+  // incluye la imagen de la nota de entrega firmada"). Misma lectura que el
+  // modal: quien recibió está en `entrega_persona_interna`, y la nota puede
+  // ser foto, PDF o estar pendiente de subir.
+  const enPapel = !!o.no_recibido;
+  const recibidoPor = (enPapel ? (o.entrega_persona_interna || o.receptor_nombre) : o.receptor_nombre) || '';
+  let firmaWrap;
+  if (!enPapel) {
+    firmaWrap = `<div class="firma-wrap">
+    <div class="firma-cap">Firma del receptor:</div>
+    ${firmaBlock}
+    <div class="firma-cap">${esc(recibidoPor)}</div>
+  </div>`;
+  } else {
+    const notaEsPdf = /\.pdf(\?|$)/i.test(String(o.nota_firmada_path || o.nota_firmada_url || ''));
+    const datos = [
+      recibidoPor ? `Recibido por: <strong>${esc(recibidoPor)}</strong>` : '',
+      o.no_recibido_motivo ? `Motivo (sin firma digital): ${esc(o.no_recibido_motivo)}` : '',
+    ].filter(Boolean).join(' · ');
+    let notaHtml;
+    if (o.nota_firmada_url && !notaEsPdf) {
+      notaHtml = `<img src="${esc(o.nota_firmada_url)}" alt="Nota de entrega firmada por el cliente" class="nota-img"
+        onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'nota',textContent:'No se pudo cargar la imagen de la nota firmada; consúltala en la orden ${esc(ordenId)}.'}))">`;
+    } else if (o.nota_firmada_url) {
+      notaHtml = `<p class="nota">La nota firmada por el cliente está guardada en PDF y no se puede incrustar aquí:
+        <a href="${esc(o.nota_firmada_url)}" target="_blank" rel="noopener">abrir la nota firmada (PDF)</a>.
+        Imprímela junto con este comprobante.</p>`;
+    } else {
+      notaHtml = `<p class="nota"><strong>Nota firmada pendiente de subir</strong>${o.nota_firmada_omitida_motivo ? ' — ' + esc(o.nota_firmada_omitida_motivo) : ''}.</p>`;
+    }
+    firmaWrap = `<div class="firma-wrap papel">
+    <div class="papel-t">Firmó en papel — nota firmada por el cliente</div>
+    ${datos ? `<div class="firma-cap">${datos}</div>` : ''}
+    ${notaHtml}
+  </div>`;
+  }
+
   // Observaciones de la orden y notas escritas al confirmar la entrega. Van
   // en el comprobante impreso porque el correo de Nota de Entrega ya las
   // lleva: la hoja que firma el cliente decía menos que el correo, y ahí
@@ -1066,10 +1244,17 @@ function verEntregaComprobante(ordenId) {
   .firma-img { max-width:280px; max-height:130px; display:block; border:1px solid #e5e7eb; border-radius:6px; background:#fff; }
   .firma-line { width:280px; border-bottom:1px solid #111; height:60px; }
   .firma-cap { font-size:12px; color:#6b7280; margin-top:4px; }
+  .papel-t { font-size:14px; font-weight:700; }
+  .nota-img { display:block; max-width:100%; margin-top:10px; border:1px solid #e5e7eb; border-radius:6px; background:#fff; }
   .toolbar { margin-bottom:18px; }
   .toolbar button { background:#0091D7; color:#fff; border:0; padding:8px 16px; border-radius:6px; font:600 13px Arial; cursor:pointer; }
   .foot { margin-top:32px; font-size:11px; color:#9ca3af; text-align:center; border-top:1px solid #eee; padding-top:8px; }
-  @media print { .toolbar { display:none; } body { padding:0; } .bloque { break-inside:avoid; } }
+  /* La foto de la nota firmada no se parte entre hojas: se limita a lo que
+     cabe en una (carta, con márgenes) y, si no entra en lo que queda de la
+     primera, el navegador la pasa entera a la siguiente. */
+  @media print { .toolbar { display:none; } body { padding:0; } .bloque { break-inside:avoid; }
+    .papel { break-inside:avoid; page-break-inside:avoid; }
+    .nota-img { max-height:225mm; width:auto; } }
 </style></head>
 <body>
   <div class="toolbar"><button onclick="window.print()">🖨️ Imprimir</button></div>
@@ -1082,7 +1267,7 @@ function verEntregaComprobante(ordenId) {
     <div><span class="k">Fecha y hora de entrega:</span> <strong>${esc(fecha)}</strong></div>
     <div><span class="k">Cliente:</span> <strong>${esc(cliente)}</strong></div>
     <div><span class="k">Tipo de servicio:</span> <strong>${esc(o.tipo_de_servicio || '—')}</strong></div>
-    <div><span class="k">Recibido por:</span> <strong>${esc(o.receptor_nombre || '—')}</strong></div>
+    <div><span class="k">Recibido por:</span> <strong>${esc(recibidoPor || '—')}</strong></div>
     <div><span class="k">Técnico:</span> <strong>${esc(o.tecnico_asignado || '—')}</strong></div>
   </div>
 
@@ -1097,11 +1282,7 @@ function verEntregaComprobante(ordenId) {
 
   ${idNota}
 
-  <div class="firma-wrap">
-    <div class="firma-cap">Firma del receptor:</div>
-    ${firmaBlock}
-    <div class="firma-cap">${esc(o.receptor_nombre || '')}</div>
-  </div>
+  ${firmaWrap}
 
   <div class="foot">Cecomunica, S.A. — Documento generado el ${esc(new Date().toLocaleString('es-PA'))}</div>
 </body></html>`;

@@ -77,9 +77,107 @@
       return String(texto).replace(RE_INSPECCION, (_m, pre) => `${pre}${n} equipo${s} devuelto${s}`);
     }
 
-    function renderOrden(datos, equipos, infoContainer, tablaContainer) {
+    // ── Visita técnica: radios atendidos (2026-11-19, Brenda) ───────────────
+    // La visita impresa traía solo el informe: los radios, lo que el técnico
+    // le hizo a cada uno y las piezas que le cambió había que consultarlos
+    // dentro del módulo. Ahora salen en una tabla debajo del informe.
+    const esTipoVisita = (tipo) => String(tipo || "").toLowerCase().includes("visita");
+    // Todo texto libre de esta sección va escapado (el resto de la página
+    // interpola tal cual; no se toca para no cambiar lo que ya imprime).
+    const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (m) => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+
+    // Piezas de la orden (subcolección `consumos`). Tolerante a fallo: si no
+    // se pueden leer devuelve null y la columna sale "—"; la orden se imprime
+    // igual.
+    function cargarConsumos() {
+      try {
+        return Promise.resolve(OrdenesService.getConsumos(ordenId))
+          .then((r) => (Array.isArray(r) ? r : null))
+          .catch((e) => { console.warn("[imprimir-orden] no se pudieron cargar las piezas (consumos):", e); return null; });
+      } catch (e) {
+        console.warn("[imprimir-orden] no se pudieron cargar las piezas (consumos):", e);
+        return Promise.resolve(null);
+      }
+    }
+
+    // "2× Teclado PNC360" por pieza; las de garantía se marcan "(sin costo)".
+    // La misma pieza cobrada y sin costo sale en dos líneas: son dos cosas
+    // distintas para quien lee el papel.
+    function piezasTexto(cons) {
+      const porPieza = new Map();
+      (cons || []).forEach((c) => {
+        const qty = Number(c.qty || 0);
+        if (!(qty > 0)) return;
+        const nombre = String(c.pieza_nombre || c.sku || "").trim() || "(pieza sin nombre)";
+        const sinCosto = String(c.tipo || "") === "garantia";
+        const k = `${String(c.pieza_id || c.sku || nombre).toLowerCase()}|${sinCosto ? "g" : "c"}`;
+        if (!porPieza.has(k)) porPieza.set(k, { nombre, sinCosto, qty: 0 });
+        porPieza.get(k).qty += qty;
+      });
+      return [...porPieza.values()]
+        .map((p) => `${p.qty}× ${esc(p.nombre)}${p.sinCosto ? " (sin costo)" : ""}`)
+        .join("<br>");
+    }
+
+    // `consumos`: undefined = todavía cargando · null = no se pudieron leer ·
+    // array = lo registrado. Los consumos se casan con su radio por `equipoId`
+    // (id del equipo; los equipos legacy sin id los guardaban bajo el número
+    // de serie — mismo respaldo que cotizar-orden.js).
+    function radiosVisitaHtml(equipos, consumos) {
+      const list = Array.isArray(equipos) ? equipos : [];
+      if (!list.length) return "";
+      const porEquipo = {};
+      (Array.isArray(consumos) ? consumos : []).forEach((c) => {
+        const k = String(c.equipoId || "").trim();
+        (porEquipo[k] = porEquipo[k] || []).push(c);
+      });
+      const usados = new Set();
+      const consumosDe = (e) => {
+        const serial = String(e.numero_de_serie || "").trim();
+        const out = [];
+        [e.id, serial].forEach((k) => {
+          if (k && porEquipo[k] && !usados.has(k)) { usados.add(k); out.push(...porEquipo[k]); }
+        });
+        return out;
+      };
+      const piezasCelda = (e) => {
+        if (consumos === undefined) return "…";
+        if (consumos === null) return "—";
+        return piezasTexto(consumosDe(e)) || "—";
+      };
+      let html = `<h3 class="section-title" style="margin-top:14px;">Radios atendidos (${list.length})</h3>
+        <table class="equipos-table"><thead><tr>
+          <th style="width:30px;">#</th><th style="width:16%;">Serie</th><th style="width:14%;">Modelo</th>
+          <th>Intervención</th><th style="width:22%;">Piezas</th><th style="width:18%;">Observaciones</th>
+        </tr></thead><tbody>`;
+      list.forEach((e, i) => {
+        const trabajo = String(e.trabajo_tecnico || "").trim();
+        const intervencion = e.intervencion_no_disponible
+          ? `<strong>No disponible</strong>${String(e.motivo_no_disponible || "").trim() ? ` — ${esc(String(e.motivo_no_disponible).trim())}` : ""}`
+          : (trabajo ? esc(trabajo) : "—");
+        html += `<tr>
+          <td><strong>${i + 1}</strong></td>
+          <td>${esc(e.numero_de_serie || "—")}</td><td>${esc(e.modelo || "—")}</td>
+          <td style="text-align:left;white-space:pre-wrap;">${intervencion}</td>
+          <td style="text-align:left;">${piezasCelda(e)}</td>
+          <td style="text-align:left;">${esc(e.observaciones || "—")}</td>
+        </tr>`;
+      });
+      html += `</tbody></table>`;
+      // Piezas registradas sin radio (o de un radio que ya no está en la
+      // orden): no se pierden, van al pie de la tabla.
+      if (Array.isArray(consumos)) {
+        const sueltas = Object.keys(porEquipo).filter((k) => !usados.has(k)).flatMap((k) => porEquipo[k]);
+        const txt = piezasTexto(sueltas);
+        if (txt) html += `<div class="info-item" style="margin-top:4px;"><span class="info-label">Piezas sin radio asociado:</span> <span class="info-value">${txt.replace(/<br>/g, " · ")}</span></div>`;
+      }
+      return html;
+    }
+
+    function renderOrden(datos, equipos, infoContainer, tablaContainer, consumos) {
       const tituloEquipos = document.getElementById("tituloEquipos");
-      const esVisita = (datos.tipo_de_servicio || "").toLowerCase().includes("visita");
+      const esVisita = esTipoVisita(datos.tipo_de_servicio);
       switch ((datos.tipo_de_servicio || "").toUpperCase()) {
         case "ENTRADA":     tituloEquipos.textContent = "Equipos en Entrada"; break;
         case "REPARACIÓN":  tituloEquipos.textContent = "Equipos en Reparación"; break;
@@ -122,18 +220,22 @@
           ${observaciones ? `<div class="info-item full"><span class="info-label">Observaciones Generales:</span> <span class="info-value">${observaciones}</span></div>` : ''}
         </div>
       `;
-      // Las visitas técnicas no llevan tabla de equipos: su contenido es el
-      // informe estructurado (motivo, trabajo, hallazgos, elementos de sitio).
+      // Las visitas técnicas llevan el informe estructurado (motivo, trabajo,
+      // hallazgos, elementos de sitio) y, debajo, los radios atendidos con su
+      // intervención y sus piezas (2026-11-19). Sin columnas de accesorios:
+      // en una visita no entra ni sale nada del taller. Una visita con radios
+      // pero todavía sin informe muestra el aviso Y la tabla.
       if (esVisita) {
         const inf = datos.informe_visita;
+        let html;
         if (!inf || (!inf.trabajo_realizado && !inf.hallazgos && !(inf.elementos || []).length)) {
-          tablaContainer.innerHTML = `<div class="alert-box">⚠️ Visita sin informe registrado todavía</div>`;
+          html = `<div class="alert-box">⚠️ Visita sin informe registrado todavía</div>`;
         } else {
-          let html = `<div class="info-grid" style="margin-bottom:12px;">
-            ${inf.fecha_visita ? `<div class="info-item"><span class="info-label">Fecha de visita:</span> <span class="info-value">${inf.fecha_visita}</span></div>` : ''}
-            ${inf.motivo ? `<div class="info-item"><span class="info-label">Motivo:</span> <span class="info-value">${inf.motivo}</span></div>` : ''}
-            ${inf.trabajo_realizado ? `<div class="info-item full"><span class="info-label">Trabajo realizado:</span> <span class="info-value">${inf.trabajo_realizado}</span></div>` : ''}
-            ${inf.hallazgos ? `<div class="info-item full"><span class="info-label">Hallazgos:</span> <span class="info-value">${inf.hallazgos}</span></div>` : ''}
+          html = `<div class="info-grid" style="margin-bottom:12px;">
+            ${inf.fecha_visita ? `<div class="info-item"><span class="info-label">Fecha de visita:</span> <span class="info-value">${esc(inf.fecha_visita)}</span></div>` : ''}
+            ${inf.motivo ? `<div class="info-item"><span class="info-label">Motivo:</span> <span class="info-value">${esc(inf.motivo)}</span></div>` : ''}
+            ${inf.trabajo_realizado ? `<div class="info-item full"><span class="info-label">Trabajo realizado:</span> <span class="info-value" style="white-space:pre-wrap;">${esc(inf.trabajo_realizado)}</span></div>` : ''}
+            ${inf.hallazgos ? `<div class="info-item full"><span class="info-label">Hallazgos:</span> <span class="info-value" style="white-space:pre-wrap;">${esc(inf.hallazgos)}</span></div>` : ''}
           </div>`;
           const els = inf.elementos || [];
           if (els.length) {
@@ -141,12 +243,12 @@
               <th style="width:40px;">#</th><th>Elemento</th><th>Detalle</th><th>Serial</th>
             </tr></thead><tbody>`;
             els.forEach((el, i) => {
-              html += `<tr><td><strong>${i + 1}</strong></td><td>${el.tipo || '—'}</td><td style="text-align:left;">${el.detalle || '—'}</td><td>${el.serial || '—'}</td></tr>`;
+              html += `<tr><td><strong>${i + 1}</strong></td><td>${esc(el.tipo || '—')}</td><td style="text-align:left;">${esc(el.detalle || '—')}</td><td>${esc(el.serial || '—')}</td></tr>`;
             });
             html += `</tbody></table>`;
           }
-          tablaContainer.innerHTML = html;
         }
+        tablaContainer.innerHTML = html + radiosVisitaHtml(list, consumos);
         return;
       }
       if (!equipos || equipos.length === 0) {
@@ -183,9 +285,17 @@
         const raw = localStorage.getItem('imprimirOrdenData');
         if (raw) {
           const d = JSON.parse(raw);
-          if (d && d.ordenId === ordenId) {
+          // Una VISITA necesita los campos de intervención por radio, que la
+          // bandeja manda desde la versión 2 del paquete. Si lo dejó una
+          // pestaña de la bandeja abierta con el código anterior (sin `v`),
+          // se descarta y se lee de Firestore: mejor un viaje que una tabla
+          // de radios sin intervenciones.
+          const viejoParaVisita = d && esTipoVisita(d.tipo_de_servicio) && Number(d.v || 0) < 2;
+          if (d && d.ordenId === ordenId && viejoParaVisita) {
             localStorage.removeItem('imprimirOrdenData');
-            renderOrden({
+          } else if (d && d.ordenId === ordenId) {
+            localStorage.removeItem('imprimirOrdenData');
+            const datosRapidos = {
               tipo_de_servicio: d.tipo_de_servicio,
               tecnico_asignado: d.tecnico_asignado,
               estado_reparacion: d.estado_reparacion,
@@ -195,7 +305,15 @@
               informe_visita: d.informe_visita || null,
               fechaCreacion: d.fecha_creacion ? d.fecha_creacion.slice(0, 10) : '—',
               fechaEntrega: d.fecha_entrega ? d.fecha_entrega.slice(0, 10) : '—'
-            }, d.equipos || [], infoContainer, tablaContainer);
+            };
+            const eqsRapidos = d.equipos || [];
+            // Visita con radios: se pinta ya (la columna Piezas dice "…") y
+            // se completa cuando llegan los consumos — o queda "—" si fallan.
+            const pidePiezas = esTipoVisita(d.tipo_de_servicio) && eqsRapidos.length > 0;
+            renderOrden(datosRapidos, eqsRapidos, infoContainer, tablaContainer, pidePiezas ? undefined : null);
+            if (pidePiezas) {
+              cargarConsumos().then((cons) => renderOrden(datosRapidos, eqsRapidos, infoContainer, tablaContainer, cons));
+            }
             return;
           }
         }
@@ -209,10 +327,16 @@
         }
         // Sin los descartados que se quedan en Cecomunica: tras el QC, este
         // papel es el que firma el cliente al retirar (domain/descarteEntrega.js).
+        // En una VISITA no se filtra nada por descarte: no hay retiro ni QC,
+        // y el papel tiene que listar todos los radios atendidos.
         const DE = window.DescarteEntrega || null;
+        const esVisitaO = esTipoVisita(o.tipo_de_servicio);
         const equipos = Array.isArray(o.equipos)
-          ? o.equipos.filter(e => !e.eliminado && !(DE && DE.seQueda(o, e))) : [];
-        const nombreCliente = await resolverNombreCliente(o);
+          ? o.equipos.filter(e => !e.eliminado && (esVisitaO || !(DE && DE.seQueda(o, e)))) : [];
+        const [nombreCliente, consumos] = await Promise.all([
+          resolverNombreCliente(o),
+          (esVisitaO && equipos.length) ? cargarConsumos() : Promise.resolve(null),
+        ]);
         renderOrden({
           tipo_de_servicio: o.tipo_de_servicio,
           tecnico_asignado: o.tecnico_asignado,
@@ -224,7 +348,8 @@
           fechaCreacion: fechaCorta(o.fecha_creacion),
           fechaEntrega: fechaCorta(o.fecha_entrega)
         }, equipos.map(e => ({
-          sin_reparar: !!(DE && DE.sinReparar(o, e)),
+          sin_reparar: !esVisitaO && !!(DE && DE.sinReparar(o, e)),
+          id: e.id || '',
           numero_de_serie: e.numero_de_serie,
           modelo: e.modelo,
           bateria: e.bateria,
@@ -233,8 +358,11 @@
           fuente: e.fuente,
           antena: e.antena,
           cubrepolvo: e.cubrepolvo,
-          observaciones: e.observaciones
-        })), infoContainer, tablaContainer);
+          observaciones: e.observaciones,
+          trabajo_tecnico: e.trabajo_tecnico || '',
+          intervencion_no_disponible: !!e.intervencion_no_disponible,
+          motivo_no_disponible: e.motivo_no_disponible || ''
+        })), infoContainer, tablaContainer, consumos);
       }).catch((error) => {
         console.error("❌ Error al cargar la orden:", error);
         infoContainer.innerHTML = `<div class="alert-box">❌ Error al cargar la orden</div>`;
