@@ -41,7 +41,53 @@ function tecnicoDe(orden) {
   return String(orden.tecnico_asignado || orden.tecnico_nombre || orden.tecnico || orden.tecnico_email || "").trim();
 }
 
-async function ejecutar({ usuario, accion, ordenId, seriales }) {
+// Aviso a recepción con copia al taller (Solangel, 2026-11-20: "¿cómo se
+// entera Brenda de este cambio?"). La salida solo quedaba en Almacén y en la
+// visita; recepción —que es quien después ajusta esos equipos— no la veía.
+// Nunca lanza: los radios ya se movieron y un correo caído no lo deshace.
+async function avisarRecepcion({ accion, ordenId, cliente, tecnico, usuario, fichas }) {
+  try {
+    const G = require("../lib/gestiones");
+    const { recepcionEmails, tallerEmailTo } = require("../lib/mailRecipients");
+    const { APP_BASE_URL } = require("../lib/inventario");
+    const [recepcion, taller] = await Promise.all([recepcionEmails(), tallerEmailTo()]);
+    const limpia = (l) => [...new Set(l.map((x) => String(x).trim().toLowerCase()).filter(G.isEmail))];
+    const para = limpia(recepcion);
+    const copia = limpia(String(taller || "").split(",")).filter((x) => !para.includes(x));
+    const to = (para.length ? para : copia).join(", ");
+    if (!to) { logger.warn("[salidaRadiosVisita] sin destinatarios para el aviso", { ordenId }); return null; }
+    const e = G.escapeHtml;
+    const p = (html) => `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">${html}</p>`;
+    const n = fichas.length;
+    const sale = accion === "sacar";
+    const lista = fichas.map((f) => `<li><code>${e(f.crudo)}</code>${f.r.data.modelo_label ? ` · ${e(f.r.data.modelo_label)}` : ""}</li>`).join("");
+    return await G.encolarCorreo({
+      to, cc: para.length && copia.length ? copia.join(", ") : null,
+      subject: sale
+        ? `Salieron ${n} radio(s) a la visita ${ordenId} · ${cliente || "—"}`
+        : `Volvieron ${n} radio(s) de la visita ${ordenId} · ${cliente || "—"}`,
+      preheader: sale ? `Los lleva ${tecnico || "el técnico"}` : "Regresaron a bodega sin usarse",
+      bodyContent: `
+        <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">${sale ? "Radios que salieron a una visita" : "Radios que volvieron de una visita"}</h2>
+        ${p(sale
+          ? `Bodega le entregó <b>${n}</b> radio(s) a <b>${e(tecnico || "el técnico")}</b> para la visita <b>${e(ordenId)}</b> de <b>${e(cliente || "—")}</b>.`
+          : `Bodega recibió de vuelta <b>${n}</b> radio(s) de la visita <b>${e(ordenId)}</b> de <b>${e(cliente || "—")}</b>: no se usaron y ya están en bodega.`)}
+        <ul style="margin:0 0 12px 18px;padding:0;font:14px/1.6 Arial,sans-serif;">${lista}</ul>
+        ${p(sale
+          ? "No hay que hacer nada ahora. Si el técnico deja alguno con el cliente, registra el cambio en la visita y te llega el aviso con la devolución ya abierta; los que no use vuelven a bodega."
+          : "No hay que hacer nada.")}
+        ${p(`<b>Lo registró:</b> ${e(usuario)}`)}`,
+      ctaUrl: `${APP_BASE_URL}/ordenes/index.html?ids=${encodeURIComponent(ordenId)}`,
+      ctaLabel: "Abrir la visita",
+      meta: { source: "salidaRadiosVisita", accion, orden_id: ordenId },
+    });
+  } catch (err) {
+    logger.error("[salidaRadiosVisita] aviso a recepción no enviado", { ordenId, message: err.message });
+    return null;
+  }
+}
+
+async function ejecutar({ usuario, accion, ordenId, seriales, avisar = true }) {
   if (!["sacar", "devolver"].includes(accion)) throw new HttpsError("invalid-argument", "Acción desconocida.");
   if (!ordenId || typeof ordenId !== "string") throw new HttpsError("invalid-argument", "Falta la visita.");
   const lista = [...new Map((Array.isArray(seriales) ? seriales : [])
@@ -112,7 +158,11 @@ async function ejecutar({ usuario, accion, ordenId, seriales }) {
       nota: fichas.map((f) => f.crudo).join(", ") }),
   }, { merge: true });
   logger.info("[salidaRadiosVisita]", { accion, ordenId, usuario, res });
-  return { ok: true, accion, orden_id: ordenId, tecnico, cliente, radios: res };
+  const movidas = fichas.filter((f, i) => res[i] && res[i].resultado === "transicion");
+  const mailId = (avisar && movidas.length)
+    ? await avisarRecepcion({ accion, ordenId, cliente, tecnico, usuario, fichas: movidas })
+    : null;
+  return { ok: true, accion, orden_id: ordenId, tecnico, cliente, radios: res, aviso_mail_id: mailId };
 }
 
 module.exports = onCall(

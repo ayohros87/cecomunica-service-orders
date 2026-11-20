@@ -114,6 +114,8 @@ exports.proponerModeloSinFicha        = require("./src/callable/proponerModeloSi
 exports.regularizarReemplazoOrden     = require("./src/callable/regularizarReemplazoOrden");
 // Salida de radios a una visita técnica: bodega se los entrega al técnico y los recibe de vuelta (2026-11-18).
 exports.salidaRadiosVisita            = require("./src/callable/salidaRadiosVisita");
+// Devolver a bodega una orden interna de C COMUNICA (maquillaje): la cierra y sus radios vuelven al estante (2026-11-20).
+exports.devolverOrdenABodega          = require("./src/callable/devolverOrdenABodega");
 exports.onOrdenEntregada              = require("./src/triggers/ordenes/onOrdenEntregada");
 exports.facturacionDiaria             = require("./src/triggers/scheduled/facturacionDiaria");
 exports.calcularFacturaContrato       = require("./src/callable/calcularFacturaContrato");

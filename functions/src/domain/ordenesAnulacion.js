@@ -54,6 +54,7 @@ const TERMINALES = new Set([
   "CERRADA (ENTRADA)",
   "CERRADA (DEVOLUCION)",
   "CERRADA (SIN RETIRAR)",
+  "CERRADA (A BODEGA)",
   "ANULADA",
 ]);
 

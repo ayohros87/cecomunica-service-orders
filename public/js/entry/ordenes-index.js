@@ -28,6 +28,8 @@ import '/js/ui/toast.js';
 import '/js/ui/busy.js';
 import '/js/ui/firmaTablet.js';
 import '/js/ui/modal.js';
+// Orden interna (C COMUNICA): predicados de "Devolver a bodega" (2026-11-20).
+import '/js/domain/ordenInterna.js';
 import '/js/pages/ordenes-state.js';
 import '/js/pages/ordenes-data.js';
 import '/js/pages/ordenes-render.js';

@@ -25,7 +25,7 @@
     'go-nueva-orden', 'nuevo-batch', 'nueva-devolucion', 'checkin-devolucion', 'recibir-mostrador',
     'asignar-tecnico', 'reasignar-tecnico', 'completar-orden', 'entregar-orden', 'entregar-parcial',
     'cerrar-entrada', 'qc-orden', 'cerrar-visita', 'informe-visita', 'eliminar-orden', 'dividir-orden',
-    'casos-viejos', 'regularizar-reemplazo', 'entrega-tardia', 'proponer-reemplazo', 'marcar-cambio-serial',
+    'casos-viejos', 'regularizar-reemplazo', 'entrega-tardia', 'devolver-bodega', 'proponer-reemplazo', 'marcar-cambio-serial',
     'editar-orden', 'resolver-contrato-anulado', 'go-fotos-taller', 'agregar-equipo', 'venta-facturada',
     'imprimir-orden', 'imprimir-orden-doc', 'nota-entrega-doc', 'ver-documentos', 'ver-cotizacion',
     'cotizar-orden', 'gestionar-notas', 'seguimiento-retiro', 'ver-entrega', 'subir-nota-firmada', 'scan-serial', 'copiar-seriales',
@@ -255,6 +255,15 @@
       closeAllMenus();
       CargaDiferida.entregaTardia().then(() => abrirEntregaTardia(ordenId))
         .catch(() => Toast.show('Sin conexión — no se pudo abrir la entrega tardía.', 'bad'));
+    },
+    // Orden interna de C COMUNICA (maquillaje): se cierra devolviendo sus
+    // radios a bodega (ordenes-devolver-bodega.js, diferido).
+    'devolver-bodega': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (!ordenId) return;
+      closeAllMenus();
+      CargaDiferida.devolverBodega().then(() => abrirDevolverBodega(ordenId))
+        .catch(() => Toast.show('Sin conexión — no se pudo abrir la devolución a bodega.', 'bad'));
     },
     // El taller propone reemplazar ESTE radio (ordenes-reemplazo.js, diferido):
     // nace una gestión GR por serial, en pendiente_aprobacion, y ventas la

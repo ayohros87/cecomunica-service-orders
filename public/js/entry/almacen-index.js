@@ -45,6 +45,10 @@ import '/js/pages/almacen-asignar.js';
 import '/js/pages/almacen-hoy.js';
 // Radios con técnicos: salida de bodega a una visita y regreso (2026-11-18).
 import '/js/pages/almacen-salidas-visita.js';
+// Órdenes internas (maquillaje) que bodega devuelve al estante de un golpe (2026-11-20).
+import '/js/domain/ordenInterna.js';
+import '/js/pages/ordenes-devolver-bodega.js';
+import '/js/pages/almacen-ordenes-internas.js';
 // Runner común de lotes (Existencias y Avanzado) — auditoría UX 2026-09-28.
 import '/js/ui/asistente-lote.js';
 import '/js/pages/almacen-existencias.js';

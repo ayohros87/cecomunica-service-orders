@@ -1240,25 +1240,32 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
 }
 
 /* Cliente cell flex structure */
+/* El nombre conserva al menos 150px; si el número de contrato y la gestión no
+   caben a su lado, bajan a una segunda línea en vez de comerse el nombre
+   (2026-11-20: el número de contrato pasó de tooltip a texto). */
 .cliente-cell {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 2px 8px;
   min-width: 0;
 }
 
 .cliente-icon {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
   align-items: center;
-  gap: 4px;
+  gap: 2px 4px;
   text-align: center;
   font-size: 12px;
   opacity: 0.8;
 }
 
 .cliente-text {
-  flex: 1;
+  flex: 1 1 150px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

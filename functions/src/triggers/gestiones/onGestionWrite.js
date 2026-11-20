@@ -720,7 +720,50 @@ function serialesAumentoCompletos(g) {
   return total > 0 && asignados >= total;
 }
 
-async function correoRecepcion(gid, g, ordenIds) {
+// Reemplazo que entró en la orden de origen (2026-11-20): recepción recibe el
+// mismo aviso de siempre —qué serial salió y cuál entró— pero sin una orden
+// nueva que armar. Copia al taller: la orden pudo volver al técnico.
+async function correoReemplazoEnOrden(gid, g, absorbida) {
+  const dests = await G.destinatariosRecepcionVendedor(g.cliente_id);
+  let taller = [];
+  try {
+    const { tallerEmailTo } = require("../../lib/mailRecipients");
+    taller = String(await tallerEmailTo() || "").split(",").map((x) => x.trim().toLowerCase()).filter(G.isEmail);
+  } catch { /* sin copia al taller */ }
+  const todos = [...new Set([...dests.map((x) => String(x).trim().toLowerCase()), ...taller])].filter(G.isEmail);
+  if (!todos.length) {
+    logger.warn("[onGestionWrite] reemplazo en la orden de origen sin destinatarios", { gid, orden: absorbida.orden_id });
+    return;
+  }
+  const it = (g.items || [])[0] || {};
+  const e = G.escapeHtml;
+  const p = (html) => `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">${html}</p>`;
+  await G.encolarCorreo({
+    to: todos[0],
+    cc: todos.length > 1 ? todos.slice(1).join(",") : null,
+    subject: `Reemplazo en la orden ${absorbida.orden_id}: ${absorbida.saliente} → ${absorbida.entrante} — ${g.cliente_nombre || "Cliente"} (${gid})`,
+    preheader: "El radio nuevo entró en la misma orden: no hay una segunda orden",
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Reemplazo dentro de la misma orden</h2>
+      ${p(`Bodega asignó el radio del reemplazo <b>${e(gid)}</b> (<b>${e(g.cliente_nombre || "—")}</b>). Como la orden
+        <b>${e(absorbida.orden_id)}</b> todavía no se ha entregado, el radio nuevo <b>entró en esa misma orden</b> en lugar del
+        dañado: <b>no se creó una segunda orden</b> y el cliente firma un solo documento.`)}
+      ${G.tablaHtml(["Entra", "Sustituye a", "Modelo", "Contrato"], [[
+        `<code>${e(absorbida.entrante)}</code>`, `<code>${e(absorbida.saliente)}</code>`,
+        e(G.modeloEntrante(it).modelo || it.modelo_solicitado || it.modelo || "—"), e(it.contrato_id || "custodia"),
+      ]])}
+      ${p(`El radio nuevo heredó los accesorios y la descripción del que sale. ${absorbida.regresa
+        ? "La orden <b>volvió al técnico</b> para programarlo (copiar la configuración del radio reemplazado) y pasar el control de calidad otra vez."
+        : "El técnico lo programa junto con los demás."}`)}
+      ${p(`El radio <b>${e(absorbida.saliente)}</b> salió de la orden y del contrato; quedó <b>por revisar</b> en bodega.`)}`,
+    ctaUrl: `${APP_BASE_URL}/ordenes/index.html?ids=${encodeURIComponent(absorbida.orden_id)}`,
+    ctaLabel: "Ver la orden",
+    meta: { gestion_id: gid, paso: "programacion", ordenes: absorbida.orden_id, en_orden_origen: true },
+  });
+}
+
+async function correoRecepcion(gid, g, ordenIds, absorbida = null) {
+  if (absorbida) return correoReemplazoEnOrden(gid, g, absorbida);
   const dests = await G.destinatariosRecepcionVendedor(g.cliente_id);
   if (!dests.length) {
     logger.warn("[onGestionWrite] OS de programación sin destinatarios", { gid, ordenIds });
@@ -1812,8 +1855,14 @@ module.exports = onDocumentWritten(
         }
 
         let ordenIds = [];
+        // Propuesta del taller nacida en una PROGRAMACIÓN que aún no se
+        // entrega (Brenda, 2026-11-20): el entrante entra en ESA orden en
+        // lugar del saliente — una sola orden, una sola firma del cliente.
+        // Si no aplica (o falla), la gestión crea su OS como siempre.
+        let absorbida = null;
         try {
-          ordenIds = await G.crearOrdenesProgramacion(gid, gC);
+          absorbida = await G.absorberEnOrdenOrigen(gid, gC);
+          ordenIds = absorbida ? [absorbida.orden_id] : await G.crearOrdenesProgramacion(gid, gC);
         } finally {
           // Sin órdenes (o con excepción) la puerta se vuelve a abrir: si se
           // quedara reservada, la gestión no volvería a intentar la OS nunca.
@@ -1836,12 +1885,16 @@ module.exports = onDocumentWritten(
               programacion_id: ordenIds[0],
               programacion_ids: ordenIds,
               programacion_en_curso: admin.firestore.FieldValue.delete(),
+              // La "OS de la gestión" es la orden del contrato del cliente:
+              // la anulación no la elimina (lib/gestiones.limpiarAnulacion).
+              ...(absorbida ? { en_orden_origen: true } : {}),
             },
             cierre: { ...(gC.cierre || {}), asignacion: true },
           }, { merge: true });
-          await G.registrarEvento(gid, "programacion",
-            `Asignación completa. OS de programación ${ordenIds.join(", ")} creada(s); correo a Recepción con copia al vendedor.${preFirma ? " La firma del anexo corre en paralelo — la ENTREGA queda candada hasta que el cliente firme." : ""}`);
-          await correoRecepcion(gid, gC, ordenIds);
+          await G.registrarEvento(gid, "programacion", absorbida
+            ? `Asignación completa. El radio ${absorbida.entrante} entró en la orden ${absorbida.orden_id} en lugar del ${absorbida.saliente}: la orden aún no se había entregado, así que no se abre una OS aparte y el cliente firma una sola.${absorbida.regresa ? " La orden vuelve al técnico para programar el radio nuevo." : ""} Correo a Recepción con copia al vendedor y al taller.`
+            : `Asignación completa. OS de programación ${ordenIds.join(", ")} creada(s); correo a Recepción con copia al vendedor.${preFirma ? " La firma del anexo corre en paralelo — la ENTREGA queda candada hasta que el cliente firme." : ""}`);
+          await correoRecepcion(gid, gC, ordenIds, absorbida);
         }
       }
     } catch (e) {

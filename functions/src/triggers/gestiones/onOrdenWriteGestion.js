@@ -204,6 +204,85 @@ async function retirarMarcaCancelacion(gid, g) {
   }
 }
 
+// Lo que la ENTREGA de un reemplazo le hace al expediente (y al saliente).
+// Muta `patch` (cierre.entrada, ordenes.devolucion_id); quien llama lo escribe.
+// Lo comparten la OS propia de la gestión y la orden de origen que absorbió
+// el reemplazo (2026-11-20).
+async function efectosEntregaReemplazo(gid, g, ordenId, patch) {
+  // Salientes que hay que IR A BUSCAR. En una propuesta del taller el
+  // radio suele estar ya en el mostrador (entró con su orden): pedir
+  // una devolución por él es mandar a recepción a recuperar algo que
+  // tiene en la mano, y de paso deja la cuenta con una devolución
+  // abierta para siempre. Esos ítems vienen con `saliente_en_casa`.
+  const salientes = (g.items || [])
+    .filter(it => !it.saliente_en_casa)
+    .map(it => ({
+      serial: it.serial_saliente,
+      modelo: it.modelo || "",
+      modelo_id: it.modelo_id || null,
+      pool_doc_id: it.pool_doc_id_saliente || null,
+    }))
+    .filter(u => String(u.serial || "").trim());
+  const contratos = Array.isArray(g.contratos_afectados) ? g.contratos_afectados : [];
+  // Todos los salientes ya están en casa → no hay recuperación que
+  // hacer: el paso "entrada" queda cumplido y la gestión puede cerrar.
+  // Se exige que TODOS los ítems lo declaren (y traigan serial): una
+  // lista vacía por datos incompletos sigue el camino de siempre.
+  const todosEnCasa = (g.items || []).length > 0
+    && (g.items || []).every(it => it.saliente_en_casa && String(it.serial_saliente || "").trim());
+  if (todosEnCasa) {
+    patch.cierre = { ...patch.cierre, entrada: true };
+    await estamparLinaje(gid, g, ordenId);
+    await G.registrarEvento(gid, "entrega",
+      `Entrega registrada desde la OS ${ordenId}. El/los radio(s) sustituido(s) ya estaban en CECOMUNICA (propuesta del taller): no se abre orden de devolución y el paso de entrada queda cumplido. Su disposición sigue en la orden de taller que los trajo.`);
+    logger.info("[onOrdenWriteGestion] reemplazo del taller sin devolución (saliente en casa)", { gid, ordenId });
+    return;
+  }
+  const devId = await crearOrdenDevolucion({
+    clienteId: g.cliente_id,
+    clienteNombre: g.cliente_nombre || "",
+    contratoDocId: contratos[0] || null,
+    contratoId: (g.items || []).find(i => i.contrato_id)?.contrato_id || null,
+    contratoOrigenIds: contratos,
+    modo: "recuperacion",
+    origen: { tipo: "gestion_reemplazo", ref_id: gid },
+    unidades: salientes,
+    motivo: `Reemplazo ${gid} — recuperar el radio sustituido (el trámite avanza aunque el equipo no esté físicamente)`,
+  });
+  if (devId) {
+    // La orden nace del creador genérico: se le cuelga el vínculo a la
+    // gestión para que este mismo trigger cierre `entrada` al check-in.
+    await db.collection("ordenes_de_servicio").doc(devId).set({
+      gestion: { id: gid, tipo: "reemplazo" },
+    }, { merge: true });
+    patch.ordenes = { ...(g.ordenes || {}), devolucion_id: devId };
+  }
+  await estamparLinaje(gid, g, ordenId);
+  await G.registrarEvento(gid, "entrega",
+    `Entrega registrada desde la OS ${ordenId}. Orden de devolución ${devId || "—"} creada para recuperar el/los saliente(s); linaje reemplaza_a estampado.`);
+}
+
+// Reemplazo que entró en la orden de ORIGEN (Brenda, 2026-11-20): esa orden
+// no lleva `gestion` (es la del contrato del cliente, con sus propios candados
+// de firma), así que la entrega le llega al expediente por
+// `reemplazos_absorbidos`. Idempotente: un expediente con la entrega ya
+// registrada, anulado o cerrado no se vuelve a tocar.
+async function entregaAbsorbida(gid, ordenId) {
+  try {
+    const gRef = db.collection("gestiones").doc(gid);
+    const gSnap = await gRef.get();
+    if (!gSnap.exists) return;
+    const g = gSnap.data();
+    if (g.tipo !== "reemplazo" || ["anulada", "cerrada"].includes(g.estado) || g.cierre?.entrega === true) return;
+    const patch = { cierre: { ...(g.cierre || {}), programacion: true, entrega: true } };
+    if (!g.ordenes?.devolucion_id) await efectosEntregaReemplazo(gid, g, ordenId, patch);
+    await gRef.set(patch, { merge: true });
+    logger.info("[onOrdenWriteGestion] entrega de la orden de origen propagada al reemplazo que absorbió", { gid, ordenId });
+  } catch (e) {
+    logger.error("[onOrdenWriteGestion] propagación de la entrega al reemplazo absorbido falló", { gid, ordenId, message: e.message });
+  }
+}
+
 module.exports = onDocumentWritten(
   { document: "ordenes_de_servicio/{ordenId}", region: "us-central1" },
   async (event) => {
@@ -211,6 +290,16 @@ module.exports = onDocumentWritten(
     const before = event.data.before?.exists ? event.data.before.data() : null;
     const after = event.data.after?.exists ? event.data.after.data() : null;
     if (!after || after.eliminado) return null;
+
+    // ── Orden que absorbió reemplazos del taller → al entregarse, cada
+    //    expediente registra su entrega (2026-11-20) ──────────────────────
+    const absorbidos = Object.keys(after.reemplazos_absorbidos || {});
+    if (absorbidos.length && esProgramacion(after)
+        && norm(before?.estado_reparacion) !== ENTREGADO
+        && norm(after.estado_reparacion) === ENTREGADO) {
+      for (const g2 of absorbidos) await entregaAbsorbida(g2, ordenId);
+    }
+
     const gid = after.gestion?.id;
     if (!gid) return null;
 
@@ -282,58 +371,7 @@ module.exports = onDocumentWritten(
         };
 
         if (g.tipo === "reemplazo" && !g.ordenes?.devolucion_id) {
-          // Salientes que hay que IR A BUSCAR. En una propuesta del taller el
-          // radio suele estar ya en el mostrador (entró con su orden): pedir
-          // una devolución por él es mandar a recepción a recuperar algo que
-          // tiene en la mano, y de paso deja la cuenta con una devolución
-          // abierta para siempre. Esos ítems vienen con `saliente_en_casa`.
-          const salientes = (g.items || [])
-            .filter(it => !it.saliente_en_casa)
-            .map(it => ({
-              serial: it.serial_saliente,
-              modelo: it.modelo || "",
-              modelo_id: it.modelo_id || null,
-              pool_doc_id: it.pool_doc_id_saliente || null,
-            }))
-            .filter(u => String(u.serial || "").trim());
-          const contratos = Array.isArray(g.contratos_afectados) ? g.contratos_afectados : [];
-          // Todos los salientes ya están en casa → no hay recuperación que
-          // hacer: el paso "entrada" queda cumplido y la gestión puede cerrar.
-          // Se exige que TODOS los ítems lo declaren (y traigan serial): una
-          // lista vacía por datos incompletos sigue el camino de siempre.
-          const todosEnCasa = (g.items || []).length > 0
-            && (g.items || []).every(it => it.saliente_en_casa && String(it.serial_saliente || "").trim());
-          if (todosEnCasa) {
-            patch.cierre = { ...patch.cierre, entrada: true };
-            await estamparLinaje(gid, g, ordenId);
-            await G.registrarEvento(gid, "entrega",
-              `Entrega registrada desde la OS ${ordenId}. El/los radio(s) sustituido(s) ya estaban en CECOMUNICA (propuesta del taller): no se abre orden de devolución y el paso de entrada queda cumplido. Su disposición sigue en la orden de taller que los trajo.`);
-            await gRef.set(patch, { merge: true });
-            logger.info("[onOrdenWriteGestion] reemplazo del taller sin devolución (saliente en casa)", { gid, ordenId });
-            return null;
-          }
-          const devId = await crearOrdenDevolucion({
-            clienteId: g.cliente_id,
-            clienteNombre: g.cliente_nombre || "",
-            contratoDocId: contratos[0] || null,
-            contratoId: (g.items || []).find(i => i.contrato_id)?.contrato_id || null,
-            contratoOrigenIds: contratos,
-            modo: "recuperacion",
-            origen: { tipo: "gestion_reemplazo", ref_id: gid },
-            unidades: salientes,
-            motivo: `Reemplazo ${gid} — recuperar el radio sustituido (el trámite avanza aunque el equipo no esté físicamente)`,
-          });
-          if (devId) {
-            // La orden nace del creador genérico: se le cuelga el vínculo a la
-            // gestión para que este mismo trigger cierre `entrada` al check-in.
-            await db.collection("ordenes_de_servicio").doc(devId).set({
-              gestion: { id: gid, tipo: "reemplazo" },
-            }, { merge: true });
-            patch.ordenes = { ...(g.ordenes || {}), devolucion_id: devId };
-          }
-          await estamparLinaje(gid, g, ordenId);
-          await G.registrarEvento(gid, "entrega",
-            `Entrega registrada desde la OS ${ordenId}. Orden de devolución ${devId || "—"} creada para recuperar el/los saliente(s); linaje reemplaza_a estampado.`);
+          await efectosEntregaReemplazo(gid, g, ordenId, patch);
         } else if (g.tipo === "demo" && !g.ordenes?.devolucion_id) {
           patch.estado = "en_demo";
           // Fecha de salida del demo: es la base del recordatorio de retorno

@@ -40,6 +40,8 @@ window.CargaDiferida = (() => {
     // Entrega tardía (recepción, 2026-10-07): la orden quedó EN OFICINA y el
     // cliente ya se llevó los radios hace tiempo.
     entregaTardia: () => import("/js/pages/ordenes-entrega-tardia.js"),
+    // Devolver a bodega una orden interna de C COMUNICA (Solangel, 2026-11-20).
+    devolverBodega: () => import("/js/pages/ordenes-devolver-bodega.js"),
     // Reemplazo hecho por fuera de la gestión, registrado a posteriori (2026-10-07).
     regularizarReemplazo: () => import("/js/pages/ordenes-regularizar-reemplazo.js"),
     bandejaKit: () => import("/js/ui/bandeja.js"),
@@ -130,6 +132,9 @@ window.CargaDiferida = (() => {
     },
     entregaTardia() {
       return window.abrirEntregaTardia ? Promise.resolve() : traer("entregaTardia");
+    },
+    devolverBodega() {
+      return window.abrirDevolverBodega ? Promise.resolve() : traer("devolverBodega");
     },
     regularizarReemplazo() {
       return window.abrirRegularizarReemplazo ? Promise.resolve() : traer("regularizarReemplazo");

@@ -700,6 +700,7 @@ window.AlmacenHoy = (() => {
 
   function recargar() {
     if (window.AlmacenSalidasVisita) AlmacenSalidasVisita.cargar();
+    if (window.AlmacenOrdenesInternas) AlmacenOrdenesInternas.cargar();
     return cargar();
   }
 
@@ -892,6 +893,8 @@ window.AlmacenHoy = (() => {
     // Radios con técnicos (salida a visita, 2026-11-18): bloque propio encima
     // de la bandeja; carga y falla por su cuenta.
     if (window.AlmacenSalidasVisita) AlmacenSalidasVisita.init(rol);
+    // Órdenes internas (maquillaje) que bodega devuelve al estante (2026-11-20).
+    if (window.AlmacenOrdenesInternas) AlmacenOrdenesInternas.init(rol);
 
     // La barra de pestañas y el deep-link ?tab= se resuelven en el parse
     // (scripts inline de la página) para que nada brinque; aquí solo se

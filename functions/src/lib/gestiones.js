@@ -393,6 +393,150 @@ async function crearOrdenesProgramacion(gid, g) {
   return ordenes;
 }
 
+// ── Reemplazo que entra en la orden de ORIGEN (Brenda, 2026-11-20) ──────────
+// El taller revisa los radios de un contrato que aún NO se ha entregado, uno
+// falla y propone el reemplazo. Hasta hoy el entrante nacía en una OS aparte:
+// para UNA entrega bajo UN contrato, recepción armaba dos órdenes, dos notas
+// y el cliente firmaba dos veces (MENZIES: 4 radios en la 2026111701 y 1 en
+// la 2026112001); además quitaba a mano el radio dañado de la primera.
+//
+// Ahora, si la propuesta nació en una PROGRAMACIÓN que sigue viva, el entrante
+// ocupa el lugar del saliente EN ESA orden: hereda sus accesorios y su
+// descripción, y si la orden ya estaba completada vuelve al técnico (hay un
+// radio sin programar; el QC caduca solo porque cambiaron los equipos). La
+// gestión queda apuntando a esa orden y se cierra cuando se entregue
+// (`reemplazos_absorbidos` → onOrdenWriteGestion).
+//
+// Lo que NO cambia: el reemplazo de un radio que ya está con el cliente (lo
+// pide el vendedor) y el que nace en una reparación — esos siguen con su OS.
+const ACCESORIOS_EQUIPO = ["bateria", "clip", "cargador", "fuente", "antena", "cubrepolvo"];
+const ORDEN_ORIGEN_VIVA = new Set(["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO", "COMPLETADO (EN OFICINA)"]);
+const _up = (s) => String(s || "").normalize("NFD").replace(/\p{M}/gu, "").toUpperCase().trim();
+const _serialEq = (e) => String((e && (e.numero_de_serie || e.serial)) || "").trim();
+
+/**
+ * PURA. Decide si el entrante de la gestión entra en la orden de origen y
+ * cómo queda la orden. Devuelve null cuando no aplica (y la gestión sigue el
+ * camino de siempre: su propia OS).
+ * @returns {null|{equipos:Array, regresa:boolean, saliente:string, entrante:string, salienteEnOrden:boolean}}
+ */
+function planAbsorcionEnOrigen(orden, g, gid, { nuevoId } = {}) {
+  if (!orden || !g || g.tipo !== "reemplazo" || g.origen?.tipo !== "taller") return null;
+  const items = g.items || [];
+  if (items.length !== 1) return null;
+  const it = items[0];
+  const entrante = String(it.serial_nuevo || "").trim();
+  const saliente = String(it.serial_saliente || g.origen?.serial || "").trim();
+  if (!entrante || !saliente) return null;
+  if (orden.eliminado === true) return null;
+  if (!_up(orden.tipo_de_servicio).startsWith("PROGRAMA")) return null;
+  if (!ORDEN_ORIGEN_VIVA.has(_up(orden.estado_reparacion || "POR ASIGNAR"))) return null;
+  if (!g.cliente_id || orden.cliente_id !== g.cliente_id) return null;
+  // El saliente es de OTRO contrato que el de la orden: no es "el mismo
+  // trámite"; se queda con su OS.
+  const cOrden = orden.contrato?.aplica ? (orden.contrato.contrato_doc_id || null) : null;
+  if (it.contrato_doc_id && cOrden && it.contrato_doc_id !== cOrden) return null;
+
+  const norm = (x) => _up(x).replace(/[^A-Z0-9]/g, "");
+  const equipos = Array.isArray(orden.equipos) ? orden.equipos.map((e) => ({ ...e })) : [];
+  // Idempotencia: si el entrante ya está en la orden, no se agrega otra vez.
+  if (equipos.some((e) => e && !e.eliminado && norm(_serialEq(e)) === norm(entrante))) return null;
+  const viejo = equipos.find((e) => e && !e.eliminado
+    && ((g.origen?.equipo_id && e.id === g.origen.equipo_id) || norm(_serialEq(e)) === norm(saliente))) || null;
+  // El de referencia para heredar accesorios y descripción: la fila viva, o
+  // la que recepción ya quitó a mano.
+  const ref = viejo || equipos.find((e) => e && norm(_serialEq(e)) === norm(saliente)) || {};
+  const mod = modeloEntrante(it);
+  const obsVieja = String(ref.observaciones || "").trim();
+  const nuevo = {
+    id: nuevoId || crypto.randomUUID(),
+    modelo_id: mod.modelo_id || null,
+    modelo: String(mod.modelo || "").trim(),
+    serial: entrante,
+    numero_de_serie: entrante,
+    observaciones: `REEMPLAZA al serial ${saliente} (${gid}): copiar su configuración, colocar su ID y confirmar.${obsVieja ? ` · ${obsVieja}` : ""}`,
+    eliminado: false,
+    reemplaza_a: saliente,
+    reemplazo_gestion: gid,
+  };
+  for (const k of ACCESORIOS_EQUIPO) if (typeof ref[k] === "boolean") nuevo[k] = ref[k];
+  if (viejo) {
+    viejo.eliminado = true;
+    viejo.reemplazado_por = entrante;
+    viejo.reemplazo_gestion = gid;
+    // En el lugar del saliente, para que la orden se lea en el mismo orden.
+    equipos.splice(equipos.indexOf(viejo) + 1, 0, nuevo);
+  } else {
+    equipos.push(nuevo);
+  }
+  return {
+    equipos, saliente, entrante, salienteEnOrden: !!viejo,
+    regresa: _up(orden.estado_reparacion) === "COMPLETADO (EN OFICINA)",
+  };
+}
+
+/**
+ * Mete el entrante en la orden de origen (ver planAbsorcionEnOrigen). Devuelve
+ * { orden_id, saliente, entrante, regresa } o null si no aplica — nunca lanza:
+ * ante cualquier duda la gestión crea su OS como siempre.
+ */
+async function absorberEnOrdenOrigen(gid, g) {
+  const oid = String(g?.origen?.orden_id || "").trim();
+  if (!oid || g.tipo !== "reemplazo" || g.origen?.tipo !== "taller") return null;
+  const pool = require("../domain/equiposPool");
+  const oRef = db.collection("ordenes_de_servicio").doc(oid);
+  let plan = null;
+  try {
+    const ahora = admin.firestore.Timestamp.now();
+    plan = await db.runTransaction(async (tx) => {
+      const s = await tx.get(oRef);
+      if (!s.exists) return null;
+      const p = planAbsorcionEnOrigen(s.data(), g, gid);
+      if (!p) return null;
+      tx.set(oRef, {
+        equipos: p.equipos,
+        reemplazos_absorbidos: { [gid]: { saliente: p.saliente, entrante: p.entrante, at: ahora } },
+        ...(p.regresa ? {
+          estado_reparacion: "ASIGNADO",
+          reabierta_por_reemplazo: { gestion_id: gid, saliente: p.saliente, entrante: p.entrante, at: ahora },
+        } : {}),
+        os_logs: admin.firestore.FieldValue.arrayUnion({
+          action: "REEMPLAZO_EN_ORDEN", by: "system:gestiones", at: ahora,
+          nota: `${p.entrante} entra en lugar de ${p.saliente} (${gid})${p.regresa ? " — vuelve al técnico" : ""}`,
+        }),
+      }, { merge: true });
+      return p;
+    });
+  } catch (e) {
+    logger.warn("[gestiones] el reemplazo no pudo entrar en la orden de origen; sigue con su propia OS", { gid, oid, message: e.message });
+    return null;
+  }
+  if (!plan) return null;
+
+  // El radio que falló sale de la orden Y del contrato: va a revisión, nunca
+  // a bodega (es el que salió por daño). Cubre las dos carreras con el trigger
+  // del pool: si este llega primero lo encuentra en_taller; si el trigger ya
+  // lo devolvió "a de donde salió", lo encuentra asignado al contrato.
+  try {
+    const it = (g.items || [])[0] || {};
+    await pool.transicionar(plan.saliente, it.modelo_id || null, it.modelo || "", {
+      aEstado: pool.ESTADOS.DEVUELTO,
+      soloDesde: [pool.ESTADOS.EN_TALLER, pool.ESTADOS.ASIGNADO],
+      condicion: (d) => (d.estado === pool.ESTADOS.EN_TALLER && d.orden_actual_id === oid)
+        || (d.estado === pool.ESTADOS.ASIGNADO && !d.orden_actual_id
+            && (!it.contrato_doc_id || d.asignacion?.contrato_doc_id === it.contrato_doc_id)),
+      tipo: "reemplazo",
+      refMov: { tipo: "gestion", id: gid, label: gid },
+      notas: `Sustituido por ${plan.entrante} antes de la entrega (orden ${oid}): sale de la orden y queda por revisar`,
+      extra: { orden_actual_id: null, asignacion: null },
+    });
+  } catch (e) {
+    logger.warn("[gestiones] saliente no pasó a revisión al entrar el reemplazo en la orden", { gid, oid, message: e.message });
+  }
+  logger.info("[gestiones] reemplazo incorporado a la orden de origen", { gid, oid, entrante: plan.entrante, saliente: plan.saliente, regresa: plan.regresa });
+  return { orden_id: oid, saliente: plan.saliente, entrante: plan.entrante, regresa: plan.regresa };
+}
+
 /**
  * Limpieza al ANULAR una gestión (pedido 2026-08-27, caso P223344): revierte
  * los efectos que la gestión dejó regados — sin tocar lo que ya ocurrió en el
@@ -463,6 +607,14 @@ async function limpiarAnulacion(gid, g) {
       const ref = db.collection("ordenes_de_servicio").doc(pid);
       const s = await ref.get();
       const o = s.exists ? s.data() : null;
+      // Reemplazo que entró en la orden de ORIGEN (2026-11-20): esa orden es
+      // la del contrato del cliente, no una OS de esta gestión — anular el
+      // reemplazo no puede llevársela. Se deja dicho qué radio revisar.
+      if (o && !o.eliminado && (g.ordenes?.en_orden_origen === true || o.reemplazos_absorbidos?.[gid])) {
+        const ab = o.reemplazos_absorbidos?.[gid] || {};
+        acciones.push(`la orden ${pid} es la del contrato (el radio ${ab.entrante || "de reemplazo"} entró en ella en lugar del ${ab.saliente || "saliente"}) — no se elimina; retirar ese radio a mano si ya no procede`);
+        continue;
+      }
       if (o && !o.eliminado) {
         if (ABIERTOS.includes((o.estado_reparacion || "").toUpperCase())) {
           await ref.update({
@@ -868,6 +1020,7 @@ module.exports = {
   destinatariosRecepcionVendedor, vendedorEmailDeCliente, adminEmails, aprobadoresEmails, aprobacionesTo, encolarCorreo,
   configEmailTo,
   registrarEvento, crearOrdenesProgramacion, siguienteOrdenId: _siguienteOrdenId,
+  planAbsorcionEnOrigen, absorberEnOrdenOrigen,
   modeloEntrante, completarModeloEntrante,
   cambiosDeModelo, estadoCambiosModelo, cambioModeloEnEspera, tarifasContrato,
   bodegaEmailTo,

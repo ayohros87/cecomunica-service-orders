@@ -164,8 +164,23 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   if (normalizarTipo(ordenData.tipo_de_servicio) === "PROGRAMACION") {
     if (ordenData.contrato) {
       if (ordenData.contrato.aplica === true) {
-        const contratoNumero = ordenData.contrato.contrato_id || 'ID no disponible';
-        iconoContrato = `<span title="Contrato: ${contratoNumero}" style="cursor:help;margin-left:4px;vertical-align:middle;"><i data-lucide="link" style="color:#059669;width:15px;height:15px;"></i></span>`;
+        // El NÚMERO a la vista (Brenda, 2026-11-20): antes solo salía la
+        // cadena verde con el número en el tooltip, mientras la gestión y la
+        // factura sí se leían en la fila — para saber de qué contrato era una
+        // orden había que abrirla. Quien ve el Centro llega al contrato con un
+        // clic; el resto lo lee.
+        const numero = String(ordenData.contrato.contrato_id || '').trim();
+        const num = escapeHtml(numero);
+        const estilo = 'margin-left:4px;vertical-align:middle;display:inline-flex;align-items:center;gap:2px;font-size:11px;color:#059669;white-space:nowrap;text-decoration:none;';
+        const icono = '<i data-lucide="link" style="color:#059669;width:15px;height:15px;"></i>';
+        const alCentro = !!(window.MODULOS && MODULOS.puedeVer(APP.state.userRole || '', 'centro')
+          && ordenData.cliente_id && ordenData.contrato.contrato_doc_id);
+        iconoContrato = !numero
+          ? `<span title="Contrato: ID no disponible" style="cursor:help;${estilo}">${icono}</span>`
+          : alCentro
+            ? `<a class="orden-contrato-num" href="../clientes/centro.html?id=${encodeURIComponent(ordenData.cliente_id)}&contrato=${encodeURIComponent(ordenData.contrato.contrato_doc_id)}"
+                 title="Contrato ${num} — abrirlo en el Centro de gestión" data-stop-propagation="true" style="${estilo}">${icono}${num}</a>`
+            : `<span class="orden-contrato-num" title="Contrato ${num}" style="${estilo}">${icono}${num}</span>`;
       } else if (ordenData.contrato.aplica === false && gestionLink) {
         iconoContrato = '';
       } else if (ordenData.contrato.aplica === false && facturaVentaDe(ordenData)) {
@@ -412,6 +427,19 @@ function _buildTimelineHTML(ordenData) {
         ? `<a href="${ordenData.nota_firmada_url}" target="_blank" rel="noopener" class="timeline-accion">Ver la nota</a>`
         : `<button type="button" class="timeline-accion" data-action="subir-nota-firmada"
                    data-orden="${safe(ordenData.ordenId || ordenData.id || '')}">Subir la nota</button>`,
+    });
+  }
+  // Orden interna devuelta a bodega (2026-11-20): el motivo es lo único que
+  // explica por qué una orden completada no se entregó.
+  if (ordenData.devuelta_bodega?.at) {
+    const db = ordenData.devuelta_bodega;
+    const nv = (db.vuelven || []).length;
+    entries.push({
+      icon: 'warehouse',
+      label: `Devuelta a bodega · ${nv} radio${nv === 1 ? '' : 's'}${db.motivo ? ` — ${db.motivo}` : ''}`,
+      ts: db.at,
+      by: db.por_email || '',
+      kind: 'completado'
     });
   }
   if (ordenData.fecha_eliminacion) {
@@ -1104,6 +1132,14 @@ function _btnResolverContratoAnulado(ordenId, od) {
 // Órdenes de ENTRADA (inspección de devueltos): la revisión termina y las
 // unidades quedan bajo control de inventario — no hay entrega al cliente,
 // así que su terminal es "Cerrar entrada" (CERRADA (ENTRADA)), no Entregar.
+// Orden INTERNA (C COMUNICA: maquillaje, revisión general): no se entrega a
+// nadie — sus radios vuelven a bodega. Va junto a "Entregar", que se queda
+// para lo que la empresa sí usa (pedido de Solangel, 2026-11-20).
+function _btnDevolverBodega(ordenId, od, rol) {
+  if (!window.OrdenInterna || !OrdenInterna.admiteDevolverABodega(od, rol)) return '';
+  return `<button class="btn-flujo btn-flujo--completar" title="Orden interna: cerrarla y pasar sus radios a bodega, disponibles para un cliente o una visita" data-action="devolver-bodega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="warehouse"></i> A bodega</button>`;
+}
+
 function _btnCerrarEntrada(ordenId) {
   return `<button class="btn-flujo btn-flujo--completar" title="Cerrar entrada (los equipos quedan bajo control de inventario)" data-action="cerrar-entrada" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Cerrar entrada</button>`;
 }
@@ -1322,6 +1358,7 @@ function botonesFlujo(ordenId, estado, ordenData) {
         html += _btnCerrarEntrada(ordenId);
       } else {
         html += _btnQc(ordenId, od, rol);
+        html += _btnDevolverBodega(ordenId, od, rol);
         // "Entregar" se calla cuando el contrato está anulado: el candado lo
         // va a denegar igual (rules y el espejo del navegador), así que
         // ofrecerlo solo manda a la persona a chocar con un modal. Su
@@ -1502,6 +1539,15 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
       action: "entregar-parcial",
       dataAttributes: `data-orden-id="${ordenId}"`,
       class: "highlighted"
+    });
+  }
+
+  // Devolver a bodega (2026-11-20): en COMPLETADO ya va como botón de la fila;
+  // aquí queda para las órdenes internas que no se van a terminar.
+  if (window.OrdenInterna && OrdenInterna.admiteDevolverABodega(o, rol)) {
+    menuItems.push({
+      icon: '<i data-lucide="warehouse"></i>', label: "Devolver a bodega…",
+      action: "devolver-bodega", dataAttributes: `data-orden-id="${ordenId}"`, class: "",
     });
   }
 
@@ -1703,7 +1749,7 @@ window.botonesGestion = botonesGestion;
 // contados), con throttle para no facturar por tecla.
 const CHIPS_ABIERTOS = ['por_recibir', 'por_asignar', 'ASIGNADO', 'COMPLETADO (EN OFICINA)'];
 const CHIPS_CERRADOS = ['ENTREGADO AL CLIENTE', 'CERRADA (VISITA)', 'CERRADA (DEVOLUCION)',
-  'CERRADA (ENTRADA)', 'CERRADA (SIN RETIRAR)', 'ANULADA'];
+  'CERRADA (ENTRADA)', 'CERRADA (SIN RETIRAR)', 'CERRADA (A BODEGA)', 'ANULADA'];
 const _conteosSrv = {};
 let _conteosSrvTs = 0;
 let _conteosSrvEnVuelo = false;

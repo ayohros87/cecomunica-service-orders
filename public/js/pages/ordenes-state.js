@@ -69,6 +69,10 @@ window.CONFIG = {
     // ENTREGADO mandaría al pool a decir que el cliente los tiene. Las
     // unidades quedan en `no_retirado` esperando una decisión de inventario.
     CERRADA_SIN_RETIRAR: 'CERRADA (SIN RETIRAR)',
+    // Órdenes del cliente INTERNO (C COMUNICA: maquillaje, revisión general,
+    // 2026-11-20): no se entregan a nadie — los radios vuelven a bodega y la
+    // orden se cierra. Lo escribe el callable devolverOrdenABodega.
+    CERRADA_A_BODEGA: 'CERRADA (A BODEGA)',
     // Orden cuyo CONTRATO se anuló (2026-09-15): ya no hay papel bajo el cual
     // entregar esos equipos. Lo escribe el trigger de la anulación
     // (functions/src/lib/ordenesDeContratoAnulado.js), no una persona — si la
@@ -315,6 +319,7 @@ function getEstadoClass(estado, orden) {
   if (e === "CERRADA (VISITA)") return "chip-aprobada";     // esmeralda
   if (e === "CERRADA (DEVOLUCION)") return "chip-aprobada"; // esmeralda
   if (e === "CERRADA (ENTRADA)") return "chip-aprobada";    // esmeralda
+  if (e === "CERRADA (A BODEGA)") return "chip-aprobada";   // esmeralda
   // Sin retirar NO es esmeralda: las otras CERRADA son cierres limpios, esta
   // es un caso que se archiva con radios ajenos todavía en la casa.
   if (e === "CERRADA (SIN RETIRAR)") return "chip-espera";  // ámbar
@@ -380,6 +385,7 @@ function estadoCompacto(estado, orden) {
   // "CERRADA" a secas se confundiría con los cierres limpios: lo que importa
   // de esta fila es que quedaron radios sin retirar.
   if (e === "CERRADA (SIN RETIRAR)") return "SIN RETIRAR";
+  if (e === "CERRADA (A BODEGA)") return "DEVUELTA A BODEGA";
   return e;
 }
 
@@ -398,6 +404,7 @@ function estadoTooltip(estado, orden) {
     : e === "COMPLETADO (EN OFICINA)" ? (nombre === "LISTO (FALTA QC)" ? "trabajo terminado; falta el control de calidad para entregar" : nombre === "COMPLETADO" ? "trabajo terminado" : "trabajo terminado, en oficina")
     : e === "ENTREGADO AL CLIENTE" ? "entregada al cliente"
     : e === "CERRADA (SIN RETIRAR)" ? "archivada con equipos que el cliente no retiró"
+    : e === "CERRADA (A BODEGA)" ? "orden interna cerrada; sus radios volvieron a bodega"
     : "";
   const cap = (s) => s.charAt(0) + s.slice(1).toLowerCase();
   return que ? `${cap(nombre)}: ${que}` : cap(nombre);

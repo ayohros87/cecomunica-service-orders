@@ -9,6 +9,7 @@ const tandas = require("../../domain/entregaTandas");
 const { incidenciaSuperada, reubicadaTrasEntrada, ubicadaTrasEntrada, fichaDeFila } = require("../../lib/incidenciasEntrada");
 const { separarSinSerial } = require("../../domain/accesorioSinSerial");
 const descarte = require("../../domain/descarteEntrega");
+const { esOrdenInterna } = require("../../domain/clienteInterno");
 const { admin, db } = require("../../lib/admin");
 
 // Pool de equipos ↔ órdenes de servicio ("migración por contacto", plan
@@ -34,6 +35,9 @@ const CERRADA_SIN_RETIRAR = "CERRADA (SIN RETIRAR)";
 // Terminal de la orden cuyo CONTRATO se anuló y no va a proceder (2026-09-15).
 // Tampoco es una entrega: el radio nunca salió de la casa.
 const ANULADA = "ANULADA";
+// Terminal de las órdenes del cliente INTERNO (maquillaje, revisión general):
+// el radio no se entrega a nadie, vuelve a bodega (2026-11-20).
+const CERRADA_A_BODEGA = "CERRADA (A BODEGA)";
 const norm = (s) => String(s || "").trim().toUpperCase();
 // Contratos que siguen vivos: solo esos vale la pena marcar para cancelar.
 const VIGENTES = new Set(["activo", "aprobado"]);
@@ -778,6 +782,58 @@ module.exports = onDocumentWritten(
         await soltarVendido(e);
       };
 
+      // ── Orden interna DEVUELTA A BODEGA (2026-11-20, correo de Solangel) ──
+      // Las órdenes de C COMUNICA (maquillaje, revisión general) no se
+      // entregan: los radios vuelven al estante y de ahí salen a un cliente o
+      // a una visita. Sin este cierre la orden se quedaba en "Completado" y
+      // bodega liberaba cada radio a mano (más de 40 en noviembre). Solo se
+      // mueve lo que SIGUE en esta orden: lo que ya salió por otro lado (se
+      // vendió, se entregó, lo lleva un técnico) no se toca.
+      //   · con contrato de un cliente → vuelve a "asignado" a ese contrato:
+      //     pasó por maquillaje, no dejó de estar reservado.
+      //   · lo demás → en_bodega, SIN custodia (la de C COMUNICA era el
+      //     arrastre que después decía "figura con otro cliente").
+      //   · descartado en el QC → cuarentena, igual que en los otros cierres.
+      const yaABodega = after && norm(after.estado_reparacion) === CERRADA_A_BODEGA;
+      if (yaABodega && norm(before?.estado_reparacion) !== CERRADA_A_BODEGA) {
+        const quedan = descarte.serialesQueSeQuedan(after);
+        const motivo = String(after.devuelta_bodega?.motivo || "").trim();
+        for (const e of despues) {
+          try {
+            if (quedan.has(pool.normSerial(e.serial))) {
+              await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+                aEstado: pool.ESTADOS.DEVUELTO,
+                soloDesde: [pool.ESTADOS.EN_TALLER],
+                condicion: (d) => d.orden_actual_id === ordenId,
+                tipo: "descarte_qc",
+                refMov,
+                notas: "Descartado en control de calidad — se queda en Cecomunica",
+                extra: { orden_actual_id: null, asignacion: null },
+              });
+              continue;
+            }
+            const r = await pool.resolver(e.serial, e.modelo_id, e.modelo);
+            const conContrato = !!(r.data && r.data.asignacion && r.data.asignacion.contrato_doc_id);
+            await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+              aEstado: conContrato ? pool.ESTADOS.ASIGNADO : pool.ESTADOS.EN_BODEGA,
+              soloDesde: [pool.ESTADOS.EN_TALLER],
+              condicion: (d) => d.orden_actual_id === ordenId,
+              tipo: "salida_taller",
+              refMov,
+              notas: (`Orden devuelta a bodega${motivo ? `: ${motivo}` : ""}`).slice(0, 300),
+              extra: { orden_actual_id: null, ...(conContrato ? {} : { asignacion: null }) },
+            });
+          } catch (err) {
+            logger.warn("[onOrdenWritePool] No se pudo devolver la unidad a bodega al cerrar la orden interna", {
+              ordenId, serial: e.serial, message: err.message,
+            });
+          }
+        }
+        return null;
+      }
+      // Ya cerrada: una edición posterior no vuelve a meter nada al taller.
+      if (yaABodega) return null;
+
       // Salida de taller: entrega de la orden, soft-delete, o borrado del doc.
       if (entregadaAhora || (eliminada && before?.eliminado !== true)) {
         const equiposFuente = despues.length ? despues : antes;
@@ -892,13 +948,18 @@ module.exports = onDocumentWritten(
 
       // Equipos nuevos en la orden → entran al taller (upsert por contacto).
       const nuevos = despues.filter((x) => !keysAntes.has(pool.normSerial(x.serial)));
+      // Orden del cliente INTERNO (maquillaje): el radio es de Cecomunica y
+      // solo pasa por el taller. No se le estampa custodia ni propiedad de
+      // "cliente": esa custodia sobrevivía a la orden y la entrega al cliente
+      // real no la pisaba (APMT, 2026-10-28 — decisión cerrada 2026-11-20).
+      const interna = nuevos.length ? await esOrdenInterna(after) : false;
       for (const e of nuevos) {
         const contrato = after.contrato || {};
         // Serial que aparece por primera vez en una orden SIN contrato: es
         // equipo del cliente (la flota propia ya existiría en el pool vía POC
         // o contrato). Con contrato vinculado, onSerialWrite refina después.
         const extra = { orden_actual_id: ordenId };
-        if (!(contrato.aplica && contrato.contrato_doc_id)) {
+        if (!interna && !(contrato.aplica && contrato.contrato_doc_id)) {
           extra.propiedad = "cliente";
           if (custodiaCliente) extra.asignacionSiFalta = custodiaCliente;
         }
