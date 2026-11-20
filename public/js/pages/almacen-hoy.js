@@ -508,8 +508,12 @@ window.AlmacenHoy = (() => {
       const filasI = cu.incidencias.map(o => fila({
         chip: 'ENTRADA', chipCls: 'inspeccion',
         txt: `<b><a href="/ordenes/index.html?ids=${encodeURIComponent(o.ordenId)}">ENTRADA ${esc(o.ordenId)}</a></b> · ${esc(o.cliente_nombre || '—')} — al cerrarla no se pudo mover: `
-          + o.items.map(i => `${esc(i.serial || '?')} <span style="color:var(--fg-3);">(${i.motivo === 'sin_ficha' ? 'sin ficha en el pool: serial mal escrito en la fila o en el radio' : esc(i.motivo || '')})</span>`).join(', ')
-          + '. Si el serial de la fila está mal, recepción lo corrige en la orden; si la ficha es la que está mal, "Corregir serial" aquí.',
+          + o.items.map(i => `${esc(i.serial || '?')} <span style="color:var(--fg-3);">(${
+            i.motivo === 'sin_ficha' ? 'sin ficha en el pool: serial mal escrito en la fila o en el radio'
+            : i.motivo === 'otro_modelo' ? `el serial existe, pero la orden dice otro modelo${i.modelo_ficha ? `; la ficha es ${esc(i.modelo_ficha)}` : ''}`
+            : i.motivo === 'no_movio' ? `la ficha está: ${esc(EquiposPoolService.ESTADO_LABELS[i.estado] || i.estado || 'sin estado')}`
+            : esc(i.motivo || '')})</span>`).join(', ')
+          + '. Si el serial o el modelo de la fila está mal, recepción lo corrige en la orden; si la ficha es la que está mal, "Corregir serial" aquí.',
         at: o.at, ctaHtml: '',
       }));
       // En producción (2026-10-07) son 58 órdenes viejas de golpe: se ven las

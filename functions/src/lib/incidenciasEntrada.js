@@ -32,14 +32,49 @@ function movidaDespues(movimientos, { ordenId, desdeMs }) {
     && !(m.ref && m.ref.id === ordenId));
 }
 
-async function incidenciaSuperada(serial, { ordenId, desde }) {
+// `abierta` (2026-11-20, correo de Brenda): la ENTRADA 2026071304 de MUNICIPIO
+// estuvo abierta cuatro meses. En ese tiempo sus radios se fueron a otro
+// contrato y uno volvió a bodega; cuando por fin se cerró, todo eso era
+// ANTERIOR al cierre y la incidencia no se daba nunca por superada. Lo que
+// alguien ubicó desde que la ENTRADA abrió también la supera.
+async function incidenciaSuperada(serial, { ordenId, desde, abierta = null }) {
   const desdeMs = ms(desde);
-  if (!desdeMs) return false;
+  const abiertaMs = ms(abierta);
+  if (!desdeMs && !abiertaMs) return false;
   const snap = await db.collection("equipos_pool")
     .where("serial_norm", "==", pool.normSerial(serial)).get();
   if (snap.size !== 1) return false;
-  const movs = await snap.docs[0].ref.collection("movimientos").get();
-  return movidaDespues(movs.docs.map((d) => d.data()), { ordenId, desdeMs });
+  const movs = (await snap.docs[0].ref.collection("movimientos").get()).docs.map((d) => d.data());
+  return movidaDespues(movs, { ordenId, desdeMs })
+    || ubicadaTrasEntrada(movs, { ordenId, desdeMs: abiertaMs });
+}
+
+// Las fichas del pool que llevan ese serial, sin mirar el modelo.
+//
+// El modelo de la fila de una orden es texto que alguien eligió o tecleó; el
+// serial es el radio. `pool.resolver` exige que los dos coincidan, y por eso
+// una fila "PNC460S-R" con un radio PNC460-R salía en el correo como "no existe
+// en el inventario" (23905A0441 en septiembre, 25725A0542/0543 en noviembre)
+// con la ficha ahí mismo, entera y con historia.
+async function fichasDelSerial(serial) {
+  const norm = pool.normSerial(serial);
+  if (!pool.esSerialValido(norm)) return [];
+  const snap = await db.collection("equipos_pool").where("serial_norm", "==", norm).get();
+  return snap.docs.map((d) => ({ ref: d.ref, data: d.data() }));
+}
+
+// La ficha de UNA fila de la orden: la del modelo de la fila y, si ninguna
+// coincide, la ÚNICA que tenga ese serial (`otroModelo: true`). Con el serial
+// repartido entre varias fichas y ninguna del modelo de la fila no se adivina:
+// `ficha: null` y `otras` dice cuáles hay.
+async function fichaDeFila(e) {
+  const r = await pool.resolver(e.serial, e.modelo_id, e.modelo);
+  if (r.data) return { ficha: { ref: r.ref, data: r.data }, otroModelo: false, otras: [] };
+  const todas = await fichasDelSerial(e.serial);
+  if (todas.length === 1 && todas[0].data.serial_compartido !== true) {
+    return { ficha: todas[0], otroModelo: true, otras: [] };
+  }
+  return { ficha: null, otroModelo: false, otras: todas };
 }
 
 // ¿Alguien UBICÓ el radio después de que la ENTRADA abrió?
@@ -67,4 +102,34 @@ function reubicadaTrasEntrada(movimientos, { ordenId, desdeMs }) {
     && UBICA.includes(m.a_estado));
 }
 
-module.exports = { movidaDespues, incidenciaSuperada, reubicadaTrasEntrada };
+// ¿Alguien DECIDIÓ dónde está el radio después de que la ENTRADA abrió?
+//
+// Hermana de la anterior, para otra pregunta. `reubicadaTrasEntrada` dice si el
+// cierre debe dejar quieto al radio (está con un cliente, en un contrato o en
+// otro taller). Esta dice si lo que el cierre NO pudo mover merece un aviso:
+// si bodega lo dio de baja, lo vendió, lo liberó al estante o lo ubicó con el
+// radio en la mano mientras la ENTRADA seguía abierta, no hay nada que avisar —
+// el radio está donde una persona dijo que está.
+//
+// Caso 24708A1206 (ENTRADA 2026071001, PANAMA JET): abierta el 10-jul; el 5-oct
+// José Solís lo liberó y lo dio de baja ("facturado 10053 daño causado"); la
+// ENTRADA se cerró el 17-nov y desde entonces el correo diario le pedía a
+// recepción resolver un radio que "está baja". No había nada que resolver.
+//
+// No cuentan los ajustes de dato (condición, modelo, fusión de duplicados) ni
+// las migraciones y correcciones que corre el sistema: no dicen dónde está el
+// radio. Una corrección hecha por una PERSONA sí (bodega corrigiendo el estado
+// desde la ficha queda como `correccion_migracion` con su correo).
+const AJUSTES_DE_DATO = ["cambio_condicion", "correccion_modelo", "fusion_duplicado"];
+function ubicadaTrasEntrada(movimientos, { ordenId, desdeMs }) {
+  if (!desdeMs) return false;
+  return (movimientos || []).some((m) => m
+    && ms(m.at) > desdeMs
+    && !(m.ref && m.ref.id === ordenId)
+    && !!m.a_estado
+    && !AJUSTES_DE_DATO.includes(m.tipo)
+    && !(/^(correccion|migracion)/.test(m.tipo || "") && !m.por_email));
+}
+
+module.exports = { movidaDespues, incidenciaSuperada, reubicadaTrasEntrada,
+  ubicadaTrasEntrada, fichasDelSerial, fichaDeFila };

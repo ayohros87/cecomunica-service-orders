@@ -95,7 +95,8 @@ function edadDias(ts, now) {
 // la lógica de edad/SLA/estado de este cron, que se desincronizaría a la
 // primera. El tope es el mismo MAX_FILAS que se muestra en la tabla.
 function idsCta(arr) {
-  const ids = arr.slice(0, MAX_FILAS).map(o => o.id).filter(Boolean);
+  // Sin repetir: una orden con dos filas en el correo es UN id en el enlace.
+  const ids = [...new Set(arr.slice(0, MAX_FILAS).map(o => o.id).filter(Boolean))];
   return ids.length ? `?ids=${encodeURIComponent(ids.join(","))}` : "";
 }
 
@@ -559,7 +560,7 @@ module.exports = onSchedule(
         for (const i of todas) {
           let superada = false;
           try {
-            superada = await incidenciaSuperada(i.serial, { ordenId: d.id, desde: o.fecha_cierre_entrada });
+            superada = await incidenciaSuperada(i.serial, { ordenId: d.id, desde: o.fecha_cierre_entrada, abierta: o.fecha_creacion });
           } catch (e) {
             logger.warn("[recordatorioOperativo] no se pudo revisar el kardex", { orden: d.id, serial: i.serial, message: e.message });
           }
@@ -582,12 +583,14 @@ module.exports = onSchedule(
             modelo: i.modelo || "—",
             motivo: i.motivo,
             estado: i.estado || null,
+            modeloFicha: i.modelo_ficha || "",
             dias: Math.floor(edadDias(o.cierre_entrada_incidencias_at || o.fecha_cierre_entrada, now) || 0),
           });
         });
       }
       filas.sort((a, b) => b.dias - a.dias);
       const sinFicha = filas.filter(f => f.motivo === "sin_ficha").length;
+      const otroModelo = filas.filter(f => f.motivo === "otro_modelo").length;
 
       const to = (await recepcionEmails()).join(",");
       const cc = await tallerEmailTo();
@@ -597,7 +600,9 @@ module.exports = onSchedule(
           `<code>${esc(f.serial)}</code>`, esc(f.modelo),
           f.motivo === "sin_ficha"
             ? '<b style="color:#b91c1c;">No existe en inventario</b>'
-            : `No se pudo mover${f.estado ? ` (está ${esc(f.estado)})` : ""}`,
+            : f.motivo === "otro_modelo"
+              ? `El serial existe con otro modelo${f.modeloFicha ? `: <b>${esc(f.modeloFicha)}</b>` : ""}`
+              : `No se pudo mover${f.estado ? ` (está ${esc(f.estado)})` : ""}`,
           `<b>${f.dias}</b>`,
         ]);
         const extra = filas.length > MAX_FILAS
@@ -616,12 +621,15 @@ module.exports = onSchedule(
             ${sinFicha ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;color:#b91c1c;">
               <b>${sinFicha}</b> tienen un serial que <b>no existe en el inventario</b> — casi siempre es un
               dígito mal tecleado. Corrígelo en la orden (lápiz del equipo) y el radio aterriza solo.</p>` : ""}
+            ${otroModelo ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              <b>${otroModelo}</b> tienen el serial bien, pero la orden dice <b>otro modelo</b> que el inventario.
+              Corrige el modelo en la orden (lápiz del equipo) y el radio aterriza solo.</p>` : ""}
             ${tablaHtml(["Orden", "Cliente", "Serial", "Modelo", "Qué pasó", "Días"], rows)}
             ${extra}`,
           ctaUrl: `${APP_BASE_URL}/ordenes/index.html${idsCta(filas)}`,
           ctaLabel: "Ver estas órdenes",
           meta: { source: "recordatorioOperativo", seccion: "entrada_incidencias",
-                  total: filas.length, sinFicha },
+                  total: filas.length, sinFicha, otroModelo },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }

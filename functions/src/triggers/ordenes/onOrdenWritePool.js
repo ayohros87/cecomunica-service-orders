@@ -6,7 +6,7 @@ const { decidirMarcaCancelacion } = require("../../domain/cancelacionEntrada");
 const { decidirCierreTrasEntrada, buildCierre } = require("../../domain/cierreContrato");
 const G = require("../../lib/gestiones");
 const tandas = require("../../domain/entregaTandas");
-const { incidenciaSuperada, reubicadaTrasEntrada } = require("../../lib/incidenciasEntrada");
+const { incidenciaSuperada, reubicadaTrasEntrada, ubicadaTrasEntrada, fichaDeFila } = require("../../lib/incidenciasEntrada");
 const { separarSinSerial } = require("../../domain/accesorioSinSerial");
 const descarte = require("../../domain/descarteEntrega");
 const { admin, db } = require("../../lib/admin");
@@ -72,9 +72,32 @@ function equiposDe(data) {
 //                  pueda mover (vendida, de baja, o ya en bodega). Puede ser
 //                  benigno; se anota igual para que alguien lo mire.
 //
+//   · otro_modelo — el serial SÍ está en el pool, pero la fila de la orden dice
+//                  otro modelo y nada ata esa ficha a esta ENTRADA (o el serial
+//                  está repartido entre varias fichas). Se corrige el modelo
+//                  de la fila; `modelo_ficha` dice cuál es.
+//
+// Lo que NO es incidencia (2026-11-20, correo de Brenda): el radio que ya está
+// en bodega, y el que una persona ubicó mientras la ENTRADA estuvo abierta
+// (`ubicadaTrasEntrada`: baja, venta, liberación, corrección de bodega). Una
+// ENTRADA de julio cerrada en noviembre no manda sobre lo que pasó en medio.
+//
 // `reintento` la usa la re-evaluación de abajo: al corregir el serial de una
 // ENTRADA ya cerrada, esto vuelve a correr y el equipo aterriza tarde pero
 // aterriza — que es exactamente lo que hubo que hacer a mano con el radio de TIL.
+
+// ¿La ficha (de otro modelo que la fila) es el radio de ESTA entrada? Sí, si
+// está en cuarentena esperando revisión, si cuelga de esta orden, o si el
+// sistema la tiene con el mismo cliente que devuelve. Con eso el cierre la
+// aterriza sin que nadie tenga que corregir el modelo de la fila.
+function vieneDeEstaEntrada(ficha, ordenId, orden) {
+  if (!ficha) return false;
+  if (ficha.estado === pool.ESTADOS.DEVUELTO) return true;
+  if (ficha.orden_actual_id && ficha.orden_actual_id === ordenId) return true;
+  const cli = ficha.asignacion && ficha.asignacion.cliente_id;
+  return !!(cli && orden && orden.cliente_id && cli === orden.cliente_id);
+}
+
 async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } = {}) {
   const refMovE = { tipo: "orden", id: ordenId, label: after.numero_orden || ordenId };
   const incidencias = [];
@@ -87,6 +110,7 @@ async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } =
   // (devuelto_revision), cuya salida es manual: bodega los da de baja. Antes
   // caían en bodega "disponibles" y solo la alerta del serial los frenaba.
   const descartados = descarte.serialesDescartadosEnRevision(after);
+  const abiertaMs = after.fecha_creacion?.toMillis?.() || 0;
 
   for (const e of equipos) {
     if (descartados.has(pool.normSerial(e.serial))) {
@@ -105,16 +129,25 @@ async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } =
       }
       continue;
     }
+    // La ficha de esta fila. Se busca por serial y modelo y, si el modelo de la
+    // fila no coincide con ninguna, vale la ÚNICA ficha de ese serial: el
+    // modelo de la fila es una referencia, el radio es el serial (2026-11-20,
+    // MUNICIPIO: fila "PNC460S-R", ficha PNC460-R → "no existe en inventario").
+    let fila = { ficha: null, otroModelo: false, otras: [] };
+    try {
+      fila = await fichaDeFila(e);
+    } catch (err) {
+      logger.warn("[onOrdenWritePool] no se pudo buscar la ficha de la fila", { ordenId, serial: e.serial, error: err.message });
+    }
     // Radio que alguien ya ubicó después de abrir esta ENTRADA (otro contrato,
     // otro cliente, el taller de otra orden): el cierre no lo saca de ahí.
     // Caso TROPICAL/GAMBOA, ver lib/incidenciasEntrada.js. No es incidencia:
     // el radio está donde tiene que estar.
     try {
-      const { ref, data } = await pool.resolver(e.serial, e.modelo_id, e.modelo);
+      const { ref, data } = fila.ficha || {};
       if (data && data.estado !== pool.ESTADOS.DEVUELTO) {
         const movs = await ref.collection("movimientos").get();
-        if (reubicadaTrasEntrada(movs.docs.map((d) => d.data()),
-          { ordenId, desdeMs: after.fecha_creacion?.toMillis?.() || 0 })) {
+        if (reubicadaTrasEntrada(movs.docs.map((d) => d.data()), { ordenId, desdeMs: abiertaMs })) {
           logger.info("[onOrdenWritePool] cierre de ENTRADA no mueve un radio ya reubicado",
             { ordenId, serial: e.serial, estado: data.estado, contrato: data.asignacion?.contrato_id || null });
           continue;
@@ -125,7 +158,7 @@ async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } =
     }
     let r = null;
     try {
-      r = await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+      const mover = {
         aEstado: pool.ESTADOS.EN_BODEGA,
         // VENDIDO y BAJA quedan fuera a propósito: son hechos de
         // propiedad, no de ubicación, y no los revierte una entrada.
@@ -142,7 +175,21 @@ async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } =
         // (p.ej. quitar un serial de un contrato, onSerialWrite) sí
         // dejan verificado:false porque nadie miró la unidad.
         extra: { orden_actual_id: null, asignacion: null, verificado: true },
-      });
+      };
+      if (!fila.otroModelo) {
+        r = await pool.transicionar(e.serial, e.modelo_id, e.modelo, mover);
+      } else if (vieneDeEstaEntrada(fila.ficha.data, ordenId, after)) {
+        // Mismo serial, otro modelo en la fila, y la ficha dice que el radio
+        // viene de aquí: es el mismo radio. Aterriza y el kardex lo cuenta.
+        r = await pool.transicionarPorId(fila.ficha.ref.id, {
+          ...mover,
+          notas: `${mover.notas} (la fila de la orden dice "${e.modelo || "sin modelo"}"; la ficha es ${fila.ficha.data.modelo_label || "sin modelo"})`,
+        });
+      } else {
+        // La ficha existe pero nada la ata a esta ENTRADA (está con otro
+        // cliente, en otro taller…): no se toca; alguien tiene que mirarla.
+        r = "otro-modelo";
+      }
     } catch (err) {
       r = "error";
       logger.warn("[onOrdenWritePool] transicionar falló al cerrar ENTRADA",
@@ -166,16 +213,42 @@ async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } =
     // "sin-cambio" con la ficha YA en bodega es el caso idempotente (el trigger
     // corrió dos veces): no es incidencia. Se distingue releyendo la ficha.
     let estadoActual = null;
+    let ahora = fila;
     try {
-      const { data } = await pool.resolver(e.serial, e.modelo_id, e.modelo);
-      estadoActual = data ? data.estado : null;
+      ahora = await fichaDeFila(e);
+      estadoActual = ahora.ficha ? ahora.ficha.data.estado : null;
     } catch { /* si no se puede releer, se anota igual */ }
     if (estadoActual === pool.ESTADOS.EN_BODEGA) continue;
+    // Lo que una persona ya ubicó mientras la ENTRADA estuvo abierta (bodega lo
+    // dio de baja, lo vendió, lo dejó en otro estado con el radio en la mano)
+    // tampoco es incidencia: no hay nada que recepción pueda ni deba corregir.
+    // Caso 24708A1206 (PANAMA JET): de baja el 5-oct, ENTRADA cerrada el 17-nov.
+    if (ahora.ficha) {
+      try {
+        const movs = await ahora.ficha.ref.collection("movimientos").get();
+        if (ubicadaTrasEntrada(movs.docs.map((d) => d.data()), { ordenId, desdeMs: abiertaMs })) {
+          logger.info("[onOrdenWritePool] cierre de ENTRADA: el radio ya lo ubicó alguien, no se avisa",
+            { ordenId, serial: e.serial, estado: estadoActual });
+          continue;
+        }
+      } catch (err) {
+        logger.warn("[onOrdenWritePool] no se pudo revisar el kardex tras el cierre", { ordenId, serial: e.serial, error: err.message });
+      }
+    }
+    // Motivo, dicho como es: `sin_ficha` SOLO cuando el serial no está en el
+    // pool. Si está pero con otro modelo, el aviso lo dice y nombra el modelo
+    // de la ficha — "no existe" mandaba a buscar un dígito mal tecleado que no
+    // había.
+    const otras = ahora.ficha ? [ahora.ficha] : (ahora.otras || []);
+    const conOtroModelo = ahora.otroModelo || (!ahora.ficha && otras.length > 0);
     incidencias.push({
       serial: e.serial,
       modelo: e.modelo || "",
-      motivo: r === "no-existe" ? "sin_ficha" : "no_movio",
+      motivo: conOtroModelo ? "otro_modelo" : (ahora.ficha ? "no_movio" : "sin_ficha"),
       estado: estadoActual,
+      ...(conOtroModelo
+        ? { modelo_ficha: otras.map((f) => f.data.modelo_label || "sin modelo").join(" / ") }
+        : {}),
     });
   }
   return { incidencias, aterrizados };
@@ -311,7 +384,7 @@ module.exports = onDocumentWritten(
           const k = pool.normSerial(e.serial);
           if (!seriales.has(k)) continue;
           try {
-            if (await incidenciaSuperada(e.serial, { ordenId, desde: after.fecha_cierre_entrada })) superados.add(k);
+            if (await incidenciaSuperada(e.serial, { ordenId, desde: after.fecha_cierre_entrada, abierta: after.fecha_creacion })) superados.add(k);
           } catch (err) {
             logger.warn("[onOrdenWritePool] no se pudo revisar el kardex de la incidencia", { ordenId, serial: e.serial, error: err.message });
           }

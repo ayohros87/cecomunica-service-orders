@@ -65,5 +65,6 @@ test("sin fecha de apertura no se frena el cierre", () => {
 test("el cierre de la ENTRADA consulta el kardex antes de mover", () => {
   const trig = fs.readFileSync(path.join(__dirname, "../src/triggers/ordenes/onOrdenWritePool.js"), "utf8");
   assert.match(trig, /reubicadaTrasEntrada\(movs\.docs\.map/);
-  assert.match(trig, /desdeMs: after\.fecha_creacion/);
+  assert.match(trig, /const abiertaMs = after\.fecha_creacion\?\.toMillis\?\.\(\) \|\| 0;/);
+  assert.match(trig, /reubicadaTrasEntrada\(movs\.docs\.map\(\(d\) => d\.data\(\)\), \{ ordenId, desdeMs: abiertaMs \}\)/);
 });
