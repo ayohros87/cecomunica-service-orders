@@ -46,7 +46,7 @@ const facturaTxt = (p) => String(p.factura || "").trim() || "—";
 const lineasTxt = (p) => (p.lineas || [])
   .map(l => `${Number(l.cantidad || 0)} × ${l.modelo || "?"}`).join(", ");
 
-// Reposición de un radio alquilado (robo/pérdida): no es venta, ver
+// Reposición de un radio alquilado (robo, pérdida o daño): no es venta, ver
 // lib/reposicionAlquiler.js. Texto corto para asunto y correos.
 const perdidosTxt = (p) => (p.reposicion?.items || []).map(i => i.serial_saliente).filter(Boolean).join(", ");
 const esReposicion = (p) => (p.reposicion?.items || []).length > 0;
@@ -76,7 +76,7 @@ async function correoBodega(pid, p) {
       </p>
       ${esReposicion(p) ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;background:#EFF6FF;border-radius:6px;padding:10px 12px;">
         <b>No es una venta:</b> es la reposición de ${esc(perdidosTxt(p))} (${esc(R.motivoTxt(p.reposicion.motivo))}), radio(s) alquilado(s) del cliente.
-        Asígnalo como siempre; el sistema lo deja de CECOMUNICA en el contrato del radio perdido y da de baja el perdido.</p>` : ""}
+        Asígnalo como siempre; el sistema lo deja de CECOMUNICA en el contrato del radio que repone y da de baja ese radio.</p>` : ""}
       ${G.tablaHtml(["Cantidad", "Modelo"], (p.lineas || []).map(l => [
         `${Number(l.cantidad || 0)}`, esc(l.modelo || "—"),
       ]))}
@@ -194,7 +194,7 @@ async function correoRecepcion(pid, p, ordenId, repo = null) {
       </p>
       ${repo?.gid ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;background:#ECFDF5;border-radius:6px;padding:10px 12px;">
         <b>Reposición registrada (${esc(repo.gid)}):</b> ${repo.pares.map(x => `${esc(x.entrante)} reemplaza a ${esc(x.saliente)} en el contrato ${esc(x.contrato_id)}`).join("; ")}.
-        Los radios nuevos quedan de CECOMUNICA en el contrato y los perdidos quedaron dados de baja.</p>` : ""}
+        Los radios nuevos quedan de CECOMUNICA en el contrato y los que reponen quedaron dados de baja.</p>` : ""}
       ${(repo?.rechazados || []).length || (repo?.perdidosSinPar || []).length ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;background:#FEF3C7;border-radius:6px;padding:10px 12px;">
         ⚠️ No se registró como reposición: ${[...(repo.rechazados || []).map(x => `${esc(x.serial)} (${esc(x.motivo)})`), ...(repo.perdidosSinPar || []).map(x => `${esc(x.serial)} (bodega no asignó un radio del mismo modelo)`)].join("; ")}.
         Lo que quedó sin parear figura como venta: avísale a administración.</p>` : ""}

@@ -1,5 +1,5 @@
-// Reposición de un radio ALQUILADO que el cliente pagó (robo o pérdida) —
-// pedido por la puerta de "Venta facturada" (Alberto, 2026-10-08).
+// Reposición de un radio ALQUILADO que el cliente pagó (robo, pérdida o daño
+// sin reparación) — pedido por la puerta de "Venta facturada" (Alberto, 2026-10-08).
 //
 // EL CASO QUE LO DESTAPÓ
 //   COMPAÑÍA GOLY reportó robado el PNC460 23905A0436, de CECOMUNICA y en el
@@ -25,6 +25,15 @@
 //       con `saliente_en_casa: true` — así la entrega de la OS no abre una
 //       devolución de un radio que no va a volver.
 //   Lo que no se pueda parear o validar sigue como venta, y el correo lo dice.
+//
+// DAÑO SIN REPARACIÓN (Brenda, 2026-11-23, R. SMITH COSTA DEL ESTE, factura
+//   11372): el vendedor reportó un radio que cayó al agua; nunca pasó por el
+//   taller y la factura ya estaba hecha. Solo había "robo" y "pérdida", así que
+//   el radio quedó de baja como PERDIDO. El motivo es una etiqueta (nada más lo
+//   lee): cambia el texto de la baja, la gestión y los correos, y el resto es
+//   igual — el dañado se da de baja y no se espera devolución. El radio dañado
+//   que SÍ está en el taller sigue por el Centro (lib/reposicionDano), que
+//   cotiza antes de facturar.
 "use strict";
 
 const logger = require("firebase-functions/logger");
@@ -33,8 +42,10 @@ const pool = require("../domain/equiposPool");
 const { catalogo, ModeloFamilia } = require("../domain/modeloCatalogo");
 
 const FV = admin.firestore.FieldValue;
-const MOTIVOS = { robo: "robo", perdida: "pérdida" };
-const motivoTxt = (m) => MOTIVOS[m] || "robo";
+const MOTIVOS = { robo: "robo", perdida: "pérdida", dano: "daño sin reparación" };
+// Un motivo que no se conoce (pedido viejo, dato a mano) cuenta como robo.
+const motivoCodigo = (m) => (Object.prototype.hasOwnProperty.call(MOTIVOS, m) ? m : "robo");
+const motivoTxt = (m) => MOTIVOS[motivoCodigo(m)];
 
 // Estados en los que un radio de contrato está "con el cliente" (o en su
 // orden de taller). Fuera de eso no hay qué dar de baja como perdido.
@@ -84,7 +95,7 @@ async function aplicar(pid, p) {
   const items = p.reposicion?.items || [];
   if (!items.length) return null;
   await catalogo();
-  const motivo = p.reposicion.motivo === "perdida" ? "perdida" : "robo";
+  const motivo = motivoCodigo(p.reposicion.motivo);
   const fact = String(p.factura || "").trim();
   const usuario = p.creado_por_email || "system";
 
@@ -215,4 +226,4 @@ async function ligarOrden(repo, ordenId) {
   }
 }
 
-module.exports = { validarPerdido, parear, aplicar, ligarOrden, motivoTxt };
+module.exports = { validarPerdido, parear, aplicar, ligarOrden, motivoTxt, motivoCodigo };

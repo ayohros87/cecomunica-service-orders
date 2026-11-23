@@ -86,6 +86,23 @@ const get = async (id) => (await pool(id).get()).data();
   const r2 = await R.aplicar("pv3", { ...pedido, reposicion: { items: [{ serial_saliente: "ROBADO2" }] }, seriales: [] });
   assert.equal(r2.gid, null);
   console.log("ok sin reposición / sin par");
+
+  // Daño sin reparación (R. SMITH, factura 11372): mismo camino, otra etiqueta.
+  await pool("NUEVO3").set({ serial: "NUEVO3", modelo_id: "m360", modelo_label: "HYTERA PNC360S", estado: "vendido", propiedad: "cliente", venta: { factura: "11372", cliente_id: "GOLY", pedido_id: "pv4" }, asignacion: { cliente_id: "GOLY", contrato_doc_id: null } });
+  const r4 = await R.aplicar("pv4", { ...pedido, factura: "11372", reposicion: { motivo: "dano", items: [{ serial_saliente: "ROBADO2" }] }, seriales: [{ pool_id: "NUEVO3", serial: "NUEVO3" }] });
+  assert.deepEqual(r4.pares.map(x => `${x.saliente}>${x.entrante}`), ["ROBADO2>NUEVO3"]);
+  assert.equal(r4.motivo, "dano");
+  const d2 = await get("ROBADO2");
+  assert.equal(d2.estado, "baja");
+  assert.match(d2.baja_motivo, /^Daño sin reparación \(/);
+  assert.doesNotMatch(d2.baja_motivo, /[Pp]érdida|[Rr]obo/);
+  const g4 = (await db.collection("gestiones").doc(r4.gid).get()).data();
+  assert.equal(g4.reposicion.motivo, "dano");
+  assert.equal(g4.items[0].motivo_codigo, "dano");
+  assert.equal(g4.items[0].saliente_en_casa, true, "el dañado tampoco abre devolución");
+  assert.match(g4.notas, /^Daño sin reparación de radio alquilado/);
+  assert.equal((await get("NUEVO3")).propiedad, "cecomunica");
+  console.log("ok daño sin reparación");
   console.log("\nTODO OK");
   process.exit(0);
 })().catch((e) => { console.error("FALLO:", e); process.exit(1); });

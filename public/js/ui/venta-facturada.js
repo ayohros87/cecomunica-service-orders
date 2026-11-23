@@ -18,7 +18,14 @@
 // un radio alquilado de ese cliente y arma solo las líneas (mismo modelo).
 // Bodega asigna como siempre y onPedidoVentaWrite (lib/reposicionAlquiler.js)
 // deja el nuevo de CECOMUNICA en el contrato, da de baja el perdido y abre la
-// gestión de reemplazo. Un radio dañado que vuelve sigue yendo por el Centro.
+// gestión de reemplazo.
+//
+// DAÑO SIN REPARACIÓN (Brenda, 2026-11-23, R. SMITH, factura 11372): tercer
+// motivo, para el radio que el cliente dañó, NO pasó por el taller y ya está
+// facturado (antes había que marcarlo como "pérdida"). Hace lo mismo: el
+// dañado se da de baja y no se espera devolución. El radio dañado que SÍ está
+// en el taller sigue por el Centro (lo propone el taller y se cotiza antes de
+// facturar): si el serial está en taller, el formulario lo avisa sin trancar.
 window.VentaFacturada = {
 
   _el: null, _api: null, _busy: false,
@@ -240,9 +247,19 @@ window.VentaFacturada = {
         return { serial, ok: false, motivo: 'no se pudo leer el inventario' };
       }
     }));
+    // Dañado y en el taller: casi seguro el taller ya propuso (o va a proponer)
+    // su reemplazo, y pedirlo aquí también lo repone dos veces. Avisa, no tranca.
+    const enTaller = (p) => this._motivo() === 'dano' && p.data?.estado === 'en_taller';
     cont.innerHTML = this._perdidos.map(p => p.ok
       ? `<div style="font-size:12.5px;color:var(--status-ok,#047857);">✓ <b>${esc(p.serial)}</b> · ${esc(p.data.modelo_label || 'modelo sin registrar')} · contrato ${esc(p.data.asignacion.contrato_id || '—')}</div>`
+        + (enTaller(p) ? `<div style="font-size:12.5px;color:var(--status-warn,#b45309);">Ojo: <b>${esc(p.serial)}</b> está en el taller${p.data.orden_actual_id ? ` (orden ${esc(p.data.orden_actual_id)})` : ''}. Si el taller ya propuso su reemplazo, ese sigue por el Centro del cliente: no lo pidas aquí también.</div>` : '')
       : `<div style="font-size:12.5px;color:var(--status-critical,#b42318);">✕ <b>${esc(p.serial)}</b>: ${esc(p.motivo)}</div>`).join('');
+  },
+
+  // Motivo de la reposición; el servidor (reposicionAlquiler.motivoCodigo) usa los mismos tres.
+  _motivo() {
+    const v = this._el?.querySelector('#vfMotivo')?.value;
+    return ['robo', 'perdida', 'dano'].includes(v) ? v : 'robo';
   },
 
   async guardar() {
@@ -261,10 +278,10 @@ window.VentaFacturada = {
     let reposicion = null;
     if (repo) {
       await this._verificarPerdidos();
-      if (!this._perdidos.length) { this._toast('Escribe el serial del radio robado o perdido.', 'bad'); return; }
+      if (!this._perdidos.length) { this._toast('Escribe el serial del radio que se repone.', 'bad'); return; }
       const malos = this._perdidos.filter(p => !p.ok);
       if (malos.length) { this._toast(`Revisa ${malos.map(p => p.serial).join(', ')}: ${malos[0].motivo}.`, 'bad'); return; }
-      if (this._perdidos.some(p => !p.data.modelo_id)) { this._toast('Un radio perdido no tiene modelo en el inventario: pídele a bodega que lo complete.', 'bad'); return; }
+      if (this._perdidos.some(p => !p.data.modelo_id)) { this._toast('Un radio de los que se reponen no tiene modelo en el inventario: pídele a bodega que lo complete.', 'bad'); return; }
       // Las líneas salen de los perdidos: un radio del mismo modelo por cada uno.
       const porModelo = new Map();
       for (const p of this._perdidos) {
@@ -274,7 +291,7 @@ window.VentaFacturada = {
       }
       lineas = [...porModelo.values()];
       reposicion = {
-        motivo: this._el.querySelector('#vfMotivo').value === 'perdida' ? 'perdida' : 'robo',
+        motivo: this._motivo(),
         items: this._perdidos.map(p => ({
           serial_saliente: p.serial, modelo_id: p.data.modelo_id, modelo: p.data.modelo_label || '',
           contrato_doc_id: p.data.asignacion.contrato_doc_id, contrato_id: p.data.asignacion.contrato_id || '',
@@ -312,7 +329,7 @@ window.VentaFacturada = {
         requiere_programacion: programacion, notas, reposicion,
       }, this._user);
       this._toast(reposicion
-        ? 'Listo: bodega recibió la reposición. Al asignar, el radio nuevo queda en el contrato y el perdido se da de baja.'
+        ? 'Listo: bodega recibió la reposición. Al asignar, el radio nuevo queda en el contrato y el anterior se da de baja.'
         : 'Listo: bodega recibió el pedido. Te llegará un correo con los seriales cuando los asigne.', 'ok');
       this._busy = false;
       this._cerrar();
@@ -341,7 +358,7 @@ window.VentaFacturada = {
           <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 var(--sp-3);">
             <b>No va aquí:</b> un radio que se asocia a un <b>contrato de servicio</b> (Propio o Servicio): bodega
             asigna sus seriales en el contrato y llegan en el correo "Contrato APROBADO". Tampoco un radio
-            <b>dañado</b> de un contrato de alquiler que vuelve al taller: es un reemplazo desde el Centro del cliente.</p>
+            <b>dañado</b> de un contrato de alquiler que <b>está en el taller</b>: su reemplazo lo propone el taller y sigue por el Centro del cliente.</p>
           <div style="display:flex; gap:var(--sp-3); flex-wrap:wrap;">
             <div class="form-field" style="flex:2; min-width:200px;">
               <label class="form-label" for="vfCliente">Cliente (de la factura)</label>
@@ -355,22 +372,22 @@ window.VentaFacturada = {
           <div id="vfAvisoContrato"></div>
           <label style="display:flex; gap:8px; align-items:flex-start; font-size:13px; margin-bottom:var(--sp-3);">
             <input type="checkbox" id="vfReposicion" style="margin-top:3px;">
-            <span>Es la <b>reposición de un radio alquilado robado o perdido</b> que el cliente pagó.
-              <span style="color:var(--fg-3);">No es venta: el radio nuevo queda de CECOMUNICA en el mismo contrato y el perdido se da de baja.</span></span>
+            <span>Es la <b>reposición de un radio alquilado robado, perdido o dañado sin reparación</b> que el cliente pagó.
+              <span style="color:var(--fg-3);">No es venta: el radio nuevo queda de CECOMUNICA en el mismo contrato y el anterior se da de baja.</span></span>
           </label>
           <div id="vfBloqueRepo" style="display:none; border:1px solid var(--border,#e5e7eb); border-radius:8px; padding:var(--sp-3); margin-bottom:var(--sp-3);">
             <div style="display:flex; gap:var(--sp-3); flex-wrap:wrap;">
               <div class="form-field" style="flex:2; min-width:200px; margin-bottom:0;">
-                <label class="form-label" for="vfPerdidos">Serial del radio robado o perdido</label>
+                <label class="form-label" for="vfPerdidos">Serial del radio que se repone</label>
                 <input class="form-input" id="vfPerdidos" type="text" placeholder="23905A0436 (si son varios, sepáralos con coma)" autocomplete="off">
               </div>
               <div class="form-field" style="flex:1; min-width:130px; margin-bottom:0;">
                 <label class="form-label" for="vfMotivo">Motivo</label>
-                <select class="form-select" id="vfMotivo"><option value="robo">Robo</option><option value="perdida">Pérdida</option></select>
+                <select class="form-select" id="vfMotivo"><option value="robo">Robo</option><option value="perdida">Pérdida</option><option value="dano">Daño sin reparación</option></select>
               </div>
             </div>
             <div id="vfPerdidosRes" style="margin-top:6px;"></div>
-            <div style="font-size:12px; color:var(--fg-3); margin-top:6px;">Bodega asigna un radio del mismo modelo por cada perdido.</div>
+            <div style="font-size:12px; color:var(--fg-3); margin-top:6px;">Bodega asigna un radio del mismo modelo por cada uno.</div>
           </div>
           <div class="form-field" id="vfBloqueLineas">
             <label class="form-label">Equipos vendidos</label>
@@ -404,6 +421,7 @@ window.VentaFacturada = {
         root.querySelector('#vfBtnGuardar').addEventListener('click', () => this.guardar());
         root.querySelector('#vfReposicion').addEventListener('change', () => this._toggleReposicion());
         root.querySelector('#vfPerdidos').addEventListener('change', () => this._verificarPerdidos());
+        root.querySelector('#vfMotivo').addEventListener('change', () => this._verificarPerdidos());
         root.querySelector('#vfCliente').addEventListener('change', () => this._pintarAvisoContrato());
         root.querySelector('#vfLineas').appendChild(this._filaLinea());
         if (typeof lucide !== 'undefined') lucide.createIcons();

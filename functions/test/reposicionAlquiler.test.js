@@ -24,6 +24,16 @@ test("lo que no es alquiler del cliente se rechaza con el motivo", () => {
   assert.match(R.validarPerdido(conCliente({ asignacion: { cliente_id: "GOLY" } }), "GOLY"), /contrato/);
 });
 
+test("el motivo: robo, pérdida o daño; lo desconocido cuenta como robo", () => {
+  assert.equal(R.motivoCodigo("dano"), "dano");
+  assert.equal(R.motivoTxt("dano"), "daño sin reparación");
+  assert.equal(R.motivoCodigo("perdida"), "perdida");
+  assert.equal(R.motivoTxt("perdida"), "pérdida");
+  assert.equal(R.motivoCodigo(undefined), "robo");
+  assert.equal(R.motivoCodigo("toString"), "robo");
+  assert.equal(R.motivoTxt("otra cosa"), "robo");
+});
+
 test("parea por modelo exacto antes que por familia, y deja lo que sobra", () => {
   const familia = (a, b) => String(a.modelo).replace(/-R$/, "") === String(b.modelo).replace(/-R$/, "");
   const perdidos = [{ serial: "P1", modelo_id: "m460", modelo: "PNC460" }, { serial: "P2", modelo_id: "m360", modelo: "PNC360S" }, { serial: "P3", modelo_id: "mX", modelo: "X" }];
