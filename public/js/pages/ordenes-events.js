@@ -29,7 +29,7 @@
     'editar-orden', 'resolver-contrato-anulado', 'go-fotos-taller', 'agregar-equipo', 'venta-facturada',
     'imprimir-orden', 'imprimir-orden-doc', 'nota-entrega-doc', 'ver-documentos', 'ver-cotizacion',
     'cotizar-orden', 'gestionar-notas', 'seguimiento-retiro', 'ver-entrega', 'subir-nota-firmada', 'scan-serial', 'copiar-seriales',
-    'abrir-trabajo-equipo', 'abrir-intervencion-desktop', 'ver-trabajo-equipo', 'ver-intervencion-equipo',
+    'abrir-trabajo-equipo', 'abrir-intervencion-desktop', 'abrir-siguiente-pendiente', 'ver-trabajo-equipo', 'ver-intervencion-equipo',
     'agregar-foto-equipo', 'abrir-material-equipo',
     'filtrar-mias', 'filtrar-estado-chip', 'abrir-chip-cerradas', 'set-view-cards', 'set-view-table', 'ver-ficha',
   ]);
@@ -366,6 +366,10 @@
     'abrir-intervencion-desktop': (el) => {
       const { ordenId, equipoId } = el.dataset;
       if (ordenId && equipoId) abrirIntervencionEquipoDesktop(ordenId, equipoId);
+    },
+    // Cabecera de la orden: salta al primer equipo sin intervención.
+    'abrir-siguiente-pendiente': (el) => {
+      if (el.dataset.ordenId) abrirSiguientePendiente(el.dataset.ordenId);
     },
     // Ficha de la intervención en SOLO LECTURA (badge de fotos de la fila).
     'ver-intervencion-equipo': (el) => {

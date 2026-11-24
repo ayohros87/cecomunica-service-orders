@@ -4108,3 +4108,31 @@ tr.activo:hover { background: #f0f9ff !important; }
   background: #ECFDF5; color: #065F46; font-size: 13px; line-height: 1.4;
 }
 .trabajo-cambio-sitio__hecho svg { width: 16px; height: 16px; flex: none; }
+
+/* Pie fijo del modal de intervención: Guardar siempre a la vista. Los
+   márgenes negativos comen el padding de .overlay .modal (20px). */
+#modalTrabajoEquipo .trabajo-pie {
+  position: sticky; bottom: -20px; z-index: 3;
+  flex-wrap: wrap;
+  margin: 14px -20px -20px; padding: 10px 20px 16px;
+  background: #fff; border-top: 1px solid var(--line);
+  border-radius: 0 0 16px 16px;
+}
+#modalTrabajoEquipo .trabajo-pie > .btn { flex: 1 1 0; }
+.trabajo-pie__atajo { flex: 0 0 100%; font-size: 12px; color: var(--fg-3); text-align: right; }
+.trabajo-pie__atajo kbd {
+  padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px;
+  background: var(--surface-2, #f8fafc); font: inherit; font-size: 11px;
+}
+/* En pantallas táctiles no hay teclado: el atajo no se anuncia. */
+@media (hover: none) { .trabajo-pie__atajo { display: none; } }
+.btn-header-compact.btn-ir-pendiente {
+  width: auto; padding: 0 10px; margin-left: 8px;
+  font-size: 12.5px; font-weight: 700; white-space: nowrap; color: var(--fg-1);
+}
+/* Teléfono: tres botones en una fila sin que el pie se coma la pantalla. */
+@media (max-width: 768px) {
+  #modalTrabajoEquipo .trabajo-pie { gap: 6px; padding: 8px 20px 12px; }
+  #modalTrabajoEquipo .trabajo-pie > .btn { padding: 8px 6px !important; font-size: 13px !important; line-height: 1.2; }
+  #modalTrabajoEquipo .trabajo-pie > .btn:first-of-type { flex: 0 0 auto; padding: 8px 10px !important; }
+}

@@ -993,7 +993,10 @@
       <div class="equipo-fotos-status" id="equipoFotosStatus"></div>
     </div>
 
-    <div class="modal-footer-mobile">
+    <!-- Pie fijo (2026-11-24): en una pantalla de oficina los botones quedaban
+         fuera de la vista y había que bajar con la rueda en cada radio. -->
+    <div class="modal-footer-mobile trabajo-pie">
+      <div class="trabajo-pie__atajo"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> guarda y pasa al siguiente pendiente</div>
       <button class="btn btn-secondary btn-full" data-action="cerrar-trabajo-equipo">Cancelar</button>
       <button id="btnGuardarTrabajoSiguiente" class="btn btn-secondary btn-full" data-action="guardar-trabajo-equipo-siguiente" style="display:none;">Guardar y siguiente <i data-lucide="chevron-right"></i></button>
       <button id="btnGuardarTrabajoEquipo" class="btn btn-primary btn-full" data-action="guardar-trabajo-equipo"><i data-lucide="save"></i> Guardar</button>

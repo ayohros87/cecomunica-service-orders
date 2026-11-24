@@ -44,8 +44,9 @@ await REF.set({
   cliente_id: 'zziv-cli', cliente_nombre: 'ZZIV HOTEL DE PRUEBA', tecnico_asignado: 'Marcos Perez', tecnico_uid: yo.uid,
   fecha_creacion: TS.now(), fecha_asignacion: TS.now(),
   equipos: [
-    eq(1, hecho('Revisión general', 300)), eq(2, hecho('revisión general.', 200)), eq(3),
-    eq(4, hecho('Cambio de flex PS J87-0040-05', 100)), eq(5), eq(6),
+    // La variante en minúscula es la MÁS usada: el botón igual sale con mayúscula.
+    eq(1, hecho('revisión general', 300)), eq(2, hecho('revisión general.', 200)), eq(3),
+    eq(4, hecho('Revisión general', 100)), eq(5), eq(6),
   ],
   radios_salida: { ZZIV1A0001: linea('ZZIV1A0001'), ZZIV1A0002: linea('ZZIV1A0002') },
 });
@@ -71,7 +72,7 @@ await p.evaluate((id) => abrirTrabajoEquipoModal(id, 2), V);
 await espera(800);
 let s = await estado();
 ok(s.abierto && /ZZIV9A0003/.test(s.titulo), 'abre la intervención del tercer radio');
-ok(s.chips.length === 1 && /^Revisión general ×2$/.test(s.chips[0]), `un solo botón, con las variantes juntas: ${JSON.stringify(s.chips)}`);
+ok(s.chips.length === 1 && /^Revisión general ×3$/.test(s.chips[0]), `un solo botón, con las variantes juntas y en mayúscula: ${JSON.stringify(s.chips)}`);
 ok(/Equipo 3 de 6 · faltan 3/.test(s.pos), `dice cuántos faltan: ${s.pos}`);
 ok(s.cambioVisible && /Lo cambié por otro radio/.test(s.cambio) && /Tienes 2 radios de bodega/.test(s.cambio), `visita: ofrece el cambio en sitio — ${s.cambio}`);
 await te.captura('01-textos-de-un-toque');
@@ -85,7 +86,7 @@ await espera(2500);
 s = await estado();
 ok((await equipos())[2].trabajo_tecnico === 'Revisión general', 'el tercer radio quedó guardado');
 ok(s.abierto && /ZZIV9A0005/.test(s.titulo) && /Equipo 5 de 6 · faltan 2/.test(s.pos), `salta al siguiente pendiente: ${s.titulo} · ${s.pos}`);
-ok(s.chips.length === 1 && /×3$/.test(s.chips[0]) && s.texto === '', `el botón sigue ahí y el texto empieza vacío: ${JSON.stringify(s.chips)}`);
+ok(s.chips.length === 1 && /×4$/.test(s.chips[0]) && s.texto === '', `el botón sigue ahí y el texto empieza vacío: ${JSON.stringify(s.chips)}`);
 
 // 3) Cambio en sitio desde el radio. El callable se sustituye por uno falso.
 const llamadas = [];
@@ -131,7 +132,7 @@ s = await estado();
 ok(s.abierto && /ZZIV9A0006/.test(s.titulo) && /faltan 1|falta 1/.test(s.pos), `y pasa al siguiente pendiente: ${s.titulo} · ${s.pos}`);
 ok(/Tienes 1 radio de bodega/.test(s.cambio), `el radio que se dejó ya no se ofrece: ${s.cambio}`);
 ok(!s.sig, 'en el último pendiente no hay "Guardar y siguiente"');
-ok(s.chips.length === 1 && /^Revisión general ×3$/.test(s.chips[0]), `el texto del cambio no se vuelve botón: ${JSON.stringify(s.chips)}`);
+ok(s.chips.length === 1 && /^Revisión general ×4$/.test(s.chips[0]), `el texto del cambio no se vuelve botón: ${JSON.stringify(s.chips)}`);
 
 // 4) El radio cambiado dice por cuál se cambió y ya no ofrece cambiarlo.
 await p.evaluate((id) => abrirTrabajoEquipoModal(id, 4), V);
@@ -140,6 +141,24 @@ s = await estado();
 ok(/Cambiado en sitio por ZZIV1A0002/.test(s.cambio) && /GR20990202-01/.test(s.cambio) && !/Lo cambié/.test(s.cambio), `el radio cambiado lo dice: ${s.cambio}`);
 await te.captura('03-radio-cambiado');
 
+// 4b) Radio que YA tenía su intervención escrita (los 7 de DECAMERON, anotados
+//     a mano): registrar el cambio no reescribe la orden ni cambia de radio.
+await p.evaluate((id) => abrirTrabajoEquipoModal(id, 3), V);
+await espera(800);
+const antes4 = (await equipos())[3];
+await p.click('#btnCambioEnSitio');
+await p.waitForSelector('#rrEnt', { timeout: 15000 });
+hoja = await p.evaluate(() => ({ chips: [...document.querySelectorAll('[data-rr-llevado]')].map(b => b.textContent.trim()), ent: document.getElementById('rrEnt').value }));
+ok(hoja.chips.join(',') === 'ZZIV1A0001' && hoja.ent === 'ZZIV1A0001', `con un solo radio de bodega, ya viene puesto: ${JSON.stringify(hoja)}`);
+await p.type('#rrMotivo', 'Sin audio; se cambió en sitio');
+await p.click('[data-sheet-action="registrar"]');
+await espera(3500);
+s = await estado();
+const despues4 = (await equipos())[3];
+ok(llamadas.length === 2 && llamadas[1].data.serialSaliente === 'ZZIV9A0004' && llamadas[1].data.serialEntrante === 'ZZIV1A0001', 'el cambio del radio ya intervenido también se registra');
+ok(despues4.trabajo_tecnico === 'Revisión general' && despues4.trabajo_tecnico_updated_at.toMillis() === antes4.trabajo_tecnico_updated_at.toMillis(), 'su intervención no se reescribe');
+ok(s.abierto && /ZZIV9A0004/.test(s.titulo) && /Cambiado en sitio por ZZIV1A0001/.test(s.cambio), `el modal sigue en ese radio y enseña el cambio: ${s.cambio}`);
+
 // 5) Fuera de una visita no se ofrece el cambio en sitio.
 await REF.set({ tipo_de_servicio: 'REPARACION' }, { merge: true });
 await espera(1500);
@@ -147,6 +166,47 @@ await p.evaluate((id) => abrirTrabajoEquipoModal(id, 5), V);
 await espera(800);
 s = await estado();
 ok(!s.cambioVisible, 'en una reparación no aparece "Lo cambié por otro radio"');
+
+// 6) En la computadora (pantalla de oficina, 1366×657): atajo a los pendientes
+//    desde la cabecera, pie con Guardar siempre a la vista y Ctrl+Enter.
+const e3 = (await equipos()).map((e, i) => (i === 2 ? { ...e, trabajo_tecnico: '', trabajo_tecnico_updated_at: null } : e));
+await REF.set({ tipo_de_servicio: 'VISITA TECNICA', equipos: e3 }, { merge: true });
+await p.evaluate(() => cerrarTrabajoEquipoModal());
+await p.setViewport({ width: 1366, height: 657 });
+await te.ir(`/ordenes/index.html?ids=${V}`, { esperar: 4500 });
+await p.evaluate((id) => document.querySelector(`tr[data-orden-id="${id}"]`)?.click(), V);
+await p.waitForSelector('.btn-ir-pendiente', { timeout: 15000 }).catch(() => {});
+await espera(1500);
+const atajo = await p.evaluate(() => { const b = document.querySelector('.btn-ir-pendiente'); return b ? { txt: b.textContent.trim(), visible: getComputedStyle(b).display !== 'none' } : null; });
+ok(!!atajo && atajo.visible && atajo.txt === 'Ir a los 2 pendientes →', `la cabecera de la orden ofrece ir a los pendientes: ${JSON.stringify(atajo)}`);
+await te.captura('04-escritorio-cabecera');
+await p.click('.btn-ir-pendiente');
+await espera(1000);
+s = await estado();
+ok(s.abierto && /ZZIV9A0003/.test(s.titulo), `abre el primer pendiente: ${s.titulo}`);
+const pie = await p.evaluate(() => {
+  const m = document.querySelector('#modalTrabajoEquipo .modal');
+  const r = (id) => document.getElementById(id).getBoundingClientRect();
+  const mr = m.getBoundingClientRect();
+  return { desborda: m.scrollHeight > m.clientHeight + 40, alto: window.innerHeight, guardar: Math.round(r('btnGuardarTrabajoEquipo').bottom), sig: Math.round(r('btnGuardarTrabajoSiguiente').bottom),
+    modalBottom: Math.round(mr.bottom), atajo: getComputedStyle(document.querySelector('.trabajo-pie__atajo')).display !== 'none' };
+});
+ok(pie.desborda && pie.guardar <= pie.modalBottom && pie.sig <= pie.modalBottom && pie.modalBottom <= pie.alto, `los botones de guardar se ven sin bajar: ${JSON.stringify(pie)}`);
+ok(pie.atajo, 'con mouse, el pie anuncia Ctrl + Enter');
+await te.captura('05-escritorio-modal');
+await p.click('#trabajoTextosUsados .trabajo-texto-chip');
+await p.focus('#trabajoEquipoText');
+await p.keyboard.down('Control'); await p.keyboard.press('Enter'); await p.keyboard.up('Control');
+await espera(2500);
+s = await estado();
+ok((await equipos())[2].trabajo_tecnico === 'Revisión general' && s.abierto && /ZZIV9A0006/.test(s.titulo), `Ctrl+Enter guarda y pasa al siguiente pendiente: ${s.titulo}`);
+await p.type('#trabajoEquipoText', 'Cambio de antena');
+await p.keyboard.down('Control'); await p.keyboard.press('Enter'); await p.keyboard.up('Control');
+await espera(2500);
+s = await estado();
+ok((await equipos())[5].trabajo_tecnico === 'Cambio de antena' && !s.abierto, 'en el último, Ctrl+Enter guarda y cierra');
+const atajoFin = await p.evaluate(() => { const b = document.querySelector('.btn-ir-pendiente'); return b ? getComputedStyle(b).display : 'no está'; });
+ok(atajoFin === 'none', `sin pendientes, la cabecera ya no ofrece el atajo: ${atajoFin}`);
 
 const errores = te.errores.filter(e => !/favicon|clipboard|Clipboard/.test(e));
 ok(!errores.length, 'sin errores de página: ' + JSON.stringify(errores.slice(0, 4)));

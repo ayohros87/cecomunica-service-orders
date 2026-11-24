@@ -796,10 +796,30 @@ function _textosFrecuentes(equipos, idxActual) {
   const repetidos = lista.filter(g => g.n >= 2).slice(0, 3);
   const elegidos = repetidos.length ? repetidos : [...lista].sort((a, b) => b.ultimo - a.ultimo).slice(0, 1);
   return elegidos.map(g => ({
-    // De las variantes, la más usada; en empate, la que empieza con mayúscula.
-    texto: [...g.variantes.entries()].sort((a, b) => b[1] - a[1] || (/^[A-ZÁÉÍÓÚÑ]/.test(b[0]) - /^[A-ZÁÉÍÓÚÑ]/.test(a[0])))[0][0],
+    // De las variantes, la que empieza con mayúscula (así se imprime en el
+    // informe); entre esas, la más usada.
+    texto: [...g.variantes.entries()].sort((a, b) => (/^[A-ZÁÉÍÓÚÑ]/.test(b[0]) - /^[A-ZÁÉÍÓÚÑ]/.test(a[0])) || b[1] - a[1])[0][0],
     n: g.n,
   }));
+}
+
+// Cabecera de la orden → "Ir a los N pendientes": abre el primero que falta.
+window.puedeEditarIntervencion = () => _puedeEditarIntervencion();
+window.abrirSiguientePendiente = function(ordenId) {
+  const o = APP.state.orders.find(x => x.ordenId === ordenId);
+  const equipos = (o?.equipos || []).filter(e => !e.eliminado);
+  const idx = equipos.findIndex(_equipoPendiente);
+  if (idx === -1) { Toast.show("Todos los equipos de la orden ya tienen intervención.", "ok"); return; }
+  abrirTrabajoEquipoModal(ordenId, idx);
+};
+
+// Ctrl+Enter dentro de la intervención = "Guardar y siguiente" (o "Guardar" si
+// no hay a dónde seguir). En la computadora el técnico no suelta el teclado.
+function _atajoGuardarTrabajo(ev) {
+  if (ev.key !== "Enter" || !(ev.ctrlKey || ev.metaKey)) return;
+  ev.preventDefault();
+  const btnSig = document.getElementById("btnGuardarTrabajoSiguiente");
+  guardarTrabajoEquipoModal({ siguiente: !!btnSig && btnSig.style.display !== "none" });
 }
 
 function _renderTextosUsados(equipos, idx) {
@@ -875,10 +895,13 @@ async function _registrarCambioEnSitio(ordenId, serial) {
     const chkNoDisp = document.getElementById("trabajoNoDisponible");
     if (chkNoDisp?.checked) { chkNoDisp.checked = false; chkNoDisp.onchange?.(); }
     const txtEl = document.getElementById("trabajoEquipoText");
-    if (txtEl && !txtEl.value.trim()) {
-      txtEl.value = `Radio reemplazado en sitio por la serie ${res.serial_entrante}.${res.motivo ? ` ${res.motivo}` : ""}`;
-    }
-    await guardarTrabajoEquipoModal({ siguiente: true });
+    const sinTexto = !!txtEl && !txtEl.value.trim();
+    if (sinTexto) txtEl.value = `Radio reemplazado en sitio por la serie ${res.serial_entrante}.${res.motivo ? ` ${res.motivo}` : ""}`;
+    if (sinTexto || _trabajoSucio()) { await guardarTrabajoEquipoModal({ siguiente: true }); return; }
+    // El radio ya tenía su intervención escrita (p. ej. un cambio anotado a
+    // mano antes de registrarlo, o una visita ya cerrada): no hay nada que
+    // guardar en la orden. Solo se enseña el cambio en el propio radio.
+    _renderCambioEnSitio(o, equipoAct);
   } catch (err) {
     console.error("❌ Error registrando el cambio en sitio:", err);
     Toast.show(`❌ No se pudo registrar el cambio: ${err?.message || err}`, "bad");
@@ -1130,6 +1153,8 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
   if (btnSig) btnSig.style.display = _siguienteEquipo(equipos, idx) === null ? "none" : "";
 
   const modal = document.getElementById("modalTrabajoEquipo");
+
+  modal.onkeydown = _atajoGuardarTrabajo;
 
   // Toque fuera del modal: cierra, pero pregunta si hay cambios sin guardar.
   modal.onclick = function(e) {

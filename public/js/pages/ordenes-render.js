@@ -527,6 +527,15 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
       } else {
         progresoIndicador.classList.add('vacio');
       }
+
+      const btnPend = progresoIndicador.parentElement?.querySelector(`.btn-ir-pendiente[data-orden-id="${ordenId}"]`);
+      if (btnPend) {
+        const editable = !ordenCerrada && pendientesIntervencion > 0
+          && typeof window.puedeEditarIntervencion === 'function' && window.puedeEditarIntervencion();
+        btnPend.style.display = editable ? '' : 'none';
+        btnPend.textContent = pendientesIntervencion === 1 ? 'Ir al pendiente →' : `Ir a los ${pendientesIntervencion} pendientes →`;
+        btnPend.title = 'Abre la intervención del primer equipo que falta';
+      }
     }
 
     const contradiccionBadge = document.querySelector(`.contradiccion-badge[data-orden-id="${ordenId}"]`);
@@ -2012,6 +2021,10 @@ function _crearFilaDetalle(ordenId, ordenData, equiposNormalizados) {
               <span class="icon"><i data-lucide="wrench"></i></span>
               <span class="progreso-valor">0/${equiposNormalizados.length}</span>
             </div>
+            <!-- Atajo al primer equipo sin intervención (2026-11-24): en la
+                 visita de 144 radios de DECAMERON los 3 pendientes estaban
+                 125 filas abajo. Lo enseña actualizarProgreso a quien edita. -->
+            <button type="button" class="btn-header-compact btn-ir-pendiente" data-action="abrir-siguiente-pendiente" data-stop-propagation="true" data-orden-id="${ordenId}" style="display:none;"></button>
             <span class="contradiccion-badge" data-orden-id="${ordenId}" style="display: none;"></span>
           </div>
 
