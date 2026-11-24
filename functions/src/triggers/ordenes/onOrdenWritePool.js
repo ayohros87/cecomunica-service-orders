@@ -10,6 +10,7 @@ const { incidenciaSuperada, reubicadaTrasEntrada, ubicadaTrasEntrada, fichaDeFil
 const { separarSinSerial } = require("../../domain/accesorioSinSerial");
 const descarte = require("../../domain/descarteEntrega");
 const { esOrdenInterna } = require("../../domain/clienteInterno");
+const { filasARevisar } = require("../../domain/ordenSinInventario");
 const { admin, db } = require("../../lib/admin");
 
 // Pool de equipos ↔ órdenes de servicio ("migración por contacto", plan
@@ -528,7 +529,15 @@ module.exports = onDocumentWritten(
           || norm(after.estado_reparacion) === ENTREGADO
           || norm(after.estado_reparacion) === CERRADA_ENTRADA
           || norm(after.estado_reparacion) === CERRADA_VISITA;
-        const equiposRef = (despues.length ? despues : antes);
+        // Solo se va al pool por lo que pudo cambiar el enlace: la orden cambió
+        // de momento, o trae un serial que antes no estaba. Guardar el trabajo
+        // de un radio no cuenta (domain/ordenSinInventario.js, 2026-11-24: una
+        // visita de 146 radios hacía 146 consultas por cada guardado).
+        const eraDeEstas = !!before && (!!before.entrada_inspeccion || /VISITA/.test(norm(before.tipo_de_servicio)));
+        const mismoMomento = !!after && eraDeEstas
+          && (before.eliminado === true) === (after.eliminado === true)
+          && norm(before.estado_reparacion) === norm(after.estado_reparacion);
+        const equiposRef = filasARevisar({ antes, despues, mismoMomento, cerrada, clave: pool.normSerial });
         for (const e of equiposRef) {
           try {
             const { ref, data } = await pool.resolver(e.serial, e.modelo_id, e.modelo);
