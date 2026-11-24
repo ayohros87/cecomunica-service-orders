@@ -33,7 +33,11 @@
   const ROLES_OK = ['administrador', 'recepcion', 'jefe_taller', 'inventario', 'gerente', 'tecnico', 'tecnico_operativo'];
   const normSerial = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-  async function abrirRegularizarReemplazo(ordenId) {
+  // opts.serialSaliente (2026-11-24): el técnico lo abre desde la intervención
+  // de UN radio de la visita ("Lo cambié por otro radio"); ese radio queda fijo
+  // como el recibido del cliente. Devuelve el resultado del callable (más
+  // serial_entrante y motivo) o undefined si se canceló.
+  async function abrirRegularizarReemplazo(ordenId, opts = {}) {
     const rol = APP.state.userRole || '';
     if (!ROLES_OK.includes(rol)) { Toast.show('Tu rol no registra reemplazos a posteriori.', 'warn'); return; }
     const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || await OrdenesService.getOrder(ordenId);
@@ -43,7 +47,7 @@
     if (!orden.cliente_id) { Toast.show('La orden no tiene cliente registrado.', 'warn'); return; }
     const hechos = orden.reemplazos_regularizados || {};
     const equipos = (orden.equipos || []).filter(e => e && !e.eliminado && (e.numero_de_serie || e.serial));
-    if (esVisita) return abrirVisita(ordenId, orden, equipos.filter(e => !hechos[normSerial(e.numero_de_serie || e.serial)]), hechos);
+    if (esVisita) return abrirVisita(ordenId, orden, equipos.filter(e => !hechos[normSerial(e.numero_de_serie || e.serial)]), hechos, opts);
     if (equipos.length < 2) { Toast.show('Hacen falta al menos dos radios en la orden (el que salió y el que entró).', 'warn'); return; }
     const qc = orden.qc?.por_equipo || {};
     const descartado = (e) => Object.values(qc).some(q => q && q.resultado === 'descartado' && (q.equipo_id === e.id || (q.serial && q.serial === (e.numero_de_serie || e.serial))));
@@ -107,9 +111,14 @@
   }
 
   // ── Visita técnica: el radio que entró se escribe ─────────────────────────
-  async function abrirVisita(ordenId, orden, equipos, hechos) {
+  async function abrirVisita(ordenId, orden, equipos, hechos, opts = {}) {
     const yaHechos = Object.values(hechos);
     if (!equipos.length) { Toast.show('Todos los radios de esta visita ya tienen su reemplazo registrado.', 'info'); return; }
+    // Abierto desde la intervención de un radio: ese es el recibido del cliente.
+    const fijo = opts.serialSaliente
+      ? equipos.find(e => normSerial(e.numero_de_serie || e.serial) === normSerial(opts.serialSaliente)) : null;
+    if (opts.serialSaliente && !fijo) { Toast.show(`El cambio del radio ${opts.serialSaliente} ya está registrado.`, 'info'); return; }
+    if (fijo) equipos = [fijo];
     const op = (e) => `<option value="${esc(e.numero_de_serie || e.serial)}">${esc(e.numero_de_serie || e.serial)} · ${esc(e.modelo || '')}</option>`;
     // Radios que bodega le entregó al técnico para ESTA visita (Almacén → Hoy →
     // "Salida a visita", 2026-11-18): se sugieren al escribir el serial.
@@ -120,13 +129,13 @@
         <p style="margin:0 0 10px;font-size:13.5px;line-height:1.45;">
           <b>${esc(orden.cliente_nombre || orden.cliente || 'Cliente')}</b>. Usa esto cuando en la visita cambiaste un radio del cliente por uno que llevabas.
           El que dejaste queda con el cliente (en el contrato del que salió) y el que salió sale del contrato.
-          No se le pide nada a bodega: recibe un correo con el cambio, igual que recepción y taller. <b>Un cambio a la vez</b>: si cambiaste varios, repítelo por cada radio.
+          No se le pide nada a bodega: recibe un correo con el cambio, igual que recepción y taller. ${fijo ? '' : '<b>Un cambio a la vez</b>: si cambiaste varios, repítelo por cada radio.'}
         </p>
         ${yaHechos.length ? `<p style="margin:0 0 10px;font-size:12.5px;color:#475569;">Ya registrados en esta visita: ${yaHechos.map(h => `${esc(h.saliente)} → ${esc(h.entrante)}`).join(' · ')}</p>` : ''}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
             <label class="form-label" for="rrSal">Radio recibido del cliente (equipo reemplazado)</label>
-            <select id="rrSal" class="form-input">${equipos.map(op).join('')}</select>
+            <select id="rrSal" class="form-input"${fijo ? ' disabled' : ''}>${equipos.map(op).join('')}</select>
           </div>
           <div>
             <label class="form-label" for="rrEnt">Radio que dejaste con el cliente (serial) *</label>
@@ -135,7 +144,8 @@
           </div>
         </div>
         ${llevados.length
-          ? `<p style="margin:6px 0 0;font-size:12.5px;color:#475569;">Salieron de bodega con esta visita: ${llevados.map(r => `<b>${esc(String(r.serial).toUpperCase())}</b>`).join(' · ')}</p>`
+          ? `<p style="margin:8px 0 4px;font-size:12.5px;color:#475569;">Salieron de bodega con esta visita — toca el que dejaste:</p>
+             <div id="rrLlevadosChips" style="display:flex;flex-wrap:wrap;gap:6px;">${llevados.map(r => `<button type="button" class="btn btn-secondary btn-sm" data-rr-llevado="${esc(String(r.serial).toUpperCase())}" style="font-family:var(--font-mono);">${esc(String(r.serial).toUpperCase())}</button>`).join('')}</div>`
           : `<p style="margin:6px 0 0;font-size:12.5px;color:#92400E;">Bodega no registró radios para esta visita. Si te llevaste uno, se acepta igual, pero bodega recibe el aviso de que salió sin registrarse.</p>`}
         <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;">
           <input type="checkbox" id="rrEnCasa" checked style="margin-top:3px;">
@@ -151,6 +161,19 @@
         { action: 'cerrar', label: 'Cancelar' },
         { action: 'registrar', label: 'Registrar cambio', primary: true, icon: 'check' },
       ],
+      // Los radios que bodega le entregó se eligen de un toque (2026-11-24): en
+      // el teléfono la lista de sugerencias del campo casi no se ve.
+      onMount: (root) => {
+        const input = root.querySelector('#rrEnt');
+        const chips = Array.from(root.querySelectorAll('[data-rr-llevado]'));
+        const marcar = () => chips.forEach(c => {
+          const on = normSerial(c.dataset.rrLlevado) === normSerial(input.value);
+          c.classList.toggle('btn-primary', on); c.classList.toggle('btn-secondary', !on);
+        });
+        chips.forEach(c => c.addEventListener('click', () => { input.value = c.dataset.rrLlevado; marcar(); root.querySelector('#rrMotivo')?.focus(); }));
+        input?.addEventListener('input', marcar);
+        if (chips.length === 1 && fijo) { input.value = chips[0].dataset.rrLlevado; marcar(); }
+      },
       onAction: async (a, root) => {
         if (a !== 'registrar') return null;
         const avisoEl = root.querySelector('#rrAviso');
@@ -166,7 +189,7 @@
         const botones = root.querySelectorAll('button'); botones.forEach(b => { b.disabled = true; });
         try {
           const r = await firebase.functions().httpsCallable('regularizarReemplazoOrden')({ ordenId, serialSaliente: sal, serialEntrante: ent, salienteEnCasa, motivo });
-          return r.data || { ok: true };
+          return { ...(r.data || { ok: true }), serial_entrante: ent, motivo };
         } catch (err) {
           console.error('[regularizar-reemplazo:visita]', err);
           botones.forEach(b => { b.disabled = false; });
@@ -176,6 +199,7 @@
     });
     if (!res || typeof res !== 'object') return;
     Toast.show(`✅ Cambio registrado: gestión ${res.gestion_id}${res.contrato ? ` (contrato ${res.contrato})` : ''}${res.devolucion_id ? ` · entrega el radio del cliente en recepción (devolución ${res.devolucion_id})` : ''}`, 'ok', 10000);
+    return res;
   }
 
   window.abrirRegularizarReemplazo = abrirRegularizarReemplazo;

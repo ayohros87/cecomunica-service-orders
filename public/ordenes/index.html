@@ -896,6 +896,11 @@
     <textarea id="trabajoEquipoText" class="textarea-full"
       placeholder="Describe la intervención técnica realizada..."></textarea>
 
+    <!-- Textos de un toque (2026-11-24): los que ya se usaron en ESTA orden.
+         En la visita de 146 radios de DECAMERON el técnico tecleó "Revisión
+         general" 95 veces, en seis versiones. Lo pinta ordenes-equipos.js. -->
+    <div id="trabajoTextosUsados" class="trabajo-textos" style="display:none;"></div>
+
     <div class="intervencion-ctrl intervencion-ctrl-modal">
       <label class="intervencion-no-disponible">
         <input type="checkbox" id="trabajoNoDisponible">
@@ -903,6 +908,11 @@
       </label>
       <input type="text" id="trabajoMotivoNoDisponible" class="motivo-no-disponible" placeholder="Motivo (libre)">
     </div>
+
+    <!-- Cambio de radio en sitio — SOLO visitas técnicas (2026-11-24): el
+         cambio se registra desde el radio que se cambió, no desde el menú de
+         la orden. Lo pinta ordenes-equipos.js. -->
+    <div id="trabajoCambioSitio" class="trabajo-cambio-sitio" style="display:none;"></div>
 
     <!-- Descarte en revisión — SOLO órdenes de ENTRADA (la inspección de
          devueltos no lleva QC, así que el "resultado: descartado" del QC no

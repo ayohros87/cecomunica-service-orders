@@ -79,6 +79,40 @@ async function escribir(ordenId, cambios) {
   const nuevo = (await db.collection("equipos_pool").doc("CSNUEVO1").get()).data();
   assert.equal(nuevo.estado, "en_cliente"); assert.equal(nuevo.asignacion.contrato_doc_id, "c9");
 
+  // 4) Radio del cliente SIN ficha (2026-11-24, DECAMERON: 125 de 146 radios de
+  //    la visita no estaban en el inventario). El cambio no rebota: se crea la
+  //    ficha con la propiedad por definir, y un entrante inválido no deja ficha.
+  await db.collection("usuarios").doc("u-bodega").set({ rol: "inventario", email: "bodega@x.com", activo: true });
+  await ficha("CSNUEVO2", { estado: "con_tecnico", salida_visita: { orden_id: VISITA } });
+  await ficha("CSOTRAVISITA", { estado: "con_tecnico", salida_visita: { orden_id: "otra" } });
+  await db.collection("ordenes_de_servicio").doc(VISITA).set({
+    equipos: [{ id: "e1", numero_de_serie: "CSVIEJO1", modelo: "PNC360S" }, { id: "e2", numero_de_serie: "CSSINFICHA1", modelo: "PNC360S", modelo_id: "m360" }],
+    radios_salida: { CSNUEVO2: { estado: "llevado", serial: "CSNUEVO2" } },
+  }, { merge: true });
+  await assert.rejects(regularizar.ejecutar({ usuario: "tec@x.com", ordenId: VISITA, serialSaliente: "CSSINFICHA1", serialEntrante: "CSOTRAVISITA", motivo: "no transmitía" }), /salió de bodega con la visita/);
+  assert.equal((await db.collection("equipos_pool").doc("CSSINFICHA1").get()).exists, false, "el cambio rechazado no deja una ficha suelta");
+  const r4 = await regularizar.ejecutar({ usuario: "tec@x.com", nombre: "Marcos Perez", ordenId: VISITA,
+    serialSaliente: "CSSINFICHA1", serialEntrante: "CSNUEVO2", salienteEnCasa: true, motivo: "no transmitía; se cambió en sitio" });
+  assert.equal(r4.saliente_sin_ficha, true);
+  const sinFicha = (await db.collection("equipos_pool").doc("CSSINFICHA1").get()).data();
+  assert.equal(sinFicha.estado, "devuelto_revision", "el radio recibido queda por revisar");
+  assert.equal(sinFicha.propiedad, "desconocida", "la propiedad no se inventa");
+  assert.equal(sinFicha.verificado, false);
+  assert.equal(sinFicha.asignacion, null, "ya no está con el cliente");
+  const movs4 = (await db.collection("equipos_pool").doc("CSSINFICHA1").collection("movimientos").get()).docs.map(d => d.data().notas || "");
+  assert.ok(movs4.some(n => /no estaba en el inventario/.test(n)), "el kardex dice de dónde salió la ficha");
+  const nuevo2 = (await db.collection("equipos_pool").doc("CSNUEVO2").get()).data();
+  assert.equal(nuevo2.estado, "en_cliente"); assert.equal(nuevo2.asignacion.cliente_id, "euro");
+  assert.equal(nuevo2.asignacion.contrato_doc_id, null, "sin contrato conocido: custodia del cliente");
+  assert.equal(nuevo2.reemplaza_a, "CSSINFICHA1");
+  const visita4 = (await db.collection("ordenes_de_servicio").doc(VISITA).get()).data();
+  assert.equal(visita4.radios_salida.CSNUEVO2.estado, "dejado");
+  assert.equal(visita4.reemplazos_regularizados.CSSINFICHA1.gestion_id, r4.gestion_id);
+  const correos4 = (await db.collection("mail_queue").get()).docs.map(d => JSON.stringify(d.data()));
+  assert.ok(correos4.some(c => /CSSINFICHA1/.test(c) && /no estaba en el inventario/.test(c)), "bodega se entera de que hay que clasificarlo");
+  assert.ok(r4.devolucion_id, "también abre la devolución del radio recibido");
+  console.log("  ok   radio del cliente sin ficha: se da de alta por definir, el cambio sigue y bodega se entera");
+
   console.log("\nTODO OK");
   process.exit(0);
 })().catch((e) => { console.error("\nFALLA:", e); process.exit(1); });

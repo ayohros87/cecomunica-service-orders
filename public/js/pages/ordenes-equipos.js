@@ -750,6 +750,141 @@ function _setFotoStatus(msg, isError = false) {
   el.classList.toggle("equipo-fotos-status--error", !!isError);
 }
 
+/* ========================================
+   Intervención en órdenes grandes (2026-11-24)
+   Visita 2026111905 de DECAMERON, 146 radios: el técnico tecleó "Revisión
+   general" 95 veces (en seis versiones), a 36 segundos por radio, y anotó
+   siete cambios de radio como texto libre porque registrarlos estaba en otro
+   menú. Tres ayudas, todas dentro del mismo modal:
+     · los textos ya usados en la orden, de un toque;
+     · "Guardar y siguiente" salta al siguiente equipo PENDIENTE;
+     · en una visita, "Lo cambié por otro radio" registra el cambio en sitio
+       desde el radio que se cambió.
+   ======================================== */
+const _equipoPendiente = (eq) => !(String(eq?.trabajo_tecnico || "").trim() || eq?.intervencion_no_disponible);
+
+// A dónde lleva "Guardar y siguiente": el próximo pendiente después de este;
+// si no queda ninguno adelante, el primero pendiente de atrás; y si ya no hay
+// pendientes, el que sigue en la lista (como siempre). null = no hay a dónde ir.
+function _siguienteEquipo(equipos, idx) {
+  for (let i = idx + 1; i < equipos.length; i++) if (_equipoPendiente(equipos[i])) return i;
+  for (let i = 0; i < idx; i++) if (_equipoPendiente(equipos[i])) return i;
+  return idx < equipos.length - 1 ? idx + 1 : null;
+}
+
+// Textos de intervención ya usados en la orden, agrupando las variantes de
+// escritura ("Revisión general." = "revisión general"). Solo los que se
+// repiten; mientras ninguno se repita, el último que se escribió — así el
+// botón aparece desde el segundo radio. Los de un solo radio (un cambio, una
+// reparación puntual) no estorban.
+function _textosFrecuentes(equipos, idxActual) {
+  const grupos = new Map();
+  equipos.forEach((eq, i) => {
+    if (i === idxActual) return;
+    const t = String(eq?.trabajo_tecnico || "").trim();
+    if (!t || t.length > 140) return;
+    const k = t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").replace(/[.\s]+$/, "");
+    const g = grupos.get(k) || { n: 0, variantes: new Map(), ultimo: 0 };
+    g.n++;
+    g.variantes.set(t, (g.variantes.get(t) || 0) + 1);
+    const at = eq.trabajo_tecnico_updated_at;
+    const ms = typeof at?.toMillis === "function" ? at.toMillis() : (Number(at?.seconds) || 0) * 1000;
+    if (ms > g.ultimo) g.ultimo = ms;
+    grupos.set(k, g);
+  });
+  const lista = [...grupos.values()].sort((a, b) => b.n - a.n || b.ultimo - a.ultimo);
+  const repetidos = lista.filter(g => g.n >= 2).slice(0, 3);
+  const elegidos = repetidos.length ? repetidos : [...lista].sort((a, b) => b.ultimo - a.ultimo).slice(0, 1);
+  return elegidos.map(g => ({
+    // De las variantes, la más usada; en empate, la que empieza con mayúscula.
+    texto: [...g.variantes.entries()].sort((a, b) => b[1] - a[1] || (/^[A-ZÁÉÍÓÚÑ]/.test(b[0]) - /^[A-ZÁÉÍÓÚÑ]/.test(a[0])))[0][0],
+    n: g.n,
+  }));
+}
+
+function _renderTextosUsados(equipos, idx) {
+  const wrap = document.getElementById("trabajoTextosUsados");
+  if (!wrap) return;
+  const textos = _textosFrecuentes(equipos, idx);
+  if (!textos.length) { wrap.style.display = "none"; wrap.innerHTML = ""; return; }
+  wrap.style.display = "";
+  wrap.innerHTML = `<span class="trabajo-textos__label">Ya usados en esta orden:</span>`
+    + textos.map((t, i) => `<button type="button" class="trabajo-texto-chip" data-i="${i}" title="Usar este texto">`
+      + `${escapeHtml(t.texto.length > 60 ? t.texto.slice(0, 58) + "…" : t.texto)}`
+      + (t.n > 1 ? ` <span class="trabajo-texto-chip__n">×${t.n}</span>` : "") + `</button>`).join("");
+  wrap.querySelectorAll(".trabajo-texto-chip").forEach(btn => {
+    btn.onclick = () => {
+      const txtEl = document.getElementById("trabajoEquipoText");
+      if (!txtEl) return;
+      if (txtEl.disabled) { Toast.show('Desmarca "no disponible" para escribir la intervención.', "warn"); return; }
+      txtEl.value = textos[Number(btn.dataset.i)].texto;
+      wrap.querySelectorAll(".trabajo-texto-chip").forEach(b => b.classList.toggle("is-on", b === btn));
+    };
+  });
+}
+
+// Cambio de radio en sitio desde el propio radio (solo VISITA TÉCNICA). El
+// registro lo hace la misma hoja del menú ⋯ (ordenes-regularizar-reemplazo.js)
+// con este radio ya puesto como el recibido del cliente.
+const _normSerialEq = (s) => Serial.norm(s);
+function _renderCambioEnSitio(o, e) {
+  const wrap = document.getElementById("trabajoCambioSitio");
+  if (!wrap) return;
+  const serial = String(e?.numero_de_serie || e?.serial || e?.SERIAL || "").trim();
+  const esVisita = typeof esOrdenVisita === "function" && esOrdenVisita(o);
+  if (!esVisita || !serial || !o?.cliente_id) { wrap.style.display = "none"; wrap.innerHTML = ""; return; }
+  wrap.style.display = "";
+  const hecho = (o.reemplazos_regularizados || {})[_normSerialEq(serial)];
+  if (hecho) {
+    wrap.innerHTML = `<div class="trabajo-cambio-sitio__hecho"><i data-lucide="replace"></i>
+      <span>Cambiado en sitio por <b>${escapeHtml(String(hecho.entrante || ""))}</b>${hecho.gestion_id ? ` · gestión ${escapeHtml(String(hecho.gestion_id))}` : ""}${hecho.devolucion_id ? ` · devolución ${escapeHtml(String(hecho.devolucion_id))}` : ""}</span></div>`;
+    APP.utils.lucideRefresh(wrap);
+    return;
+  }
+  const llevados = Object.values(o.radios_salida || {}).filter(r => r && r.estado === "llevado" && r.serial).length;
+  wrap.innerHTML = `<button type="button" class="btn btn-secondary btn-sm" id="btnCambioEnSitio"><i data-lucide="replace"></i> Lo cambié por otro radio…</button>
+    <span class="trabajo-cambio-sitio__hint">${llevados
+      ? `Tienes ${llevados === 1 ? "1 radio" : `${llevados} radios`} de bodega de esta visita.`
+      : "Si dejaste con el cliente un radio que llevabas."}</span>`;
+  APP.utils.lucideRefresh(wrap);
+  wrap.querySelector("#btnCambioEnSitio").onclick = () => _registrarCambioEnSitio(o.ordenId, serial);
+}
+
+async function _registrarCambioEnSitio(ordenId, serial) {
+  try {
+    await CargaDiferida.regularizarReemplazo();
+    const res = await abrirRegularizarReemplazo(ordenId, { serialSaliente: serial });
+    if (!res || typeof res !== "object" || !res.gestion_id) return;
+    // La orden en pantalla se pone al día sin esperar al listener: el radio
+    // queda con su cambio y el que se dejó sale de los "llevados".
+    const o = APP.state.orders.find(x => x.ordenId === ordenId);
+    if (o) {
+      o.reemplazos_regularizados = { ...(o.reemplazos_regularizados || {}),
+        [_normSerialEq(serial)]: { gestion_id: res.gestion_id, saliente: serial, entrante: res.serial_entrante, devolucion_id: res.devolucion_id || null } };
+      const salidas = { ...(o.radios_salida || {}) };
+      Object.keys(salidas).forEach(k => {
+        if (_normSerialEq(salidas[k]?.serial || k) === _normSerialEq(res.serial_entrante)) salidas[k] = { ...salidas[k], estado: "dejado" };
+      });
+      o.radios_salida = salidas;
+    }
+    // Si el modal sigue en este radio: la intervención queda escrita (si el
+    // técnico no puso nada) y se guarda, para no dejarlo "sin intervención".
+    if (_trabajoOrdenId !== ordenId) return;
+    const equipoAct = _resolveEquipoActual();
+    if (_normSerialEq(equipoAct?.numero_de_serie || equipoAct?.serial) !== _normSerialEq(serial)) return;
+    const chkNoDisp = document.getElementById("trabajoNoDisponible");
+    if (chkNoDisp?.checked) { chkNoDisp.checked = false; chkNoDisp.onchange?.(); }
+    const txtEl = document.getElementById("trabajoEquipoText");
+    if (txtEl && !txtEl.value.trim()) {
+      txtEl.value = `Radio reemplazado en sitio por la serie ${res.serial_entrante}.${res.motivo ? ` ${res.motivo}` : ""}`;
+    }
+    await guardarTrabajoEquipoModal({ siguiente: true });
+  } catch (err) {
+    console.error("❌ Error registrando el cambio en sitio:", err);
+    Toast.show(`❌ No se pudo registrar el cambio: ${err?.message || err}`, "bad");
+  }
+}
+
 // ¿El rol puede EDITAR la intervención de un equipo?
 function _puedeEditarIntervencion() {
   const rol = APP.state.userRole || "";
@@ -789,6 +924,8 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
   _renderEquipoMateriales();
   const txtEl = document.getElementById("trabajoEquipoText");
   if (txtEl) txtEl.value = (e.trabajo_tecnico || "").toString();
+  _renderTextosUsados(equipos, idx);
+  _renderCambioEnSitio(o, e);
 
   // Lote (auditoría M3): checkboxes con los DEMÁS equipos de la orden para
   // aplicarles el mismo texto de intervención — una orden de 10 radios
@@ -965,7 +1102,8 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
     const total = equipos.length;
     nav.style.display = total > 1 ? "flex" : "none";
     const pos = document.getElementById("trabajoNavPos");
-    if (pos) pos.textContent = `Equipo ${idx + 1} de ${total}`;
+    const faltan = equipos.filter(_equipoPendiente).length;
+    if (pos) pos.textContent = `Equipo ${idx + 1} de ${total}${faltan ? ` · ${faltan === 1 ? "falta 1" : `faltan ${faltan}`}` : " · todos listos"}`;
     const irA = async (destino) => {
       if (destino < 0 || destino >= total) return;
       if (_trabajoSucio()) {
@@ -986,8 +1124,10 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
 
   // "Guardar y siguiente" (auditoría UX 2026-09-28, 4.2 #5): el modal se
   // cerraba al guardar y había que reabrirlo por cada equipo.
+  // Desde el 2026-11-24 "siguiente" es el siguiente PENDIENTE (ver
+  // _siguienteEquipo): se ofrece mientras haya otro equipo al que ir.
   const btnSig = document.getElementById("btnGuardarTrabajoSiguiente");
-  if (btnSig) btnSig.style.display = idx < equipos.length - 1 ? "" : "none";
+  if (btnSig) btnSig.style.display = _siguienteEquipo(equipos, idx) === null ? "none" : "";
 
   const modal = document.getElementById("modalTrabajoEquipo");
 
@@ -1892,7 +2032,11 @@ window.guardarTrabajoEquipoModal = async function({ siguiente = false } = {}) {
   const idxGuardado = _trabajoEquipoIdx;
   const terminar = () => {
     if (btnSig) btnSig.disabled = false;
-    if (siguiente) abrirTrabajoEquipoModal(ordenGuardada, idxGuardado + 1);
+    // El siguiente se decide DESPUÉS de guardar, con la orden ya al día: el
+    // lote "aplicar también" pudo dejar listos varios de los que seguían.
+    const o = APP.state.orders.find(x => x.ordenId === ordenGuardada);
+    const destino = siguiente ? _siguienteEquipo((o?.equipos || []).filter(x => !x.eliminado), idxGuardado) : null;
+    if (destino !== null) abrirTrabajoEquipoModal(ordenGuardada, destino);
     else cerrarTrabajoEquipoModal();
   };
   const txt = (document.getElementById("trabajoEquipoText")?.value || "").trim();

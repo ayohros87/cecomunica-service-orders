@@ -70,7 +70,7 @@ const equipoDe = (orden, serial) => (orden.equipos || []).find((e) => e && !e.el
 
 // Aviso a bodega (corto: resultado primero, una sola acción). Nunca lanza: el
 // cambio ya quedó registrado y un correo caído no lo deshace.
-async function avisarBodega({ gid, ordenId, esVisita, cliente, sal, ent, modSal, modEnt, contratoId, salienteEnCasa, motivo, quien, sinSalida = false, devolucionId = null }) {
+async function avisarBodega({ gid, ordenId, esVisita, cliente, sal, ent, modSal, modEnt, contratoId, salienteEnCasa, motivo, quien, sinSalida = false, salSinFicha = false, devolucionId = null }) {
   try {
     const G = require("../lib/gestiones");
     const { bodegaEmailTo, recepcionEmails, tallerEmailTo } = require("../lib/mailRecipients");
@@ -94,6 +94,7 @@ async function avisarBodega({ gid, ordenId, esVisita, cliente, sal, ent, modSal,
              <b>Se recibió del cliente:</b> ${e(sal)}${modSal ? ` · ${e(modSal)}` : ""}`)}
         ${p(`<b>Qué pasó:</b> ${e(motivo || "—")}<br><b>Lo registró:</b> ${e(quien)}`)}
         ${sinSalida ? p(`<b style="color:#B45309;">Ojo:</b> el radio <b>${e(ent)}</b> figuraba en bodega: salió sin registrarse la salida a la visita. Las próximas veces, entrégalo desde Almacén → Hoy → "Salida a visita".`) : ""}
+        ${salSinFicha ? p(`<b style="color:#B45309;">Ojo:</b> el radio <b>${e(sal)}</b> no estaba en el inventario: se creó su ficha con la propiedad <b>por definir</b> y el radio que se dejó quedó con el cliente <b>sin contrato</b>. Cuando llegue, clasifícalo (¿de CECOMUNICA o del cliente?).`) : ""}
         ${p(salienteEnCasa
           ? `El radio <b>${e(sal)}</b> se entrega en <b>recepción</b> para su revisión de taller${devolucionId ? `: recepción lo recibe en la devolución <b>${e(devolucionId)}</b>, que ya está abierta` : ""}.`
           : `El radio <b>${e(sal)}</b> se quedó con el cliente: queda <b>pendiente de devolución</b>${devolucionId ? ` (devolución <b>${e(devolucionId)}</b>)` : ""}.`)}`,
@@ -127,9 +128,10 @@ async function ejecutar({ usuario, nombre = "", uid = null, ordenId, serialSalie
   if (!eEnt) throw new HttpsError("failed-precondition", `El entrante ${ent} no está en la orden.`);
 
   await catalogo();
-  const rSal = await pool.resolver(sal, eSal.modelo_id || null, eSal.modelo || "", { adoptarSiExiste: true });
+  let rSal = await pool.resolver(sal, eSal.modelo_id || null, eSal.modelo || "", { adoptarSiExiste: true });
   const rEnt = await pool.resolver(ent, eEnt.modelo_id || null, eEnt.modelo || "", { adoptarSiExiste: true });
-  if (!rSal.data) throw new HttpsError("failed-precondition", `El saliente ${sal} no existe en el inventario.`);
+  // En una visita el saliente sin ficha no tranca (ver más abajo): se le crea.
+  if (!rSal.data && !esVisita) throw new HttpsError("failed-precondition", `El saliente ${sal} no existe en el inventario.`);
   if (!rEnt.data) throw new HttpsError("failed-precondition", `El entrante ${ent} no existe en el inventario (recíbelo primero en Almacén).`);
   if (rEnt.data.reemplaza_a) throw new HttpsError("failed-precondition", `${ent} ya figura como reemplazo de ${rEnt.data.reemplaza_a}.`);
   if ([pool.ESTADOS.BAJA, pool.ESTADOS.VENDIDO].includes(rEnt.data.estado)) throw new HttpsError("failed-precondition", `El entrante está ${rEnt.data.estado}.`);
@@ -149,6 +151,27 @@ async function ejecutar({ usuario, nombre = "", uid = null, ordenId, serialSalie
     || (rEnt.data.estado === pool.ESTADOS.EN_CLIENTE && rEnt.data.asignacion?.cliente_id === orden.cliente_id);
   if (esVisita && !okVisita) throw new HttpsError("failed-precondition", `El entrante ${ent} figura "${rEnt.data.estado}", no en bodega. Revisa el serial o corrige su ubicación primero.`);
   const sinSalida = esVisita && !salioConEsta && rEnt.data.estado !== pool.ESTADOS.EN_CLIENTE;
+
+  // Saliente sin ficha (2026-11-24, visita 2026111905 de DECAMERON: 125 de sus
+  // 146 radios no estaban en el inventario y los 7 cambios en sitio habrían
+  // rebotado con "no existe"). El técnico tiene el radio en la mano: se da de
+  // alta como lo que es — un radio que tenía ese cliente, de propiedad POR
+  // DEFINIR y sin verificar — y el cambio sigue. Bodega lo clasifica cuando
+  // llegue; el correo se lo dice. Va después de validar el entrante para no
+  // dejar una ficha suelta si el cambio se rechaza.
+  let salSinFicha = false;
+  if (!rSal.data) {
+    await pool.upsertContacto({
+      serial: sal, modelo_id: eSal.modelo_id || null, modelo_label: eSal.modelo || "",
+      estado: pool.ESTADOS.EN_CLIENTE, tipo: "migracion", origen: "migracion_orden",
+      refMov: { tipo: "orden", id: ordenId, label: orden.numero_orden || ordenId },
+      notas: `Alta al registrar un cambio de radio en sitio (visita ${ordenId}): lo tenía el cliente y no estaba en el inventario. Propiedad por definir.`,
+      extra: { asignacion: { contrato_doc_id: null, contrato_id: "", cliente_id: orden.cliente_id, cliente_nombre: orden.cliente_nombre || orden.cliente || "" } },
+    });
+    rSal = await pool.resolver(sal, eSal.modelo_id || null, eSal.modelo || "", { adoptarSiExiste: true });
+    if (!rSal.data) throw new HttpsError("failed-precondition", `El saliente ${sal} no existe en el inventario y no se pudo dar de alta: revisa el serial.`);
+    salSinFicha = true;
+  }
 
   const asigSal = rSal.data.asignacion || {};
   const contratoDocId = asigSal.cliente_id === orden.cliente_id ? (asigSal.contrato_doc_id || null) : null;
@@ -190,7 +213,7 @@ async function ejecutar({ usuario, nombre = "", uid = null, ordenId, serialSalie
   const gref = db.collection("gestiones").doc(gid);
   await gref.set(g);
   await gref.collection("mapeos").add({ saliente: sal, entrante: ent, modelo: modEnt.modelo, modelo_id: modEnt.modelo_id, contrato_doc_id: contratoDocId, contrato_id: contratoId, auto: false, regularizado: true, at: now, por: usuario });
-  await gref.collection("eventos").add({ accion: "regularizacion", detalle: `Reemplazo registrado a posteriori desde la orden ${ordenId}: ${sal} → ${ent}${cambioModelo ? ` (cambio de modelo ${modSal.modelo} → ${modEnt.modelo}, tarifa se mantiene)` : ""}. ${motivo || ""}`.trim(), at: now, por_uid: uid, por_email: usuario });
+  await gref.collection("eventos").add({ accion: "regularizacion", detalle: `Reemplazo registrado a posteriori desde la orden ${ordenId}: ${sal} → ${ent}${cambioModelo ? ` (cambio de modelo ${modSal.modelo} → ${modEnt.modelo}, tarifa se mantiene)` : ""}.${salSinFicha ? ` El saliente no estaba en el inventario: se le creó la ficha, propiedad por definir.` : ""} ${motivo || ""}`.trim(), at: now, por_uid: uid, por_email: usuario });
 
   // La orden.
   await oSnap.ref.set({
@@ -255,9 +278,9 @@ async function ejecutar({ usuario, nombre = "", uid = null, ordenId, serialSalie
   }
   const mailId = await avisarBodega({ gid, ordenId, esVisita, devolucionId, cliente: orden.cliente_nombre || orden.cliente || "", sal, ent,
     modSal: modSal.modelo, modEnt: modEnt.modelo, contratoId, salienteEnCasa: !!salienteEnCasa, motivo: String(motivo || "").trim(),
-    quien: nombre ? `${nombre} (${usuario})` : usuario, sinSalida });
-  logger.info("[regularizarReemplazoOrden]", { ordenId, gid, sal, ent, usuario, entRes, salRes, cambioModelo: !!cambioModelo });
-  return { ok: true, gestion_id: gid, entrante: entRes, saliente: salRes, cambio_modelo: !!cambioModelo, contrato: contratoId || null, aviso_mail_id: mailId, devolucion_id: devolucionId };
+    quien: nombre ? `${nombre} (${usuario})` : usuario, sinSalida, salSinFicha });
+  logger.info("[regularizarReemplazoOrden]", { ordenId, gid, sal, ent, usuario, entRes, salRes, cambioModelo: !!cambioModelo, salSinFicha });
+  return { ok: true, gestion_id: gid, entrante: entRes, saliente: salRes, cambio_modelo: !!cambioModelo, contrato: contratoId || null, aviso_mail_id: mailId, devolucion_id: devolucionId, saliente_sin_ficha: salSinFicha };
 }
 
 module.exports = onCall(
