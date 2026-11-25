@@ -1106,7 +1106,7 @@ Object.assign(window.Centro, {
   anularContrato(id) {
     const c = this.contratos.find(x => x.id === id);
     if (!c) return;
-    if (![ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)) { Toast.show('Solo administración o gerencia puede anular contratos.', 'bad'); return; }
+    if (!this._puedeAnularContrato(c)) { Toast.show('Solo administración, gerencia o quien creó el contrato (mientras siga en trámite) puede anularlo.', 'bad'); return; }
     if (!ContratoAnulacion.esAnulable(c)) { Toast.show('Solo se puede anular un contrato ACTIVO, APROBADO o pendiente de aprobación.', 'bad'); return; }
     const cands = ContratoAnulacion.candidatos(this.contratos, id);
     const enCampo = this.equipos.filter(e => e.asignacion?.contrato_doc_id === id).length;

@@ -21,6 +21,16 @@ Object.assign(window.Centro, {
   // `beta` = clave de js/ui/beta.js: chip "Beta" junto al label mientras no venza.
   _acc(a) { return { grupo: 'Avanzar', ok: true, motivo: '', ...a }; },
 
+  // ¿Puede ESTE usuario anular el contrato? Administración y gerencia, siempre.
+  // Además quien lo creó, mientras siga EN TRÁMITE (pendiente de aprobación):
+  // todavía no movió ningún equipo y se anula sin devolución ni traspaso
+  // (Andrea/Cobros 2026-11-25, ASESORÍA: un contrato creado por error y nadie
+  // fuera de administración podía quitarlo).
+  _puedeAnularContrato(c) {
+    if ([ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)) return true;
+    return !!c && c.estado === 'pendiente_aprobacion' && !!this.uid && c.creado_por_uid === this.uid;
+  },
+
   _accionesGestion(g) {
     const id = this.esc(g.id);
     const A = [];
@@ -408,8 +418,10 @@ Object.assign(window.Centro, {
     A.push(this._acc({ id: 'anular', grupo: 'Corregir', label: 'Anular contrato…', danger: true,
       hint: 'pide el motivo y queda en el historial',
       onclick: `Centro.anularContrato('${id}')`,
-      ok: anulable && mando,
-      motivo: !anulable ? `un contrato ${this.esc(this._estadoLabel(c).toLowerCase())} ya no se anula desde aquí` : 'lo anula administración o gerencia' }));
+      ok: anulable && this._puedeAnularContrato(c),
+      motivo: !anulable ? `un contrato ${this.esc(this._estadoLabel(c).toLowerCase())} ya no se anula desde aquí`
+        : c.estado === 'pendiente_aprobacion' ? 'lo anula quien lo creó, administración o gerencia'
+          : 'lo anula administración o gerencia' }));
     return A;
   },
 
