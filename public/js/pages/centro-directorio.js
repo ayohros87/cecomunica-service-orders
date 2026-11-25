@@ -31,7 +31,7 @@ Object.assign(window.Centro, {
   esVendedor() { return this.rol === ROLES.VENDEDOR; },
 
   CARTERA_TARJETAS: 12,   // hasta aquí la cartera se ve en tarjetas; más, lista por letra
-  filtro: null,           // 'aprobar' | 'firma' | 'vencen' | 'regularizar' | 'sin_vendedor' | null
+  filtro: null,           // 'aprobar' | 'firma' | 'vencen' | 'regularizar' | 'sin_vendedor' | 'docs_revisar' | 'docs_faltan' | null
   vendedorFiltro: null,   // uid (admin/gerencia/recepción)
   _dir: null,             // { clave, docs, at, provisional }
   _senales: null,         // { firma, reg, vencen, at }
@@ -175,6 +175,8 @@ Object.assign(window.Centro, {
     else if (firma.length) chip = { cls: 'cg-chip--warn', txt: firma.length === 1 ? 'Firma pendiente' : `${firma.length} firmas pendientes`, title: firma.map(f => `${f.contrato} · ${f.dias} d`).join(' · ') };
     else if (diasVence != null) chip = { cls: 'cg-chip--warn', txt: `Vence en ${diasVence} d`, title: vencen.map(x => x.contrato_id || x.id).join(' · ') };
     else if (puntos > 0) chip = { cls: 'cg-chip--warn', txt: `Por regularizar · ${puntos}`, title: `${(window.Regularizacion?.NIVEL_LABEL || {})[r?.nivel] || ''} ${puntos} punto(s)`.trim() };
+    // Expediente legal (2026-11-25): lo que subió el cliente y Cobros no ha abierto.
+    else if (this._puedeVerDocs() && this._docsPorRevisarDe?.(c)) chip = { cls: 'cg-chip--info', txt: `Documentos por revisar · ${c.expediente.por_revisar}`, title: 'El cliente subió documentos desde su enlace: ábrelos y márcalos como revisados' };
     else if (sinVendedor) chip = { cls: 'cg-chip--warn', txt: 'Sin vendedor', title: 'Nadie la atiende: asígnale un vendedor' };
     else if (c.regularizacion) chip = { cls: 'cg-chip--ok', txt: 'Al día' };
     return { puntos, critica, firma, vencen, vence, diasVence, inactivo, sinVendedor, chip, bodega: Number(r?.d7 || 0) };
@@ -200,6 +202,13 @@ Object.assign(window.Centro, {
     } else if (this.filtro === 'sin_vendedor') docs = docs.filter(c => !c.vendedor_asignado && !c.vendedor_email);
     else if (this.filtro === 'vencen') { const set = ids(S.vencen); docs = docs.filter(c => set.has(c.id)); }
     else if (this.filtro === 'firma') { const set = ids(S.firma); docs = docs.filter(c => set.has(c.id)); }
+    // Los dos filtros de Cobros sobre el expediente legal (2026-11-25).
+    else if (this.filtro === 'docs_revisar') docs = docs.filter(c => this._docsPorRevisarDe(c));
+    else if (this.filtro === 'docs_faltan') {
+      // Solo clientes con contrato vivo: la lista se pide al abrir el filtro.
+      if (!this._docsVivos) { this._cargarDocsVivos(); docs = []; }
+      else docs = docs.filter(c => this._docsVivos.has(c.id) && this._docsIncompleto(c));
+    }
     else if (this.filtro === 'aprobar') { const set = new Set((window.CentroAprobaciones?._items || []).map(x => x.cliente_id).filter(Boolean)); docs = docs.filter(c => set.has(c.id)); }
     const words = this._palabrasBusq();
     if (words.length) docs = docs.filter(c => this._coincide(c, words));
@@ -339,6 +348,9 @@ Object.assign(window.Centro, {
       if (f === 'sin_vendedor') return todos.filter(c => !c.vendedor_asignado && !c.vendedor_email).length;
       if (f === 'vencen') return S.vencen ? new Set(S.vencen.map(x => x.cliente_id)).size : null;
       if (f === 'firma') return S.firma ? new Set(S.firma.map(x => x.cliente_id)).size : null;
+      if (f === 'docs_revisar') return todos.filter(c => this._docsPorRevisarDe(c)).length;
+      // Sin número hasta que se abra: contarlo cuesta leer los contratos vivos.
+      if (f === 'docs_faltan') return this._docsVivos ? todos.filter(c => this._docsVivos.has(c.id) && this._docsIncompleto(c)).length : null;
       return null;
     };
     // Chips y "Mías" del kit de bandeja (2026-10-09): el mismo chip y el mismo
@@ -361,9 +373,14 @@ Object.assign(window.Centro, {
         : `${docs.length} cuenta${docs.length === 1 ? '' : 's'}${this._dir?.provisional ? ' · actualizando…' : ''}`;
     const extra = this.filtro === 'regularizar' && [ROLES.ADMIN, 'admin', ROLES.GERENTE, ROLES.RECEPCION].includes(this.rol)
       ? ` · <a href="./regularizacion.html">bandeja completa ›</a>` : '';
+    // Expediente legal: solo para quien puede abrir los documentos (Cobros
+    // entra con rol recepción). "Con contrato vivo" va en el título del chip.
+    const docsChips = this._puedeVerDocs?.() && this._docsPorRevisarDe
+      ? `${chip('docs_revisar', 'Docs por revisar')}<span title="Clientes con contrato activo o aprobado a los que les falta algún documento">${chip('docs_faltan', 'Expediente incompleto')}</span>`
+      : '';
     // Orden canónico de la barra (2026-10-09): chips · Mías · secundarios.
     cont.innerHTML = `<h2 class="cg-h2" style="margin-right:6px;">${titulo}</h2>
-      ${chip('regularizar', 'Por regularizar')}${this.esVendedor() ? '' : chip('sin_vendedor', 'Sin vendedor')}${chip('vencen', 'Vencen pronto')}${chip('firma', 'Firma pendiente')}${seg}${vend}
+      ${chip('regularizar', 'Por regularizar')}${this.esVendedor() ? '' : chip('sin_vendedor', 'Sin vendedor')}${chip('vencen', 'Vencen pronto')}${chip('firma', 'Firma pendiente')}${docsChips}${seg}${vend}
       <label class="cg-switch" style="margin-left:auto;" title="Ocultar clientes marcados como inactivos"><input type="checkbox" ${this.soloActivos ? 'checked' : ''} onchange="Centro.setSoloActivos(this.checked)"><span class="trk" aria-hidden="true"></span> Solo activas</label>
       <span class="cg-resumen" id="cgResumen">${resumen}${extra}</span>`;
   },
@@ -385,6 +402,7 @@ Object.assign(window.Centro, {
     if (!this._dir) { cont.innerHTML = '<div class="cg-empty">Cargando el directorio…</div>'; if (az) az.innerHTML = ''; return; }
     if (!docs.length) {
       cont.innerHTML = `<div class="cg-empty">${this.term ? 'Ninguna cuenta coincide con la búsqueda.'
+        : this.filtro === 'docs_faltan' && !this._docsVivos ? 'Buscando los clientes con contrato vivo…'
         : this.filtro ? 'Ninguna cuenta con ese filtro.' : this._dir.error ? 'No se pudo cargar el directorio.'
         : this.esVendedor() ? 'No tienes clientes asignados todavía.' : 'Sin clientes registrados.'}
         ${this._dir.error ? `<div class="cta"><button class="btn btn-ghost cg-act" onclick="Centro.cargarLista(true)">Reintentar</button></div>` : ''}</div>`;
@@ -424,7 +442,10 @@ Object.assign(window.Centro, {
     const v = this._vendedorCorto(c);
     const sub = [c.cuenta_alias ? `alias ${c.cuenta_alias}` : '', c.representante || ''].filter(Boolean).join(' · ');
     const chip = info.chip ? `<span class="cg-chip ${info.chip.cls}" title="${esc(info.chip.title || '')}">${esc(info.chip.txt)}</span>` : '';
-    const bodega = info.bodega ? `<span class="cg-chip cg-chip--muted" title="${info.bodega} radio(s) por clasificar: los revisa bodega, no cuentan como deuda de la cuenta">Bodega · ${info.bodega}</span>` : '';
+    let bodega = info.bodega ? `<span class="cg-chip cg-chip--muted" title="${info.bodega} radio(s) por clasificar: los revisa bodega, no cuentan como deuda de la cuenta">Bodega · ${info.bodega}</span>` : '';
+    // Con los filtros del expediente la fila dice SIEMPRE cómo está el
+    // expediente, aunque el chip de estado sea otro (regularización, firma…).
+    if ((this.filtro === 'docs_faltan' || this.filtro === 'docs_revisar') && this._docsChipFila) bodega = this._docsChipFila(c);
     return `<a class="cg-fila${info.inactivo ? ' off' : ''}" href="?id=${encodeURIComponent(c.id)}" onclick="event.preventDefault(); Centro.abrir('${esc(c.id)}')">
       <span style="min-width:0;"><span class="n">${esc(c.nombre || '(sin nombre)')}</span><span class="r">${esc(this._rucLegible(c) || '—')}</span></span>
       <span class="r">${esc(sub)}</span>

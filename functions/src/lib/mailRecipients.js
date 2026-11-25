@@ -20,6 +20,8 @@ const FALLBACKS = {
   // silencioso. Se resuelve con empresa/config.email_bodega y, si está vacío,
   // con los usuarios de rol `inventario`. Ver bodegaEmailTo().
   bodega:           "",
+  // Cobros revisa el expediente legal de los clientes (Andrea Kelly).
+  expediente:       "cobros@cecomunica.com",
 };
 
 async function configEmailTo(key, fallback) {
@@ -94,6 +96,16 @@ async function recepcionEmails() {
   return [...out];
 }
 
+// Expediente legal del cliente (2026-11-25): quién REVISA los documentos que
+// sube el cliente. Cobros, por decisión de Alberto. empresa/config
+// .email_expediente si se quiere apartar; si no, el buzón de cobranza que ya
+// existe (email_cobranza) y, sin ninguno, cobros@. Nunca lanza.
+async function expedienteEmailTo() {
+  const propio = await configEmailTo("expediente", "");
+  if (propio) return propio;
+  return configEmailTo("cobranza", FALLBACKS.expediente);
+}
+
 // CC extra del correo "Contrato APROBADO" (empresa/config.mail_cc_contrato_aprobado,
 // editable en Admin · Configuración). Array; [] si no hay o falla la lectura.
 async function ccContratoAprobado() {
@@ -107,4 +119,4 @@ async function ccContratoAprobado() {
   return [];
 }
 
-module.exports = { configEmailTo, activacionesEmailTo, atencionClienteEmailTo, bodegaEmailTo, tallerEmailTo, recepcionEmails, ccContratoAprobado, FALLBACKS };
+module.exports = { configEmailTo, activacionesEmailTo, atencionClienteEmailTo, bodegaEmailTo, tallerEmailTo, recepcionEmails, ccContratoAprobado, expedienteEmailTo, FALLBACKS };

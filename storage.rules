@@ -112,6 +112,24 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // ── Entrada de documentos que sube el CLIENTE (2026-11-25) ──────────
+    // El cliente abre su enlace (/documentos/?s=… o el de firma) SIN sesión y
+    // deja aquí los archivos de su expediente. La carpeta es el id del enlace
+    // (imposible de adivinar, igual que firmas_identidad/{sid}); de aquí no se
+    // lee nada. La callable documentosClientePublico valida el enlace,
+    // comprueba que el archivo sea de verdad un PDF o un JPEG, lo MUEVE a
+    // clientes_documentos/{cliente}/ y vacía la carpeta: lo que no se
+    // registra no se queda. El nombre lo fija la página
+    // ({requisito}-{marca de tiempo}-{n}.pdf|jpg); sin update, un nombre ya
+    // usado no se puede pisar.
+    match /clientes_docs_entrada/{sid}/{file} {
+      allow read:   if false;
+      allow create: if request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('(image/jpeg|application/pdf)')
+                    && file.matches('(constitucion|cedula|direccion)-[0-9]+-[0-9]+[.](pdf|jpg)');
+      allow update, delete: if false;
+    }
+
     // ── Signed contract PDFs ────────────────────────────────────────────
     // PDFs only, no frontend delete. Read-restricted to authenticated staff;
     // public verification routes through the Cloud Function instead.

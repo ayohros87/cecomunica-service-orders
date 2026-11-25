@@ -303,6 +303,46 @@
 .cg-accmenu .mal { color:var(--bad-deep, #991B1B); }
 .cg-accmenu.cg-up { top:auto; bottom:calc(100% + 6px); }
 .cg-vacio { color:var(--fg-3); font-size:13px; padding:14px; text-align:center; }
+/* Pestaña Documentos (2026-11-25, centro-documentos.js): arriba los tres
+   documentos que pide administración con su estado, debajo los archivos. */
+.cg-docs-aviso { display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:10px 14px; margin-bottom:12px;
+                 border-radius:8px; background:var(--cg-warn-soft); color:var(--cg-warn-deep); font-size:13px; line-height:1.45; }
+.cg-docs-aviso.is-ok { background:var(--cg-ok-soft); color:var(--cg-ok-deep); }
+.cg-docs-aviso > span { flex:1 1 280px; min-width:0; }
+.cg-docs-aviso .btn { flex:none; }
+.cg-reqs { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; margin-bottom:12px; }
+.cg-req { display:flex; gap:10px; align-items:flex-start; padding:11px 12px; border:1px solid var(--border-subtle); border-radius:8px; background:var(--surface-card, #fff); }
+.cg-req svg, .cg-req i { width:18px; height:18px; flex:none; margin-top:1px; color:var(--fg-4); }
+.cg-req .t { min-width:0; display:flex; flex-direction:column; gap:2px; }
+.cg-req .t b { font-size:13px; line-height:1.3; }
+.cg-req .t span { font-size:12px; color:var(--fg-3); }
+.cg-req--ok svg { color:var(--cg-ok); } .cg-req--ok .t span { color:var(--cg-ok-deep); }
+.cg-req--por_revisar svg { color:var(--cg-warn); } .cg-req--por_revisar .t span { color:var(--cg-warn-deep); }
+.cg-req--falta { border-style:dashed; }
+.cg-docs-enlace { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:9px 12px; margin-bottom:12px;
+                  border-radius:8px; background:var(--cg-info-soft); color:var(--cg-info-deep); font-size:12.5px; line-height:1.45; }
+.cg-docs-enlace svg, .cg-docs-enlace i { width:16px; height:16px; flex:none; }
+.cg-docs-enlace > span { flex:1 1 260px; min-width:0; overflow-wrap:anywhere; }
+.cg-docs-h { margin:16px 0 2px; font-size:13px; font-weight:700; }
+.cg-docs-h span { font-weight:500; color:var(--fg-3); }
+.cg-docs-nota { margin:0 0 6px; font-size:12px; color:var(--fg-4); }
+.cg-doc { display:flex; gap:10px; align-items:center; padding:9px 2px; border-bottom:1px solid var(--border-subtle); }
+.cg-doc > svg, .cg-doc > i { width:18px; height:18px; color:var(--fg-3); flex:none; }
+.cg-doc .t { flex:1; min-width:0; }
+.cg-doc .n { font-size:13px; font-weight:600; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.cg-doc .m { font-size:12px; color:var(--fg-4); overflow-wrap:anywhere; }
+.cg-doc .a { display:flex; gap:6px; flex:none; flex-wrap:wrap; justify-content:flex-end; }
+.cg-doc.is-rev { background:linear-gradient(90deg, var(--cg-warn-soft), transparent 60%); }
+.cg-pedir-lista { display:flex; flex-direction:column; gap:8px; }
+.cg-pedir { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border:1px solid var(--border-subtle); border-radius:8px; cursor:pointer; }
+.cg-pedir input { margin-top:3px; flex:none; }
+.cg-pedir span { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.cg-pedir b { font-size:13.5px; } .cg-pedir small { font-size:12px; color:var(--fg-3); }
+@media (max-width: 760px) {
+  .cg-reqs { grid-template-columns:1fr; }
+  .cg-doc { flex-wrap:wrap; }
+  .cg-doc .a { flex:1 1 100%; justify-content:flex-start; padding-left:28px; }
+}
 /* "Qué está esperando" (antes la cola "Ahora", 2026-09-08): ahora vive en
    la columna derecha, siempre visible, una tarjeta por fila con quién le
    toca y UN botón. Las filas las pinta pintarAhora. */

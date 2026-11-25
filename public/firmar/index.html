@@ -105,6 +105,15 @@
         </details>
         <p class="nota">Guarde este enlace: es su constancia del documento tal como lo firmó.</p>
       </div>
+      <!-- Expediente del cliente (2026-11-25): ya que el cliente está aquí,
+           se le ofrece subir los documentos que falten (Aviso de Operación o
+           Registro Público, cédula del representante, recibo de servicio).
+           Solo aparece si falta alguno; nunca estorba la firma. -->
+      <div class="card hidden" id="yfDocs">
+        <h2>Documentos de su empresa</h2>
+        <p id="yfDocsTxt"></p>
+        <a id="yfDocsLink" href="#" class="btn-p" style="display:block; text-align:center; text-decoration:none; padding:12px 18px; border-radius:10px; font-weight:600;">Subir los documentos</a>
+      </div>
     </div>
 
     <div id="form" class="hidden">
@@ -241,7 +250,9 @@
             this.pintarDocumento(s, 'yfDocumento', 'yfDocDet');
             document.getElementById('yfCopia').style.display = '';
           }
-          this.ver('yaFirmado'); return;
+          this.ver('yaFirmado');
+          this.avisoDocumentos();
+          return;
         }
         this.pintar(s);
         this.ver('form');
@@ -473,6 +484,22 @@
       });
     },
 
+    // ¿Le falta algún documento al expediente de esta empresa? Se pregunta a
+    // la callable con el MISMO enlace de firma (f) y, si falta, se ofrece
+    // subirlo en /documentos/. Es un aviso: si la consulta falla, no se muestra.
+    async avisoDocumentos() {
+      try {
+        const r = (await firebase.functions().httpsCallable('documentosClientePublico')({ accion: 'ver', f: this.sid })).data || {};
+        if (r.status !== 'ok') return;
+        const faltan = (r.pide || []).filter(p => p.estado !== 'recibido').map(p => p.label);
+        if (!faltan.length) return;
+        document.getElementById('yfDocsTxt').textContent =
+          `Para completar el expediente de su empresa falta${faltan.length === 1 ? '' : 'n'}: ${faltan.join('; ')}. Puede subirlo${faltan.length === 1 ? '' : 's'} ahora mismo, con una foto o un PDF.`;
+        document.getElementById('yfDocsLink').href = `/documentos/?f=${encodeURIComponent(this.sid)}`;
+        document.getElementById('yfDocs').classList.remove('hidden');
+      } catch (e) { console.warn('[firmar] aviso de documentos:', e?.message || e); }
+    },
+
     // Mensaje de validación inline: visible, con foco y a la vista — sin alert().
     aviso(msg) {
       const el = document.getElementById('fMsg');
@@ -553,6 +580,7 @@
         document.getElementById('yfCopia').style.display = '';
         this.ver('yaFirmado');
         window.scrollTo(0, 0);
+        this.avisoDocumentos();
       } catch (e) {
         console.error(e);
         btn.disabled = false; btn.textContent = 'Firmar el contrato';

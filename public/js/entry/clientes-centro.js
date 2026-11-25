@@ -13,6 +13,8 @@ import '/js/pages/centro-aprobaciones.js';
 import '/js/services/usuariosService.js';
 import '/js/services/clientesService.js';
 import '/js/services/clienteDocumentosService.js';
+// Qué documentos pide el expediente legal y en qué estado están (2026-11-25).
+import '/js/domain/expedienteCliente.js';
 import '/js/services/contratosService.js';
 import '/js/domain/modeloFamilia.js';
 import '/js/services/equiposPoolService.js';
@@ -73,6 +75,8 @@ import '/js/pages/centro-orden-compra.js';
 import '/js/pages/centro-gestiones.js';
 import '/js/pages/centro-acciones.js';
 import '/js/pages/centro-menu-gestion.js';
+// Expediente legal: qué falta, enlace para que el cliente suba y revisión de Cobros (2026-11-25).
+import '/js/pages/centro-documentos.js';
 import '/js/pages/centro-wiz-reemplazo-demo.js';
 // Buscador + grupos por contrato para los selectores de seriales de los wizards (auditoría de módulos 2026-09-30, P4).
 import '/js/pages/centro-selector-seriales.js';

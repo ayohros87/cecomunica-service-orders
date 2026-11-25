@@ -67,6 +67,49 @@ async function copiarAutorizacionAlExpediente(sid, s) {
   }
 }
 
+// La cédula que el REPRESENTANTE fotografía al firmar también es la "copia de
+// cédula del representante legal" que pide el expediente (decisión de Alberto,
+// 2026-11-25): se copia allá y el cliente no tiene que mandarla aparte.
+//
+// Solo cuando el firmante lo AUTORIZÓ: el consentimiento de /firmar/ decía
+// "únicamente para verificar mi identidad como firmante de este documento",
+// así que las firmas hechas con ese texto NO se copian. La página estampa
+// `firma.consent_expediente: true` cuando el texto que se aceptó ya cubre el
+// expediente; sin esa marca aquí no pasa nada.
+//
+// Y solo si quien firmó ES el representante registrado (o pasó a serlo al
+// aceptarlo con "actualizar la ficha"): la cédula de un apoderado no es la del
+// representante. Entra "por revisar", como todo lo que no subió el personal.
+// Best-effort e idempotente por id derivado del sid.
+async function copiarCedulaAlExpediente(sid, s) {
+  const f = s.firma || {};
+  if (f.consent_expediente !== true || !f.cedula_path || !s.cliente_id) return false;
+  if (!String(f.cedula_path).startsWith(`firmas_identidad/${sid}/`)) return false;
+  try {
+    const docId = `cedula-firma-${sid}`;
+    const docRef = db.collection("clientes").doc(s.cliente_id).collection("documentos").doc(docId);
+    if ((await docRef.get()).exists) return false;
+    const destino = `clientes_documentos/${s.cliente_id}/${docId}.jpg`;
+    await admin.storage().bucket().file(f.cedula_path).copy(destino);
+    await docRef.set({
+      tipo: "cedula_representante",
+      nombre_archivo: `Cédula — ${f.nombre || "representante"} (firma ${s.contrato_id || s.gestion_id || ""}).jpg`,
+      storage_path: destino,
+      content_type: "image/jpeg",
+      size: null,
+      subido_por: null,
+      subido_en: admin.firestore.FieldValue.serverTimestamp(),
+      deleted: false,
+      origen: { cliente: true, firma_solicitud: sid, nombre: f.nombre || "", cedula_de_firma: true },
+      revision: { estado: "pendiente" },
+    });
+    return true;
+  } catch (e) {
+    logger.warn("[onFirmaContrato] cédula no copiada al expediente", { sid, error: e.message });
+    return false;
+  }
+}
+
 async function activarContrato(sid, s, extraFirmado = {}) {
   const cRef = db.collection("contratos").doc(s.contrato_doc_id);
   const cSnap = await cRef.get();
@@ -261,6 +304,7 @@ module.exports = onDocumentUpdated(
                ${resumenAnexoHtml(after)}`,
               urlFicha, "Abrir la ficha del cliente", { firma_solicitud: sid, resultado: "activado" });
             await correoCopiaCliente(sid, after, true);
+            await copiarCedulaAlExpediente(sid, after);
             logger.info("[onFirmaContrato] anexo firmado", { sid, gestion: after.gestion_id });
           } else {
             await ref.update({ estado: "validacion", firmante_coincide: false,
@@ -299,6 +343,7 @@ module.exports = onDocumentUpdated(
              ${resumenAnexoHtml(after)}`,
             urlFicha, "Abrir la ficha del cliente", { firma_solicitud: sid, resultado: "activado" });
           await correoCopiaCliente(sid, after, false);
+          await copiarCedulaAlExpediente(sid, after);
           logger.info("[onFirmaContrato] firmado y activado", { sid, contrato: after.contrato_id });
         } else {
           await ref.update({ estado: "validacion", firmante_coincide: false,
@@ -355,6 +400,8 @@ module.exports = onDocumentUpdated(
             ...(["cedula", "pasaporte"].includes(after.firma.doc_tipo)
               ? { representante_doc_tipo: after.firma.doc_tipo } : {}),
           }).catch((e) => logger.warn("[onFirmaContrato] ficha no actualizada", { message: e.message }));
+          // El firmante aceptado pasó a ser el representante: su cédula es la del expediente.
+          await copiarCedulaAlExpediente(sid, after);
         }
         const vendedor = await G.vendedorEmailDeCliente(after.cliente_id);
         const ventas = await G.aprobacionesTo();

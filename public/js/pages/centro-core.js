@@ -142,7 +142,9 @@ window.Centro = {
         // aquí a ver el expediente legal — esa página es "papel" y no carga el
         // kit, así que el visor vive solo de este lado. Sin permiso no abre
         // nada: ahí el enlace ni se ofrece.
-        if (id && params.get('docs') === '1' && this._puedeVerDocs()) this.verDocumentos();
+        // Desde 2026-11-25 abre la PESTAÑA (ahí se revisa y se rechaza); el
+        // correo "el cliente subió documentos" también llega por aquí.
+        if (id && params.get('docs') === '1' && this._puedeVerDocs()) this.abrirBloque('blkDocumentos');
       } catch (e) { console.error(e); Toast.show('Error al iniciar', 'bad'); }
     });
     window.addEventListener('popstate', () => {

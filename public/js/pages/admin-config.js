@@ -89,6 +89,10 @@
       type: 'user-picker', emptyHint: 'si está vacío, se notifica a recepción',
       hint: 'Quién recibe el resumen diario de los equipos que un cliente no devolvió y hay que facturarle, con el monto y cuántos días llevan. Ahí mismo se avisa cuáles pasaron a cobranza (a los 10 días) y cuáles no se pueden facturar todavía porque les falta ponerles precio. Vacío = se notifica a recepción, que es quien cierra las devoluciones.' },
 
+    { key: 'email_expediente', section: 'correos', label: 'Documentos que sube el cliente (expediente) → quién los revisa',
+      type: 'user-picker', emptyHint: 'si está vacío, se usa el buzón de cobranza de arriba',
+      hint: 'Quién recibe el aviso cuando un cliente sube documentos a su expediente desde el enlace (Aviso de Operación o Registro Público, cédula del representante, recibo de servicio) para abrirlos y marcarlos como revisados. Vacío = el mismo buzón de cobranza.' },
+
     { key: 'stock_minimo_default',      section: 'inventario', label: 'Stock mínimo por defecto (piezas nuevas)',
       type: 'int',  min: 0,     max: 1000,
       hint: 'Placeholder usado al crear una pieza nueva. No modifica las existentes.' },

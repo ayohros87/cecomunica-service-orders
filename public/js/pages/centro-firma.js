@@ -124,6 +124,7 @@ Object.assign(window.Centro, {
             <input class="form-input" id="wfEmail" type="email" value="${this.esc(this.cliente.representante_email || this.cliente.email || '')}" placeholder="correo del cliente"></div>
           <button class="btn btn-ghost" onclick="Centro._enviarFirmaCorreo('${this.esc(c.id)}','${this.esc(sid)}')">Enviar correo</button>
         </div>
+        ${this._avisoExpedienteFirmaHtml ? this._avisoExpedienteFirmaHtml() : ''}
         <p style="margin:12px 0 0; font-size:12.5px; color:var(--fg-3);">
           ¿Prefieres <b>papel</b>? Imprime el <b>Documento completo</b> (menú ⋯ del contrato), recoge la firma y
           sube el firmado desde ese mismo menú: eso también activa el contrato. En la tablet de recepción no se firman contratos.</p>

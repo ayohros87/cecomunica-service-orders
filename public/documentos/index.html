@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Documentos de su empresa — C Comunica</title>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <!-- Página PÚBLICA (2026-11-25, pedido de Zuleika): el cliente sube los
+       documentos de su expediente (Aviso de Operación o Registro Público,
+       cédula del representante, recibo de servicio) desde un enlace portador,
+       sin sesión:  ?s= es el enlace que pide el personal desde la ficha,
+       ?f= es el enlace de firma de su contrato. Aquí no se lee Firestore: la
+       página habla con la callable documentosClientePublico, que valida el
+       enlace, y sube los archivos a una carpeta de entrada sin lectura
+       (storage.rules: clientes_docs_entrada). La lógica vive en
+       js/pages/documentos-publico.js. -->
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    body { font: 15px/1.55 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1c2733; background: #f2f5f8; padding: 0 0 48px; }
+    .wrap { max-width: 640px; margin: 0 auto; padding: 16px; }
+    .cab { display: flex; gap: 12px; align-items: center; padding: 14px 16px; background: #fff; border-bottom: 3px solid #0B2A47; }
+    .cab img { height: 40px; }
+    .cab h1 { font-size: 16px; color: #0B2A47; }
+    .cab .sub { font-size: 11px; color: #5a6b7b; }
+    .card { background: #fff; border: 1px solid #dde5ec; border-radius: 12px; padding: 16px; margin-top: 14px; }
+    h2 { font-size: 17px; color: #0B2A47; margin-bottom: 6px; }
+    h3 { font-size: 15px; color: #0B2A47; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    label { display: block; font-size: 12.5px; font-weight: 600; color: #40525f; margin: 12px 0 4px; }
+    input[type=text], select { width: 100%; padding: 10px 12px; border: 1px solid #c8d4de; border-radius: 8px; font-size: 15px; background: #fff; font-family: inherit; }
+    .nota { font-size: 12.5px; color: #5a6b7b; margin-top: 6px; }
+    .aviso { background: #FBF3E0; border: 1px solid #E0A93A; color: #8A6415; border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-top: 12px; }
+    .aviso-ok { background: #E4F5EC; border-color: #1FA56B; color: #17714B; }
+    .aviso-error { background: #FBE9E9; border-color: #D24545; color: #8A1F1F; font-weight: 600; outline: none; }
+    .foto-btn { display: block; width: 100%; text-align: center; border: 2px dashed #c8d4de; border-radius: 10px;
+                padding: 14px; background: #fff; color: #40525f; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 10px; }
+    .foto-btn:focus-within { outline: 2px solid #0B2A47; outline-offset: 2px; }
+    .chip { font-size: 11.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: #E4F5EC; color: #17714B; }
+    .archivos { list-style: none; padding: 0; margin-top: 8px; }
+    .archivos li { display: flex; gap: 10px; align-items: center; padding: 8px 10px; margin-top: 6px; border: 1px solid #1FA56B; border-radius: 8px; background: #F3FBF7; font-size: 13.5px; }
+    .archivos li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .archivos li small { color: #5a6b7b; flex: none; }
+    button { font: 600 15px inherit; font-family: inherit; border: 0; border-radius: 10px; cursor: pointer; padding: 12px 18px; }
+    .btn-p { background: #0B2A47; color: #fff; width: 100%; margin-top: 16px; }
+    .btn-p:disabled { background: #9fb0bf; cursor: default; }
+    .btn-g { background: none; color: #5a6b7b; padding: 6px 10px; font-size: 13px; text-decoration: underline; }
+    .btn-x { background: none; color: #8A1F1F; padding: 2px 8px; font-size: 13px; flex: none; }
+    .estado { text-align: center; padding: 40px 16px; }
+    .estado .icono { font-size: 44px; }
+    .estado h2 { margin: 8px 0; }
+    .hidden { display: none !important; }
+  </style>
+  <script type="module" src="/js/entry/documentos-index.js"></script>
+</head>
+<body>
+  <div class="cab">
+    <img src="/brand/logo-lockup-horizontal.svg" alt="C Comunica">
+    <div>
+      <h1>C COMUNICA, S.A.</h1>
+      <div class="sub">RUC 32977-27-249966 DV 39 · Panamá · ventas@cecomunica.com · +507 279-5570</div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div id="cargando" class="estado"><div class="icono">⏳</div><p>Cargando…</p></div>
+
+    <div id="noValido" class="estado hidden">
+      <div class="icono">🔒</div>
+      <h2>Enlace no válido</h2>
+      <p class="nota">Este enlace no existe o fue retirado. Contacte a su asesor de C Comunica para que le envíe uno nuevo.</p>
+    </div>
+
+    <div id="vencido" class="estado hidden">
+      <div class="icono">⌛</div>
+      <h2>Este enlace venció</h2>
+      <p class="nota">Por seguridad, el enlace para subir documentos deja de funcionar después de un tiempo.
+        Pídale a su asesor de C Comunica que le envíe uno nuevo.</p>
+    </div>
+
+    <div id="sinRed" class="estado hidden">
+      <div class="icono">📶</div>
+      <h2>No se pudo cargar</h2>
+      <p class="nota">Revise su conexión a internet e intente de nuevo.</p>
+      <button type="button" class="btn-p" style="max-width:260px;" onclick="location.reload()">Reintentar</button>
+    </div>
+
+    <div id="completo" class="estado hidden">
+      <div class="icono">✅</div>
+      <h2>Documentos recibidos</h2>
+      <p>Gracias. Ya tenemos los documentos de <b id="cpCliente">su empresa</b>.</p>
+      <p class="nota">C Comunica los revisará y le avisará si hace falta algo más. Puede cerrar esta página.</p>
+    </div>
+
+    <div id="form" class="hidden">
+      <div class="card">
+        <h2>Documentos de <span id="fCliente">su empresa</span></h2>
+        <p>Para mantener al día el expediente de su empresa con C Comunica, suba una <b>foto</b> o un <b>PDF</b>
+          de cada documento. Puede hacerlo desde el celular.</p>
+        <p class="nota" id="fVence"></p>
+        <div id="fResultado" class="aviso aviso-ok hidden" role="status"></div>
+      </div>
+
+      <div id="fPedidos"></div>
+
+      <div class="card">
+        <label for="fNombre">Su nombre completo</label>
+        <input type="text" id="fNombre" autocomplete="name" maxlength="120">
+        <p class="nota">Queda registrado como la persona que entregó los documentos.</p>
+        <p class="nota">Los documentos se guardan de forma segura, con acceso restringido al personal autorizado de
+          C COMUNICA, S.A., y se usan únicamente para el expediente de su empresa como cliente, conforme a la
+          Ley 81 de 2019 de Protección de Datos Personales. Este enlace solo sirve para enviar documentos:
+          no permite ver los que ya entregó.</p>
+        <div id="fMsg" class="aviso aviso-error" role="alert" tabindex="-1" hidden></div>
+        <button type="button" class="btn-p" id="btnEnviar" onclick="DocsCliente.enviar()">Enviar documentos</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

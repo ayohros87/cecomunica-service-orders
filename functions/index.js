@@ -95,6 +95,9 @@ exports.runBackfill                   = require("./src/callable/runBackfill");
 exports.previewEmail                  = require("./src/callable/previewEmail");
 exports.getIdentificacionUrl          = require("./src/callable/getIdentificacionUrl");
 exports.getClienteDocUrl              = require("./src/callable/getClienteDocUrl");
+// Expediente legal: el cliente sube sus documentos desde un enlace (2026-11-25).
+exports.documentosClientePublico      = require("./src/callable/documentosClientePublico");
+exports.onClienteDocumentoWrite       = require("./src/triggers/clientes/onClienteDocumentoWrite");
 // Evidencia de identidad de la firma digital (cédula + selfie): URL firmada
 // de corta vida, gated a admin/gerencia, con auditoría por vista
 exports.getFirmaIdentidadUrl          = require("./src/callable/getFirmaIdentidadUrl");

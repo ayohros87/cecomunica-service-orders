@@ -314,9 +314,9 @@ Object.assign(window.Centro, {
       ? `${this.esc(c.representante)}${c.representante_cedula ? ` · ${c.representante_doc_tipo === 'pasaporte' ? 'pasaporte' : 'cédula'} <span class="cg-mono">${this.esc(c.representante_cedula)}</span>` : ''}${c.representante_email ? `<br><span style="color:var(--fg-3);">${this.esc(c.representante_email)}</span>` : ''}`
       : '';
     const tel = [c.telefono, c.email].filter(Boolean).map(x => this.esc(x)).join(' · ');
-    const docs = this._puedeVerDocs()
-      ? `<a href="#documentos" onclick="event.preventDefault(); Centro.mostrarTab('blkDocumentos')">${this._docsN == null ? 'Ver el expediente' : `${this._docsN} archivo${this._docsN === 1 ? '' : 's'}`}</a> · registro público, cédula, poderes`
-      : '';
+    // Qué falta del expediente legal, para TODOS los roles (2026-11-25): el
+    // vendedor no abre los documentos, pero es quien se los pide al cliente.
+    const docs = this._docsContactoHtml ? this._docsContactoHtml() : '';
     const filas = fila('Representante', rep) + fila('Contacto', tel) + fila('Acuses', c.email_acuses ? this.esc(c.email_acuses) : '')
       + fila('Dirección', c.direccion ? this.esc(c.direccion) : '') + fila('Documentos', docs);
     el.innerHTML = `<div class="cg-cardhd"><h2 class="cg-h2">Contacto</h2>
@@ -352,7 +352,7 @@ Object.assign(window.Centro, {
     if (this._bloquesDe === clienteId) return;
     this._bloquesDe = clienteId;
     this._eqSel = new Set();
-    this._docsN = null; this._docsDe = null;
+    this._docsN = null; this._docsDe = null; this._docs = null; this._docsSol = null; this._docsResumen = null; this._docsResumenDe = null;
     this._actividadDe = null;
     const act = document.getElementById('fActividad');
     if (act) act.innerHTML = '<div class="cg-vacio">Cargando el historial…</div>';
@@ -496,34 +496,9 @@ Object.assign(window.Centro, {
     return out.sort((a, b) => b.at - a.at);
   },
 
-  // ── Pestaña Documentos (expediente legal, PII): la misma lista que antes
-  // abría un modal desde el "⋯". Solo quien puede verlos tiene la pestaña. ──
-  _docsDe: null,
-  _docsN: null,
-  async pintarDocumentos() {
-    const cont = document.getElementById('fDocumentos');
-    const c = this.cliente;
-    if (!cont || !c || !this._puedeVerDocs()) return;
-    if (this._docsDe === c.id) return;
-    this._docsDe = c.id;
-    const urlSubir = `./ficha.html?id=${encodeURIComponent(c.id)}&from=centro&seccion=documentos`;
-    cont.innerHTML = `<p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">Expediente legal de <b>${this.esc(c.nombre || '')}</b>. Cada archivo se abre con un enlace que vence a los 5 minutos y queda registrado en la auditoría de PII.</p>
-      <div id="cgDocsList"><div class="cg-vacio">Cargando documentos…</div></div>
-      <p style="margin:12px 0 0; font-size:12.5px;"><a href="${urlSubir}">Cargar un documento ›</a></p>`;
-    try {
-      const docs = await ClienteDocumentosService.list(c.id);
-      if (this.cliente?.id !== c.id) return;
-      this._docsN = docs.length;
-      const n = document.getElementById('nDocumentos'); if (n) n.textContent = docs.length ? String(docs.length) : '';
-      const lista = document.getElementById('cgDocsList');
-      if (lista) lista.innerHTML = docs.length ? docs.map(d => this._docFilaHtml(d)).join('') : `<div class="cg-vacio">No hay documentos cargados para este cliente.</div>`;
-      this.pintarContacto();
-      if (window.lucide?.createIcons) lucide.createIcons();
-    } catch (err) {
-      const lista = document.getElementById('cgDocsList');
-      if (lista) lista.innerHTML = `<p style="color:#b91c1c; font-size:13px;">No se pudieron cargar los documentos: ${this.esc(err?.message || err)}</p>`;
-    }
-  },
+  // ── Pestaña Documentos (expediente legal, PII): vive en
+  // centro-documentos.js (pintarDocumentos), con los tres documentos que pide
+  // administración, el enlace para el cliente y la revisión de Cobros. ──
 
   // ── Selección en Equipos: la gestión sale de lo marcado ──────────────
   _eqSel: null,

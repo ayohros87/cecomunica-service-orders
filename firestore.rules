@@ -1432,6 +1432,38 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado"]));
       allow delete: if isAdmin();
     }
+    // Enlace para que el CLIENTE suba los documentos de su expediente
+    // (2026-11-25, pedido de Zuleika). A diferencia de firma_solicitudes,
+    // aquí NADA es público: la página del cliente (/documentos/) habla con la
+    // callable documentosClientePublico (Admin SDK), que valida el id del
+    // enlace en cada llamada. El personal lo crea desde la ficha, anota a
+    // quién lo envió y lo puede retirar; `recibidos` y `completada` los
+    // escribe solo la callable. Vence a los 30 días (tope de 31 aquí; la
+    // callable lo vuelve a comprobar contra creado_at).
+    match /documentos_solicitudes/{sid} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && userRole() in ["administrador","gerente","vendedor","recepcion"]
+        && request.resource.data.estado == "pendiente"
+        && request.resource.data.cliente_id is string
+        && request.resource.data.creado_por_uid == request.auth.uid
+        && request.resource.data.creado_at == request.time
+        && request.resource.data.vence_at is timestamp
+        && request.resource.data.vence_at <= request.time + duration.value(31, "d")
+        && !("recibidos" in request.resource.data);
+      allow update: if isSignedIn()
+        && userRole() in ["administrador","gerente","vendedor","recepcion"]
+        && resource.data.estado == "pendiente"
+        && (
+          // Retirar el enlace (se pidió por error, o al cliente equivocado).
+          (request.resource.data.estado == "cancelado"
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado","cancelado_por_uid","cancelado_at"]))
+          // A quién se le envió por correo, y cuándo.
+          || (request.resource.data.estado == "pendiente"
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["enviado_a","enviado_at"]))
+        );
+      allow delete: if false;
+    }
     // Firma en TABLET del acuse de devolución (2026-09-01): recepción "manda"
     // la firma a la tablet del mostrador (Lenovo TB311XU con sesión iniciada,
     // /firmar/tablet.html), que ESCUCHA las solicitudes pendientes en vivo y
