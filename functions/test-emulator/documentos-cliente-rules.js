@@ -110,11 +110,12 @@ async function main() {
   await assertFails(getBytes(ref(st, `clientes_docs_entrada/sol1/cedula-${M}-0.jpg`)));
   await assertFails(getBytes(ref(testEnv.authenticatedContext("administrador").storage(), `clientes_docs_entrada/sol1/cedula-${M}-0.jpg`)));
   ok("nadie lee la carpeta de entrada, ni el admin");
-  // "Un nombre ya usado no se pisa" (allow update: if false) NO se puede probar
-  // aquí: el emulador de Storage valida toda subida como `create`, exista o no
-  // el objeto (firebase-tools, emulator/storage/files.js); producción sí la
-  // evalúa como `update`. Nada depende de eso: la página nombra cada archivo
-  // con marca de tiempo y la callable saca de la carpeta lo que registra.
+  // Un nombre ya usado no se pisa. Lo impide `resource == null` en el create:
+  // una subida sobre un objeto que existe se evalúa como `create` (aquí y en
+  // producción — comprobado el 2026-11-25), así que `update: if false` solo
+  // no lo frenaba.
+  await assertFails(uploadBytes(ref(st, `clientes_docs_entrada/sol1/cedula-${M}-0.jpg`), bytes, jpg));
+  ok("un nombre ya usado no se pisa");
   await assertFails(deleteObject(ref(st, `clientes_docs_entrada/sol1/cedula-${M}-0.jpg`)));
   ok("ni se borra desde el navegador");
   await assertFails(uploadBytes(ref(st, `clientes_docs_entrada/sol1/cedula-${M}-3.jpg`), bytes, { contentType: "text/html" }));

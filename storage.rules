@@ -120,11 +120,17 @@ service firebase.storage {
     // comprueba que el archivo sea de verdad un PDF o un JPEG, lo MUEVE a
     // clientes_documentos/{cliente}/ y vacía la carpeta: lo que no se
     // registra no se queda. El nombre lo fija la página
-    // ({requisito}-{marca de tiempo}-{n}.pdf|jpg); sin update, un nombre ya
-    // usado no se puede pisar.
+    // ({requisito}-{marca de tiempo}-{n}.pdf|jpg).
+    //
+    // `resource == null` es lo que impide PISAR un archivo ya subido. El
+    // `update: if false` solo no alcanza: una subida nueva sobre un nombre que
+    // existe se evalúa como `create` (comprobado en producción el 2026-11-25:
+    // devolvía 200 y el contenido cambiaba). OJO: firmas_identidad/{sid}/, más
+    // arriba, tiene esa misma forma sin el `resource == null`.
     match /clientes_docs_entrada/{sid}/{file} {
       allow read:   if false;
-      allow create: if request.resource.size < 10 * 1024 * 1024
+      allow create: if resource == null
+                    && request.resource.size < 10 * 1024 * 1024
                     && request.resource.contentType.matches('(image/jpeg|application/pdf)')
                     && file.matches('(constitucion|cedula|direccion)-[0-9]+-[0-9]+[.](pdf|jpg)');
       allow update, delete: if false;
