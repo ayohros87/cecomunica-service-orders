@@ -125,8 +125,8 @@ service firebase.storage {
     // `resource == null` es lo que impide PISAR un archivo ya subido. El
     // `update: if false` solo no alcanza: una subida nueva sobre un nombre que
     // existe se evalúa como `create` (comprobado en producción el 2026-11-25:
-    // devolvía 200 y el contenido cambiaba). OJO: firmas_identidad/{sid}/, más
-    // arriba, tiene esa misma forma sin el `resource == null`.
+    // devolvía 200 y el contenido cambiaba). firmas_identidad/{sid}/, más
+    // abajo, lleva el mismo candado desde ese día.
     match /clientes_docs_entrada/{sid}/{file} {
       allow read:   if false;
       allow create: if resource == null
@@ -198,16 +198,29 @@ service firebase.storage {
     // callable getFirmaIdentidadUrl (URL firmada de 5 min + auditoría), igual
     // que la cédula de entrega. Sin update/delete: purga por retención vía
     // admin SDK.
+    //
+    // La evidencia NO SE PISA (2026-11-25): `resource == null` exige que el
+    // nombre esté libre. Hasta ese día quien tuviera el enlace podía subir
+    // otra cedula.jpg / selfie.jpg encima DESPUÉS de firmar — una subida sobre
+    // un objeto que existe se evalúa como `create`, y el `update: if false`
+    // solo no la frenaba. La página sube cada foto con marca de tiempo
+    // (cedula-{ms}.jpg, selfie-{ms}.jpg) para que un reintento no choque; los
+    // nombres fijos de antes siguen valiendo UNA vez, por si alguien tenía la
+    // página abierta durante el despliegue. Solo esos nombres y solo JPEG (la
+    // página siempre comprime a JPEG): ya no entra cualquier image/* con
+    // cualquier nombre.
     match /firmas_identidad/{sid}/{file} {
       allow read:   if false;
-      // Fotos de identidad (cédula, selfie): imagen <6MB. El documento que
+      // Fotos de identidad (cédula, selfie): JPEG <6MB. El documento que
       // autoriza a un firmante distinto al representante (poder, Registro
       // Público, acta — 2026-09-24) puede venir en PDF y pesar hasta 10MB.
-      allow create: if (request.resource.size < 6 * 1024 * 1024
-                    && request.resource.contentType.matches('image/.*'))
+      allow create: if resource == null
+                    && ((file.matches('(cedula|selfie)(-[0-9]+)?[.]jpg')
+                    && request.resource.size < 6 * 1024 * 1024
+                    && request.resource.contentType == 'image/jpeg')
                     || (file.matches('autorizacion-[0-9]+[.](pdf|jpg)')
                     && request.resource.size < 10 * 1024 * 1024
-                    && request.resource.contentType.matches('(image/.*|application/pdf)'));
+                    && request.resource.contentType.matches('(image/jpeg|application/pdf)')));
       allow update, delete: if false;
     }
 

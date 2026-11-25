@@ -401,6 +401,7 @@
 
     // ── Evidencia de identidad: cédula y selfie en TOMAS SEPARADAS ──
     _fotos: { cedula: null, selfie: null },
+    _subidas: {},   // { cedula: { blob, path }, selfie: {…} } — lo ya subido en esta visita
     armarFotos() {
       const wire = (inputId, btnId, prevId, clave, listo) => {
         document.getElementById(inputId).addEventListener('change', async (e) => {
@@ -536,13 +537,24 @@
       btn.disabled = true; btn.textContent = 'Subiendo evidencia…';
       try {
         // Evidencia de identidad a Storage (path del enlace — inadivinable).
+        // Cada foto sube con marca de tiempo en el nombre (2026-11-25): las
+        // reglas de Storage ya no dejan PISAR un archivo que existe
+        // (`resource == null`), así que la evidencia de una firma no se puede
+        // reemplazar después — y un reintento tras una subida a medias no se
+        // tranca, porque sube con otro nombre. La foto que ya subió en un
+        // intento anterior no se repite (_subidas).
         const st = firebase.storage();
-        const cedPath = `firmas_identidad/${this.sid}/cedula.jpg`;
-        const selPath = `firmas_identidad/${this.sid}/selfie.jpg`;
-        await st.ref(cedPath).put(this._fotos.cedula, { contentType: 'image/jpeg' });
-        await st.ref(selPath).put(this._fotos.selfie, { contentType: 'image/jpeg' });
-        // Nombre con marca de tiempo: Storage no deja sobrescribir (update:false)
-        // y un reintento tras una subida a medias no debe trancar la firma.
+        const subir = async (clave) => {
+          const blob = this._fotos[clave];
+          const ya = this._subidas[clave];
+          if (ya && ya.blob === blob) return ya.path;
+          const path = `firmas_identidad/${this.sid}/${clave}-${Date.now()}.jpg`;
+          await st.ref(path).put(blob, { contentType: 'image/jpeg' });
+          this._subidas[clave] = { blob, path };
+          return path;
+        };
+        const cedPath = await subir('cedula');
+        const selPath = await subir('selfie');
         let autPath = null;
         if (requiereAut && this._autorizacion) {
           autPath = `firmas_identidad/${this.sid}/autorizacion-${Date.now()}.${this._autorizacion.ext}`;

@@ -116,7 +116,9 @@ async function abrir({ email = null, viewport = 'escritorio' } = {}) {
       return req.continue();
     } catch (e) { console.error('interceptor:', e.message); try { req.continue(); } catch {} }
   });
-  page.on('console', m => { if (m.type() === 'error') s.errores.push(m.text().slice(0, 220)); });
+  // "Failed to load resource … 400" no dice de dónde: se anota la URL.
+  page.on('response', r => { if (r.status() >= 400 && !/favicon/.test(r.url())) s.errores.push(`HTTP ${r.status()} ${r.request().method()} ${r.url().slice(0, 170)}`); });
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) s.errores.push(m.text().slice(0, 220)); });
   page.on('pageerror', e => s.errores.push('pageerror ' + String(e).slice(0, 220)));
   page.on('dialog', async d => { s.errores.push('dialog nativo: ' + d.message().slice(0, 100)); await d.accept(); });
   await page.evaluateOnNewDocument(() => {
@@ -530,23 +532,42 @@ ok(/autorizar el uso de sus fotos/.test(await firmante.page.$eval('#fMsg', e => 
   && (await db.doc(`firma_solicitudes/${fsid2}`).get()).data().estado === 'pendiente', 'sin marcar el consentimiento no se firma');
 await firmante.page.evaluate(() => { document.getElementById('fConsentBio').click(); });
 await firmante.captura('16-firma-consentimiento-expediente', true);
+// Un intento que falla DESPUÉS de subir las fotos (aquí: la firma no se pudo
+// leer del lienzo) no tranca el reintento ni vuelve a subir las mismas fotos.
+await firmante.page.evaluate(() => { const real = Firma._pad.snapshot; Firma._pad.snapshot = () => { Firma._pad.snapshot = real; throw new Error('fallo de prueba'); }; });
+await firmante.page.evaluate(() => Firma.enviar());
+await firmante.page.waitForFunction(() => /No se pudo registrar la firma/.test(document.getElementById('fMsg').textContent), { timeout: 40000 });
+const tras1 = (await bucket.getFiles({ prefix: `firmas_identidad/${fsid2}/` }))[0].map(f => f.name.split('/').pop()).sort();
+ok(tras1.length === 2 && /^cedula-[0-9]{13}[.]jpg$/.test(tras1[0]) && /^selfie-[0-9]{13}[.]jpg$/.test(tras1[1]), `las fotos suben con marca de tiempo: ${tras1.join(', ')}`);
 await firmante.page.evaluate(() => Firma.enviar());
 await firmante.page.waitForSelector('#yaFirmado:not(.hidden)', { timeout: 40000 });
+const tras2 = (await bucket.getFiles({ prefix: `firmas_identidad/${fsid2}/` }))[0].map(f => f.name.split('/').pop()).sort();
+ok(tras2.join() === tras1.join(), 'el reintento firma sin trancarse y sin subir las fotos otra vez');
 const firmada = (await db.doc(`firma_solicitudes/${fsid2}`).get()).data();
 ok(firmada.estado === 'firmado' && firmada.firma.consent_expediente === true && firmada.firma.consent_biometrico === true,
   'la firma queda con la marca consent_expediente (y la de siempre)');
-ok((await bucket.file(`firmas_identidad/${fsid2}/cedula.jpg`).exists())[0], 'la foto de la cédula quedó en la evidencia de la firma');
+const cedFirma = firmada.firma.cedula_path, selFirma = firmada.firma.selfie_path;
+ok(cedFirma === `firmas_identidad/${fsid2}/${tras1[0]}` && selFirma === `firmas_identidad/${fsid2}/${tras1[1]}`
+  && (await bucket.file(cedFirma).exists())[0] && (await bucket.file(selFirma).exists())[0], 'la firma apunta a SUS dos fotos');
+// Con el enlace en la mano, después de firmar: la evidencia no se reemplaza.
+t = await firmante.page.evaluate(async (ced, sel) => {
+  const blob = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 7, 7, 7])], { type: 'image/jpeg' });
+  const intento = async (ruta) => { try { await firebase.storage().ref(ruta).put(blob, { contentType: 'image/jpeg' }); return 'SUBIÓ'; } catch (e) { return e.code || String(e); } };
+  return [await intento(ced), await intento(sel)];
+}, cedFirma, selFirma);
+const [mCed] = await bucket.file(cedFirma).getMetadata();
+ok(t.every(x => x === 'storage/unauthorized') && Number(mCed.size) > 100, `quien tiene el enlace no puede reemplazar la cédula ni la selfie (${t.join(', ')})`);
 const refCed = db.doc(`clientes/${cli.id}/documentos/cedula-firma-${fsid2}`);
 // Una firma hecha con el texto viejo no trae la marca: no se copia nada.
 const sinMarca = { ...firmada, firma: { ...firmada.firma } }; delete sinMarca.firma.consent_expediente;
 ok(await copiarCedulaAlExpediente(fsid2, sinMarca) === false && !(await refCed.get()).exists, 'una firma SIN la marca (texto viejo) no copia nada');
-ok(await copiarCedulaAlExpediente(fsid2, { ...firmada, firma: { ...firmada.firma, cedula_path: `firmas_identidad/otra-firma/cedula.jpg` } }) === false
+ok(await copiarCedulaAlExpediente(fsid2, { ...firmada, firma: { ...firmada.firma, cedula_path: `firmas_identidad/otra-firma/${tras1[0]}` } }) === false
   && !(await refCed.get()).exists, 'ni copia una ruta que no sea la de SU firma');
 ok(await copiarCedulaAlExpediente(fsid2, firmada) === true, 'con la marca, la cédula se copia al expediente');
 const dCed = (await refCed.get()).data() || {};
 ok(dCed.tipo === 'cedula_representante' && dCed.revision?.estado === 'pendiente' && dCed.origen?.cedula_de_firma === true
   && dCed.storage_path === `clientes_documentos/${cli.id}/cedula-firma-${fsid2}.jpg`, 'entra como cédula del representante, por revisar');
-ok((await bucket.file(dCed.storage_path || 'x').exists())[0] && (await bucket.file(`firmas_identidad/${fsid2}/cedula.jpg`).exists())[0],
+ok((await bucket.file(dCed.storage_path || 'x').exists())[0] && (await bucket.file(cedFirma).exists())[0],
   'es una COPIA: la evidencia de la firma sigue en su sitio');
 ok(await copiarCedulaAlExpediente(fsid2, firmada) === false, 'repetir el trigger no la duplica');
 await recalcular(cli.id);

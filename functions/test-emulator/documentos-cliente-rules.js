@@ -17,6 +17,10 @@
 //   4) Storage: sin sesión se puede CREAR en la carpeta de entrada un PDF o
 //      JPEG de menos de 10 MB con el nombre que fija la página, y nada más:
 //      ni leer, ni pisar, ni borrar, ni otro tipo, ni otra carpeta.
+//   5) Storage: la evidencia de identidad de la FIRMA (firmas_identidad) no se
+//      puede reemplazar — ni la de una firma vieja (cedula.jpg) ni la de una
+//      nueva (cedula-{ms}.jpg) — y solo entran los nombres y tipos que usa
+//      la página de firma.
 const fs = require("fs");
 const path = require("path");
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require("@firebase/rules-unit-testing");
@@ -134,6 +138,45 @@ async function main() {
   await assertFails(uploadBytes(ref(st, `clientes_documentos/cli-1/x.pdf`), bytes, pdf));
   await assertFails(getBytes(ref(st, `clientes_documentos/cli-1/x.pdf`)));
   ok("sin sesión no se escribe ni se lee el expediente (clientes_documentos)");
+
+  // ── 5) Storage: la evidencia de la firma no se reemplaza ──
+  // Una firma de ANTES del arreglo: nombres fijos, ya subidos.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await uploadBytes(ref(ctx.storage(), "firmas_identidad/firmaVieja/cedula.jpg"), bytes, jpg);
+    await uploadBytes(ref(ctx.storage(), "firmas_identidad/firmaVieja/selfie.jpg"), bytes, jpg);
+  });
+  const otra = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 9, 9, 9, 9, 9]);
+  await assertFails(uploadBytes(ref(st, "firmas_identidad/firmaVieja/cedula.jpg"), otra, jpg));
+  await assertFails(uploadBytes(ref(st, "firmas_identidad/firmaVieja/selfie.jpg"), otra, jpg));
+  ok("la cédula y la selfie de una firma ya hecha no se pisan (nombres fijos de antes)");
+  await assertSucceeds(uploadBytes(ref(st, `firmas_identidad/firmaNueva/cedula-${M}.jpg`), bytes, jpg));
+  await assertSucceeds(uploadBytes(ref(st, `firmas_identidad/firmaNueva/selfie-${M}.jpg`), bytes, jpg));
+  ok("la página nueva sube cedula-{ms}.jpg y selfie-{ms}.jpg sin sesión");
+  await assertFails(uploadBytes(ref(st, `firmas_identidad/firmaNueva/cedula-${M}.jpg`), otra, jpg));
+  await assertFails(uploadBytes(ref(st, `firmas_identidad/firmaNueva/selfie-${M}.jpg`), otra, jpg));
+  ok("tampoco se pisan las de nombre con marca de tiempo");
+  await assertSucceeds(uploadBytes(ref(st, `firmas_identidad/firmaNueva/cedula-${M + 1}.jpg`), bytes, jpg));
+  ok("un reintento sube con otro nombre: no se tranca");
+  await assertSucceeds(uploadBytes(ref(st, "firmas_identidad/firmaAbierta/cedula.jpg"), bytes, jpg));
+  await assertFails(uploadBytes(ref(st, "firmas_identidad/firmaAbierta/cedula.jpg"), otra, jpg));
+  ok("una página abierta desde antes del despliegue todavía sube cedula.jpg — una sola vez");
+  await assertSucceeds(uploadBytes(ref(st, `firmas_identidad/firmaNueva/autorizacion-${M}.pdf`), bytes, pdf));
+  await assertSucceeds(uploadBytes(ref(st, `firmas_identidad/firmaNueva/autorizacion-${M + 1}.jpg`), bytes, jpg));
+  await assertFails(uploadBytes(ref(st, `firmas_identidad/firmaNueva/autorizacion-${M}.pdf`), otra, pdf));
+  ok("el documento de autorización entra en PDF o JPEG y tampoco se pisa");
+  await assertFails(uploadBytes(ref(st, "firmas_identidad/firmaNueva/otra-cosa.jpg"), bytes, jpg));
+  await assertFails(uploadBytes(ref(st, `firmas_identidad/firmaNueva/cedula-${M + 2}.png`), bytes, { contentType: "image/png" }));
+  await assertFails(uploadBytes(ref(st, `firmas_identidad/firmaNueva/cedula-${M + 3}.jpg`), bytes, { contentType: "image/svg+xml" }));
+  await assertFails(uploadBytes(ref(st, `firmas_identidad/firmaNueva/selfie-${M + 4}.jpg`), bytes, pdf));
+  await assertFails(uploadBytes(ref(st, `firmas_identidad/firmaNueva/sub/cedula-${M}.jpg`), bytes, jpg));
+  ok("solo los nombres de la página y solo JPEG (ni PNG, ni SVG, ni PDF en la foto, ni subcarpetas)");
+  await assertFails(uploadBytes(ref(st, `firmas_identidad/firmaNueva/cedula-${M + 5}.jpg`), new Uint8Array(6 * 1024 * 1024 + 1), jpg));
+  ok("una foto de 6 MB o más no entra");
+  await assertFails(getBytes(ref(st, `firmas_identidad/firmaNueva/cedula-${M}.jpg`)));
+  await assertFails(getBytes(ref(testEnv.authenticatedContext("administrador").storage(), `firmas_identidad/firmaNueva/cedula-${M}.jpg`)));
+  await assertFails(deleteObject(ref(st, `firmas_identidad/firmaNueva/cedula-${M}.jpg`)));
+  await assertFails(deleteObject(ref(testEnv.authenticatedContext("administrador").storage(), `firmas_identidad/firmaNueva/cedula-${M}.jpg`)));
+  ok("nadie la lee ni la borra desde el navegador, ni el admin");
 
   await testEnv.cleanup();
   console.log(`\n${n} comprobaciones OK`);
