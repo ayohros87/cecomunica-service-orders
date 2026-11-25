@@ -131,8 +131,8 @@
           ${avisoEnvio}
           ${motivosHtml}
           <div style="margin-top:8px; padding:8px; border:1px dashed var(--border-default); border-radius:8px; max-width:420px;">
-            ${bloque('Venta · pago único', tot.venta, '', tot.hayAlquiler && tot.hayVenta)}
-            ${tot.hayAlquiler ? bloque('Alquiler · por mes', tot.alquiler, '/mes', true) : ''}
+            ${bloque('Pago único', tot.venta, '', tot.hayAlquiler && tot.hayVenta)}
+            ${tot.hayAlquiler ? bloque('Mensualidad', tot.alquiler, '/mes', true) : ''}
             ${tot.hayAlquiler ? `
             <div style="border-top:1px solid var(--border-default); margin-top:8px; padding-top:8px; font-size:12.5px; color:var(--fg-3);">
               <div style="display:flex; justify-content:space-between;"><span>Plazo acordado</span><strong>${tot.plazoMeses > 0 ? tot.plazoMeses + ' meses' : 'sin declarar'}</strong></div>
@@ -152,20 +152,20 @@
         <table class="app-table" style="font-size:13px; min-width:520px;">
           <thead>
             <tr><th>Descripción</th><th style="text-align:center;">Cant.</th>
-              ${tot.hayAlquiler ? '<th style="text-align:center;">Modalidad</th>' : ''}
+              ${tot.conModalidad ? '<th style="text-align:center;">Modalidad</th>' : ''}
               <th style="text-align:right;">P. unit.</th><th style="text-align:right;">Desc.</th><th style="text-align:right;">Total</th></tr>
           </thead>
           <tbody>
             ${ui.items.map(it => {
-              const esAlq = T.esAlquiler(it);
+              const per = T.esMensual(it) && !T.esIncluido(it) ? '<span class="cc-per">/mes</span>' : '';
               return `
               <tr>
                 <td>${esc(it.nombre || '—')}${it.modelo ? ' · ' + esc(it.modelo) : ''}</td>
                 <td style="text-align:center;">${esc(it.cant)}</td>
-                ${tot.hayAlquiler ? `<td style="text-align:center;"><span class="cc-mod-chip ${esAlq ? 'es-alquiler' : 'es-venta'}">${esAlq ? 'Alquiler' : 'Venta'}</span></td>` : ''}
-                <td style="text-align:right;">${FMT.money(it.precio)}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</td>
+                ${tot.conModalidad ? `<td style="text-align:center;">${T.esTexto(it) ? '' : `<span class="cc-mod-chip ${T.claseModalidad(it)}">${esc(T.etiquetaModalidad(it))}</span>`}</td>` : ''}
+                <td style="text-align:right;">${FMT.money(it.precio)}${per}</td>
                 <td style="text-align:right;${Number(it.desc || 0) > Number(policyCfg?.descuentoMaxPct ?? T.POLICY_DEFAULT.descuentoMaxPct) ? ' color:#B91C1C; font-weight:600;' : ''}">${Number(it.desc || 0) > 0 ? Number(it.desc) + '%' : '—'}</td>
-                <td style="text-align:right;">${FMT.money(T.lineTotal(it))}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</td>
+                <td style="text-align:right;">${FMT.money(T.lineTotal(it))}${per}</td>
               </tr>`;
             }).join('')}
           </tbody>

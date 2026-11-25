@@ -349,16 +349,18 @@
                 <thead>
                   <tr><th style="width:40px;">#</th><th>Descripción</th>
                     <th style="width:70px; text-align:center;">Cant.</th>
-                    ${t.hayAlquiler ? '<th style="width:88px; text-align:center;">Modalidad</th>' : ''}
+                    ${t.conModalidad ? '<th style="width:118px; text-align:center;">Modalidad</th>' : ''}
                     <th style="width:100px; text-align:right;">P. unit.</th>
                     <th style="width:110px; text-align:right;">Total</th></tr>
                 </thead>
                 <tbody>
                   ${cot.items.map((it, i) => {
-                    // La columna de modalidad solo aparece si la cotización
-                    // mezcla: en una de pura venta sería una columna con el
-                    // mismo valor en todas las filas.
-                    const esAlq = T.esAlquiler(it);
+                    // La columna de modalidad solo aparece si algún renglón
+                    // no es venta: en una de pura venta sería una columna con
+                    // el mismo valor en todas las filas. Un renglón de texto
+                    // (cant 0, $0) no lleva chip ni importes.
+                    const per = T.esMensual(it) && !T.esIncluido(it) ? '<span class="cc-per">/mes</span>' : '';
+                    const texto = T.esTexto(it);
                     return `
                     <tr>
                       <td class="td-muted">${String(i + 1).padStart(2, '0')}</td>
@@ -366,10 +368,10 @@
                         <div style="font-weight:600; color:var(--fg-1);">${esc(it.nombre)}</div>
                         <div style="font-size:11.5px; color:var(--fg-3);">${esc(it.spec || '')}${it.modelo ? ' · ' + esc(it.modelo) : ''}${it.desc > 0 ? ' · desc ' + it.desc + '%' : ''}</div>
                       </td>
-                      <td style="text-align:center; font-family:var(--font-mono);">${esc(it.cant)}</td>
-                      ${t.hayAlquiler ? `<td style="text-align:center;"><span class="cc-mod-chip ${esAlq ? 'es-alquiler' : 'es-venta'}">${esAlq ? 'Alquiler' : 'Venta'}</span></td>` : ''}
-                      <td style="text-align:right; font-family:var(--font-mono);">${FMT.money(it.precio)}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</td>
-                      <td style="text-align:right; font-family:var(--font-mono); font-weight:600; color:var(--fg-1);">${FMT.money(T.lineTotal(it))}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</td>
+                      <td style="text-align:center; font-family:var(--font-mono);">${texto ? '' : esc(it.cant)}</td>
+                      ${t.conModalidad ? `<td style="text-align:center;">${texto ? '' : `<span class="cc-mod-chip ${T.claseModalidad(it)}">${esc(T.etiquetaModalidad(it))}</span>`}</td>` : ''}
+                      <td style="text-align:right; font-family:var(--font-mono);">${texto ? '' : FMT.money(it.precio) + per}</td>
+                      <td style="text-align:right; font-family:var(--font-mono); font-weight:600; color:var(--fg-1);">${texto ? '' : FMT.money(T.lineTotal(it)) + per}</td>
                     </tr>`;
                   }).join('')}
                 </tbody>

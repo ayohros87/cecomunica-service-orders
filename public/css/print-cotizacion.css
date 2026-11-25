@@ -120,8 +120,8 @@
 .cq-trow { display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px; color: var(--fg3); border-bottom: 1px solid var(--stone); }
 .cq-trow .cq-tv { font-family: var(--font-mono); color: var(--ink); }
 .cq-trow.disc .cq-tv { color: var(--blue); }
-.cq-trow.total { margin-top: 8px; padding: 14px 16px; border: 0; border-radius: 8px; background: var(--navy); color: #fff; font-family: var(--font-display); font-weight: 700; font-size: 18px; align-items: baseline; }
-.cq-trow.total .cq-tv { font-family: var(--font-mono); font-weight: 700; color: #fff; font-size: 20px; }
+.cq-trow.total { gap: 12px; margin-top: 8px; padding: 14px 16px; border: 0; border-radius: 8px; background: var(--navy); color: #fff; font-family: var(--font-display); font-weight: 700; font-size: 18px; align-items: baseline; }
+.cq-trow.total .cq-tv { font-family: var(--font-mono); font-weight: 700; color: #fff; font-size: 20px; white-space: nowrap; }
 .cq-trow.total .cq-lblt { text-transform: uppercase; letter-spacing: .04em; }
 
 /* Propuesta con equipos en venta Y alquiler: dos cierres, no uno.
@@ -139,6 +139,9 @@
 .cq-tcap ~ .cq-trow.total .cq-tv { font-size: 17px; }
 .cq-per { font-family: var(--font-body); font-weight: 400; font-size: .68em; opacity: .8; margin-left: 2px; }
 .cq-table .cq-mod { font-size: 10.5px; color: var(--fg3); text-transform: uppercase; letter-spacing: .04em; }
+/* Renglón de solo texto (cant 0, $0): descripción del sistema o de lo que
+   incluye el servicio. Sin cifras, la descripción ocupa la fila. */
+.cq-table tr.cq-texto .cq-desc { font-weight: 400; }
 
 .cq-sign { display: flex; gap: 48px; padding: 12px 48px 0; margin-top: auto; }
 .cq-sign .cq-col { flex: 1; }

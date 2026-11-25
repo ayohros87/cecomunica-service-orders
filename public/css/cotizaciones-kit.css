@@ -126,11 +126,15 @@
 
 .cc-add-row { margin-top: var(--sp-2); }
 
-/* ── Modalidad del renglón (venta / alquiler) ────────────────
+/* ── Modalidad del renglón (venta / alquiler / servicio único / mensual) ──
    El borde izquierdo de color es la única señal que permite auditar una
-   cotización mixta sin leer control por control. */
+   cotización mixta sin leer control por control. Los servicios van en violeta;
+   el mensual, con borde punteado (se cobra cada mes, como el alquiler). */
 .cc-item-row.cc-mod-venta    { border-left: 3px solid var(--status-online, #1FA56B); }
 .cc-item-row.cc-mod-alquiler { border-left: 3px solid var(--accent); }
+.cc-item-row.cc-mod-servicio_unico   { border-left: 3px solid #7C5CC4; }
+.cc-item-row.cc-mod-servicio_mensual { border-left: 3px dashed #7C5CC4; }
+.cc-item-row .cc-item-mod { height: 34px; font-size: 12.5px; padding-left: 8px; padding-right: 24px; }
 
 .cc-seg {
   display: grid; grid-template-columns: 1fr 1fr; height: 34px;
@@ -177,7 +181,7 @@
   .cc-items-head { display: none; }
   .cc-item-row { grid-template-columns: 1fr 1fr; gap: 6px; padding: var(--sp-3); }
   .cc-item-row .cc-item-reorden, .cc-item-row .cc-item-total, .cc-item-row .cc-item-del { grid-column: span 1; }
-  .cc-item-row .cc-item-desc, .cc-item-row .cc-seg { grid-column: 1 / -1; }
+  .cc-item-row .cc-item-desc, .cc-item-row .cc-seg, .cc-item-row .cc-item-mod { grid-column: 1 / -1; }
   /* En táctil la manija no sirve: quedan solo las flechas. */
   .cc-item-row .cc-item-handle { display: none; }
   .cc-item-reorden { justify-content: flex-start; }
@@ -262,6 +266,9 @@
 }
 .cc-mod-chip.es-venta    { color: #0F6B47; background: #E7F6EF; border-color: #A8DCC4; }
 .cc-mod-chip.es-alquiler { color: var(--blue-700, #005781); background: var(--blue-50, #E6F4FB); border-color: var(--blue-200, #99D3EF); }
+.cc-mod-chip.es-servicio_unico,
+.cc-mod-chip.es-servicio_mensual { color: #5B3FA6; background: #F1ECFB; border-color: #CDBDF0; }
+.cc-mod-chip.es-incluido { color: var(--fg-3); background: transparent; border-color: var(--border-default); }
 
 /* Timeline historial */
 .cc-timeline { list-style: none; margin: 0; padding: 0; }

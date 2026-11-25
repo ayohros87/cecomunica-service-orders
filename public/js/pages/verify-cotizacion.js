@@ -60,10 +60,10 @@
       <div class="cq-trow total"><span class="cq-lblt">${titulo}</span><span class="cq-tv">${FMT.money(b.total)}${sufijo}</span></div>`;
 
     return `
-      ${bloque(snap.ventaDetalle, 'Total equipos', '', snap.hayVenta ? 'Equipos en venta' : '')}
-      ${bloque(snap.alquilerDetalle, 'Mensualidad', '<span class="cq-per">/mes</span>', 'Alquiler mensual')}
+      ${bloque(snap.ventaDetalle, 'Pago único', '', snap.hayVenta ? 'Una sola vez' : '')}
+      ${bloque(snap.alquilerDetalle, 'Mensualidad', '<span class="cq-per">/mes</span>', 'Cada mes')}
       ${Number(snap.plazoMeses) > 0
-        ? `<div class="cq-trow"><span>Plazo del alquiler</span><span class="cq-tv">${Number(snap.plazoMeses)} meses</span></div>`
+        ? `<div class="cq-trow"><span>Plazo</span><span class="cq-tv">${Number(snap.plazoMeses)} meses</span></div>`
         : ''}`;
   }
 
@@ -71,6 +71,10 @@
     if (!snap) { showError('La cotización no contiene datos.'); return; }
     const cli = snap.cliente || {};
     const ej = snap.ejecutivo || {};
+    // Columna "Modalidad": los espejos nuevos la traen resuelta (`conModalidad`,
+    // también con servicios); los ya emitidos caen a `hayAlquiler`, que es lo
+    // que decidía la columna cuando se enviaron.
+    const conMod = snap.conModalidad != null ? !!snap.conModalidad : !!snap.hayAlquiler;
     const dirA = $('ptMeta').dataset.dirigidoA || cli.representante || '';
     const dirEmail = $('ptMeta').dataset.dirigidoEmail || cli.email || '';
 
@@ -133,7 +137,7 @@
       <div class="cq-items">
         <table class="cq-table">
           <thead><tr><th>#</th><th>Descripción</th><th class="c">Cant.</th>
-            ${snap.hayAlquiler ? '<th class="c">Modalidad</th>' : ''}
+            ${conMod ? '<th class="c">Modalidad</th>' : ''}
             <th class="r">Precio unit.</th>
             ${T.hayDescLineas(snap.items) ? '<th class="c">Desc.</th>' : ''}
             <th class="r">Total</th></tr></thead>
@@ -141,7 +145,7 @@
             <!-- Mismo cuerpo agrupado por equipo que la impresión: lo que el
                  cliente abre desde el correo y lo que descarga en PDF tienen
                  que decir exactamente lo mismo. -->
-            ${T.filasPorEquipoHtml(snap.items || [], { hayAlquiler: snap.hayAlquiler })}
+            ${T.filasPorEquipoHtml(snap.items || [], { conModalidad: conMod })}
           </tbody>
         </table>
       </div>

@@ -263,7 +263,7 @@
     const hayRentaCerrada = aceptadas.some(c => Number(c.total_mensual || 0) > 0);
     $('statPendSub').textContent = 'requieren seguimiento';
     $('statMontoLbl').textContent = 'Monto cerrado';
-    $('statMontoSub').textContent = (hayRentaCerrada ? 'aceptadas · alquiler a 12 meses' : 'solo aceptadas por el cliente') + ' · ' + sobre;
+    $('statMontoSub').textContent = (hayRentaCerrada ? 'aceptadas · lo mensual a 12 meses' : 'solo aceptadas por el cliente') + ' · ' + sobre;
     $('statTasaLbl').textContent = 'Tasa de cierre';
     $('statTasaSub').textContent = 'aceptadas / oportunidades · ' + sobre;
   }

@@ -52,10 +52,10 @@
     if (!t.hayAlquiler) return bloque(t.venta, 'Total', '', '');
 
     return `
-      ${bloque(t.venta, 'Total equipos', '', t.hayVenta ? 'Equipos en venta' : '')}
-      ${bloque(t.alquiler, 'Mensualidad', '<span class="cq-per">/mes</span>', 'Alquiler mensual')}
+      ${bloque(t.venta, 'Pago único', '', t.hayVenta ? 'Una sola vez' : '')}
+      ${bloque(t.alquiler, 'Mensualidad', '<span class="cq-per">/mes</span>', 'Cada mes')}
       ${t.plazoMeses > 0
-        ? `<div class="cq-trow"><span>Plazo del alquiler</span><span class="cq-tv">${t.plazoMeses} meses</span></div>`
+        ? `<div class="cq-trow"><span>Plazo</span><span class="cq-tv">${t.plazoMeses} meses</span></div>`
         : ''}`;
   }
 
@@ -120,7 +120,7 @@
         <table class="cq-table">
           <thead>
             <tr><th>#</th><th>Descripción</th><th class="c">Cant.</th>
-              ${t.hayAlquiler ? '<th class="c">Modalidad</th>' : ''}
+              ${t.conModalidad ? '<th class="c">Modalidad</th>' : ''}
               <th class="r">Precio unit.</th>
               ${T.hayDescLineas(cot.items) ? '<th class="c">Desc.</th>' : ''}
               <th class="r">Total</th></tr>
@@ -129,10 +129,10 @@
             <!-- Agrupado por equipo (reporte jefa de taller, punto 4): un
                  encabezado por radio con su modelo, su serie y el trabajo
                  realizado, en vez del contexto repetido en gris bajo cada fila.
-                 La columna de modalidad solo se imprime si la propuesta mezcla
-                 venta y alquiler; en una de pura venta sería la misma palabra
-                 en todas las filas. -->
-            ${T.filasPorEquipoHtml(cot.items, { hayAlquiler: t.hayAlquiler })}
+                 La columna de modalidad solo se imprime si algún renglón no es
+                 venta (alquiler o servicio); en una de pura venta sería la
+                 misma palabra en todas las filas. -->
+            ${T.filasPorEquipoHtml(cot.items, { conModalidad: t.conModalidad })}
           </tbody>
         </table>
       </div>

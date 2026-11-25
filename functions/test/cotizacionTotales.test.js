@@ -156,7 +156,7 @@ test("el motivo del techo enseña la cuenta cuando hay alquiler", () => {
     { items: [{ cant: 1, precio: 9000 }, alq({ cant: 1, precio: 700 })], itbmsPct: 0, plazoMeses: 24 }, POL);
   const m = r.motivos.join(" ");
   assert.match(m, /\$700\.00\/mes × 12 meses/);
-  assert.match(m, /\$9000\.00 de venta/);
+  assert.match(m, /\$9000\.00 de pago único/);
 });
 
 test("una venta pura no habla de meses en el motivo", () => {

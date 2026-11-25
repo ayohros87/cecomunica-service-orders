@@ -389,11 +389,21 @@
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
+  // Sufijo "/mes" del total de un renglón que se cobra cada mes.
+  const perMes = (it) => (T.esMensual(it) ? '<span class="cc-per">/mes</span>' : '');
+
+  // Título del precio según cómo se cobra el renglón.
+  const tituloPrecio = (it) => (T.esMensual(it) ? 'Precio POR MES de cada unidad' : 'Precio unitario (pago único)');
+
   function itemRowHtml(it) {
-    const esAlq = T.esAlquiler(it);
+    const mod = T.modalidadDe(it);
     const totalLinea = FMT.money(T.lineTotal(it));
+    // Las cuatro modalidades: venta/alquiler (equipo) y servicio único/mensual
+    // (activación, GPS, consola…). Un select y no botones: cuatro no caben.
+    const opciones = Object.entries(T.MODALIDADES).map(([k, m]) =>
+      `<option value="${k}" ${k === mod ? 'selected' : ''}>${m.label}</option>`).join('');
     return `
-      <div class="cc-item-row ${esAlq ? 'cc-mod-alquiler' : 'cc-mod-venta'}" data-id="${it.id}" draggable="true">
+      <div class="cc-item-row cc-mod-${mod}" data-id="${it.id}" draggable="true">
         <span class="cc-item-reorden">
           <span class="cc-item-handle" title="Arrastrar para reordenar"><i data-lucide="grip-vertical"></i></span>
           <span class="cc-item-arrows">
@@ -407,16 +417,12 @@
           <div class="cc-cat-pop" hidden></div>
         </div>
         <input class="form-input ctr-input cc-item-cant" type="number" min="0" value="${esc(it.cant)}">
-        <span class="cc-seg" role="group" aria-label="Modalidad del renglón">
-          <button type="button" class="cc-seg-btn cc-seg-venta ${esAlq ? '' : 'on'}" data-mod="venta"
-            aria-pressed="${esAlq ? 'false' : 'true'}" title="Pago único">Venta</button>
-          <button type="button" class="cc-seg-btn cc-seg-alquiler ${esAlq ? 'on' : ''}" data-mod="alquiler"
-            aria-pressed="${esAlq ? 'true' : 'false'}" title="Mensualidad">Alquiler</button>
-        </span>
+        <select class="form-select cc-item-mod" aria-label="Modalidad del renglón"
+          title="Equipo en venta o alquiler, o servicio de pago único o mensual">${opciones}</select>
         <input class="form-input num-input cc-item-precio" type="number" min="0" step="0.01" value="${esc(it.precio)}"
-          title="${esAlq ? 'Precio POR MES de cada unidad' : 'Precio unitario de venta'}">
+          title="${tituloPrecio(it)}">
         <input class="form-input ctr-input cc-item-descpct" type="number" min="0" max="100" value="${esc(it.desc)}">
-        <span class="cc-item-total">${totalLinea}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</span>
+        <span class="cc-item-total">${totalLinea}${perMes(it)}</span>
         <button class="btn btn-ghost btn-icon btn-sm cc-item-del" title="Eliminar"><i data-lucide="trash-2"></i></button>
       </div>
     `;
@@ -445,8 +451,9 @@
     const upd = (patch) => {
       const it = getIt(); if (!it) return;
       Object.assign(it, patch);
-      // Actualiza total de la fila sin re-render completo.
-      row.querySelector('.cc-item-total').textContent = FMT.money(T.lineTotal(it));
+      // Actualiza total de la fila sin re-render completo (con su "/mes": antes
+      // se perdía al teclear y el total mensual parecía un pago único).
+      row.querySelector('.cc-item-total').innerHTML = FMT.money(T.lineTotal(it)) + perMes(it);
       renderSummary();
     };
 
@@ -472,25 +479,30 @@
 
     // Modalidad: al cambiar se re-renderiza la fila entera porque cambian el
     // rótulo del total (/mes), el título del precio y el color del borde.
-    row.querySelectorAll('.cc-seg-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const it = getIt(); if (!it) return;
-        const nueva = btn.dataset.mod;
-        if (T.modalidadDe(it) === nueva) return;
-        it.modalidad = nueva;
-        // El precio guardado es el de la OTRA modalidad y no significa nada en
-        // esta: si el catálogo tiene precio para la nueva, se propone; si no,
-        // se limpia en vez de dejar un número que ya no aplica.
-        const cat = (catalogos.catalogo || []).find(c => c.modelo === it.modelo || c.nombre === it.nombre);
+    row.querySelector('.cc-item-mod').addEventListener('change', (e) => {
+      const it = getIt(); if (!it) return;
+      const nueva = e.target.value;
+      if (T.modalidadDe(it) === nueva) return;
+      it.modalidad = nueva;
+      // Un EQUIPO del catálogo tiene un precio de venta y otro de alquiler: el
+      // guardado es el de la otra modalidad y no significa nada en esta, así
+      // que se propone el del catálogo o se limpia. Un servicio, o un renglón
+      // escrito a mano, conserva su precio: pasar "GPS $12" de Venta a
+      // Servicio mensual es corregir CÓMO se cobra, no cuánto.
+      const cat = (catalogos.catalogo || []).find(c => !c.esCargo && it.modelo && c.modelo === it.modelo);
+      const equipo = nueva === 'venta' || nueva === 'alquiler';
+      let sinPrecio = false;
+      if (cat && equipo) {
         const sug = CotState.precioSugerido(cat, nueva);
         it.precio = sug != null ? sug : 0;
-        if (!draft.plazoMeses && nueva === 'alquiler') draft.plazoMeses = 12;
-        renderItems();
-        renderSummary();
-        if (sug == null && cat) {
-          Toast.show(`${cat.nombre} no tiene ${nueva === 'alquiler' ? 'tarifa de alquiler' : 'precio de venta'} en el catálogo — escríbelo a mano.`, 'warn');
-        }
-      });
+        sinPrecio = sug == null;
+      }
+      if (!draft.plazoMeses && T.esMensual(it)) draft.plazoMeses = 12;
+      renderItems();
+      renderSummary();
+      if (sinPrecio) {
+        Toast.show(`${cat.nombre} no tiene ${nueva === 'alquiler' ? 'tarifa de alquiler' : 'precio de venta'} en el catálogo — escríbelo a mano.`, 'warn');
+      }
     });
 
     // Drag/drop
@@ -531,31 +543,59 @@
     const precioChip = (p, m) => {
       const v = CotState.precioSugerido(p, m);
       const activo = m === mod ? ' es-activo' : '';
-      const txt = v != null ? FMT.money(v) + (m === 'alquiler' ? '/mes' : '') : 'sin precio';
+      const txt = v != null ? FMT.money(v) + (T.MODALIDADES[m].mensual ? '/mes' : '') : 'sin precio';
       return `<span class="cc-cat-price${activo}${v == null ? ' es-vacio' : ''}">${txt}</span>`;
     };
+    // Un servicio del catálogo de cargos (activación, GPS, consola…) trae su
+    // forma de cobro: un solo chip, con su modalidad.
     pop.innerHTML = matches.map((p, i) => `
-      <div class="cc-cat-item${i === 0 ? ' active' : ''}" data-modelo="${esc(p.modelo)}">
+      <div class="cc-cat-item${i === 0 ? ' active' : ''}" data-key="${esc(p.key)}">
         <div class="cc-cat-name">${esc(p.nombre)}</div>
         <div class="cc-cat-meta">
-          <span class="cc-cat-model">${esc(p.modelo)}</span>
+          ${p.esCargo
+            ? `<span>${esc(T.MODALIDADES[p.modalidad].label)}</span>${precioChip(p, p.modalidad)}`
+            : `<span class="cc-cat-model">${esc(p.modelo)}</span>
           <span>${esc(p.cat)}</span>
           ${precioChip(p, 'venta')}
-          ${precioChip(p, 'alquiler')}
+          ${precioChip(p, 'alquiler')}`}
         </div>
       </div>
     `).join('');
     pop.hidden = false;
     pop.querySelectorAll('.cc-cat-item').forEach(el => {
-      el.addEventListener('mousedown', (ev) => { ev.preventDefault(); pickCat(row, el.dataset.modelo); });
+      el.addEventListener('mousedown', (ev) => { ev.preventDefault(); pickCat(row, el.dataset.key); });
     });
   }
-  function pickCat(row, modelo) {
-    const p = (catalogos.catalogo || []).find(x => x.modelo === modelo);
+  function pickCat(row, key) {
+    const p = (catalogos.catalogo || []).find(x => x.key === key);
     if (!p) return;
     const id = row.dataset.id;
     const it = draft.items.find(x => x.id === id);
     if (!it) return;
+    // Servicio del catálogo de cargos: el renglón toma su modalidad (único o
+    // mensual) y su monto, igual que en el contrato. Se repinta la fila entera
+    // porque cambian el selector, el borde y el "/mes".
+    if (p.esCargo) {
+      it.modelo = ''; it.nombre = p.nombre; it.spec = p.spec || '';
+      it.modalidad = p.modalidad;
+      const sug = CotState.precioSugerido(p, p.modalidad);
+      it.precio = sug != null ? sug : 0;
+      if (!draft.plazoMeses && T.esMensual(it)) draft.plazoMeses = 12;
+      renderItems();
+      renderSummary();
+      if (sug == null) {
+        Toast.show(`${p.nombre} no tiene monto en el catálogo de cargos — escríbelo a mano.`, 'warn');
+        document.querySelector(`.cc-item-row[data-id="${id}"] .cc-item-precio`)?.focus();
+      }
+      return;
+    }
+    // Un equipo sobre un renglón que estaba como servicio vuelve a venta: el
+    // catálogo de equipos solo tiene precio de venta y de alquiler.
+    if (!['venta', 'alquiler'].includes(T.modalidadDe(it))) {
+      it.modalidad = 'venta';
+      row.className = 'cc-item-row cc-mod-venta';
+      row.querySelector('.cc-item-mod').value = 'venta';
+    }
     // El precio que se carga depende de la modalidad de ESTA fila: el de venta
     // es un pago único y el de alquiler es por mes.
     const mod = T.modalidadDe(it);
@@ -566,7 +606,7 @@
     row.querySelector('.cc-item-spec-input').value = p.spec || '';
     row.querySelector('.cc-item-precio').value = it.precio;
     row.querySelector('.cc-item-total').innerHTML =
-      FMT.money(T.lineTotal(it)) + (mod === 'alquiler' ? '<span class="cc-per">/mes</span>' : '');
+      FMT.money(T.lineTotal(it)) + perMes(it);
     row.querySelector('.cc-cat-pop').hidden = true;
     // Sin precio cargado NO se escribe 0 en silencio: un cero parece un precio
     // real y así salían propuestas en $0.00. Se avisa y se enfoca el campo.
@@ -583,7 +623,7 @@
     const idx = items.findIndex(el => el.classList.contains('active'));
     if (e.key === 'ArrowDown') { e.preventDefault(); const n = Math.min(idx + 1, items.length - 1); items.forEach(i => i.classList.remove('active')); items[n]?.classList.add('active'); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); const n = Math.max(idx - 1, 0); items.forEach(i => i.classList.remove('active')); items[n]?.classList.add('active'); }
-    else if (e.key === 'Enter') { e.preventDefault(); const act = items.find(i => i.classList.contains('active')); if (act) pickCat(row, act.dataset.modelo); }
+    else if (e.key === 'Enter') { e.preventDefault(); const act = items.find(i => i.classList.contains('active')); if (act) pickCat(row, act.dataset.key); }
     else if (e.key === 'Escape') { pop.hidden = true; }
   }
 
@@ -727,7 +767,7 @@
   function bloqueTotales(t) {
     const plazoInput = `
       <div class="form-field">
-        <label class="form-label" for="inpPlazo">Plazo del alquiler (meses)</label>
+        <label class="form-label" for="inpPlazo">Plazo (meses)</label>
         <input type="number" class="form-input" id="inpPlazo" min="0" max="120" step="1" value="${esc(draft.plazoMeses || '')}" placeholder="36">
       </div>`;
     return CotState.bloqueTotalesHtml(t, draft, { plazoInput });
@@ -746,7 +786,7 @@
           <label class="form-label">Descuento global %</label>
           <input type="number" class="form-input" id="inpDesc" min="0" max="100" value="${esc(draft.descuentoPct)}">
           <span style="display:block; font-size:11.5px; color:var(--fg-3); margin-top:2px;">
-            Sobre ${Number(policyCfg?.descuentoMaxPct ?? T.POLICY_DEFAULT.descuentoMaxPct)}% de descuento —global <b>o en cualquier renglón</b>— o ${FMT.money(Number(policyCfg?.totalMax ?? T.POLICY_DEFAULT.totalMax))} requiere aprobación.${t.hayAlquiler ? ' El alquiler cuenta hasta 12 meses.' : ''}
+            Sobre ${Number(policyCfg?.descuentoMaxPct ?? T.POLICY_DEFAULT.descuentoMaxPct)}% de descuento —global <b>o en cualquier renglón</b>— o ${FMT.money(Number(policyCfg?.totalMax ?? T.POLICY_DEFAULT.totalMax))} requiere aprobación.${t.hayAlquiler ? ' Lo mensual cuenta hasta 12 meses.' : ''}
           </span>
         </div>
         <div class="form-field">
@@ -771,7 +811,7 @@
       renderSummary();
     });
     $('selItbms').addEventListener('change', (e) => { draft.itbmsPct = Number(e.target.value); renderSummary(); });
-    // El campo de plazo solo existe cuando hay renglones de alquiler.
+    // El campo de plazo solo existe cuando hay renglones mensuales.
     $('inpPlazo')?.addEventListener('input', (e) => {
       draft.plazoMeses = Math.max(0, Math.min(120, Math.round(Number(e.target.value || 0))));
       marcarSucio();

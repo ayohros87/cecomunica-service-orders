@@ -8,6 +8,7 @@ import '/js/ui/modal.js';
 import '/js/services/cotizacionesService.js';
 import '/js/services/clientesService.js';
 import '/js/services/modelosService.js';
+import '/js/services/cargosService.js';
 import '/js/services/usuariosService.js';
 import '/js/services/empresaService.js';
 import '/js/services/mailService.js';

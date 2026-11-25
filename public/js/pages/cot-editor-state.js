@@ -133,6 +133,9 @@
       precioVenta,
       precioAlquiler,
       esAlquiler: m?.es_alquiler === true,
+      // Clave única del autocompletado: el código del modelo. Los servicios
+      // del catálogo de cargos usan "cargo:<id>" (ver mapCargoToCatItem).
+      key: m?.codigo || m?.modelo || m?.id,
       cat: m?.categoria || m?.tipo || 'Equipos',
       // Un modelo retirado del catálogo (activo:false) ya no se ofrece al
       // escribir, pero sigue en la lista para resolver renglones viejos.
@@ -140,14 +143,36 @@
     };
   }
 
+  // Servicio del catálogo de cargos (activación, GPS, consola…) como opción
+  // del autocompletado. Trae su forma de cobro —Único o Mensual, igual que en
+  // el contrato— y el renglón la toma al elegirlo.
+  function mapCargoToCatItem(c) {
+    const monto = Number(c?.monto_default || 0);
+    return {
+      key: 'cargo:' + c?.id,
+      modelo: '',
+      nombre: String(c?.concepto || '').trim(),
+      spec: '',
+      esCargo: true,
+      modalidad: c?.recurrente ? 'servicio_mensual' : 'servicio_unico',
+      monto,
+      precio: monto, precioVenta: 0, precioAlquiler: 0,
+      cat: 'Servicio',
+      activo: c?.activo !== false,
+    };
+  }
+
   // Precio sugerido del catálogo para una modalidad. Devuelve null cuando no
   // hay precio cargado: es distinto de 0 y las pantallas lo dicen ("sin
   // tarifa") en vez de escribir un cero que parece un precio real.
+  // Un servicio del catálogo de cargos tiene UN monto; un equipo, uno de venta
+  // y otro de alquiler (y ninguno de servicio).
   function precioSugerido(catItem, modalidad) {
     if (!catItem) return null;
-    const v = modalidad === 'alquiler'
-      ? Number(catItem.precioAlquiler || 0)
-      : Number(catItem.precioVenta || 0);
+    let v = 0;
+    if (catItem.esCargo) v = Number(catItem.monto || 0);
+    else if (modalidad === 'alquiler') v = Number(catItem.precioAlquiler || 0);
+    else if (modalidad === 'venta' || !modalidad) v = Number(catItem.precioVenta || 0);
     return v > 0 ? v : null;
   }
 
@@ -189,7 +214,9 @@
       desc: Number(it.desc || 0),
       // Modalidad del renglón. Ausente = venta: así una cotización anterior a
       // este campo se lee y recalcula exactamente igual que siempre.
-      modalidad: it.modalidad === 'alquiler' ? 'alquiler' : 'venta',
+      // Venta, alquiler, servicio único o servicio mensual (ver
+      // CotizacionTotales.MODALIDADES); lo desconocido cae a venta.
+      modalidad: window.CotizacionTotales.modalidadDe(it),
     }));
     // Resuelve ITBMS: prioriza `itbms_aplica` (esquema canónico). Fallback al
     // `itbmsPct` legacy y al default global FMT.ITBMS_RATE.
@@ -466,11 +493,15 @@
 
   // ── Bootstrap de catálogos ────────────────────────────────────────────────
   async function bootstrapCatalogos() {
-    const [clientesRaw, modelosRaw, vendedoresRaw, emisorRaw] = await Promise.all([
+    const [clientesRaw, modelosRaw, vendedoresRaw, emisorRaw, cargosRaw] = await Promise.all([
       (ClientesService.loadClientes ? ClientesService.loadClientes() : ClientesService.listClientes?.()) || [],
       ModelosService.getModelos(),
       UsuariosService.getVendedores(),
       EmpresaService.getDoc('emisor').catch(() => null),
+      // Catálogo de cargos (servicios). Si no carga, el editor sigue con los
+      // equipos: el vendedor puede escribir el servicio a mano.
+      (typeof CargosService !== 'undefined' ? CargosService.getCargos() : Promise.resolve([]))
+        .catch((e) => { console.warn('[cotizaciones] catálogo de cargos no disponible:', e?.message || e); return []; }),
     ]);
 
     // `clientes` es lo que se ofrece para elegir: excluye los borrados (los
@@ -492,7 +523,10 @@
     }
     clientes.sort((a, b) => (a.razon || '').localeCompare(b.razon || '', 'es', { sensitivity: 'base' }));
 
-    const catalogo = (modelosRaw || []).map(mapModeloToCatItem)
+    const catalogo = [
+      ...(modelosRaw || []).map(mapModeloToCatItem),
+      ...(cargosRaw || []).map(mapCargoToCatItem).filter(c => c.nombre),
+    ]
       .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' }));
 
     const ejecutivos = (vendedoresRaw || []).map(mapVendedorToEjec)
@@ -680,14 +714,14 @@
          </div>`
       : (t.plazoMeses > 0
           ? `<div class="cc-sum-grupo cc-sum-plazo">
-               <div class="cc-sum-row"><span>Plazo del alquiler</span><span class="v">${t.plazoMeses} meses</span></div>
+               <div class="cc-sum-row"><span>Plazo</span><span class="v">${t.plazoMeses} meses</span></div>
                <div class="cc-sum-row muted"><span>Compromiso de ${t.plazoMeses} meses</span><span class="v">${FMT.money(t.compromiso)}</span></div>
              </div>`
           : '');
 
     return `
-      ${t.hayVenta ? grupo('Total venta', 'var(--status-online, #1FA56B)', t.venta, '', 'es-venta') : ''}
-      ${grupo('Total mensual', 'var(--accent)', t.alquiler, '<span class="cc-per">/mes</span>', 'es-alquiler')}
+      ${t.hayVenta ? grupo('Pago único', 'var(--status-online, #1FA56B)', t.venta, '', 'es-venta') : ''}
+      ${grupo('Mensualidad', 'var(--accent)', t.alquiler, '<span class="cc-per">/mes</span>', 'es-alquiler')}
       ${plazoBloque}
       <div class="cc-sum-evaluado">
         <b>Valor evaluado a ${t.mesesComputables} ${t.mesesComputables === 1 ? 'mes' : 'meses'}</b>
@@ -1135,6 +1169,10 @@
       subtotal: t.subtotal, descGlobal: t.descGlobal, itbms: t.itbms, total: t.total,
       totalVenta: t.venta.total, totalMensual: t.alquiler.total,
       plazoMeses: t.plazoMeses, hayAlquiler: t.hayAlquiler, hayVenta: t.hayVenta,
+      // Columna "Modalidad" del documento: ya no depende solo de que haya
+      // alquiler (un servicio único también la pide). Los espejos viejos no lo
+      // traen y caen a `hayAlquiler`.
+      conModalidad: t.conModalidad,
       ventaDetalle: t.venta, alquilerDetalle: t.alquiler,
       // Taller: el espejo se congela diciendo qué documento es. Los espejos ya
       // emitidos no lo traen y se siguen viendo como se enviaron.
@@ -1271,7 +1309,7 @@
     });
     const itemsHtml = [...grupos.entries()].map(([spec, items]) => {
       const lis = items.map(it =>
-        `<li>${esc(it.nombre || '')}${it.modelo ? ` <span style="font-family:monospace;font-size:12px;">(${esc(it.modelo)})</span>` : ''} – ${Number(it.cant || 0)} × ${FMT.money(Number(it.precio || 0))}${T.esAlquiler(it) ? '/mes' : ''}${Number(it.desc || 0) > 0 ? ` <b>− ${Number(it.desc)}%</b> = ${FMT.money(T.lineTotal(it))}${T.esAlquiler(it) ? '/mes' : ''}` : ''}${T.esAlquiler(it) ? ' <span style="font-size:11px;color:#005781;">[alquiler]</span>' : ''}</li>`
+        `<li>${esc(it.nombre || '')}${it.modelo ? ` <span style="font-family:monospace;font-size:12px;">(${esc(it.modelo)})</span>` : ''} – ${Number(it.cant || 0)} × ${FMT.money(Number(it.precio || 0))}${T.esMensual(it) ? '/mes' : ''}${Number(it.desc || 0) > 0 ? ` <b>− ${Number(it.desc)}%</b> = ${FMT.money(T.lineTotal(it))}${T.esMensual(it) ? '/mes' : ''}` : ''}${T.modalidadDe(it) !== 'venta' && !T.esTexto(it) ? ` <span style="font-size:11px;color:#005781;">[${esc(T.etiquetaModalidad(it).toLowerCase())}]</span>` : ''}</li>`
       ).join('');
       const header = spec
         ? `<p style="margin:10px 0 4px;font:600 13px Arial,sans-serif;color:#374151;">${esc(spec)}</p>`
@@ -1318,8 +1356,8 @@
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Vendedor</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.ejecutivo_nombre || '-'}</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Validez</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.validezDias} días</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Introducción</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${obsEsc}</td></tr>
-          ${filaMail(t.venta, t.hayAlquiler ? 'Total venta' : 'Total', '', t.hayAlquiler && t.hayVenta, doc)}
-          ${t.hayAlquiler ? filaMail(t.alquiler, 'Total mensual', ' / mes', true, doc) : ''}
+          ${filaMail(t.venta, t.hayAlquiler ? 'Pago único' : 'Total', '', t.hayAlquiler && t.hayVenta, doc)}
+          ${t.hayAlquiler ? filaMail(t.alquiler, 'Mensualidad', ' / mes', true, doc) : ''}
           ${t.hayAlquiler ? `
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Plazo</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${t.plazoMeses > 0 ? t.plazoMeses + ' meses · compromiso ' + FMT.money(t.compromiso) : 'sin declarar'}</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Valor evaluado (${t.mesesComputables} meses)</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>${FMT.money(t.total)}</b> <span style="color:#6B7884;">= ${FMT.money(t.venta.total)} + ${FMT.money(t.alquiler.total)} × ${t.mesesComputables}</span></td></tr>` : ''}
@@ -1347,7 +1385,7 @@
     CONDICIONES_DEFAULT, PLANTILLAS_COND,
     EMISOR_FALLBACK,
     uid,
-    mapClienteToUI, mapModeloToCatItem, mapVendedorToEjec, precioSugerido,
+    mapClienteToUI, mapModeloToCatItem, mapCargoToCatItem, mapVendedorToEjec, precioSugerido,
     toUi, toDoc, nuevaCotizacion, nextCotizacionId, bootstrapCatalogos,
     filtrarClientes, mountClienteCombo, requiereAprobacionPara, bloqueTotalesHtml,
     cerrarPrompt, patchCierre, cierreToast, reenviarPrompt,

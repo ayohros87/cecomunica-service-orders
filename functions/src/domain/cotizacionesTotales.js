@@ -40,13 +40,64 @@ const CotizacionTotales = {
   // por el plazo completo mandaría a aprobación casi cualquier alquiler serio.
   MESES_TECHO: 12,
 
-  // Modalidad de un renglón. Ausente = 'venta' (retrocompatible).
-  modalidadDe(it) {
-    return it?.modalidad === 'alquiler' ? 'alquiler' : 'venta';
+  // Las cuatro modalidades. El orden es el del selector del editor.
+  MODALIDADES: {
+    venta:            { label: 'Venta',            mensual: false, servicio: false },
+    alquiler:         { label: 'Alquiler',         mensual: true,  servicio: false },
+    servicio_unico:   { label: 'Servicio único',   mensual: false, servicio: true },
+    servicio_mensual: { label: 'Servicio mensual', mensual: true,  servicio: true },
   },
 
+  // Modalidad de un renglón. Ausente o desconocida = 'venta' (retrocompatible).
+  modalidadDe(it) {
+    const m = it?.modalidad;
+    return Object.prototype.hasOwnProperty.call(this.MODALIDADES, m) ? m : 'venta';
+  },
+
+  // ¿El renglón se cobra cada mes? Decide el bucket y el sufijo "/mes".
+  esMensual(it) {
+    return this.MODALIDADES[this.modalidadDe(it)].mensual;
+  },
+
+  // Alias histórico de esMensual: "alquiler" fue durante un tiempo la única
+  // forma de cobro mensual. Lo nuevo usa esMensual.
   esAlquiler(it) {
-    return this.modalidadDe(it) === 'alquiler';
+    return this.esMensual(it);
+  },
+
+  // Renglón de solo texto: cantidad 0 y precio 0. Los vendedores lo usan para
+  // describir el sistema o lo que incluye el servicio; no lleva modalidad, ni
+  // cantidad, ni importes en el documento.
+  esTexto(it) {
+    return !(Number(it?.cant || 0) > 0) && !(Number(it?.precio || 0) > 0);
+  },
+
+  // Renglón con cantidad pero a $0: va incluido (batería "(INCLUIDO)",
+  // instalación gratis). Se rotula "Incluido", no "Venta".
+  esIncluido(it) {
+    return !this.esTexto(it) && !(Number(it?.precio || 0) > 0);
+  },
+
+  // Rótulo de la modalidad tal como lo lee el cliente. '' para un renglón de
+  // texto. Lo usan TODAS las pantallas (editor aparte): un solo vocabulario.
+  etiquetaModalidad(it) {
+    if (this.esTexto(it)) return '';
+    if (this.esIncluido(it)) return 'Incluido';
+    return this.MODALIDADES[this.modalidadDe(it)].label;
+  },
+
+  // Clase CSS del chip/celda: es-venta, es-alquiler, es-servicio_unico,
+  // es-servicio_mensual o es-incluido.
+  claseModalidad(it) {
+    return this.esIncluido(it) ? 'es-incluido' : 'es-' + this.modalidadDe(it);
+  },
+
+  // ¿El documento lleva columna "Modalidad"? Solo cuando algún renglón con
+  // importe no es venta: en una de pura venta sería la misma palabra en todas
+  // las filas.
+  conModalidad(items) {
+    return (Array.isArray(items) ? items : [])
+      .some((it) => !this.esTexto(it) && this.modalidadDe(it) !== 'venta');
   },
 
   // ¿Algún renglón trae descuento propio? Decide si el documento imprime la
@@ -99,8 +150,9 @@ const CotizacionTotales = {
     const descPct = Number(cot?.descuentoPct || 0);
     const itbmsPct = Number(cot?.itbmsPct || 0);
 
-    const venta = this._bucket(items.filter(it => !this.esAlquiler(it)), descPct, itbmsPct);
-    const alquiler = this._bucket(items.filter(it => this.esAlquiler(it)), descPct, itbmsPct);
+    // `venta` = todo lo de pago único; `alquiler` = todo lo mensual.
+    const venta = this._bucket(items.filter(it => !this.esMensual(it)), descPct, itbmsPct);
+    const alquiler = this._bucket(items.filter(it => this.esMensual(it)), descPct, itbmsPct);
 
     const hayAlquiler = alquiler.n > 0;
     const plazoMeses = this.plazoDe(cot);
@@ -135,6 +187,7 @@ const CotizacionTotales = {
       hayVenta: venta.n > 0,
       hayAlquiler,
       esMixta: venta.n > 0 && hayAlquiler,
+      conModalidad: this.conModalidad(items),
       plazoMeses,
       mesesComputables,
       compromiso,
@@ -208,7 +261,7 @@ const CotizacionTotales = {
       const meses = Number(input?.mesesComputables || 0);
       const mensual = Number(input?.alquilerMensual || 0);
       const detalle = meses > 0 && mensual > 0
-        ? ` (${FMT.money(Number(input?.ventaTotal || 0))} de venta + ${FMT.money(mensual)}/mes × ${meses} ${meses === 1 ? 'mes' : 'meses'})`
+        ? ` (${FMT.money(Number(input?.ventaTotal || 0))} de pago único + ${FMT.money(mensual)}/mes × ${meses} ${meses === 1 ? 'mes' : 'meses'})`
         : '';
       motivos.push(
         `El total ${FMT.money(total)}${detalle} supera el máximo para envío directo (${FMT.money(Number(pol.totalMax))}).`);
@@ -307,19 +360,22 @@ const CotizacionTotales = {
    * que va a bodega para reponer inventario, no algo que el cliente deba ver.
    *
    * @param {Array} items
-   * @param {{hayAlquiler:boolean}} opts
+   * @param {{conModalidad?:boolean, hayAlquiler?:boolean}} opts
+   *   `conModalidad` decide la columna; `hayAlquiler` es el nombre viejo del
+   *   mismo interruptor (lo siguen mandando los espejos públicos ya emitidos).
    * @returns {string} HTML de las filas (sin <tbody>)
    */
-  filasPorEquipoHtml(items, { hayAlquiler = false } = {}) {
+  filasPorEquipoHtml(items, { conModalidad, hayAlquiler = false } = {}) {
     const esc = (v) => FMT.esc(v);
     const grupos = this.agruparPorEquipo(items);
+    const colMod = conModalidad != null ? !!conModalidad : !!hayAlquiler;
     // La columna "Desc." aparece solo si algún renglón trae descuento — misma
     // regla que "Modalidad". Se decide AQUÍ (no la pasa el llamador) para que
     // el <thead> del llamador y estas filas nunca queden desalineados: ambos
     // preguntan a hayDescLineas sobre los mismos items.
     const hayDesc = this.hayDescLineas(items);
     // Columnas: # · Descripción · Cant. · [Modalidad] · Precio unit. · [Desc.] · Total
-    const cols = 5 + (hayAlquiler ? 1 : 0) + (hayDesc ? 1 : 0);
+    const cols = 5 + (colMod ? 1 : 0) + (hayDesc ? 1 : 0);
     let n = 0;
 
     return grupos.map((g) => {
@@ -336,24 +392,28 @@ const CotizacionTotales = {
         </tr>` : '';
 
       const filas = g.items.map((it) => {
-        const esAlq = this.esAlquiler(it);
+        const texto = this.esTexto(it);
+        // "/mes" solo donde hay un importe que se repite: un incluido a $0 no.
+        const per = this.esMensual(it) && !this.esIncluido(it) ? '<span class="cq-per">/mes</span>' : '';
         const pctLinea = Number(it?.desc || 0);
         // `spec` libre de una cotización comercial (Nº de parte, descripción)
         // va bajo el renglón; el del taller ya salió en el encabezado.
         const specLibre = this.esSpecEquipo(it.spec) ? '' : String(it.spec || '').trim();
         n++;
+        // Un renglón de texto (cant 0, $0) es descripción: sin "0", sin
+        // "$0.00" y sin modalidad, que es lo que lo hacía leerse como "Venta".
         return `
-        <tr>
+        <tr${texto ? ' class="cq-texto"' : ''}>
           <td class="idx">${String(n).padStart(2, '0')}</td>
           <td>
             <div class="cq-desc">${esc(it.nombre)}</div>
             ${it.modelo || specLibre ? `<div class="cq-spec">${it.modelo ? `<span class="cq-model">${esc(it.modelo)}</span>` : ''}${it.modelo && specLibre ? ' · ' : ''}${esc(specLibre)}</div>` : ''}
           </td>
-          <td class="qty">${esc(it.cant)}</td>
-          ${hayAlquiler ? `<td class="c cq-mod">${esAlq ? 'Alquiler' : 'Venta'}</td>` : ''}
-          <td class="num r">${FMT.money(it.precio)}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
-          ${hayDesc ? `<td class="num c">${pctLinea > 0 ? esc(pctLinea) + '%' : '—'}</td>` : ''}
-          <td class="num r">${FMT.money(this.lineTotal(it))}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
+          <td class="qty">${texto ? '' : esc(it.cant)}</td>
+          ${colMod ? `<td class="c cq-mod">${esc(this.etiquetaModalidad(it))}</td>` : ''}
+          <td class="num r">${texto ? '' : FMT.money(it.precio) + per}</td>
+          ${hayDesc ? `<td class="num c">${texto ? '' : pctLinea > 0 ? esc(pctLinea) + '%' : '—'}</td>` : ''}
+          <td class="num r">${texto ? '' : this.esIncluido(it) && !colMod ? 'Incluido' : FMT.money(this.lineTotal(it)) + per}</td>
         </tr>`;
       }).join('');
 
@@ -391,9 +451,10 @@ const CotizacionTotales = {
       if (!(cant > 0)) return;
       const parte = String(it.modelo || '').trim();
       const nombre = String(it.nombre || '').trim();
-      const alquiler = this.esAlquiler(it);
+      // `alquiler` = se cobra cada mes (equipo o servicio): decide el "/mes".
+      const alquiler = this.esMensual(it);
       const precio = FMT.round2(Number(it.precio || 0));
-      const key = `${norm(parte) || norm(nombre)}|${precio}|${alquiler ? 'a' : 'v'}`;
+      const key = `${norm(parte) || norm(nombre)}|${precio}|${this.modalidadDe(it)}`;
       if (!filas.has(key)) {
         filas.set(key, { parte, nombre, cant: 0, precio, total: 0, alquiler, _eq: new Set() });
       }
