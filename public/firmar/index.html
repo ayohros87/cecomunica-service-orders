@@ -187,7 +187,7 @@
           <input type="checkbox" id="fConsentBio">
           <span>Autorizo a <b>C COMUNICA, S.A.</b> a capturar y conservar la imagen de mi documento de
             identidad y mi fotografía, <b>únicamente para verificar mi identidad</b> como firmante de este
-            documento. Se conservarán de forma segura, con acceso restringido, mientras la relación
+            documento <b>y para el expediente de mi empresa como cliente</b>. Se conservarán de forma segura, con acceso restringido, mientras la relación
             contractual esté vigente y hasta 3 años después, conforme a la Ley 81 de 2019 de Protección
             de Datos Personales.</span>
         </div>
@@ -566,6 +566,12 @@
               autorizacion_nombre: String(this._autorizacion.nombre).slice(0, 120),
             } : {}),
             consent_biometrico: true,
+            // El texto que se acepta arriba (#fConsentBio) cubre desde el
+            // 2026-11-25 "el expediente de mi empresa como cliente": con esta
+            // marca onFirmaContrato copia la cédula del representante al
+            // expediente. Viaja en el MISMO archivo que el texto: si alguien
+            // cambia el texto y deja de cubrirlo, quita también la marca.
+            consent_expediente: true,
             acepta: true,
             user_agent: navigator.userAgent || '',
             firmado_at: firebase.firestore.FieldValue.serverTimestamp(),

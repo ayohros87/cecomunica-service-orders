@@ -141,3 +141,18 @@ test("expediente: los tipos del requisito existen en el catálogo del servicio d
     for (const t of q.tipos) assert.match(src, new RegExp(`value:\\s*"${t}"`), `falta el tipo ${t} en ClienteDocumentosService.TIPOS`);
   }
 });
+
+// La cédula de la firma se copia al expediente SOLO si el firmante lo
+// autorizó (onFirmaContrato exige `firma.consent_expediente === true`). El
+// texto que se acepta y la marca viven en la misma página: si uno cambia sin
+// el otro, se estaría copiando sin consentimiento, o dejando de copiar.
+test("expediente: /firmar/ estampa consent_expediente y su consentimiento cubre el expediente", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "..", "public", "firmar", "index.html"), "utf8");
+  const plano = html.replace(/<[^>]+>/g, "").replace(/\s+/g, " ");
+  const cubre = plano.includes("únicamente para verificar mi identidad como firmante de este documento y para el expediente de mi empresa como cliente.");
+  const estampa = /consent_expediente:\s*true/.test(html);
+  assert.equal(cubre, estampa, "el texto del consentimiento y la marca consent_expediente tienen que ir juntos");
+  assert.equal(estampa, true, "la copia de la cédula al expediente quedó encendida el 2026-11-25");
+  const trigger = fs.readFileSync(path.join(__dirname, "..", "src", "triggers", "firmas", "onFirmaContrato.js"), "utf8");
+  assert.match(trigger, /f\.consent_expediente !== true/, "el trigger no copia sin la marca");
+});

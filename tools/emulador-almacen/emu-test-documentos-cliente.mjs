@@ -4,7 +4,9 @@
 //   Cobros los ve "por revisar", marca uno y rechaza el otro →
 //   el directorio filtra "Docs por revisar" y "Expediente incompleto" →
 //   la vendedora ve qué falta sin poder abrir nada →
-//   la página de firma le ofrece al cliente subir lo que falta.
+//   la página de firma le ofrece al cliente subir lo que falta →
+//   el representante FIRMA en la página y la foto de su cédula pasa al
+//   expediente, por revisar (consentimiento ampliado el 2026-11-25).
 //
 // Emuladores: auth, firestore, STORAGE y hosting (dist/ recién construido):
 //   firebase emulators:start --only auth,firestore,storage,hosting --project cecomunica-service-orders
@@ -485,6 +487,78 @@ await espera(2500);
 ok(await cliente.page.$eval('#yfDocs', e => e.classList.contains('hidden')), 'sin nada que pedir, la página de firma no muestra el aviso');
 ok(cliente.errores.filter(e => /PRODUCCIÓN/.test(e)).length === 0, 'nada tocó producción');
 await cliente.cerrar();
+
+// ── 8. La cédula que se fotografía al FIRMAR pasa al expediente ──
+// Encendido el 2026-11-25 (Alberto aprobó el texto): el consentimiento de
+// /firmar/ ahora cubre "el expediente de mi empresa como cliente" y la firma
+// lleva `consent_expediente: true`. Aquí el cliente firma DE VERDAD en la
+// página; lo que en producción hace onFirmaContrato al activar (copiar la
+// cédula) se llama a mano, igual que el trigger del resumen.
+console.log('— 8. La cédula de la firma pasa al expediente');
+const { copiarCedulaAlExpediente } = require('./src/triggers/firmas/onFirmaContrato.js')._interno;
+const fsid2 = `prueba-firma-cedula-${Date.now()}`;
+await db.doc(`firma_solicitudes/${fsid2}`).set({
+  estado: 'pendiente', tipo: 'contrato', cliente_id: cli.id, cliente_nombre: cli.nombre, contrato_doc_id: cli.contrato, contrato_id: 'ALQ-PRUEBA',
+  created_at: admin.firestore.Timestamp.now(), representante: { nombre: 'Ana Representante', cedula: '8-888-8888' },
+  resumen: { equipos: [], cargos: [], total_mensual: 0 },
+});
+const firmante = await abrir({ viewport: 'telefono' });
+await firmante.ir(`/firmar/?s=${fsid2}`);
+await firmante.page.waitForSelector('#form:not(.hidden)', { timeout: 20000 });
+t = await firmante.page.$eval('#fConsentBio + span', e => e.innerText.replace(/\s+/g, ' '));
+ok(/únicamente para verificar mi identidad como firmante de este documento y para el expediente de mi empresa como cliente\. Se conservarán/.test(t),
+  `el consentimiento cubre el expediente: "…${t.slice(t.indexOf('únicamente'), t.indexOf('Se conservarán')).trim()}"`);
+await (await firmante.page.$('#fCedFoto')).uploadFile(fx.foto);
+await firmante.page.waitForFunction(() => !document.getElementById('fCedPrev').classList.contains('hidden'), { timeout: 15000 });
+await (await firmante.page.$('#fSelfieFoto')).uploadFile(fx.foto);
+await firmante.page.waitForFunction(() => !document.getElementById('fSelfiePrev').classList.contains('hidden'), { timeout: 15000 });
+await firmante.page.evaluate(() => { document.getElementById('fDocDet').open = true; });
+await firmante.page.waitForFunction(() => !document.getElementById('fAcepta').disabled, { timeout: 10000 });
+await firmante.page.evaluate(() => { document.getElementById('fDocDet').open = false; document.getElementById('firmaCanvas').scrollIntoView({ block: 'center' }); });
+await espera(300);
+const caja = await (await firmante.page.$('#firmaCanvas')).boundingBox();
+await firmante.page.mouse.move(caja.x + 30, caja.y + 40);
+await firmante.page.mouse.down();
+for (let i = 1; i <= 8; i++) await firmante.page.mouse.move(caja.x + 30 + i * 25, caja.y + 40 + (i % 2 ? 50 : 10));
+await firmante.page.mouse.up();
+ok(await firmante.page.evaluate(() => !Firma._pad.isEmpty()), 'la firma quedó dibujada');
+await firmante.page.evaluate(() => { document.getElementById('fAcepta').click(); });
+// Sin marcar el consentimiento no hay firma (ni fotos subidas, ni marca).
+await firmante.page.evaluate(() => Firma.enviar());
+await espera(800);
+ok(/autorizar el uso de sus fotos/.test(await firmante.page.$eval('#fMsg', e => e.textContent))
+  && (await db.doc(`firma_solicitudes/${fsid2}`).get()).data().estado === 'pendiente', 'sin marcar el consentimiento no se firma');
+await firmante.page.evaluate(() => { document.getElementById('fConsentBio').click(); });
+await firmante.captura('16-firma-consentimiento-expediente', true);
+await firmante.page.evaluate(() => Firma.enviar());
+await firmante.page.waitForSelector('#yaFirmado:not(.hidden)', { timeout: 40000 });
+const firmada = (await db.doc(`firma_solicitudes/${fsid2}`).get()).data();
+ok(firmada.estado === 'firmado' && firmada.firma.consent_expediente === true && firmada.firma.consent_biometrico === true,
+  'la firma queda con la marca consent_expediente (y la de siempre)');
+ok((await bucket.file(`firmas_identidad/${fsid2}/cedula.jpg`).exists())[0], 'la foto de la cédula quedó en la evidencia de la firma');
+const refCed = db.doc(`clientes/${cli.id}/documentos/cedula-firma-${fsid2}`);
+// Una firma hecha con el texto viejo no trae la marca: no se copia nada.
+const sinMarca = { ...firmada, firma: { ...firmada.firma } }; delete sinMarca.firma.consent_expediente;
+ok(await copiarCedulaAlExpediente(fsid2, sinMarca) === false && !(await refCed.get()).exists, 'una firma SIN la marca (texto viejo) no copia nada');
+ok(await copiarCedulaAlExpediente(fsid2, { ...firmada, firma: { ...firmada.firma, cedula_path: `firmas_identidad/otra-firma/cedula.jpg` } }) === false
+  && !(await refCed.get()).exists, 'ni copia una ruta que no sea la de SU firma');
+ok(await copiarCedulaAlExpediente(fsid2, firmada) === true, 'con la marca, la cédula se copia al expediente');
+const dCed = (await refCed.get()).data() || {};
+ok(dCed.tipo === 'cedula_representante' && dCed.revision?.estado === 'pendiente' && dCed.origen?.cedula_de_firma === true
+  && dCed.storage_path === `clientes_documentos/${cli.id}/cedula-firma-${fsid2}.jpg`, 'entra como cédula del representante, por revisar');
+ok((await bucket.file(dCed.storage_path || 'x').exists())[0] && (await bucket.file(`firmas_identidad/${fsid2}/cedula.jpg`).exists())[0],
+  'es una COPIA: la evidencia de la firma sigue en su sitio');
+ok(await copiarCedulaAlExpediente(fsid2, firmada) === false, 'repetir el trigger no la duplica');
+await recalcular(cli.id);
+const cobros2 = await abrir({ email: 'cobros@cecomunica.com' });
+await cobros2.ir(FICHA + '&docs=1');
+await cobros2.page.waitForFunction(() => /Tomada al firmar/.test(document.getElementById('fDocumentos')?.innerText || ''), { timeout: 30000 });
+t = await cobros2.page.evaluate(() => [...document.querySelectorAll('#fDocumentos .cg-doc')].map(e => e.innerText.replace(/\n+/g, ' | ')).find(x => /Tomada al firmar/.test(x)) || '');
+ok(/Ana Representante/.test(t) && /revis/i.test(t), `Cobros la ve por revisar: ${t.slice(0, 160)}`);
+await cobros2.captura('17-cobros-cedula-de-la-firma');
+ok(firmante.errores.filter(e => /PRODUCCIÓN/.test(e)).length === 0, 'nada tocó producción');
+await firmante.cerrar();
+await cobros2.cerrar();
 
 console.log(fallos ? `\n${fallos} FALLA(S)` : '\nTODO OK');
 process.exit(fallos ? 1 : 0);

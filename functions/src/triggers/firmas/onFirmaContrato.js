@@ -71,11 +71,12 @@ async function copiarAutorizacionAlExpediente(sid, s) {
 // cédula del representante legal" que pide el expediente (decisión de Alberto,
 // 2026-11-25): se copia allá y el cliente no tiene que mandarla aparte.
 //
-// Solo cuando el firmante lo AUTORIZÓ: el consentimiento de /firmar/ decía
-// "únicamente para verificar mi identidad como firmante de este documento",
-// así que las firmas hechas con ese texto NO se copian. La página estampa
-// `firma.consent_expediente: true` cuando el texto que se aceptó ya cubre el
-// expediente; sin esa marca aquí no pasa nada.
+// Solo cuando el firmante lo AUTORIZÓ: hasta el 2026-11-25 el consentimiento
+// de /firmar/ decía "únicamente para verificar mi identidad como firmante de
+// este documento", así que las firmas hechas con ese texto NO se copian (ni
+// se hace backfill). Desde ese día el texto agrega "y para el expediente de
+// mi empresa como cliente" (aprobado por Alberto) y la página estampa
+// `firma.consent_expediente: true`; sin esa marca aquí no pasa nada.
 //
 // Y solo si quien firmó ES el representante registrado (o pasó a serlo al
 // aceptarlo con "actualizar la ficha"): la cédula de un apoderado no es la del
@@ -256,7 +257,7 @@ async function correoCopiaCliente(sid, s, esAnexo) {
   } catch (e) { logger.warn("[onFirmaContrato] copia al cliente falló", { sid, message: e.message }); }
 }
 
-module.exports = onDocumentUpdated(
+const fn = onDocumentUpdated(
   { document: "firma_solicitudes/{sid}", region: "us-central1" },
   async (event) => {
     const before = event.data.before?.data() || {};
@@ -430,3 +431,6 @@ module.exports = onDocumentUpdated(
     return null;
   }
 );
+
+fn._interno = { copiarCedulaAlExpediente };
+module.exports = fn;
