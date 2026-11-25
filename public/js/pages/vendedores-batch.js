@@ -803,9 +803,9 @@ window.VB = {
       });
       const partes = PocService.partirLotePreparado(base);
       const enviados = await PocService.enviarLotePreparado(partes);
-      // El correo es aviso, no candado: si falla, el lote ya está en la cola.
-      try { await this._avisarRecepcion(base, enviados); }
-      catch (e) { console.warn('[vendedores-batch] correo a recepción no encolado:', e); }
+      // El correo a recepción lo manda el servidor al crearse el lote
+      // (functions onLotePocPreparado, 2026-11-25): va a email_recepcion con
+      // vendedor, cliente y contrato. Antes salía de aquí hacia tecnico@.
       this._mostrarEnviado(enviados);
       // Ahora sí el lote salió: el borrador deja de ser trabajo pendiente.
       this._resetTrasEnvio();
@@ -844,62 +844,6 @@ window.VB = {
     this.setStep('exp');
     this.clearDraft(true);
     this.updateStepBadges();
-  },
-
-  // Destinatarios: el MISMO buzón que el aviso "Nueva orden creada"
-  // (empresa/config.mail_orden_creada_to: primero = to, resto = cc; vacío =
-  // tecnico@cecomunica.com). Es la cola que recepción ya mira; no se consulta
-  // `usuarios` porque el vendedor no tiene permiso de listarla.
-  async _destinatariosRecepcion() {
-    const set = new Set();
-    try {
-      const cfg = await EmpresaService.getConfig();
-      (Array.isArray(cfg?.mail_orden_creada_to) ? cfg.mail_orden_creada_to : [])
-        .forEach(e => { if (e) set.add(String(e).trim().toLowerCase()); });
-    } catch (e) { console.warn('[vendedores-batch] destinatarios de recepción:', e); }
-    if (!set.size) set.add('tecnico@cecomunica.com');
-    return [...set];
-  },
-
-  async _avisarRecepcion(base, enviados) {
-    const lista = await this._destinatariosRecepcion();
-    const origen = window.location.origin;
-    const enlaces = enviados.map(e => ({
-      ...e, url: `${origen}/POC/nuevo-batch.html?lote=${encodeURIComponent(e.id)}`,
-    }));
-    const varias = enlaces.length > 1;
-    const vendedor = base.creado_por_nombre || base.creado_por_email || 'Ventas';
-    const cod = enviados.map(e => `#${e.codigo}`).join(', ');
-    const esc = (v) => this._esc(v);
-    const lineas = [
-      'Ventas preparó un lote de equipos PoC para cargar.',
-      '',
-      `Lote: ${cod}`,
-      `Cliente: ${base.cliente_nombre || '—'}`,
-      `Equipos: ${base.total}`,
-      `Preparado por: ${vendedor}`,
-    ];
-    if (base.notas) lineas.push(`Notas: ${base.notas}`);
-    lineas.push('');
-    enlaces.forEach(e => lineas.push((varias ? `Parte ${e.parte} de ${e.partes} (${e.total}): ` : '') + e.url));
-    const htmlLinks = enlaces.map(e =>
-      `<li><a href="${e.url}">${varias ? `Cargar parte ${e.parte} de ${e.partes} (${e.total} equipos)` : 'Cargar el lote en Nuevo lote'}</a></li>`).join('');
-    await MailService.enqueue({
-      to: lista[0],
-      ...(lista.length > 1 ? { cc: lista.slice(1) } : {}),
-      subject: `Lote PoC por cargar ${cod} – ${base.cliente_nombre || 'sin cliente'} (${base.total} equipos)`,
-      text: lineas.join('\n'),
-      html: `<p>Ventas preparó un lote de equipos PoC para cargar.</p>
-<ul>
-  <li><strong>Lote:</strong> ${esc(cod)}</li>
-  <li><strong>Cliente:</strong> ${esc(base.cliente_nombre || '—')}</li>
-  <li><strong>Equipos:</strong> ${base.total}</li>
-  <li><strong>Preparado por:</strong> ${esc(vendedor)}</li>
-  ${base.notas ? `<li><strong>Notas:</strong> ${esc(base.notas)}</li>` : ''}
-</ul>
-<ul>${htmlLinks}</ul>`,
-      meta: { source: 'poc_lote_preparado', lote_ids: enviados.map(e => e.id) },
-    });
   },
 
   // ---- Mis lotes enviados ----
