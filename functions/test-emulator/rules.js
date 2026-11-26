@@ -1200,6 +1200,70 @@ async function main() {
   }));
   ok("comision: por rutas punteadas TAMPOCO se cuela la base ni un requisito derivado");
 
+  // Pagos de clientes (2026-11-26, Andrea/Cobros): quien está en
+  // empresa/config.comisiones_pagos_extra registra el PRIMER PAGO — y nada más.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc("empresa/config").set({ comisiones_pagos_extra: ["cobros@x.com"] }, { merge: true });
+    await db.doc("usuarios/cobros").set({ rol: "recepcion" });
+    await db.doc("facturacion_avisos/ave").set({
+      tipo: "contrato_activo", estado: "hecho", cliente_nombre: "Z",
+      pasos: { qbo: { aplica: true, hecho: true }, poc: { aplica: true, hecho: true } },
+      historial: [{ accion: "creado" }],
+      comision: {
+        aplica: true, estado: "esperando", vendedor_email: "elvia@x", base: 90, base_de: "mensual",
+        requisitos: { firma: FIRMA, entrega: ENTREGA, pago: { aplica: true, hecho: false, factura: null } },
+        periodo: null, liberada_por: null, liberada_at: null, nota: null,
+      },
+    });
+  });
+  const cobros = testEnv.authenticatedContext("cobros", { email: "Cobros@x.com" }).firestore();
+  await assertSucceeds(cobros.doc("facturacion_avisos/ave").get());
+  await assertSucceeds(cobros.doc("facturacion_avisos/ave").update({
+    "comision.requisitos.pago": { aplica: true, hecho: true, factura: "2001", monto: 90, saldo: 0, fuente: "manual" },
+    "comision.estado": "listo",
+    historial: [{ accion: "creado" }, { accion: "comision_pago" }],
+    updated_at: 1, por_uid: "cobros", por_email: "cobros@x.com",
+  }));
+  ok("comision: Cobros (lista de pagos) confirma el primer pago");
+  await assertFails(cobros.doc("facturacion_avisos/ave").update({
+    "comision.estado": "pagada", "comision.periodo": "2026-11",
+    "comision.liberada_por": "cobros@x.com", "comision.liberada_at": 3,
+    historial: [{ accion: "creado" }, { accion: "comision_pago" }, { accion: "comision_liberada" }],
+  }));
+  await assertFails(cobros.doc("facturacion_avisos/ave").update({ "comision.nota": "x" }));
+  await assertFails(cobros.doc("facturacion_avisos/ave").update({ "comision.base": 1 }));
+  await assertFails(cobros.doc("facturacion_avisos/ave").update({
+    "comision.requisitos.firma": { aplica: true, hecho: false, motivo: "x" },
+  }));
+  ok("comision: Cobros NO cierra el período, ni anota, ni toca lo derivado");
+  await assertSucceeds(cobros.doc("facturacion_avisos/ave").update({
+    "comision.requisitos.pago": { aplica: true, hecho: false, factura: null, motivo: "falta confirmar" },
+    "comision.estado": "esperando",
+    historial: [{ accion: "creado" }, { accion: "comision_pago" }, { accion: "comision_pago_deshecho" }],
+  }));
+  ok("comision: Cobros deshace su pago");
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("facturacion_avisos/ave").update({ "comision.estado": "pagada", "comision.periodo": "2026-11" });
+  });
+  await assertFails(cobros.doc("facturacion_avisos/ave").update({
+    "comision.requisitos.pago": { aplica: true, hecho: false, factura: null },
+    "comision.estado": "esperando",
+  }));
+  ok("comision: una comisión ya cerrada, Cobros no la mueve");
+  // Un vendedor en la lista lee y registra pagos, pero no marca pasos de facturación.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("empresa/config").set({ comisiones_pagos_extra: ["cobros@x.com", "ven@x.com"] }, { merge: true });
+  });
+  const venExtra = testEnv.authenticatedContext("vendedor", { email: "ven@x.com" }).firestore();
+  await assertSucceeds(venExtra.doc("facturacion_avisos/avc").get());
+  await assertFails(venExtra.doc("facturacion_avisos/avd").update({
+    "pasos.qbo": { aplica: true, hecho: false }, historial: [{ accion: "creado" }, { accion: "comision_pago" }, { accion: "comision_liberada" }, { accion: "x" }],
+  }));
+  ok("comision: quien entra solo por la lista no marca pasos de facturación");
+  await assertFails(as("recepcion").doc("facturacion_avisos/ave").update({ "comision.nota": "x" }));
+  ok("comision: recepción fuera de la lista sigue sin tocar la comisión");
+
   // contratos: descarte de la orden de programación ("no se va a crear"). Lo
   // escribe quien ve la bandeja del home — recepción/admin. Es el campo que
   // apaga el CTA "Crear orden" de la lista de contratos, así que no puede

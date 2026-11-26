@@ -729,6 +729,18 @@ window.FacturacionBandeja = (() => {
           if (S().ROLES_FINANZAS.includes(rol)) { if (!mount.children.length && window.FinanzasNav) FinanzasNav.render('bandeja'); }
           else mount.innerHTML = '';
         }
+        // Cobros (empresa/config.comisiones_pagos_extra, 2026-11-26): entra a
+        // Comisiones solo a registrar el primer pago de los clientes. Su puerta
+        // es esta bandeja, que ya es la suya; admin/contabilidad tienen la pestaña.
+        if (!S().ROLES_FINANZAS.includes(rol)) {
+          S().pagosExtra(u?.email || user.email).then((ok) => {
+            const push = document.querySelector('#fbChips .push');
+            if (!ok || !push || document.getElementById('fbPagosLink')) return;
+            push.insertAdjacentHTML('afterend', `<a id="fbPagosLink" class="btn btn-ghost btn-sm" href="./comisiones.html?f=pago"
+              title="Confirmar el primer pago de los clientes (comisiones)"><i data-lucide="hand-coins"></i> Pagos de clientes</a>`);
+            if (window.lucide?.createIcons) lucide.createIcons();
+          });
+        }
         wire();
         aplicarBusquedaUrl();
         await cargar();

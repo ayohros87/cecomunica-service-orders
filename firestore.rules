@@ -1028,16 +1028,42 @@ service cloud.firestore {
             && ahora.get("requisitos", {}).get("firma", {}) == antes.get("requisitos", {}).get("firma", {})
             && ahora.get("requisitos", {}).get("entrega", {}) == antes.get("requisitos", {}).get("entrega", {});
       }
-      allow read:   if rolBandejaFact();
+      // Pagos de clientes (2026-11-26, Andrea/Cobros): los emails en
+      // empresa/config.comisiones_pagos_extra registran el PRIMER PAGO de una
+      // comisión — y nada más. Cobros es quien ve el estado de cuenta; liberar
+      // la comisión (período, cierre, nota) sigue siendo de admin/contabilidad.
+      // Mismo patrón de allowlist que qc_revisores_extra. La UI
+      // (FacturacionAvisosService.pagosExtra) lee la misma lista.
+      function esPagosComisionExtra() {
+        return isSignedIn()
+          && ("email" in request.auth.token)
+          && request.auth.token.email.lower()
+               in get(/databases/$(database)/documents/empresa/config).data.get("comisiones_pagos_extra", []);
+      }
+      // Solo `requisitos.pago` y el estado que de ahí se deriva; nunca una
+      // comisión ya cerrada ni una que se cierre en este write.
+      function soloMuevePagoComision() {
+        let antes = resource.data.get("comision", {});
+        let ahora = request.resource.data.get("comision", {});
+        return ahora.diff(antes).affectedKeys().hasOnly(["requisitos", "estado"])
+            && ahora.get("requisitos", {}).diff(antes.get("requisitos", {})).affectedKeys().hasOnly(["pago"])
+            && antes.get("estado", "esperando") in ["esperando", "listo"]
+            && ahora.get("estado", "esperando") in ["esperando", "listo"];
+      }
+      allow read:   if rolBandejaFact() || esPagosComisionExtra();
       allow create: if false;
-      allow update: if rolBandejaFact()
+      allow update: if (rolBandejaFact() || esPagosComisionExtra())
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(["pasos", "estado", "descarte", "historial", "reenvio_solicitado",
                        "comision", "updated_at", "por_uid", "por_email"])
         && request.resource.data.estado in ["esperando", "pendiente", "hecho", "descartado"]
         && avisoHistorialSoloCrece()
+        // Quien entra SOLO por la lista de pagos no marca pasos de facturación.
+        && (rolBandejaFact() || request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(["comision", "historial", "updated_at", "por_uid", "por_email"]))
         && (!tocaComision() || (
-              userRole() in ["administrador", "contabilidad"]
+              (userRole() in ["administrador", "contabilidad"]
+                || (esPagosComisionExtra() && soloMuevePagoComision()))
               && request.resource.data.comision.estado in ["esperando", "listo", "pagada", "no_aplica"]
               && comisionDerivadaIntacta()));
       allow delete: if false;

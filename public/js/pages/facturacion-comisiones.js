@@ -14,6 +14,10 @@
 //
 // Roles: FacturacionAvisosService.ROLES_COMISION (admin/contabilidad). A
 // diferencia de la Bandeja, recepción no entra: liberar plata es otra decisión.
+// Excepción (2026-11-26, Andrea/Cobros): los emails de
+// empresa/config.comisiones_pagos_extra entran en modo "solo pagos" —
+// confirman o deshacen el primer pago (es Cobros quien ve el estado de
+// cuenta) y nada más: ni cierre de período, ni CSV, ni totales por vendedor.
 // Deep-link: ?aviso=<id> abre la fila.
 
 window.FacturacionComisiones = (() => {
@@ -22,6 +26,7 @@ window.FacturacionComisiones = (() => {
   const money = (n) => `$${Number(n || 0).toFixed(2)}`;
 
   let rol = null;
+  let soloPagos = false;   // entra por comisiones_pagos_extra, no por rol
   let todas = [];
   let filtro = 'abiertas';
   let periodo = '';        // '' = todos; 'YYYY-MM' de fecha_efectiva
@@ -150,7 +155,7 @@ window.FacturacionComisiones = (() => {
     const r = com.requisitos || {};
     const e = est(a);
     const d = (l, v) => v ? `<div class="cm-d"><span>${l}</span><span>${v}</span></div>` : '';
-    const puede = S().puedeComisionar(rol);
+    const puede = S().puedeComisionar(rol) || soloPagos;
     const faltan = S().faltantes(com);
 
     const datos = `<div class="cm-grid">
@@ -178,6 +183,8 @@ window.FacturacionComisiones = (() => {
       acciones = `<p style="font-size:12.5px;color:var(--fg-3);margin:0;">Este evento no paga comisión: ${esc(com.motivo || '')}.</p>`;
     } else if (!puede) {
       acciones = `<p style="font-size:12.5px;color:var(--fg-3);margin:0;">Solo administración y contabilidad mueven comisiones.</p>`;
+    } else if (soloPagos && e === 'pagada') {
+      acciones = `<p style="font-size:12.5px;color:var(--fg-3);margin:0;">Esta comisión ya se cerró; el pago no se puede mover.</p>`;
     } else if (e === 'pagada') {
       acciones = `<div class="cm-acts"><span class="sep"></span>
         <button type="button" class="btn btn-ghost btn-sm" onclick="FacturacionComisiones.reabrir('${esc(a.id)}')">
@@ -191,11 +198,11 @@ window.FacturacionComisiones = (() => {
               <i data-lucide="check"></i> Confirmar el primer pago</button>`
           : `<button type="button" class="btn btn-ghost btn-sm" onclick="FacturacionComisiones.deshacerPago('${esc(a.id)}')">
               <i data-lucide="undo-2"></i> Deshacer el pago</button>`}
-        <span class="sep"></span>
+        ${soloPagos ? '' : `<span class="sep"></span>
         <button type="button" class="btn ${listo ? 'btn-primary' : 'btn-ghost'} btn-sm" ${listo ? '' : 'disabled'}
           title="${listo ? 'Marca esta comisión como pagada en un período' : 'Todavía falta un requisito'}"
           onclick="FacturacionComisiones.formCierre('${esc(a.id)}')">
-          <i data-lucide="badge-dollar-sign"></i> Cerrar el período</button>
+          <i data-lucide="badge-dollar-sign"></i> Cerrar el período</button>`}
       </div>
       <div id="cmForm-${esc(a.id)}"></div>`;
     }
@@ -228,7 +235,7 @@ window.FacturacionComisiones = (() => {
         <span class="who ${sin ? 'sin' : ''}" title="${esc(sin ? 'estas comisiones no tienen a quién pagarse' : vendedor)}">${
           esc(sin ? 'SIN VENDEDOR ASIGNADO' : vendedorCorto(vendedor))}</span>
         <span class="meta">${filas.length} evento${filas.length === 1 ? '' : 's'}${listas ? ` · ${listas} lista${listas === 1 ? '' : 's'} para pago` : ''}</span>
-        ${abiertas.length ? `<span class="tot">${money(total)} en base abierta</span>` : ''}
+        ${abiertas.length && !soloPagos ? `<span class="tot">${money(total)} en base abierta</span>` : ''}
         ${modoLote() && !sin && elegibles ? `<button type="button" class="btn btn-ghost btn-sm" data-sel-vendedor="${esc(vendedor)}">Seleccionar sus ${elegibles}</button>` : ''}
       </div>
       <div class="cm-rows">${filas.map(filaHtml).join('')}</div>
@@ -236,8 +243,12 @@ window.FacturacionComisiones = (() => {
   }
 
   // El lote existe en "Listas para pago" (cerrar período) y en "Falta el pago"
-  // (confirmar el primer pago), solo para quien puede liberar.
-  function modoLote() { return ['listo', 'pago'].includes(filtro) && S().puedeComisionar(rol); }
+  // (confirmar el primer pago), solo para quien puede liberar. Quien entra en
+  // modo "solo pagos" tiene únicamente el lote de pagos.
+  function modoLote() {
+    if (filtro === 'pago') return S().puedeComisionar(rol) || soloPagos;
+    return filtro === 'listo' && S().puedeComisionar(rol);
+  }
 
   function pintarLote() {
     const box = document.getElementById('cmLote');
@@ -658,6 +669,18 @@ window.FacturacionComisiones = (() => {
     });
   }
 
+  // Pantalla de Cobros: arranca en "Falta el pago", sin el CSV de planilla ni
+  // la barra de Finanzas, y el texto dice lo que ella sí puede hacer.
+  function modoSoloPagos() {
+    filtro = 'pago';
+    document.getElementById('cmCsv')?.remove();
+    document.getElementById('wsTabs-mount')?.replaceChildren();
+    const intro = document.querySelector('.cm-intro');
+    if (intro) intro.innerHTML = `Aquí registras el <b>primer pago</b> de cada cliente (factura en cero), uno por uno o en lote
+      desde <b>Falta el pago</b>, con el estado de cuenta. Con el pago confirmado la comisión queda lista y
+      contabilidad la cierra en su período. Si hay saldo pendiente, escríbelo: la comisión no se libera hasta que quede en cero.`;
+  }
+
   function init() {
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) return window.location.href = '../login.html';
@@ -666,9 +689,14 @@ window.FacturacionComisiones = (() => {
         rol = u ? u.rol : null;
         // Esta pantalla es de admin/contabilidad y punto: recepción marca pasos
         // de facturación, no libera comisiones.
-        if (!S().puedeComisionar(rol)) { MODULOS.rechazar(); return; } // guarda única (2026-10-09)
+        // Cobros (comisiones_pagos_extra) entra en modo "solo pagos".
+        if (!S().puedeComisionar(rol)) {
+          soloPagos = await S().pagosExtra(u?.email || user.email);
+          if (!soloPagos) { MODULOS.rechazar(); return; } // guarda única (2026-10-09)
+          modoSoloPagos();
+        }
         const mount = document.getElementById('wsTabs-mount');
-        if (mount && !mount.children.length && window.FinanzasNav) FinanzasNav.render('comisiones');
+        if (mount && !soloPagos && !mount.children.length && window.FinanzasNav) FinanzasNav.render('comisiones');
         // ?f=pago (señal "Comisiones listas" del home, P8): abre en ese chip.
         const f0 = new URLSearchParams(location.search).get('f');
         if (f0 && document.querySelector(`#cmChips [data-f="${CSS.escape(f0)}"], .bj-filtro[data-f="${CSS.escape(f0)}"]`)) filtro = f0;

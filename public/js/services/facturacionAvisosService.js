@@ -94,6 +94,23 @@ window.FacturacionAvisosService = {
   ROLES_COMISION: ['administrador', 'contabilidad'],
   puedeComisionar(rol) { return this.ROLES_COMISION.includes(rol); },
 
+  // Pagos de clientes (2026-11-26, Andrea/Cobros): empresa/config.
+  // comisiones_pagos_extra habilita a registrar el PRIMER PAGO (confirmar o
+  // deshacer) sin poder cerrar períodos. Mismo criterio que rules
+  // (esPagosComisionExtra). Falla cerrado si la config no se puede leer.
+  async pagosExtra(email) {
+    const e = String(email || '').toLowerCase();
+    if (!e) return false;
+    try {
+      const doc = await firebase.firestore().collection('empresa').doc('config').get();
+      const lista = doc.exists ? doc.data().comisiones_pagos_extra : null;
+      return Array.isArray(lista) && lista.some(x => String(x).toLowerCase() === e);
+    } catch (err) {
+      console.warn('[comisiones] no se pudo leer comisiones_pagos_extra:', err);
+      return false;
+    }
+  },
+
   // La bandeja de comisiones lee la colección ENTERA (43 documentos hoy,
   // ~15 nuevos al mes). Un `where` sobre comision.estado pediría índice y no
   // ahorraría nada a esta escala; agrupar y filtrar se hace en el navegador.

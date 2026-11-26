@@ -114,7 +114,11 @@
       type: 'user-picker', emptyHint: 'solo administradores y el jefe de taller',
       hint: 'Ninguna orden de taller se entrega hasta que el control de calidad quede aprobado, y hoy lo firma casi siempre la misma persona. Aquí puedes habilitar suplentes: usuarios que podrán firmar el QC aunque no sean administradores ni jefe de taller. Sin nadie configurado, si esa persona falta la cola de entregas se detiene. Vacío = solo administradores y jefe de taller.' },
 
-    { key: 'orden_stale_dias',          section: 'operacion', label: 'Días para marcar orden como "sin movimiento"',
+    { key: 'comisiones_pagos_extra', section: 'operacion', label: 'Registrar pagos de clientes en Comisiones (además de admin y contabilidad)',
+      type: 'user-picker', emptyHint: 'solo administradores y contabilidad',
+      hint: 'Usuarios que pueden confirmar (o deshacer) el primer pago de un cliente en Finanzas · Comisiones — normalmente Cobros, que es quien ve el estado de cuenta. NO pueden cerrar períodos ni liberar comisiones, y no ven el CSV ni los totales por vendedor. Entran desde su bandeja de Facturación pendiente, botón "Pagos de clientes". Vacío = solo administradores y contabilidad.' },
+
+    { key: 'orden_stale_dias',         section: 'operacion', label: 'Días para marcar orden como "sin movimiento"',
       type: 'int',  min: 3,     max: 60,
       hint: 'Umbral usado en el panel de Operación para el flag de stale y en el correo diario de órdenes estancadas al taller (recordatorioOperativo).' },
     { key: 'retiro_escalacion_dias',    section: 'operacion', label: 'Orden lista sin retirar: días para escalar',
