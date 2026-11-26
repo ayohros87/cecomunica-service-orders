@@ -37,6 +37,13 @@ const UsuariosAdminService = {
     return res.data;
   },
 
+  // Jefe inmediato: quien le aprueba lo que pide de caja menuda. '' lo quita
+  // (aprueba administración).
+  async updateJefe(uid, jefeUid) {
+    const res = await this._call()({ action: 'updateJefe', uid, jefe_uid: jefeUid || '' });
+    return res.data;
+  },
+
   async deactivate(uid) {
     const res = await this._call()({ action: 'deactivate', uid });
     return res.data;

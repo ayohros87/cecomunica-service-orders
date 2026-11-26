@@ -82,6 +82,13 @@
         ${sinRol ? `<option value="" selected>— sin rol —${u.rol ? ` (${escapeHtml(u.rol)})` : ''}</option>` : ''}
         ${rolOptions(u.rol)}
       </select>`;
+      // Jefe inmediato (caja menuda, 2026-11-26): quien le aprueba los gastos.
+      const jefes = state.all.filter(j => j.uid !== u.uid && (j.activo !== false || j.uid === u.jefe_uid))
+        .sort((x, y) => String(x.nombre || '').localeCompare(String(y.nombre || '')));
+      const jefeDropdown = `<select class="form-input form-input-sm" data-action="jefe" data-uid="${u.uid}" style="font-size:12px;padding:3px 6px;max-width:170px;" title="Quien le aprueba lo que pide de caja menuda. Sin jefe, aprueba administración.">
+        <option value="">— administración —</option>
+        ${jefes.map(j => `<option value="${j.uid}"${u.jefe_uid === j.uid ? ' selected' : ''}>${escapeHtml(j.nombre || j.email || j.uid)}</option>`).join('')}
+      </select>`;
       const actBtn = activo
         ? `<button class="btn btn-ghost btn-sm" data-action="deactivate" data-uid="${u.uid}" ${isSelf ? 'disabled title="No puedes desactivarte a ti mismo"' : 'title="Desactivar"'}><i data-lucide="user-x"></i></button>`
         : `<button class="btn btn-ghost btn-sm" data-action="reactivate" data-uid="${u.uid}" title="Reactivar"><i data-lucide="user-check"></i></button>`;
@@ -93,13 +100,14 @@
           <td>${rolDropdown}</td>
           <td><button class="btn btn-ghost btn-sm" data-action="cargo" data-uid="${u.uid}" title="Cargo con el que firma las cotizaciones"
                 style="font-size:12px;${u.cargo ? '' : 'color:var(--fg-3);'}">${escapeHtml(u.cargo || 'Poner cargo')}</button></td>
+          <td>${jefeDropdown}</td>
           <td>${activo ? '<span class="pill" style="background:#d1fae5;color:#065f46;border-color:#a7f3d0;">activo</span>' : '<span class="pill" style="background:#fee2e2;color:#991b1b;border-color:#fecaca;">desactivado</span>'}</td>
           <td><code style="font-size:10px;color:var(--fg-3);">${u.uid.slice(0, 12)}…</code></td>
           <td style="text-align:right;white-space:nowrap;">${resetBtn} ${actBtn}</td>
         </tr>`;
     }).join('');
     el.innerHTML = `<div class="admin-table-wrap"><table class="admin-table">
-      <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Cargo (firma)</th><th>Estado</th><th>UID</th><th style="text-align:right;">Acciones</th></tr></thead>
+      <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Cargo (firma)</th><th title="Quien le aprueba lo que pide de caja menuda">Jefe (aprueba caja menuda)</th><th>Estado</th><th>UID</th><th style="text-align:right;">Acciones</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
     setText('countShowing', `${state.filtered.length} de ${state.all.length}`);
@@ -132,6 +140,24 @@
         } catch (err) {
           Toast.show('Error: ' + (err.message || err.code), 'bad');
           sel.value = oldSel;
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-action="jefe"]').forEach(sel => {
+      sel.addEventListener('change', async () => {
+        const u = state.all.find(x => x.uid === sel.dataset.uid);
+        const antes = u?.jefe_uid || '';
+        try {
+          await UsuariosAdminService.updateJefe(sel.dataset.uid, sel.value);
+          if (u) u.jefe_uid = sel.value || null;
+          const j = state.all.find(x => x.uid === sel.value);
+          Toast.show(sel.value
+            ? `${j?.nombre || 'Esa persona'} aprueba desde ahora lo que pida ${u?.nombre || 'la persona'} de caja menuda.`
+            : `Lo que pida ${u?.nombre || 'la persona'} de caja menuda lo aprueba administración.`, 'ok');
+        } catch (err) {
+          Toast.show('Error: ' + (err.message || err.code), 'bad');
+          sel.value = antes;
         }
       });
     });

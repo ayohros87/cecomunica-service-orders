@@ -1,0 +1,137 @@
+/* Caja menuda (2026-11-26). Prefijo .cm- = piezas compartidas (tarjeta,
+   formulario, detalle); .cc- = la bandeja de contabilidad.
+   La pantalla de quien pide se diseña para el teléfono primero: una columna,
+   objetivos táctiles de 44px y el botón principal abajo. */
+
+/* ── Página de quien pide ─────────────────────────────────────────────── */
+.cm-wrap { max-width: 720px; padding-bottom: 96px; }
+.cm-cabecera { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
+.cm-cabecera .push { flex: 1; }
+.cm-tabs { display: flex; gap: 6px; }
+.cm-tab {
+  appearance: none; border: 1px solid var(--border-default, #d1d5db); background: #fff; color: var(--fg-2, #374151);
+  border-radius: 999px; padding: 8px 14px; font: 600 14px var(--font-body, system-ui); cursor: pointer; min-height: 40px;
+}
+.cm-tab.is-on { background: var(--navy, #0B2A47); border-color: var(--navy, #0B2A47); color: #fff; }
+.cm-tab .cnt { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 999px;
+  background: #F59E0B; color: #fff; font-size: 12px; line-height: 20px; text-align: center; }
+.cm-grupo-t { margin: 18px 2px 8px; font: 700 12px var(--font-body, system-ui); letter-spacing: .06em;
+  text-transform: uppercase; color: var(--fg-3, #6b7280); }
+.cm-vacio { text-align: center; color: var(--fg-3, #6b7280); padding: 40px 16px; font-size: 15px; line-height: 1.5; }
+.cm-vacio svg { width: 36px; height: 36px; color: var(--accent, #0091D7); margin-bottom: 8px; }
+.cm-fab {
+  position: fixed; right: 20px; bottom: 20px; z-index: 40; min-height: 52px; padding: 0 22px;
+  border-radius: 999px; font-size: 16px; font-weight: 700; box-shadow: 0 6px 20px rgba(11, 42, 71, .28);
+}
+/* Teléfono: ancho completo, dejando libre la esquina del botón del menú
+   (el rail colapsado flota abajo a la izquierda). */
+@media (max-width: 1024px) {
+  .cm-fab { left: 84px; right: 16px; bottom: 16px; justify-content: center; }
+}
+
+/* ── Tarjeta ──────────────────────────────────────────────────────────── */
+.cm-card {
+  display: flex; align-items: flex-start; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  background: #fff; border: 1px solid var(--border-subtle, #e5e7eb); border-radius: var(--radius-lg, 10px);
+  padding: 12px 14px; margin-bottom: 8px; font: inherit; color: inherit; min-height: 64px;
+}
+.cm-card:hover, .cm-card.is-on { border-color: var(--accent, #0091D7); background: #F8FCFF; }
+.cm-card:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0, 145, 215, .30); }
+.cm-card-monto { flex: none; min-width: 74px; font: 700 17px var(--font-mono, ui-monospace, monospace); color: var(--fg-1, #111827); }
+.cm-card-monto small { display: block; font: 700 10.5px var(--font-body, system-ui); color: #1E3A8A; letter-spacing: .05em; }
+.cm-card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cm-card-main b { font-size: 14.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-card-quien { font-size: 12.5px; font-weight: 700; color: var(--accent-press, #005781); }
+.cm-card-sub { font-size: 12.5px; color: var(--fg-3, #6b7280); }
+.cm-card-espera { font-size: 12.5px; color: #92400E; }
+.cm-card-tarde { font-size: 12.5px; font-weight: 700; color: #B91C1C; }
+.cm-card .bj-chip { flex: none; }
+
+/* ── Formulario (en hoja) ─────────────────────────────────────────────── */
+.cm-form { display: flex; flex-direction: column; gap: 14px; }
+.cm-form [hidden] { display: none !important; }
+.cm-campo { display: flex; flex-direction: column; gap: 5px; }
+.cm-campo > span:first-child { font-size: 13px; font-weight: 600; color: var(--fg-2, #374151); }
+.cm-campo em { font-style: normal; font-weight: 400; color: var(--fg-3, #6b7280); }
+.cm-form .form-input { width: 100%; min-height: 44px; font-size: 16px; } /* 16px: iOS no hace zoom al enfocar */
+.cm-dos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.cm-form [data-cm-solo] > .cm-campo + .cm-campo, .cm-form [data-cm-solo] > .cm-dos + .cm-campo { margin-top: 14px; }
+@media (max-width: 420px) { .cm-dos { grid-template-columns: 1fr; } }
+.cm-monto-in { position: relative; display: block; }
+.cm-monto-in i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font: 700 20px var(--font-mono, monospace); font-style: normal; color: var(--fg-3, #6b7280); }
+.cm-form .cm-monto-in .form-input { padding-left: 30px; font: 700 22px var(--font-mono, ui-monospace, monospace); min-height: 54px; }
+.cm-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cm-seg-btn {
+  appearance: none; text-align: left; cursor: pointer; background: #fff; color: var(--fg-2, #374151);
+  border: 1.5px solid var(--border-default, #d1d5db); border-radius: var(--radius-lg, 10px); padding: 10px 12px; min-height: 64px;
+  display: flex; flex-direction: column; gap: 3px; font: inherit;
+}
+.cm-seg-btn b { font-size: 14.5px; }
+.cm-seg-btn span { font-size: 12px; color: var(--fg-3, #6b7280); line-height: 1.3; }
+.cm-seg-btn.is-on { border-color: var(--accent, #0091D7); background: var(--accent-soft, #E6F4FC); color: var(--accent-press, #005781); }
+.cm-seg-btn:disabled { cursor: default; opacity: .6; }
+.cm-aviso { margin: 0; padding: 9px 12px; border-radius: var(--radius-md, 6px); font-size: 13px; line-height: 1.45;
+  background: #FEF3C7; color: #92400E; }
+.cm-aviso--info { background: #EFF6FF; color: #1E3A8A; }
+.cm-aprueba { margin: 0; font-size: 13px; color: var(--fg-3, #6b7280); }
+.cm-fotos-lista { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.cm-fotos-lista:empty { display: none; }
+.cm-foto-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 10px; border-radius: 999px;
+  background: #ECFDF5; color: #065F46; font-size: 13px; font-weight: 600; }
+.cm-foto-chip svg { width: 14px; height: 14px; }
+.cm-foto-chip button { appearance: none; border: 0; background: rgba(6, 95, 70, .12); color: inherit; width: 24px; height: 24px;
+  border-radius: 50%; font-size: 16px; line-height: 1; cursor: pointer; }
+.cm-foto-chip.is-subiendo { background: var(--surface-sunken, #f3f4f6); color: var(--fg-3, #6b7280); padding-right: 10px; }
+.cm-fotos-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cm-foto-btn { justify-content: center; min-height: 44px; cursor: pointer; }
+.cm-foto-btn.is-off { opacity: .45; pointer-events: none; }
+.cm-foto-btn svg { width: 16px; height: 16px; }
+
+/* ── Detalle ──────────────────────────────────────────────────────────── */
+.cm-det { display: flex; flex-direction: column; gap: 12px; }
+.cm-det-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cm-det-monto { font: 700 30px var(--font-mono, ui-monospace, monospace); color: var(--fg-1, #111827); }
+.cm-det-top > span:last-child { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.cm-det-top small { font-size: 12.5px; color: var(--fg-3, #6b7280); }
+.cm-caja { padding: 9px 12px; border-radius: var(--radius-md, 6px); font-size: 13.5px; line-height: 1.45; background: #EFF6FF; color: #1E3A8A; }
+.cm-caja--mal { background: #FEF2F2; color: #991B1B; }
+.cm-datos { margin: 0; display: flex; flex-direction: column; }
+.cm-dato { display: grid; grid-template-columns: 112px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border-subtle, #e5e7eb); font-size: 14px; }
+.cm-dato dt { color: var(--fg-3, #6b7280); }
+.cm-dato dd { margin: 0; color: var(--fg-1, #111827); overflow-wrap: anywhere; }
+.cm-recibos { display: flex; flex-wrap: wrap; gap: 8px; }
+.cm-recibo { display: block; width: calc(50% - 4px); min-height: 80px; border: 1px solid var(--border-subtle, #e5e7eb);
+  border-radius: var(--radius-md, 6px); overflow: hidden; font-size: 13px; color: var(--fg-3, #6b7280);
+  display: flex; align-items: center; justify-content: center; text-align: center; background: var(--surface-sunken, #f9fafb); }
+.cm-recibo:only-child { width: 100%; } /* una sola factura: que se lea */
+.cm-recibo img { display: block; width: 100%; height: auto; }
+.cm-recibo.is-pdf { color: var(--accent-press, #005781); font-weight: 600; padding: 10px; }
+.cm-recibo.is-error { color: #991B1B; }
+.cm-sin-recibo { margin: 0; font-size: 13px; color: var(--fg-3, #6b7280); }
+.cm-hist summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--fg-2, #374151); padding: 6px 0; }
+.cm-hist ul { margin: 4px 0 0; padding: 0; list-style: none; }
+.cm-hist li { font-size: 13px; padding: 5px 0; border-top: 1px solid var(--border-subtle, #e5e7eb); }
+.cm-hist li b { text-transform: capitalize; }
+.cm-hist li span { color: var(--fg-3, #6b7280); }
+.cm-hist li em { display: block; font-style: normal; color: var(--fg-2, #374151); }
+
+/* ── Bandeja de contabilidad (escritorio primero) ─────────────────────── */
+.cc-kpis { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 12px; }
+.cc-kpi { border: 1px solid var(--border-subtle, #e5e7eb); border-radius: var(--radius-md, 6px); padding: 8px 14px; min-width: 150px; background: #fff; }
+.cc-kpi-n { font: 800 20px var(--font-body, system-ui); line-height: 1.15; }
+.cc-kpi-n small { font: 600 13px var(--font-mono, monospace); color: var(--fg-3, #6b7280); margin-left: 6px; }
+.cc-kpi-l { font-size: 11.5px; color: var(--fg-3, #6b7280); }
+.cc-dos { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(380px, 460px); gap: 16px; align-items: start; }
+.cc-detalle { position: sticky; top: 12px; background: #fff; border: 1px solid var(--border-subtle, #e5e7eb);
+  border-radius: var(--radius-lg, 10px); padding: 16px; max-height: calc(100vh - 24px); overflow-y: auto; }
+.cc-detalle .cm-recibo { width: 100%; }
+.cc-detalle-vacio { color: var(--fg-3, #6b7280); text-align: center; padding: 48px 12px; font-size: 14px; }
+/* Los botones se quedan a la vista aunque la factura sea alta. */
+.cc-acciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin: 14px -16px -16px;
+  padding: 12px 16px; border-top: 1px solid var(--border-subtle, #e5e7eb);
+  position: sticky; bottom: -16px; background: #fff; border-radius: 0 0 var(--radius-lg, 10px) var(--radius-lg, 10px); }
+.bj-barra .cc-mes { width: auto; flex: none; height: 30px; font-size: 13px; }
+@media (max-width: 960px) {
+  .cc-dos { grid-template-columns: 1fr; }
+  .cc-detalle { display: none; } /* en pantalla angosta el detalle abre en hoja */
+}

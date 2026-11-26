@@ -59,6 +59,8 @@ exports.onPocDeviceWritePool          = require("./src/triggers/poc/onPocDeviceW
 exports.onPocDeviceSello              = require("./src/triggers/poc/onPocDeviceSello");
 // Lote PoC que ventas envía → correo a recepción con vendedor, cliente y contrato
 exports.onLotePocPreparado            = require("./src/triggers/poc/onLotePocPreparado");
+// Caja menuda: numera cada gasto (CM-0001) y avisa por correo a quien le toca
+exports.onCajaMenudaWrite             = require("./src/triggers/caja/onCajaMenudaWrite");
 exports.onOrdenCompletada             = require("./src/triggers/ordenes/onComplete");
 exports.onConsumoPiezasBodega         = require("./src/triggers/ordenes/onConsumoPiezasBodega");
 exports.onContratoOrdenWrite          = onContratoOrdenWrite;

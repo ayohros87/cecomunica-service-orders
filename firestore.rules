@@ -1500,6 +1500,124 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["copia_a"])));
       allow delete: if isAdmin();
     }
+    // ── Caja menuda (2026-11-26) ──────────────────────────────────────────
+    // Un doc por gasto. Las reglas salen del cuestionario de Cheila
+    // (contabilidad): pide cualquier colaborador, APRUEBA su jefe inmediato
+    // (usuarios/{uid}.jefe_uid, que fija administración; sin jefe asignado o
+    // en suplencia aprueba administración) y el efectivo lo entrega quien
+    // custodia el fondo (contabilidad o administración). Nadie aprueba lo suyo.
+    //
+    //   reembolso: solicitado → aprobado → pagado
+    //   anticipo:  solicitado → aprobado → entregado → rendido → cerrado
+    //   salidas:   rechazado (jefe, o custodio sobre un aprobado) · anulado
+    //              (quien pidió, mientras siga solicitado)
+    //
+    // Cada quien ve lo suyo; el jefe, lo que le toca aprobar; el custodio,
+    // todo. El historial solo crece (y lo ya escrito no se toca). `numero` lo
+    // pone el servidor (onCajaMenudaWrite): no está en ninguna lista de campos
+    // que el navegador pueda escribir. Nada se borra. Espejo de la UI en
+    // public/js/domain/cajaMenuda.js (acciones). Pruebas:
+    // functions/test-emulator/caja-menuda-rules.js.
+    match /caja_menuda/{docId} {
+      function cmCustodio() {
+        return isSignedIn() && userRole() in ["administrador", "contabilidad"];
+      }
+      function cmMio() { return resource.data.solicitante_uid == request.auth.uid; }
+      function cmAprobador() {
+        return isSignedIn() && !cmMio()
+          && (resource.data.aprobador_uid == request.auth.uid || isAdmin());
+      }
+      function cmCambia() { return request.resource.data.diff(resource.data).affectedKeys(); }
+      // Una entrada más por escritura, firmada por quien escribe, y las
+      // anteriores intactas.
+      function cmHistorialCrece() {
+        let antes = resource.data.get("historial", []);
+        let ahora = request.resource.data.get("historial", []);
+        return ahora.size() == antes.size() + 1
+            && ahora[0:antes.size()] == antes
+            && ahora[antes.size()].por_uid == request.auth.uid;
+      }
+      function cmMontoOk(d) {
+        return d.monto is number && d.monto > 0 && d.monto <= 5000
+            && d.tipo in ["reembolso", "anticipo"]
+            && d.via in ["efectivo", "ach"]
+            && (d.tipo == "reembolso" || d.via == "efectivo")
+            && d.recibos is list && d.recibos.size() <= 4
+            && d.concepto is string && d.concepto.size() >= 3 && d.concepto.size() <= 300;
+      }
+
+      allow get, list: if isSignedIn()
+        && (resource.data.solicitante_uid == request.auth.uid
+            || resource.data.aprobador_uid == request.auth.uid
+            || cmCustodio());
+
+      allow create: if isSignedIn()
+        && request.resource.data.solicitante_uid == request.auth.uid
+        && request.resource.data.estado == "solicitado"
+        && request.resource.data.keys().hasOnly(["solicitante_uid", "solicitante_nombre", "solicitante_email",
+             "aprobador_uid", "aprobador_nombre", "tipo", "via", "estado", "monto", "concepto", "categoria",
+             "proveedor", "fecha_gasto", "factura_numero", "recibos", "historial", "created_at", "updated_at"])
+        && cmMontoOk(request.resource.data)
+        // El aprobador no se elige: es el jefe que administración le asignó.
+        && request.resource.data.aprobador_uid
+             == get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.get("jefe_uid", null)
+        && request.resource.data.historial is list && request.resource.data.historial.size() == 1
+        && request.resource.data.historial[0].por_uid == request.auth.uid
+        && request.resource.data.created_at == request.time;
+
+      allow update: if isSignedIn() && cmHistorialCrece() && (
+        // Quien pidió corrige o anula mientras nadie lo ha aprobado.
+        (cmMio() && resource.data.estado == "solicitado"
+          && request.resource.data.estado in ["solicitado", "anulado"]
+          && cmCambia().hasOnly(["via", "monto", "concepto", "categoria", "proveedor", "fecha_gasto",
+               "factura_numero", "recibos", "estado", "historial", "updated_at"])
+          && cmMontoOk(request.resource.data))
+        // Quien pidió un anticipo lo rinde: lo gastado y la factura.
+        || (cmMio() && resource.data.tipo == "anticipo" && resource.data.estado == "entregado"
+          && request.resource.data.estado == "rendido"
+          && cmCambia().hasOnly(["estado", "rendicion", "recibos", "historial", "updated_at"])
+          && request.resource.data.rendicion.monto_gastado is number
+          && request.resource.data.rendicion.monto_gastado >= 0
+          && request.resource.data.recibos is list
+          && request.resource.data.recibos.size() >= 1 && request.resource.data.recibos.size() <= 4)
+        // El jefe (o administración) aprueba o rechaza. El rechazo lleva motivo.
+        || (cmAprobador() && resource.data.estado == "solicitado"
+          && cmCambia().hasOnly(["estado", "aprobacion", "rechazo", "historial", "updated_at"])
+          && ((request.resource.data.estado == "aprobado"
+                && request.resource.data.aprobacion.por_uid == request.auth.uid)
+              || (request.resource.data.estado == "rechazado"
+                && request.resource.data.rechazo.por_uid == request.auth.uid
+                && request.resource.data.rechazo.motivo is string
+                && request.resource.data.rechazo.motivo.size() >= 3)))
+        // El custodio paga el reembolso, entrega el anticipo o lo devuelve con
+        // motivo (la factura no sirve). Solo sobre lo que YA aprobó el jefe.
+        || (cmCustodio() && resource.data.estado == "aprobado"
+          && cmCambia().hasOnly(["estado", "entrega", "rechazo", "historial", "updated_at"])
+          && ((request.resource.data.estado == "pagado" && resource.data.tipo == "reembolso"
+                && request.resource.data.entrega.por_uid == request.auth.uid
+                && request.resource.data.entrega.monto is number && request.resource.data.entrega.monto > 0)
+              || (request.resource.data.estado == "entregado" && resource.data.tipo == "anticipo"
+                && request.resource.data.entrega.por_uid == request.auth.uid
+                && request.resource.data.entrega.monto is number && request.resource.data.entrega.monto > 0)
+              || (request.resource.data.estado == "rechazado"
+                && request.resource.data.rechazo.por_uid == request.auth.uid
+                && request.resource.data.rechazo.motivo is string
+                && request.resource.data.rechazo.motivo.size() >= 3)))
+        // El custodio cierra la rendición, o la devuelve para que la corrijan.
+        || (cmCustodio() && resource.data.estado == "rendido"
+          && cmCambia().hasOnly(["estado", "cierre", "rendicion_devuelta", "historial", "updated_at"])
+          && ((request.resource.data.estado == "cerrado"
+                && request.resource.data.cierre.por_uid == request.auth.uid)
+              || (request.resource.data.estado == "entregado"
+                && request.resource.data.rendicion_devuelta.motivo is string
+                && request.resource.data.rendicion_devuelta.motivo.size() >= 3)))
+        // El custodio reclasifica (categoría) sin mover el estado.
+        || (cmCustodio() && request.resource.data.estado == resource.data.estado
+          && cmCambia().hasOnly(["categoria", "historial", "updated_at"]))
+      );
+      allow delete: if false;
+    }
+
     // empresa/config guarda parámetros sensibles: umbrales de auto-envío de
     // cotizaciones (descuento_max_pct, total_max), seriales_editores_extra
     // (allowlist que salta el candado de seriales) e itbms_rate (tasa fiscal).
@@ -1512,7 +1630,9 @@ service cloud.firestore {
     match /empresa/{docId} {
       allow read:  if isSignedIn();
       allow write: if isSignedIn()
-        && (docId == "facturacion_config"
+        // caja_menuda (2026-11-26): monto del fondo, tope por recibo y
+        // categorías — los lleva contabilidad.
+        && (docId in ["facturacion_config", "caja_menuda"]
               ? userRole() in ["administrador", "contabilidad"]
               : (docId == "IPs" ? true : isAdmin()));
     }

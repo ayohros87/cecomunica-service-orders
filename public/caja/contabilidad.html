@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
+  <link rel="preload" href="/brand/fonts/ibm-plex-sans-400-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/brand/fonts/barlow-700-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <title>Caja menuda · Contabilidad - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/ceco-rail.css">
+  <link rel="stylesheet" href="../css/bandeja.css">
+  <link rel="stylesheet" href="../css/caja.css">
+
+  <script src="../js/core/modulos.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script type="module" src="/js/entry/caja-contabilidad.js"></script>
+</head>
+<body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
+
+<div id="topbar-mount"></div>
+<script>
+  Layout.renderTopbarFor('index', {
+    back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Caja menuda' },
+    title: '<i data-lucide="banknote"></i> Caja menuda · Contabilidad',
+  });
+</script>
+
+<!-- Bandeja de quien custodia el fondo (contabilidad y administración).
+     Escritorio primero: lista a la izquierda, el gasto con su factura a la
+     derecha. En pantalla angosta el detalle abre en hoja. -->
+<div class="app-wrap app-wrap--full">
+  <div class="cc-kpis" id="ccKpis"></div>
+  <div class="bj-barra">
+    <span class="bj-buscar"><i data-lucide="search"></i><input type="search" id="ccBuscar" class="form-input" placeholder="Buscar persona, concepto o número…" autocomplete="off" aria-label="Buscar"></span>
+    <div class="bj-filtros" id="ccFiltros" role="tablist" aria-label="Filtrar"></div>
+    <span class="push"></span>
+    <input type="month" id="ccMes" class="form-input cc-mes" title="Mes de los terminados y del Excel" aria-label="Mes">
+    <button type="button" class="btn btn-ghost btn-sm" id="ccExcel"><i data-lucide="file-spreadsheet"></i> Excel del mes</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="ccConfig"><i data-lucide="settings-2"></i> Fondo y tope</button>
+  </div>
+  <div class="cc-dos">
+    <div id="ccLista"><div class="cm-vacio">Cargando…</div></div>
+    <aside class="cc-detalle" id="ccDetalle"><div class="cc-detalle-vacio">Elige un gasto para ver su factura.</div></aside>
+  </div>
+</div>
+
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>document.addEventListener('DOMContentLoaded', () => Layout.initRail('caja'));</script>
+</body>
+</html>

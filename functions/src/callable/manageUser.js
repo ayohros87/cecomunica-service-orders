@@ -19,6 +19,7 @@ const { admin, db } = require("../lib/admin");
  *   { action: "reactivate",    uid }                                   → { ok: true }
  *   { action: "resetPassword", uid }                                   → { resetLink }
  *   { action: "updateCargo",   uid, cargo }                            → { ok: true }
+ *   { action: "updateJefe",    uid, jefe_uid }                         → { ok: true }
  *
  * Audit: every successful mutation writes to usuarios_audit/{autoId} so
  * admin/auditoria.html can render it alongside órdenes / contratos / PII.
@@ -213,6 +214,43 @@ module.exports = onCall(
           action:    "USUARIO_UPDATE_CARGO",
           before:    { cargo: antes },
           after:     { cargo },
+        });
+        return { ok: true };
+      }
+
+      // ─────────────── UPDATE JEFE ───────────────
+      // El jefe inmediato de la persona: quien le APRUEBA lo que pide de caja
+      // menuda (2026-11-26; las reglas de caja_menuda leen usuarios/{uid}.jefe_uid
+      // al crear el gasto). Vacío = sin jefe asignado y aprueba administración.
+      case "updateJefe": {
+        const uid = data.uid;
+        const jefeUid = String(data.jefe_uid || "").trim();
+        if (!uid) throw new HttpsError("invalid-argument", "uid requerido.");
+        if (jefeUid && jefeUid === uid) {
+          throw new HttpsError("invalid-argument", "Nadie puede ser su propio jefe: aprobaría sus propios gastos.");
+        }
+        const ref = db.collection("usuarios").doc(uid);
+        const snap = await ref.get();
+        if (!snap.exists) throw new HttpsError("not-found", "Usuario no encontrado.");
+        let jefeNombre = "";
+        if (jefeUid) {
+          const j = await db.collection("usuarios").doc(jefeUid).get();
+          if (!j.exists) throw new HttpsError("not-found", "El jefe elegido no existe.");
+          if (j.data().activo === false) throw new HttpsError("failed-precondition", "El jefe elegido está desactivado.");
+          jefeNombre = j.data().nombre || j.data().email || "";
+        }
+        const antes = snap.data().jefe_uid || "";
+        await ref.update({
+          jefe_uid: jefeUid || admin.firestore.FieldValue.delete(),
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+          updated_by: callerUid,
+        });
+        await writeAudit({
+          actorUid:  callerUid,
+          targetUid: uid,
+          action:    "USUARIO_UPDATE_JEFE",
+          before:    { jefe_uid: antes },
+          after:     { jefe_uid: jefeUid, jefe_nombre: jefeNombre },
         });
         return { ok: true };
       }

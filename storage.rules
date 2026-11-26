@@ -224,6 +224,22 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // ── Caja menuda: foto de la factura (2026-11-26) ────────────────────
+    // Cada quien sube a SU carpeta (el uid) la factura fiscal del gasto que
+    // pide o rinde; el doc caja_menuda/{id} guarda solo el path. La lee el
+    // personal con sesión (el jefe que aprueba y contabilidad que paga la
+    // necesitan a la vista). JPEG (la página comprime la foto) o PDF. No se
+    // pisa (`resource == null`) ni se borra: es el respaldo contable.
+    match /caja_menuda_recibos/{uid}/{file} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == uid
+                    && resource == null
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('(image/jpeg|application/pdf)')
+                    && file.matches('[0-9]+-[a-z0-9]+[.](jpg|pdf)');
+      allow update, delete: if false;
+    }
+
     // ── Reporte KPIs junta (snapshots PDF + Excel fuente) ────────────────
     // Data financiera de junta directiva: NINGÚN acceso de cliente, ni
     // lectura. Escritura y lectura pasan solo por el callable

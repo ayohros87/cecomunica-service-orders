@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
+  <link rel="preload" href="/brand/fonts/ibm-plex-sans-400-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/brand/fonts/barlow-700-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <title>Caja menuda - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/ceco-rail.css">
+  <link rel="stylesheet" href="../css/bandeja.css">
+  <link rel="stylesheet" href="../css/caja.css">
+
+  <script src="../js/core/modulos.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script type="module" src="/js/entry/caja-index.js"></script>
+</head>
+<body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
+
+<div id="topbar-mount"></div>
+<script>
+  Layout.renderTopbarFor('index', {
+    title: '<i data-lucide="banknote"></i> Caja menuda',
+  });
+</script>
+
+<!-- Caja menuda para quien pide y para quien aprueba (2026-11-26). Pensada
+     para el teléfono: una columna y el botón de pedir fijo abajo. La bandeja
+     de contabilidad es otra página (contabilidad.html). -->
+<div class="app-wrap cm-wrap">
+  <div class="cm-cabecera">
+    <div class="cm-tabs" role="tablist" aria-label="Qué ver">
+      <button type="button" class="cm-tab is-on" data-tab="mios" role="tab" aria-selected="true">Mis gastos</button>
+      <button type="button" class="cm-tab" data-tab="aprobar" role="tab" aria-selected="false" id="cmTabAprobar" hidden>Por aprobar <span class="cnt" id="cmCntAprobar" hidden>0</span></button>
+    </div>
+    <span class="push"></span>
+    <a class="btn btn-ghost btn-sm" href="contabilidad.html" id="cmLinkConta" hidden><i data-lucide="inbox"></i> Bandeja de contabilidad</a>
+  </div>
+  <div id="cmLista"><div class="cm-vacio">Cargando…</div></div>
+</div>
+<button type="button" class="btn btn-accent cm-fab" id="cmNuevo"><i data-lucide="plus"></i> Nuevo gasto</button>
+
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>document.addEventListener('DOMContentLoaded', () => Layout.initRail('caja'));</script>
+</body>
+</html>

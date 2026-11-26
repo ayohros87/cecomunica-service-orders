@@ -34,7 +34,12 @@ window.MODULOS = (() => {
     // admin/contabilidad llegan a la bandeja por Finanzas → Bandeja; el módulo
     // suelto "facturacion_bandeja" es solo para recepción (una sola entrada
     // por rol, sin duplicar tarjetas en el home — Alberto 2026-09-04).
-    administrador: ["ordenes", "poc", "almacen", "inventario", "equipos", "pendientes", "facturacion", "vendedores", "centro", "contratos", "cotizaciones", "piezas", "firma"],
+    // "caja" (caja menuda, 2026-11-26): EN PILOTO, solo administración y
+    // contabilidad, hasta que Alberto asigne el jefe de cada quien en
+    // Usuarios y Cheila valide el recorrido. Las reglas ya admiten a todo el
+    // personal (pide cualquiera, aprueba su jefe): abrirlo es agregar "caja"
+    // a los demás roles de este mapa.
+    administrador: ["ordenes", "poc", "almacen", "inventario", "equipos", "pendientes", "facturacion", "caja", "vendedores", "centro", "contratos", "cotizaciones", "piezas", "firma"],
     gerente:       ["ordenes", "poc", "almacen", "inventario", "equipos", "centro", "contratos", "cotizaciones", "firma"],
     // inventario perdió "centro" el 2026-09-03: bodega asigna los seriales de
     // las gestiones desde Almacén · Asignar, ya no desde la ficha del cliente.
@@ -42,7 +47,7 @@ window.MODULOS = (() => {
     // contratos: archivo de CONSULTA (Alberto 2026-09-28). centro (D17, Alberto
     // 2026-10-01): contabilidad ve Finanzas, Centro de gestión y Clientes — el
     // Centro ES la entrada a clientes; ahí entra de consulta (sin gestiones).
-    contabilidad:  ["facturacion", "contratos", "centro", "firma"],
+    contabilidad:  ["facturacion", "caja", "contratos", "centro", "firma"],
     vista:         ["ordenes", "poc", "firma"],
     tecnico:       ["ordenes", "poc", "firma"],
     // "no-devueltos" (2026-10-15): la jefa de taller cotiza la reposición de
@@ -107,6 +112,9 @@ window.MODULOS = (() => {
       { id: 'facturacion', label: 'Finanzas', icon: 'calculator', href: '/facturacion/bandeja.html',
         subtitulo: 'Catálogo · QuickBooks · Emisión',
         keywords: 'finanzas facturacion contabilidad tarifas alquiler cargos modelos quickbooks activacion' },
+      { id: 'caja', label: 'Caja menuda', icon: 'banknote', href: '/caja/index.html',
+        subtitulo: 'Reembolsos y anticipos',
+        keywords: 'caja menuda gasto reembolso anticipo viatico peaje combustible estacionamiento factura efectivo' },
     ]},
   ];
 
