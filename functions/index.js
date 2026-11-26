@@ -94,6 +94,7 @@ exports.recordatorioOperativo         = require("./src/triggers/scheduled/record
 // La salud del catálogo ("una familia, dos filas") ya no tiene cron propio:
 // la arma agregadoPoolDiario con el mismo barrido del pool (2026-11-11).
 exports.manageUser                    = require("./src/callable/manageUser");
+exports.cajaMenudaReponer             = require("./src/callable/cajaMenudaReponer");
 exports.rebuildContractCache          = require("./src/callable/rebuildContractCache");
 exports.runBackfill                   = require("./src/callable/runBackfill");
 exports.previewEmail                  = require("./src/callable/previewEmail");

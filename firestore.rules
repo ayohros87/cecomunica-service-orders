@@ -1639,11 +1639,38 @@ service cloud.firestore {
               || (request.resource.data.estado == "entregado"
                 && request.resource.data.rendicion_devuelta.motivo is string
                 && request.resource.data.rendicion_devuelta.motivo.size() >= 3)))
-        // El custodio reclasifica (categoría) sin mover el estado.
+        // El custodio reclasifica (categoría) sin mover el estado. Ya no
+        // cuando el gasto entró en una reposición: el informe de esa
+        // reposición quedó congelado con la categoría que tenía.
         || (cmCustodio() && request.resource.data.estado == resource.data.estado
+          && resource.data.get("reposicion_id", null) == null
           && cmCambia().hasOnly(["categoria", "historial", "updated_at"]))
       );
       allow delete: if false;
+    }
+
+    // ── Caja menuda: arqueos y reposiciones del fondo (2026-11-26) ────────
+    // Un doc por arqueo (ARQ-0001) o por reposición (REP-0001), con la lista
+    // de recibos congelada, el cuadre del fondo y el conteo del efectivo. Los
+    // crea SOLO el servidor (callable cajaMenudaReponer), que en la misma
+    // transacción pone el consecutivo y marca cada gasto con `reposicion_id`
+    // — por eso `reposicion_id` y `por_reponer` no están en ninguna lista de
+    // campos que el navegador pueda escribir en caja_menuda. Lo único que
+    // hace el navegador aquí es anotar que el cheque ya se cobró y el
+    // efectivo volvió a la caja. Solo lo ve quien custodia el fondo.
+    match /caja_menuda_reposiciones/{docId} {
+      function crCustodio() {
+        return isSignedIn() && userRole() in ["administrador", "contabilidad"];
+      }
+      allow get, list: if crCustodio();
+      allow update: if crCustodio()
+        && resource.data.tipo == "reposicion" && resource.data.estado == "preparada"
+        && request.resource.data.estado == "repuesta"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado", "pago", "updated_at"])
+        && request.resource.data.pago.por_uid == request.auth.uid
+        && request.resource.data.pago.referencia is string
+        && request.resource.data.pago.referencia.size() <= 60;
+      allow create, delete: if false;
     }
 
     // empresa/config guarda parámetros sensibles: umbrales de auto-envío de

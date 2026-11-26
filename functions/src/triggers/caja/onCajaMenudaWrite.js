@@ -5,19 +5,22 @@ const { db } = require("../../lib/admin");
 const { escapeHtml } = require("../../domain/emailRenderer");
 const { APP_BASE_URL } = require("../../lib/inventario");
 const { avisos, numero } = require("../../domain/cajaMenudaAviso");
+const C = require("../../domain/cajaMenuda");
 
 // Caja menuda (2026-11-26): lo que el servidor hace por cada gasto.
 //
 //  1. Al crearse le pone el número consecutivo (CM-0001). El navegador no
 //     puede escribir `numero` (firestore.rules), así que nadie lo falsea ni
 //     lo repite.
-//  2. Cada vez que el gasto cambia de manos, avisa por correo a quien le toca
+//  2. Cuando el gasto ya sacó efectivo del fondo lo marca `por_reponer`, y le
+//     quita la marca cuando entra en una reposición (cajaMenudaReponer).
+//  3. Cada vez que el gasto cambia de manos, avisa por correo a quien le toca
 //     (domain/cajaMenudaAviso.js): al jefe que aprueba, a contabilidad que
 //     paga o cierra, o a quien pidió cuando ya hay respuesta.
 //
-// El eco: poner el número reescribe el doc y este trigger vuelve a correr.
-// No hace nada la segunda vez porque el estado no cambió (avisos() devuelve
-// vacío) y el número ya está.
+// El eco: poner el número o la marca reescribe el doc y este trigger vuelve a
+// correr. No hace nada la segunda vez porque el estado no cambió (avisos()
+// devuelve vacío), el número ya está y la marca ya dice lo que debe.
 
 const activos = (snap) => snap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(u => u.activo !== false && u.email);
 
@@ -63,6 +66,19 @@ async function asignarNumero(ref) {
   });
 }
 
+// `por_reponer` es la marca por la que la bandeja y la reposición encuentran
+// los recibos que ya sacaron efectivo del fondo, sin importar de qué mes sean.
+// Se decide con el doc de AHORA (no con el del evento): un evento viejo que
+// llega tarde no puede volver a marcar un gasto que ya entró en una reposición.
+async function marcarPorReponer(ref) {
+  return db.runTransaction(async (tx) => {
+    const doc = await tx.get(ref);
+    if (!doc.exists) return;
+    const debe = C.porReponer(doc.data());
+    if ((doc.data().por_reponer === true) !== debe) tx.update(ref, { por_reponer: debe });
+  });
+}
+
 module.exports = onDocumentWritten(
   { document: "caja_menuda/{gastoId}", region: "us-central1" },
   async (event) => {
@@ -78,6 +94,12 @@ module.exports = onDocumentWritten(
       }
     } catch (e) {
       logger.error("[onCajaMenudaWrite] no se pudo numerar", { id, message: e.message });
+    }
+
+    try {
+      if ((despues.por_reponer === true) !== C.porReponer(despues)) await marcarPorReponer(event.data.after.ref);
+    } catch (e) {
+      logger.error("[onCajaMenudaWrite] no se pudo marcar por reponer", { id, message: e.message });
     }
 
     for (const av of avisos(antes, despues, id)) {

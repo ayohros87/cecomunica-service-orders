@@ -27,18 +27,40 @@ import { abrir as abrirSesion, USUARIOS, FS_HOST, AUTH_HOST, PASS } from './emu-
 // Storage de mentira DESDE EL ARRANQUE de cada página: el enlace ?g= abre el
 // gasto (y pide la URL de la factura) antes de que el script alcance a
 // parchar nada, y sin esto esa lectura se iba al Storage de producción.
+//
+// Lo mismo con las callables (no hay emulador de Functions): la página llama
+// a firebase.functions().httpsCallable(nombre) y aquí corre el código REAL de
+// la function contra el Firestore del emulador, con el uid de esa sesión.
+// Y el Excel: SheetJS viene de un CDN; aquí se reemplaza por uno de mentira
+// que guarda las filas en window.__excel para poder revisarlas.
 async function abrir(opts) {
   const s = await abrirSesion(opts);
+  const uid = Object.keys(GENTE).find(k => GENTE[k].email === opts.email);
+  await s.page.exposeFunction('__callable', async (nombre, data) => {
+    if (!CALLABLES[nombre]) throw new Error(`callable sin simular: ${nombre}`);
+    return CALLABLES[nombre].run({ data, auth: { uid, token: {} } });
+  });
   await s.page.evaluateOnNewDocument(() => {
     const fake = () => ({ ref: (p) => ({
       put: async () => ({}),
       getDownloadURL: async () => 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7#' + encodeURIComponent(p),
     }) });
+    const fns = () => ({ httpsCallable: (nombre) => async (data) => ({ data: await window.__callable(nombre, data) }) });
     let fb;
     Object.defineProperty(window, 'firebase', { configurable: true, get: () => fb, set: (v) => {
       fb = v;
       try { Object.defineProperty(v, 'storage', { configurable: true, writable: true, value: fake }); } catch (e) { v.storage = fake; }
+      try { Object.defineProperty(v, 'functions', { configurable: true, writable: true, value: fns }); } catch (e) { v.functions = fns; }
     } });
+    window.XLSX = {
+      utils: {
+        aoa_to_sheet: (filas) => ({ filas }),
+        json_to_sheet: (objs) => ({ filas: objs }),
+        book_new: () => ({ hojas: [] }),
+        book_append_sheet: (wb, ws, nombre) => wb.hojas.push({ nombre, ws }),
+      },
+      writeFile: (wb, archivo) => { window.__excel = { archivo, hoja: wb.hojas[0].nombre, filas: wb.hojas[0].ws.filas }; },
+    };
   });
   return s;
 }
@@ -51,6 +73,7 @@ const admin = require('firebase-admin');
 admin.initializeApp({ projectId: 'cecomunica-service-orders' });
 const db = admin.firestore();
 const trigger = require('./src/triggers/caja/onCajaMenudaWrite');
+const CALLABLES = { cajaMenudaReponer: require('./src/callable/cajaMenudaReponer') };
 
 let fallos = 0;
 const ok = (c, m) => { console.log((c ? '  ok   ' : '  FALLA ') + m); if (!c) fallos++; };
@@ -69,11 +92,12 @@ for (const [uid, u] of Object.entries(GENTE)) {
   await admin.auth().createUser({ uid, email: u.email, password: PASS, displayName: u.nombre });
   await db.doc(`usuarios/${uid}`).set({ ...u, activo: true });
 }
-for (const col of ['caja_menuda', 'mail_queue']) {
+for (const col of ['caja_menuda', 'caja_menuda_reposiciones', 'mail_queue']) {
   const s = await db.collection(col).get();
   await Promise.all(s.docs.map(d => d.ref.delete()));
 }
 await db.doc('contadores/caja_menuda').delete().catch(() => {});
+await db.doc('contadores/caja_menuda_reposiciones').delete().catch(() => {});
 await db.doc('empresa/caja_menuda').delete().catch(() => {});
 
 // Una imagen de verdad para la factura (la página la comprime a JPEG).
@@ -224,7 +248,7 @@ ok(/te pagaron \$35\.00 por ACH/.test(mq[mq.length - 1].subject) && mq[mq.length
 // ═══ 3) Anticipo ═══════════════════════════════════════════════════════════
 console.log('\n3) Anticipo: pide Alberto, aprueba Zuleika, entrega Cheila, rinde Alberto, cierra Cheila');
 await alb.ir('/caja/index.html', { esperar: 1200 }); await stubStorage(alb);
-await llenar(alb, { tipo: 'anticipo', monto: '20', categoria: 'Viático', concepto: 'Almuerzo instalación Chitré', foto: false });
+await llenar(alb, { tipo: 'anticipo', monto: '20', categoria: 'Vales y viáticos', concepto: 'Almuerzo instalación Chitré', foto: false });
 ok(/Lo aprueba administración/.test(await alb.texto(hoja)), 'sin jefe asignado, el formulario dice que aprueba administración');
 await accion(alb, 'enviar'); await servidor();
 let g3 = await porConcepto('Almuerzo instalación');
@@ -287,7 +311,7 @@ await cheE.captura('11-escritorio-terminados');
 // ═══ 4) Rechazo con motivo ═════════════════════════════════════════════════
 console.log('\n4) Rechazo');
 await che.ir('/caja/index.html', { esperar: 1200 }); await stubStorage(che);
-await llenar(che, { monto: '8', categoria: 'Varios', concepto: 'Café para la oficina', proveedor: 'Super 99' });
+await llenar(che, { monto: '8', categoria: 'Misceláneo', concepto: 'Café para la oficina', proveedor: 'Super 99' });
 await accion(che, 'enviar'); await servidor();
 const g4 = await porConcepto('Café para');
 await zul.ir(`/caja/index.html?g=${g4.id}`, { esperar: 1800 });
@@ -304,6 +328,118 @@ ok(/rechazaron/.test(mq[mq.length - 1].subject) && /No es un gasto de la empresa
 await che.ir(`/caja/index.html?g=${g4.id}`, { esperar: 1800 });
 ok(/Rechazado por Zuleika/.test(await che.texto(hoja)) && (await botones(che)).length === 0, 'quien pidió ve el motivo y ya no puede hacer nada con ese gasto');
 await che.captura('12-telefono-rechazado');
+
+// ═══ 7) El fondo: arqueo y reposición ══════════════════════════════════════
+// Como en el informe de Cheila: se juntan los recibos pagados en efectivo, se
+// cuenta la caja por denominación y sale el informe para pedir el cheque.
+// A esta altura: CM-0001 pagado en efectivo ($12.50), CM-0002 por ACH ($35,
+// no toca el fondo), CM-0003 anticipo cerrado ($20 − $2.75 de vuelto = $17.25)
+// y CM-0004 rechazado.
+console.log('\n7) El fondo: arqueo y reposición');
+const reps = async () => (await db.collection('caja_menuda_reposiciones').get()).docs.map(d => ({ id: d.id, ...d.data() }));
+const contar = async (s, conteo) => {
+  for (const [id, n] of Object.entries(conteo)) await escribir(s, `${hoja} [data-den="${id}"]`, n);
+  await s.quieto(200);
+};
+// Clic por DOM: el aviso flotante del guardado anterior puede estar encima del botón.
+const abrirArqueo = async (s) => { await s.page.$eval('#ccFondo [data-cc-fondo="arqueo"]', b => b.click()); await s.page.waitForSelector(`${hoja} [data-den="b20"]`, { timeout: 5000 }); };
+let gs = await gastos();
+ok(gs.filter(g => g.por_reponer === true).map(g => g.numero).sort().join() === 'CM-0001,CM-0003',
+  `el servidor marcó por reponer lo que sacó efectivo del fondo: ${gs.filter(g => g.por_reponer === true).map(g => g.numero).sort()}`);
+await cheE.ir('/caja/contabilidad.html', { esperar: 1800 });
+let fondoTxt = await cheE.texto('#ccFondo');
+ok(/\$170\.25/.test(fondoTxt) && /2 recibos pagados sin reponer: \$29\.75/.test(fondoTxt), `el fondo dice cuánto debe haber: ${fondoTxt.replace(/\s+/g, ' ').slice(0, 120)}`);
+ok(!/Toca reponer/.test(fondoTxt), 'con $170 en caja todavía no toca reponer');
+await cheE.captura('14-escritorio-fondo');
+
+await abrirArqueo(cheE);
+let hojaTxt = await cheE.texto(hoja);
+ok(/CM-0001 al CM-0003/.test(hojaTxt) && /Debe haber en caja/.test(hojaTxt) && /Reponer \$29\.75/.test(hojaTxt), 'la hoja muestra los recibos que entran y el botón dice cuánto se repone');
+await accion(cheE, 'arqueo');
+ok(/Cuenta el efectivo/.test(await ultimoToast(cheE)), `sin contar no guarda: "${await ultimoToast(cheE)}"`);
+await contar(cheE, { b20: 8, m25: 1 });
+ok(/Falta/.test(await cheE.texto('#ccArqDif')) && /\$10\.00/.test(await cheE.texto('#ccArqDif')) && /\$160\.25/.test(await cheE.texto('#ccArqEfectivo')),
+  `va contando: ${(await cheE.texto('#ccArqEfectivo'))} · ${(await cheE.texto('#ccArqDif')).replace(/\s+/g, ' ')}`);
+await cheE.captura('15-escritorio-arqueo-falta');
+await escribir(cheE, '#ccArqNota', 'Falta un billete de 10, lo busco');
+await accion(cheE, 'arqueo'); await cheE.quieto(900, 15000);
+let rs = await reps();
+const arq = rs.find(r => r.tipo === 'arqueo');
+ok(!!arq && arq.numero === 'ARQ-0001' && arq.estado === 'hecho' && arq.arqueo.diferencia === -10 && arq.esperado === 170.25 && arq.items.length === 0 && arq.created_by_uid === 'cheila',
+  `el arqueo suelto queda guardado con lo que faltó: ${JSON.stringify(arq && { n: arq.numero, d: arq.arqueo.diferencia, e: arq.esperado })}`);
+ok(/ARQ-0001 guardado: faltan \$10\.00/.test(await ultimoToast(cheE)), `y lo dice: "${await ultimoToast(cheE)}"`);
+gs = await gastos();
+ok(gs.filter(g => g.por_reponer === true).length === 2 && !gs.some(g => g.reposicion_id), 'un arqueo no toca los recibos: siguen por reponer');
+
+// Ahora sí: aparece el billete, la caja cuadra y se repone.
+await abrirArqueo(cheE);
+await contar(cheE, { b20: 8, b10: 1, m25: 1 });
+ok(/Cuadra/.test(await cheE.texto('#ccArqDif')), 'con el billete de 10 la caja cuadra');
+await cheE.captura('16-escritorio-arqueo-cuadra');
+await accion(cheE, 'reponer'); await cheE.quieto(1200, 15000);
+rs = await reps();
+const rep = rs.find(r => r.tipo === 'reposicion');
+ok(!!rep && rep.numero === 'REP-0001' && rep.estado === 'preparada' && rep.n === 2 && rep.total === 29.75 && rep.desde === 'CM-0001' && rep.hasta === 'CM-0003'
+  && rep.esperado === 170.25 && rep.arqueo.diferencia === 0 && rep.arqueo.efectivo === 170.25,
+  `la reposición junta los 2 recibos por $29.75 y cuadra: ${JSON.stringify(rep && { n: rep.numero, t: rep.total, d: rep.desde, h: rep.hasta, dif: rep.arqueo.diferencia })}`);
+ok(rep.items.map(i => `${i.numero}:${i.monto}:${i.categoria}`).join(' | ') === 'CM-0001:12.5:Peaje | CM-0003:17.25:Vales y viáticos',
+  `con la lista congelada (el anticipo entra por lo gastado, no por lo entregado): ${rep.items.map(i => `${i.numero}:${i.monto}`).join(' | ')}`);
+gs = await gastos();
+const marcados = gs.filter(g => g.reposicion_id === rep.id);
+ok(marcados.length === 2 && marcados.every(g => g.por_reponer === false && g.reposicion_numero === 'REP-0001' && g.historial[g.historial.length - 1].accion === 'repuesto'),
+  'cada recibo queda marcado con su reposición y con la entrada en su historial');
+ok(!gs.find(g => g.numero === 'CM-0002').reposicion_id && !gs.find(g => g.numero === 'CM-0004').reposicion_id, 'el ACH y el rechazado no entran');
+const nCorreos = (await correos()).length;
+await servidor();
+gs = await gastos();
+ok(gs.filter(g => g.por_reponer === true).length === 0 && (await correos()).length === nCorreos, 'el eco del trigger no los vuelve a marcar ni manda correos');
+
+// El informe sale solo, en el formato del Excel de Cheila.
+const xl = await cheE.page.evaluate(() => window.__excel);
+const cab = xl?.filas.find(f => f[0] === 'COMP') || [];
+const fila3 = xl?.filas.find(f => f[0] === 'CM-0003') || [];
+ok(xl?.archivo === 'caja-menuda-REP-0001.xlsx' && cab[3] === 'VALES Y VIÁTICOS' && cab[cab.length - 1] === 'TOTAL' && fila3[2] === 'Alberto Yohros' && fila3[3] === 17.25,
+  `el informe se descarga solo, una columna por categoría: ${xl?.archivo} · ${cab.slice(0, 5).join(', ')}…`);
+ok(xl.filas.find(f => f[2] === 'REEMBOLSO:')[3] === 29.75 && xl.filas.find(f => f[2] === 'TOTAL EN CAJA:')[3] === 170.25
+  && xl.filas.find(f => f[0] === 'Efectivo en Caja')[3] === 170.25 && xl.filas.some(f => f[0] === 'Preparado por: Cheila Sánchez'),
+  'con el reembolso, el total en caja, el arqueo y quién lo preparó');
+
+fondoTxt = await cheE.texto('#ccFondo');
+ok(/\$170\.25/.test(fondoTxt) && /0 recibos pagados sin reponer/.test(fondoTxt) && /cheque por cobrar: \$29\.75/.test(fondoTxt),
+  `mientras el cheque no vuelve, en caja sigue habiendo lo mismo: ${fondoTxt.replace(/\s+/g, ' ').slice(0, 140)}`);
+await cheE.page.click('#ccFiltros [data-f="hechos"]'); await cheE.quieto(600);
+await cheE.page.click(`#ccLista [data-cm-id="${g1.id}"]`); await cheE.quieto(700);
+ok(/En la reposición REP-0001/.test(await cheE.texto('#ccDetalle')) && !(await cheE.page.$('#ccCat')), 'el recibo dice en qué reposición entró y ya no se reclasifica');
+await abrirArqueo(cheE);
+ok(!(await botones(cheE)).includes('reponer'), `sin recibos nuevos no hay nada que reponer: ${await botones(cheE)}`);
+await accion(cheE, 'cancelar');
+
+// El cheque se cobra: el fondo vuelve a estar completo.
+await cheE.page.$eval('#ccFondo [data-cc-fondo="historial"]', b => b.click());
+await cheE.page.waitForSelector(`${hoja} .cc-rep`, { timeout: 5000 });
+hojaTxt = await cheE.texto(hoja);
+ok(/REP-0001/.test(hojaTxt) && /ARQ-0001/.test(hojaTxt) && /Cheque por cobrar/.test(hojaTxt) && /faltaron \$10\.00/.test(hojaTxt), 'el historial lista la reposición y el arqueo, con lo que faltó');
+await cheE.quieto(600); await cheE.captura('17-escritorio-reposiciones');
+await cheE.page.click(`${hoja} [data-rep-excel="${arq.id}"]`); await cheE.quieto(400);
+const xlArq = await cheE.page.evaluate(() => window.__excel);
+ok(xlArq.archivo === 'caja-menuda-ARQ-0001.xlsx' && xlArq.filas.some(f => f[0] === 'Faltante' && f[3] === 10) && !xlArq.filas.some(f => f[0] === 'COMP'), 'el arqueo también tiene su informe, con el faltante');
+await cheE.page.click(`${hoja} [data-rep-cobrada="${rep.id}"]`);
+await cheE.page.waitForSelector('.overlay [data-role="prompt-input"]', { timeout: 5000 });
+await cheE.page.type('.overlay [data-role="prompt-input"]', '000445');
+await cheE.page.click('.overlay [data-action="confirm"]'); await cheE.quieto(1200, 15000);
+const repB = (await reps()).find(r => r.id === rep.id);
+ok(repB.estado === 'repuesta' && repB.pago.referencia === '000445' && repB.pago.por_uid === 'cheila', 'la reposición queda con el cheque cobrado y quién lo anotó');
+ok(/Cheque cobrado · 000445/.test(await cheE.texto(hoja)), 'y el historial lo muestra');
+await accion(cheE, 'cerrar');
+fondoTxt = await cheE.texto('#ccFondo');
+ok(/\$200\.00/.test(fondoTxt) && !/por cobrar/.test(fondoTxt), `el fondo vuelve a estar completo: ${fondoTxt.replace(/\s+/g, ' ').slice(0, 90)}`);
+
+// El servidor no le cree a la pantalla ni a cualquiera.
+const llamar = (uid, data) => CALLABLES.cajaMenudaReponer.run({ data, auth: { uid, token: {} } }).then(() => 'ok', e => e.code || e.message);
+ok(await llamar('marcos', { conteo: { b20: 10 }, solo_arqueo: true }) === 'permission-denied', 'un técnico no puede hacer el arqueo');
+ok(await llamar('cheila', { conteo: { b20: 10 }, ids: gs.map(g => g.id) }) === 'failed-precondition', 'pedir reponer recibos ya repuestos, por ACH o rechazados no arma nada');
+ok(await llamar('cheila', { conteo: { b50: 4 } }) === 'invalid-argument', 'un conteo con una denominación que no existe se rechaza');
+ok((await reps()).length === 2, 'y ninguno de esos intentos dejó un documento');
 
 // ═══ 5) Piloto y 6) Usuarios ═══════════════════════════════════════════════
 console.log('\n5) Piloto · 6) Usuarios');

@@ -1,8 +1,13 @@
 // @ts-nocheck
+/* global window */
 // Caja menuda — estados, quién puede hacer qué y validación del formulario.
 // Lógica PURA (sin Firestore). La comparten la pantalla de quien pide
-// (caja/index.html), la bandeja de contabilidad (caja/contabilidad.html) y las
-// pruebas (functions/test/cajaMenuda.test.js).
+// (caja/index.html), la bandeja de contabilidad (caja/contabilidad.html), el
+// servidor y las pruebas (functions/test/cajaMenuda.test.js).
+//
+// OJO: functions/src/domain/cajaMenuda.js es COPIA EXACTA de este archivo (la
+// usan el trigger y la callable de reposición). Si cambias uno, copia el otro:
+// la prueba F6 falla si se separan.
 //
 // De dónde salen las reglas: del cuestionario que llenó Cheila (contabilidad)
 // el 2026-11-26. En corto:
@@ -29,7 +34,10 @@
     tope_recibo: 20,
     minimo_reposicion: 50,
     dias_rendir: 2,
-    categorias: ["Viático", "Estacionamiento", "Peaje", "Combustible", "Mantenimiento de auto", "Varios"],
+    // Las columnas del informe de caja menuda que Cheila lleva en Excel
+    // (muestra del 2026-11-26), en su mismo orden.
+    categorias: ["Vales y viáticos", "Transporte y estacionamiento", "Taller", "Mantenimiento de auto",
+      "Correo y timbres", "Peaje", "Misceláneo", "Combustible"],
   };
 
   const TIPOS = {
@@ -175,10 +183,172 @@
 
   const dinero = (n) => `$${(Number(n) || 0).toFixed(2)}`;
 
+  // ── Fondo, reposición y arqueo (2026-11-26) ────────────────────────────
+  // Cómo lo lleva Cheila (su "Informe de caja menuda y arqueo"): el fondo es
+  // fijo ($200). Cuando se va acabando junta los recibos pagados desde la
+  // última reposición, cuenta el efectivo por denominación y pide un cheque
+  // por el total de los recibos. El informe es POR REPOSICIÓN, no por mes.
+  //
+  //   en caja debe haber = fondo − recibos pagados sin reponer
+  //                              − anticipos que andan en la calle
+  //                              − reposiciones pedidas cuyo cheque no ha vuelto
+  //
+  // Las cuentas van en centavos: 147 monedas de un centavo no pueden dar
+  // 1.4700000000000002.
+  const DENOMINACIONES = [
+    { id: "m1", tipo: "moneda", valor: 0.01 },
+    { id: "m5", tipo: "moneda", valor: 0.05 },
+    { id: "m10", tipo: "moneda", valor: 0.1 },
+    { id: "m25", tipo: "moneda", valor: 0.25 },
+    { id: "m50", tipo: "moneda", valor: 0.5 },
+    { id: "m100", tipo: "moneda", valor: 1 },
+    { id: "b1", tipo: "billete", valor: 1 },
+    { id: "b5", tipo: "billete", valor: 5 },
+    { id: "b10", tipo: "billete", valor: 10 },
+    { id: "b20", tipo: "billete", valor: 20 },
+  ];
+  const centavos = (v) => Math.round((Number(v) || 0) * 100);
+  const deCentavos = (c) => Math.round(c) / 100;
+  const msDe = (t) => (t && typeof t.toMillis === "function" ? t.toMillis() : (t instanceof Date ? t.getTime() : Number(t) || 0));
+  // Panamá es UTC−5 todo el año.
+  const fechaPanama = (ms) => (ms ? new Date(ms - 5 * 3600000).toISOString().slice(0, 10) : "");
+
+  // El gasto ya sacó efectivo del fondo para siempre (reembolso pagado, o
+  // anticipo cerrado con algo gastado) y todavía no entró en una reposición.
+  function porReponer(g) {
+    return !!g && !g.reposicion_id && g.via !== "ach"
+      && (g.estado === "pagado" || g.estado === "cerrado") && efectivoFuera(g) > 0;
+  }
+
+  // Efectivo de un anticipo que sigue en manos de la persona.
+  function enLaCalle(g) {
+    if (!g || g.tipo !== "anticipo" || (g.estado !== "entregado" && g.estado !== "rendido")) return 0;
+    return num(g.entrega && g.entrega.monto) || 0;
+  }
+
+  // El conteo es { m1: 147, b5: 2, … }: enteros, y solo denominaciones de la lista.
+  function conteoValido(conteo) {
+    if (!conteo || typeof conteo !== "object" || Array.isArray(conteo)) return false;
+    const ids = DENOMINACIONES.map((d) => d.id);
+    return Object.keys(conteo).every((k) => ids.includes(k)
+      && Number.isInteger(conteo[k]) && conteo[k] >= 0 && conteo[k] <= 9999);
+  }
+
+  function arqueo(conteo) {
+    const c = conteo || {};
+    let total = 0;
+    const lineas = DENOMINACIONES.map((d) => {
+      const n = Number(c[d.id]);
+      const cant = Number.isInteger(n) && n > 0 ? n : 0;
+      const monto = cant * centavos(d.valor);
+      total += monto;
+      return { id: d.id, tipo: d.tipo, valor: d.valor, cant, monto: deCentavos(monto) };
+    });
+    return { lineas, efectivo: deCentavos(total) };
+  }
+
+  // El cuadre del fondo. `gastos` puede traer de todo: aquí se separa lo que
+  // está por reponer de lo que anda en la calle. Con `conteo`, además dice
+  // cuánto se contó y la diferencia (+ sobra, − falta).
+  function cuadre({ fondo, gastos = [], reposiciones = [], conteo = null } = {}) {
+    const f = centavos(fondo);
+    const porRep = gastos.filter(porReponer);
+    const gastado = porRep.reduce((n, g) => n + centavos(efectivoFuera(g)), 0);
+    const anticipos = gastos.reduce((n, g) => n + centavos(enLaCalle(g)), 0);
+    const porCobrar = reposiciones
+      .filter((r) => r && r.tipo === "reposicion" && r.estado === "preparada")
+      .reduce((n, r) => n + centavos(r.total), 0);
+    const esperado = f - gastado - anticipos - porCobrar;
+    const out = {
+      fondo: deCentavos(f), n: porRep.length, gastado: deCentavos(gastado), anticipos: deCentavos(anticipos),
+      por_cobrar: deCentavos(porCobrar), esperado: deCentavos(esperado),
+    };
+    if (conteo) {
+      const a = arqueo(conteo);
+      out.efectivo = a.efectivo;
+      out.diferencia = deCentavos(centavos(a.efectivo) - esperado);
+    }
+    return out;
+  }
+
+  // Las filas del informe: un recibo por gasto, en orden de número. La fecha
+  // es la del día en que salió el efectivo (pago del reembolso o cierre del
+  // anticipo), como en el informe de Cheila.
+  function itemsInforme(gastos) {
+    return (gastos || []).filter(porReponer).map((g) => ({
+      id: g.id,
+      numero: g.numero || "",
+      fecha: fechaPanama(msDe((g.cierre && g.cierre.at) || (g.entrega && g.entrega.at))),
+      beneficiario: g.solicitante_nombre || "",
+      categoria: g.categoria || "",
+      concepto: g.concepto || "",
+      monto: efectivoFuera(g),
+    })).sort((a, b) => String(a.numero).localeCompare(String(b.numero)) || a.fecha.localeCompare(b.fecha));
+  }
+
+  const numeroReposicion = (tipo, n) => `${tipo === "arqueo" ? "ARQ" : "REP"}-${String(n).padStart(4, "0")}`;
+
+  // El informe en el formato del Excel de Cheila, como filas (arreglo de
+  // arreglos) listas para la hoja: COMP · FECHA · BENEFICIARIO · una columna
+  // por categoría · DESCRIPCIÓN · TOTAL, los totales, el cuadre del fondo y
+  // el arqueo por denominación. `rep` es el doc de caja_menuda_reposiciones.
+  function informe(rep, categorias) {
+    const r = rep || {};
+    const items = Array.isArray(r.items) ? r.items : [];
+    const cats = (categorias || []).slice();
+    for (const it of items) if (it.categoria && !cats.includes(it.categoria)) cats.push(it.categoria);
+    const dmy = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || "") ? iso.split("-").reverse().join("/") : "");
+    const filas = [];
+    filas.push(["C COMUNICA, S.A. — INFORME DE CAJA MENUDA"]);
+    filas.push([[r.tipo === "arqueo" ? "Arqueo" : "Reposición", r.numero || "",
+      items.length ? `· comprobantes ${r.desde || ""} al ${r.hasta || ""}` : "", r.fecha ? `· ${dmy(r.fecha)}` : ""]
+      .filter(Boolean).join(" ")]);
+    filas.push([]);
+    const porCat = cats.map(() => 0);
+    let total = 0;
+    // Un arqueo suelto no trae la lista de recibos (siguen por reponer):
+    // solo el cuadre y el conteo.
+    if (items.length) {
+      filas.push(["COMP", "FECHA", "BENEFICIARIO", ...cats.map((c) => c.toUpperCase()), "DESCRIPCIÓN", "TOTAL"]);
+      for (const it of items) {
+        const m = centavos(it.monto);
+        const i = cats.indexOf(it.categoria);
+        if (i >= 0) porCat[i] += m;
+        total += m;
+        filas.push([it.numero || "", dmy(it.fecha), it.beneficiario || "",
+          ...cats.map((c, j) => (j === i ? deCentavos(m) : "")), it.concepto || "", deCentavos(m)]);
+      }
+      filas.push(["", "", "", ...porCat.map(deCentavos), "", deCentavos(total)]);
+      filas.push([]);
+    }
+    filas.push(["", "", "FONDO DE CAJA", num(r.fondo) || 0]);
+    filas.push(["", "", r.tipo === "arqueo" ? "RECIBOS SIN REPONER:" : "REEMBOLSO:",
+      items.length ? deCentavos(total) : (num(r.total) || 0)]);
+    if (num(r.anticipos) > 0) filas.push(["", "", "ANTICIPOS POR RENDIR:", num(r.anticipos)]);
+    if (num(r.por_cobrar) > 0) filas.push(["", "", "REPOSICIONES POR COBRAR:", num(r.por_cobrar)]);
+    filas.push(["", "", "TOTAL EN CAJA:", num(r.esperado) || 0]);
+    filas.push([]);
+    const a = arqueo(r.arqueo && r.arqueo.conteo);
+    const linea = (l) => ["", l.cant, l.valor, l.monto];
+    filas.push(["Monedas", "Cant", "Denominación", "Monto"]);
+    for (const l of a.lineas.filter((x) => x.tipo === "moneda")) filas.push(linea(l));
+    filas.push(["Billetes"]);
+    for (const l of a.lineas.filter((x) => x.tipo === "billete")) filas.push(linea(l));
+    filas.push(["Efectivo en Caja", "", "", a.efectivo]);
+    const dif = deCentavos(centavos(a.efectivo) - centavos(r.esperado));
+    if (dif) filas.push([dif > 0 ? "Sobrante" : "Faltante", "", "", Math.abs(dif)]);
+    if (r.nota) filas.push([`Nota: ${r.nota}`]);
+    filas.push([]);
+    filas.push([`Preparado por: ${r.created_by_nombre || "______________________________"}`]);
+    filas.push(["Revisado por: _______________________________"]);
+    return { filas, columnas: 3 + cats.length + 2 };
+  }
+
   const API = {
-    CONFIG_DEFECTO, TIPOS, ESTADOS, ABIERTOS, ROLES_CUSTODIO, MAX_RECIBOS, MONTO_MAXIMO,
+    CONFIG_DEFECTO, TIPOS, ESTADOS, ABIERTOS, ROLES_CUSTODIO, MAX_RECIBOS, MONTO_MAXIMO, DENOMINACIONES,
     num, config, via, esCustodio, esAprobador, acciones, esperaA, diasSinRendir,
     validar, rendicion, efectivoFuera, dinero,
+    porReponer, enLaCalle, conteoValido, arqueo, cuadre, itemsInforme, numeroReposicion, informe, fechaPanama,
   };
 
   if (typeof window !== "undefined") window.CajaMenuda = API;

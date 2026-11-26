@@ -7,6 +7,11 @@
 // terminados del mes elegido. Derecha: el gasto con su factura a la vista y
 // los botones que aplican. "Excel del mes" saca todos los gastos del mes para
 // el registro en QuickBooks. "Fondo y tope" edita empresa/caja_menuda.
+//
+// Arriba, el fondo: cuánto debe haber en caja, y "Arqueo y reposición" —
+// contar el efectivo por denominación y juntar los recibos pagados en el
+// informe con el que se pide el cheque (el formato del Excel de Cheila,
+// muestras del 2026-11-26). El informe es por reposición, no por mes.
 (function () {
   const C = () => window.CajaMenuda;
   const S = () => window.CajaMenudaService;
@@ -29,6 +34,9 @@
   let busqueda = '';
   let sel = null; // id del gasto abierto a la derecha
   let mes = '';   // YYYY-MM
+  // El fondo: recibos pagados sin reponer (de cualquier mes) y las
+  // reposiciones y arqueos recientes.
+  let fondo = { gastos: [], reposiciones: [] };
 
   const ms = (t) => (t?.toMillis ? t.toMillis() : 0);
   const delMes = (g) => {
@@ -96,19 +104,197 @@
       return `<button type="button" class="btn ${b.danger ? 'btn-danger' : b.primary ? 'btn-primary' : 'btn-ghost'}" data-cc-accion="${a}">${esc(b.label)}</button>`;
     };
     const cats = cfg.categorias.includes(g.categoria) ? cfg.categorias : [g.categoria, ...cfg.categorias].filter(Boolean);
+    // Un gasto que ya entró en una reposición no se reclasifica: el informe
+    // de esa reposición quedó congelado con la categoría que tenía.
     cont.innerHTML = CajaUI.detalleHtml(g)
       + `<div class="cc-acciones">
-          <select class="form-input" id="ccCat" title="Reclasificar la categoría" style="max-width:190px;margin-right:auto;height:34px;font-size:13px;">
-            ${cats.map(c => `<option${c === g.categoria ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
+          ${g.reposicion_id
+            ? `<span class="cc-repuesto"><i data-lucide="check"></i> En la reposición ${esc(g.reposicion_numero || '')}</span>`
+            : `<select class="form-input" id="ccCat" title="Reclasificar la categoría" style="max-width:190px;margin-right:auto;height:34px;font-size:13px;">
+            ${cats.map(c => `<option${c === g.categoria ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>`}
           ${orden.map(btn).join('')}</div>`;
+    if (window.lucide?.createIcons) lucide.createIcons({ nodes: [cont] });
     CajaUI.cargarRecibos(cont, g);
   }
 
-  function pintar() { pintarKpis(); pintarFiltros(); pintarLista(); pintarDetalle(); }
+  // ── El fondo ────────────────────────────────────────────────────────────
+  // Lo que cuenta para el cuadre: lo que el servidor marcó por reponer (de
+  // cualquier mes) más lo que esta pantalla acaba de leer — un recibo pagado
+  // hace un segundo todavía no trae la marca.
+  function gastosDelFondo() {
+    const porId = new Map();
+    for (const g of fondo.gastos) porId.set(g.id, g);
+    for (const g of todos) porId.set(g.id, g);
+    return [...porId.values()];
+  }
+  const cuadre = (conteo = null) => C().cuadre({ fondo: cfg.fondo, gastos: gastosDelFondo(), reposiciones: fondo.reposiciones, conteo });
+
+  function pintarFondo() {
+    const d = C().dinero;
+    const q = cuadre();
+    const toca = q.n > 0 && q.esperado <= cfg.minimo_reposicion;
+    const partes = [`Fondo ${d(q.fondo)}`, `${q.n} ${q.n === 1 ? 'recibo pagado' : 'recibos pagados'} sin reponer: ${d(q.gastado)}`];
+    if (q.anticipos) partes.push(`anticipos en la calle: ${d(q.anticipos)}`);
+    if (q.por_cobrar) partes.push(`reposición con el cheque por cobrar: ${d(q.por_cobrar)}`);
+    $('ccFondo').innerHTML = `
+      <div class="cc-fondo-n${toca ? ' is-bajo' : ''}"><b>${d(q.esperado)}</b><span>debe haber en caja</span></div>
+      <div class="cc-fondo-d">${partes.map(esc).join(' · ')}${toca ? `<span class="cc-fondo-toca">Toca reponer el fondo</span>` : ''}</div>
+      <button type="button" class="btn btn-ghost btn-sm" data-cc-fondo="historial"><i data-lucide="history"></i> Reposiciones y arqueos</button>
+      <button type="button" class="btn btn-primary btn-sm" data-cc-fondo="arqueo"><i data-lucide="calculator"></i> Arqueo y reposición</button>`;
+    if (window.lucide?.createIcons) lucide.createIcons({ nodes: [$('ccFondo')] });
+  }
+
+  // El informe de una reposición (o de un arqueo) en el formato del Excel de
+  // Cheila: es lo que se imprime y acompaña la solicitud del cheque.
+  async function excelInforme(rep) {
+    try {
+      const XLSX = await cargarXLSX();
+      const { filas, columnas } = C().informe(rep, cfg.categorias);
+      const ws = XLSX.utils.aoa_to_sheet(filas);
+      ws['!cols'] = Array.from({ length: columnas }, (_, i) => ({ wch: i === 2 ? 24 : i === columnas - 2 ? 60 : 14 }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, rep.numero || 'Informe');
+      XLSX.writeFile(wb, `caja-menuda-${rep.numero || 'informe'}.xlsx`);
+    } catch (e) { console.error(e); Toast.show(e.message || 'No se pudo generar el Excel.', 'bad'); }
+  }
+
+  // Arqueo: se cuenta el efectivo por denominación y se compara con lo que
+  // debe haber. Se puede guardar solo (el arqueo de la semana) o armar de una
+  // vez la reposición con los recibos pagados.
+  async function hojaArqueo() {
+    const d = C().dinero;
+    const q0 = cuadre();
+    const items = C().itemsInforme(gastosDelFondo());
+    const etiqueta = (v) => (v < 1 ? `${Math.round(v * 100)}¢` : `$${v}`);
+    const den = (tipo) => C().DENOMINACIONES.filter(x => x.tipo === tipo).map(x => `
+      <label class="cc-den"><span>${etiqueta(x.valor)}</span>
+        <input type="text" inputmode="numeric" class="form-input" data-den="${x.id}" autocomplete="off" placeholder="0" aria-label="Cantidad de ${tipo}s de ${etiqueta(x.valor)}">
+        <em data-den-m="${x.id}">$0.00</em></label>`).join('');
+    const linea = (txt, monto, cls = '') => `<div class="cc-cuadre-l ${cls}"><span>${txt}</span><b>${monto}</b></div>`;
+    const rango = items.length ? ` · ${esc(items[0].numero)} al ${esc(items[items.length - 1].numero)}` : '';
+    const html = `<div class="cm-form">
+      <div class="cc-cuadre">
+        ${linea('Fondo', d(q0.fondo))}
+        ${linea(`Recibos pagados sin reponer (${q0.n})${rango}`, '− ' + d(q0.gastado))}
+        ${q0.anticipos ? linea('Anticipos en la calle', '− ' + d(q0.anticipos)) : ''}
+        ${q0.por_cobrar ? linea('Reposición pedida, cheque por cobrar', '− ' + d(q0.por_cobrar)) : ''}
+        ${linea('Debe haber en caja', d(q0.esperado), 'is-total')}
+      </div>
+      <div class="cc-dens">
+        <fieldset><legend>Monedas</legend>${den('moneda')}</fieldset>
+        <fieldset><legend>Billetes</legend>${den('billete')}</fieldset>
+      </div>
+      <div class="cc-cuadre">
+        ${linea('Efectivo contado', '<span id="ccArqEfectivo">$0.00</span>', 'is-total')}
+        <div class="cc-cuadre-l" id="ccArqDif"><span>Diferencia</span><b>—</b></div>
+      </div>
+      <label class="cm-campo"><span>Nota <em>(si no cuadra, explica por qué)</em></span>
+        <textarea id="ccArqNota" class="form-input" rows="2" maxlength="300"></textarea></label>
+      ${q0.n ? `<p class="form-hint" style="margin:0;">Al reponer, los ${q0.n} recibos quedan en un informe para pedir el cheque por ${d(q0.gastado)} y no vuelven a salir en la próxima reposición. No se puede deshacer.</p>` : ''}
+    </div>`;
+    const entradas = (root) => [...root.querySelectorAll('[data-den]')];
+    const leer = (root) => {
+      const conteo = {};
+      for (const i of entradas(root)) {
+        const t = i.value.trim();
+        const n = t === '' ? 0 : Number(t);
+        if (!Number.isInteger(n) || n < 0 || n > 9999) return null;
+        conteo[i.dataset.den] = n;
+      }
+      return conteo;
+    };
+    const refrescar = (root) => {
+      const conteo = leer(root);
+      const a = C().arqueo(conteo || {});
+      for (const l of a.lineas) root.querySelector(`[data-den-m="${l.id}"]`).textContent = d(l.monto);
+      root.querySelector('#ccArqEfectivo').textContent = d(a.efectivo);
+      const el = root.querySelector('#ccArqDif');
+      const vacio = !entradas(root).some(i => i.value.trim() !== '');
+      if (!conteo || vacio) { el.className = 'cc-cuadre-l'; el.innerHTML = `<span>Diferencia</span><b>—</b>`; return; }
+      const dif = cuadre(conteo).diferencia;
+      el.className = 'cc-cuadre-l ' + (dif === 0 ? 'is-ok' : 'is-mal');
+      el.innerHTML = dif === 0 ? `<span>Cuadra</span><b>$0.00</b>` : (dif > 0 ? `<span>Sobra</span><b>${d(dif)}</b>` : `<span>Falta</span><b>${d(-dif)}</b>`);
+    };
+    let ocupado = false;
+    const res = await Modal.sheet({
+      title: 'Arqueo y reposición del fondo', icon: 'calculator', size: 'md', html,
+      buttons: [{ action: 'cancelar', label: 'Cancelar' },
+        { action: 'arqueo', label: 'Guardar solo el arqueo', primary: !q0.n },
+        ...(q0.n ? [{ action: 'reponer', label: `Reponer ${d(q0.gastado)}`, primary: true }] : [])],
+      onMount(root) { root.addEventListener('input', (e) => { if (e.target.matches('[data-den]')) refrescar(root); }); },
+      async onAction(action, root) {
+        if (action === 'cancelar') return action;
+        if (ocupado) return false;
+        const conteo = leer(root);
+        if (!conteo) { Toast.show('Las cantidades son números enteros.', 'warn'); return false; }
+        if (!entradas(root).some(i => i.value.trim() !== '')) { Toast.show('Cuenta el efectivo antes de guardar.', 'warn'); return false; }
+        ocupado = true;
+        try {
+          const r = await S().reponer({ conteo, nota: root.querySelector('#ccArqNota').value, solo_arqueo: action === 'arqueo', ids: items.map(i => i.id) });
+          return { ...r, accion: action };
+        } catch (e) { console.error(e); Toast.show(e.message || 'No se pudo guardar.', 'bad'); return false; }
+        finally { ocupado = false; }
+      },
+    });
+    if (!res || res === 'cancelar') return;
+    await cargar();
+    const dif = Number(res.diferencia) || 0;
+    Toast.show(`${res.numero} guardado: ${dif === 0 ? 'la caja cuadra' : (dif > 0 ? `sobran ${d(dif)}` : `faltan ${d(-dif)}`)}.`, dif === 0 ? 'ok' : 'warn');
+    if (res.accion === 'reponer') {
+      const rep = fondo.reposiciones.find(r => r.id === res.id);
+      if (rep) await excelInforme(rep);
+    }
+  }
+
+  // Reposiciones y arqueos hechos: el informe en Excel de cada uno, y dónde
+  // se anota que el cheque de la reposición ya se cobró.
+  async function hojaHistorial() {
+    const d = C().dinero;
+    const dmy = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? iso.split('-').reverse().join('/') : '');
+    const fila = (r) => {
+      const dif = Number(r.arqueo?.diferencia) || 0;
+      const esRep = r.tipo === 'reposicion';
+      const estado = !esRep ? '' : (r.estado === 'repuesta'
+        ? `<span class="bj-chip bj-chip--listo">Cheque cobrado${r.pago?.referencia ? ' · ' + esc(r.pago.referencia) : ''}</span>`
+        : `<span class="bj-chip bj-chip--aviso">Cheque por cobrar</span>`);
+      return `<div class="cc-rep" data-rep="${esc(r.id)}">
+        <div class="cc-rep-t"><b>${esc(r.numero || '')}</b> · ${esc(dmy(r.fecha))}${r.created_by_nombre ? ' · ' + esc(r.created_by_nombre) : ''} ${estado}</div>
+        <div class="cc-rep-d">${esRep
+          ? `${r.n} ${r.n === 1 ? 'recibo' : 'recibos'} (${esc(r.desde || '')} al ${esc(r.hasta || '')}) · <b>${d(r.total)}</b>`
+          : `Contado ${d(r.arqueo?.efectivo)} de ${d(r.esperado)}`}
+          · ${dif === 0 ? 'cuadró' : `<span class="cc-rep-dif">${dif > 0 ? 'sobraron' : 'faltaron'} ${d(Math.abs(dif))}</span>`}${r.nota ? ` · ${esc(r.nota)}` : ''}</div>
+        <div class="cc-rep-b">
+          ${esRep && r.estado === 'preparada' ? `<button type="button" class="btn btn-ghost btn-sm" data-rep-cobrada="${esc(r.id)}">Cheque cobrado</button>` : ''}
+          <button type="button" class="btn btn-ghost btn-sm" data-rep-excel="${esc(r.id)}"><i data-lucide="file-spreadsheet"></i> Informe</button>
+        </div></div>`;
+    };
+    const res = await Modal.sheet({
+      title: 'Reposiciones y arqueos', icon: 'history', size: 'md',
+      html: fondo.reposiciones.length
+        ? `<div class="cc-reps">${fondo.reposiciones.map(fila).join('')}</div>`
+        : `<div class="cm-vacio">Todavía no hay arqueos ni reposiciones.</div>`,
+      buttons: [{ action: 'cerrar', label: 'Cerrar' }],
+      onMount(root, api) {
+        root.addEventListener('click', async (e) => {
+          const x = e.target.closest('[data-rep-excel]');
+          const c = e.target.closest('[data-rep-cobrada]');
+          if (x) { const r = fondo.reposiciones.find(y => y.id === x.dataset.repExcel); if (r) await excelInforme(r); return; }
+          if (!c) return;
+          const ref = await Modal.prompt({ title: 'Cheque cobrado', message: 'El efectivo ya volvió a la caja. Anota el número del cheque.', placeholder: 'N.º de cheque', confirmLabel: 'Guardar' });
+          if (ref == null) return;
+          try { await S().marcarCobrada(c.dataset.repCobrada, ref); api.close('cobrada'); }
+          catch (err) { console.error(err); Toast.show('No se pudo guardar.', 'bad'); }
+        });
+      },
+    });
+    if (res === 'cobrada') { await cargar(); Toast.show('Anotado: el fondo vuelve a estar completo.', 'ok'); hojaHistorial(); }
+  }
+
+  function pintar() { pintarFondo(); pintarKpis(); pintarFiltros(); pintarLista(); pintarDetalle(); }
 
   async function cargar() {
     try {
-      todos = await S().bandeja({ desde: inicioDelMes() });
+      [todos, fondo] = await Promise.all([S().bandeja({ desde: inicioDelMes() }), S().fondo()]);
       if (sel && !todos.some(g => g.id === sel)) sel = null;
       pintar();
     } catch (e) {
@@ -220,6 +406,11 @@
       if (e.target.id !== 'ccCat') return;
       try { await S().reclasificar(sel, e.target.value); Toast.show('Categoría cambiada.', 'ok'); await cargar(); }
       catch (err) { console.error(err); Toast.show('No se pudo cambiar la categoría.', 'bad'); pintarDetalle(); }
+    });
+    $('ccFondo').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-cc-fondo]');
+      if (!b || !cfg) return;
+      if (b.dataset.ccFondo === 'arqueo') hojaArqueo(); else hojaHistorial();
     });
     $('ccExcel').addEventListener('click', excel);
     $('ccConfig').addEventListener('click', configurar);

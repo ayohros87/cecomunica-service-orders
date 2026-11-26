@@ -135,3 +135,126 @@ test("A1 — a quién se le avisa", () => {
   assert.equal(numero(7), "CM-0007");
   assert.equal(numero(12345), "CM-12345");
 });
+
+// ── Fondo, arqueo y reposición (2026-11-26) ────────────────────────────────
+// De las muestras de Cheila: su "Informe de caja menuda y arqueo" de los
+// recibos 15235 al 15258 ($183.18) y el conteo con el que cuadró $16.82.
+//
+//   F1 — Por reponer: solo lo que ya sacó efectivo del fondo y no ha entrado
+//        en una reposición. El ACH y lo que sigue abierto no cuentan.
+//   F2 — El arqueo de Cheila cuadra al centavo (147 monedas de 1¢ no dan
+//        1.4700000000000002).
+//   F3 — En caja debe haber: fondo − recibos − anticipos en la calle −
+//        reposiciones cuyo cheque no ha vuelto.
+//   F4 — El conteo solo admite enteros y denominaciones de la lista.
+//   F5 — El informe sale en el formato de su Excel: una columna por
+//        categoría, totales, cuadre y arqueo.
+//   F6 — El servidor usa LA MISMA lógica: src/domain/cajaMenuda.js es copia
+//        exacta de public/js/domain/cajaMenuda.js.
+const fs = require("node:fs");
+const path = require("node:path");
+
+const pagado = (n, monto, categoria, extra = {}) => g({ id: `p${n}`, numero: `CM-${String(n).padStart(4, "0")}`,
+  estado: "pagado", monto, categoria, entrega: { monto, at: new Date("2026-11-18T15:00:00Z") }, ...extra });
+const CONTEO_CHEILA = { m1: 147, m5: 2, m10: 0, m25: 1, m50: 0, m100: 5, b1: 0, b5: 2, b10: 0, b20: 0 };
+
+test("F1 — qué está por reponer", () => {
+  assert.equal(C.porReponer(pagado(1, 8, "Peaje")), true);
+  assert.equal(C.porReponer(pagado(1, 35, "Combustible", { via: "ach" })), false, "el ACH no sale del fondo");
+  assert.equal(C.porReponer(pagado(1, 8, "Peaje", { reposicion_id: "r1" })), false, "ya entró en una reposición");
+  assert.equal(C.porReponer(g({ estado: "aprobado" })), false);
+  const anticipo = g({ tipo: "anticipo", estado: "entregado", entrega: { monto: 20 } });
+  assert.equal(C.porReponer(anticipo), false, "el anticipo en la calle todavía no tiene recibo");
+  assert.equal(C.enLaCalle(anticipo), 20);
+  assert.equal(C.enLaCalle({ ...anticipo, estado: "rendido" }), 20);
+  const cerrado = { ...anticipo, estado: "cerrado", cierre: { vuelto_recibido: 7.5, diferencia_pagada: 0 } };
+  assert.equal(C.porReponer(cerrado), true);
+  assert.equal(C.enLaCalle(cerrado), 0);
+  assert.equal(C.porReponer({ ...anticipo, estado: "cerrado", cierre: { vuelto_recibido: 20 } }), false, "devolvió todo: no hay nada que reponer");
+});
+
+test("F2 — el arqueo de Cheila cuadra al centavo", () => {
+  const a = C.arqueo(CONTEO_CHEILA);
+  assert.equal(a.efectivo, 16.82);
+  assert.equal(a.lineas.find((l) => l.id === "m1").monto, 1.47);
+  assert.equal(a.lineas.find((l) => l.id === "b5").monto, 10);
+  assert.equal(C.arqueo(null).efectivo, 0);
+  assert.equal(C.arqueo({ m1: -3, b5: 1.5 }).efectivo, 0, "lo que no es un entero positivo no suma");
+});
+
+test("F3 — cuánto debe haber en caja", () => {
+  const recibos = [pagado(1, 1.05, "Transporte y estacionamiento"), pagado(2, 5, "Vales y viáticos"), pagado(3, 177.13, "Misceláneo")];
+  const q = C.cuadre({ fondo: 200, gastos: recibos, conteo: CONTEO_CHEILA });
+  assert.deepEqual(q, { fondo: 200, n: 3, gastado: 183.18, anticipos: 0, por_cobrar: 0, esperado: 16.82, efectivo: 16.82, diferencia: 0 });
+
+  const conAnticipo = [...recibos.slice(0, 2), g({ id: "a1", tipo: "anticipo", estado: "entregado", entrega: { monto: 20 } }),
+    pagado(9, 50, "Combustible", { via: "ach" })];
+  const q2 = C.cuadre({ fondo: 200, gastos: conAnticipo,
+    reposiciones: [{ tipo: "reposicion", estado: "preparada", total: 100 }, { tipo: "reposicion", estado: "repuesta", total: 80 },
+      { tipo: "arqueo", estado: "hecho", total: 60 }] });
+  assert.equal(q2.gastado, 6.05);
+  assert.equal(q2.anticipos, 20);
+  assert.equal(q2.por_cobrar, 100, "solo la reposición cuyo cheque no ha vuelto");
+  assert.equal(q2.esperado, 73.95);
+  assert.equal("diferencia" in q2, false, "sin conteo no hay diferencia");
+  assert.equal(C.cuadre({ fondo: 200, gastos: [], conteo: { b20: 9, b10: 1 } }).diferencia, -10, "faltan $10");
+  assert.equal(C.cuadre({ fondo: 200, gastos: [], conteo: { b20: 10, m25: 1 } }).diferencia, 0.25, "sobran 25 centavos");
+});
+
+test("F4 — el conteo", () => {
+  assert.equal(C.conteoValido(CONTEO_CHEILA), true);
+  assert.equal(C.conteoValido({}), true, "caja vacía");
+  assert.equal(C.conteoValido({ b5: 1.5 }), false);
+  assert.equal(C.conteoValido({ b5: -1 }), false);
+  assert.equal(C.conteoValido({ b50: 1 }), false, "denominación que no existe");
+  assert.equal(C.conteoValido({ b5: "2" }), false);
+  assert.equal(C.conteoValido(null), false);
+  assert.equal(C.conteoValido([1, 2]), false);
+});
+
+test("F5 — el informe en el formato del Excel de Cheila", () => {
+  const recibos = [pagado(2, 5, "Vales y viáticos", { concepto: "Viático Campana" }), pagado(1, 1.05, "Transporte y estacionamiento"),
+    pagado(3, 8, "Regalos", { solicitante_nombre: "Elvia" }), pagado(4, 30, "Combustible", { via: "ach" })];
+  const items = C.itemsInforme(recibos);
+  assert.deepEqual(items.map((i) => i.numero), ["CM-0001", "CM-0002", "CM-0003"], "en orden de número y sin el ACH");
+  assert.equal(items[0].fecha, "2026-11-18", "la fecha del pago, en hora de Panamá");
+  assert.equal(C.fechaPanama(Date.UTC(2026, 10, 19, 3, 0, 0)), "2026-11-18", "las 10 p. m. en Panamá siguen siendo el 18");
+
+  const conteo = { b20: 9, b5: 1, m25: 3, m10: 2 };
+  const q = C.cuadre({ fondo: 200, gastos: recibos, conteo });
+  const { filas, columnas } = C.informe({ tipo: "reposicion", numero: "REP-0001", fecha: "2026-11-18", fondo: 200, items,
+    desde: "CM-0001", hasta: "CM-0003", esperado: q.esperado, arqueo: { conteo }, created_by_nombre: "Cheila" },
+  C.CONFIG_DEFECTO.categorias);
+  const cab = filas.find((f) => f[0] === "COMP");
+  assert.deepEqual(cab.slice(0, 4), ["COMP", "FECHA", "BENEFICIARIO", "VALES Y VIÁTICOS"]);
+  assert.equal(cab[cab.length - 3], "REGALOS", "una categoría que ya no está en la lista igual tiene su columna");
+  assert.equal(cab.length, columnas);
+  const f2 = filas.find((f) => f[0] === "CM-0002");
+  assert.equal(f2[1], "18/11/2026");
+  assert.equal(f2[3], 5, "el monto va en la columna de su categoría");
+  assert.equal(f2[f2.length - 1], 5);
+  const totales = filas[filas.indexOf(filas.find((f) => f[0] === "CM-0003")) + 1];
+  assert.equal(totales[totales.length - 1], 14.05);
+  const linea = (txt) => filas.find((f) => f[2] === txt);
+  assert.equal(linea("FONDO DE CAJA")[3], 200);
+  assert.equal(linea("REEMBOLSO:")[3], 14.05);
+  assert.equal(linea("TOTAL EN CAJA:")[3], 185.95);
+  assert.equal(filas.find((f) => f[0] === "Efectivo en Caja")[3], 185.95);
+  assert.equal(filas.some((f) => f[0] === "Faltante" || f[0] === "Sobrante"), false, "cuadra: no hay renglón de diferencia");
+  assert.ok(filas.some((f) => f[0] === "Preparado por: Cheila"));
+
+  // Un arqueo suelto: sin lista de recibos, con lo que falta.
+  const arq = C.informe({ tipo: "arqueo", numero: "ARQ-0001", fondo: 200, total: 14.05, items: [], esperado: 185.95,
+    arqueo: { conteo: { b20: 9 } } }, C.CONFIG_DEFECTO.categorias).filas;
+  assert.equal(arq.some((f) => f[0] === "COMP"), false);
+  assert.equal(arq.find((f) => f[2] === "RECIBOS SIN REPONER:")[3], 14.05);
+  assert.deepEqual(arq.find((f) => f[0] === "Faltante"), ["Faltante", "", "", 5.95]);
+  assert.equal(C.numeroReposicion("reposicion", 7), "REP-0007");
+  assert.equal(C.numeroReposicion("arqueo", 12), "ARQ-0012");
+});
+
+test("F6 — el servidor usa la misma lógica que la pantalla", () => {
+  const publico = fs.readFileSync(path.join(__dirname, "../../public/js/domain/cajaMenuda.js"), "utf8");
+  const servidor = fs.readFileSync(path.join(__dirname, "../src/domain/cajaMenuda.js"), "utf8");
+  assert.equal(servidor, publico, "copia public/js/domain/cajaMenuda.js a functions/src/domain/cajaMenuda.js");
+});

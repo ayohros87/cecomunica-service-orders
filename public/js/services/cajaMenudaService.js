@@ -237,9 +237,46 @@ window.CajaMenudaService = (() => {
 
   const reclasificar = (id, categoria) => mover(id, { categoria }, 'reclasificado', categoria);
 
+  // ── Fondo: arqueo y reposición ──────────────────────────────────────────
+  const REP = 'caja_menuda_reposiciones';
+
+  // Los recibos que ya sacaron efectivo del fondo y no han entrado en una
+  // reposición, sean del mes que sean (la marca la pone el servidor), y las
+  // reposiciones: las últimas para la lista, más cualquiera cuyo cheque no ha
+  // vuelto (esa plata todavía falta en la caja).
+  async function fondo() {
+    const [g, ult, prep] = await Promise.all([
+      db().collection(COL).where('por_reponer', '==', true).get(),
+      db().collection(REP).orderBy('created_at', 'desc').limit(20).get(),
+      db().collection(REP).where('estado', '==', 'preparada').get(),
+    ]);
+    const porId = new Map();
+    for (const r of [...deSnap(ult), ...deSnap(prep)]) porId.set(r.id, r);
+    return { gastos: deSnap(g), reposiciones: recientesPrimero([...porId.values()]) };
+  }
+
+  // El servidor arma el arqueo o la reposición (callable cajaMenudaReponer):
+  // pone el consecutivo y marca cada gasto, todo junto.
+  async function reponer({ conteo, nota = '', solo_arqueo = false, ids = [] } = {}) {
+    if (!C().conteoValido(conteo)) throw new Error('Cuenta el efectivo: cuántas monedas y billetes hay.');
+    const fn = firebase.functions().httpsCallable('cajaMenudaReponer');
+    const r = await fn({ conteo, nota: limpio(nota, 300), solo_arqueo: !!solo_arqueo, ids });
+    return r.data;
+  }
+
+  // El cheque de la reposición ya se cobró: el efectivo volvió a la caja.
+  function marcarCobrada(id, referencia) {
+    return db().collection(REP).doc(id).update({
+      estado: 'repuesta',
+      pago: { ...firma(), referencia: limpio(referencia, 60) },
+      updated_at: FV().serverTimestamp(),
+    });
+  }
+
   return {
     usar, config, guardarConfig, miJefe, subirRecibo, urlRecibo,
     get, mios, porAprobar, bandeja,
     crear, editar, anular, aprobar, rechazar, entregar, rendir, cerrar, devolverRendicion, reclasificar,
+    fondo, reponer, marcarCobrada,
   };
 })();

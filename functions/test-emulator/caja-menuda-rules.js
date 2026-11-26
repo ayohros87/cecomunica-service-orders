@@ -202,6 +202,53 @@ async function main() {
   await assertSucceeds(getDoc(doc(as("tecnico"), "empresa/caja_menuda")));
   ok("el fondo y el tope los fijan contabilidad y administración; todos los leen");
 
+  // ── Arqueos y reposiciones del fondo ─────────────────────────────────
+  // Los crea el servidor (cajaMenudaReponer). El navegador solo anota que
+  // el cheque ya se cobró.
+  const rep = (u, id) => doc(as(u), `caja_menuda_reposiciones/${id}`);
+  const sembrarRep = async (id, data) => testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `caja_menuda_reposiciones/${id}`), { created_at: new Date(), ...data });
+  });
+  const reposicion = { tipo: "reposicion", numero: "REP-0001", estado: "preparada", fondo: 200, total: 183.18, n: 24,
+    items: [], gasto_ids: ["r1"], esperado: 16.82, arqueo: { conteo: { b5: 2 }, efectivo: 10, diferencia: -6.82 }, created_by_uid: "conta" };
+  await sembrarRep("rep1", reposicion);
+  await sembrarRep("arq1", { ...reposicion, tipo: "arqueo", numero: "ARQ-0001", estado: "hecho" });
+  const cobro = (u, extra = {}) => ({ estado: "repuesta", pago: { por_uid: u, por_nombre: USUARIOS[u].nombre, at: new Date(), referencia: "000444" }, updated_at: serverTimestamp(), ...extra });
+
+  await assertSucceeds(getDoc(rep("conta", "rep1")));
+  await assertSucceeds(getDocs(collection(as("admin"), "caja_menuda_reposiciones")));
+  await assertFails(getDoc(rep("tecnico", "rep1")));
+  await assertFails(getDoc(rep("jefa", "rep1")));
+  await assertFails(getDocs(collection(as("vendedor"), "caja_menuda_reposiciones")));
+  ok("los arqueos y las reposiciones solo los ve quien custodia el fondo");
+
+  await assertFails(setDoc(rep("conta", "rep2"), reposicion));
+  await assertFails(addDoc(collection(as("admin"), "caja_menuda_reposiciones"), reposicion));
+  await assertFails(deleteDoc(rep("admin", "rep1")));
+  ok("nadie crea ni borra una reposición desde el navegador: la arma el servidor");
+
+  await assertFails(updateDoc(rep("tecnico", "rep1"), cobro("tecnico")));
+  await assertFails(updateDoc(rep("conta", "rep1"), cobro("conta", { total: 1 })));
+  await assertFails(updateDoc(rep("conta", "rep1"), cobro("conta", { items: [{ numero: "CM-9999" }] })));
+  await assertFails(updateDoc(rep("conta", "rep1"), cobro("admin")));
+  await assertFails(updateDoc(rep("conta", "arq1"), cobro("conta")));
+  await assertSucceeds(updateDoc(rep("conta", "rep1"), cobro("conta")));
+  await assertFails(updateDoc(rep("conta", "rep1"), { estado: "preparada" }));
+  await assertFails(updateDoc(rep("admin", "rep1"), cobro("admin")));
+  ok("el custodio anota el cheque cobrado, una vez, a su nombre y sin tocar el informe; un arqueo no se cobra");
+
+  // La marca de la reposición en el gasto es del servidor.
+  await assertFails(mover("conta", "r1", { reposicion_id: "rep1" }, "repuesto"));
+  await assertFails(mover("conta", "r1", { por_reponer: false }, "repuesto"));
+  await assertFails(mover("admin", "r1", { reposicion_id: "rep1", reposicion_numero: "REP-0001", por_reponer: false }, "repuesto"));
+  ok("nadie marca un gasto como repuesto desde el navegador");
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), "caja_menuda/r1"), { reposicion_id: "rep1", reposicion_numero: "REP-0001", por_reponer: false });
+  });
+  await assertFails(mover("conta", "r1", { categoria: "Peaje" }, "reclasificado"));
+  await assertSucceeds(mover("conta", "n1", { categoria: "Peaje" }, "reclasificado"));
+  ok("un gasto que ya entró en una reposición no se reclasifica (el informe quedó congelado)");
+
   await testEnv.cleanup();
   console.log(`\nCAJA MENUDA: ${n} grupos de reglas OK`);
 }
