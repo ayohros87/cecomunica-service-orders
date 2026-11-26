@@ -234,7 +234,11 @@ async function efectosEntregaReemplazo(gid, g, ordenId, patch) {
     patch.cierre = { ...patch.cierre, entrada: true };
     await estamparLinaje(gid, g, ordenId);
     await G.registrarEvento(gid, "entrega",
-      `Entrega registrada desde la OS ${ordenId}. El/los radio(s) sustituido(s) ya estaban en CECOMUNICA (propuesta del taller): no se abre orden de devolución y el paso de entrada queda cumplido. Su disposición sigue en la orden de taller que los trajo.`);
+      `Entrega registrada desde la OS ${ordenId}. El/los radio(s) sustituido(s) ya estaban en CECOMUNICA (propuesta del taller): no se abre orden de devolución y el paso de entrada queda cumplido.`);
+    // La orden de taller que trajo al saliente ya no le debe ese radio al
+    // cliente: sale de la orden, queda por revisar, y la orden cierra si no
+    // le queda nada más por entregar (Brenda, 2026-11-26).
+    await G.cerrarSalienteEnOrdenOrigen(gid, g, { ordenEntregaId: ordenId });
     logger.info("[onOrdenWriteGestion] reemplazo del taller sin devolución (saliente en casa)", { gid, ordenId });
     return;
   }
@@ -260,6 +264,10 @@ async function efectosEntregaReemplazo(gid, g, ordenId, patch) {
   await estamparLinaje(gid, g, ordenId);
   await G.registrarEvento(gid, "entrega",
     `Entrega registrada desde la OS ${ordenId}. Orden de devolución ${devId || "—"} creada para recuperar el/los saliente(s); linaje reemplaza_a estampado.`);
+  // Mezcla: los ítems que SÍ estaban en casa también salen de su orden de taller.
+  if ((g.items || []).some(it => it.saliente_en_casa)) {
+    await G.cerrarSalienteEnOrdenOrigen(gid, g, { ordenEntregaId: ordenId });
+  }
 }
 
 // Reemplazo que entró en la orden de ORIGEN (Brenda, 2026-11-20): esa orden

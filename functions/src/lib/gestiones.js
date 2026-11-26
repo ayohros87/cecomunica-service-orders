@@ -537,6 +537,159 @@ async function absorberEnOrdenOrigen(gid, g) {
   return { orden_id: oid, saliente: plan.saliente, entrante: plan.entrante, regresa: plan.regresa };
 }
 
+// ── El saliente que se quedó en la orden de taller (Brenda, 2026-11-26) ────
+// Cuando el taller propone el reemplazo de un radio que entró a REPARACIÓN,
+// el radio malo ya está en la casa: la gestión no abre devolución y deja "su
+// disposición en la orden de taller que lo trajo". Pero esa orden no tenía
+// cómo terminar: se quedaba en COMPLETADO con el botón "Entregar" (Asamblea
+// Nacional 2026111104, SEPROSA 2026112002 y 5 más), y entregarla habría
+// mandado al cliente, en inventario, el radio que ya le cambiamos.
+//
+// Ahora, al ENTREGARSE el reemplazo:
+//   · la fila del saliente sale de la orden (eliminado + reemplazado_por), igual
+//     que en la absorción — no cuenta para entregar ni para la firma;
+//   · el radio pasa a revisión (devuelto_revision): el taller lo repara o lo
+//     descarta desde ahí, sin tener la orden del cliente abierta por eso;
+//   · si en la orden ya no queda nada por entregarle al cliente, la orden se
+//     cierra sola: CERRADA (REEMPLAZADO). Si quedan otros radios, sigue abierta
+//     solo por ellos.
+const CERRADA_REEMPLAZO = "CERRADA (REEMPLAZADO)";
+const _normS = (x) => _up(x).replace(/[^A-Z0-9]/g, "");
+
+/**
+ * PURA. Qué le pasa a la orden de origen cuando se entrega el reemplazo.
+ * Devuelve null si no aplica (la orden no existe, ya cerró, es de otro
+ * cliente, es la misma orden de la entrega o no es de taller).
+ * @returns {null|{equipos:Array, salientes:string[], entrantes:string[], cierra:boolean, pendientes:string[]}}
+ */
+function planSalienteEnOrdenOrigen(orden, g, gid, { ordenEntregaId = null } = {}) {
+  if (!orden || !g || g.tipo !== "reemplazo" || g.origen?.tipo !== "taller") return null;
+  if (g.ordenes?.en_orden_origen) return null;
+  if (orden.eliminado === true) return null;
+  if (!/PROGRAMA|REPARA/.test(_up(orden.tipo_de_servicio))) return null;
+  if (!ORDEN_ORIGEN_VIVA.has(_up(orden.estado_reparacion || "POR ASIGNAR"))) return null;
+  if (!g.cliente_id || orden.cliente_id !== g.cliente_id) return null;
+  if (ordenEntregaId && String(ordenEntregaId) === String(g.origen?.orden_id || "")) return null;
+
+  const items = (g.items || []).filter((it) => it && it.saliente_en_casa
+    && String(it.serial_saliente || "").trim() && String(it.serial_nuevo || "").trim());
+  if (!items.length) return null;
+
+  const equipos = Array.isArray(orden.equipos) ? orden.equipos.map((e) => ({ ...e })) : [];
+  const salientes = [];
+  const entrantes = [];
+  for (const it of items) {
+    const sal = _normS(it.serial_saliente);
+    const fila = equipos.find((e) => e && !e.eliminado
+      && ((items.length === 1 && g.origen?.equipo_id && e.id === g.origen.equipo_id) || _normS(_serialEq(e)) === sal));
+    if (!fila) continue;
+    fila.eliminado = true;
+    fila.reemplazado_por = String(it.serial_nuevo).trim();
+    fila.reemplazo_gestion = gid;
+    salientes.push(String(it.serial_saliente).trim());
+    entrantes.push(String(it.serial_nuevo).trim());
+  }
+
+  // Lo que todavía hay que entregarle al cliente: filas vivas que no sean un
+  // descarte que se queda en Cecomunica ni algo que ya salió en una tanda.
+  const descarte = require("../domain/descarteEntrega");
+  const seQuedan = descarte.serialesQueSeQuedan(orden);
+  const enTandas = new Set();
+  for (const t of (Array.isArray(orden.entrega?.tandas) ? orden.entrega.tandas : [])) {
+    for (const u of (Array.isArray(t?.equipos) ? t.equipos : [])) enTandas.add(_normS(u?.serial));
+  }
+  const pendientes = equipos
+    .filter((e) => e && !e.eliminado)
+    .map((e) => _serialEq(e) || "(sin serial)")
+    .filter((s) => !seQuedan.has(_normS(s)) && !enTandas.has(_normS(s)));
+
+  // Nada que marcar y algo pendiente → no hay nada que hacer aquí.
+  if (!salientes.length && pendientes.length) return null;
+  // Nada que marcar y nada pendiente: solo se cierra si la fila del saliente
+  // ya no está viva (recepción la quitó a mano) — es la misma situación.
+  if (!salientes.length) {
+    const algunaDeEsta = equipos.some((e) => e && items.some((it) => _normS(_serialEq(e)) === _normS(it.serial_saliente)));
+    if (!algunaDeEsta) return null;
+  }
+  return { equipos, salientes, entrantes, cierra: pendientes.length === 0, pendientes };
+}
+
+/**
+ * Aplica planSalienteEnOrdenOrigen: saca al saliente de la orden de taller, lo
+ * manda a revisión y cierra la orden si ya no queda nada por entregar. Nunca
+ * lanza; devuelve { orden_id, salientes, cierra } o null.
+ */
+async function cerrarSalienteEnOrdenOrigen(gid, g, { ordenEntregaId = null, por = "system:gestiones" } = {}) {
+  const oid = String(g?.origen?.orden_id || "").trim();
+  if (!oid || g.tipo !== "reemplazo" || g.origen?.tipo !== "taller") return null;
+  const pool = require("../domain/equiposPool");
+  const oRef = db.collection("ordenes_de_servicio").doc(oid);
+  try {
+    const s0 = await oRef.get();
+    if (!s0.exists) return null;
+    const p0 = planSalienteEnOrdenOrigen(s0.data(), g, gid, { ordenEntregaId });
+    if (!p0) return null;
+
+    // El radio primero, la orden después: así, cuando el trigger del pool vea
+    // la fila quitada, el radio ya no está "en taller con esta orden" y no lo
+    // devuelve "a de donde salió" (que sería el cliente).
+    for (const sal of p0.salientes) {
+      const it = (g.items || []).find((x) => _normS(x.serial_saliente) === _normS(sal)) || {};
+      try {
+        await pool.transicionar(sal, it.modelo_id || null, it.modelo || "", {
+          aEstado: pool.ESTADOS.DEVUELTO,
+          soloDesde: [pool.ESTADOS.EN_TALLER],
+          condicion: (d) => !d.orden_actual_id || d.orden_actual_id === oid,
+          tipo: "reemplazo",
+          refMov: { tipo: "gestion", id: gid, label: gid },
+          notas: `Sustituido por ${it.serial_nuevo || "—"} (entregado${ordenEntregaId ? ` con la orden ${ordenEntregaId}` : ""}): sale de la orden ${oid} y queda por revisar en Cecomunica`,
+          extra: { orden_actual_id: null, asignacion: null },
+        });
+      } catch (e) {
+        logger.warn("[gestiones] el saliente no pasó a revisión al entregarse el reemplazo", { gid, oid, saliente: sal, message: e.message });
+      }
+    }
+
+    const ahora = admin.firestore.Timestamp.now();
+    const res = await db.runTransaction(async (tx) => {
+      const s = await tx.get(oRef);
+      if (!s.exists) return null;
+      const p = planSalienteEnOrdenOrigen(s.data(), g, gid, { ordenEntregaId });
+      if (!p) return null;
+      const nota = p.salientes.length
+        ? `${p.salientes.join(", ")} reemplazado(s) por ${p.entrantes.join(", ")} (${gid}${ordenEntregaId ? `, entregado con la orden ${ordenEntregaId}` : ""}): no se entrega${p.cierra ? " — orden cerrada" : ""}`
+        : `Reemplazo ${gid} entregado${ordenEntregaId ? ` con la orden ${ordenEntregaId}` : ""}: no queda nada por entregar — orden cerrada`;
+      tx.set(oRef, {
+        equipos: p.equipos,
+        reemplazos_entregados: { [gid]: {
+          salientes: p.salientes, entrantes: p.entrantes,
+          orden_entrega_id: ordenEntregaId || null, at: ahora,
+        } },
+        ...(p.cierra ? {
+          estado_reparacion: CERRADA_REEMPLAZO,
+          cerrada_reemplazo: { gestion_id: gid, orden_entrega_id: ordenEntregaId || null, at: ahora, por },
+          fecha_cierre: ahora,
+        } : {}),
+        fecha_modificacion: ahora,
+        os_logs: admin.firestore.FieldValue.arrayUnion({
+          action: p.cierra ? "CERRADA_REEMPLAZO" : "SALIENTE_REEMPLAZADO", by: por, at: ahora, nota,
+        }),
+      }, { merge: true });
+      return { orden_id: oid, salientes: p.salientes, cierra: p.cierra };
+    });
+    if (res) {
+      await registrarEvento(gid, "entrega", res.cierra
+        ? `La orden de taller ${oid} se cerró (CERRADA (REEMPLAZADO)): el cliente ya tiene el reemplazo y no le queda nada por retirar.${res.salientes.length ? ` ${res.salientes.join(", ")} queda(n) por revisar en Cecomunica.` : ""}`
+        : `${res.salientes.join(", ")} salió/salieron de la orden de taller ${oid} y queda(n) por revisar en Cecomunica; la orden sigue abierta por los otros radios del cliente.`);
+      logger.info("[gestiones] saliente retirado de la orden de taller", { gid, ...res });
+    }
+    return res;
+  } catch (e) {
+    logger.warn("[gestiones] no se pudo cerrar el saliente en la orden de taller", { gid, oid, message: e.message });
+    return null;
+  }
+}
+
 /**
  * Limpieza al ANULAR una gestión (pedido 2026-08-27, caso P223344): revierte
  * los efectos que la gestión dejó regados — sin tocar lo que ya ocurrió en el
@@ -1021,6 +1174,7 @@ module.exports = {
   configEmailTo,
   registrarEvento, crearOrdenesProgramacion, siguienteOrdenId: _siguienteOrdenId,
   planAbsorcionEnOrigen, absorberEnOrdenOrigen,
+  planSalienteEnOrdenOrigen, cerrarSalienteEnOrdenOrigen, CERRADA_REEMPLAZO,
   modeloEntrante, completarModeloEntrante,
   cambiosDeModelo, estadoCambiosModelo, cambioModeloEnEspera, tarifasContrato,
   bodegaEmailTo,

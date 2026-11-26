@@ -39,6 +39,10 @@ const ANULADA = "ANULADA";
 // Terminal de las órdenes del cliente INTERNO (maquillaje, revisión general):
 // el radio no se entrega a nadie, vuelve a bodega (2026-11-20).
 const CERRADA_A_BODEGA = "CERRADA (A BODEGA)";
+// Orden de taller cuyo radio se le reemplazó al cliente (2026-11-26): la cierra
+// lib/gestiones.cerrarSalienteEnOrdenOrigen, que ya mandó al saliente a
+// revisión ANTES de escribir la orden. Aquí no se mueve nada más.
+const CERRADA_REEMPLAZO = "CERRADA (REEMPLAZADO)";
 const norm = (s) => String(s || "").trim().toUpperCase();
 // Contratos que siguen vivos: solo esos vale la pena marcar para cancelar.
 const VIGENTES = new Set(["activo", "aprobado"]);
@@ -842,6 +846,11 @@ module.exports = onDocumentWritten(
       }
       // Ya cerrada: una edición posterior no vuelve a meter nada al taller.
       if (yaABodega) return null;
+      // Igual con la cerrada por reemplazo: en la transición misma sí se deja
+      // correr lo de abajo (la fila quitada rebota en soloDesde: el radio ya
+      // está en revisión); después, ninguna edición mueve inventario.
+      if (after && norm(after.estado_reparacion) === CERRADA_REEMPLAZO
+          && norm(before?.estado_reparacion) === CERRADA_REEMPLAZO) return null;
 
       // Salida de taller: entrega de la orden, soft-delete, o borrado del doc.
       if (entregadaAhora || (eliminada && before?.eliminado !== true)) {

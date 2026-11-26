@@ -442,6 +442,25 @@ function _buildTimelineHTML(ordenData) {
       kind: 'completado'
     });
   }
+  // Reemplazo entregado de un radio de esta orden (2026-11-26, correo de
+  // Brenda): el radio viejo salió de la orden y no se entrega. Si no quedaba
+  // nada más, la orden se cerró sola (CERRADA (REEMPLAZADO)).
+  const _cr = ordenData.cerrada_reemplazo || null;
+  for (const [gid, r] of Object.entries(ordenData.reemplazos_entregados || {})) {
+    const sal = (r && r.salientes) || [];
+    const ent = (r && r.entrantes) || [];
+    const que = sal.length
+      ? `${sal.join(', ')} reemplazado por ${ent.join(', ')} (${gid})${r.orden_entrega_id ? `, entregado con la orden ${r.orden_entrega_id}` : ''} — no se entrega; queda por revisar en Cecomunica`
+      : `Reemplazo ${gid} entregado${r && r.orden_entrega_id ? ` con la orden ${r.orden_entrega_id}` : ''}`;
+    const cierra = _cr && _cr.gestion_id === gid;
+    entries.push({
+      icon: 'replace',
+      label: cierra ? `${que}. Orden cerrada: no queda nada por entregar` : que,
+      ts: r && r.at,
+      by: '',
+      kind: 'completado'
+    });
+  }
   if (ordenData.fecha_eliminacion) {
     entries.push({
       icon: 'trash-2',
@@ -1758,7 +1777,7 @@ window.botonesGestion = botonesGestion;
 // contados), con throttle para no facturar por tecla.
 const CHIPS_ABIERTOS = ['por_recibir', 'por_asignar', 'ASIGNADO', 'COMPLETADO (EN OFICINA)'];
 const CHIPS_CERRADOS = ['ENTREGADO AL CLIENTE', 'CERRADA (VISITA)', 'CERRADA (DEVOLUCION)',
-  'CERRADA (ENTRADA)', 'CERRADA (SIN RETIRAR)', 'CERRADA (A BODEGA)', 'ANULADA'];
+  'CERRADA (ENTRADA)', 'CERRADA (SIN RETIRAR)', 'CERRADA (A BODEGA)', 'CERRADA (REEMPLAZADO)', 'ANULADA'];
 const _conteosSrv = {};
 let _conteosSrvTs = 0;
 let _conteosSrvEnVuelo = false;

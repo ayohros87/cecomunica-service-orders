@@ -26,7 +26,7 @@ const ENTREGADO = "ENTREGADO AL CLIENTE";
 // si una mitad se anuló, la otra mitad entregada es la entrega completa de
 // lo que quedó vivo.
 const TERMINALES = new Set([
-  ENTREGADO, "ANULADA", "CERRADA (SIN RETIRAR)", "CERRADA (A BODEGA)", "CERRADA (ENTRADA)",
+  ENTREGADO, "ANULADA", "CERRADA (SIN RETIRAR)", "CERRADA (A BODEGA)", "CERRADA (REEMPLAZADO)", "CERRADA (ENTRADA)",
   "CERRADA (VISITA)", "CERRADA (DEVOLUCION)",
 ]);
 

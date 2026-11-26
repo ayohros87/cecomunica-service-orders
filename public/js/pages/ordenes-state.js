@@ -73,6 +73,10 @@ window.CONFIG = {
     // 2026-11-20): no se entregan a nadie — los radios vuelven a bodega y la
     // orden se cierra. Lo escribe el callable devolverOrdenABodega.
     CERRADA_A_BODEGA: 'CERRADA (A BODEGA)',
+    // Orden de taller cuyo radio se le reemplazó al cliente (2026-11-26): la
+    // cierra el servidor al entregarse el reemplazo si no queda nada por
+    // entregar (lib/gestiones.cerrarSalienteEnOrdenOrigen).
+    CERRADA_REEMPLAZO: 'CERRADA (REEMPLAZADO)',
     // Orden cuyo CONTRATO se anuló (2026-09-15): ya no hay papel bajo el cual
     // entregar esos equipos. Lo escribe el trigger de la anulación
     // (functions/src/lib/ordenesDeContratoAnulado.js), no una persona — si la
@@ -320,6 +324,7 @@ function getEstadoClass(estado, orden) {
   if (e === "CERRADA (DEVOLUCION)") return "chip-aprobada"; // esmeralda
   if (e === "CERRADA (ENTRADA)") return "chip-aprobada";    // esmeralda
   if (e === "CERRADA (A BODEGA)") return "chip-aprobada";   // esmeralda
+  if (e === "CERRADA (REEMPLAZADO)") return "chip-aprobada"; // esmeralda
   // Sin retirar NO es esmeralda: las otras CERRADA son cierres limpios, esta
   // es un caso que se archiva con radios ajenos todavía en la casa.
   if (e === "CERRADA (SIN RETIRAR)") return "chip-espera";  // ámbar
@@ -386,6 +391,7 @@ function estadoCompacto(estado, orden) {
   // de esta fila es que quedaron radios sin retirar.
   if (e === "CERRADA (SIN RETIRAR)") return "SIN RETIRAR";
   if (e === "CERRADA (A BODEGA)") return "DEVUELTA A BODEGA";
+  if (e === "CERRADA (REEMPLAZADO)") return "REEMPLAZADA";
   return e;
 }
 
@@ -405,6 +411,7 @@ function estadoTooltip(estado, orden) {
     : e === "ENTREGADO AL CLIENTE" ? "entregada al cliente"
     : e === "CERRADA (SIN RETIRAR)" ? "archivada con equipos que el cliente no retiró"
     : e === "CERRADA (A BODEGA)" ? "orden interna cerrada; sus radios volvieron a bodega"
+    : e === "CERRADA (REEMPLAZADO)" ? "cerrada sola: el cliente ya recibió el reemplazo y no queda nada por entregar"
     : "";
   const cap = (s) => s.charAt(0) + s.slice(1).toLowerCase();
   return que ? `${cap(nombre)}: ${que}` : cap(nombre);

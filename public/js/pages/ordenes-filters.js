@@ -1051,6 +1051,7 @@ const CHIP_CERRADAS = {
   'CERRADA (ENTRADA)':     'Entrada cerrada',
   'CERRADA (SIN RETIRAR)': 'Sin retirar',
   'CERRADA (A BODEGA)':    'Devuelta a bodega',
+  'CERRADA (REEMPLAZADO)': 'Reemplazada',
   'ANULADA':               'Anulada',
 };
 window.CHIP_CERRADAS = CHIP_CERRADAS;
