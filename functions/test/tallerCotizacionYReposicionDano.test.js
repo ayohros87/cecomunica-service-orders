@@ -268,7 +268,8 @@ test("P · reglas: sin fotos no hay propuesta por daño; pendiente_cliente solo 
   assert.match(r, /\["pendiente_bodega","en_proceso","pendiente_firma","pendiente_cliente"\]/);
   assert.match(r, /request\.resource\.data\.estado != "pendiente_cliente"\s*\n\s*\|\| resource\.data\.get\("causa", ""\) == "dano_cliente"/);
   // `cambio_modelo` (2026-09-29) es la decisión sobre un radio de otro modelo.
-  assert.match(r, /soloTocaG\(\["estado","aprobacion","cierre","cobro","cambio_modelo"\]\)/);
+  // `cambio_modelo_pedido` (2026-11-27): la tarifa del modelo que pidió el vendedor.
+  assert.match(r, /soloTocaG\(\["estado","aprobacion","cierre","cobro","cambio_modelo","cambio_modelo_pedido"\]\)/);
   assert.match(r, /resource\.data\.estado in \["pendiente_aprobacion","pendiente_firma","pendiente_bodega","pendiente_cliente"\]/,
     "mientras espera al cliente la gestión sigue blanda: se corrige o se anula sin efectos regados");
 });

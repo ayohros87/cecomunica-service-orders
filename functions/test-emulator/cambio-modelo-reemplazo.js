@@ -162,6 +162,63 @@ async function flujoTrigger() {
   assert.equal((await ordenes()).length, 1, "misma familia: sale la OS");
   assert.equal(await correos("cambio_modelo"), 0);
   ok("PNC460 ↔ PNC460-R no pide aprobación (caso SEPROSA)");
+
+  // ── 6) Cambio PEDIDO por el vendedor (Brenda 2026-11-27, MEDICINA LEGAL) ──
+  // Sale un PNC550-R, el vendedor pidió PNC460-R y administración decidió la
+  // tarifa AL APROBAR: bodega pone el PNC460-R → programa sin volver a
+  // preguntar, hereda la decisión y el correo a recepción lo marca.
+  await limpiar();
+  const pedidaBase = gestionBase({
+    cambio_modelo_pedido: { [SALIENTE]: { estado: "aprobado", saliente: SALIENTE, de: "PNC550-R", de_id: M550,
+      a: "HYTERA PNC460-R", a_id: M460, tarifa: "se_mantiene", decidido_por_email: "alberto.yohros@cecomunica.com" } },
+  });
+  Object.assign(pedidaBase.items[0], { modelo_solicitado: "HYTERA PNC460-R", modelo_solicitado_id: M460 });
+  const pedidaAsig = JSON.parse(JSON.stringify(pedidaBase));
+  Object.assign(pedidaAsig.items[0], { serial_nuevo: PNC460_SERIAL, pool_doc_id_nuevo: PNC460_SERIAL,
+    modelo_id_nuevo: M460, modelo_nuevo: "HYTERA PNC460-R" });
+  await trigger.run(await evento(pedidaBase, pedidaAsig));
+  g = (await ref().get()).data();
+  assert.equal(g.cambio_modelo?.[PNC460_SERIAL]?.estado, "aprobado", "hereda la decisión del aprobar");
+  assert.equal(g.cambio_modelo[PNC460_SERIAL].tarifa, "se_mantiene");
+  assert.equal(g.cambio_modelo[PNC460_SERIAL].origen, "vendedor");
+  assert.equal(g.cambio_modelo[PNC460_SERIAL].de_id, M550, "el cambio se mide contra el saliente");
+  assert.equal(await correos("cambio_modelo"), 0, "no se pregunta dos veces");
+  assert.equal((await ordenes()).length, 1, "sale la OS");
+  const prog = (await db.collection("mail_queue").where("meta.paso", "==", "programacion").get()).docs.map(d => d.data());
+  assert.equal(prog.length, 1);
+  assert.match(prog[0].subject, /CON CAMBIO DE MODELO/);
+  assert.match(prog[0].bodyContent, /REEMPLAZO CON CAMBIO DE MODELO — mismo contrato, la tarifa se mantiene/);
+  assert.doesNotMatch(prog[0].bodyContent, /facturación no cambian/);
+  assert.match(prog[0].bodyContent, /pedido por el vendedor/);
+  ok("cambio pedido + tarifa decidida al aprobar → programa directo y la OS lo dice en asunto y trámite");
+
+  // ── 7) Pedido SIN decisión previa (aprobado antes del cambio) → pregunta ──
+  await limpiar();
+  const sinDec = JSON.parse(JSON.stringify(pedidaAsig)); delete sinDec.cambio_modelo_pedido; delete sinDec.cambio_modelo;
+  const sinDecBase = JSON.parse(JSON.stringify(pedidaBase)); delete sinDecBase.cambio_modelo_pedido;
+  await trigger.run(await evento(sinDecBase, sinDec));
+  g = (await ref().get()).data();
+  assert.equal(g.estado, "pendiente_aprobacion");
+  assert.equal(g.cambio_modelo[PNC460_SERIAL].origen, "vendedor");
+  assert.deepEqual(await ordenes(), []);
+  const cm = (await db.collection("mail_queue").where("meta.paso", "==", "cambio_modelo").get()).docs[0].data();
+  assert.match(cm.bodyContent, /Lo pidió el vendedor/);
+  ok("cambio pedido sin decisión → vuelve a administración (antes pasaba de largo)");
+
+  // ── 8) Decisión TARDÍA (ya programado): solo la tarifa + aviso a recepción ─
+  await limpiar();
+  const tarde = { ...pedidaAsig, estado: "en_proceso", ordenes: { programacion_id: "2026112504" },
+    cambio_modelo: { [PNC460_SERIAL]: { estado: "pendiente", tardio: true, serial: PNC460_SERIAL, saliente: SALIENTE,
+      de: "PNC550-R", de_id: M550, a: "HYTERA PNC460-R", a_id: M460, origen: "vendedor" } } };
+  delete tarde.cambio_modelo_pedido;
+  const decidida = { ...tarde, cambio_modelo: { [PNC460_SERIAL]: { ...tarde.cambio_modelo[PNC460_SERIAL], estado: "aprobado", tarifa: "se_ajusta", nota: "sube a la tarifa del PNC460" } } };
+  await trigger.run(await evento(tarde, decidida));
+  assert.equal(await correos("cambio_modelo_tarifa"), 1, "recepción recibe la decisión");
+  const td = (await db.collection("mail_queue").where("meta.paso", "==", "cambio_modelo_tarifa").get()).docs[0].data();
+  assert.match(td.bodyContent, /SE AJUSTA/);
+  assert.equal((await ref().get()).data().estado, "en_proceso", "el estado no se toca");
+  assert.equal(await correos("cambio_modelo_rechazado"), 0);
+  ok("decisión tardía → aviso corto a recepción, estado intacto");
 }
 
 async function reglas() {
@@ -197,6 +254,29 @@ async function reglas() {
   const items = gestionBase().items;
   await assertSucceeds(updateDoc(doc(as("inventario"), `gestiones/${GID}`), { items }));
   ok("bodega puede cambiar el serial mientras se decide (solo items)");
+
+  // Aprobar un reemplazo con cambio PEDIDO escribe cambio_modelo_pedido.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `gestiones/${GID}`), { ...gestionBase(), estado: "pendiente_aprobacion", cierre: {} });
+  });
+  const aprobarPedido = { estado: "pendiente_bodega", "cierre.aprobacion": true, aprobacion: { requiere: true },
+    cambio_modelo_pedido: { [SALIENTE]: { estado: "aprobado", tarifa: "se_mantiene" } } };
+  await assertFails(updateDoc(doc(as("vendedor"), `gestiones/${GID}`), aprobarPedido));
+  await assertSucceeds(updateDoc(doc(as("administrador"), `gestiones/${GID}`), aprobarPedido));
+  ok("aprobar con la tarifa del cambio pedido: administración sí, vendedor no");
+
+  // Decisión TARDÍA: solo cambio_modelo, sin tocar el estado; nunca anulada.
+  const tardia = { ...gestionBase(), estado: "en_proceso", ordenes: { programacion_id: "X" },
+    cambio_modelo: { [PNC460_SERIAL]: { estado: "pendiente", a_id: M460 } } };
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `gestiones/${GID}`), tardia); });
+  const dec = { [`cambio_modelo.${PNC460_SERIAL}.estado`]: "aprobado", [`cambio_modelo.${PNC460_SERIAL}.tarifa`]: "se_mantiene" };
+  await assertFails(updateDoc(doc(as("vendedor"), `gestiones/${GID}`), dec));
+  await assertFails(updateDoc(doc(as("inventario"), `gestiones/${GID}`), dec));
+  await assertFails(updateDoc(doc(as("administrador"), `gestiones/${GID}`), { ...dec, estado: "cerrada" }));
+  await assertSucceeds(updateDoc(doc(as("administrador"), `gestiones/${GID}`), dec));
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `gestiones/${GID}`), { ...tardia, estado: "anulada" }); });
+  await assertFails(updateDoc(doc(as("administrador"), `gestiones/${GID}`), dec));
+  ok("decisión tardía: solo administración, solo cambio_modelo, nunca en anulada");
   await testEnv.cleanup();
 }
 

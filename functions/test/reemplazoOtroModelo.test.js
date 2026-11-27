@@ -145,3 +145,81 @@ test("asignador: contrato, aumento y corrección no fuerzan otro modelo; reempla
   const asg = leer("public", "js", "ui", "asignador-seriales.js");
   assert.match(asg, /const puedeForzar = soloModelo && modeloDistinto !== 'bloquear';/);
 });
+
+// ── Cambio de modelo PEDIDO por el vendedor (Brenda, 2026-11-27) ───────────
+// GR20261125-01 MEDICINA LEGAL: sale un P50PRO, el vendedor pidió PNC460-R y
+// bodega puso justo eso. Antes no se detectaba (se medía contra lo pedido) y el
+// correo a recepción decía "la facturación no cambia".
+const P50PRO = "9ndnrSP49cVW4EZlhwxm";
+const itML = (extra = {}) => ({
+  serial_saliente: "26814A0935", modelo: "HYTERA HYT-P50PRO", modelo_id: P50PRO,
+  modelo_solicitado: "HYTERA PNC460-R", modelo_solicitado_id: PNC460,
+  serial_nuevo: "24O22A0016", modelo_id_nuevo: PNC460, modelo_nuevo: "HYTERA PNC460-R",
+  contrato_id: "ALQ1", ...extra,
+});
+
+test("cambiosDeModelo: se mide contra el SALIENTE — el pedido por el vendedor también cuenta", () => {
+  const c = G.cambiosDeModelo({ tipo: "reemplazo", items: [itML()] });
+  assert.equal(c.length, 1);
+  assert.equal(c[0].de_id, P50PRO);
+  assert.equal(c[0].a_id, PNC460);
+  assert.equal(c[0].origen, "vendedor");
+  // LIGO (bodega puso otro): sigue detectado y es de bodega.
+  assert.equal(G.cambiosDeModelo({ tipo: "reemplazo", items: [itLigo()] })[0].origen, "bodega");
+  // Vendedor pidió otro pero bodega puso el MISMO del saliente: no hay cambio para el cliente.
+  assert.deepEqual(G.cambiosDeModelo({ tipo: "reemplazo", items: [itML({ modelo_id_nuevo: P50PRO, modelo_nuevo: "HYTERA HYT-P50PRO" })] }), []);
+});
+
+test("cambiosPedidos: lo ve ANTES de que bodega asigne; clave = serial saliente", () => {
+  const p = G.cambiosPedidos({ tipo: "reemplazo", items: [itML({ serial_nuevo: null, modelo_id_nuevo: null })] });
+  assert.equal(p.length, 1);
+  assert.equal(p[0].clave, "26814A0935");
+  assert.equal(p[0].de, "HYTERA HYT-P50PRO");
+  assert.equal(p[0].a, "HYTERA PNC460-R");
+  // Igual por igual (incluye N/R de la misma familia) no es cambio.
+  assert.deepEqual(G.cambiosPedidos({ tipo: "reemplazo", items: [itLigo()] }), []);
+  assert.deepEqual(G.cambiosPedidos({ tipo: "demo", items: [itML()] }), []);
+});
+
+test("decisionesHeredadas: la tarifa decidida al aprobar se hereda si bodega pone ESE modelo", () => {
+  const pedido = { "26814A0935": { estado: "aprobado", a: "HYTERA PNC460-R", a_id: PNC460, tarifa: "se_mantiene", decidido_por_email: "a@x" } };
+  const g = { tipo: "reemplazo", items: [itML()], cambio_modelo_pedido: pedido };
+  const h = G.decisionesHeredadas(g);
+  assert.equal(h["24O22A0016"].estado, "aprobado");
+  assert.equal(h["24O22A0016"].tarifa, "se_mantiene");
+  assert.equal(h["24O22A0016"].decidido_en, "aprobacion");
+  assert.equal(G.estadoCambiosModelo({ ...g, cambio_modelo: h }).sinDecidir.length, 0);
+  // Bodega puso OTRO modelo distinto al pedido: se pregunta de nuevo.
+  const otro = { ...g, items: [itML({ modelo_id_nuevo: PNC550, modelo_nuevo: "HYTERA PNC550-R" })] };
+  assert.deepEqual(G.decisionesHeredadas(otro), {});
+  // Sin decisión previa: nada que heredar.
+  assert.deepEqual(G.decisionesHeredadas({ tipo: "reemplazo", items: [itML()] }), {});
+});
+
+test("tramiteResumen: reemplazo con cambio de modelo NO dice 'la facturación no cambia'", () => {
+  const sin = G.tramiteResumen("GR1", { tipo: "reemplazo", items: [itML()] });
+  assert.match(sin.titulo, /REEMPLAZO CON CAMBIO DE MODELO — tarifa POR DECIDIR/);
+  assert.doesNotMatch(sin.titulo, /no cambian/);
+  assert.match(Object.fromEntries(sin.filas)["Cambio de modelo"], /26814A0935 \(HYTERA HYT-P50PRO\) → entra 24O22A0016 \(HYTERA PNC460-R\) — pedido por el vendedor/);
+  assert.match(sin.html, /#d97706/);
+  const ok = G.tramiteResumen("GR1", { tipo: "reemplazo", items: [itML()],
+    cambio_modelo: { "24O22A0016": { estado: "aprobado", a_id: PNC460, tarifa: "se_mantiene" } } });
+  assert.match(ok.titulo, /la tarifa se mantiene/);
+  const aj = G.tramiteResumen("GR1", { tipo: "reemplazo", items: [itML()],
+    cambio_modelo: { "24O22A0016": { estado: "aprobado", a_id: PNC460, tarifa: "se_ajusta" } } });
+  assert.match(aj.titulo, /SE AJUSTA/);
+  // Igual por igual: el título viejo, explícito.
+  const igual = G.tramiteResumen("GR1", { tipo: "reemplazo", items: [itML({ modelo_id_nuevo: P50PRO, modelo_nuevo: "HYTERA HYT-P50PRO" })] });
+  assert.match(igual.titulo, /mismo modelo; el contrato y la facturación no cambian/);
+});
+
+test("rules: cambio_modelo_pedido al aprobar; la decisión tardía solo toca cambio_modelo", () => {
+  const rules = leer("firestore.rules");
+  const aprob = rules.slice(rules.indexOf("function esAprobacionGestion()"), rules.indexOf("function esDecisionTardiaCambioModelo()"));
+  assert.match(aprob, /"cambio_modelo_pedido"/);
+  const tard = rules.slice(rules.indexOf("function esDecisionTardiaCambioModelo()"), rules.indexOf("function gestionBlanda()"));
+  assert.match(tard, /userRole\(\) in \["administrador","gerente"\]/);
+  assert.match(tard, /soloTocaG\(\["cambio_modelo"\]\)/);
+  assert.match(tard, /!\(resource\.data\.estado in \["pendiente_aprobacion","anulada"\]\)/);
+  assert.match(rules, /\|\| esDecisionTardiaCambioModelo\(\)\);/);
+});

@@ -208,6 +208,21 @@ async function completarModeloEntrante(items) {
 //     estado: 'pendiente'|'aprobado'|'rechazado', serial, saliente,
 //     de, de_id, a, a_id, motivo, tarifa_de, tarifa_a,
 //     tarifa: 'se_mantiene'|'se_ajusta', nota, decidido_por_email, decidido_at } }
+//
+// Desde 2026-11-27 (Brenda, GR20261125-01 MEDICINA LEGAL: un P50PRO cambiado
+// por un PNC460-R) el cambio se mide contra el modelo del radio que SALE —lo
+// que el cliente tenía y por lo que paga—, no contra el pedido. Antes, si el
+// VENDEDOR pedía otro modelo y bodega ponía justo ese, nadie lo veía: no pasaba
+// por la decisión de tarifa y el correo a recepción decía "la facturación no
+// cambia". `origen` dice quién lo cambió: 'vendedor' (lo pidió así) o 'bodega'.
+function modeloSaliente(it) {
+  const id = it?.modelo_id || null;
+  const label = String(it?.modelo || "").trim();
+  if (id || label) return { id, label };
+  // Ítems viejos sin el modelo del saliente: el pedido es lo único que hay.
+  return { id: it?.modelo_solicitado_id || null, label: String(it?.modelo_solicitado || "").trim() };
+}
+
 function cambiosDeModelo(g) {
   if (g?.tipo !== "reemplazo") return [];
   const pool = require("../domain/equiposPool");
@@ -217,20 +232,84 @@ function cambiosDeModelo(g) {
     // Sin modelo real estampado no se decide nada (completarModeloEntrante
     // corre antes): no se inventa un cambio que no se puede demostrar.
     if (!serial || !it.modelo_id_nuevo) continue;
-    const deId = it.modelo_solicitado_id || it.modelo_id || null;
-    const de = it.modelo_solicitado || it.modelo || "";
-    if (!deId && !de) continue;
+    const sal = modeloSaliente(it);
+    if (!sal.id && !sal.label) continue;
+    const entrante = { modelo_id: it.modelo_id_nuevo, modelo_label: it.modelo_nuevo || "" };
     // Mismo criterio que el asignador: N/R de una familia es el mismo modelo.
-    if (pool.mismoModelo({ modelo_id: it.modelo_id_nuevo, modelo_label: it.modelo_nuevo || "" }, deId, de)) continue;
+    if (pool.mismoModelo(entrante, sal.id, sal.label)) continue;
+    const pedidoId = it.modelo_solicitado_id || null;
+    const pedido = String(it.modelo_solicitado || "").trim();
+    const comoPedido = (pedidoId || pedido) && pool.mismoModelo(entrante, pedidoId, pedido);
     out.push({
       clave: pool.normSerial(serial), serial,
       saliente: String(it.serial_saliente || "").trim() || null,
-      de, de_id: deId, a: it.modelo_nuevo || "", a_id: it.modelo_id_nuevo,
+      de: sal.label, de_id: sal.id, a: it.modelo_nuevo || "", a_id: it.modelo_id_nuevo,
+      pedido: pedido || null, pedido_id: pedidoId,
+      origen: comoPedido ? "vendedor" : "bodega",
       motivo: String(it.cambio_modelo_motivo || "").trim() || null,
       contrato_doc_id: it.contrato_doc_id || null,
     });
   }
   return out;
+}
+
+// Cambios de modelo PEDIDOS al crear el reemplazo (el vendedor eligió otro
+// modelo que el del saliente). Se ven ANTES de que bodega asigne: el correo de
+// aprobación los marca y administración decide la tarifa al aprobar
+// (`cambio_modelo_pedido`, por serial SALIENTE). Clave = serial_norm del saliente.
+function cambiosPedidos(g) {
+  if (g?.tipo !== "reemplazo") return [];
+  const pool = require("../domain/equiposPool");
+  const out = [];
+  for (const it of (g.items || [])) {
+    const saliente = String(it?.serial_saliente || "").trim();
+    const pedidoId = it?.modelo_solicitado_id || null;
+    const pedido = String(it?.modelo_solicitado || "").trim();
+    if (!saliente || (!pedidoId && !pedido) || (!it.modelo_id && !it.modelo)) continue;
+    if (pool.mismoModelo({ modelo_id: pedidoId, modelo_label: pedido }, it.modelo_id || null, it.modelo || "")) continue;
+    out.push({
+      clave: pool.normSerial(saliente), saliente,
+      de: String(it.modelo || "").trim(), de_id: it.modelo_id || null,
+      a: pedido, a_id: pedidoId, contrato_doc_id: it.contrato_doc_id || null,
+    });
+  }
+  return out;
+}
+
+// Al asignar bodega: un cambio sin decidir cuyo modelo es JUSTO el que
+// administración ya aprobó al aprobar el reemplazo (cambio_modelo_pedido) no
+// vuelve a preguntarse — hereda esa decisión. Devuelve el parche de
+// `cambio_modelo` (vacío si no hay nada que heredar). Puro.
+function decisionesHeredadas(g) {
+  const pool = require("../domain/equiposPool");
+  const pedidas = g?.cambio_modelo_pedido || {};
+  const patch = {};
+  for (const c of estadoCambiosModelo(g).sinDecidir) {
+    const p = c.saliente ? pedidas[pool.normSerial(c.saliente)] : null;
+    if (!p || p.estado !== "aprobado") continue;
+    if (!pool.mismoModelo({ modelo_id: c.a_id, modelo_label: c.a }, p.a_id || null, p.a || "")) continue;
+    patch[c.clave] = {
+      estado: "aprobado", serial: c.serial, saliente: c.saliente,
+      de: c.de, de_id: c.de_id, a: c.a, a_id: c.a_id, origen: c.origen,
+      tarifa: p.tarifa || null, nota: p.nota || null,
+      contrato_doc_id: c.contrato_doc_id,
+      decidido_por_email: p.decidido_por_email || null,
+      decidido_por_uid: p.decidido_por_uid || null,
+      decidido_at: p.decidido_at || null,
+      decidido_en: "aprobacion",
+    };
+  }
+  return patch;
+}
+
+// Texto de la decisión para correos e historial.
+function tarifaDecididaTxt(d) {
+  if (!d || d.estado === "pendiente") return "tarifa POR DECIDIR (administración)";
+  if (d.estado === "rechazado") return "rechazado por administración";
+  if (d.estado !== "aprobado") return "sin decidir";
+  return d.tarifa === "se_ajusta"
+    ? "la tarifa SE AJUSTA (con una gestión de Ajuste de tarifa aparte)"
+    : "la tarifa se mantiene";
 }
 
 // Reparte los cambios según lo que administración ya decidió. Una decisión
@@ -1043,12 +1122,30 @@ function tramiteResumen(gid, g = {}) {
     filas.push(["Modalidad", modalidad]);
     if (Number(a.duracion_meses) > 0) filas.push(["Vigencia del tramo", `${Number(a.duracion_meses)} meses desde la entrega`]);
   } else if (g.tipo === "reemplazo") {
-    titulo = "REEMPLAZO DE EQUIPOS — el contrato y la facturación no cambian";
+    // Cambio de MODELO (Brenda, 2026-11-27): "reemplazo" a secas dice que la
+    // facturación no cambia, y con otro modelo eso no es verdad por defecto.
+    // El título lo dice y cada cambio va en su fila con la tarifa decidida
+    // (sin montos: need-to-know).
+    const cambios = cambiosDeModelo(g);
+    const dec = g.cambio_modelo || {};
+    if (cambios.length) {
+      const ds = cambios.map(c => dec[c.clave]);
+      const ajusta = ds.some(d => d?.estado === "aprobado" && d.tarifa === "se_ajusta");
+      const todas = ds.every(d => d?.estado === "aprobado");
+      titulo = "REEMPLAZO CON CAMBIO DE MODELO — "
+        + (ajusta ? "la tarifa SE AJUSTA (gestión aparte)" : todas ? "mismo contrato, la tarifa se mantiene" : "tarifa POR DECIDIR");
+    } else {
+      titulo = "REEMPLAZO DE EQUIPOS — mismo modelo; el contrato y la facturación no cambian";
+    }
     const contratos = [...new Set((g.items || []).map(it => it.contrato_id).filter(Boolean))];
     filas.push(["Contrato(s)", contratos.length
       ? contratos.map(c => `${c}${tipoContratoDeNumero(c) ? ` — ${tipoContratoDeNumero(c)}` : ""}`).join(", ")
       : "sin contrato interno (equipo en custodia)"]);
     filas.push(["Equipos", `${(g.items || []).length} radio(s) sustituido(s) — cada uno indica el serial saliente`]);
+    for (const c of cambios) {
+      filas.push(["Cambio de modelo", `sale ${c.saliente || "—"} (${c.de || "—"}) → entra ${c.serial} (${c.a || "—"})`
+        + `${c.origen === "vendedor" ? " — pedido por el vendedor" : " — puesto por bodega"} · ${tarifaDecididaTxt(dec[c.clave])}`]);
+    }
   } else {
     titulo = "DEMO — sin contrato ni facturación";
     filas.push(["Contrato", "no aplica (demostración)"]);
@@ -1064,9 +1161,11 @@ function tramiteResumen(gid, g = {}) {
     filas.push(["Cuenta", `${nivel}${Number(cr.puntos) > 0 ? ` · ${Number(cr.puntos)} punto(s)` : ""}${Number(cr.puntual_n) > 0 ? ` · gestión puntual #${Number(cr.puntual_n)}` : ""}`]);
   }
   filas.push(["Gestión", `${gid} · <a href="${urlGestion(g, gid)}" style="color:#0091D7;">ver el expediente</a>`]);
+  // Un cambio de modelo va en ámbar: es lo que recepción tiene que notar.
+  const alerta = titulo.startsWith("REEMPLAZO CON CAMBIO DE MODELO");
   const html = `
-    <div style="margin:0 0 14px;padding:12px 14px;border:2px solid #2563eb;border-radius:10px;background:#eff6ff;">
-      <div style="font:700 15px Arial,sans-serif;color:#1e3a8a;margin:0 0 6px;">Trámite: ${escapeHtml(titulo)}</div>
+    <div style="margin:0 0 14px;padding:12px 14px;border:2px solid ${alerta ? "#d97706" : "#2563eb"};border-radius:10px;background:${alerta ? "#fffbeb" : "#eff6ff"};">
+      <div style="font:700 15px Arial,sans-serif;color:${alerta ? "#78350f" : "#1e3a8a"};margin:0 0 6px;">Trámite: ${escapeHtml(titulo)}</div>
       <table role="presentation" style="font:13px/1.5 Arial,sans-serif;color:#1f2937;border-collapse:collapse;">
         ${filas.map(([k, v]) => `<tr><td style="padding:2px 10px 2px 0;white-space:nowrap;"><b>${escapeHtml(k)}</b></td><td style="padding:2px 0;">${k === "Gestión" ? v : escapeHtml(v)}</td></tr>`).join("")}
       </table>
@@ -1177,6 +1276,7 @@ module.exports = {
   planSalienteEnOrdenOrigen, cerrarSalienteEnOrdenOrigen, CERRADA_REEMPLAZO,
   modeloEntrante, completarModeloEntrante,
   cambiosDeModelo, estadoCambiosModelo, cambioModeloEnEspera, tarifasContrato,
+  modeloSaliente, cambiosPedidos, decisionesHeredadas, tarifaDecididaTxt,
   bodegaEmailTo,
   salientesDeReemplazo,
 };

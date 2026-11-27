@@ -10,12 +10,15 @@ const Module = require("module");
 const origLoad = Module._load;
 Module._load = function (req, parent) {
   // gestiones, inventario y mailRecipients cargan ./admin: se stubea para todos.
-  if (req === "./admin" && parent && /[\\/]src[\\/]lib[\\/]/.test(parent.filename)) {
+  // El pool (src/domain) también: el cuadro mira el cambio de modelo (2026-11-27).
+  if ((req === "./admin" && parent && /[\\/]src[\\/]lib[\\/]/.test(parent.filename))
+      || (req === "../lib/admin" && parent && /[\\/]src[\\/]domain[\\/]/.test(parent.filename))) {
     return { admin: { firestore: { FieldValue: {}, Timestamp: {} } }, db: {} };
   }
   return origLoad.apply(this, arguments);
 };
 const G = require("../src/lib/gestiones");
+require("../src/domain/equiposPool");   // gestiones lo carga perezoso: con el stub puesto
 Module._load = origLoad;
 
 test("tipoContratoDeNumero: el prefijo del número dice el tipo", () => {

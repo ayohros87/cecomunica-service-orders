@@ -46,6 +46,13 @@ Object.assign(window.Centro, {
     // aprobado —, así que "Aprobar" a secas no aparece: lo que se pregunta es
     // si se acepta el modelo y qué pasa con la tarifa.
     const cambiosModelo = g.estado === 'pendiente_aprobacion' ? GestionesService.cambiosModeloPendientes(g) : [];
+    // Detectado TARDE (2026-11-27): el radio ya salió sin decisión de tarifa.
+    const tardios = !['anulada', 'pendiente_aprobacion'].includes(g.estado) ? GestionesService.cambiosModeloPendientes(g) : [];
+    if (tardios.length) {
+      A.push(this._acc({ id: 'tarifa_cambio_modelo', label: 'Decidir la tarifa del cambio de modelo…', primaria: true,
+        hint: 'el radio ya salió; dices si la tarifa del cliente se mantiene o se ajusta',
+        onclick: `Centro.aprobarCambioModelo('${id}')`, ok: this.puedeAprobar(), motivo: 'solo administración o gerencia decide' }));
+    }
     if (cambiosModelo.length) {
       const puede = this.puedeAprobar();
       A.push(this._acc({ id: 'aprobar_cambio_modelo', label: 'Aprobar el cambio de modelo…', primaria: true,

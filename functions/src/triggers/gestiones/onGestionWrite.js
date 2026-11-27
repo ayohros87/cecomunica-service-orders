@@ -323,22 +323,36 @@ async function correoAdmins(gid, g) {
   const excepciones = (g.items || []).filter(it => it.elegibilidad === "propio_excepcion");
   const todos = g.items || [];
   const hayExcepcion = excepciones.length > 0;
+  // Cambio de MODELO pedido por el vendedor (Brenda, 2026-11-27): se dice en
+  // el asunto, el título y la tabla — al aprobar se decide la tarifa.
+  const pedidos = G.cambiosPedidos(g);
+  const cambiaSal = new Map(pedidos.map(c => [c.saliente, c]));
   const vend = await G.vendedorEmailDeCliente(g.cliente_id);
   await G.encolarCorreo({
     to: await G.aprobacionesTo(),
     cc: vend || null,
-    subject: `Aprobación requerida: ${G.TIPO_LABEL[g.tipo] || g.tipo} ${gid} — ${g.cliente_nombre || "Cliente"}`,
-    preheader: hayExcepcion
-      ? "Incluye equipo propio sin garantía vigente (excepción por servicio al cliente)"
-      : `${todos.length} radio(s) a reemplazar — Bodega no asigna hasta que administración apruebe`,
+    subject: `Aprobación requerida: ${G.TIPO_LABEL[g.tipo] || g.tipo}${pedidos.length ? " CON CAMBIO DE MODELO" : ""} ${gid} — ${g.cliente_nombre || "Cliente"}`,
+    preheader: pedidos.length
+      ? "El vendedor pidió otro modelo — al aprobar decides si la tarifa del cliente se mantiene o se ajusta"
+      : hayExcepcion
+        ? "Incluye equipo propio sin garantía vigente (excepción por servicio al cliente)"
+        : `${todos.length} radio(s) a reemplazar — Bodega no asigna hasta que administración apruebe`,
     bodyContent: `
-      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">${hayExcepcion
-        ? "Reemplazo con excepción, esperando aprobación" : "Reemplazo esperando aprobación"}</h2>
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">${pedidos.length
+        ? "Reemplazo con CAMBIO DE MODELO, esperando aprobación"
+        : hayExcepcion ? "Reemplazo con excepción, esperando aprobación" : "Reemplazo esperando aprobación"}</h2>
       <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
         ${G.escapeHtml(g.responsable_email || "Un vendedor")} pidió el reemplazo de
         <b>${todos.length} radio(s)</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>
         (gestión <b>${G.escapeHtml(gid)}</b>). Bodega <b>no recibe el aviso</b> hasta que esto se apruebe.
       </p>
+      ${pedidos.length ? `
+      <div style="margin:0 0 12px;padding:12px 14px;border:2px solid #d97706;border-radius:10px;background:#fffbeb;font:14px/1.5 Arial,sans-serif;color:#78350f;">
+        <b>${pedidos.length === todos.length ? "Todos los radios cambian" : `${pedidos.length} de los radios cambian`} de modelo</b>
+        (${pedidos.map(c => `${G.escapeHtml(c.de || "—")} → ${G.escapeHtml(c.a || "—")}`).join("; ")}).
+        No es un reemplazo igual por igual: al aprobar decides si la tarifa del cliente <b>se mantiene</b>
+        o <b>se ajusta</b> (con una gestión de Ajuste de tarifa aparte). Recepción lo verá marcado en la orden de programación.
+      </div>` : ""}
       ${hayExcepcion ? `
       <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
         ${excepciones.length === todos.length ? "Todos los equipos son" : `${excepciones.length} de los equipos son`}
@@ -347,7 +361,9 @@ async function correoAdmins(gid, g) {
       </p>` : ""}
       ${G.tablaHtml(["Serial", "Modelo", "Sale por", "Motivo"], todos.map(it => [
         `<code>${G.escapeHtml(it.serial_saliente || "—")}</code>`,
-        G.escapeHtml(it.modelo || "—"),
+        cambiaSal.has(String(it.serial_saliente || "").trim())
+          ? `${G.escapeHtml(it.modelo || "—")} → <b>${G.escapeHtml(it.modelo_solicitado || "—")}</b>`
+          : G.escapeHtml(it.modelo || "—"),
         it.elegibilidad === "propio_excepcion" ? "<b>Propio SIN garantía</b>"
           : it.elegibilidad === "propio_garantia" ? "Propio en garantía" : "Alquiler",
         G.escapeHtml(it.motivo_detalle || it.motivo_codigo || "—"),
@@ -368,20 +384,20 @@ async function correoCambioModelo(gid, g, cambios) {
     to: await G.aprobacionesTo(),
     cc: vend || null,
     subject: `Aprobación requerida: cambio de modelo en el reemplazo ${gid} — ${g.cliente_nombre || "Cliente"}`,
-    preheader: "Bodega asignó un modelo distinto al aprobado — no se programa hasta que decidas la tarifa",
+    preheader: "El radio que entra es de otro modelo que el que sale — no se programa hasta que decidas la tarifa",
     bodyContent: `
       <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Cambio de modelo esperando aprobación</h2>
       <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-        En el reemplazo <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>, Bodega asignó
-        un radio de un modelo <b>distinto al aprobado</b>. La gestión no se programa hasta que administración decida
+        En el reemplazo <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>, el radio
+        asignado es de un modelo <b>distinto al que tenía el cliente</b>. La gestión no se programa hasta que administración decida
         si lo acepta y si la tarifa del cliente se mantiene.
       </p>
-      ${G.tablaHtml(["Sale", "Aprobado", "Asignado", "Tarifa hoy", "Motivo de bodega"], cambios.map(c => [
+      ${G.tablaHtml(["Sale", "Tenía el cliente", "Entra", "Tarifa hoy", "Quién lo cambió"], cambios.map(c => [
         `<code>${G.escapeHtml(c.saliente || "—")}</code>`,
         G.escapeHtml(c.de || "—"),
         `<b>${G.escapeHtml(c.a || "—")}</b> <code>${G.escapeHtml(c.serial)}</code>`,
         `${G.escapeHtml(c.de || "")}: ${tarifaTxt(c.tarifa_de)}<br>${G.escapeHtml(c.a || "")}: ${tarifaTxt(c.tarifa_a)}`,
-        G.escapeHtml(c.motivo || "—"),
+        c.origen === "vendedor" ? "Lo pidió el vendedor" : `Bodega${c.motivo ? `: ${G.escapeHtml(c.motivo)}` : ""}`,
       ]))}`,
     ctaUrl: G.urlGestion(g, gid),
     ctaLabel: "Revisar el cambio de modelo",
@@ -408,7 +424,7 @@ async function escalarCambioModelo(ref, gid, g, sinDecidir) {
     for (const c of faltan) {
       patch[c.clave] = {
         estado: "pendiente", serial: c.serial, saliente: c.saliente,
-        de: c.de, de_id: c.de_id, a: c.a, a_id: c.a_id, motivo: c.motivo,
+        de: c.de, de_id: c.de_id, a: c.a, a_id: c.a_id, motivo: c.motivo, origen: c.origen || null,
         tarifa_de: c.tarifa_de, tarifa_a: c.tarifa_a,
         contrato_doc_id: c.contrato_doc_id,
         propuesto_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -423,7 +439,7 @@ async function escalarCambioModelo(ref, gid, g, sinDecidir) {
   });
   if (!nuevos.length) return;
   await G.registrarEvento(gid, "cambio_modelo",
-    `Bodega asignó otro modelo: ${nuevos.map(c => `${c.serial} es ${c.a || "—"} (aprobado: ${c.de || "—"})`).join("; ")}. `
+    `Entra otro modelo: ${nuevos.map(c => `${c.serial} es ${c.a || "—"} (el cliente tenía ${c.de || "—"}; ${c.origen === "vendedor" ? "lo pidió el vendedor" : "lo puso bodega"})`).join("; ")}. `
     + "Vuelve a administración: no se programa hasta que se decida si se acepta y si la tarifa se mantiene.");
   await correoCambioModelo(gid, g, nuevos);
 }
@@ -472,6 +488,35 @@ async function correoCambioModeloRechazado(gid, g, rechazados) {
     ctaLabel: "Cambiar el serial en Almacén",
     meta: { gestion_id: gid, paso: "cambio_modelo_rechazado" },
   });
+}
+
+// Cambio de modelo decidido DESPUÉS de programar (2026-11-27): corto, a los
+// mismos destinatarios de la OS de programación. Sin montos (need-to-know).
+async function correoTarifaDecidida(gid, g, aprobados) {
+  const dests = await G.destinatariosRecepcionVendedor(g.cliente_id);
+  if (!dests.length) return;
+  const dec = g.cambio_modelo || {};
+  await G.encolarCorreo({
+    to: dests[0],
+    cc: dests.length > 1 ? dests.slice(1).join(",") : null,
+    subject: `Cambio de modelo: tarifa decidida — ${g.cliente_nombre || "Cliente"} (${gid})`,
+    preheader: "Administración decidió la tarifa del reemplazo con cambio de modelo",
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Tarifa decidida</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        El reemplazo <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> cambió de modelo.
+        Administración ya decidió qué pasa con la tarifa:
+      </p>
+      ${G.tablaHtml(["Sale", "Entra", "Tarifa"], aprobados.map(c => [
+        `<code>${G.escapeHtml(c.saliente || "—")}</code> ${G.escapeHtml(c.de || "")}`,
+        `<code>${G.escapeHtml(c.serial)}</code> <b>${G.escapeHtml(c.a || "")}</b>`,
+        G.escapeHtml(G.tarifaDecididaTxt(dec[c.clave])),
+      ]))}`,
+    ctaUrl: G.urlGestion(g, gid),
+    ctaLabel: "Ver la gestión",
+    meta: { gestion_id: gid, paso: "cambio_modelo_tarifa" },
+  });
+  await G.registrarEvento(gid, "correo_recepcion", "Aviso a Recepción: tarifa del cambio de modelo decidida.");
 }
 
 // Baja por serial: UNA sola aprobación por gestión, con el desglose claro de
@@ -573,11 +618,13 @@ async function correoBodega(gid, g, { anticipo = false } = {}) {
     logger.warn("[onGestionWrite] sin buzón de bodega (email_bodega) — gestión sin aviso", { gid });
     return;
   }
+  const otroModelo = new Set(G.cambiosPedidos(g).map(c => c.saliente));
   const filas = g.tipo === "reemplazo"
     ? (g.items || []).map(it => [
         `<code>${G.escapeHtml(it.serial_saliente || "—")}</code>`,
         G.escapeHtml(it.modelo || "—"),
-        G.escapeHtml(it.modelo_solicitado || it.modelo || "—"),
+        G.escapeHtml(it.modelo_solicitado || it.modelo || "—")
+          + (otroModelo.has(String(it.serial_saliente || "").trim()) ? " <b>(cambio de modelo aprobado)</b>" : ""),
         (RD.cobraCargo(g) ? "<b>Reposición por daño — el cliente aceptó el cobro.</b> " : "")
           + G.escapeHtml(it.motivo_detalle || it.motivo_codigo || "—"),
       ])
@@ -748,6 +795,7 @@ async function correoReemplazoEnOrden(gid, g, absorbida) {
       ${p(`Bodega asignó el radio del reemplazo <b>${e(gid)}</b> (<b>${e(g.cliente_nombre || "—")}</b>). Como la orden
         <b>${e(absorbida.orden_id)}</b> todavía no se ha entregado, el radio nuevo <b>entró en esa misma orden</b> en lugar del
         dañado: <b>no se creó una segunda orden</b> y el cliente firma un solo documento.`)}
+      ${G.cambiosDeModelo(g).length ? G.tramiteResumen(gid, g).html : ""}
       ${G.tablaHtml(["Entra", "Sustituye a", "Modelo", "Contrato"], [[
         `<code>${e(absorbida.entrante)}</code>`, `<code>${e(absorbida.saliente)}</code>`,
         e(G.modeloEntrante(it).modelo || it.modelo_solicitado || it.modelo || "—"), e(it.contrato_id || "custodia"),
@@ -770,11 +818,16 @@ async function correoRecepcion(gid, g, ordenIds, absorbida = null) {
     return;
   }
   // Reemplazo: columna "Contrato" por fila — los ítems pueden cruzar contratos.
+  // Cambio de modelo (2026-11-27): la columna dice "sale → entra" para que
+  // nadie lo lea como un igual por igual.
+  const cmPorSerial = new Map(G.cambiosDeModelo(g).map(c => [c.serial, c]));
   const pares = g.tipo === "reemplazo"
     ? (g.items || []).map(it => [
         `<code>${G.escapeHtml(it.serial_nuevo || "—")}</code>`,
         `<code>${G.escapeHtml(it.serial_saliente || "—")}</code>`,
-        G.escapeHtml(it.modelo_solicitado || it.modelo || "—"),
+        cmPorSerial.has(String(it.serial_nuevo || "").trim())
+          ? `${G.escapeHtml(cmPorSerial.get(String(it.serial_nuevo).trim()).de || "—")} → <b>${G.escapeHtml(G.modeloEntrante(it).modelo || "—")}</b><br><b style="color:#92400e;">CAMBIO DE MODELO</b>`
+          : G.escapeHtml(G.modeloEntrante(it).modelo || it.modelo || "—"),
         G.escapeHtml(it.contrato_id || "custodia"),
       ])
     : ((g.tipo === "aumento" ? g.aumento?.seriales_asignados : g.demo?.seriales_asignados) || []).map(s => [
@@ -791,7 +844,8 @@ async function correoRecepcion(gid, g, ordenIds, absorbida = null) {
   const tramite = G.tramiteResumen(gid, g);
   const contratoAsunto = g.tipo === "aumento"
     ? ` · ${g.aumento?.contrato_papel === true && !g.aumento?.contrato_doc_id ? "adenda a contrato en papel" : "anexo al contrato"} ${g.aumento?.contrato_id || "—"}`
-    : g.tipo === "demo" ? " · sin contrato" : "";
+    : g.tipo === "demo" ? " · sin contrato"
+      : cmPorSerial.size ? " · CON CAMBIO DE MODELO" : "";
   await G.encolarCorreo({
     to: dests[0],
     cc: dests.length > 1 ? dests.slice(1).join(",") : null,
@@ -1082,7 +1136,12 @@ module.exports = onDocumentWritten(
       // el aviso genérico ("asigna seriales") sobra. Aprobado → la sección C
       // programa sola; rechazado → bodega tiene que poner otro radio.
       const decidioCambioModelo = before && G.cambioModeloEnEspera(before) && !G.cambioModeloEnEspera(after);
-      if (decidioCambioModelo) {
+      if (decidioCambioModelo && (after.ordenes?.programacion_id || after.cierre?.entrega === true)) {
+        // Decidida TARDE (el radio ya salió): recepción recibió la OS con
+        // "tarifa por decidir" — se le cuenta qué se decidió.
+        const { aprobados } = G.estadoCambiosModelo(after);
+        if (aprobados.length) await correoTarifaDecidida(gid, after, aprobados);
+      } else if (decidioCambioModelo) {
         const { rechazados } = G.estadoCambiosModelo(after);
         if (rechazados.length) {
           await correoCambioModeloRechazado(gid, after, rechazados);
@@ -1742,6 +1801,16 @@ module.exports = onDocumentWritten(
         if (cambio) {
           gX = { ...after, items };
           await ref.set({ items }, { merge: true });
+        }
+        // El cambio que administración ya aprobó al aprobar el reemplazo (el
+        // vendedor pidió ese modelo) hereda esa decisión: no se pregunta dos veces.
+        const heredadas = G.decisionesHeredadas(gX);
+        if (Object.keys(heredadas).length) {
+          gX = { ...gX, cambio_modelo: { ...(gX.cambio_modelo || {}), ...heredadas } };
+          await ref.set({ cambio_modelo: heredadas }, { merge: true });
+          await G.registrarEvento(gid, "cambio_modelo",
+            `Cambio de modelo ya decidido al aprobar: ${Object.values(heredadas).map(d => `${d.saliente || "—"} (${d.de || "—"}) → ${d.serial} (${d.a || "—"})`).join("; ")}`
+            + ` — ${G.tarifaDecididaTxt(Object.values(heredadas)[0])}.`);
         }
         const { sinDecidir, rechazados } = G.estadoCambiosModelo(gX);
         if (sinDecidir.length || rechazados.length) {

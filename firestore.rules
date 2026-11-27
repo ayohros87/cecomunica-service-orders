@@ -1130,12 +1130,21 @@ service cloud.firestore {
           // `cambio_modelo` (2026-09-29): la decisión sobre un radio de otro
           // modelo que puso bodega — la toma administración al sacar la
           // gestión de pendiente_aprobacion, nunca bodega (esAsignacionGestion
-          // solo toca `items`).
-          && soloTocaG(["estado","aprobacion","cierre","cobro","cambio_modelo"])
+          // solo toca `items`). `cambio_modelo_pedido` (2026-11-27): la tarifa
+          // del cambio de modelo que pidió el VENDEDOR, decidida al aprobar.
+          && soloTocaG(["estado","aprobacion","cierre","cobro","cambio_modelo","cambio_modelo_pedido"])
           && (request.resource.data.estado != "pendiente_cliente"
               || resource.data.get("causa", "") == "dano_cliente")
           && (resource.data.tipo != "baja"
               || ("carta_path" in resource.data && resource.data.carta_path is string));
+      }
+      // Decidir la tarifa de un cambio de modelo que se detectó TARDE (2026-11-27:
+      // reemplazos ya programados o entregados antes de que el cambio pedido por
+      // el vendedor se marcara). Solo escribe la decisión; el estado no cambia.
+      function esDecisionTardiaCambioModelo() {
+        return userRole() in ["administrador","gerente"]
+          && !(resource.data.estado in ["pendiente_aprobacion","anulada"])
+          && soloTocaG(["cambio_modelo"]);
       }
       // La gestión sigue BLANDA: nada aplicado al contrato, bodega sin asignar
       // y sin orden de programación. Es la ventana en la que todavía se puede
@@ -1393,7 +1402,8 @@ service cloud.firestore {
                       || esAprobacionActualizacionSeriales()
                       || esEnlaceFirmaGestion() || esAsignacionGestion()
                       || esCorreccionSerialesGestion() || esMarcaTallerGestion()
-                      || esEdicionGestion() || esRefrendoAnexoGestion());
+                      || esEdicionGestion() || esRefrendoAnexoGestion()
+                      || esDecisionTardiaCambioModelo());
       allow delete: if false;
       // Linaje del reemplazo (espejo del patrón contratos/{cid}/mapeos):
       // append-only — onMapeoWrite generalizado los consume en la Ola 2.

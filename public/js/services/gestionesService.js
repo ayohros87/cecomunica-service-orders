@@ -286,9 +286,27 @@ const GestionesService = {
   // Aprobación de la excepción por servicio al cliente (propio sin garantía,
   // decisión 2026-08-26 §8.1). Solo administrador — la regla de UI la valida
   // la página; el trigger onGestionWrite manda el correo a bodega al aprobar.
-  async aprobar(gestionId) {
+  // `cambioModelo` (2026-11-27): si el vendedor pidió OTRO modelo que el del
+  // saliente, aprobar exige decir qué pasa con la tarifa — { tarifa, nota }.
+  // Queda en `cambio_modelo_pedido.{serial saliente}` y, al asignar bodega ese
+  // modelo, el servidor la hereda sin volver a preguntar.
+  async aprobar(gestionId, { cambioModelo = null } = {}) {
     const user = firebase.auth().currentUser;
     const g = await this.get(gestionId);
+    const pedidos = this.cambiosPedidos(g);
+    const extra = {};
+    if (pedidos.length) {
+      const { tarifa, nota = '' } = cambioModelo || {};
+      if (!['se_mantiene', 'se_ajusta'].includes(tarifa)) throw new Error('Este reemplazo cambia de modelo: indica qué pasa con la tarifa.');
+      if (tarifa === 'se_ajusta' && !String(nota).trim()) throw new Error('Escribe la nota del ajuste.');
+      const dec = {
+        estado: 'aprobado', tarifa, nota: String(nota).trim() || null,
+        decidido_por_uid: user?.uid || null, decidido_por_email: user?.email || null,
+        decidido_at: firebase.firestore.FieldValue.serverTimestamp(),
+      };
+      extra.cambio_modelo_pedido = Object.fromEntries(pedidos.map(p => [p.clave,
+        { saliente: p.saliente, de: p.de, de_id: p.de_id, a: p.a, a_id: p.a_id, ...dec }]));
+    }
     // `cierre.aprobacion` no es condición de cierre en reemplazo/demo (la
     // compuerta va ANTES de bodega, no al final), pero sí deja el paso dado en
     // el expediente: sin él, el checklist tenía que adivinarlo por el estado.
@@ -304,8 +322,31 @@ const GestionesService = {
         aprobado_por_email: user?.email || null,
         at: firebase.firestore.FieldValue.serverTimestamp(),
       },
+      ...extra,
     });
-    await this.registrarEvento(gestionId, 'aprobar', 'Gestión aprobada — pasa a Bodega para asignar seriales.');
+    const cm = pedidos.length
+      ? ` CON CAMBIO DE MODELO (${pedidos.map(p => `${p.saliente}: ${p.de || '—'} → ${p.a || '—'}`).join('; ')}) — `
+        + `tarifa: ${cambioModelo.tarifa === 'se_ajusta' ? 'se ajusta' : 'se mantiene'}${cambioModelo.nota ? ` (${String(cambioModelo.nota).trim()})` : ''}.`
+      : '';
+    await this.registrarEvento(gestionId, 'aprobar', `Gestión aprobada${cm} — pasa a Bodega para asignar seriales.`);
+  },
+
+  // Mismo criterio que lib/gestiones.cambiosPedidos del servidor: el vendedor
+  // pidió un modelo de OTRA familia que el del radio que sale. Clave = serial
+  // saliente normalizado.
+  cambiosPedidos(g) {
+    if (g?.tipo !== 'reemplazo') return [];
+    const out = [];
+    for (const it of (g.items || [])) {
+      const saliente = String(it?.serial_saliente || '').trim();
+      const aId = it?.modelo_solicitado_id || null;
+      const a = String(it?.modelo_solicitado || '').trim();
+      if (!saliente || (!aId && !a) || (!it.modelo_id && !it.modelo)) continue;
+      if (EquiposPoolService._mismoModelo({ modelo_id: aId, modelo_label: a }, it.modelo_id || null, it.modelo || '')) continue;
+      out.push({ clave: EquiposPoolService.normalizarSerial(saliente), saliente,
+        de: String(it.modelo || '').trim(), de_id: it.modelo_id || null, a, a_id: aId });
+    }
+    return out;
   },
 
   // CAMBIO DE MODELO en un reemplazo (2026-09-29). Bodega puso un radio de
@@ -326,6 +367,11 @@ const GestionesService = {
     const g = await this.get(gestionId);
     const pend = this.cambiosModeloPendientes(g);
     if (!pend.length) throw new Error('Esta gestión no tiene un cambio de modelo esperando.');
+    // Detectado TARDE (la gestión ya salió de aprobación: programada o
+    // entregada): solo se decide la tarifa — el radio ya va o ya está con el
+    // cliente, así que no hay rechazo ni cambia el estado.
+    const tardio = g.estado !== 'pendiente_aprobacion';
+    if (tardio && !aprobar) throw new Error('El radio ya salió: solo queda decidir la tarifa.');
     if (aprobar && !['se_mantiene', 'se_ajusta'].includes(tarifa)) throw new Error('Indica qué pasa con la tarifa.');
     if ((!aprobar || tarifa === 'se_ajusta') && !String(nota || '').trim()) throw new Error('Escribe el motivo.');
     const decision = {
@@ -336,12 +382,12 @@ const GestionesService = {
       decidido_por_email: user?.email || null,
       decidido_at: firebase.firestore.FieldValue.serverTimestamp(),
     };
-    const upd = { estado: 'pendiente_bodega' };
+    const upd = tardio ? {} : { estado: 'pendiente_bodega' };
     pend.forEach(p => { upd[`cambio_modelo.${p.clave}`] = { ...(g.cambio_modelo[p.clave] || {}), ...decision }; });
     await firebase.firestore().collection(this.COL).doc(gestionId).update(upd);
     const que = pend.map(p => `${p.serial}: ${p.de || '—'} → ${p.a || '—'}`).join('; ');
     await this.registrarEvento(gestionId, 'cambio_modelo', aprobar
-      ? `Cambio de modelo APROBADO (${que}). Tarifa: ${tarifa === 'se_mantiene' ? 'se mantiene' : 'se ajusta'}${decision.nota ? ` — ${decision.nota}` : ''}. La OS de programación sale sola.`
+      ? `Cambio de modelo APROBADO (${que}). Tarifa: ${tarifa === 'se_mantiene' ? 'se mantiene' : 'se ajusta'}${decision.nota ? ` — ${decision.nota}` : ''}.${tardio ? ' (Decidido después de programado.)' : ' La OS de programación sale sola.'}`
       : `Cambio de modelo RECHAZADO (${que}): ${decision.nota}. Bodega debe asignar un radio del modelo aprobado.`);
   },
 

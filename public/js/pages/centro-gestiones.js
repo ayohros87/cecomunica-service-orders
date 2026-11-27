@@ -888,14 +888,27 @@ Object.assign(window.Centro, {
               ? 'Los radios ya están en CECOMUNICA — no se abrirá orden de devolución.'
               : 'Los radios siguen donde el cliente — al entregar el reemplazo se abre sola la devolución.'}</div>
         </div>` : '';
-      cuerpo = taller + danoBox + `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
+      // Cambio de modelo PEDIDO (2026-11-27): se marca en la fila — no es un
+      // igual por igual y la tarifa la decide administración al aprobar.
+      const pedidosCM = new Map(GestionesService.cambiosPedidos(g).map(p => [p.saliente, p]));
+      const decPedido = (sal) => {
+        const d = (g.cambio_modelo_pedido || {})[EquiposPoolService.normalizarSerial(sal)];
+        return d?.estado === 'aprobado' ? ` · tarifa ${d.tarifa === 'se_ajusta' ? 'se ajusta' : 'se mantiene'}` : ' · tarifa por decidir';
+      };
+      cuerpo = taller + danoBox + (pedidosCM.size ? `<div class="cg-senal warn" style="margin:0 0 10px;">
+          <span><b>Reemplazo con cambio de modelo.</b> ${pedidosCM.size === (g.items || []).length ? 'Todos los radios cambian' : `${pedidosCM.size} radio(s) cambian`}
+          de modelo a pedido del vendedor — ${g.cambio_modelo_pedido
+            ? 'administración decidió la tarifa al aprobar (ver cada fila).'
+            : 'la tarifa la decide administración al aprobar.'}</span></div>` : '')
+        + `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
         <th>Sale</th><th>Modelo</th><th>Entra</th><th>Modelo solicitado</th><th>Motivo</th><th>Contrato</th>
         </tr></thead><tbody>
         ${(g.items || []).map((it, ix) => `<tr>
           <td class="cg-mono">${this.esc(it.serial_saliente || '—')}</td>
           <td>${this.esc(it.modelo || '—')}</td>
           <td><span class="cg-mono">${this.esc(it.serial_nuevo || 'pendiente')}</span>${this._modeloEntroHtml(g, it)}</td>
-          <td>${this.esc(it.modelo_solicitado || it.modelo || '—')}</td>
+          <td>${this.esc(it.modelo_solicitado || it.modelo || '—')}${pedidosCM.has(String(it.serial_saliente || '').trim())
+            ? `<div style="font-size:12px; color:#92400E; font-weight:600;">cambio de modelo${decPedido(it.serial_saliente)}</div>` : ''}</td>
           <td style="font-size:12.5px;">${this.esc(it.motivo_detalle || it.motivo_codigo || '—')}
             ${it.elegibilidad === 'propio_excepcion' ? '<br><span class="cg-venc por_vencer">excepción serv. cliente</span>' : ''}</td>
           <td class="cg-mono" style="font-size:12px;">${this.esc(it.contrato_id || '—')}</td>
@@ -974,8 +987,8 @@ Object.assign(window.Centro, {
       const sinCarta = esBaja && !g.carta_path;
       const cambiosModelo = GestionesService.cambiosModeloPendientes(g);
       aprobacion = cambiosModelo.length ? `<div class="cg-senal warn" style="margin:10px 0 0;">
-           <span><b>Bodega asignó otro modelo.</b> El reemplazo se aprobó con
-             ${cambiosModelo.map(p => `<b>${this.esc(p.de || '—')}</b> y entró <b>${this.esc(p.a || '—')}</b> <span class="cg-mono">${this.esc(p.serial || '')}</span>`).join('; ')}.
+           <span><b>Entra otro modelo.</b>
+             ${cambiosModelo.map(p => `El cliente tenía <b>${this.esc(p.de || '—')}</b> y entra <b>${this.esc(p.a || '—')}</b> <span class="cg-mono">${this.esc(p.serial || '')}</span>${p.origen === 'vendedor' ? ' (lo pidió el vendedor)' : ' (lo puso bodega)'}`).join('; ')}.
              No se programa hasta que administración decida en Acciones si lo acepta y si la tarifa del cliente se mantiene.</span>
            </div>` : `<div class="cg-senal warn" style="margin:10px 0 0;">
            <span>${esBaja
@@ -1020,6 +1033,15 @@ Object.assign(window.Centro, {
              <b>en paralelo</b>: bodega asigna y la orden de programación sale sola — la firma solo
              frena la <b>entrega</b>.</span>
            </div>`;
+    }
+    // Cambio de modelo detectado TARDE (2026-11-27): el radio ya se programó o
+    // se entregó sin que nadie decidiera la tarifa. Se decide en Acciones.
+    const tardios = g.estado !== 'pendiente_aprobacion' ? GestionesService.cambiosModeloPendientes(g) : [];
+    if (tardios.length) {
+      aprobacion += `<div class="cg-senal warn" style="margin:10px 0 0;">
+           <span><b>Cambio de modelo sin decidir la tarifa.</b>
+             ${tardios.map(p => `El cliente tenía <b>${this.esc(p.de || '—')}</b> y recibe <b>${this.esc(p.a || '—')}</b> <span class="cg-mono">${this.esc(p.serial || '')}</span>`).join('; ')}.
+             El radio ya salió; falta que administración diga en Acciones si la tarifa se mantiene o se ajusta.</span></div>`;
     }
     // Pie del expediente: el siguiente paso y "Acciones ⋯" — la MISMA lista
     // del "⋯" de la fila. Nada de botoneras por estado repartidas por el
@@ -1075,16 +1097,19 @@ Object.assign(window.Centro, {
   // administración decidió (la tarifa) — lo que queda para leer meses después.
   _modeloEntroHtml(g, it) {
     if (!it.serial_nuevo || !it.modelo_nuevo) return '';
-    const pedido = it.modelo_solicitado || it.modelo || '';
+    // Contra el modelo del SALIENTE (lo que el cliente tenía), como el
+    // servidor desde 2026-11-27; ítems viejos sin él caen al pedido.
+    const salId = it.modelo_id || (it.modelo ? null : it.modelo_solicitado_id) || null;
+    const sal = it.modelo || it.modelo_solicitado || '';
     // Mismo criterio que el asignador y el servidor: N/R de una familia es el mismo modelo.
     if (EquiposPoolService._mismoModelo({ modelo_id: it.modelo_id_nuevo, modelo_label: it.modelo_nuevo },
-      it.modelo_solicitado_id || it.modelo_id || null, pedido)) return '';
+      salId, sal)) return '';
     const clave = EquiposPoolService.normalizarSerial(it.serial_nuevo);
     const d = (g.cambio_modelo || {})[clave];
     const dec = !d ? '' : d.estado === 'aprobado'
       ? ` · aprobado${d.decidido_por_email ? ` por ${this.esc(d.decidido_por_email.split('@')[0])}` : ''} · tarifa ${d.tarifa === 'se_ajusta' ? 'se ajusta' : 'se mantiene'}`
-      : d.estado === 'rechazado' ? ' · rechazado' : d.estado === 'pendiente' ? ' · por aprobar' : '';
-    return `<div style="font-size:12px; color:#92400E;">es ${this.esc(it.modelo_nuevo)}${dec}</div>`;
+      : d.estado === 'rechazado' ? ' · rechazado' : d.estado === 'pendiente' ? ' · tarifa por decidir' : '';
+    return `<div style="font-size:12px; color:#92400E;">cambio de modelo: es ${this.esc(it.modelo_nuevo)}${dec}</div>`;
   },
 
   // CAMBIO DE MODELO (2026-09-29): bodega puso un radio de otro modelo y la
@@ -1102,13 +1127,14 @@ Object.assign(window.Centro, {
     return `<div style="border:1px solid var(--border); border-radius:8px; overflow:hidden; margin:0 0 12px;">
       <table style="border-collapse:collapse; width:100%; font-size:13px;">
         <thead><tr style="text-align:left; color:var(--fg-3);">
-          <th style="padding:6px 10px;">Aprobado</th><th style="padding:6px 10px;">Asignado por bodega</th><th style="padding:6px 10px;">Tarifa hoy</th></tr></thead>
+          <th style="padding:6px 10px;">Tenía el cliente</th><th style="padding:6px 10px;">Entra</th><th style="padding:6px 10px;">Tarifa hoy</th></tr></thead>
         <tbody>${pend.map(p => `<tr>
           <td style="padding:6px 10px; border-top:1px solid var(--border);">${this.esc(p.de || '—')}
             ${p.saliente ? `<div class="cg-mono" style="color:var(--fg-3); font-size:12px;">sale ${this.esc(p.saliente)}</div>` : ''}</td>
           <td style="padding:6px 10px; border-top:1px solid var(--border);"><b>${this.esc(p.a || '—')}</b>
             <div class="cg-mono" style="font-size:12px;">${this.esc(p.serial || '')}</div>
-            ${p.motivo ? `<div style="color:var(--fg-3); font-size:12px;">Bodega: ${this.esc(p.motivo)}</div>` : ''}</td>
+            ${p.origen === 'vendedor' ? '<div style="color:var(--fg-3); font-size:12px;">lo pidió el vendedor</div>'
+              : p.motivo ? `<div style="color:var(--fg-3); font-size:12px;">Bodega: ${this.esc(p.motivo)}</div>` : ''}</td>
           <td style="padding:6px 10px; border-top:1px solid var(--border); font-size:12.5px;">
             ${this.esc(p.de || '')}: ${t(p.tarifa_de)}<br>${this.esc(p.a || '')}: ${t(p.tarifa_a)}</td>
         </tr>`).join('')}</tbody>
@@ -1118,8 +1144,9 @@ Object.assign(window.Centro, {
     const g = await GestionesService.get(gid);
     const pend = GestionesService.cambiosModeloPendientes(g);
     if (!pend.length) { Toast.show('Esta gestión ya no tiene un cambio de modelo esperando', 'warn'); await this.recargarGestiones(); return; }
+    const tardio = g.estado !== 'pendiente_aprobacion';
     const r = await Modal.sheet({
-      title: aprobar ? 'Aprobar el cambio de modelo' : 'Rechazar el cambio de modelo',
+      title: tardio ? 'Decidir la tarifa del cambio de modelo' : aprobar ? 'Aprobar el cambio de modelo' : 'Rechazar el cambio de modelo',
       icon: aprobar ? 'check' : 'x', size: 'md',
       html: `${this._tablaCambioModelo(pend)}
         ${aprobar ? `
@@ -1129,12 +1156,14 @@ Object.assign(window.Centro, {
         <label style="display:flex; gap:8px; align-items:flex-start; font-size:13px; margin:0 0 10px;">
           <input type="radio" name="cmTarifa" value="se_ajusta"> <span><b>Se ajusta</b> — el cambio de precio se hace aparte, con una gestión de <b>Ajuste de tarifa</b>.</span></label>
         <textarea id="cmNota" class="form-input" rows="2" style="width:100%;" placeholder="Nota (obligatoria si se ajusta)"></textarea>
-        <p style="margin:8px 0 0; font-size:12.5px; color:var(--fg-3);">Al aprobar, la OS de programación sale sola.</p>`
+        <p style="margin:8px 0 0; font-size:12.5px; color:var(--fg-3);">${tardio
+          ? 'El radio ya salió: esto solo deja la decisión de la tarifa en el expediente.'
+          : 'Al aprobar, la OS de programación sale sola.'}</p>`
         : `<textarea id="cmNota" class="form-input" rows="2" style="width:100%;" placeholder="Motivo del rechazo (obligatorio) — lo recibe bodega"></textarea>
         <p style="margin:8px 0 0; font-size:12.5px; color:var(--fg-3);">Bodega recibe el aviso de asignar un radio del modelo aprobado.</p>`}`,
       buttons: [
         { action: 'cancel', label: 'Volver' },
-        { action: 'confirm', label: aprobar ? 'Aprobar' : 'Rechazar', primary: true, danger: !aprobar },
+        { action: 'confirm', label: tardio ? 'Guardar la decisión' : aprobar ? 'Aprobar' : 'Rechazar', primary: true, danger: !aprobar },
       ],
       onAction: (action, root) => {
         if (action !== 'confirm') return null;
@@ -1150,7 +1179,8 @@ Object.assign(window.Centro, {
     if (!r || typeof r !== 'object') return;
     try {
       await GestionesService.decidirCambioModelo(gid, { aprobar, tarifa: r.tarifa, nota: r.nota });
-      Toast.show(aprobar ? 'Cambio de modelo aprobado — la OS de programación sale sola' : 'Rechazado — bodega recibirá el aviso', 'ok');
+      Toast.show(tardio ? 'Decisión de la tarifa guardada en el expediente'
+        : aprobar ? 'Cambio de modelo aprobado — la OS de programación sale sola' : 'Rechazado — bodega recibirá el aviso', 'ok');
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo guardar la decisión: ' + (e?.message || e), 'bad'); }
   },
@@ -1209,11 +1239,50 @@ Object.assign(window.Centro, {
     return this._candado('aprobarGestion:' + gid, () => this._aprobarGestion(gid), 'Aprobando…');
   },
   async _aprobarGestion(gid) {
+    // Reemplazo con CAMBIO DE MODELO pedido por el vendedor (2026-11-27): no
+    // es un igual por igual — aprobar pide qué pasa con la tarifa.
+    let cambioModelo = null;
     try {
-      await GestionesService.aprobar(gid);
+      const g = await GestionesService.get(gid);
+      const pedidos = GestionesService.cambiosPedidos(g);
+      if (pedidos.length) {
+        const r = await Modal.sheet({
+          title: 'Aprobar reemplazo con cambio de modelo', icon: 'check', size: 'md',
+          html: `<p style="margin:0 0 10px; font-size:13px;">El vendedor pidió <b>otro modelo</b> que el que tiene el cliente.
+              No es un reemplazo igual por igual: el contrato tenía el precio del modelo que sale.</p>
+            <div style="border:1px solid var(--border); border-radius:8px; overflow:hidden; margin:0 0 12px;">
+              <table style="border-collapse:collapse; width:100%; font-size:13px;">
+                <thead><tr style="text-align:left; color:var(--fg-3);"><th style="padding:6px 10px;">Sale</th><th style="padding:6px 10px;">Tiene el cliente</th><th style="padding:6px 10px;">Pidió el vendedor</th></tr></thead>
+                <tbody>${pedidos.map(p => `<tr>
+                  <td class="cg-mono" style="padding:6px 10px; border-top:1px solid var(--border);">${this.esc(p.saliente)}</td>
+                  <td style="padding:6px 10px; border-top:1px solid var(--border);">${this.esc(p.de || '—')}</td>
+                  <td style="padding:6px 10px; border-top:1px solid var(--border);"><b>${this.esc(p.a || '—')}</b></td></tr>`).join('')}</tbody>
+              </table></div>
+            <p style="margin:0 0 6px; font-size:13px;"><b>¿Qué pasa con la tarifa del cliente?</b></p>
+            <label style="display:flex; gap:8px; align-items:flex-start; font-size:13px; margin:0 0 6px;">
+              <input type="radio" name="apTarifa" value="se_mantiene" checked> <span><b>Se mantiene</b> — el cliente sigue pagando lo mismo.</span></label>
+            <label style="display:flex; gap:8px; align-items:flex-start; font-size:13px; margin:0 0 10px;">
+              <input type="radio" name="apTarifa" value="se_ajusta"> <span><b>Se ajusta</b> — el cambio de precio se hace aparte, con una gestión de <b>Ajuste de tarifa</b>.</span></label>
+            <textarea id="apNota" class="form-input" rows="2" style="width:100%;" placeholder="Nota (obligatoria si se ajusta)"></textarea>
+            <p style="margin:8px 0 0; font-size:12.5px; color:var(--fg-3);">Bodega recibe el aviso con el cambio marcado, y Recepción lo verá en la orden de programación.</p>`,
+          buttons: [{ action: 'cancel', label: 'Volver' }, { action: 'confirm', label: 'Aprobar', primary: true }],
+          onAction: (action, root) => {
+            if (action !== 'confirm') return null;
+            const tarifa = root.querySelector('input[name="apTarifa"]:checked')?.value || null;
+            const nota = root.querySelector('#apNota')?.value.trim() || '';
+            if (tarifa === 'se_ajusta' && nota.length < 5) { Toast.show('Escribe la nota del ajuste', 'warn'); return false; }
+            return { tarifa, nota };
+          },
+        });
+        if (!r || typeof r !== 'object') return;
+        cambioModelo = r;
+      }
+    } catch (e) { console.error(e); Toast.show('No se pudo leer la gestión', 'bad'); return; }
+    try {
+      await GestionesService.aprobar(gid, { cambioModelo });
       Toast.show('Aprobada — Bodega recibirá el aviso para asignar', 'ok');
       await this.recargarGestiones();
-    } catch (e) { console.error(e); Toast.show('No se pudo aprobar', 'bad'); }
+    } catch (e) { console.error(e); Toast.show('No se pudo aprobar: ' + (e?.message || e), 'bad'); }
   },
 
   async verAnexo(path) {
