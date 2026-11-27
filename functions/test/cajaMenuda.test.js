@@ -258,3 +258,122 @@ test("F6 — el servidor usa la misma lógica que la pantalla", () => {
   const servidor = fs.readFileSync(path.join(__dirname, "../src/domain/cajaMenuda.js"), "utf8");
   assert.equal(servidor, publico, "copia public/js/domain/cajaMenuda.js a functions/src/domain/cajaMenuda.js");
 });
+
+// ── Viáticos sin factura y solicitud de pago en papel (2026-11-27) ─────────
+// Alberto: los "vales" de alimentación son viáticos y no llevan factura; el
+// proceso queda como el del papel, y los Vo.Bo. se firman a mano sobre una
+// hoja que imprime el sistema con lo que ya se aprobó.
+//   V1 — Un viático se pide sin foto; lo demás sigue pidiendo factura.
+//   V2 — Qué categorías son viático se configura; vacío = todo con factura.
+//   V3 — El monto en letras, como en el formato de contabilidad.
+//   V4 — La solicitud de pago de un reembolso por ACH: cuatro firmas, con Vo.Bo.
+//   V5 — La de la reposición: cheque a quien custodia, tres firmas, con sus recibos.
+
+test("V1 — el viático no lleva factura", () => {
+  const viatico = { tipo: "reembolso", monto: "5", categoria: "Vales y viáticos", concepto: "Viático gira Campana", fecha_gasto: "2026-11-26", recibos: [] };
+  assert.deepEqual(C.validar(viatico, {}, { hoyISO: "2026-11-27" }), []);
+  assert.ok(C.sinFactura("Vales y viáticos", {}));
+  assert.ok(C.esViatico(viatico, {}));
+  // Sigue llevando fecha, y no puede ser futura.
+  assert.match(C.validar({ ...viatico, fecha_gasto: "" }, {})[0], /fecha del viático/);
+  assert.match(C.validar({ ...viatico, fecha_gasto: "2026-11-28" }, {}, { hoyISO: "2026-11-27" })[0], /futura/);
+  // Un viático no es un anticipo: no hay factura con qué rendirlo.
+  assert.match(C.validar({ ...viatico, tipo: "anticipo" }, {})[0], /viático/);
+  // Lo demás no cambia: un peaje sin foto no sale.
+  assert.match(C.validar({ ...viatico, categoria: "Peaje" }, {})[0], /foto de la factura/);
+  assert.ok(!C.sinFactura("Peaje", {}) && !C.sinFactura("", {}) && !C.esViatico(null, {}));
+  // Pasado el tope sigue yéndose por ACH, como cualquier reembolso.
+  assert.equal(C.via("reembolso", 25, {}), "ach");
+});
+
+test("V2 — las categorías sin factura se configuran", () => {
+  assert.deepEqual(C.config({}).sin_factura, ["Vales y viáticos"]);
+  assert.deepEqual(C.config({ sin_factura: [] }).sin_factura, []);
+  assert.deepEqual(C.config({ sin_factura: [" Viáticos ", "", null] }).sin_factura, ["Viáticos"]);
+  const todoConFactura = { sin_factura: [] };
+  const v = { tipo: "reembolso", monto: 5, categoria: "Vales y viáticos", concepto: "Viático", fecha_gasto: "2026-11-26", recibos: [] };
+  assert.match(C.validar(v, todoConFactura)[0], /foto de la factura/);
+  // Los nombres de las firmas: los del formato, y se pueden cambiar o dejar en blanco.
+  assert.deepEqual(C.config({}).firmas, { revisado: "Lic. Zuleika Díaz", aprobado: "Ing. Alberto Yohros", vobo: "Sr. Joseph Bettsack" });
+  assert.deepEqual(C.config({ firmas: { vobo: " Sr. Michael Bettsack ", aprobado: "" } }).firmas,
+    { revisado: "Lic. Zuleika Díaz", aprobado: "", vobo: "Sr. Michael Bettsack" });
+});
+
+test("V3 — el monto en letras", () => {
+  // Los tres de las muestras de Cheila.
+  assert.equal(C.enLetras(183.18), "CIENTO OCHENTA Y TRES CON 18/100");
+  assert.equal(C.enLetras(3373.16), "TRES MIL TRESCIENTOS SETENTA Y TRES CON 16/100");
+  assert.equal(C.enLetras(85.24), "OCHENTA Y CINCO CON 24/100");
+  const casos = {
+    0.05: "CERO CON 05/100", 1: "UNO CON 00/100", 16.82: "DIECISÉIS CON 82/100", 21: "VEINTIUNO CON 00/100",
+    31: "TREINTA Y UNO CON 00/100", 100: "CIEN CON 00/100", 101: "CIENTO UNO CON 00/100", 111: "CIENTO ONCE CON 00/100",
+    500: "QUINIENTOS CON 00/100", 1000: "MIL CON 00/100", 1001: "MIL UNO CON 00/100", 1100: "MIL CIEN CON 00/100",
+    21000: "VEINTIÚN MIL CON 00/100", 31021.5: "TREINTA Y UN MIL VEINTIUNO CON 50/100",
+    999999.99: "NOVECIENTOS NOVENTA Y NUEVE MIL NOVECIENTOS NOVENTA Y NUEVE CON 99/100",
+  };
+  for (const [n, letras] of Object.entries(casos)) assert.equal(C.enLetras(Number(n)), letras, n);
+  for (const malo of [-1, 1000000, NaN, "abc", null, ""]) assert.equal(C.enLetras(malo), "", String(malo));
+  assert.equal(C.fechaLarga("2026-11-18"), "18 de noviembre de 2026");
+  assert.equal(C.fechaLarga("18/11/2026"), "");
+});
+
+test("V4 — solicitud de pago de un reembolso por ACH", () => {
+  const g = {
+    numero: "CM-0007", tipo: "reembolso", via: "ach", estado: "aprobado", monto: 85.24, categoria: "Combustible",
+    concepto: "56 litros de diésel, la tarjeta no tenía saldo", proveedor: "Petróleos Delta", factura_numero: "100078405",
+    fecha_gasto: "2026-11-12", solicitante_nombre: "Victor Mariche", created_at: new Date("2026-11-12T13:35:00Z"),
+    aprobacion: { por_nombre: "Alberto Yohros", at: new Date("2026-11-13T15:00:00Z") },
+  };
+  assert.ok(C.llevaSolicitudPago(g));
+  assert.ok(C.llevaSolicitudPago({ ...g, estado: "pagado" }));
+  assert.ok(!C.llevaSolicitudPago({ ...g, estado: "solicitado" }), "sin aprobar no hay nada que llevar a firmar");
+  assert.ok(!C.llevaSolicitudPago({ ...g, via: "efectivo" }), "lo que sale del fondo no lleva solicitud de pago");
+  assert.ok(!C.llevaSolicitudPago(null));
+  const s = C.solicitudPago({ gasto: g, cfg: {}, hoy: "2026-11-19" });
+  assert.equal(s.ref, "CM-0007");
+  assert.equal(s.fecha, "2026-11-19");
+  assert.equal(s.beneficiario, "Victor Mariche");
+  assert.equal(s.monto, 85.24);
+  assert.equal(s.letras, "OCHENTA Y CINCO CON 24/100");
+  assert.equal(s.mediante, "ACH");
+  assert.match(s.concepto, /^Reembolso: 56 litros/);
+  assert.equal(s.detalle.length, 1);
+  assert.equal(s.detalle[0].factura, "100078405");
+  assert.match(s.detalle[0].descripcion, /Petróleos Delta · Combustible · 12 de noviembre de 2026/);
+  // Lo que ya consta en el sistema: quién pidió y quién aprobó, con su día (hora de Panamá).
+  assert.deepEqual(s.aprobado, [{ que: "Pedido", por: "Victor Mariche", fecha: "2026-11-12" },
+    { que: "Aprobado", por: "Alberto Yohros", fecha: "2026-11-13" }]);
+  // Las cuatro casillas del formato, la última el Vo.Bo. del director.
+  assert.deepEqual(s.firmas.map((f) => `${f.rol}=${f.nombre}`), ["Solicitado por=Victor Mariche", "Revisado por=Lic. Zuleika Díaz",
+    "Aprobado=Ing. Alberto Yohros", "Vo.Bo.=Sr. Joseph Bettsack"]);
+  // Reimpresa después de pagar, dice con qué referencia salió.
+  const pagada = C.solicitudPago({ gasto: { ...g, estado: "pagado", entrega: { por_nombre: "Cheila Sánchez", referencia: "778899", at: new Date("2026-11-20T15:00:00Z") } }, hoy: "2026-11-20" });
+  assert.deepEqual(pagada.aprobado[2], { que: "Pagado (ACH 778899)", por: "Cheila Sánchez", fecha: "2026-11-20" });
+});
+
+test("V5 — solicitud de pago de la reposición", () => {
+  const rep = {
+    tipo: "reposicion", numero: "REP-0001", fecha: "2026-11-18", total: 183.18, desde: "CM-0001", hasta: "CM-0024",
+    created_by_nombre: "Cheila Sánchez",
+    items: [{ numero: "CM-0001", fecha: "2026-10-22", beneficiario: "Reynaldo Cruz", categoria: "Peaje", concepto: "Panapass", aprobo: "Victor Mariche", monto: 10 },
+      { numero: "CM-0002", fecha: "2026-10-23", beneficiario: "Reynaldo Cruz", categoria: "Vales y viáticos", concepto: "Viático", monto: 5 }],
+  };
+  const s = C.solicitudPago({ reposicion: rep, cfg: {}, hoy: "2026-11-27" });
+  assert.equal(s.ref, "REP-0001");
+  assert.equal(s.fecha, "2026-11-18", "lleva la fecha de la reposición, no la del día en que se imprime");
+  assert.equal(s.beneficiario, "Cheila Sánchez", "el cheque sale a nombre de quien custodia el fondo");
+  assert.equal(s.mediante, "CHEQUE");
+  assert.equal(s.letras, "CIENTO OCHENTA Y TRES CON 18/100");
+  assert.equal(s.concepto, "Reembolso de caja menuda CM-0001 al CM-0024");
+  // En el formato de contabilidad la reposición va sin Vo.Bo.
+  assert.deepEqual(s.firmas.map((f) => f.rol), ["Preparado por", "Revisado por", "Aprobado"]);
+  assert.equal(s.firmas[0].nombre, "Cheila Sánchez");
+  // Los recibos, con quién aprobó cada uno (los viejos no lo traen).
+  assert.equal(s.recibos.length, 2);
+  assert.equal(s.recibos[0].aprobo, "Victor Mariche");
+  assert.equal(s.recibos[1].aprobo, "");
+  // Y el informe guarda quién aprobó cada recibo desde ahora.
+  const pagado = { id: "a", numero: "CM-0001", via: "efectivo", estado: "pagado", categoria: "Peaje", concepto: "Peaje",
+    solicitante_nombre: "Ana", entrega: { monto: 4.6, at: new Date("2026-11-20T15:00:00Z") }, aprobacion: { por_nombre: "Zuleika Díaz" } };
+  assert.equal(C.itemsInforme([pagado])[0].aprobo, "Zuleika Díaz");
+});

@@ -38,6 +38,10 @@ window.CajaUI = (() => {
     const e = C().ESTADOS[g.estado] || { label: g.estado, tono: 'neutro' };
     return `<span class="bj-chip bj-chip--${e.tono}">${esc(e.label)}</span>`;
   };
+  // Un viático recorre el camino del reembolso, pero no es un reembolso:
+  // no hay factura. En pantalla se llama por su nombre.
+  const esViatico = (g) => g.tipo === 'reembolso' && C().esViatico(g, cfg);
+  const tipoLabel = (g) => (esViatico(g) ? 'Viático' : (C().TIPOS[g.tipo]?.label || ''));
   const pintarIconos = (root) => { if (window.lucide?.createIcons) lucide.createIcons({ nodes: [root] }); };
   const fallo = (e) => {
     console.error('[caja]', e);
@@ -49,7 +53,7 @@ window.CajaUI = (() => {
   // quien: 'mio' (mis gastos: qué espera) · 'otro' (aprobar / contabilidad:
   // de quién es).
   function tarjeta(g, { quien = 'mio' } = {}) {
-    const tipo = C().TIPOS[g.tipo]?.label || '';
+    const tipo = tipoLabel(g);
     const sub = [g.categoria, tipo, fCorta(g.created_at), g.numero].filter(Boolean).map(esc).join(' · ');
     const dias = C().diasSinRendir(g);
     const tarde = dias != null && dias > cfg.dias_rendir;
@@ -125,6 +129,8 @@ window.CajaUI = (() => {
           proveedor: previo.proveedor || '', fecha_gasto: previo.fecha_gasto || FMT.hoyISOPanama(),
           factura_numero: previo.factura_numero || '', recibos: [...(previo.recibos || [])] }
       : { tipo: 'reembolso', monto: '', categoria: '', concepto: '', proveedor: '', fecha_gasto: FMT.hoyISOPanama(), factura_numero: '', recibos: [] };
+    // Corrigiendo un anticipo no se puede pasar a viático (el tipo no cambia).
+    const categorias = previo?.tipo === 'anticipo' ? cfg.categorias.filter(c => !C().sinFactura(c, cfg)) : cfg.categorias;
     const tipoBtn = (t) => `<button type="button" class="cm-seg-btn${f.tipo === t ? ' is-on' : ''}" data-cm-tipo="${t}"${previo ? ' disabled' : ''}>
         <b>${esc(C().TIPOS[t].corto)}</b><span>${esc(C().TIPOS[t].ayuda)}</span></button>`;
     const html = `
@@ -135,19 +141,21 @@ window.CajaUI = (() => {
         <p class="cm-aviso" id="cmAvisoVia" hidden></p>
         <label class="cm-campo"><span>Categoría</span>
           <select id="cmCategoria" class="form-input"><option value="">Elige…</option>
-            ${cfg.categorias.map(c => `<option${f.categoria === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+            ${categorias.map(c => `<option${f.categoria === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+        <p class="cm-aviso cm-aviso--info" id="cmAvisoViatico" hidden>Los viáticos <b>no llevan factura</b>.
+          Cuando lo apruebe tu jefe, pasas por contabilidad a cobrarlo.</p>
         <label class="cm-campo"><span>¿Para qué fue?</span>
           <input type="text" id="cmConcepto" class="form-input" maxlength="300" placeholder="Ej.: peaje para la visita a DECAMERON" value="${esc(f.concepto)}"></label>
         <div data-cm-solo="reembolso">
-          <label class="cm-campo"><span>Proveedor</span>
+          <label class="cm-campo" data-cm-factura><span>Proveedor</span>
             <input type="text" id="cmProveedor" class="form-input" maxlength="120" placeholder="A quién se le pagó" value="${esc(f.proveedor)}"></label>
           <div class="cm-dos">
-            <label class="cm-campo"><span>Fecha de la factura</span>
+            <label class="cm-campo"><span id="cmFechaLbl">Fecha de la factura</span>
               <input type="date" id="cmFecha" class="form-input" max="${FMT.hoyISOPanama()}" value="${esc(f.fecha_gasto)}"></label>
-            <label class="cm-campo"><span>N.º de factura <em>(opcional)</em></span>
+            <label class="cm-campo" data-cm-factura><span>N.º de factura <em>(opcional)</em></span>
               <input type="text" id="cmFactura" class="form-input" maxlength="40" value="${esc(f.factura_numero)}"></label>
           </div>
-          <div class="cm-campo"><span>Factura fiscal</span>${selectorFotos(f.recibos, C().MAX_RECIBOS)}</div>
+          <div class="cm-campo" data-cm-factura><span>Factura fiscal</span>${selectorFotos(f.recibos, C().MAX_RECIBOS)}</div>
         </div>
         <p class="cm-aviso cm-aviso--info" data-cm-solo="anticipo">Cuando lo apruebe tu jefe, pasas por contabilidad a retirar el efectivo.
           Después tienes <b>${cfg.dias_rendir} días</b> para traer la factura fiscal y el vuelto.</p>
@@ -168,13 +176,21 @@ window.CajaUI = (() => {
       buttons: [{ action: 'cancelar', label: 'Cancelar' }, { action: 'enviar', label: previo ? 'Guardar' : 'Enviar a aprobación', primary: true, icon: 'send' }],
       onMount(root) {
         const refrescar = () => {
+          // Viático: no hay nada que elegir ni que fotografiar. Se pide, se
+          // aprueba y se cobra.
+          const viatico = C().sinFactura($(root, '#cmCategoria').value, cfg);
+          if (viatico && !previo) f.tipo = 'reembolso';
+          $(root, '.cm-seg').hidden = viatico;
+          $(root, '#cmAvisoViatico').hidden = !viatico;
+          root.querySelectorAll('[data-cm-factura]').forEach(el => { el.hidden = viatico; });
+          $(root, '#cmFechaLbl').textContent = viatico ? 'Fecha del viático' : 'Fecha de la factura';
           root.querySelectorAll('[data-cm-solo]').forEach(el => { el.hidden = el.dataset.cmSolo !== f.tipo; });
           root.querySelectorAll('[data-cm-tipo]').forEach(b => b.classList.toggle('is-on', b.dataset.cmTipo === f.tipo));
           const m = C().num($(root, '#cmMonto').value);
           const av = $(root, '#cmAvisoVia');
           if (m > cfg.tope_recibo && f.tipo === 'reembolso') {
             av.hidden = false; av.className = 'cm-aviso cm-aviso--info';
-            av.innerHTML = `Pasa de <b>${dinero(cfg.tope_recibo)}</b>, el tope de caja menuda por factura: no sale en efectivo, contabilidad te lo devuelve por <b>ACH</b>.`;
+            av.innerHTML = `Pasa de <b>${dinero(cfg.tope_recibo)}</b>, el tope de caja menuda: no sale en efectivo. Contabilidad lo tramita con una solicitud de pago y te lo devuelve por <b>ACH</b>.`;
           } else if (m > cfg.tope_recibo && f.tipo === 'anticipo') {
             av.hidden = false; av.className = 'cm-aviso';
             av.innerHTML = `Recuerda que el tope de caja menuda es de <b>${dinero(cfg.tope_recibo)}</b> por factura.`;
@@ -186,6 +202,7 @@ window.CajaUI = (() => {
           f.tipo = b.dataset.cmTipo; refrescar();
         });
         $(root, '#cmMonto').addEventListener('input', refrescar);
+        $(root, '#cmCategoria').addEventListener('change', refrescar);
         fotos = cablearFotos(root, f.recibos, C().MAX_RECIBOS);
         refrescar();
         if (previo) {
@@ -198,7 +215,9 @@ window.CajaUI = (() => {
         if (action !== 'enviar') return action;
         if (fotos.ocupado()) { Toast.show('Espera a que termine de subir la foto.', 'warn'); return false; }
         leer(root);
-        const envio = { ...f, recibos: f.tipo === 'reembolso' ? f.recibos : [] };
+        const viatico = C().sinFactura(f.categoria, cfg);
+        const envio = { ...f, recibos: f.tipo === 'reembolso' && !viatico ? f.recibos : [] };
+        if (viatico) { envio.proveedor = ''; envio.factura_numero = ''; }
         const errores = C().validar(envio, cfg, { hoyISO: FMT.hoyISOPanama() });
         if (errores.length) { Toast.show(errores[0], 'warn'); return false; }
         const btn = root.querySelector('[data-sheet-action="enviar"]');
@@ -219,7 +238,7 @@ window.CajaUI = (() => {
   const dato = (k, v) => (v ? `<div class="cm-dato"><dt>${esc(k)}</dt><dd>${v}</dd></div>` : '');
 
   function detalleHtml(g) {
-    const t = C().TIPOS[g.tipo] || {};
+    const viatico = esViatico(g);
     const cajas = [];
     if (g.estado === 'rechazado' && g.rechazo) {
       cajas.push(`<div class="cm-caja cm-caja--mal"><b>Rechazado por ${esc(g.rechazo.por_nombre || '')}</b><br>${esc(g.rechazo.motivo || '')}</div>`);
@@ -228,7 +247,7 @@ window.CajaUI = (() => {
       cajas.push(`<div class="cm-caja cm-caja--mal"><b>Contabilidad devolvió la rendición</b><br>${esc(g.rendicion_devuelta.motivo)}</div>`);
     }
     if (g.via === 'ach') {
-      cajas.push(`<div class="cm-caja">Pasa del tope de ${dinero(cfg.tope_recibo)} por factura: se devuelve por <b>ACH</b>, no sale del fondo.</div>`);
+      cajas.push(`<div class="cm-caja">Pasa del tope de ${dinero(cfg.tope_recibo)}: no sale del fondo. Se paga por <b>ACH</b> con una solicitud de pago firmada.</div>`);
     }
     const e = g.entrega;
     const r = g.rendicion;
@@ -250,19 +269,19 @@ window.CajaUI = (() => {
     return `<div class="cm-det" data-cm-det="${esc(g.id)}">
       <div class="cm-det-top">
         <span class="cm-det-monto">${dinero(g.monto)}</span>
-        <span>${chip(g)}<small>${esc(t.label || '')}${g.numero ? ` · ${esc(g.numero)}` : ''}</small></span>
+        <span>${chip(g)}<small>${esc(tipoLabel(g))}${g.numero ? ` · ${esc(g.numero)}` : ''}</small></span>
       </div>
       ${cajas.join('')}
       <dl class="cm-datos">
         ${dato('Para qué', esc(g.concepto))}
         ${dato('Categoría', esc(g.categoria))}
         ${dato('Proveedor', esc(g.proveedor))}
-        ${dato('Factura', [fIso(g.fecha_gasto), g.factura_numero ? `N.º ${esc(g.factura_numero)}` : ''].filter(Boolean).join(' · '))}
+        ${dato(viatico ? 'Fecha' : 'Factura', [fIso(g.fecha_gasto), g.factura_numero ? `N.º ${esc(g.factura_numero)}` : ''].filter(Boolean).join(' · '))}
         ${dato('Pidió', `${esc(g.solicitante_nombre || g.solicitante_email || '')}, ${fHora(g.created_at)}`)}
         ${dato('Aprueba', g.aprobacion ? `${esc(g.aprobacion.por_nombre || '')} lo aprobó, ${fHora(g.aprobacion.at)}` : esc(g.aprobador_nombre || 'Administración'))}
         ${plata.join('')}
       </dl>
-      <div class="cm-recibos" data-cm-recibos>${(g.recibos || []).length ? '' : '<p class="cm-sin-recibo">Sin factura todavía.</p>'}</div>
+      <div class="cm-recibos" data-cm-recibos>${(g.recibos || []).length ? '' : `<p class="cm-sin-recibo">${viatico ? 'Viático: no lleva factura.' : 'Sin factura todavía.'}</p>`}</div>
       <details class="cm-hist"><summary>Historial</summary><ul>${hist}</ul></details>
     </div>`;
   }
@@ -369,9 +388,10 @@ window.CajaUI = (() => {
     const quien = esc(g.solicitante_nombre || 'la persona');
     const html = `<div class="cm-form">
       <p class="cm-aviso cm-aviso--info">${ach
-        ? `Reembolso por <b>ACH</b> a ${quien}: no sale del fondo.`
+        ? `Reembolso por <b>ACH</b> a ${quien}: no sale del fondo. Regístralo cuando la solicitud de pago tenga sus firmas y la transferencia esté hecha.`
         : (anticipo ? `Le entregas el efectivo a ${quien}. Tiene ${cfg.dias_rendir} días para traer la factura y el vuelto.`
-          : `Le pagas en efectivo a ${quien}, contra la factura.`)}</p>
+          : (esViatico(g) ? `Le pagas el viático en efectivo a ${quien}. No lleva factura.`
+            : `Le pagas en efectivo a ${quien}, contra la factura.`))}</p>
       <label class="cm-campo cm-campo--monto"><span>${ach ? 'Monto transferido' : 'Efectivo entregado'}</span>
         <span class="cm-monto-in"><i>$</i><input type="text" inputmode="decimal" id="cmEntMonto" class="form-input" value="${Number(g.monto).toFixed(2)}" autocomplete="off"></span></label>
       ${ach ? `<label class="cm-campo"><span>Referencia del ACH</span><input type="text" id="cmEntRef" class="form-input" maxlength="60" placeholder="N.º de transacción del banco"></label>` : ''}
@@ -464,5 +484,5 @@ window.CajaUI = (() => {
     return true;
   }
 
-  return { init, tarjeta, abrir, nuevo, detalleHtml, cargarRecibos, ejecutar, BOTONES, fCorta, fHora, fIso, chip };
+  return { init, tarjeta, abrir, nuevo, detalleHtml, cargarRecibos, ejecutar, BOTONES, fCorta, fHora, fIso, chip, tipoLabel };
 })();

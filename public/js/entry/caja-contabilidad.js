@@ -7,6 +7,7 @@ import '/js/domain/cajaMenuda.js';
 import '/js/services/cajaMenudaService.js';
 import '/js/ui/bandeja.js';
 import '/js/ui/caja-menuda-ui.js';
+import '/js/ui/caja-solicitud-pago.js';
 import '/js/pages/caja-contabilidad.js';
 import '/js/vendor/lucide.min.js';
 import '/js/core/icons.js';

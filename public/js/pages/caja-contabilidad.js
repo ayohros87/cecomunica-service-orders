@@ -12,6 +12,11 @@
 // contar el efectivo por denominación y juntar los recibos pagados en el
 // informe con el que se pide el cheque (el formato del Excel de Cheila,
 // muestras del 2026-11-26). El informe es por reposición, no por mes.
+//
+// "Solicitud de pago" imprime la hoja del formato de contabilidad para lo que
+// no se paga del fondo — el reembolso por ACH y el cheque de la reposición —
+// con lo que ya se aprobó en el sistema; las firmas (y el Vo.Bo. del
+// director) van a mano (Alberto, 2026-11-27).
 (function () {
   const C = () => window.CajaMenuda;
   const S = () => window.CajaMenudaService;
@@ -112,9 +117,16 @@
             ? `<span class="cc-repuesto"><i data-lucide="check"></i> En la reposición ${esc(g.reposicion_numero || '')}</span>`
             : `<select class="form-input" id="ccCat" title="Reclasificar la categoría" style="max-width:190px;margin-right:auto;height:34px;font-size:13px;">
             ${cats.map(c => `<option${c === g.categoria ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>`}
+          ${C().llevaSolicitudPago(g) ? `<button type="button" class="btn btn-ghost" data-cc-solicitud title="La hoja para las firmas y el Vo.Bo."><i data-lucide="printer"></i> Solicitud de pago</button>` : ''}
           ${orden.map(btn).join('')}</div>`;
     if (window.lucide?.createIcons) lucide.createIcons({ nodes: [cont] });
     CajaUI.cargarRecibos(cont, g);
+  }
+
+  // La solicitud de pago en papel: la hoja con lo que ya se aprobó, para
+  // llevarla a firmar. `que` es { gasto } o { reposicion }.
+  function imprimirSolicitud(que) {
+    CajaSolicitud.abrir(C().solicitudPago({ ...que, cfg, hoy: FMT.hoyISOPanama() }), { por: yo.nombre });
   }
 
   // ── El fondo ────────────────────────────────────────────────────────────
@@ -239,7 +251,8 @@
     if (!res || res === 'cancelar') return;
     await cargar();
     const dif = Number(res.diferencia) || 0;
-    Toast.show(`${res.numero} guardado: ${dif === 0 ? 'la caja cuadra' : (dif > 0 ? `sobran ${d(dif)}` : `faltan ${d(-dif)}`)}.`, dif === 0 ? 'ok' : 'warn');
+    Toast.show(`${res.numero} guardado: ${dif === 0 ? 'la caja cuadra' : (dif > 0 ? `sobran ${d(dif)}` : `faltan ${d(-dif)}`)}.`
+      + (res.accion === 'reponer' ? ' La solicitud de pago del cheque se imprime en "Reposiciones y arqueos".' : ''), dif === 0 ? 'ok' : 'warn');
     if (res.accion === 'reponer') {
       const rep = fondo.reposiciones.find(r => r.id === res.id);
       if (rep) await excelInforme(rep);
@@ -265,6 +278,7 @@
           · ${dif === 0 ? 'cuadró' : `<span class="cc-rep-dif">${dif > 0 ? 'sobraron' : 'faltaron'} ${d(Math.abs(dif))}</span>`}${r.nota ? ` · ${esc(r.nota)}` : ''}</div>
         <div class="cc-rep-b">
           ${esRep && r.estado === 'preparada' ? `<button type="button" class="btn btn-ghost btn-sm" data-rep-cobrada="${esc(r.id)}">Cheque cobrado</button>` : ''}
+          ${esRep ? `<button type="button" class="btn btn-ghost btn-sm" data-rep-solicitud="${esc(r.id)}" title="La hoja para pedir el cheque"><i data-lucide="printer"></i> Solicitud de pago</button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm" data-rep-excel="${esc(r.id)}"><i data-lucide="file-spreadsheet"></i> Informe</button>
         </div></div>`;
     };
@@ -278,6 +292,8 @@
         root.addEventListener('click', async (e) => {
           const x = e.target.closest('[data-rep-excel]');
           const c = e.target.closest('[data-rep-cobrada]');
+          const sp = e.target.closest('[data-rep-solicitud]');
+          if (sp) { const r = fondo.reposiciones.find(y => y.id === sp.dataset.repSolicitud); if (r) imprimirSolicitud({ reposicion: r }); return; }
           if (x) { const r = fondo.reposiciones.find(y => y.id === x.dataset.repExcel); if (r) await excelInforme(r); return; }
           if (!c) return;
           const ref = await Modal.prompt({ title: 'Cheque cobrado', message: 'El efectivo ya volvió a la caja. Anota el número del cheque.', placeholder: 'N.º de cheque', confirmLabel: 'Guardar' });
@@ -357,15 +373,25 @@
         ${campo('cfDias', 'Días para rendir un anticipo', cfg.dias_rendir)}
         <label class="cm-campo"><span>Categorías <em>(una por línea)</em></span>
           <textarea id="cfCats" class="form-input" rows="7" style="font-size:14px;">${esc(cfg.categorias.join('\n'))}</textarea></label>
+        <label class="cm-campo"><span>Sin factura <em>(viáticos; una por línea, escrita igual que arriba)</em></span>
+          <textarea id="cfSinFac" class="form-input" rows="2" style="font-size:14px;">${esc(cfg.sin_factura.join('\n'))}</textarea></label>
+        <p class="form-hint" style="margin:0;">Quién firma la solicitud de pago en papel:</p>
+        ${campo('cfRevisa', 'Revisado por', cfg.firmas.revisado)}
+        ${campo('cfAprueba', 'Aprobado', cfg.firmas.aprobado)}
+        ${campo('cfVobo', 'Vo.Bo.', cfg.firmas.vobo)}
       </div>`,
       buttons: [{ action: 'cancelar', label: 'Cancelar' }, { action: 'ok', label: 'Guardar', primary: true }],
       async onAction(action, root) {
         if (action !== 'ok') return action;
         const n = (id) => C().num(root.querySelector('#' + id).value);
         const nuevo = { fondo: n('cfFondo'), tope_recibo: n('cfTope'), minimo_reposicion: n('cfMin'), dias_rendir: n('cfDias'),
-          categorias: root.querySelector('#cfCats').value.split('\n').map(s => s.trim()).filter(Boolean) };
+          categorias: root.querySelector('#cfCats').value.split('\n').map(s => s.trim()).filter(Boolean),
+          sin_factura: root.querySelector('#cfSinFac').value.split('\n').map(s => s.trim()).filter(Boolean),
+          firmas: { revisado: root.querySelector('#cfRevisa').value, aprobado: root.querySelector('#cfAprueba').value, vobo: root.querySelector('#cfVobo').value } };
         if (![nuevo.fondo, nuevo.tope_recibo, nuevo.minimo_reposicion, nuevo.dias_rendir].every(v => v > 0)) { Toast.show('Los cuatro números tienen que ser mayores que cero.', 'warn'); return false; }
         if (!nuevo.categorias.length) { Toast.show('Deja al menos una categoría.', 'warn'); return false; }
+        const ajena = nuevo.sin_factura.find(c => !nuevo.categorias.includes(c));
+        if (ajena) { Toast.show(`"${ajena}" no está en las categorías: escríbela igual.`, 'warn'); return false; }
         try { cfg = await S().guardarConfig(nuevo); return 'hecho'; }
         catch (e) { console.error(e); Toast.show('No se pudo guardar.', 'bad'); return false; }
       },
@@ -393,6 +419,11 @@
       sel = g.id; pintarLista(); pintarDetalle();
     });
     $('ccDetalle').addEventListener('click', async (e) => {
+      if (e.target.closest('[data-cc-solicitud]')) {
+        const g = todos.find(x => x.id === sel);
+        if (g) imprimirSolicitud({ gasto: g });
+        return;
+      }
       const b = e.target.closest('[data-cc-accion]');
       if (!b) return;
       const g = todos.find(x => x.id === sel);

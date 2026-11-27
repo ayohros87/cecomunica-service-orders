@@ -12,6 +12,10 @@
 //   5) Piloto: un técnico todavía no entra a la pantalla.
 //   6) Usuarios: administración asigna el jefe (callable simulada aparte: aquí
 //      solo se comprueba que la columna pinta).
+//   7) El fondo: arqueo y reposición, con el informe de contabilidad.
+//   8) Viático: se pide sin factura, se aprueba y se cobra (2026-11-27).
+//   9) Solicitud de pago en papel: la hoja del reembolso por ACH (con Vo.Bo.)
+//      y la del cheque de la reposición, con lo que ya se aprobó.
 //
 // Uso: emulador con auth,firestore,hosting (dist/ compilado). Este script
 // siembra sus propios usuarios y dispara el trigger a mano (sin emulador de
@@ -61,6 +65,11 @@ async function abrir(opts) {
       },
       writeFile: (wb, archivo) => { window.__excel = { archivo, hoja: wb.hojas[0].nombre, filas: wb.hojas[0].ws.filas }; },
     };
+    // La hoja para imprimir abre una pestaña en blanco y escribe el documento:
+    // aquí se guarda en window.__hoja para revisarlo.
+    const abrirDeVerdad = window.open.bind(window);
+    window.open = (url, ...resto) => (url ? abrirDeVerdad(url, ...resto)
+      : { document: { write: (h) => { window.__hoja = h; }, close: () => {} } });
   });
   return s;
 }
@@ -234,8 +243,11 @@ await abrirTarjeta(zul, g2.id); await accion(zul, 'aprobar'); await servidor();
 await alb.ir('/caja/contabilidad.html', { esperar: 1500 });
 ok(/Reembolsos por ACH/.test(await alb.texto('#ccKpis')) && /\$35\.00/.test(await alb.texto('#ccKpis')), 'el KPI de ACH lo separa del efectivo');
 await alb.page.click(`#ccLista [data-cm-id="${g2.id}"]`); await alb.quieto(600);
+ok(!!(await alb.page.$('#ccDetalle [data-cc-solicitud]')) && /solicitud de pago firmada/.test(await alb.texto('#ccDetalle')),
+  'aprobado y por ACH: la bandeja ofrece imprimir la solicitud de pago');
 await alb.page.click('#ccDetalle [data-cc-accion="pagar"]');
 await alb.page.waitForSelector(`${hoja} #cmEntRef`, { timeout: 5000 });
+ok(/cuando la solicitud de pago tenga sus firmas/.test(await alb.texto(hoja)), 'y al registrar el pago recuerda que va con la solicitud firmada');
 await accion(alb, 'ok');
 ok(/referencia/i.test(await ultimoToast(alb)), `sin referencia del ACH no se registra: "${await ultimoToast(alb)}"`);
 await escribir(alb, '#cmEntRef', 'ACH-778899');
@@ -248,15 +260,15 @@ ok(/te pagaron \$35\.00 por ACH/.test(mq[mq.length - 1].subject) && mq[mq.length
 // ═══ 3) Anticipo ═══════════════════════════════════════════════════════════
 console.log('\n3) Anticipo: pide Alberto, aprueba Zuleika, entrega Cheila, rinde Alberto, cierra Cheila');
 await alb.ir('/caja/index.html', { esperar: 1200 }); await stubStorage(alb);
-await llenar(alb, { tipo: 'anticipo', monto: '20', categoria: 'Vales y viáticos', concepto: 'Almuerzo instalación Chitré', foto: false });
+await llenar(alb, { tipo: 'anticipo', monto: '20', categoria: 'Transporte y estacionamiento', concepto: 'Taxi instalación Chitré', foto: false });
 ok(/Lo aprueba administración/.test(await alb.texto(hoja)), 'sin jefe asignado, el formulario dice que aprueba administración');
 await accion(alb, 'enviar'); await servidor();
-let g3 = await porConcepto('Almuerzo instalación');
+let g3 = await porConcepto('Taxi instalación');
 ok(g3.tipo === 'anticipo' && g3.aprobador_uid === null && g3.recibos.length === 0, 'el anticipo nace sin factura y sin jefe asignado');
 mq = await correos();
 ok(mq[mq.length - 1].to === GENTE.zuleika.email && !String(mq[mq.length - 1].cc || '').includes(GENTE.alberto.email), 'el correo va a la otra administradora, no a quien pide');
 await alb.ir('/caja/index.html?ver=aprobar', { esperar: 1200 });
-ok(!/Almuerzo instalación/.test(await alb.texto('#cmLista')), 'a quien pidió NO le sale su gasto en "Por aprobar"');
+ok(!/Taxi instalación/.test(await alb.texto('#cmLista')), 'a quien pidió NO le sale su gasto en "Por aprobar"');
 await alb.ir('/caja/index.html', { esperar: 1200 });
 await abrirTarjeta(alb, g3.id);
 ok(!(await botones(alb)).includes('aprobar'), `administración no aprueba lo suyo: ${await botones(alb)}`);
@@ -272,7 +284,7 @@ ok(/Entregar el efectivo/.test(await cheE.texto('#ccDetalle')), 'el enlace del c
 await cheE.page.click('#ccDetalle [data-cc-accion="entregar"]');
 await cheE.page.waitForSelector(`${hoja} #cmEntMonto`, { timeout: 5000 });
 await accion(cheE, 'ok'); await servidor();
-g3 = await porConcepto('Almuerzo instalación');
+g3 = await porConcepto('Taxi instalación');
 ok(g3.estado === 'entregado' && g3.entrega.monto === 20, 'entregado: queda por rendir');
 ok(/Anticipos en la calle/.test(await cheE.texto('#ccKpis')) && /\$20\.00/.test(await cheE.texto('#ccKpis')), 'el KPI cuenta el efectivo que anda en la calle');
 
@@ -291,7 +303,7 @@ await alb.page.waitForFunction(() => document.querySelectorAll('.cm-foto-chip:no
 await alb.captura('09-escritorio-rendir');
 await alb.page.$$eval(`${hoja} [data-sheet-action="ok"]`, bs => bs[bs.length - 1].click()); await alb.quieto(1200);
 await servidor();
-g3 = await porConcepto('Almuerzo instalación');
+g3 = await porConcepto('Taxi instalación');
 ok(g3.estado === 'rendido' && g3.rendicion.monto_gastado === 17.25 && g3.rendicion.vuelto === 2.75 && g3.recibos.length === 1, 'rendido: gastó $17.25, vuelto $2.75, con factura');
 mq = await correos();
 ok(/rindió su anticipo/.test(mq[mq.length - 1].subject) && mq[mq.length - 1].to === GENTE.cheila.email, 'correo a contabilidad para que cierre');
@@ -302,10 +314,10 @@ await cheE.page.waitForSelector('#cmCieMonto', { timeout: 5000 });
 ok(await cheE.page.$eval('#cmCieMonto', e => e.value) === '2.75', 'al cerrar propone el vuelto a recibir');
 await cheE.captura('10-escritorio-cerrar');
 await accion(cheE, 'ok'); await servidor();
-g3 = await porConcepto('Almuerzo instalación');
+g3 = await porConcepto('Taxi instalación');
 ok(g3.estado === 'cerrado' && g3.cierre.vuelto_recibido === 2.75 && g3.cierre.por_uid === 'cheila', 'cerrado con el vuelto recibido');
 await cheE.page.click('#ccFiltros [data-f="hechos"]'); await cheE.quieto(600);
-ok(/Almuerzo instalación/.test(await cheE.texto('#ccLista')) && /Peaje corredor/.test(await cheE.texto('#ccLista')), '"Terminados del mes" lista lo cerrado y lo pagado');
+ok(/Taxi instalación/.test(await cheE.texto('#ccLista')) && /Peaje corredor/.test(await cheE.texto('#ccLista')), '"Terminados del mes" lista lo cerrado y lo pagado');
 await cheE.captura('11-escritorio-terminados');
 
 // ═══ 4) Rechazo con motivo ═════════════════════════════════════════════════
@@ -382,7 +394,7 @@ const rep = rs.find(r => r.tipo === 'reposicion');
 ok(!!rep && rep.numero === 'REP-0001' && rep.estado === 'preparada' && rep.n === 2 && rep.total === 29.75 && rep.desde === 'CM-0001' && rep.hasta === 'CM-0003'
   && rep.esperado === 170.25 && rep.arqueo.diferencia === 0 && rep.arqueo.efectivo === 170.25,
   `la reposición junta los 2 recibos por $29.75 y cuadra: ${JSON.stringify(rep && { n: rep.numero, t: rep.total, d: rep.desde, h: rep.hasta, dif: rep.arqueo.diferencia })}`);
-ok(rep.items.map(i => `${i.numero}:${i.monto}:${i.categoria}`).join(' | ') === 'CM-0001:12.5:Peaje | CM-0003:17.25:Vales y viáticos',
+ok(rep.items.map(i => `${i.numero}:${i.monto}:${i.categoria}`).join(' | ') === 'CM-0001:12.5:Peaje | CM-0003:17.25:Transporte y estacionamiento',
   `con la lista congelada (el anticipo entra por lo gastado, no por lo entregado): ${rep.items.map(i => `${i.numero}:${i.monto}`).join(' | ')}`);
 gs = await gastos();
 const marcados = gs.filter(g => g.reposicion_id === rep.id);
@@ -398,7 +410,7 @@ ok(gs.filter(g => g.por_reponer === true).length === 0 && (await correos()).leng
 const xl = await cheE.page.evaluate(() => window.__excel);
 const cab = xl?.filas.find(f => f[0] === 'COMP') || [];
 const fila3 = xl?.filas.find(f => f[0] === 'CM-0003') || [];
-ok(xl?.archivo === 'caja-menuda-REP-0001.xlsx' && cab[3] === 'VALES Y VIÁTICOS' && cab[cab.length - 1] === 'TOTAL' && fila3[2] === 'Alberto Yohros' && fila3[3] === 17.25,
+ok(xl?.archivo === 'caja-menuda-REP-0001.xlsx' && cab[3] === 'VALES Y VIÁTICOS' && cab[cab.length - 1] === 'TOTAL' && fila3[2] === 'Alberto Yohros' && fila3[4] === 17.25,
   `el informe se descarga solo, una columna por categoría: ${xl?.archivo} · ${cab.slice(0, 5).join(', ')}…`);
 ok(xl.filas.find(f => f[2] === 'REEMBOLSO:')[3] === 29.75 && xl.filas.find(f => f[2] === 'TOTAL EN CAJA:')[3] === 170.25
   && xl.filas.find(f => f[0] === 'Efectivo en Caja')[3] === 170.25 && xl.filas.some(f => f[0] === 'Preparado por: Cheila Sánchez'),
@@ -440,6 +452,115 @@ ok(await llamar('marcos', { conteo: { b20: 10 }, solo_arqueo: true }) === 'permi
 ok(await llamar('cheila', { conteo: { b20: 10 }, ids: gs.map(g => g.id) }) === 'failed-precondition', 'pedir reponer recibos ya repuestos, por ACH o rechazados no arma nada');
 ok(await llamar('cheila', { conteo: { b50: 4 } }) === 'invalid-argument', 'un conteo con una denominación que no existe se rechaza');
 ok((await reps()).length === 2, 'y ninguno de esos intentos dejó un documento');
+
+// ═══ 8) Viático: sin factura ═══════════════════════════════════════════════
+// Los "vales" de alimentación son viáticos: no llevan factura. Se piden, los
+// aprueba el jefe y se cobran, igual que en el papel.
+console.log('\n8) Viático: se pide sin factura');
+await che.ir('/caja/index.html', { esperar: 1200 });
+await llenar(che, { monto: '9.60', categoria: 'Peaje', concepto: 'Peaje sin foto', proveedor: 'ENA', foto: false });
+await accion(che, 'enviar');
+ok(/foto de la factura/.test(await ultimoToast(che)), `un peaje sin foto sigue sin salir: "${await ultimoToast(che)}"`);
+await accion(che, 'cancelar');
+await llenar(che, { monto: '5', categoria: 'Vales y viáticos', concepto: 'Viático gira Campana', foto: false });
+const formViatico = await che.page.evaluate((h) => {
+  const r = document.querySelector(h);
+  const visible = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
+  return {
+    tipo: visible(r.querySelector('.cm-seg')),
+    aviso: visible(r.querySelector('#cmAvisoViatico')),
+    factura: [...r.querySelectorAll('[data-cm-factura]')].some(visible),
+    fecha: r.querySelector('#cmFechaLbl').textContent,
+    fechaVisible: visible(r.querySelector('#cmFecha')),
+  };
+}, hoja);
+ok(!formViatico.tipo && formViatico.aviso && !formViatico.factura && formViatico.fecha === 'Fecha del viático' && formViatico.fechaVisible,
+  `al elegir viático el formulario deja de pedir factura, proveedor y tipo: ${JSON.stringify(formViatico)}`);
+await che.captura('18-telefono-viatico');
+await accion(che, 'enviar'); await servidor();
+let g5 = await porConcepto('Viático gira');
+ok(!!g5 && g5.estado === 'solicitado' && g5.tipo === 'reembolso' && g5.via === 'efectivo' && g5.recibos.length === 0 && g5.proveedor === '' && g5.numero === 'CM-0005',
+  `el viático nace sin factura y con su número: ${JSON.stringify(g5 && { e: g5.estado, t: g5.tipo, r: g5.recibos.length, n: g5.numero })}`);
+await che.ir('/caja/index.html', { esperar: 1500 });
+ok(/Viático · /.test(await che.texto(`[data-cm-id="${g5.id}"]`)) && !/Reembolso/.test(await che.texto(`[data-cm-id="${g5.id}"]`)), 'en la lista se llama Viático, no Reembolso');
+await zul.ir(`/caja/index.html?g=${g5.id}`, { esperar: 1800 });
+await zul.page.waitForSelector(`${hoja} [data-cm-det]`, { timeout: 6000 }).catch(() => {});
+ok(/Viático: no lleva factura/.test(await zul.texto(hoja)), 'la jefa ve que es un viático sin factura');
+await accion(zul, 'aprobar'); await servidor();
+await cheE.ir(`/caja/contabilidad.html?g=${g5.id}`, { esperar: 1800 });
+ok(!(await cheE.page.$('#ccDetalle [data-cc-solicitud]')), 'un viático en efectivo no lleva solicitud de pago');
+// Cheila lo pidió y, ya aprobado por su jefa, lo paga ella misma como custodia.
+await cheE.page.click('#ccDetalle [data-cc-accion="pagar"]');
+await cheE.page.waitForSelector(`${hoja} #cmEntMonto`, { timeout: 5000 });
+ok(/Le pagas el viático en efectivo/.test(await cheE.texto(hoja)) && /No lleva factura/.test(await cheE.texto(hoja)), 'al pagarlo, la hoja dice que es un viático sin factura');
+await accion(cheE, 'ok'); await servidor();
+g5 = await porConcepto('Viático gira');
+ok(g5.estado === 'pagado' && g5.entrega.monto === 5 && g5.por_reponer === true, 'pagado en efectivo: sale del fondo y queda por reponer como cualquier recibo');
+await cheE.ir('/caja/contabilidad.html', { esperar: 1800 });
+fondoTxt = await cheE.texto('#ccFondo');
+ok(/\$195\.00/.test(fondoTxt) && /1 recibo pagado sin reponer: \$5\.00/.test(fondoTxt), `y el fondo lo descuenta: ${fondoTxt.replace(/\s+/g, ' ').slice(0, 90)}`);
+
+// ═══ 9) Solicitud de pago en papel ═════════════════════════════════════════
+// Lo que no sale del fondo se paga con la SOLICITUD DE PAGO de contabilidad.
+// El sistema imprime la hoja con lo que ya se aprobó; las firmas y el Vo.Bo.
+// del director van a mano.
+console.log('\n9) Solicitud de pago en papel');
+const hojaImpresa = (s) => s.page.evaluate(() => { const h = window.__hoja || ''; window.__hoja = ''; return h; });
+const plano = (h) => h.replace(/<style>[\s\S]*?<\/style>/, '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
+await cheE.page.click('#ccFiltros [data-f="hechos"]'); await cheE.quieto(600);
+await cheE.page.click(`#ccLista [data-cm-id="${g1.id}"]`); await cheE.quieto(600);
+ok(!(await cheE.page.$('#ccDetalle [data-cc-solicitud]')), 'lo que se pagó del fondo no tiene solicitud de pago');
+await cheE.page.click(`#ccLista [data-cm-id="${g2.id}"]`); await cheE.quieto(600);
+await cheE.page.click('#ccDetalle [data-cc-solicitud]'); await cheE.quieto(300);
+const htmlAch = await hojaImpresa(cheE);
+const sp = plano(htmlAch);
+ok(/C COMUNICA, S\.A\./.test(sp) && /SOLICITUD DE PAGO/.test(sp) && /Páguese a la orden de: CHEILA SÁNCHEZ/.test(sp)
+  && /La suma de: B\/\.35\.00 \(TREINTA Y CINCO CON 00\/100\)/.test(sp) && /Mediante: ACH/.test(sp) && /Reembolso: Gasolina gira Colón/.test(sp),
+  `la hoja del ACH sale en el formato de contabilidad: ${sp.slice(sp.indexOf('SOLICITUD'), sp.indexOf('SOLICITUD') + 150)}`);
+ok(/Ya consta en el sistema · CM-0002/.test(sp) && /Pedido — Cheila Sánchez/.test(sp) && /Aprobado — Zuleika Diaz/.test(sp) && /Pagado \(ACH ACH-778899\) — Alberto Yohros/.test(sp),
+  'con lo que ya se aprobó en el sistema: quién pidió, quién aprobó y el pago');
+ok(/Solicitado por: Cheila Sánchez/.test(sp) && /Revisado por: Lic\. Zuleika Díaz/.test(sp) && /Aprobado: Ing\. Alberto Yohros/.test(sp) && /Vo\.Bo\.: Sr\. Joseph Bettsack/.test(sp)
+  && (htmlAch.match(/class="firma"/g) || []).length === 4, 'y las cuatro casillas para firmar a mano, la última el Vo.Bo.');
+
+await cheE.page.$eval('#ccFondo [data-cc-fondo="historial"]', b => b.click());
+await cheE.page.waitForSelector(`${hoja} .cc-rep`, { timeout: 5000 });
+ok(!(await cheE.page.$(`${hoja} [data-rep-solicitud="${arq.id}"]`)), 'un arqueo suelto no pide cheque: no tiene solicitud');
+await cheE.page.click(`${hoja} [data-rep-solicitud="${rep.id}"]`); await cheE.quieto(300);
+const htmlRep = await hojaImpresa(cheE);
+const sr = plano(htmlRep);
+ok(/Páguese a la orden de: CHEILA SÁNCHEZ/.test(sr) && /B\/\.29\.75 \(VEINTINUEVE CON 75\/100\)/.test(sr) && /Mediante: CHEQUE/.test(sr)
+  && /Reembolso de caja menuda CM-0001 al CM-0003/.test(sr), `la del cheque de la reposición: ${sr.slice(sr.indexOf('Páguese'), sr.indexOf('Páguese') + 150)}`);
+ok(/Preparado por: Cheila Sánchez/.test(sr) && !/Vo\.Bo\./.test(sr) && (htmlRep.match(/class="firma"/g) || []).length === 3, 'va con tres firmas, sin Vo.Bo., como la de contabilidad');
+ok(/Recibos de esta reposición \(2\)/.test(sr) && /CM-0001 .* Peaje corredor sur visita banco Zuleika Diaz 12\.50/.test(sr) && /Total 29\.75/.test(sr),
+  'y lleva la lista de recibos con quién aprobó cada uno');
+await accion(cheE, 'cerrar');
+
+// Quién firma se cambia en "Fondo y tope".
+await cheE.page.click('#ccConfig');
+await cheE.page.waitForSelector(`${hoja} #cfVobo`, { timeout: 5000 });
+ok(await cheE.page.$eval('#cfVobo', e => e.value) === 'Sr. Joseph Bettsack' && await cheE.page.$eval('#cfSinFac', e => e.value) === 'Vales y viáticos',
+  'la configuración trae quién firma y qué categoría va sin factura');
+await escribir(cheE, '#cfSinFac', 'Viaticos mal escrito');
+await accion(cheE, 'ok');
+ok(/no está en las categorías/.test(await ultimoToast(cheE)), `una categoría sin factura que no existe no se guarda: "${await ultimoToast(cheE)}"`);
+await escribir(cheE, '#cfSinFac', 'Vales y viáticos');
+await escribir(cheE, '#cfVobo', 'Sr. Michael Bettsack');
+await accion(cheE, 'ok'); await cheE.quieto(900);
+const cfgGuardada = (await db.doc('empresa/caja_menuda').get()).data() || {};
+ok(cfgGuardada.firmas?.vobo === 'Sr. Michael Bettsack' && cfgGuardada.sin_factura?.join() === 'Vales y viáticos' && cfgGuardada.fondo === 200,
+  `se guarda sin tocar lo demás: ${JSON.stringify({ v: cfgGuardada.firmas?.vobo, s: cfgGuardada.sin_factura, f: cfgGuardada.fondo })}`);
+await cheE.page.click(`#ccLista [data-cm-id="${g2.id}"]`); await cheE.quieto(600);
+await cheE.page.click('#ccDetalle [data-cc-solicitud]'); await cheE.quieto(300);
+ok(/Vo\.Bo\.: Sr\. Michael Bettsack/.test(plano(await hojaImpresa(cheE))), 'y la siguiente hoja sale con el nuevo nombre');
+
+// Las dos hojas, a la vista (para revisar cómo quedan impresas).
+const visor = await cheE.page.browser().newPage();
+await visor.setViewport({ width: 900, height: 1100 });
+for (const [nombre, h] of [['19-solicitud-pago-ach', htmlAch], ['20-solicitud-pago-reposicion', htmlRep]]) {
+  await visor.setContent(h, { waitUntil: 'load' });
+  await visor.screenshot({ path: `C:/Projects/cecomunica-service-orders/docs/auditoria-modulos/capturas/caja-menuda/${nombre}.png`, fullPage: true });
+}
+await visor.close();
 
 // ═══ 5) Piloto y 6) Usuarios ═══════════════════════════════════════════════
 console.log('\n5) Piloto · 6) Usuarios');

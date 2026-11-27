@@ -18,7 +18,13 @@
 //     devuelve por ACH;
 //   · se usan los dos caminos: reembolso (ya pagué) y anticipo (necesito
 //     efectivo y luego rindo con la factura, en 1 o 2 días);
-//   · todo gasto lleva factura fiscal de compra.
+//   · todo gasto lleva factura fiscal de compra — menos los viáticos (los
+//     "vales" de alimentación): no llevan factura (Alberto, 2026-11-27). Se
+//     piden, los aprueba el jefe y se cobran, igual que en el papel.
+//
+// Lo que pasa del tope sale por ACH con una SOLICITUD DE PAGO en papel, como
+// hoy: revisado, aprobado y el Vo.Bo. del director se firman a mano
+// (Alberto, 2026-11-27). El sistema imprime la hoja con lo que ya se aprobó.
 //
 // Los números viven en empresa/caja_menuda y se pueden cambiar sin desplegar;
 // CONFIG_DEFECTO vale mientras ese documento no exista.
@@ -38,6 +44,11 @@
     // (muestra del 2026-11-26), en su mismo orden.
     categorias: ["Vales y viáticos", "Transporte y estacionamiento", "Taller", "Mantenimiento de auto",
       "Correo y timbres", "Peaje", "Misceláneo", "Combustible"],
+    // Categorías que no llevan factura: los viáticos.
+    sin_factura: ["Vales y viáticos"],
+    // Los nombres que van bajo cada firma de la solicitud de pago en papel
+    // (los del formato de contabilidad, muestras del 2026-11-26).
+    firmas: { revisado: "Lic. Zuleika Díaz", aprobado: "Ing. Alberto Yohros", vobo: "Sr. Joseph Bettsack" },
   };
 
   const TIPOS = {
@@ -69,15 +80,28 @@
   function config(doc) {
     const d = doc || {};
     const positivo = (v, def) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : def);
-    const cats = Array.isArray(d.categorias) ? d.categorias.map((c) => String(c || "").trim()).filter(Boolean) : [];
+    const lista = (v) => v.map((c) => String(c || "").trim()).filter(Boolean);
+    const cats = Array.isArray(d.categorias) ? lista(d.categorias) : [];
+    const f = d.firmas && typeof d.firmas === "object" ? d.firmas : {};
+    const firma = (k) => (typeof f[k] === "string" ? f[k].trim().slice(0, 80) : CONFIG_DEFECTO.firmas[k]);
     return {
       fondo: positivo(d.fondo, CONFIG_DEFECTO.fondo),
       tope_recibo: positivo(d.tope_recibo, CONFIG_DEFECTO.tope_recibo),
       minimo_reposicion: positivo(d.minimo_reposicion, CONFIG_DEFECTO.minimo_reposicion),
       dias_rendir: positivo(d.dias_rendir, CONFIG_DEFECTO.dias_rendir),
       categorias: cats.length ? cats : CONFIG_DEFECTO.categorias.slice(),
+      // Una lista vacía guardada a propósito vale: todo lleva factura.
+      sin_factura: Array.isArray(d.sin_factura) ? lista(d.sin_factura) : CONFIG_DEFECTO.sin_factura.slice(),
+      firmas: { revisado: firma("revisado"), aprobado: firma("aprobado"), vobo: firma("vobo") },
     };
   }
+
+  // Un viático: la categoría no lleva factura. Se pide, se aprueba y se cobra
+  // (el recorrido del reembolso), sin foto y sin rendición.
+  function sinFactura(categoria, cfg) {
+    return !!categoria && config(cfg).sin_factura.includes(categoria);
+  }
+  function esViatico(g, cfg) { return !!g && sinFactura(g.categoria, cfg); }
 
   // Por dónde se devuelve la plata. Solo el reembolso puede irse por ACH: un
   // anticipo siempre es efectivo del fondo.
@@ -120,7 +144,7 @@
   function esperaA(g) {
     switch (g && g.estado) {
       case "solicitado": return g.aprobador_nombre ? `Espera a ${g.aprobador_nombre}` : "Espera a administración";
-      case "aprobado": return g.via === "ach" ? "Contabilidad te lo paga por ACH" : (g.tipo === "anticipo" ? "Pasa por contabilidad a retirar el efectivo" : "Pasa por contabilidad a cobrarlo");
+      case "aprobado": return g.via === "ach" ? "Contabilidad tramita la solicitud de pago; te llega por ACH" : (g.tipo === "anticipo" ? "Pasa por contabilidad a retirar el efectivo" : "Pasa por contabilidad a cobrarlo");
       case "entregado": return "Falta que traigas la factura";
       case "rendido": return "Contabilidad revisa tu factura";
       default: return "";
@@ -149,10 +173,12 @@
     if (!f || String(f.concepto || "").trim().length < 3) e.push("Escribe para qué fue el gasto.");
     const nRecibos = (f && Array.isArray(f.recibos) ? f.recibos : []).length;
     if (nRecibos > MAX_RECIBOS) e.push(`Máximo ${MAX_RECIBOS} fotos.`);
+    const viatico = !!f && sinFactura(f.categoria, c);
+    if (viatico && f.tipo === "anticipo") e.push("Un viático no se rinde con factura: pídelo como viático, no como anticipo.");
     if (f && f.tipo === "reembolso") {
-      if (!nRecibos) e.push("Falta la foto de la factura.");
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(f.fecha_gasto || ""))) e.push("Pon la fecha de la factura.");
-      else if (hoyISO && f.fecha_gasto > hoyISO) e.push("La fecha de la factura no puede ser futura.");
+      if (!nRecibos && !viatico) e.push("Falta la foto de la factura.");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(f.fecha_gasto || ""))) e.push(viatico ? "Pon la fecha del viático." : "Pon la fecha de la factura.");
+      else if (hoyISO && f.fecha_gasto > hoyISO) e.push("La fecha no puede ser futura.");
     }
     return e;
   }
@@ -282,6 +308,7 @@
       beneficiario: g.solicitante_nombre || "",
       categoria: g.categoria || "",
       concepto: g.concepto || "",
+      aprobo: (g.aprobacion && g.aprobacion.por_nombre) || "",
       monto: efectivoFuera(g),
     })).sort((a, b) => String(a.numero).localeCompare(String(b.numero)) || a.fecha.localeCompare(b.fecha));
   }
@@ -344,9 +371,100 @@
     return { filas, columnas: 3 + cats.length + 2 };
   }
 
+  // ── Solicitud de pago en papel (2026-11-27) ────────────────────────────
+  // El formato de contabilidad: "Páguese a la orden de · La suma de (en
+  // letras) · En concepto de · Mediante" y las firmas. Sale para lo que no se
+  // paga del fondo: el reembolso por ACH (pasa del tope) y el cheque de la
+  // reposición. El sistema pone lo que ya se aprobó en él; revisado, aprobado
+  // y Vo.Bo. se firman a mano.
+  const UNI = ["", "UN", "DOS", "TRES", "CUATRO", "CINCO", "SEIS", "SIETE", "OCHO", "NUEVE", "DIEZ", "ONCE", "DOCE",
+    "TRECE", "CATORCE", "QUINCE", "DIECISÉIS", "DIECISIETE", "DIECIOCHO", "DIECINUEVE", "VEINTE", "VEINTIÚN",
+    "VEINTIDÓS", "VEINTITRÉS", "VEINTICUATRO", "VEINTICINCO", "VEINTISÉIS", "VEINTISIETE", "VEINTIOCHO", "VEINTINUEVE"];
+  const DEC = ["", "", "", "TREINTA", "CUARENTA", "CINCUENTA", "SESENTA", "SETENTA", "OCHENTA", "NOVENTA"];
+  const CEN = ["", "CIENTO", "DOSCIENTOS", "TRESCIENTOS", "CUATROCIENTOS", "QUINIENTOS", "SEISCIENTOS", "SETECIENTOS",
+    "OCHOCIENTOS", "NOVECIENTOS"];
+  function hasta999(n) {
+    if (n === 100) return "CIEN";
+    const r = n % 100;
+    const dec = r < 30 ? UNI[r] : DEC[Math.floor(r / 10)] + (r % 10 ? ` Y ${UNI[r % 10]}` : "");
+    return [CEN[Math.floor(n / 100)], dec].filter(Boolean).join(" ");
+  }
+  // 183.18 → "CIENTO OCHENTA Y TRES CON 18/100". Hasta 999,999.99.
+  function enLetras(monto) {
+    const c = centavos(monto);
+    if (monto === "" || monto == null || !Number.isFinite(Number(monto)) || c < 0 || c >= 100000000) return "";
+    const entero = Math.floor(c / 100);
+    const miles = Math.floor(entero / 1000), resto = entero % 1000;
+    const partes = [];
+    if (miles) partes.push(miles === 1 ? "MIL" : `${hasta999(miles)} MIL`);
+    // "UN" solo va delante de MIL: al final es UNO (VEINTIUNO, TREINTA Y UNO).
+    if (resto) partes.push(hasta999(resto).replace(/VEINTIÚN$/, "VEINTIUNO").replace(/(^| )UN$/, "$1UNO"));
+    return `${partes.join(" ") || "CERO"} CON ${String(c % 100).padStart(2, "0")}/100`;
+  }
+
+  const MESES_LARGOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
+    "octubre", "noviembre", "diciembre"];
+  // "2026-11-18" → "18 de noviembre de 2026"
+  function fechaLarga(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+    return m ? `${Number(m[3])} de ${MESES_LARGOS[Number(m[2]) - 1]} de ${m[1]}` : "";
+  }
+
+  // El gasto sale con solicitud de pago: ya lo aprobó el jefe y no se paga
+  // del fondo. (Ya pagado se puede reimprimir.)
+  function llevaSolicitudPago(g) {
+    return !!g && g.via === "ach" && (g.estado === "aprobado" || g.estado === "pagado");
+  }
+
+  // Los datos de la hoja, listos para pintar. Uno de los dos: `gasto` (el
+  // reembolso por ACH) o `reposicion` (el cheque que repone el fondo, que en
+  // el formato de contabilidad va sin Vo.Bo.). `hoy` es YYYY-MM-DD.
+  //   aprobado: lo que ya consta en el sistema — { que, por, fecha }.
+  //   firmas:   las casillas que se firman a mano — { rol, nombre }.
+  function solicitudPago({ gasto = null, reposicion = null, cfg = null, hoy = "" } = {}) {
+    const c = config(cfg);
+    const dia = (t) => fechaPanama(msDe(t));
+    if (reposicion) {
+      const r = reposicion;
+      const quien = r.created_by_nombre || "";
+      const items = Array.isArray(r.items) ? r.items : [];
+      return {
+        ref: r.numero || "", fecha: r.fecha || hoy,
+        beneficiario: quien, monto: num(r.total) || 0, letras: enLetras(r.total), mediante: "CHEQUE",
+        concepto: `Reembolso de caja menuda ${r.desde || ""} al ${r.hasta || ""}`,
+        detalle: [],
+        recibos: items.map((it) => ({ numero: it.numero || "", fecha: it.fecha || "", beneficiario: it.beneficiario || "",
+          categoria: it.categoria || "", concepto: it.concepto || "", aprobo: it.aprobo || "", monto: num(it.monto) || 0 })),
+        aprobado: [{ que: `Reposición ${r.numero || ""} preparada`, por: quien, fecha: r.fecha || "" }],
+        firmas: [{ rol: "Preparado por", nombre: quien }, { rol: "Revisado por", nombre: c.firmas.revisado },
+          { rol: "Aprobado", nombre: c.firmas.aprobado }],
+      };
+    }
+    const g = gasto || {};
+    const aprobado = [{ que: "Pedido", por: g.solicitante_nombre || "", fecha: dia(g.created_at) }];
+    if (g.aprobacion) aprobado.push({ que: "Aprobado", por: g.aprobacion.por_nombre || "", fecha: dia(g.aprobacion.at) });
+    if (g.entrega) {
+      aprobado.push({ que: `Pagado${g.entrega.referencia ? ` (ACH ${g.entrega.referencia})` : ""}`,
+        por: g.entrega.por_nombre || "", fecha: dia(g.entrega.at) });
+    }
+    return {
+      ref: g.numero || "", fecha: hoy,
+      beneficiario: g.solicitante_nombre || "", monto: num(g.monto) || 0, letras: enLetras(g.monto),
+      mediante: g.via === "ach" ? "ACH" : "EFECTIVO",
+      concepto: `Reembolso: ${g.concepto || ""}`,
+      detalle: [{ factura: g.factura_numero || "", monto: num(g.monto) || 0,
+        descripcion: [g.concepto, g.proveedor, g.categoria, fechaLarga(g.fecha_gasto)].filter(Boolean).join(" · ") }],
+      recibos: [],
+      aprobado,
+      firmas: [{ rol: "Solicitado por", nombre: g.solicitante_nombre || "" }, { rol: "Revisado por", nombre: c.firmas.revisado },
+        { rol: "Aprobado", nombre: c.firmas.aprobado }, { rol: "Vo.Bo.", nombre: c.firmas.vobo }],
+    };
+  }
+
   const API = {
     CONFIG_DEFECTO, TIPOS, ESTADOS, ABIERTOS, ROLES_CUSTODIO, MAX_RECIBOS, MONTO_MAXIMO, DENOMINACIONES,
     num, config, via, esCustodio, esAprobador, acciones, esperaA, diasSinRendir,
+    sinFactura, esViatico, enLetras, fechaLarga, llevaSolicitudPago, solicitudPago,
     validar, rendicion, efectivoFuera, dinero,
     porReponer, enLaCalle, conteoValido, arqueo, cuadre, itemsInforme, numeroReposicion, informe, fechaPanama,
   };
